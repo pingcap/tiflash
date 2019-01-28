@@ -1,6 +1,6 @@
 [submodule "contrib/poco"]
 	path = contrib/poco
-	url = https://github.com/ClickHouse-Extras/poco
+	url = https://github.com/pingcap/poco.git
 [submodule "contrib/zstd"]
 	path = contrib/zstd
 	url = https://github.com/facebook/zstd.git
@@ -21,7 +21,7 @@
 	url = https://github.com/google/googletest.git
 [submodule "contrib/capnproto"]
 	path = contrib/capnproto
-	url = https://github.com/capnproto/capnproto.git
+	url = https://github.com/pingcap/capnproto.git
 [submodule "contrib/double-conversion"]
 	path = contrib/double-conversion
 	url = https://github.com/google/double-conversion.git
@@ -33,7 +33,7 @@
 	url = https://github.com/ClickHouse-Extras/ssl.git
 [submodule "contrib/boost"]
 	path = contrib/boost
-	url = https://github.com/ClickHouse-Extras/boost.git
+	url = https://github.com/pingcap/boost-extra.git
 [submodule "contrib/kvproto"]
 	path = contrib/kvproto
 	url = https://github.com/pingcap/kvproto.git
