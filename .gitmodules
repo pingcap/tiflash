@@ -34,3 +34,6 @@
 [submodule "contrib/boost"]
 	path = contrib/boost
 	url = https://github.com/ClickHouse-Extras/boost.git
+[submodule "contrib/kvproto"]
+	path = contrib/kvproto
+	url = https://github.com/pingcap/kvproto.git
