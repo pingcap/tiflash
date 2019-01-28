@@ -31,7 +31,8 @@ IMergedBlockOutputStream::IMergedBlockOutputStream(
     min_compress_block_size(min_compress_block_size_),
     max_compress_block_size(max_compress_block_size_),
     aio_threshold(aio_threshold_),
-    compression_settings(compression_settings_)
+    compression_settings(compression_settings_),
+    compactCtxPtr(nullptr)
 {
 }
 
@@ -54,14 +55,23 @@ void IMergedBlockOutputStream::addStreams(
         if (column_streams.count(stream_name))
             return;
 
-        column_streams[stream_name] = std::make_unique<ColumnStream>(
-            stream_name,
-            path + stream_name, DATA_FILE_EXTENSION,
-            path + stream_name, MARKS_FILE_EXTENSION,
-            max_compress_block_size,
-            compression_settings,
-            estimated_size,
-            aio_threshold);
+        if (compactCtxPtr == nullptr) {
+            column_streams[stream_name] = std::make_unique<ColumnStream>(
+                stream_name,
+                path + stream_name, DATA_FILE_EXTENSION,
+                path + stream_name, MARKS_FILE_EXTENSION,
+                max_compress_block_size,
+                compression_settings,
+                estimated_size,
+                aio_threshold);
+        } else {
+            column_streams[stream_name] = std::make_unique<ColumnStream>(
+                stream_name,
+                compression_settings,
+                compactCtxPtr,
+                IDataType::isNullMap(substream_path)
+            );
+        }
     };
 
     type.enumerateStreams(callback, {});
@@ -77,6 +87,11 @@ void IMergedBlockOutputStream::writeData(
 {
     size_t size = column.size();
     size_t prev_mark = 0;
+
+    if (compactCtxPtr != nullptr)
+    {
+        compactCtxPtr->beginMark(name);
+    }
     while (prev_mark < size)
     {
         size_t limit = 0;
@@ -88,7 +103,6 @@ void IMergedBlockOutputStream::writeData(
         {
             limit = storage.index_granularity;
 
-            /// Write marks.
             type.enumerateStreams([&] (const IDataType::SubstreamPath & substream_path)
             {
                 bool is_offsets = !substream_path.empty() && substream_path.back().type == IDataType::Substream::ArraySizes;
@@ -107,8 +121,9 @@ void IMergedBlockOutputStream::writeData(
                 if (stream.compressed.offset() >= min_compress_block_size)
                     stream.compressed.next();
 
-                writeIntBinary(stream.plain_hashing.count(), stream.marks);
+                writeIntBinary(stream.plain_hashing->count(), stream.marks);
                 writeIntBinary(stream.compressed.offset(), stream.marks);
+                stream.marks.next();
             }, {});
         }
 
@@ -143,9 +158,47 @@ void IMergedBlockOutputStream::writeData(
                 return;
 
             column_streams[stream_name]->compressed.nextIfAtEnd();
+            column_streams[stream_name]->marks.next();
         }, {});
 
         prev_mark += limit;
+    }
+
+    if (compactCtxPtr != nullptr)
+    {
+        compactCtxPtr->endMark(name);
+        std::string null_map_name;
+        type.enumerateStreams([&] (const IDataType::SubstreamPath & substream_path)
+        {
+            bool is_offsets = !substream_path.empty() && substream_path.back().type == IDataType::Substream::ArraySizes;
+            if (is_offsets && skip_offsets)
+                return;
+
+            String stream_name = IDataType::getFileNameForStream(name, substream_path);
+
+            /// Don't write offsets more than one time for Nested type.
+            if (is_offsets && offset_columns.count(stream_name))
+                return;
+
+            if (IDataType::isNullMap(substream_path)) {
+                null_map_name = stream_name;
+            }
+
+            column_streams[stream_name]->compressed.next();
+            compactCtxPtr->writeEOF(column_streams[stream_name]->plain_hashing);
+            column_streams[stream_name]->plain_hashing->next();
+            column_streams[stream_name]->marks.next();
+        }, {});
+        if (!null_map_name.empty()) {
+            std::string col_string = column_streams[null_map_name]->substream_col_stream.str();
+            size_t file_offset = column_streams[name]->plain_hashing->count();
+            column_streams[name]->plain_hashing->write(col_string.c_str(), col_string.size());
+            column_streams[name]->plain_hashing->next();
+            auto marks_string = column_streams[null_map_name]->substream_mark_stream.str();
+            compactCtxPtr -> beginMark(null_map_name);
+            compactCtxPtr -> mergeMarksStream(marks_string, file_offset);
+            compactCtxPtr -> endMark(null_map_name);
+        }
     }
 
     /// Memoize offsets for Nested types, that are already written. They will not be written again for next columns of Nested structure.
@@ -177,10 +230,24 @@ IMergedBlockOutputStream::ColumnStream::ColumnStream(
     data_file_extension{data_file_extension_},
     marks_file_extension{marks_file_extension_},
     plain_file(createWriteBufferFromFileBase(data_path + data_file_extension, estimated_size, aio_threshold, max_compress_block_size)),
-    plain_hashing(*plain_file), compressed_buf(plain_hashing, compression_settings), compressed(compressed_buf),
-    marks_file(marks_path + marks_file_extension, 4096, O_TRUNC | O_CREAT | O_WRONLY), marks(marks_file)
-{
-}
+    plain_hashing(std::make_shared<HashingWriteBuffer>(*plain_file)), compressed_buf(*plain_hashing, compression_settings), compressed(compressed_buf),
+    marks_file(std::make_unique<WriteBufferFromFile>(marks_path + marks_file_extension, 4096, O_TRUNC | O_CREAT | O_WRONLY)), marks(*marks_file)
+{}
+
+IMergedBlockOutputStream::ColumnStream::ColumnStream(
+    const String & escaped_column_name_,
+    CompressionSettings compression_settings,
+    const CompactWriteContextPtr & compactCtxPtr,
+    bool is_substream) :
+    escaped_column_name(escaped_column_name_),
+    substream_ostream(is_substream ? std::make_unique<WriteBufferFromOStream>(substream_col_stream) : NULL),
+    plain_hashing(is_substream ? std::make_shared<HashingWriteBuffer>(*substream_ostream) : compactCtxPtr->plain_hashing), 
+    compressed_buf(*plain_hashing, compression_settings), 
+    compressed(compressed_buf),
+    marks_sstream(std::make_unique<WriteBufferFromOStream>(is_substream ? substream_mark_stream: compactCtxPtr->mark_stream)),
+    marks(*marks_sstream)
+{}
+
 
 void IMergedBlockOutputStream::ColumnStream::finalize()
 {
@@ -192,7 +259,7 @@ void IMergedBlockOutputStream::ColumnStream::finalize()
 void IMergedBlockOutputStream::ColumnStream::sync()
 {
     plain_file->sync();
-    marks_file.sync();
+    marks_file->sync();
 }
 
 void IMergedBlockOutputStream::ColumnStream::addToChecksums(MergeTreeData::DataPart::Checksums & checksums)
@@ -202,8 +269,8 @@ void IMergedBlockOutputStream::ColumnStream::addToChecksums(MergeTreeData::DataP
     checksums.files[name + data_file_extension].is_compressed = true;
     checksums.files[name + data_file_extension].uncompressed_size = compressed.count();
     checksums.files[name + data_file_extension].uncompressed_hash = compressed.getHash();
-    checksums.files[name + data_file_extension].file_size = plain_hashing.count();
-    checksums.files[name + data_file_extension].file_hash = plain_hashing.getHash();
+    checksums.files[name + data_file_extension].file_size = plain_hashing->count();
+    checksums.files[name + data_file_extension].file_hash = plain_hashing->getHash();
 
     checksums.files[name + marks_file_extension].file_size = marks.count();
     checksums.files[name + marks_file_extension].file_hash = marks.getHash();
@@ -216,6 +283,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     MergeTreeData & storage_,
     String part_path_,
     const NamesAndTypesList & columns_list_,
+    bool use_compact_write,
     CompressionSettings compression_settings)
     : IMergedBlockOutputStream(
         storage_, storage_.context.getSettings().min_compress_block_size,
@@ -223,6 +291,8 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         storage_.context.getSettings().min_bytes_to_use_direct_io),
     columns_list(columns_list_), part_path(part_path_)
 {
+    if (use_compact_write)
+        compactCtxPtr = CompactContextFactory::tryToGetCompactWriteCtxPtr(part_path, max_compress_block_size);
     init();
     for (const auto & it : columns_list)
         addStreams(part_path, it.name, *it.type, 0, false);
@@ -232,6 +302,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     MergeTreeData & storage_,
     String part_path_,
     const NamesAndTypesList & columns_list_,
+    bool use_compact_write,
     CompressionSettings compression_settings,
     const MergeTreeData::DataPart::ColumnToSize & merged_column_to_size_,
     size_t aio_threshold_)
@@ -241,6 +312,8 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         aio_threshold_),
     columns_list(columns_list_), part_path(part_path_)
 {
+    if (use_compact_write)
+        compactCtxPtr = CompactContextFactory::tryToGetCompactWriteCtxPtr(part_path, max_compress_block_size);
     init();
     for (const auto & it : columns_list)
     {
@@ -300,26 +373,25 @@ void MergedBlockOutputStream::writeSuffixAndFinalizePart(
         checksums.files["primary.idx"].file_hash = index_stream->getHash();
         index_stream = nullptr;
     }
+    if (compactCtxPtr != nullptr) {
+        compactCtxPtr->finalize(rows_count);
+        checksums.files[CompactWriteCtx::CompactFileName].file_size = compactCtxPtr-> plain_hashing->count();
+        checksums.files[CompactWriteCtx::CompactFileName].file_hash = compactCtxPtr-> plain_hashing->getHash();
+    } else {
 
-    for (ColumnStreams::iterator it = column_streams.begin(); it != column_streams.end(); ++it)
-    {
-        it->second->finalize();
-        it->second->addToChecksums(checksums);
+        for (ColumnStreams::iterator it = column_streams.begin(); it != column_streams.end(); ++it)
+        {
+            it->second->finalize();
+            it->second->addToChecksums(checksums);
+        }
     }
-
     column_streams.clear();
-
-    if (rows_count == 0)
-    {
-        /// A part is empty - all records are deleted.
-        Poco::File(part_path).remove(true);
-        return;
-    }
 
     if (storage.format_version >= MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
     {
         new_part->partition.store(storage, part_path, checksums);
-        new_part->minmax_idx.store(storage, part_path, checksums);
+        if (new_part->minmax_idx.initialized)
+            new_part->minmax_idx.store(storage, part_path, checksums);
 
         WriteBufferFromFile count_out(part_path + "count.txt", 4096);
         HashingWriteBuffer count_out_hashing(count_out);
@@ -360,6 +432,7 @@ void MergedBlockOutputStream::init()
             part_path + "primary.idx", DBMS_DEFAULT_BUFFER_SIZE, O_TRUNC | O_CREAT | O_WRONLY);
         index_stream = std::make_unique<HashingWriteBuffer>(*index_file_stream);
     }
+
 }
 
 

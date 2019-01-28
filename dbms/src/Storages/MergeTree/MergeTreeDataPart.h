@@ -7,6 +7,7 @@
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Columns/IColumn.h>
+#include <IO/CompactContext.h>
 #include <shared_mutex>
 
 
@@ -60,11 +61,15 @@ struct MergeTreeDataPart
     /// Returns part->name with prefixes like 'tmp_<name>'
     String getNameWithPrefix() const;
 
+    String getNewName(const MergeTreePartInfo & new_part_info) const;
+
     bool contains(const MergeTreeDataPart & other) const { return info.contains(other.info); }
 
     /// If the partition key includes date column (a common case), these functions will return min and max values for this column.
     DayNum_t getMinDate() const;
     DayNum_t getMaxDate() const;
+
+    bool isEmpty() const { return rows_count == 0; }
 
     MergeTreeData & storage;
 
@@ -88,6 +93,12 @@ struct MergeTreeDataPart
 
     /// If true it means that there are no ZooKeeper node for this part, so it should be deleted only from filesystem
     bool is_duplicate = false;
+
+    CompactReadContextPtr compactCtxPtr;
+
+    void tryToGetCompactCtx();
+
+    bool isCompactFormat() const;
 
     /**
      * Part state is a stage of its lifetime. States are ordered and state of a part could be increased only.

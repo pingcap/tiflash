@@ -290,11 +290,21 @@ try
     if (uncompressed_cache_size)
         context->setUncompressedCache(uncompressed_cache_size);
 
+    /// Quota size in bytes of persisted mapping cache. 0 means unlimited.
+    size_t persisted_cache_size = config().getUInt64("persisted_mapping_cache_size", 0);
+    /// Path of persisted cache in fast(er) disk device. Empty means disabled.
+    std::string persisted_cache_path = config().getString("persisted_mapping_cache_path", "");
+    if (!persisted_cache_path.empty())
+        context->setPersistedCache(persisted_cache_size, persisted_cache_path);
+
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     /// Specify default value for mark_cache_size explicitly!
     size_t mark_cache_size = config().getUInt64("mark_cache_size", 5368709120);
     if (mark_cache_size)
         context->setMarkCache(mark_cache_size);
+
+    bool use_L0_opt = config().getBool("l0_optimize", true);
+    context->setUseL0Opt(use_L0_opt);
 
     /// Load global settings from default_profile and system_profile.
     context->setDefaultProfiles(config());

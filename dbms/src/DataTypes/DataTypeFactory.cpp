@@ -109,6 +109,7 @@ void registerDataTypeDate(DataTypeFactory & factory);
 void registerDataTypeDateTime(DataTypeFactory & factory);
 void registerDataTypeString(DataTypeFactory & factory);
 void registerDataTypeFixedString(DataTypeFactory & factory);
+void registerDataTypeDecimal(DataTypeFactory & factory);
 void registerDataTypeEnum(DataTypeFactory & factory);
 void registerDataTypeArray(DataTypeFactory & factory);
 void registerDataTypeTuple(DataTypeFactory & factory);
@@ -127,6 +128,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeDateTime(*this);
     registerDataTypeString(*this);
     registerDataTypeFixedString(*this);
+    registerDataTypeDecimal(*this);
     registerDataTypeEnum(*this);
     registerDataTypeArray(*this);
     registerDataTypeTuple(*this);

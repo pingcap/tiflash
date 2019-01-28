@@ -6,6 +6,7 @@
     M(Query) \
     M(SelectQuery) \
     M(InsertQuery) \
+    M(DeleteQuery) \
     M(FileOpen) \
     M(FileOpenFailed) \
     M(Seek) \
@@ -25,6 +26,16 @@
     M(UncompressedCacheHits) \
     M(UncompressedCacheMisses) \
     M(UncompressedCacheWeightLost) \
+    M(PersistedMarksFileHits) \
+    M(PersistedMarksFileMisses) \
+    M(PersistedMarksFileBusy) \
+    M(PersistedMarksFileUpdate) \
+    M(PersistedCacheFileHits) \
+    M(PersistedCacheFileMisses) \
+    M(PersistedCacheFileExpectedMisses) \
+    M(PersistedCacheFileBusy) \
+    M(PersistedCacheFileUpdate) \
+    M(PersistedCachePartBusy) \
     M(IOBufferAllocs) \
     M(IOBufferAllocBytes) \
     M(ArenaAllocChunks) \

@@ -59,6 +59,9 @@
 #include <DataTypes/DataTypeFunction.h>
 #include <Functions/FunctionsMiscellaneous.h>
 
+#include <Storages/StorageMergeTree.h>
+#include <Storages/MutableSupport.h>
+
 
 namespace DB
 {
@@ -1040,6 +1043,16 @@ void ExpressionAnalyzer::normalizeTreeImpl(
     }
     else if (ASTExpressionList * node = typeid_cast<ASTExpressionList *>(ast.get()))
     {
+        // Get hidden column names of mutable storage
+        OrderedNameSet filtered_names;
+        {
+            if (storage && select_query && !select_query->raw_for_mutable)
+            {
+                // LOG_DEBUG(&Logger::get("ExpressionAnalyzer"), "Filter hidden columns for mutable table.");
+                filtered_names = MutableSupport::instance().hiddenColumns(storage->getName());
+            }
+        }
+
         /// Replace * with a list of columns.
         ASTs & asts = node->children;
         for (int i = static_cast<int>(asts.size()) - 1; i >= 0; --i)
@@ -1052,7 +1065,8 @@ void ExpressionAnalyzer::normalizeTreeImpl(
                 {
                     /// If we select from a table, get only not MATERIALIZED, not ALIAS columns.
                     for (const auto & name_type : storage->getColumns().ordinary)
-                        all_columns.emplace_back(std::make_shared<ASTIdentifier>(name_type.name));
+                        if (!filtered_names.has(name_type.name))
+                            all_columns.emplace_back(std::make_shared<ASTIdentifier>(name_type.name));
                 }
                 else
                 {

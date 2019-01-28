@@ -5,6 +5,7 @@
 #include <limits>
 #include <algorithm>
 #include <iterator>
+#include <iomanip>
 
 #include <common/DateLUT.h>
 #include <common/LocalDate.h>
@@ -62,7 +63,6 @@ inline void writeFloatBinary(const T & x, WriteBuffer & buf)
 {
     writePODBinary(x, buf);
 }
-
 
 inline void writeStringBinary(const std::string & s, WriteBuffer & buf)
 {
@@ -550,6 +550,11 @@ inline void writeDateText(DayNum_t date, WriteBuffer & buf)
 }
 
 
+inline void writeDecimalText(const Decimal& v, WriteBuffer & buf) {
+    const std::string& str = v.toString();
+    buf.write(str.c_str(), str.length());
+}
+
 /// In the format YYYY-MM-DD HH:MM:SS
 template <char date_delimeter = '-', char time_delimeter = ':', char between_date_time_delimiter = ' '>
 inline void writeDateTimeText(const LocalDateTime & datetime, WriteBuffer & buf)
@@ -644,6 +649,7 @@ inline void writeBinary(const UInt128 & x, WriteBuffer & buf) { writePODBinary(x
 inline void writeBinary(const UInt256 & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const LocalDate & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const LocalDateTime & x, WriteBuffer & buf) { writePODBinary(x, buf); }
+inline void writeBinary(const Decimal & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 
 
 /// Methods for outputting the value in text form for a tab-separated format.
@@ -667,6 +673,7 @@ inline void writeText(const char * x, size_t size, WriteBuffer & buf) { writeEsc
 
 inline void writeText(const LocalDate & x, WriteBuffer & buf) { writeDateText(x, buf); }
 inline void writeText(const LocalDateTime & x, WriteBuffer & buf) { writeDateTimeText(x, buf); }
+inline void writeText(const Decimal & x, WriteBuffer & buf) { writeDecimalText(x, buf); }
 inline void writeText(const UUID & x, WriteBuffer & buf) { writeUUIDText(x, buf); }
 inline void writeText(const UInt128 &, WriteBuffer &)
 {
@@ -798,6 +805,15 @@ inline String toString(const T & x)
     WriteBufferFromOwnString buf;
     writeText(x, buf);
     return buf.str();
+}
+
+template <typename T>
+inline std::enable_if_t<std::is_floating_point_v<T>, String>
+toString(const T & x, int precision)
+{
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(precision) << x;
+    return ss.str();
 }
 
 }

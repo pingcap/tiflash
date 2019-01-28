@@ -1,5 +1,5 @@
 ---
-BasedOnStyle:  WebKit
+BasedOnStyle:  Google
 Language:        Cpp
 AlignAfterOpenBracket: false
 BreakBeforeBraces: Custom
@@ -14,6 +14,7 @@ BraceWrapping: {
     BeforeCatch : 'true'
     BeforeElse : 'true'
     IndentBraces : 'false'
+    SplitEmptyFunction: 'false'
 }
 
 BreakConstructorInitializersBeforeComma: false
@@ -27,47 +28,33 @@ IndentWidth: 4
 Standard: Cpp11
 PointerAlignment: Middle
 MaxEmptyLinesToKeep: 2
-KeepEmptyLinesAtTheStartOfBlocks: false
+KeepEmptyLinesAtTheStartOfBlocks: true
 #AllowShortFunctionsOnASingleLine: Inline
-AllowShortFunctionsOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: All
 AlwaysBreakTemplateDeclarations: true
 IndentCaseLabels: true
 #SpaceAfterTemplateKeyword: true
-SortIncludes: true
-IncludeCategories:
-  - Regex:           '^<[a-z_]+>'
-    Priority:        1
-  - Regex:           '^<[a-z_]+.h>'
-    Priority:        2
-  - Regex:           '^["<](common|ext|mysqlxx|daemon|zkutil)/'
-    Priority:        90
-  - Regex:           '^["<](DB)/'
-    Priority:        100
-  - Regex:           '^["<](Poco)/'
-    Priority:        50
-  - Regex:           '^"'
-    Priority:        110
-  - Regex:           '/'
-    Priority:        30
-  - Regex:           '.*'
-    Priority:        40
+#SortIncludes: true
+FixNamespaceComments: true
+
 ReflowComments: false
 AlignEscapedNewlinesLeft: true
 
 # Not changed:
 AccessModifierOffset: -4
 AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
 AlignOperands:   false
-AlignTrailingComments: false
+AlignTrailingComments: true
 AllowAllParametersOfDeclarationOnNextLine: true
-AllowShortBlocksOnASingleLine: false
+AllowShortBlocksOnASingleLine: true
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakAfterDefinitionReturnType: None
 AlwaysBreakBeforeMultilineStrings: false
-BinPackArguments: false
-BinPackParameters: false
+BinPackArguments: true
+BinPackParameters: true
 BreakBeforeBinaryOperators: All
 BreakBeforeTernaryOperators: true
 CommentPragmas:  '^ IWYU pragma:'
@@ -80,7 +67,7 @@ IndentWidth:     4
 IndentWrappedFunctionNames: false
 MacroBlockBegin: ''
 MacroBlockEnd:   ''
-NamespaceIndentation: Inner
+NamespaceIndentation: None
 ObjCBlockIndentWidth: 4
 ObjCSpaceAfterProperty: true
 ObjCSpaceBeforeProtocolList: true
@@ -100,4 +87,3 @@ SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
 ...
-

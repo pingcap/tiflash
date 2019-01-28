@@ -1,5 +1,6 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnDecimal.h>
 #include <Common/typeid_cast.h>
 #include <Interpreters/SetVariants.h>
 
@@ -92,6 +93,7 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
 
     bool all_fixed = true;
     size_t keys_bytes = 0;
+    bool has_dec = false;
     key_sizes.resize(keys_size);
     for (size_t j = 0; j < keys_size; ++j)
     {
@@ -104,11 +106,17 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
         keys_bytes += key_sizes[j];
     }
 
+    for (size_t j = 0; j < keys_size; ++j)
+        if (typeid_cast<const ColumnDecimal*>(nested_key_columns[j])) {
+            has_dec = true;
+            break;
+        }
+
     if (has_nullable_key)
     {
         /// At least one key is nullable. Therefore we choose a method
         /// that takes into account this fact.
-        if ((keys_size == 1) && (nested_key_columns[0]->isNumeric()))
+        if ((keys_size == 1) && (nested_key_columns[0]->isNumeric()) && !has_dec)
         {
             /// We have exactly one key and it is nullable. We shall add it a tag
             /// which specifies whether its value is null or not.
@@ -120,7 +128,7 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
                     ErrorCodes::LOGICAL_ERROR};
         }
 
-        if (all_fixed)
+        if (all_fixed && !has_dec)
         {
             /// Pack if possible all the keys along with information about which key values are nulls
             /// into a fixed 16- or 32-byte blob.
@@ -150,6 +158,8 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
             return Type::key64;
         if (size_of_field == 16)
             return Type::keys128;
+        if (size_of_field == sizeof(Decimal))
+            return Type::key_decimal;
         throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
     }
 

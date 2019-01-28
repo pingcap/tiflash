@@ -29,6 +29,7 @@ MergeTreeBaseBlockInputStream::MergeTreeBaseBlockInputStream(
     size_t max_read_buffer_size,
     bool use_uncompressed_cache,
     bool save_marks_in_cache,
+    bool update_persisted_cache,
     const Names & virt_column_names)
 :
     storage(storage),
@@ -41,6 +42,7 @@ MergeTreeBaseBlockInputStream::MergeTreeBaseBlockInputStream(
     max_read_buffer_size(max_read_buffer_size),
     use_uncompressed_cache(use_uncompressed_cache),
     save_marks_in_cache(save_marks_in_cache),
+    update_persisted_cache(update_persisted_cache),
     virt_column_names(virt_column_names),
     max_block_size_marks(max_block_size_rows / storage.index_granularity)
 {

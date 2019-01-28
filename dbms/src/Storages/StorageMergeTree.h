@@ -9,6 +9,7 @@
 #include <Storages/MergeTree/MergeTreeDataMerger.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Common/SimpleIncrement.h>
 
 
@@ -20,6 +21,9 @@ namespace DB
 class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>, public IStorage
 {
 friend class MergeTreeBlockOutputStream;
+friend class TxnMergeTreeBlockOutputStream;
+
+    using TableInfo = TiDB::TableInfo;
 
 public:
     void startup() override;
@@ -32,6 +36,7 @@ public:
     }
 
     std::string getTableName() const override { return table_name; }
+    std::string getDatabaseName() const { return database_name; }
 
     bool supportsSampling() const override { return data.supportsSampling(); }
     bool supportsPrewhere() const override { return data.supportsPrewhere(); }
@@ -62,6 +67,8 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    UInt64 getVersionSeed(const Settings & settings) const;
+
     /** Perform the next step in combining the parts.
       */
     bool optimize(const ASTPtr & query, const ASTPtr & partition, bool final, bool deduplicate, const Context & context) override;
@@ -73,11 +80,16 @@ public:
 
     void drop() override;
 
+    void truncate(const ASTPtr & /*query*/, const Context & /*context*/) override;
+
     void rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name) override;
 
     void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
     bool checkTableCanBeDropped() const override;
+
+    const TableInfo & getTableInfo() const { return data.table_info; }
+    void setTableInfo(const TableInfo & table_info_) { data.table_info = table_info_; }
 
     MergeTreeData & getData() { return data; }
     const MergeTreeData & getData() const { return data; }
@@ -113,6 +125,8 @@ private:
 
     BackgroundProcessingPool::TaskHandle merge_task_handle;
 
+    const OrderedNameSet & getHiddenColumnsImpl() const override;
+
     friend struct CurrentlyMergingPartsTagger;
 
     /** Determines what parts should be merged and merges it.
@@ -120,9 +134,10 @@ private:
       * Returns true if merge is finished successfully.
       */
     bool merge(size_t aio_threshold, bool aggressive, const String & partition_id, bool final, bool deduplicate,
-               String * out_disable_reason = nullptr);
+               bool eliminate = false, String * out_disable_reason = nullptr);
 
     bool mergeTask();
+
 
 protected:
     /** Attach the table with the appropriate name, along the appropriate path (with  / at the end),
@@ -140,6 +155,7 @@ protected:
         const ColumnsDescription & columns_,
         bool attach,
         Context & context_,
+        const TableInfo & table_info_,
         const ASTPtr & primary_expr_ast_,
         const ASTPtr & secondary_sorting_expr_list_,
         const String & date_column_name,

@@ -28,6 +28,10 @@ struct SelectQueryInfo
     /// Prepared sets are used for indices by storage engine.
     /// Example: x IN (1, 2, 3)
     PreparedSets sets;
+
+    bool resolve_locks = false;
+
+    UInt64 read_tso;
 };
 
 }

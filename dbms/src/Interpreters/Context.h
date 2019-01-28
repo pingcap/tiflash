@@ -45,6 +45,10 @@ class Cluster;
 class Compiler;
 class MarkCache;
 class UncompressedCache;
+class PersistedCache;
+class DBGInvoker;
+class TMTContext;
+using TMTContextPtr = std::shared_ptr<TMTContext>;
 class ProcessList;
 class ProcessListElement;
 class Macros;
@@ -69,7 +73,12 @@ using BlockOutputStreamPtr = std::shared_ptr<IBlockOutputStream>;
 class Block;
 struct SystemLogs;
 using SystemLogsPtr = std::shared_ptr<SystemLogs>;
-
+class SharedQueries;
+using SharedQueriesPtr = std::shared_ptr<SharedQueries>;
+class RaftService;
+using RaftServicePtr = std::shared_ptr<RaftService>;
+class TiDBService;
+using TiDBServicePtr = std::shared_ptr<TiDBService>;
 
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
@@ -115,6 +124,8 @@ private:
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
+
+    bool use_l0_opt = true;
 
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
@@ -313,6 +324,17 @@ public:
     std::shared_ptr<UncompressedCache> getUncompressedCache() const;
     void dropUncompressedCache() const;
 
+    /// Create a persisted cache written in fast(er) disk device.
+    void setPersistedCache(size_t max_size_in_bytes, const std::string & persisted_path);
+    std::shared_ptr<PersistedCache> getPersistedCache() const;
+
+    /// Execute inner functions, debug only.
+    DBGInvoker & getDBGInvoker() const;
+
+    TMTContext & getTMTContext();
+
+    TMTContext & getTMTContext() const ;
+
     /// Create a cache of marks of specified size. This can be done only once.
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
@@ -326,10 +348,23 @@ public:
       */
     void dropCaches() const;
 
+    void setUseL0Opt(bool use_l0_opt) ;
+    bool useL0Opt() const;
+
+    void setPDAddrs(std::vector<String> addrs_) {
+        pd_addrs = std::move(addrs_);
+    }
+
     BackgroundProcessingPool & getBackgroundPool();
 
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
     DDLWorker & getDDLWorker() const;
+
+    void initializeRaftService(const std::string & service_addr);
+    RaftService & getRaftService();
+
+    void initializeTiDBService(const std::string & service_ip, const std::string & status_port);
+    TiDBService & getTiDBService();
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;
@@ -388,6 +423,8 @@ public:
     String getFormatSchemaPath() const;
     void setFormatSchemaPath(const String & path);
 
+    SharedQueriesPtr getSharedQueries();
+
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;
 
@@ -408,6 +445,8 @@ private:
 
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
+
+    std::vector<String> pd_addrs;
 };
 
 

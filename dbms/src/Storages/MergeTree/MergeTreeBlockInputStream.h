@@ -30,6 +30,7 @@ public:
         size_t min_bytes_to_use_direct_io,
         size_t max_read_buffer_size,
         bool save_marks_in_cache,
+        bool update_persisted_cache,
         const Names & virt_column_names = {},
         size_t part_index_in_query = 0,
         bool quiet = false);
@@ -63,6 +64,8 @@ private:
 
     /// Mark ranges we should read (in ascending order)
     MarkRanges all_mark_ranges;
+    /// Total number of marks we should read
+    size_t total_marks_count = 0;
     /// Value of _part_index virtual column (used only in SelectExecutor)
     size_t part_index_in_query = 0;
 

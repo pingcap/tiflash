@@ -30,13 +30,14 @@ MergeTreeBlockInputStream::MergeTreeBlockInputStream(
     size_t min_bytes_to_use_direct_io_,
     size_t max_read_buffer_size_,
     bool save_marks_in_cache_,
+    bool update_persisted_cache_,
     const Names & virt_column_names,
     size_t part_index_in_query_,
     bool quiet)
     :
     MergeTreeBaseBlockInputStream{storage_, prewhere_actions_, prewhere_column_, max_block_size_rows_,
         preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_, min_bytes_to_use_direct_io_,
-        max_read_buffer_size_, use_uncompressed_cache_, save_marks_in_cache_, virt_column_names},
+        max_read_buffer_size_, use_uncompressed_cache_, save_marks_in_cache_, update_persisted_cache_, virt_column_names},
     ordered_names{column_names},
     data_part{owned_data_part_},
     part_columns_lock(data_part->columns_lock),
@@ -46,10 +47,10 @@ MergeTreeBlockInputStream::MergeTreeBlockInputStream(
     path(data_part->getFullPath())
 {
     /// Let's estimate total number of rows for progress bar.
-    size_t total_rows = 0;
     for (const auto & range : all_mark_ranges)
-        total_rows += range.end - range.begin;
-    total_rows *= storage.index_granularity;
+        total_marks_count += range.end - range.begin;
+
+    size_t total_rows = total_marks_count * storage.index_granularity;
 
     if (!quiet)
         LOG_TRACE(log, "Reading " << all_mark_ranges.size() << " ranges from part " << data_part->name
@@ -91,8 +92,8 @@ Block MergeTreeBlockInputStream::getHeader() const
 bool MergeTreeBlockInputStream::getNewTask()
 try
 {
-    /// Produce only one task
-    if (!is_first_task)
+    /// Produce no more than one task
+    if (!is_first_task || total_marks_count == 0)
     {
         finish();
         return false;
@@ -170,14 +171,16 @@ try
 
         owned_mark_cache = storage.context.getMarkCache();
 
+        auto persisted_cache = storage.context.getPersistedCache();
+
         reader = std::make_unique<MergeTreeReader>(
-            path, data_part, columns, owned_uncompressed_cache.get(),
+            path, data_part, columns, persisted_cache.get(), update_persisted_cache, owned_uncompressed_cache.get(),
             owned_mark_cache.get(), save_marks_in_cache, storage,
             all_mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size);
 
         if (prewhere_actions)
             pre_reader = std::make_unique<MergeTreeReader>(
-                path, data_part, pre_columns, owned_uncompressed_cache.get(),
+                path, data_part, pre_columns, persisted_cache.get(), update_persisted_cache, owned_uncompressed_cache.get(),
                 owned_mark_cache.get(), save_marks_in_cache, storage,
                 all_mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size);
     }

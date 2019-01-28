@@ -57,6 +57,17 @@ private:
         const Names & virt_columns,
         const Settings & settings) const;
 
+    BlockInputStreams spreadMarkRangesAmongStreamsOnMutableEngine(
+        const RangesInDataParts & parts_with_ranges,
+        const Names & column_names,
+        size_t max_block_size,
+        unsigned num_streams,
+        bool use_uncompressed_cache,
+        ExpressionActionsPtr prewhere_actions,
+        const String & prewhere_column,
+        const Names & virt_columns,
+        const Settings & settings) const;
+
     /// Get the approximate value (bottom estimate - only by full marks) of the number of rows falling under the index.
     size_t getApproximateTotalRowsToRead(
         const MergeTreeData::DataPartsVector & parts,

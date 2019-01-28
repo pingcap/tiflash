@@ -5,12 +5,16 @@
 #include <Storages/MergeTree/SimpleMergeSelector.h>
 #include <Storages/MergeTree/AllMergeSelector.h>
 #include <Storages/MergeTree/MergeList.h>
+#include <Storages/MutableSupport.h>
 #include <DataStreams/DistinctSortedBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MergingSortedBlockInputStream.h>
+#include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
+#include <DataStreams/DeletingDeletedBlockInputStream.h>
 #include <DataStreams/CollapsingSortedBlockInputStream.h>
 #include <DataStreams/SummingSortedBlockInputStream.h>
 #include <DataStreams/ReplacingSortedBlockInputStream.h>
+#include <DataStreams/ReplacingTMTSortedBlockInputStream.h>
 #include <DataStreams/GraphiteRollupSortedBlockInputStream.h>
 #include <DataStreams/AggregatingSortedBlockInputStream.h>
 #include <DataStreams/VersionedCollapsingSortedBlockInputStream.h>
@@ -25,6 +29,8 @@
 #include <Common/SimpleIncrement.h>
 #include <Common/interpolate.h>
 #include <Common/typeid_cast.h>
+
+#include <Storages/Transaction/TMTContext.h>
 
 #include <Poco/File.h>
 
@@ -240,12 +246,20 @@ bool MergeTreeDataMerger::selectAllPartsToMergeWithinPartition(
     const AllowedMergingPredicate & can_merge,
     const String & partition_id,
     bool final,
+    bool eliminate,
     String * out_disable_reason)
 {
     MergeTreeData::DataPartsVector parts = selectAllPartsFromPartition(partition_id);
 
     if (parts.empty())
         return false;
+
+    if (final && eliminate && data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        LOG_DEBUG(log, "Selected " << parts.size() << " parts from " << parts.front()->name << " to " << parts.back()->name);
+        future_part.assign(std::move(parts));
+        return true;
+    }
 
     if (!final && parts.size() == 1)
     {
@@ -343,7 +357,8 @@ static void extractMergingAndGatheringColumns(const NamesAndTypesList & all_colu
         key_columns.emplace(merging_params.sign_column);
 
     /// Force version column for Replacing mode
-    if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
+    if (merging_params.mode == MergeTreeData::MergingParams::Replacing ||
+        merging_params.mode == MergeTreeData::MergingParams::Mutable)
         key_columns.emplace(merging_params.version_column);
 
     /// Force sign column for VersionedCollapsing mode. Version is already in primary key.
@@ -509,7 +524,8 @@ public:
 /// parts should be sorted.
 MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart(
     const FuturePart & future_part, MergeList::Entry & merge_entry,
-    size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplicate)
+    size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplicate,
+    bool eliminate)
 {
     static const String TMP_PREFIX = "tmp_merge_";
 
@@ -592,7 +608,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
     {
         auto input = std::make_unique<MergeTreeBlockInputStream>(
             data, part, DEFAULT_MERGE_BLOCK_SIZE, 0, 0, merging_column_names, MarkRanges(1, MarkRange(0, part->marks_count)),
-            false, nullptr, "", true, aio_threshold, DBMS_DEFAULT_BUFFER_SIZE, false);
+            false, nullptr, "", true, aio_threshold, DBMS_DEFAULT_BUFFER_SIZE, false, false);
 
         input->setProgressCallback(MergeProgressCallback(
                 merge_entry, sum_input_rows_upper_bound, column_sizes, watch_prev_elapsed, merge_alg));
@@ -636,6 +652,50 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 src_streams, sort_desc, data.merging_params.version_column, DEFAULT_MERGE_BLOCK_SIZE, rows_sources_write_buf.get());
             break;
 
+        case MergeTreeData::MergingParams::Mutable:
+            // TODO: Use DedupSorted+MergingSorted instead of ReplacingSort, may be faster.
+            merged_stream = std::make_unique<ReplacingSortedBlockInputStream>(
+                src_streams, sort_desc, data.merging_params.version_column, DEFAULT_MERGE_BLOCK_SIZE, rows_sources_write_buf.get());
+            break;
+
+        case MergeTreeData::MergingParams::Txn:
+        {
+            if (eliminate)
+            {
+                /*
+                BlockInputStreamPtr to_merge = std::make_shared<MergingSortedBlockInputStream>(src_streams,
+                    data.getPrimarySortDescription(), DEFAULT_MERGE_BLOCK_SIZE);
+                merged_stream = std::make_shared<DeletingDeletedBlockInputStream>(to_merge,
+                    MutableSupport::delmark_column_name);
+                */
+                merged_stream = std::make_unique<ReplacingDeletingSortedBlockInputStream>(
+                    src_streams,
+                    data.getPrimarySortDescription(),
+                    MutableSupport::version_column_name,
+                    MutableSupport::delmark_column_name,
+                    DEFAULT_MERGE_BLOCK_SIZE,
+                    nullptr,
+                    true);
+            }
+            else
+            {
+                merged_stream = std::make_unique<ReplacingSortedBlockInputStream>(
+                    src_streams,
+                    data.getPrimarySortDescription(),
+                    MutableSupport::version_column_name,
+                    DEFAULT_MERGE_BLOCK_SIZE,
+                    nullptr);
+/*
+                auto &tmt = data.context.getTMTContext();
+                merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
+                    src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
+                    data.getPrimarySortDescription()[0].column_name, DEFAULT_MERGE_BLOCK_SIZE,
+                    tmt.getPDClient()->getGCSafePoint(), false,
+                    tmt.isEnabledDataHistoryVersionGc());
+*/
+            }
+            break;
+        }
         case MergeTreeData::MergingParams::Graphite:
             merged_stream = std::make_unique<GraphiteRollupSortedBlockInputStream>(
                 src_streams, sort_desc, DEFAULT_MERGE_BLOCK_SIZE,
@@ -659,7 +719,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             static_cast<double> (merge_entry->total_size_bytes_compressed) / data.getTotalActiveSizeInBytes());
 
     MergedBlockOutputStream to{
-        data, new_part_tmp_path, merging_columns, compression_settings, merged_column_to_size, aio_threshold};
+        data, new_part_tmp_path, merging_columns, false, compression_settings, merged_column_to_size, aio_threshold};
 
     merged_stream->readPrefix();
     to.writePrefix();
@@ -727,7 +787,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             {
                 auto column_part_stream = std::make_shared<MergeTreeBlockInputStream>(
                     data, parts[part_num], DEFAULT_MERGE_BLOCK_SIZE, 0, 0, column_name_, MarkRanges{MarkRange(0, parts[part_num]->marks_count)},
-                    false, nullptr, "", true, aio_threshold, DBMS_DEFAULT_BUFFER_SIZE, false, Names{}, 0, true);
+                    false, nullptr, "", true, aio_threshold, DBMS_DEFAULT_BUFFER_SIZE, false, false, Names{}, 0, true);
 
                 column_part_stream->setProgressCallback(MergeProgressCallbackVerticalStep(
                         merge_entry, sum_input_rows_exact, column_sizes, column_name, watch_prev_elapsed));
@@ -792,8 +852,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
         to.writeSuffixAndFinalizePart(new_data_part, &all_columns, &checksums_gathered_columns);
 
     /// For convenience, even CollapsingSortedBlockInputStream can not return zero rows.
-    if (0 == to.getRowsCount())
-        throw Exception("Empty part after merge", ErrorCodes::LOGICAL_ERROR);
+    // if (0 == to.getRowsCount())
+    //     throw Exception("Empty part after merge", ErrorCodes::LOGICAL_ERROR);
 
     return new_data_part;
 }
@@ -812,6 +872,7 @@ MergeTreeDataMerger::MergeAlgorithm MergeTreeDataMerger::chooseMergeAlgorithm(
         data.merging_params.mode == MergeTreeData::MergingParams::Ordinary ||
         data.merging_params.mode == MergeTreeData::MergingParams::Collapsing ||
         data.merging_params.mode == MergeTreeData::MergingParams::Replacing ||
+        data.merging_params.mode == MergeTreeData::MergingParams::Mutable ||
         data.merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing;
 
     bool enough_ordinary_cols = gathering_columns.size() >= data.context.getMergeTreeSettings().vertical_merge_algorithm_min_columns_to_activate;

@@ -51,6 +51,9 @@ size_t CompressedReadBufferBase::readCompressedData(size_t & size_decompressed, 
 
     UInt8 method = own_compressed_buffer[0];    /// See CompressedWriteBuffer.h
 
+    if(method == static_cast<UInt8>(CompressionMethodByte::COL_END))
+        return 0;
+
     size_t & size_compressed = size_compressed_without_checksum;
 
     if (method == static_cast<UInt8>(CompressionMethodByte::LZ4) ||

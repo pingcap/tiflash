@@ -3,6 +3,7 @@
 #include <memory>
 #include <sys/resource.h>
 #include <Poco/DirectoryIterator.h>
+#include <Poco/StringTokenizer.h>
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <ext/scope_guard.h>
@@ -64,7 +65,7 @@ static std::string getCanonicalPath(std::string && path)
         throw Exception("path configuration parameter is empty");
     if (path.back() != '/')
         path += '/';
-    return path;
+    return std::move(path);
 }
 
 void Server::uninitialize()
@@ -276,6 +277,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (uncompressed_cache_size)
         global_context->setUncompressedCache(uncompressed_cache_size);
 
+    /// Quota size in bytes of persisted mapping cache. 0 means unlimited.
+    size_t persisted_cache_size = config().getUInt64("persisted_mapping_cache_size", 0);
+    /// Path of persisted cache in fast(er) disk device. Empty means disabled.
+    std::string persisted_cache_path = config().getString("persisted_mapping_cache_path", "");
+    if (!persisted_cache_path.empty())
+        global_context->setPersistedCache(persisted_cache_size, persisted_cache_path);
+
+    bool use_L0_opt = config().getBool("l0_optimize", true);
+    global_context->setUseL0Opt(use_L0_opt);
+
     /// Load global settings from default_profile and system_profile.
     global_context->setDefaultProfiles(config());
     Settings & settings = global_context->getSettingsRef();
@@ -318,6 +329,32 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// DDL worker should be started after all tables were loaded
         String ddl_zookeeper_path = config().getString("distributed_ddl.path", "/clickhouse/task_queue/ddl/");
         global_context->setDDLWorker(std::make_shared<DDLWorker>(ddl_zookeeper_path, *global_context, &config(), "distributed_ddl"));
+    }
+
+    if (config().has("raft"))
+    {
+        String raft_service_addr = config().getString("raft.service_addr");
+        if (config().has("raft.pd_addr"))
+        {
+            String pd_service_addrs = config().getString("raft.pd_addr");
+            Poco::StringTokenizer string_tokens(pd_service_addrs, ";");
+            std::vector<std::string> pd_addrs;
+            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
+                pd_addrs.push_back(*it);
+            }
+            global_context->setPDAddrs(pd_addrs);
+            LOG_INFO(log, "Found pd addrs.");
+        } else {
+            LOG_INFO(log, "Not found pd addrs.");
+        }
+        global_context->initializeRaftService(raft_service_addr);
+    }
+
+    if (config().has("tidb"))
+    {
+        String service_ip = config().getString("tidb.service_ip");
+        String status_port = config().getString("tidb.status_port");
+        global_context->initializeTiDBService(service_ip, status_port);
     }
 
     {

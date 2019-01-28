@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -107,7 +108,6 @@ inline void readFloatBinary(T & x, ReadBuffer & buf)
     readPODBinary(x, buf);
 }
 
-
 inline void readStringBinary(std::string & s, ReadBuffer & buf, size_t MAX_STRING_SIZE = DEFAULT_MAX_STRING_SIZE)
 {
     size_t size = 0;
@@ -200,7 +200,6 @@ inline bool checkStringByFirstCharacterAndAssertTheRestCaseInsensitive(const Str
     return checkStringByFirstCharacterAndAssertTheRestCaseInsensitive(s.c_str(), buf);
 }
 
-
 inline void readBoolText(bool & x, ReadBuffer & buf)
 {
     char tmp = '0';
@@ -223,6 +222,94 @@ inline void readBoolTextWord(bool & x, ReadBuffer & buf)
         assertString("false", buf);
         x = false;
     }
+}
+
+inline void decimalRound(Decimal& x, ReadBuffer & buf)
+{
+    ++buf.position();
+    if (buf.eof()) {
+        return;
+    }
+    if (*buf.position() >= '5' && *buf.position() <= '9') {
+        x.value ++;
+    }
+    x.checkOverflow();
+    while(!buf.eof() && *buf.position() >= '0' && *buf.position() <= '9') {
+        ++buf.position();
+    }
+}
+
+inline void readDecimalText(Decimal& x, ReadBuffer & buf)
+{
+    size_t scale = x.scale;
+    bool negative = false; 
+    bool fractional = false;
+    x.value = 0;
+    if (buf.eof())
+    {
+        throwReadAfterEOF();
+    }
+    size_t cur_scale = 0;
+    while (!buf.eof())
+    {
+        switch (*buf.position())
+        {
+            case '+':
+                break;
+            case '-':
+                negative = !negative;
+                break;
+            case '.':
+                if (fractional) {
+                    throw Exception("invalid format!");
+                }
+                fractional = true;
+                if (scale == 0) {
+                    decimalRound(x, buf);
+                    if (negative)
+                        x.value = -x.value;
+                    return;
+                }
+                break;
+            case '0': [[fallthrough]];
+            case '1': [[fallthrough]];
+            case '2': [[fallthrough]];
+            case '3': [[fallthrough]];
+            case '4': [[fallthrough]];
+            case '5': [[fallthrough]];
+            case '6': [[fallthrough]];
+            case '7': [[fallthrough]];
+            case '8': [[fallthrough]];
+            case '9':
+                x.value *= 10;
+                x.value += *buf.position() - '0';
+                if (fractional) {
+                    cur_scale++;
+                    if (scale == cur_scale) {
+                        decimalRound(x, buf);
+                        if (negative)
+                            x.value = -x.value;
+                        return;
+                    }
+                } 
+                break;
+            default:
+                for(;cur_scale < scale; cur_scale++) {
+                    x.value *= 10;
+                }
+                x.checkOverflow();
+                if (negative)
+                    x.value = -x.value;
+                return;
+        }
+        ++buf.position();
+    }
+    for(;cur_scale < scale; cur_scale++) {
+        x.value *= 10;
+    }
+    if (negative)
+        x.value = -x.value;
+    return;
 }
 
 template <typename T, typename ReturnType = void>
@@ -587,6 +674,7 @@ inline void readBinary(UInt128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(UInt256 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(LocalDate & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(LocalDateTime & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+inline void readBinary(Decimal & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 
 
 /// Generic methods to read value in text tab-separated format.
@@ -598,6 +686,7 @@ template <typename T>
 inline std::enable_if_t<std::is_floating_point_v<T>, void>
 readText(T & x, ReadBuffer & buf) { readFloatText(x, buf); }
 
+inline void readText(Decimal & x, ReadBuffer & buf) { readDecimalText(x, buf); }
 inline void readText(bool & x, ReadBuffer & buf) { readBoolText(x, buf); }
 inline void readText(String & x, ReadBuffer & buf) { readEscapedString(x, buf); }
 inline void readText(LocalDate & x, ReadBuffer & buf) { readDateText(x, buf); }
@@ -698,6 +787,7 @@ inline void readCSV(String & x, ReadBuffer & buf, const char delimiter = ',') { 
 inline void readCSV(LocalDate & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(LocalDateTime & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(UUID & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
+inline void readCSV(Decimal & x, ReadBuffer & buf) { readCSVSimple(x, buf); }
 inline void readCSV(UInt128 &, ReadBuffer &)
 {
     /** Because UInt128 isn't a natural type, without arithmetic operator and only use as an intermediary type -for UUID-

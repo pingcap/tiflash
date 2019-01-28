@@ -6,6 +6,8 @@
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <Core/NamesAndTypes.h>
 
+#include<IO/CompactContext.h>
+
 
 namespace DB
 {
@@ -25,6 +27,8 @@ public:
 
     MergeTreeReader(const String & path, /// Path to the directory containing the part
         const MergeTreeData::DataPartPtr & data_part, const NamesAndTypesList & columns,
+        PersistedCache * persisted_cache,
+        bool update_persisted_cache,
         UncompressedCache * uncompressed_cache,
         MarkCache * mark_cache,
         bool save_marks_in_cache,
@@ -54,8 +58,10 @@ private:
     {
     public:
         Stream(
-            const String & path_prefix_, const String & extension_, size_t marks_count_,
+            const String & path_prefix_, const String & stream_name, const String & extension_, size_t marks_count_,
             const MarkRanges & all_mark_ranges,
+            PersistedCache * persisted_cache, bool update_persisted_cache,
+            CompactReadContextPtr compactContextPtr_,
             MarkCache * mark_cache, bool save_marks_in_cache,
             UncompressedCache * uncompressed_cache,
             size_t aio_threshold, size_t max_read_buffer_size,
@@ -74,9 +80,15 @@ private:
         void loadMarks();
 
         std::string path_prefix;
+        std::string stream_name;
         std::string extension;
 
         size_t marks_count;
+
+        PersistedCache * persisted_cache;
+        bool update_persisted_cache;
+
+        CompactReadContextPtr compactContextPtr;
 
         MarkCache * mark_cache;
         bool save_marks_in_cache;
@@ -97,6 +109,9 @@ private:
 
     /// Columns that are read.
     NamesAndTypesList columns;
+
+    PersistedCache * persisted_cache;
+    bool update_persisted_cache;
 
     UncompressedCache * uncompressed_cache;
     MarkCache * mark_cache;
@@ -121,6 +136,8 @@ private:
     size_t readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Block & res);
 
     friend class MergeTreeRangeReader::DelayedStream;
+
+    CompactReadContextPtr compactContextPtr;
 };
 
 }

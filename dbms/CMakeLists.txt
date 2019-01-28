@@ -48,12 +48,16 @@ add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
+add_headers_and_sources(dbms src/Debug)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/ClusterProxy)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
 add_headers_and_sources(dbms src/Storages/Distributed)
 add_headers_and_sources(dbms src/Storages/MergeTree)
+add_headers_and_sources(dbms src/Storages/Transaction)
+add_headers_and_sources(dbms src/Raft)
+add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
 add_headers_only(dbms src/Server)
 
@@ -144,12 +148,19 @@ target_link_libraries (dbms
     clickhouse_parsers
     clickhouse_common_config
     clickhouse_common_io
+    kvproto
+    kv_client
+    ${Protobuf_LIBRARIES}
+    gRPC::grpc++_unsecure
+    ${CURL_LIBRARIES}
     ${MYSQLXX_LIBRARY}
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
 )
+
+target_include_directories (dbms BEFORE PRIVATE ${kvClient_INCLUDE_DIR})
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})

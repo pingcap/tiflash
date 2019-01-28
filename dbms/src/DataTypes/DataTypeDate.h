@@ -6,7 +6,7 @@
 namespace DB
 {
 
-class DataTypeDate final : public DataTypeNumberBase<UInt16>
+class DataTypeDate final : public DataTypeNumberBase<UInt32>
 {
 public:
     const char * getFamilyName() const override { return "Date"; }

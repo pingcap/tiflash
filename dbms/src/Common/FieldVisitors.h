@@ -43,6 +43,7 @@ typename std::decay_t<Visitor>::ResultType applyVisitor(Visitor && visitor, F &&
         case Field::Types::String:  return visitor(field.template get<String>());
         case Field::Types::Array:   return visitor(field.template get<Array>());
         case Field::Types::Tuple:   return visitor(field.template get<Tuple>());
+        case Field::Types::Decimal:   return visitor(field.template get<Decimal>());
 
         default:
             throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -112,6 +113,7 @@ public:
     String operator() (const String & x) const;
     String operator() (const Array & x) const;
     String operator() (const Tuple & x) const;
+    String operator() (const Decimal & x) const;
 };
 
 
@@ -126,6 +128,7 @@ public:
     String operator() (const String & x) const;
     String operator() (const Array & x) const;
     String operator() (const Tuple & x) const;
+    String operator() (const Decimal & x) const;
 };
 
 
@@ -157,6 +160,7 @@ public:
     T operator() (const UInt64 & x) const { return x; }
     T operator() (const Int64 & x) const { return x; }
     T operator() (const Float64 & x) const { return x; }
+    T operator() (const Decimal & x) const { return x; }
 };
 
 
@@ -174,6 +178,7 @@ public:
     void operator() (const Float64 & x) const;
     void operator() (const String & x) const;
     void operator() (const Array & x) const;
+    void operator() (const Decimal & x) const;
 };
 
 
@@ -314,6 +319,7 @@ public:
     bool operator() (UInt64 & x) const { x += get<UInt64>(rhs); return x != 0; }
     bool operator() (Int64 & x) const { x += get<Int64>(rhs); return x != 0; }
     bool operator() (Float64 & x) const { x += get<Float64>(rhs); return x != 0; }
+    bool operator() (Decimal & x) const { x += get<Decimal>(rhs); return x.value != 0; }
 
     bool operator() (Null &) const { throw Exception("Cannot sum Nulls", ErrorCodes::LOGICAL_ERROR); }
     bool operator() (String &) const { throw Exception("Cannot sum Strings", ErrorCodes::LOGICAL_ERROR); }

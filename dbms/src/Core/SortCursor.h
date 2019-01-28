@@ -39,7 +39,7 @@ struct SortCursorImpl
     /** Is there at least one column with Collator. */
     bool has_collation = false;
 
-    SortCursorImpl() {}
+    SortCursorImpl() : order(0) {}
 
     SortCursorImpl(const Block & block, const SortDescription & desc_, size_t order_ = 0)
         : desc(desc_), sort_columns_size(desc.size()), order(order_), need_collation(desc.size())
@@ -85,11 +85,16 @@ struct SortCursorImpl
 /// For easy copying.
 struct SortCursor
 {
-    SortCursorImpl * impl;
+    SortCursorImpl * impl = nullptr;
 
+    SortCursor() {}
     SortCursor(SortCursorImpl * impl_) : impl(impl_) {}
     SortCursorImpl * operator-> () { return impl; }
     const SortCursorImpl * operator-> () const { return impl; }
+
+    bool none() { return !impl; }
+    bool operator==(const SortCursor & other) const { return impl == other.impl; }
+    bool operator!=(const SortCursor & other) const { return impl != other.impl; }
 
     /// The specified row of this cursor is greater than the specified row of another cursor.
     bool greaterAt(const SortCursor & rhs, size_t lhs_pos, size_t rhs_pos) const
@@ -107,6 +112,41 @@ struct SortCursor
         return impl->order > rhs.impl->order;
     }
 
+    bool lessAtIgnOrder(const SortCursor & rhs, size_t lhs_pos, size_t rhs_pos) const
+    {
+        for (size_t i = 0; i < impl->sort_columns_size; ++i)
+        {
+            int direction = impl->desc[i].direction;
+            int nulls_direction = impl->desc[i].nulls_direction;
+            int res = direction * impl->sort_columns[i]->compareAt(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), nulls_direction);
+            if (res < 0)
+                return true;
+            if (res > 0)
+                return false;
+        }
+        return false;
+    }
+
+    bool equalAtIgnOrder(const SortCursor & rhs, size_t lhs_pos, size_t rhs_pos) const
+    {
+        for (size_t i = 0; i < impl->sort_columns_size; ++i)
+        {
+            int direction = impl->desc[i].direction;
+            int nulls_direction = impl->desc[i].nulls_direction;
+            int res = direction * impl->sort_columns[i]->compareAt(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), nulls_direction);
+            if (res != 0)
+                return false;
+        }
+        return true;
+    }
+
+    bool totallyLessIgnOrder(const SortCursor & rhs) const
+    {
+        if (impl->rows == 0 || rhs.impl->rows == 0)
+            return false;
+        return lessAtIgnOrder(rhs, impl->rows - 1, 0);
+    }
+
     /// Checks that all rows in the current block of this cursor are less than or equal to all the rows of the current block of another cursor.
     bool totallyLessOrEquals(const SortCursor & rhs) const
     {
@@ -122,6 +162,11 @@ struct SortCursor
         return greaterAt(rhs, impl->pos, rhs.impl->pos);
     }
 
+    bool equalIgnOrder(const SortCursor & rhs) const
+    {
+        return equalAtIgnOrder(rhs, impl->pos, rhs.impl->pos);
+    }
+
     /// Inverted so that the priority queue elements are removed in ascending order.
     bool operator< (const SortCursor & rhs) const
     {
@@ -133,11 +178,16 @@ struct SortCursor
 /// Separate comparator for locale-sensitive string comparisons
 struct SortCursorWithCollation
 {
-    SortCursorImpl * impl;
+    SortCursorImpl * impl = nullptr;
 
+    SortCursorWithCollation() {}
     SortCursorWithCollation(SortCursorImpl * impl_) : impl(impl_) {}
     SortCursorImpl * operator-> () { return impl; }
     const SortCursorImpl * operator-> () const { return impl; }
+
+    bool none() { return !impl; }
+    bool operator==(const SortCursor & other) const { return impl == other.impl; }
+    bool operator!=(const SortCursor & other) const { return impl != other.impl; }
 
     bool greaterAt(const SortCursorWithCollation & rhs, size_t lhs_pos, size_t rhs_pos) const
     {
@@ -163,6 +213,28 @@ struct SortCursorWithCollation
         return impl->order > rhs.impl->order;
     }
 
+    bool equalAtIgnOrder(const SortCursorWithCollation & rhs, size_t lhs_pos, size_t rhs_pos) const
+    {
+        for (size_t i = 0; i < impl->sort_columns_size; ++i)
+        {
+            int direction = impl->desc[i].direction;
+            int nulls_direction = impl->desc[i].nulls_direction;
+            int res;
+            if (impl->need_collation[i])
+            {
+                const ColumnString & column_string = static_cast<const ColumnString &>(*impl->sort_columns[i]);
+                res = column_string.compareAtWithCollation(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), *impl->desc[i].collator);
+            }
+            else
+                res = impl->sort_columns[i]->compareAt(lhs_pos, rhs_pos, *(rhs.impl->sort_columns[i]), nulls_direction);
+
+            res *= direction;
+            if (res != 0)
+                return false;
+        }
+        return true;
+    }
+
     bool totallyLessOrEquals(const SortCursorWithCollation & rhs) const
     {
         if (impl->rows == 0 || rhs.impl->rows == 0)
@@ -175,6 +247,11 @@ struct SortCursorWithCollation
     bool greater(const SortCursorWithCollation & rhs) const
     {
         return greaterAt(rhs, impl->pos, rhs.impl->pos);
+    }
+
+    bool equalIgnOrder(const SortCursorWithCollation & rhs) const
+    {
+        return equalAtIgnOrder(rhs, impl->pos, rhs.impl->pos);
     }
 
     bool operator< (const SortCursorWithCollation & rhs) const

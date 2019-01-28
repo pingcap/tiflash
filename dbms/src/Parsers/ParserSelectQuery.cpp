@@ -9,6 +9,7 @@
 #include <Parsers/ParserSampleRatio.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
+#include <Parsers/ParserPartition.h>
 
 
 namespace DB
@@ -26,8 +27,11 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     node = select_query;
 
     ParserKeyword s_select("SELECT");
+    ParserKeyword s_selraw("SELRAW");
+    ParserKeyword s_no_kvstore("NOKVSTORE");
     ParserKeyword s_distinct("DISTINCT");
     ParserKeyword s_from("FROM");
+    ParserKeyword s_partition("PARTITION");
     ParserKeyword s_prewhere("PREWHERE");
     ParserKeyword s_where("WHERE");
     ParserKeyword s_group_by("GROUP BY");
@@ -56,8 +60,14 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     /// SELECT [DISTINCT] expr list
     {
-        if (!s_select.ignore(pos, expected))
+        bool is_select = s_select.ignore(pos, expected);
+        bool is_selraw = s_selraw.ignore(pos, expected);
+        if (!is_select && !is_selraw)
             return false;
+        select_query->raw_for_mutable = is_selraw;
+
+        if (s_no_kvstore.ignore(pos, expected))
+            select_query->no_kvstore = true;
 
         if (s_distinct.ignore(pos, expected))
             select_query->distinct = true;
@@ -70,6 +80,13 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (s_from.ignore(pos, expected))
     {
         if (!ParserTablesInSelectQuery().parse(pos, select_query->tables, expected))
+            return false;
+    }
+
+    /// PARTITION p or PARTITION (p1, p2, ...)
+    if (s_partition.ignore(pos, expected))
+    {
+        if (!ParserPartition().parse(pos, select_query->partition_expression_list, expected))
             return false;
     }
 

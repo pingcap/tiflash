@@ -8,6 +8,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/Transaction/TiDB.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/ReadBufferFromFile.h>
@@ -239,6 +240,8 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
+            Mutable             = 100,
+            Txn                 = 101,
         };
 
         Mode mode;
@@ -289,7 +292,12 @@ public:
     void loadDataParts(bool skip_sanity_checks);
 
     bool supportsSampling() const { return sampling_expression != nullptr; }
-    bool supportsPrewhere() const { return true; }
+
+    bool supportsPrewhere() const
+    {
+        return merging_params.mode != MergingParams::Mutable &&
+            merging_params.mode != MergingParams::Txn;
+    }
 
     bool supportsFinal() const
     {
@@ -297,6 +305,8 @@ public:
             || merging_params.mode == MergingParams::Summing
             || merging_params.mode == MergingParams::Aggregating
             || merging_params.mode == MergingParams::Replacing
+            || merging_params.mode == MergingParams::Mutable
+            || merging_params.mode == MergingParams::Txn
             || merging_params.mode == MergingParams::VersionedCollapsing;
     }
 
@@ -477,6 +487,8 @@ public:
     /// For ATTACH/DETACH/DROP PARTITION.
     String getPartitionIDFromQuery(const ASTPtr & partition, const Context & context);
 
+    /// For PARTITION SELECT.
+    NameSet getPartitionIDsInLiteral(const ASTPtr & partition, const Context & context);
 
     MergeTreeDataFormatVersion format_version;
 
@@ -509,6 +521,8 @@ public:
 
     /// For generating names of temporary parts during insertion.
     SimpleIncrement insert_increment;
+
+    TiDB::TableInfo table_info;
 
 private:
     friend struct MergeTreeDataPart;

@@ -20,10 +20,13 @@ public:
 
     ASTPtr clone() const override;
 
+    bool raw_for_mutable = false;
     bool distinct = false;
+    bool no_kvstore = false;
     ASTPtr with_expression_list;
     ASTPtr select_expression_list;
     ASTPtr tables;
+    ASTPtr partition_expression_list;
     ASTPtr prewhere_expression;
     ASTPtr where_expression;
     ASTPtr group_expression_list;

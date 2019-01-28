@@ -231,6 +231,13 @@ public:
         throw Exception("Method dropPartition is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    /** Run the query TRUNCATE TABLE.
+      */
+    virtual void truncate(const ASTPtr & /*query*/, const Context & /*context*/)
+    {
+      throw Exception("Method truncate is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /** Run the ATTACH request (PART|PARTITION).
       */
     virtual void attachPartition(const ASTPtr & /*partition*/, bool /*part*/, const Context & /*context*/)

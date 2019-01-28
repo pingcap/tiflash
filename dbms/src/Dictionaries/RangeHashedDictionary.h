@@ -86,7 +86,7 @@ public:
     {
         using std::pair<UInt16, UInt16>::pair;
 
-        static bool isCorrectDate(const UInt16 date) { return 0 < date && date <= DATE_LUT_MAX_DAY_NUM; }
+        static bool isCorrectDate(const UInt32 date) { return 0 < date && date <= DATE_LUT_MAX_DAY_NUM; }
 
         bool contains(const UInt16 date) const
         {

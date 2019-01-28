@@ -26,7 +26,13 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
 
-    AggregateFunctionPtr res(createWithNumericType<Function>(*argument_types[0]));
+    AggregateFunctionPtr res;
+    const IDataType * p = argument_types[0].get();
+    if (auto dec_type = typeid_cast<const DataTypeDecimal *>(p)) {
+        res = AggregateFunctionPtr(createWithNumericType<Function>(*dec_type, dec_type->getPrec(), dec_type->getScale()));
+    }
+    else 
+        res = AggregateFunctionPtr(createWithNumericType<Function>(*argument_types[0]));
 
     if (!res)
         throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);

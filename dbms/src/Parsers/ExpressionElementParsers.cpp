@@ -501,6 +501,14 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     res = float_value;
 
+    Decimal dec;
+    if (parseDecimal(buf, pos->size(), dec)) {
+        if (negative) {
+            dec.value = -dec.value;
+        }
+        res = dec;
+    }
+
     /// try to use more exact type: UInt64
 
     char * pos_integer = buf;
@@ -664,6 +672,7 @@ const char * ParserAliasBase::restricted_keywords[] =
     "FORMAT",
     "UNION",
     "INTO",
+    "PARTITION",
     nullptr
 };
 

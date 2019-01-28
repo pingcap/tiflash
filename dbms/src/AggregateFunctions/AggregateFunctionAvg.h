@@ -4,6 +4,7 @@
 #include <IO/ReadHelpers.h>
 
 #include <DataTypes/DataTypesNumber.h>
+#include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnsNumber.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
@@ -18,6 +19,12 @@ struct AggregateFunctionAvgData
 {
     T sum = 0;
     UInt64 count = 0;
+
+    AggregateFunctionAvgData(){}
+
+    AggregateFunctionAvgData(PrecType prec, ScaleType scale){
+        sum = Decimal(0, prec, scale);
+    }
 };
 
 
@@ -25,12 +32,24 @@ struct AggregateFunctionAvgData
 template <typename T>
 class AggregateFunctionAvg final : public IAggregateFunctionDataHelper<AggregateFunctionAvgData<typename NearestFieldType<T>::Type>, AggregateFunctionAvg<T>>
 {
+    PrecType prec;
+    ScaleType scale;
+    PrecType result_prec;
+    ScaleType result_scale;
 public:
+    AggregateFunctionAvg() {}
+    AggregateFunctionAvg(PrecType prec_, ScaleType scale_) : prec(prec_), scale(scale_)
+    {
+        AvgDecimalInferer::infer(prec, scale, result_prec, result_scale);
+    }
     String getName() const override { return "avg"; }
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeFloat64>();
+        if constexpr (IsDecimal<T>)
+            return std::make_shared<DataTypeDecimal>(result_prec, result_scale);
+        else 
+            return std::make_shared<DataTypeFloat64>();
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
@@ -59,8 +78,20 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
     {
-        static_cast<ColumnFloat64 &>(to).getData().push_back(
-            static_cast<Float64>(this->data(place).sum) / this->data(place).count);
+        if constexpr (IsDecimal<T>)
+            static_cast<ColumnDecimal &>(to).getData().push_back(
+                this->data(place).sum.getAvg(this->data(place).count, result_prec, result_scale));
+        else
+            static_cast<ColumnFloat64 &>(to).getData().push_back(
+                static_cast<Float64>(this->data(place).sum) / this->data(place).count);
+    }
+
+    void create(AggregateDataPtr place) const override {
+        using Data = AggregateFunctionAvgData<typename NearestFieldType<T>::Type>;
+        if constexpr (IsDecimal<T>)
+            new (place) Data(result_prec, result_scale);
+        else
+            new (place) Data;
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

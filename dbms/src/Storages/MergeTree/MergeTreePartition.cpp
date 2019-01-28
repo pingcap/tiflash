@@ -11,6 +11,8 @@
 
 #include <Poco/File.h>
 
+#include <Storages/MutableSupport.h>
+
 namespace DB
 {
 
@@ -23,6 +25,9 @@ static ReadBufferFromFile openForReading(const String & path)
 /// So if you want to change this method, be sure to guarantee compatibility with existing table data.
 String MergeTreePartition::getID(const MergeTreeData & storage) const
 {
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Mutable || storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        return toString(value[0].safeGet<UInt64>());
+
     if (value.size() != storage.partition_key_sample.columns())
         throw Exception("Invalid partition key size: " + toString(value.size()), ErrorCodes::LOGICAL_ERROR);
 
@@ -79,6 +84,12 @@ String MergeTreePartition::getID(const MergeTreeData & storage) const
 
 void MergeTreePartition::serializeTextQuoted(const MergeTreeData & storage, WriteBuffer & out) const
 {
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Mutable || storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        writeCString(toString(value[0].safeGet<UInt64>()).data(), out);
+        return;
+    }
+
     size_t key_size = storage.partition_key_sample.columns();
 
     if (key_size == 0)

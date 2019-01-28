@@ -2,6 +2,7 @@
 
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 
@@ -22,7 +23,8 @@
     M(Int32) \
     M(Int64) \
     M(Float32) \
-    M(Float64)
+    M(Float64) \
+    M(Decimal)
 
 #define FOR_NUMERIC_TYPES_AND_ENUMS(M) \
     M(UInt8, DataTypeUInt8) \
@@ -36,7 +38,8 @@
     M(Float32, DataTypeFloat32) \
     M(Float64, DataTypeFloat64) \
     M(UInt8, DataTypeEnum8) \
-    M(UInt16, DataTypeEnum16)
+    M(UInt16, DataTypeEnum16) \
+    M(Decimal, DataTypeDecimal)
 
 namespace DB
 {

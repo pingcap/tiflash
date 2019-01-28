@@ -2,7 +2,7 @@
 
 #include <type_traits>
 #include <DataTypes/DataTypeNumberBase.h>
-
+#include <DataTypes/DataTypeDecimal.h>
 
 namespace DB
 {
@@ -21,6 +21,9 @@ class DataTypeNumber final : public DataTypeNumberBase<T>
     bool isInteger() const override { return std::is_integral_v<T>; }
     bool canBeInsideNullable() const override { return true; }
 };
+
+template <>
+class DataTypeNumber<Decimal> : public DataTypeDecimal{};
 
 using DataTypeUInt8 = DataTypeNumber<UInt8>;
 using DataTypeUInt16 = DataTypeNumber<UInt16>;

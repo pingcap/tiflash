@@ -11,14 +11,14 @@ namespace DB
 
 void DataTypeDate::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
-    writeDateText(DayNum_t(static_cast<const ColumnUInt16 &>(column).getData()[row_num]), ostr);
+    writeDateText(DayNum_t(static_cast<const ColumnUInt32 &>(column).getData()[row_num]), ostr);
 }
 
 static void deserializeText(IColumn & column, ReadBuffer & istr)
 {
     DayNum_t x;
     readDateText(x, istr);
-    static_cast<ColumnUInt16 &>(column).getData().push_back(x);
+    static_cast<ColumnUInt32 &>(column).getData().push_back(x);
 }
 
 void DataTypeDate::serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -44,7 +44,7 @@ void DataTypeDate::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) co
     assertChar('\'', istr);
     readDateText(x, istr);
     assertChar('\'', istr);
-    static_cast<ColumnUInt16 &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
+    static_cast<ColumnUInt32 &>(column).getData().push_back(x);    /// It's important to do this at the end - for exception safety.
 }
 
 void DataTypeDate::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
@@ -60,7 +60,7 @@ void DataTypeDate::deserializeTextJSON(IColumn & column, ReadBuffer & istr) cons
     assertChar('"', istr);
     readDateText(x, istr);
     assertChar('"', istr);
-    static_cast<ColumnUInt16 &>(column).getData().push_back(x);
+    static_cast<ColumnUInt32 &>(column).getData().push_back(x);
 }
 
 void DataTypeDate::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -74,7 +74,7 @@ void DataTypeDate::deserializeTextCSV(IColumn & column, ReadBuffer & istr, const
 {
     LocalDate value;
     readCSV(value, istr);
-    static_cast<ColumnUInt16 &>(column).getData().push_back(value.getDayNum());
+    static_cast<ColumnUInt32 &>(column).getData().push_back(value.getDayNum());
 }
 
 bool DataTypeDate::equals(const IDataType & rhs) const

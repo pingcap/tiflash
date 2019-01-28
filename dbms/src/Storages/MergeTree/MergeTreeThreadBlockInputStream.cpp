@@ -23,7 +23,7 @@ MergeTreeThreadBlockInputStream::MergeTreeThreadBlockInputStream(
     :
     MergeTreeBaseBlockInputStream{storage, prewhere_actions, prewhere_column, max_block_size_rows,
         preferred_block_size_bytes, preferred_max_column_in_block_size_bytes, settings.min_bytes_to_use_direct_io,
-        settings.max_read_buffer_size, use_uncompressed_cache, true, virt_column_names},
+        settings.max_read_buffer_size, use_uncompressed_cache, true, true, virt_column_names},
     thread{thread},
     pool{pool}
 {
@@ -74,27 +74,35 @@ bool MergeTreeThreadBlockInputStream::getNewTask()
 
         owned_mark_cache = storage.context.getMarkCache();
 
+        auto persisted_cache = storage.context.getPersistedCache();
+
         reader = std::make_unique<MergeTreeReader>(
-            path, task->data_part, task->columns, owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
+            path, task->data_part, task->columns, persisted_cache.get(), update_persisted_cache,
+            owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
             storage, task->mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size, MergeTreeReader::ValueSizeMap{}, profile_callback);
 
         if (prewhere_actions)
             pre_reader = std::make_unique<MergeTreeReader>(
-                path, task->data_part, task->pre_columns, owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
+                path, task->data_part, task->pre_columns, persisted_cache.get(), update_persisted_cache,
+                owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
                 storage, task->mark_ranges, min_bytes_to_use_direct_io,
                 max_read_buffer_size, MergeTreeReader::ValueSizeMap{}, profile_callback);
     }
     else
     {
+        auto persisted_cache = storage.context.getPersistedCache();
+
         /// retain avg_value_size_hints
         reader = std::make_unique<MergeTreeReader>(
-            path, task->data_part, task->columns, owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
+            path, task->data_part, task->columns, persisted_cache.get(), update_persisted_cache,
+            owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
             storage, task->mark_ranges, min_bytes_to_use_direct_io, max_read_buffer_size,
             reader->getAvgValueSizeHints(), profile_callback);
 
         if (prewhere_actions)
             pre_reader = std::make_unique<MergeTreeReader>(
-                path, task->data_part, task->pre_columns, owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
+                path, task->data_part, task->pre_columns, persisted_cache.get(), update_persisted_cache,
+                owned_uncompressed_cache.get(), owned_mark_cache.get(), save_marks_in_cache,
                 storage, task->mark_ranges, min_bytes_to_use_direct_io,
                 max_read_buffer_size, pre_reader->getAvgValueSizeHints(), profile_callback);
     }

@@ -26,6 +26,8 @@ public:
     const char * data = nullptr;
     const char * end = nullptr;
 
+    bool is_import;
+
     /** Get the text that identifies this element. */
     String getID() const override { return "InsertQuery_" + database + "_" + table; };
 

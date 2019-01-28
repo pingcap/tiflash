@@ -1,7 +1,12 @@
 #pragma once
 
+#include <functional>
+//#include <city.h>
+#include <functional>
+#include <citycrc.h>
 #include <Core/Types.h>
 #include <Common/UInt128.h>
+#include <boost/functional/hash/hash.hpp>
 
 
 /** Hash functions that are better than the trivial function std::hash.
@@ -87,6 +92,15 @@ DEFINE_HASH(DB::Float64)
 
 #undef DEFINE_HASH
 
+template <> struct DefaultHash<DB::Decimal>
+{
+    size_t operator() (DB::Decimal v) const {
+        //return CityHash_v1_0_2::CityHash64(reinterpret_cast<char*>(&v), sizeof(v));
+        //return std::hash<std::string>{}(v.toString());
+        return boost::multiprecision::hash_value(v.value);
+    }
+};
+
 
 template <typename T> struct HashCRC32;
 
@@ -110,6 +124,16 @@ template <> struct HashCRC32<T>\
     {\
         return hashCRC32<T>(key);\
     }\
+};
+
+template <> struct HashCRC32<DB::Decimal>
+{
+    size_t operator() (DB::Decimal v) const
+    {
+        //return CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::CityHashCrc128(reinterpret_cast<char*>(&v), sizeof(DB::Decimal)));
+        //return std::hash<std::string>{}(v.toString());
+        return boost::multiprecision::hash_value(v.value);
+    }
 };
 
 DEFINE_HASH(DB::UInt8)

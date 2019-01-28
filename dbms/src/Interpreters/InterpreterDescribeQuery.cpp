@@ -14,6 +14,9 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
+#include <Storages/StorageMergeTree.h>
+#include <Storages/MutableSupport.h>
+
 
 namespace DB
 {
@@ -106,8 +109,13 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     Block sample_block = getSampleBlock();
     MutableColumns res_columns = sample_block.cloneEmptyColumns();
 
+    OrderedNameSet filtered_names = MutableSupport::instance().hiddenColumns(table->getName());
+
     for (const auto & column : columns)
     {
+        if (filtered_names.has(column.name))
+            continue;
+
         res_columns[0]->insert(column.name);
         res_columns[1]->insert(column.type->getName());
 

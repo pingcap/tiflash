@@ -9,7 +9,7 @@ void ASTInsertQuery::formatImpl(const FormatSettings & settings, FormatState & s
 {
     frame.need_parens = false;
 
-    settings.ostr << (settings.hilite ? hilite_keyword : "") << "INSERT INTO ";
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << (is_import ? "IMPORT INTO " : "INSERT INTO ");
     if (table_function)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "FUNCTION ";

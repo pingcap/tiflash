@@ -22,6 +22,15 @@ public:
 
     String getName() const override { return "BlocksList"; }
 
+    Block getHeader() const override
+    {
+        Block res;
+        if (!list.empty())
+            for (const auto & elem : list.front())
+                res.insert({ elem.column->cloneEmpty(), elem.type, elem.name });
+        return res;
+    }
+
 protected:
     Block readImpl() override
     {

@@ -47,7 +47,11 @@ struct SetMethodOneNumber
             size_t i,                             /// From what row of the block I get the key.
             const Sizes & /*key_sizes*/) const    /// If keys of a fixed length - their lengths. Not used in methods for variable length keys.
         {
-            return unionCastToUInt64(vec[i]);
+            if constexpr(IsDecimal<Key>) {
+                return vec[i];
+            } else {
+                return unionCastToUInt64(vec[i]);
+            }
         }
     };
 
@@ -314,6 +318,7 @@ struct NonClearableSet
       */
     std::unique_ptr<SetMethodOneNumber<UInt32, HashSet<UInt32, HashCRC32<UInt32>>>>                             key32;
     std::unique_ptr<SetMethodOneNumber<UInt64, HashSet<UInt64, HashCRC32<UInt64>>>>                             key64;
+    std::unique_ptr<SetMethodOneNumber<Decimal, HashSet<Decimal, HashCRC32<Decimal>>>>                         key_decimal;
     std::unique_ptr<SetMethodString<HashSetWithSavedHash<StringRef>>>                                           key_string;
     std::unique_ptr<SetMethodFixedString<HashSetWithSavedHash<StringRef>>>                                      key_fixed_string;
     std::unique_ptr<SetMethodKeysFixed<HashSet<UInt128, UInt128HashCRC32>>>                                     keys128;
@@ -337,6 +342,7 @@ struct ClearableSet
 
     std::unique_ptr<SetMethodOneNumber<UInt32, ClearableHashSet<UInt32, HashCRC32<UInt32>>>>                        key32;
     std::unique_ptr<SetMethodOneNumber<UInt64, ClearableHashSet<UInt64, HashCRC32<UInt64>>>>                        key64;
+    std::unique_ptr<SetMethodOneNumber<Decimal, ClearableHashSet<Decimal, HashCRC32<Decimal>>>>                         key_decimal;
     std::unique_ptr<SetMethodString<ClearableHashSetWithSavedHash<StringRef>>>                                      key_string;
     std::unique_ptr<SetMethodFixedString<ClearableHashSetWithSavedHash<StringRef>>>                                 key_fixed_string;
     std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt128, UInt128HashCRC32>>>                                keys128;
@@ -366,6 +372,7 @@ struct SetVariantsTemplate: public Variant
         M(key_fixed_string)     \
         M(keys128)              \
         M(keys256)              \
+        M(key_decimal)              \
         M(nullable_keys128)     \
         M(nullable_keys256)     \
         M(hashed)
