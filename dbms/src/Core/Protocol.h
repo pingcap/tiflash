@@ -69,6 +69,7 @@ namespace Protocol
             Totals = 7,               /// A block with totals (compressed or not).
             Extremes = 8,             /// A block with minimums and maximums (compressed or not).
             TablesStatusResponse = 9, /// A response to TablesStatus request.
+            LockInfos = 100,          /// Lock infos of some pending transactions.
         };
 
         /// NOTE: If the type of packet argument would be Enum, the comparison packet >= 0 && packet < 10
@@ -80,6 +81,8 @@ namespace Protocol
             static const char * data[] = { "Hello", "Data", "Exception", "Progress", "Pong", "EndOfStream", "ProfileInfo", "Totals", "Extremes", "TablesStatusResponse" };
             return packet < 10
                 ? data[packet]
+                : packet == LockInfos
+                ? "LockInfos"
                 : "Unknown packet";
         }
     }

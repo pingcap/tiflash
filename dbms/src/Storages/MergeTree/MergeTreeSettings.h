@@ -21,6 +21,9 @@ struct MergeTreeSettings
     /** How many rows correspond to one primary key value. */                                                 \
     M(SettingUInt64, index_granularity, 8192)                                                                 \
                                                                                                               \
+    /** MutableMergeTree partition number. */                                                                 \
+    M(SettingUInt64, mutable_mergetree_partition_number, 16)                                                  \
+                                                                                                              \
     /** Merge settings. */                                                                                    \
                                                                                                               \
     /** Maximum in total size of parts to merge, when there are maximum (minimum) free threads                \

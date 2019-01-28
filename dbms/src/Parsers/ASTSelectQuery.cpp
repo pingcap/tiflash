@@ -71,7 +71,13 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
         s.ostr << s.nl_or_ws;
     }
 
-    s.ostr << (s.hilite ? hilite_keyword : "") << indent_str << "SELECT " << (distinct ? "DISTINCT " : "") << (s.hilite ? hilite_none : "");
+    s.ostr
+        << (s.hilite ? hilite_keyword : "")
+        << indent_str
+        << (raw_for_mutable ? "SELRAW " : "SELECT ")
+        << (no_kvstore ? "NOKVSTORE " : "")
+        << (distinct ? "DISTINCT " : "")
+        << (s.hilite ? hilite_none : "");
 
     s.one_line
         ? select_expression_list->formatImpl(s, state, frame)

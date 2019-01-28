@@ -17,6 +17,11 @@ void MergeTreeBlockOutputStream::write(const Block & block)
     storage.data.delayInsertIfNeeded();
 
     auto part_blocks = storage.writer.splitBlockIntoParts(block);
+    if (part_blocks.size() > 0)
+    {
+        LOG_TRACE(log, "Writing block, origin rows: " << block.rows() << ", splitted into " << part_blocks.size() << " parts");
+    }
+
     for (auto & current_block : part_blocks)
     {
         Stopwatch watch;

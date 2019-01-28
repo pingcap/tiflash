@@ -26,6 +26,8 @@
 #define DEFAULT_MIN_COMPRESS_BLOCK_SIZE 65536
 #define DEFAULT_MAX_COMPRESS_BLOCK_SIZE 1048576
 
+#define DEFAULT_MAX_READ_TSO 0xFFFFFFFFFFFFFFFF
+
 /** Which blocks by default read the data (by number of rows).
   * Smaller values give better cache locality, less consumption of RAM, but more overhead to process the query.
   */

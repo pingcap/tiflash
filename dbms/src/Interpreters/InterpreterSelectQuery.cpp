@@ -660,13 +660,15 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
         query_info.sets = query_analyzer->getPreparedSets();
+        query_info.resolve_locks = settings.resolve_locks;
+        query_info.read_tso = settings.read_tso;
 
         /// PREWHERE optimization
         {
             auto optimize_prewhere = [&](auto & merge_tree)
             {
                 /// Try transferring some condition from WHERE to PREWHERE if enabled and viable
-                if (settings.optimize_move_to_prewhere && query.where_expression && !query.prewhere_expression && !query.final())
+                if (settings.optimize_move_to_prewhere && query.where_expression && !query.prewhere_expression && !query.final() && storage->supportsPrewhere())
                     MergeTreeWhereOptimizer{query_info, context, merge_tree.getData(), required_columns, log};
             };
 
@@ -675,6 +677,20 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
             else if (const StorageReplicatedMergeTree * merge_tree = dynamic_cast<const StorageReplicatedMergeTree *>(storage.get()))
                 optimize_prewhere(*merge_tree);
         }
+
+        /// PARTITION SELECT only supports MergeTree family now.
+        if (const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
+        {
+            const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
+            if (select_query->partition_expression_list && !merge_tree)
+            {
+                throw Exception("PARTITION SELECT only supports MergeTree family.");
+            }
+        }
+
+        //if (storage->getData().merging_params.mode == MergeTreeData::MergingParams::Txn) {
+        //    TMTContext & tmt = context.getTMTContext();
+        //}
 
         if (!dry_run)
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);

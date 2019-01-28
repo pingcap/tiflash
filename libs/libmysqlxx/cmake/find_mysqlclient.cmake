@@ -1,4 +1,4 @@
-option (ENABLE_MYSQL "Enable MySQL" ON)
+option (ENABLE_MYSQL "Enable MySQL" OFF)
 
 if (ENABLE_MYSQL)
     set (MYSQL_LIB_PATHS

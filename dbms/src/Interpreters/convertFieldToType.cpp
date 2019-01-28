@@ -66,6 +66,8 @@ static Field convertNumericType(const Field & from, const IDataType & type)
         return convertNumericTypeImpl<Int64, To>(from);
     if (from.getType() == Field::Types::Float64)
         return convertNumericTypeImpl<Float64, To>(from);
+    if (from.getType() == Field::Types::Decimal)
+        return convertNumericTypeImpl<Decimal, To>(from);
 
     throw Exception("Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: "
         + Field::Types::toString(from.getType()), ErrorCodes::TYPE_MISMATCH);
@@ -123,6 +125,7 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
         if (typeid_cast<const DataTypeInt64 *>(&type)) return convertNumericType<Int64>(src, type);
         if (typeid_cast<const DataTypeFloat32 *>(&type)) return convertNumericType<Float32>(src, type);
         if (typeid_cast<const DataTypeFloat64 *>(&type)) return convertNumericType<Float64>(src, type);
+        if (typeid_cast<const DataTypeDecimal *>(&type)) return convertNumericType<Decimal>(src, type);
 
         const bool is_date = typeid_cast<const DataTypeDate *>(&type);
         bool is_datetime = false;
@@ -136,6 +139,8 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
                         throw Exception{"Logical error: unknown numeric type " + type.getName(), ErrorCodes::LOGICAL_ERROR};
 
         /// Numeric values for Enums should not be used directly in IN section
+        if (src.getType() == Field::Types::Int64 && !is_enum)
+            return src;
         if (src.getType() == Field::Types::UInt64 && !is_enum)
             return src;
 

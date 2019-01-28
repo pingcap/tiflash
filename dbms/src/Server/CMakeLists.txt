@@ -24,8 +24,7 @@ add_library (clickhouse-server-lib
     RootRequestHandler.cpp
     Server.cpp
     StatusFile.cpp
-    TCPHandler.cpp
-    )
+    TCPHandler.cpp)
 
 target_link_libraries (clickhouse-server-lib clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
 target_include_directories (clickhouse-server-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
@@ -92,102 +91,102 @@ if (CLICKHOUSE_SPLIT_BINARY)
         target_link_libraries (clickhouse-clang clickhouse-compiler-lib)
         add_executable (clickhouse-lld clickhouse-lld.cpp)
         target_link_libraries (clickhouse-lld clickhouse-compiler-lib)
-        install (TARGETS clickhouse-clang clickhouse-lld RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        install (TARGETS clickhouse-clang clickhouse-lld RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list (APPEND CLICKHOUSE_ALL_TARGETS clickhouse-clang clickhouse-lld)
     endif ()
 
-    install (TARGETS clickhouse-server ${CLICKHOUSE_ALL_TARGETS} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+    install (TARGETS clickhouse-server ${CLICKHOUSE_ALL_TARGETS} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
 
     add_custom_target (clickhouse-bundle ALL DEPENDS ${CLICKHOUSE_ALL_TARGETS})
-    add_custom_target (clickhouse ALL DEPENDS clickhouse-bundle)
+    add_custom_target (theflash ALL DEPENDS clickhouse-bundle)
 else ()
-    add_executable (clickhouse main.cpp)
-    target_link_libraries (clickhouse clickhouse_common_io)
-    target_include_directories (clickhouse BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
-    target_include_directories (clickhouse PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+    add_executable (theflash main.cpp)
+    target_link_libraries (theflash clickhouse_common_io)
+    target_include_directories (theflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
+    target_include_directories (theflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
     if (USE_EMBEDDED_COMPILER)
-        target_link_libraries (clickhouse clickhouse-compiler-lib)
+        target_link_libraries (theflash clickhouse-compiler-lib)
     endif ()
     if (ENABLE_CLICKHOUSE_SERVER)
-        target_link_libraries (clickhouse clickhouse-server-lib)
+        target_link_libraries (theflash clickhouse-server-lib)
     endif ()
     if (ENABLE_CLICKHOUSE_CLIENT)
-        target_link_libraries (clickhouse clickhouse-client-lib)
+        target_link_libraries (theflash clickhouse-client-lib)
     endif ()
     if (ENABLE_CLICKHOUSE_LOCAL)
-        target_link_libraries (clickhouse clickhouse-local-lib)
+        target_link_libraries (theflash clickhouse-local-lib)
     endif ()
     if (ENABLE_CLICKHOUSE_BENCHMARK)
-        target_link_libraries (clickhouse clickhouse-benchmark-lib)
+        target_link_libraries (theflash clickhouse-benchmark-lib)
     endif ()
     if (ENABLE_CLICKHOUSE_PERFORMANCE)
-        target_link_libraries (clickhouse clickhouse-performance-test-lib)
+        target_link_libraries (theflash clickhouse-performance-test-lib)
     endif ()
     if (ENABLE_CLICKHOUSE_TOOLS)
-    target_link_libraries (clickhouse
+    target_link_libraries (theflash
         clickhouse-extract-from-config-lib
         clickhouse-compressor-lib
         clickhouse-format-lib
     )
     endif ()
     if (ENABLE_CLICKHOUSE_COPIER)
-        target_link_libraries (clickhouse clickhouse-copier-lib)
+        target_link_libraries (theflash clickhouse-copier-lib)
     endif ()
 
     set (CLICKHOUSE_BUNDLE)
     if (ENABLE_CLICKHOUSE_SERVER)
-        add_custom_target (clickhouse-server ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-server DEPENDS clickhouse)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        add_custom_target (clickhouse-server ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-server DEPENDS theflash)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-server)
     endif ()
     if (ENABLE_CLICKHOUSE_CLIENT)
-        add_custom_target (clickhouse-client ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-client DEPENDS clickhouse)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-client DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        add_custom_target (clickhouse-client ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-client DEPENDS theflash)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-client DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-client)
     endif ()
     if (ENABLE_CLICKHOUSE_LOCAL)
-        add_custom_target (clickhouse-local ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-local DEPENDS clickhouse)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-local DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        add_custom_target (clickhouse-local ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-local DEPENDS theflash)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-local DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-local)
     endif ()
     if (ENABLE_CLICKHOUSE_BENCHMARK)
-        add_custom_target (clickhouse-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-benchmark DEPENDS clickhouse)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        add_custom_target (clickhouse-benchmark ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-benchmark DEPENDS theflash)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-benchmark DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-benchmark)
     endif ()
     if (ENABLE_CLICKHOUSE_PERFORMANCE)
-        add_custom_target (clickhouse-performance-test ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-performance-test DEPENDS clickhouse)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-performance-test DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        add_custom_target (clickhouse-performance-test ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-performance-test DEPENDS theflash)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-performance-test DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-performance-test)
     endif ()
     if (ENABLE_CLICKHOUSE_TOOLS)
-        add_custom_target (clickhouse-extract-from-config ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-extract-from-config DEPENDS clickhouse)
-        add_custom_target (clickhouse-compressor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-compressor DEPENDS clickhouse)
-        add_custom_target (clickhouse-format ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-format DEPENDS clickhouse)
+        add_custom_target (clickhouse-extract-from-config ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-extract-from-config DEPENDS theflash)
+        add_custom_target (clickhouse-compressor ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-compressor DEPENDS theflash)
+        add_custom_target (clickhouse-format ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-format DEPENDS theflash)
         install (FILES
            ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-extract-from-config
            ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-compressor
            ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-format
-           DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+           DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-extract-from-config clickhouse-compressor clickhouse-format)
     endif ()
     if (ENABLE_CLICKHOUSE_COPIER)
-        add_custom_target (clickhouse-copier ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-copier DEPENDS clickhouse)
-        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-copier DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        add_custom_target (clickhouse-copier ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-copier DEPENDS theflash)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-copier DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-copier)
     endif ()
     # install always because depian package want this files:
-    add_custom_target (clickhouse-clang ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-clang DEPENDS clickhouse)
-    add_custom_target (clickhouse-lld ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-lld DEPENDS clickhouse)
+    add_custom_target (clickhouse-clang ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-clang DEPENDS theflash)
+    add_custom_target (clickhouse-lld ALL COMMAND ${CMAKE_COMMAND} -E create_symlink theflash clickhouse-lld DEPENDS theflash)
     list(APPEND CLICKHOUSE_BUNDLE clickhouse-clang clickhouse-lld)
 
-    install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+    install (TARGETS theflash RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
 
     install (FILES
        ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-clang
        ${CMAKE_CURRENT_BINARY_DIR}/clickhouse-lld
-       DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+       DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT theflash)
 
     add_custom_target (clickhouse-bundle ALL DEPENDS ${CLICKHOUSE_BUNDLE})
 endif ()
@@ -198,4 +197,21 @@ add_test(NAME GLIBC_required_version COMMAND bash -c "readelf -s ${CMAKE_CURRENT
 install (
     FILES config.xml users.xml
     DESTINATION  ${CLICKHOUSE_ETC_DIR}/clickhouse-server
-    COMPONENT clickhouse)
+    COMPONENT theflash)
+
+add_executable (gserver GServer.cpp)
+add_executable (gclient GClient.cpp)
+
+target_link_libraries (gserver
+    kvproto
+    ${Protobuf_LIBRARIES}
+    gRPC::grpc++_unsecure)
+
+target_link_libraries (gclient
+    kvproto
+    ${Protobuf_LIBRARIES}
+    gRPC::grpc++_unsecure)
+
+target_include_directories (gserver PUBLIC ${DBMS_INCLUDE_DIR})
+target_include_directories (gclient PUBLIC ${DBMS_INCLUDE_DIR})
+

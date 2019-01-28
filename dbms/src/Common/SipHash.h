@@ -15,6 +15,7 @@
 
 #include <common/Types.h>
 #include <type_traits>
+#include <Common/Decimal.h>
 
 #define ROTL(x, b) static_cast<UInt64>(((x) << (b)) | ((x) >> (64 - (b))))
 
@@ -186,6 +187,13 @@ std::enable_if_t<std::/*has_unique_object_representations_v*/is_standard_layout_
 {
     SipHash hash;
     hash.update(x);
+    return hash.get64();
+}
+
+inline UInt64 sipHash64(const DB::Decimal& x)
+{
+    SipHash hash;
+    hash.update(reinterpret_cast<const char *>(&x), sizeof(x));
     return hash.get64();
 }
 

@@ -1,3 +1,6 @@
+add_subdirectory (kvproto/cpp)
+add_subdirectory (client-c)
+
 if (NOT MSVC)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-old-style-cast")
 endif ()

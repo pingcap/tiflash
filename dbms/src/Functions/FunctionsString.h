@@ -30,7 +30,8 @@ namespace ErrorCodes
   * s                -> UInt8:    empty, notEmpty
   * s                -> UInt64:   length, lengthUTF8
   * s                -> s:        lower, upper, lowerUTF8, upperUTF8, reverse, reverseUTF8
-  * s, s             -> s:        concat
+  * s, s             -> s:        concat, trim, ltrim, rtrim
+  * s, c, s          -> s:        lpad, rpad
   * s, c1, c2        -> s:        substring, substringUTF8
   * s, c1, c2, s2    -> s:        replace, replaceUTF8
   *

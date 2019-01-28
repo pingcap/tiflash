@@ -52,7 +52,7 @@ namespace
             case ValueType::Float32: static_cast<ColumnFloat32 &>(column).insert(value.getDouble()); break;
             case ValueType::Float64: static_cast<ColumnFloat64 &>(column).insert(value.getDouble()); break;
             case ValueType::String: static_cast<ColumnString &>(column).insertData(value.data(), value.size()); break;
-            case ValueType::Date: static_cast<ColumnUInt16 &>(column).insert(UInt16{value.getDate().getDayNum()}); break;
+            case ValueType::Date: static_cast<ColumnUInt32 &>(column).insert(UInt32{value.getDate().getDayNum()}); break;
             case ValueType::DateTime: static_cast<ColumnUInt32 &>(column).insert(time_t{value.getDateTime()}); break;
         }
     }

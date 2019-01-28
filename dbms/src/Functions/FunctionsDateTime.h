@@ -45,7 +45,7 @@ namespace ErrorCodes
   * (toDate - located in FunctionConversion.h file)
   *
   * Return types:
-  *  toYear -> UInt16
+  *  toYear -> UInt32
   *  toMonth, toDayOfMonth, toDayOfWeek, toHour, toMinute, toSecond -> UInt8
   *  toMonday, toStartOfMonth, toStartOfYear -> Date
   *  toStartOfMinute, toStartOfHour, toTime, now -> DateTime
@@ -72,7 +72,7 @@ const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const Co
 #define TIME_SLOT_SIZE 1800
 
 /** Transformations.
-  * Represents two functions - from datetime (UInt32) and from date (UInt16).
+  * Represents two functions - from datetime (Int64) and from date (UInt32).
   *
   * Also, the "factor transformation" F is defined for the T transformation.
   * This is a transformation of F such that its value identifies the region of monotonicity for T
@@ -87,19 +87,19 @@ const DateLUTImpl & extractTimeZoneFromFunctionArguments(Block & block, const Co
 /// This factor transformation will say that the function is monotone everywhere.
 struct ZeroTransform
 {
-    static inline UInt16 execute(UInt32, const DateLUTImpl &) { return 0; }
-    static inline UInt16 execute(UInt16, const DateLUTImpl &) { return 0; }
+    static inline UInt32 execute(Int64, const DateLUTImpl &) { return 0; }
+    static inline UInt32 execute(UInt32, const DateLUTImpl &) { return 0; }
 };
 
 struct ToDateImpl
 {
     static constexpr auto name = "toDate";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
-        return UInt16(time_zone.toDayNum(t));
+        return UInt32(time_zone.toDayNum(t));
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl &)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl &)
     {
         return d;
     }
@@ -111,11 +111,11 @@ struct ToStartOfDayImpl
 {
     static constexpr auto name = "toStartOfDay";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toDate(t);
     }
-    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    static inline Int64 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toStartOfDay", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -127,11 +127,11 @@ struct ToMondayImpl
 {
     static constexpr auto name = "toMonday";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfWeek(time_zone.toDayNum(t));
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfWeek(DayNum_t(d));
     }
@@ -143,11 +143,11 @@ struct ToStartOfMonthImpl
 {
     static constexpr auto name = "toStartOfMonth";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfMonth(time_zone.toDayNum(t));
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfMonth(DayNum_t(d));
     }
@@ -159,11 +159,11 @@ struct ToStartOfQuarterImpl
 {
     static constexpr auto name = "toStartOfQuarter";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfQuarter(time_zone.toDayNum(t));
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfQuarter(DayNum_t(d));
     }
@@ -175,11 +175,11 @@ struct ToStartOfYearImpl
 {
     static constexpr auto name = "toStartOfYear";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfYear(time_zone.toDayNum(t));
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toFirstDayNumOfYear(DayNum_t(d));
     }
@@ -193,12 +193,12 @@ struct ToTimeImpl
     static constexpr auto name = "toTime";
 
     /// When transforming to time, the date will be equated to 1970-01-02.
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toTime(t) + 86400;
     }
 
-    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    static inline Int64 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -210,11 +210,11 @@ struct ToStartOfMinuteImpl
 {
     static constexpr auto name = "toStartOfMinute";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toStartOfMinute(t);
     }
-    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    static inline Int64 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toStartOfMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -226,11 +226,11 @@ struct ToStartOfFiveMinuteImpl
 {
     static constexpr auto name = "toStartOfFiveMinute";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toStartOfFiveMinute(t);
     }
-    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    static inline Int64 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toStartOfFiveMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -242,11 +242,11 @@ struct ToStartOfFifteenMinutesImpl
 {
     static constexpr auto name = "toStartOfFifteenMinutes";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toStartOfFifteenMinutes(t);
     }
-    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    static inline Int64 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toStartOfFifteenMinutes", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -258,12 +258,12 @@ struct ToStartOfHourImpl
 {
     static constexpr auto name = "toStartOfHour";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toStartOfHour(t);
     }
 
-    static inline UInt32 execute(UInt16, const DateLUTImpl &)
+    static inline Int64 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toStartOfHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -275,11 +275,11 @@ struct ToYearImpl
 {
     static constexpr auto name = "toYear";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(t);
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(DayNum_t(d));
     }
@@ -291,11 +291,11 @@ struct ToQuarterImpl
 {
     static constexpr auto name = "toQuarter";
 
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toQuarter(t);
     }
-    static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toQuarter(DayNum_t(d));
     }
@@ -307,11 +307,11 @@ struct ToMonthImpl
 {
     static constexpr auto name = "toMonth";
 
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toMonth(t);
     }
-    static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toMonth(DayNum_t(d));
     }
@@ -323,11 +323,11 @@ struct ToDayOfMonthImpl
 {
     static constexpr auto name = "toDayOfMonth";
 
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toDayOfMonth(t);
     }
-    static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toDayOfMonth(DayNum_t(d));
     }
@@ -339,11 +339,11 @@ struct ToDayOfWeekImpl
 {
     static constexpr auto name = "toDayOfWeek";
 
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toDayOfWeek(t);
     }
-    static inline UInt8 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toDayOfWeek(DayNum_t(d));
     }
@@ -355,12 +355,12 @@ struct ToHourImpl
 {
     static constexpr auto name = "toHour";
 
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toHour(t);
     }
 
-    static inline UInt8 execute(UInt16, const DateLUTImpl &)
+    static inline UInt8 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toHour", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -372,11 +372,11 @@ struct ToMinuteImpl
 {
     static constexpr auto name = "toMinute";
 
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toMinute(t);
     }
-    static inline UInt8 execute(UInt16, const DateLUTImpl &)
+    static inline UInt8 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toMinute", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -388,11 +388,11 @@ struct ToSecondImpl
 {
     static constexpr auto name = "toSecond";
 
-    static inline UInt8 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt8 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toSecond(t);
     }
-    static inline UInt8 execute(UInt16, const DateLUTImpl &)
+    static inline UInt8 execute(UInt32, const DateLUTImpl &)
     {
         throw Exception("Illegal type Date of argument for function toSecond", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
@@ -404,11 +404,11 @@ struct ToRelativeYearNumImpl
 {
     static constexpr auto name = "toRelativeYearNum";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(t);
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toYear(DayNum_t(d));
     }
@@ -420,11 +420,11 @@ struct ToRelativeQuarterNumImpl
 {
     static constexpr auto name = "toRelativeQuarterNum";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeQuarterNum(t);
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeQuarterNum(DayNum_t(d));
     }
@@ -436,11 +436,11 @@ struct ToRelativeMonthNumImpl
 {
     static constexpr auto name = "toRelativeMonthNum";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeMonthNum(t);
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeMonthNum(DayNum_t(d));
     }
@@ -452,11 +452,11 @@ struct ToRelativeWeekNumImpl
 {
     static constexpr auto name = "toRelativeWeekNum";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeWeekNum(t);
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeWeekNum(DayNum_t(d));
     }
@@ -468,11 +468,11 @@ struct ToRelativeDayNumImpl
 {
     static constexpr auto name = "toRelativeDayNum";
 
-    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toDayNum(t);
     }
-    static inline UInt16 execute(UInt16 d, const DateLUTImpl &)
+    static inline UInt32 execute(UInt32 d, const DateLUTImpl &)
     {
         return static_cast<DayNum_t>(d);
     }
@@ -485,11 +485,11 @@ struct ToRelativeHourNumImpl
 {
     static constexpr auto name = "toRelativeHourNum";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeHourNum(t);
     }
-    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeHourNum(DayNum_t(d));
     }
@@ -501,11 +501,11 @@ struct ToRelativeMinuteNumImpl
 {
     static constexpr auto name = "toRelativeMinuteNum";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeMinuteNum(t);
     }
-    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toRelativeMinuteNum(DayNum_t(d));
     }
@@ -517,11 +517,11 @@ struct ToRelativeSecondNumImpl
 {
     static constexpr auto name = "toRelativeSecondNum";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl &)
+    static inline Int64 execute(Int64 t, const DateLUTImpl &)
     {
         return t;
     }
-    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.fromDayNum(DayNum_t(d));
     }
@@ -533,11 +533,11 @@ struct ToYYYYMMImpl
 {
     static constexpr auto name = "toYYYYMM";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMM(t);
     }
-    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMM(static_cast<DayNum_t>(d));
     }
@@ -549,11 +549,11 @@ struct ToYYYYMMDDImpl
 {
     static constexpr auto name = "toYYYYMMDD";
 
-    static inline UInt32 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMMDD(t);
     }
-    static inline UInt32 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMMDD(static_cast<DayNum_t>(d));
     }
@@ -565,11 +565,11 @@ struct ToYYYYMMDDhhmmssImpl
 {
     static constexpr auto name = "toYYYYMMDDhhmmss";
 
-    static inline UInt64 execute(UInt32 t, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMMDDhhmmss(t);
     }
-    static inline UInt64 execute(UInt16 d, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, const DateLUTImpl & time_zone)
     {
         return time_zone.toNumYYYYMMDDhhmmss(time_zone.toDate(static_cast<DayNum_t>(d)));
     }
@@ -708,14 +708,14 @@ public:
 
         if (checkAndGetDataType<DataTypeDate>(&type))
         {
-            return Transform::FactorTransform::execute(UInt16(left.get<UInt64>()), date_lut)
-                == Transform::FactorTransform::execute(UInt16(right.get<UInt64>()), date_lut)
+            return Transform::FactorTransform::execute(UInt32(left.get<Int64>()), date_lut)
+                == Transform::FactorTransform::execute(UInt32(right.get<Int64>()), date_lut)
                 ? is_monotonic : is_not_monotonic;
         }
         else
         {
-            return Transform::FactorTransform::execute(UInt32(left.get<UInt64>()), date_lut)
-                == Transform::FactorTransform::execute(UInt32(right.get<UInt64>()), date_lut)
+            return Transform::FactorTransform::execute(Int64(left.get<Int64>()), date_lut)
+                == Transform::FactorTransform::execute(Int64(right.get<Int64>()), date_lut)
                 ? is_monotonic : is_not_monotonic;
         }
     }
@@ -726,12 +726,12 @@ struct AddSecondsImpl
 {
     static constexpr auto name = "addSeconds";
 
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl &)
     {
         return t + delta;
     }
 
-    static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.fromDayNum(DayNum_t(d)) + delta;
     }
@@ -741,12 +741,12 @@ struct AddMinutesImpl
 {
     static constexpr auto name = "addMinutes";
 
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl &)
     {
         return t + delta * 60;
     }
 
-    static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.fromDayNum(DayNum_t(d)) + delta * 60;
     }
@@ -756,12 +756,12 @@ struct AddHoursImpl
 {
     static constexpr auto name = "addHours";
 
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl &)
     {
         return t + delta * 3600;
     }
 
-    static inline UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(UInt32 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.fromDayNum(DayNum_t(d)) + delta * 3600;
     }
@@ -771,12 +771,12 @@ struct AddDaysImpl
 {
     static constexpr auto name = "addDays";
 
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.addDays(t, delta);
     }
 
-    static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl &)
+    static inline UInt32 execute(UInt32 d, Int64 delta, const DateLUTImpl &)
     {
         return d + delta;
     }
@@ -786,12 +786,12 @@ struct AddWeeksImpl
 {
     static constexpr auto name = "addWeeks";
 
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.addWeeks(t, delta);
     }
 
-    static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl &)
+    static inline UInt32 execute(UInt32 d, Int64 delta, const DateLUTImpl &)
     {
         return d + delta * 7;
     }
@@ -801,12 +801,12 @@ struct AddMonthsImpl
 {
     static constexpr auto name = "addMonths";
 
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.addMonths(t, delta);
     }
 
-    static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.addMonths(DayNum_t(d), delta);
     }
@@ -816,12 +816,12 @@ struct AddYearsImpl
 {
     static constexpr auto name = "addYears";
 
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.addYears(t, delta);
     }
 
-    static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.addYears(DayNum_t(d), delta);
     }
@@ -831,12 +831,12 @@ struct AddYearsImpl
 template <typename Transform>
 struct SubtractIntervalImpl
 {
-    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
+    static inline Int64 execute(Int64 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return Transform::execute(t, -delta, time_zone);
     }
 
-    static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
+    static inline UInt32 execute(UInt32 d, Int64 delta, const DateLUTImpl & time_zone)
     {
         return Transform::execute(d, -delta, time_zone);
     }
@@ -972,14 +972,14 @@ public:
 
         if (checkDataType<DataTypeDate>(arguments[0].type.get()))
         {
-            if (std::is_same_v<decltype(Transform::execute(DataTypeDate::FieldType(), 0, std::declval<DateLUTImpl>())), UInt16>)
+            if (std::is_same_v<decltype(Transform::execute(DataTypeDate::FieldType(), 0, std::declval<DateLUTImpl>())), UInt32>)
                 return std::make_shared<DataTypeDate>();
             else
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, 2, 0));
         }
         else
         {
-            if (std::is_same_v<decltype(Transform::execute(DataTypeDateTime::FieldType(), 0, std::declval<DateLUTImpl>())), UInt16>)
+            if (std::is_same_v<decltype(Transform::execute(DataTypeDateTime::FieldType(), 0, std::declval<DateLUTImpl>())), UInt32>)
                 return std::make_shared<DataTypeDate>();
             else
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, 2, 0));
@@ -1102,14 +1102,14 @@ private:
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result)
     {
-        if (auto * x_vec = checkAndGetColumn<ColumnUInt16>(&x))
+        if (auto * x_vec = checkAndGetColumn<ColumnUInt32>(&x))
             dispatchForSecondColumn<Transform>(*x_vec, y, timezone_x, timezone_y, result);
-        else if (auto * x_vec = checkAndGetColumn<ColumnUInt32>(&x))
+        else if (auto * x_vec = checkAndGetColumn<ColumnInt64>(&x))
             dispatchForSecondColumn<Transform>(*x_vec, y, timezone_x, timezone_y, result);
-        else if (auto * x_const = checkAndGetColumnConst<ColumnUInt16>(&x))
-            dispatchConstForSecondColumn<Transform>(x_const->getValue<UInt16>(), y, timezone_x, timezone_y, result);
         else if (auto * x_const = checkAndGetColumnConst<ColumnUInt32>(&x))
             dispatchConstForSecondColumn<Transform>(x_const->getValue<UInt32>(), y, timezone_x, timezone_y, result);
+        else if (auto * x_const = checkAndGetColumnConst<ColumnInt64>(&x))
+            dispatchConstForSecondColumn<Transform>(x_const->getValue<Int64>(), y, timezone_x, timezone_y, result);
         else
             throw Exception("Illegal column for first argument of function " + getName() + ", must be Date or DateTime", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -1120,14 +1120,14 @@ private:
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result)
     {
-        if (auto * y_vec = checkAndGetColumn<ColumnUInt16>(&y))
+        if (auto * y_vec = checkAndGetColumn<ColumnUInt32>(&y))
             vector_vector<Transform>(x, *y_vec, timezone_x, timezone_y, result);
-        else if (auto * y_vec = checkAndGetColumn<ColumnUInt32>(&y))
+        else if (auto * y_vec = checkAndGetColumn<ColumnInt64>(&y))
             vector_vector<Transform>(x, *y_vec, timezone_x, timezone_y, result);
-        else if (auto * y_const = checkAndGetColumnConst<ColumnUInt16>(&y))
-            vector_constant<Transform>(x, y_const->getValue<UInt16>(), timezone_x, timezone_y, result);
         else if (auto * y_const = checkAndGetColumnConst<ColumnUInt32>(&y))
             vector_constant<Transform>(x, y_const->getValue<UInt32>(), timezone_x, timezone_y, result);
+        else if (auto * y_const = checkAndGetColumnConst<ColumnInt64>(&y))
+            vector_constant<Transform>(x, y_const->getValue<Int64>(), timezone_x, timezone_y, result);
         else
             throw Exception("Illegal column for second argument of function " + getName() + ", must be Date or DateTime", ErrorCodes::ILLEGAL_COLUMN);
     }
@@ -1138,9 +1138,9 @@ private:
         const DateLUTImpl & timezone_x, const DateLUTImpl & timezone_y,
         ColumnInt64::Container & result)
     {
-        if (auto * y_vec = checkAndGetColumn<ColumnUInt16>(&y))
+        if (auto * y_vec = checkAndGetColumn<ColumnUInt32>(&y))
             constant_vector<Transform>(x, *y_vec, timezone_x, timezone_y, result);
-        else if (auto * y_vec = checkAndGetColumn<ColumnUInt32>(&y))
+        else if (auto * y_vec = checkAndGetColumn<ColumnInt64>(&y))
             constant_vector<Transform>(x, *y_vec, timezone_x, timezone_y, result);
         else
             throw Exception("Illegal column for second argument of function " + getName() + ", must be Date or DateTime", ErrorCodes::ILLEGAL_COLUMN);
@@ -1212,9 +1212,9 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
     {
-        block.getByPosition(result).column = DataTypeUInt32().createColumnConst(
+        block.getByPosition(result).column = DataTypeInt64().createColumnConst(
             block.rows(),
-            static_cast<UInt64>(time(nullptr)));
+            static_cast<Int64>(time(nullptr)));
     }
 };
 
@@ -1241,9 +1241,9 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
     {
-        block.getByPosition(result).column = DataTypeUInt16().createColumnConst(
+        block.getByPosition(result).column = DataTypeUInt32().createColumnConst(
             block.rows(),
-            UInt64(DateLUT::instance().toDayNum(time(nullptr))));
+            Int64(DateLUT::instance().toDayNum(time(nullptr))));
     }
 };
 
@@ -1270,9 +1270,9 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & /*arguments*/, size_t result) override
     {
-        block.getByPosition(result).column = DataTypeUInt16().createColumnConst(
+        block.getByPosition(result).column = DataTypeUInt32().createColumnConst(
             block.rows(),
-            UInt64(DateLUT::instance().toDayNum(time(nullptr)) - 1));
+            Int64(DateLUT::instance().toDayNum(time(nullptr)) - 1));
     }
 };
 
@@ -1340,11 +1340,11 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
-        if (const ColumnUInt32 * times = typeid_cast<const ColumnUInt32 *>(block.getByPosition(arguments[0]).column.get()))
+        if (const ColumnInt64 * times = typeid_cast<const ColumnInt64 *>(block.getByPosition(arguments[0]).column.get()))
         {
-            auto res = ColumnUInt32::create();
-            ColumnUInt32::Container & res_vec = res->getData();
-            const ColumnUInt32::Container & vec = times->getData();
+            auto res = ColumnInt64::create();
+            ColumnInt64::Container & res_vec = res->getData();
+            const ColumnInt64::Container & vec = times->getData();
 
             size_t size = vec.size();
             res_vec.resize(size);
@@ -1366,8 +1366,8 @@ template <typename DurationType>
 struct TimeSlotsImpl
 {
     static void vector_vector(
-        const PaddedPODArray<UInt32> & starts, const PaddedPODArray<DurationType> & durations,
-        PaddedPODArray<UInt32> & result_values, ColumnArray::Offsets & result_offsets)
+        const PaddedPODArray<Int64> & starts, const PaddedPODArray<DurationType> & durations,
+        PaddedPODArray<Int64> & result_values, ColumnArray::Offsets & result_offsets)
     {
         size_t size = starts.size();
 
@@ -1377,7 +1377,7 @@ struct TimeSlotsImpl
         ColumnArray::Offset current_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            for (UInt32 value = starts[i] / TIME_SLOT_SIZE; value <= (starts[i] + durations[i]) / TIME_SLOT_SIZE; ++value)
+            for (Int64 value = starts[i] / TIME_SLOT_SIZE; value <= (starts[i] + durations[i]) / TIME_SLOT_SIZE; ++value)
             {
                 result_values.push_back(value * TIME_SLOT_SIZE);
                 ++current_offset;
@@ -1388,8 +1388,8 @@ struct TimeSlotsImpl
     }
 
     static void vector_constant(
-        const PaddedPODArray<UInt32> & starts, DurationType duration,
-        PaddedPODArray<UInt32> & result_values, ColumnArray::Offsets & result_offsets)
+        const PaddedPODArray<Int64> & starts, DurationType duration,
+        PaddedPODArray<Int64> & result_values, ColumnArray::Offsets & result_offsets)
     {
         size_t size = starts.size();
 
@@ -1399,7 +1399,7 @@ struct TimeSlotsImpl
         ColumnArray::Offset current_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            for (UInt32 value = starts[i] / TIME_SLOT_SIZE; value <= (starts[i] + duration) / TIME_SLOT_SIZE; ++value)
+            for (Int64 value = starts[i] / TIME_SLOT_SIZE; value <= (starts[i] + duration) / TIME_SLOT_SIZE; ++value)
             {
                 result_values.push_back(value * TIME_SLOT_SIZE);
                 ++current_offset;
@@ -1410,8 +1410,8 @@ struct TimeSlotsImpl
     }
 
     static void constant_vector(
-        UInt32 start, const PaddedPODArray<DurationType> & durations,
-        PaddedPODArray<UInt32> & result_values, ColumnArray::Offsets & result_offsets)
+        Int64 start, const PaddedPODArray<DurationType> & durations,
+        PaddedPODArray<Int64> & result_values, ColumnArray::Offsets & result_offsets)
     {
         size_t size = durations.size();
 
@@ -1421,7 +1421,7 @@ struct TimeSlotsImpl
         ColumnArray::Offset current_offset = 0;
         for (size_t i = 0; i < size; ++i)
         {
-            for (UInt32 value = start / TIME_SLOT_SIZE; value <= (start + durations[i]) / TIME_SLOT_SIZE; ++value)
+            for (Int64 value = start / TIME_SLOT_SIZE; value <= (start + durations[i]) / TIME_SLOT_SIZE; ++value)
             {
                 result_values.push_back(value * TIME_SLOT_SIZE);
                 ++current_offset;
@@ -1432,11 +1432,11 @@ struct TimeSlotsImpl
     }
 
     static void constant_constant(
-        UInt32 start, DurationType duration,
+        Int64 start, DurationType duration,
         Array & result)
     {
-        for (UInt32 value = start / TIME_SLOT_SIZE; value <= (start + duration) / TIME_SLOT_SIZE; ++value)
-            result.push_back(static_cast<UInt64>(value * TIME_SLOT_SIZE));
+        for (Int64 value = start / TIME_SLOT_SIZE; value <= (start + duration) / TIME_SLOT_SIZE; ++value)
+            result.push_back(static_cast<Int64>(value * TIME_SLOT_SIZE));
     }
 };
 
@@ -1460,8 +1460,8 @@ public:
             throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName() + ". Must be DateTime.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        if (!checkDataType<DataTypeUInt32>(arguments[1].get()))
-            throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be UInt32.",
+        if (!checkDataType<DataTypeInt64>(arguments[1].get()))
+            throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName() + ". Must be Int64.",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeDateTime>());
@@ -1469,34 +1469,34 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
-        auto starts = checkAndGetColumn<ColumnUInt32>(block.getByPosition(arguments[0]).column.get());
-        auto const_starts = checkAndGetColumnConst<ColumnUInt32>(block.getByPosition(arguments[0]).column.get());
+        auto starts = checkAndGetColumn<ColumnInt64>(block.getByPosition(arguments[0]).column.get());
+        auto const_starts = checkAndGetColumnConst<ColumnInt64>(block.getByPosition(arguments[0]).column.get());
 
-        auto durations = checkAndGetColumn<ColumnUInt32>(block.getByPosition(arguments[1]).column.get());
-        auto const_durations = checkAndGetColumnConst<ColumnUInt32>(block.getByPosition(arguments[1]).column.get());
+        auto durations = checkAndGetColumn<ColumnInt64>(block.getByPosition(arguments[1]).column.get());
+        auto const_durations = checkAndGetColumnConst<ColumnInt64>(block.getByPosition(arguments[1]).column.get());
 
-        auto res = ColumnArray::create(ColumnUInt32::create());
-        ColumnUInt32::Container & res_values = typeid_cast<ColumnUInt32 &>(res->getData()).getData();
+        auto res = ColumnArray::create(ColumnInt64::create());
+        ColumnInt64::Container & res_values = typeid_cast<ColumnInt64 &>(res->getData()).getData();
 
         if (starts && durations)
         {
-            TimeSlotsImpl<UInt32>::vector_vector(starts->getData(), durations->getData(), res_values, res->getOffsets());
+            TimeSlotsImpl<Int64>::vector_vector(starts->getData(), durations->getData(), res_values, res->getOffsets());
             block.getByPosition(result).column = std::move(res);
         }
         else if (starts && const_durations)
         {
-            TimeSlotsImpl<UInt32>::vector_constant(starts->getData(), const_durations->getValue<UInt32>(), res_values, res->getOffsets());
+            TimeSlotsImpl<Int64>::vector_constant(starts->getData(), const_durations->getValue<Int64>(), res_values, res->getOffsets());
             block.getByPosition(result).column = std::move(res);
         }
         else if (const_starts && durations)
         {
-            TimeSlotsImpl<UInt32>::constant_vector(const_starts->getValue<UInt32>(), durations->getData(), res_values, res->getOffsets());
+            TimeSlotsImpl<Int64>::constant_vector(const_starts->getValue<Int64>(), durations->getData(), res_values, res->getOffsets());
             block.getByPosition(result).column = std::move(res);
         }
         else if (const_starts && const_durations)
         {
             Array const_res;
-            TimeSlotsImpl<UInt32>::constant_constant(const_starts->getValue<UInt32>(), const_durations->getValue<UInt32>(), const_res);
+            TimeSlotsImpl<Int64>::constant_constant(const_starts->getValue<Int64>(), const_durations->getValue<Int64>(), const_res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), const_res);
         }
         else
@@ -1508,7 +1508,7 @@ public:
 };
 
 
-using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToYearImpl>;
+using FunctionToYear = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToYearImpl>;
 using FunctionToQuarter = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToQuarterImpl>;
 using FunctionToMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToMonthImpl>;
 using FunctionToDayOfMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt8, ToDayOfMonthImpl>;
@@ -1527,18 +1527,18 @@ using FunctionToStartOfFifteenMinutes = FunctionDateOrDateTimeToSomething<DataTy
 using FunctionToStartOfHour = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToStartOfHourImpl>;
 using FunctionToTime = FunctionDateOrDateTimeToSomething<DataTypeDateTime, ToTimeImpl>;
 
-using FunctionToRelativeYearNum = FunctionDateOrDateTimeToSomething<DataTypeUInt16, ToRelativeYearNumImpl>;
-using FunctionToRelativeQuarterNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeQuarterNumImpl>;
-using FunctionToRelativeMonthNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeMonthNumImpl>;
-using FunctionToRelativeWeekNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeWeekNumImpl>;
-using FunctionToRelativeDayNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeDayNumImpl>;
-using FunctionToRelativeHourNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeHourNumImpl>;
-using FunctionToRelativeMinuteNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeMinuteNumImpl>;
-using FunctionToRelativeSecondNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeSecondNumImpl>;
+using FunctionToRelativeYearNum = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToRelativeYearNumImpl>;
+using FunctionToRelativeQuarterNum = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToRelativeQuarterNumImpl>;
+using FunctionToRelativeMonthNum = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToRelativeMonthNumImpl>;
+using FunctionToRelativeWeekNum = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToRelativeWeekNumImpl>;
+using FunctionToRelativeDayNum = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToRelativeDayNumImpl>;
+using FunctionToRelativeHourNum = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToRelativeHourNumImpl>;
+using FunctionToRelativeMinuteNum = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToRelativeMinuteNumImpl>;
+using FunctionToRelativeSecondNum = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToRelativeSecondNumImpl>;
 
-using FunctionToYYYYMM = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToYYYYMMImpl>;
-using FunctionToYYYYMMDD = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToYYYYMMDDImpl>;
-using FunctionToYYYYMMDDhhmmss = FunctionDateOrDateTimeToSomething<DataTypeUInt64, ToYYYYMMDDhhmmssImpl>;
+using FunctionToYYYYMM = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToYYYYMMImpl>;
+using FunctionToYYYYMMDD = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToYYYYMMDDImpl>;
+using FunctionToYYYYMMDDhhmmss = FunctionDateOrDateTimeToSomething<DataTypeInt64, ToYYYYMMDDhhmmssImpl>;
 
 using FunctionAddSeconds = FunctionDateOrDateTimeAddInterval<AddSecondsImpl>;
 using FunctionAddMinutes = FunctionDateOrDateTimeAddInterval<AddMinutesImpl>;

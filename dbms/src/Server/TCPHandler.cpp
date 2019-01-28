@@ -5,6 +5,7 @@
 #include <Common/ClickHouseRevision.h>
 
 #include <Common/Stopwatch.h>
+#include <Common/ProfileEvents.h>
 
 #include <IO/Progress.h>
 
@@ -33,6 +34,23 @@
 #include <Common/NetException.h>
 #include <ext/scope_guard.h>
 
+#include <Storages/Transaction/LockException.h>
+#include <Interpreters/SharedQueries.h>
+
+namespace ProfileEvents
+{
+    extern const Event PersistedMarksFileHits;
+    extern const Event PersistedMarksFileMisses;
+    extern const Event PersistedMarksFileBusy;
+    extern const Event PersistedMarksFileUpdate;
+    extern const Event PersistedCacheFileHits;
+    extern const Event PersistedCacheFileMisses;
+    extern const Event PersistedCacheFileExpectedMisses;
+    extern const Event PersistedCacheFileBusy;
+    extern const Event PersistedCacheFileUpdate;
+    extern const Event PersistedCachePartBusy;
+}
+
 
 namespace DB
 {
@@ -47,6 +65,7 @@ namespace ErrorCodes
     extern const int STD_EXCEPTION;
     extern const int SOCKET_TIMEOUT;
     extern const int UNEXPECTED_PACKET_FROM_CLIENT;
+    extern const int LOCK_EXCEPTION;
 }
 
 
@@ -134,7 +153,10 @@ void TCPHandler::runImpl()
          *  The client will be able to accept it, if it did not happen while sending another packet and the client has not disconnected yet.
          */
         std::unique_ptr<Exception> exception;
+        Region::LockInfos lock_infos;
         bool network_error = false;
+
+        String shared_query_id;
 
         try
         {
@@ -159,7 +181,29 @@ void TCPHandler::runImpl()
             state.maybe_compressed_in.reset();  /// For more accurate accounting by MemoryTracker.
 
             /// Processing Query
-            state.io = executeQuery(state.query, query_context, false, state.stage);
+            const Settings & settings = query_context.getSettingsRef();
+            if (settings.shared_query_clients && !state.query_id.empty())
+            {
+                LOG_DEBUG(log, "shared query");
+
+                state.io = query_context.getSharedQueries()->getOrCreateBlockIO(
+                    state.query_id,
+                    settings.shared_query_clients,
+                    [&]()
+                    {
+                        return executeQuery(state.query, query_context, false, state.stage);
+                    });
+
+                /// As getOrCreateBlockIO could produce exception, this line must be put after.
+                shared_query_id = state.query_id;
+
+                if (state.io.out)
+                    throw Exception("Insert query is not supported in shared query mode");
+            }
+            else
+            {
+                state.io = executeQuery(state.query, query_context, false, state.stage);
+            }
 
             if (state.io.out)
                 state.need_receive_data_for_insert = true;
@@ -170,12 +214,19 @@ void TCPHandler::runImpl()
             /// Does the request require receive data from client?
             if (state.need_receive_data_for_insert)
                 processInsertQuery(global_settings);
+            else if (!shared_query_id.empty())
+                processSharedQuery();
             else
                 processOrdinaryQuery();
 
             sendEndOfStream();
 
             state.reset();
+        }
+        catch (LockException & e)
+        {
+            state.io.onException();
+            lock_infos = std::move(e.lock_infos);
         }
         catch (const Exception & e)
         {
@@ -216,10 +267,17 @@ void TCPHandler::runImpl()
             exception = std::make_unique<Exception>("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
         }
 
+        if (!shared_query_id.empty())
+        {
+            query_context.getSharedQueries()->onSharedQueryFinish(shared_query_id);
+        }
+
         try
         {
             if (exception)
                 sendException(*exception);
+            else if (!lock_infos.empty())
+                sendLockInfos(lock_infos);
         }
         catch (...)
         {
@@ -230,6 +288,13 @@ void TCPHandler::runImpl()
 
         try
         {
+            // Manually call cancel before reset, as state.io.in is shared between clients in shared mode.
+            if (!shared_query_id.empty())
+            {
+                if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(state.io.in.get()))
+                    input->cancel(true);
+            }
+
             state.reset();
         }
         catch (...)
@@ -244,7 +309,19 @@ void TCPHandler::runImpl()
         watch.stop();
 
         LOG_INFO(log, std::fixed << std::setprecision(3)
-            << "Processed in " << watch.elapsedSeconds() << " sec.");
+            << "Processed in " << watch.elapsedSeconds() << " sec. "
+            << "Global persisted cache hit|miss|busy|update|miss(ok): mark index files = "
+            << ProfileEvents::counters[ProfileEvents::PersistedMarksFileHits].load()
+            << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileMisses].load()
+            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCachePartBusy].load()
+            << "+" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileBusy].load()
+            << "|" << ProfileEvents::counters[ProfileEvents::PersistedMarksFileUpdate].load()
+            << ", mark ranges = " << ProfileEvents::counters[ProfileEvents::PersistedCacheFileHits].load()
+            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileMisses].load()
+            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCachePartBusy].load()
+            << "+" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileBusy].load()
+            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileUpdate].load()
+            << "|" << ProfileEvents::counters[ProfileEvents::PersistedCacheFileExpectedMisses].load());
 
         if (network_error)
             break;
@@ -770,6 +847,21 @@ void TCPHandler::sendException(const Exception & e)
 }
 
 
+void TCPHandler::sendLockInfos(const Region::LockInfos & lock_infos)
+{
+    writeVarUInt(Protocol::Server::LockInfos, *out);
+    writeVarUInt(lock_infos.size(), *out);
+    for (auto & lock_info : lock_infos)
+    {
+        writeStringBinary(lock_info->primary_lock, *out);
+        writeVarUInt(lock_info->lock_version, *out);
+        writeStringBinary(lock_info->key, *out);
+        writeVarUInt(lock_info->lock_ttl, *out);
+    }
+    out->next();
+}
+
+
 void TCPHandler::sendEndOfStream()
 {
     state.sent_all_data = true;
@@ -798,8 +890,6 @@ void TCPHandler::run()
     try
     {
         runImpl();
-
-        LOG_INFO(log, "Done processing connection.");
     }
     catch (Poco::Exception & e)
     {
@@ -812,6 +902,40 @@ void TCPHandler::run()
         else
             throw;
     }
+}
+
+
+void TCPHandler::processSharedQuery()
+{
+    /// Send header-block, to allow client to prepare output format for data to send.
+    {
+        Block header = state.io.in->getHeader();
+        if (header)
+            sendData(header);
+    }
+
+    state.io.in->readPrefix();
+
+    while (true)
+    {
+        Block block;
+        if (isQueryCancelled())
+        {
+            LOG_WARNING(log, "Cancel input stream");
+            if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(state.io.in.get()))
+                input->cancel(true);
+        }
+        else
+        {
+            block = state.io.in->read();
+        }
+        sendData(block);
+        if (!block)
+            break;
+    }
+
+    state.io.in->readSuffix();
+    state.io.onFinish();
 }
 
 }

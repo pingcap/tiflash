@@ -79,6 +79,32 @@ Block ITableDeclaration::getSampleBlockForColumns(const Names & column_names) co
 }
 
 
+Block ITableDeclaration::getSampleBlockNoHidden() const
+{
+    Block res;
+    const OrderedNameSet & hidden = getHiddenColumnsImpl();
+
+    for (const auto & col : boost::join(getColumns().ordinary, getColumns().materialized))
+        if (!hidden.has(col.name))
+            res.insert({ col.type->createColumn(), col.type, col.name });
+
+    return res;
+}
+
+
+Block ITableDeclaration::getSampleBlockNonMaterializedNoHidden() const
+{
+    Block res;
+    const OrderedNameSet & hidden = getHiddenColumnsImpl();
+
+    for (const auto & col : getColumns().ordinary)
+        if (!hidden.has(col.name))
+            res.insert({ col.type->createColumn(), col.type, col.name });
+
+    return res;
+}
+
+
 static std::string listOfColumns(const NamesAndTypesList & available_columns)
 {
     std::stringstream s;

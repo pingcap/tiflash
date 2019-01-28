@@ -13,6 +13,8 @@
 #include <IO/WriteHelpers.h>
 #include <Client/TimeoutSetter.h>
 
+#include <Storages/Transaction/Region.h>
+
 #include "IServer.h"
 
 namespace CurrentMetrics
@@ -134,12 +136,13 @@ private:
 
     /// Process a request that does not require the receiving of data blocks from the client
     void processOrdinaryQuery();
-
+    void processSharedQuery();
     void processTablesStatusRequest();
 
     void sendHello();
     void sendData(const Block & block);    /// Write a block to the network.
     void sendException(const Exception & e);
+    void sendLockInfos(const Region::LockInfos & lock_infos);
     void sendProgress();
     void sendEndOfStream();
     void sendProfileInfo();

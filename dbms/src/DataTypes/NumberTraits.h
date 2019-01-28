@@ -112,12 +112,22 @@ template <typename A> struct ResultOfNegate
         std::is_signed_v<A> ? sizeof(A) : nextSize(sizeof(A))>::Type;
 };
 
+template <> struct ResultOfNegate<Decimal>
+{
+    using Type = Decimal;
+};
+
 template <typename A> struct ResultOfAbs
 {
     using Type = typename Construct<
         false,
         std::is_floating_point_v<A>,
         sizeof(A)>::Type;
+};
+
+template <> struct ResultOfAbs<Decimal>
+{
+    using Type = Decimal;
 };
 
 /** For bitwise operations, an integer is obtained with number of bits is equal to the maximum of the arguments.
@@ -138,6 +148,10 @@ template <typename A> struct ResultOfBitNot
         sizeof(A)>::Type;
 };
 
+template <> struct ResultOfBitNot<Decimal>
+{
+    using Type = Decimal;
+};
 
 /** Type casting for `if` function:
   * UInt<x>,  UInt<y>   ->  UInt<max(x,y)>

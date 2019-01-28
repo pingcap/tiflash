@@ -360,6 +360,8 @@ public:
     static void updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint);
 
     static String getFileNameForStream(const String & column_name, const SubstreamPath & path);
+
+    static bool isNullMap(const SubstreamPath & path);
 };
 
 

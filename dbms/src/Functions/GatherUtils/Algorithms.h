@@ -233,6 +233,174 @@ void NO_INLINE concat(StringSources & sources, Sink && sink)
 }
 
 
+template <bool ltrim, bool rtrim, typename Source, typename Sink>
+void NO_INLINE trim(Source && source, Sink && sink)
+{
+    sink.reserve(source.getSizeForReserve());
+
+    while (!sink.isEnd())
+    {
+        StringSource::Slice slice = source.getWhole();
+
+        size_t start = 0;
+        /// It seems that ltrim will be optimized by compiler
+        if (ltrim)
+        {
+            /// according to the spark trim, it only trims the SPACE, namely 0x20
+            for (start = 0; start < slice.size && slice.data[start] == 0x20; ++start)
+            {
+                ;
+            }
+        }
+
+        if (start == slice.size)
+        {
+            slice.size = 0;
+        }
+        else
+        {
+            size_t end = slice.size - 1;
+
+            /// It seems that rtrim will be optimized by compiler
+            if (rtrim) {
+                for (; end >= start && slice.data[end] == 0x20; --end)
+                {
+                    ;
+                }
+            }
+
+            slice.data += start;
+            slice.size = end - start + 1;
+        }
+
+        writeSlice(slice, sink);
+        sink.next();
+        source.next();
+    }
+}
+
+
+template <bool ltrim, bool rtrim, typename SourceA, typename SourceB, typename Sink>
+void NO_INLINE trim(SourceA && source, SourceB && exclude, Sink && sink)
+{
+    sink.reserve(source.getSizeForReserve());
+
+    while (!sink.isEnd())
+    {
+        StringSource::Slice src = source.getWhole();
+        StringSource::Slice exc = exclude.getWhole();
+
+        size_t start = 0;
+        /// according to the spark trim, it only trims the SPACE, namely 0x20
+        /// It seems that ltrim will be optimized by compiler
+        if (ltrim)
+        {
+            for (; start < src.size; ++start)
+            {
+                size_t i;
+                for (i = 0; i < exc.size; ++i)
+                {
+                    if (src.data[start] == exc.data[i])
+                    {
+                        break;
+                    }
+                }
+                if (i == exc.size)
+                {
+                    /// not in the exclude set
+                    break;
+                }
+            }
+        }
+
+        if (start == src.size)
+        {
+            src.size = 0;
+        }
+        else
+        {
+            size_t end = src.size - 1;
+            /// It seems that rtrim will be optimized by compiler
+            if (rtrim) {
+                for (; end >= start; --end)
+                {
+                    size_t i;
+                    for (i = 0; i < exc.size; ++i)
+                    {
+                        if (src.data[end] == exc.data[i])
+                        {
+                            break;
+                        }
+                    }
+                    if (i == exc.size) {
+                        /// not in the exclude set
+                        break;
+                    }
+                }
+            }
+
+            src.data += start;
+            src.size = end - start + 1;
+        }
+
+        writeSlice(src, sink);
+        sink.next();
+        source.next();
+        exclude.next();
+    }
+}
+
+
+template <bool is_left, typename SourceA, typename SourceB, typename Sink>
+void NO_INLINE pad(SourceA && src, SourceB && padding, Sink && sink, ssize_t length)
+{
+    sink.reserve(src.getSizeForReserve());
+
+    while (!src.isEnd())
+    {
+        StringSource::Slice slice = src.getWhole();
+        if (slice.size >= static_cast<size_t>(length))
+        {
+            /// no need to padding, just truncate and return
+            slice.size = static_cast<size_t>(length);
+            writeSlice(slice, sink);
+        }
+        else
+        {
+            size_t left = static_cast<size_t>(length) - slice.size;
+            if (is_left)
+            {
+                StringSource::Slice padSlice = padding.getWhole();
+                while (left > padSlice.size && padSlice.size != 0)
+                {
+                    writeSlice(padSlice, sink);
+                    left -= padSlice.size;
+                }
+
+                writeSlice(padding.getSliceFromLeft(0, left), sink);
+                writeSlice(slice, sink);
+            }
+            else
+            {
+                writeSlice(slice, sink);
+                StringSource::Slice padSlice = padding.getWhole();
+                while (left > padSlice.size && padSlice.size != 0)
+                {
+                    writeSlice(padSlice, sink);
+                    left -= padSlice.size;
+                }
+
+                writeSlice(padding.getSliceFromLeft(0, left), sink);
+            }
+        }
+
+        sink.next();
+        src.next();
+        padding.next();
+    }
+}
+
+
 template <typename Source, typename Sink>
 void NO_INLINE sliceFromLeftConstantOffsetUnbounded(Source && src, Sink && sink, size_t offset)
 {

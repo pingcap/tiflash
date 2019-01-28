@@ -32,7 +32,7 @@ struct __attribute__((__packed__)) AggregateFunctionUniqUpToData
   */
     UInt8 count = 0;
 
-    T data[0];
+    T *data;
 
 
     size_t size() const

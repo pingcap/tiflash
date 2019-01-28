@@ -19,6 +19,12 @@ struct AggregateFunctionSumData
 {
     T sum{};
 
+    AggregateFunctionSumData(){}
+
+    AggregateFunctionSumData(PrecType prec, ScaleType scale){
+        sum = Decimal(0, prec, scale);
+    }
+
     void add(T value)
     {
         sum += value;
@@ -97,9 +103,28 @@ class AggregateFunctionSum final : public IAggregateFunctionDataHelper<Data, Agg
 public:
     String getName() const override { return "sum"; }
 
-    DataTypePtr getReturnType() const override
-    {
-        return std::make_shared<DataTypeNumber<TResult>>();
+    ScaleType result_scale;
+    PrecType result_prec;
+
+    AggregateFunctionSum(){}
+    
+    AggregateFunctionSum(PrecType prec, ScaleType scale) {
+        SumDecimalInferer::infer(prec, scale, result_prec, result_scale);
+    };
+
+    DataTypePtr getReturnType() const override {
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>) {
+            return std::make_shared<DataTypeDecimal>(result_prec, result_scale);
+        } else {
+            return std::make_shared<DataTypeNumber<TResult>>();
+        }
+    }
+
+    void create(AggregateDataPtr place) const override {
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>)
+            new (place) Data(result_prec, result_scale);
+        else
+            new (place) Data;
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
@@ -129,6 +154,5 @@ public:
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
-
 
 }

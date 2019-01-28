@@ -28,7 +28,7 @@ namespace DB
   * Server time zone is the time zone specified in 'timezone' parameter in configuration file,
   *  or system time zone at the moment of server startup.
   */
-class DataTypeDateTime final : public DataTypeNumberBase<UInt32>
+class DataTypeDateTime final : public DataTypeNumberBase<Int64>
 {
 public:
     DataTypeDateTime(const std::string & time_zone_name = "");

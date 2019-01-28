@@ -60,13 +60,21 @@ StoragePtr InterpreterInsertQuery::getTable(const ASTInsertQuery & query)
 
 Block InterpreterInsertQuery::getSampleBlock(const ASTInsertQuery & query, const StoragePtr & table)
 {
-    Block table_sample_non_materialized = table->getSampleBlockNonMaterialized();
+    Block table_sample_non_materialized;
+    if (query.is_import)
+        table_sample_non_materialized = table->getSampleBlockNonMaterialized();
+    else
+        table_sample_non_materialized = table->getSampleBlockNonMaterializedNoHidden();
 
     /// If the query does not include information about columns
     if (!query.columns)
         return table_sample_non_materialized;
 
-    Block table_sample = table->getSampleBlock();
+    Block table_sample;
+    if (query.is_import)
+        table_sample = table->getSampleBlock();
+    else
+        table_sample = table->getSampleBlockNoHidden();
 
     /// Form the block based on the column names from the query
     Block res;

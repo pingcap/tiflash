@@ -648,7 +648,8 @@ private:
                 || executeNumRightType<T0, Int32>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, Int64>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, Float32>(block, result, col_left, col_right_untyped)
-                || executeNumRightType<T0, Float64>(block, result, col_left, col_right_untyped))
+                || executeNumRightType<T0, Float64>(block, result, col_left, col_right_untyped)
+                || executeNumRightType<T0, Decimal>(block, result, col_left, col_right_untyped))
                 return true;
             else
                 throw Exception("Illegal column " + col_right_untyped->getName()
@@ -1116,7 +1117,8 @@ public:
                 || executeNumLeftType<Int32>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<Int64>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<Float32>(block, result, col_left_untyped, col_right_untyped)
-                || executeNumLeftType<Float64>(block, result, col_left_untyped, col_right_untyped)))
+                || executeNumLeftType<Float64>(block, result, col_left_untyped, col_right_untyped)
+                || executeNumLeftType<Decimal>(block, result, col_left_untyped, col_right_untyped)))
                 throw Exception("Illegal column " + col_left_untyped->getName()
                     + " of first argument of function " + getName(),
                     ErrorCodes::ILLEGAL_COLUMN);

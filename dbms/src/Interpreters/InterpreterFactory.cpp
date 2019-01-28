@@ -4,6 +4,8 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
+#include <Parsers/ASTDeleteQuery.h>
+#include <Parsers/ASTDBGInvokeQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -12,6 +14,7 @@
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTUseQuery.h>
+#include <Parsers/ASTTruncateQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
 #include <Interpreters/InterpreterAlterQuery.h>
@@ -23,6 +26,8 @@
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterInsertQuery.h>
 #include <Interpreters/InterpreterKillQueryQuery.h>
+#include <Interpreters/InterpreterDeleteQuery.h>
+#include <Interpreters/InterpreterDBGInvokeQuery.h>
 #include <Interpreters/InterpreterOptimizeQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -33,6 +38,7 @@
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
+#include <Interpreters/InterpreterTruncateQuery.h>
 
 #include <Parsers/ASTSystemQuery.h>
 #include <Common/typeid_cast.h>
@@ -143,10 +149,24 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     {
         return std::make_unique<InterpreterKillQueryQuery>(query, context);
     }
+    else if (typeid_cast<ASTDeleteQuery *>(query.get()))
+    {
+        bool allow_materialized = static_cast<bool>(context.getSettingsRef().insert_allow_materialized_columns);
+        return std::make_unique<InterpreterDeleteQuery>(query, context, allow_materialized);
+    }
+    else if (typeid_cast<ASTDBGInvokeQuery *>(query.get()))
+    {
+        return std::make_unique<InterpreterDBGInvokeQuery>(query, context);
+    }
     else if (typeid_cast<ASTSystemQuery *>(query.get()))
     {
         throwIfReadOnly(context);
         return std::make_unique<InterpreterSystemQuery>(query, context);
+    }
+    else if (typeid_cast<ASTTruncateQuery *>(query.get()))
+    {
+        throwIfReadOnly(context);
+        return std::make_unique<InterpreterTruncateQuery>(query, context);
     }
     else
         throw Exception("Unknown type of query: " + query->getID(), ErrorCodes::UNKNOWN_TYPE_OF_QUERY);

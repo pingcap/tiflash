@@ -73,6 +73,12 @@ roundDownToPowerOfTwo(T x)
     return ext::bit_cast<T>(ext::bit_cast<UInt64>(x) & ~((1ULL << 52) - 1));
 }
 
+template <typename T>
+inline std::enable_if_t<std::is_same_v<Decimal, T>, T> roundDownToPowerOfTwo(T)
+{
+    return {};
+}
+
 /** For integer data types:
   * - if number is greater than zero, round it down to nearest power of two (example: roundToExp2(100) = 64, roundToExp2(64) = 64);
   * - otherwise, return 0.
@@ -122,6 +128,11 @@ struct RoundDurationImpl
     }
 };
 
+template <> struct RoundDurationImpl<Decimal>{
+    using ResultType = UInt16;
+    static inline ResultType apply(Decimal) { throw Exception("RoundDuration of decimal is not implemented yet."); }
+};
+
 template <typename A>
 struct RoundAgeImpl
 {
@@ -139,6 +150,10 @@ struct RoundAgeImpl
     }
 };
 
+template <> struct RoundAgeImpl<Decimal>{
+    using ResultType = UInt8;
+    static inline ResultType apply(Decimal) { throw Exception("RoundAge of decimal is not implemented yet."); }
+};
 
 /** This parameter controls the behavior of the rounding functions.
   */

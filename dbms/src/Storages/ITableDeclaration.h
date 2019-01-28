@@ -24,6 +24,11 @@ public:
     Block getSampleBlockNonMaterialized() const;
     Block getSampleBlockForColumns(const Names & column_names) const;
 
+    /** The hidden coloumns will not be returned. Mainly for INSERT query.
+      */
+    Block getSampleBlockNoHidden() const;
+    Block getSampleBlockNonMaterializedNoHidden() const;
+
     /** Verify that all the requested names are in the table and are set correctly.
       * (the list of names is not empty and the names do not repeat)
       */
@@ -50,6 +55,13 @@ public:
 
 private:
     ColumnsDescription columns;
+
+    OrderedNameSet empty_names;
+
+    virtual const OrderedNameSet & getHiddenColumnsImpl() const
+    {
+        return empty_names;
+    }
 };
 
 }

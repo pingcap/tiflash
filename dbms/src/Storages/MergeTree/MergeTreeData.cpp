@@ -306,8 +306,8 @@ void MergeTreeData::MergingParams::check(const NamesAndTypesList & columns) cons
         throw Exception("Sign column for MergeTree cannot be specified in modes except Collapsing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
-        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing.",
+    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing && mode != MergingParams::Mutable && mode != MergingParams::Txn)
+        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing or Mutable.",
                         ErrorCodes::LOGICAL_ERROR);
 
     if (!columns_to_sum.empty() && mode != MergingParams::Summing)
@@ -410,6 +410,8 @@ String MergeTreeData::MergingParams::getModeName() const
         case Summing:       return "Summing";
         case Aggregating:   return "Aggregating";
         case Replacing:     return "Replacing";
+        case Mutable:       return "Mutable";
+        case Txn:           return "Txn";
         case Graphite:      return "Graphite";
         case VersionedCollapsing:  return "VersionedCollapsing";
 
@@ -1085,6 +1087,12 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     const ASTPtr & new_primary_key,
     bool skip_sanity_checks)
 {
+    // check if is compact
+    if (part->isCompactFormat())
+    {
+        throw Exception("L0 compact does not support alter clause.");
+    }
+
     ExpressionActionsPtr expression;
     AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part)); /// Blocks changes to the part.
     bool force_update_metadata;
@@ -1211,7 +1219,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
         MarkRanges ranges{MarkRange(0, part->marks_count)};
         BlockInputStreamPtr part_in = std::make_shared<MergeTreeBlockInputStream>(
             *this, part, DEFAULT_MERGE_BLOCK_SIZE, 0, 0, expression->getRequiredColumns(), ranges,
-            false, nullptr, "", false, 0, DBMS_DEFAULT_BUFFER_SIZE, false);
+            false, nullptr, "", false, 0, DBMS_DEFAULT_BUFFER_SIZE, false, false);
 
         auto compression_settings = this->context.chooseCompressionSettings(
             part->bytes_on_disk,
@@ -1466,12 +1474,12 @@ MergeTreeData::DataPartsVector MergeTreeData::renameTempPartAndReplace(
       * Otherwise there is race condition - merge of blocks could happen in interval that doesn't yet contain new part.
       */
     if (increment)
+    {
         part_info.min_block = part_info.max_block = increment->get();
-
-    if (format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
-        part_name = part_info.getPartNameV0(part->getMinDate(), part->getMaxDate());
+        part_name = part->getNewName(part_info);
+    }
     else
-        part_name = part_info.getPartName();
+        part_name = part->name;
 
     LOG_TRACE(log, "Renaming temporary part " << part->relative_path << " to " << part_name << ".");
 
@@ -2029,6 +2037,44 @@ String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, const Context 
     }
 
     return partition_id;
+}
+
+NameSet MergeTreeData::getPartitionIDsInLiteral(const ASTPtr &ast, const Context &)
+{
+    const auto & partition_ast = typeid_cast<const ASTPartition &>(*ast);
+
+    if (!partition_ast.value)
+        return {partition_ast.id};
+
+    const auto * partition_lit = typeid_cast<const ASTLiteral *>(partition_ast.value.get());
+    if (partition_lit && partition_lit->value.getType() == Field::Types::String)
+    {
+        return {partition_lit->value.get<String>()};
+    }
+
+    const auto * partition_function = typeid_cast<const ASTFunction *>(partition_ast.value.get());
+    if (partition_function && partition_function->name == "tuple")
+    {
+        NameSet ids;
+        bool ok = true;
+        for (const auto & item : partition_function->arguments->children)
+        {
+            const auto * partition_lit = typeid_cast<const ASTLiteral *>(item.get());
+            if (partition_lit && partition_lit->value.getType() == Field::Types::String)
+            {
+                ids.emplace(partition_lit->value.get<String>());
+            }
+            else
+            {
+                ok = false;
+                break;
+            }
+        }
+        if (ok)
+            return ids;
+    }
+
+    throw Exception("Unable to parse partition values in literal form: `" + partition_ast.fields_str.toString() + "`");
 }
 
 MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVector(const DataPartStates & affordable_states, DataPartStateVector * out_states) const

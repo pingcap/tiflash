@@ -1,6 +1,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/MutableSupport.h>
 
 #include <Common/typeid_cast.h>
 #include <Common/OptimizedRegularExpression.h>
@@ -12,7 +13,7 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>
-
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -203,6 +204,42 @@ static void setGraphitePatternsFromConfig(const Context & context,
 }
 
 
+static String getMutableMergeTreeVerboseHelp()
+{
+    String help = R"(
+
+MutableMergeTree is a member of the MergeTree engine family.
+
+MutableMergeTree is slightly different from the others:
+- it only support non-replicated
+- it won't take a 'date' type column for partitioning, instead, it take a number as partition count (default = 16).
+
+Examples of creating a MutableMergeTree table:
+- Create Table ... MutableMergeTree((CounterID, EventDate), 8192)
+- Create Table ... MutableMergeTree(16, (CounterID, EventDate), 8192)
+)";
+    return help;
+}
+
+
+static String getTxnMergeTreeVerboseHelp()
+{
+    String help = R"(
+
+TxnMergeTree is a variant of the MutableMergeTree engine.
+
+TxnMergeTree is slightly different from MutableMergeTree:
+- it requires an extra table info parameter in JSON format
+- in most cases, it should be created implicitly through raft rather than explicitly
+
+Examples of creating a TxnMergeTree table:
+- Create Table ... TxnMergeTree((CounterID, EventDate), 8192, '...')
+- Create Table ... TxnMergeTree(16, (CounterID, EventDate), 8192, '...')
+)";
+    return help;
+}
+
+
 static String getMergeTreeVerboseHelp(bool is_extended_syntax)
 {
     String help = R"(
@@ -210,11 +247,11 @@ static String getMergeTreeVerboseHelp(bool is_extended_syntax)
 MergeTree is a family of storage engines.
 
 MergeTrees are different in two ways:
-- they may be replicated and non-replicated;
+- they may be replicated and non-replicated (except MutableMergeTree, it only support non-replicated);
 - they may do different actions on merge: nothing; sign collapse; sum; apply aggregete functions.
 
-So we have 14 combinations:
-    MergeTree, CollapsingMergeTree, SummingMergeTree, AggregatingMergeTree, ReplacingMergeTree, GraphiteMergeTree, VersionedCollapsingMergeTree
+So we have 15 combinations:
+    MergeTree, CollapsingMergeTree, SummingMergeTree, AggregatingMergeTree, ReplacingMergeTree, GraphiteMergeTree, VersionedCollapsingMergeTree, MutableMergeTree
     ReplicatedMergeTree, ReplicatedCollapsingMergeTree, ReplicatedSummingMergeTree, ReplicatedAggregatingMergeTree, ReplicatedReplacingMergeTree, ReplicatedGraphiteMergeTree, ReplicatedVersionedCollapsingMergeTree
 
 In most of cases, you need MergeTree or ReplicatedMergeTree.
@@ -368,6 +405,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         merging_params.mode = MergeTreeData::MergingParams::Aggregating;
     else if (name_part == "Replacing")
         merging_params.mode = MergeTreeData::MergingParams::Replacing;
+    else if (name_part == "Mutable")
+        merging_params.mode = MergeTreeData::MergingParams::Mutable;
+    else if (name_part == "Txn")
+        merging_params.mode = MergeTreeData::MergingParams::Txn;
     else if (name_part == "Graphite")
         merging_params.mode = MergeTreeData::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
@@ -376,6 +417,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(
             "Unknown storage " + args.engine_name + getMergeTreeVerboseHelp(is_extended_storage_def),
             ErrorCodes::UNKNOWN_STORAGE);
+
+    bool is_txn_engine = merging_params.mode == MergeTreeData::MergingParams::Txn;
+    bool is_mutable_engine = (merging_params.mode == MergeTreeData::MergingParams::Mutable || is_txn_engine);
 
     /// NOTE Quite complicated.
 
@@ -393,7 +437,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     auto add_optional_param = [&](const char * desc)
     {
         ++max_num_params;
-        needed_params += needed_params.empty() ? "\n" : ",\n[";
+        needed_params += needed_params.empty() ? "\n[" : ",\n[";
         needed_params += desc;
         needed_params += "]";
     };
@@ -404,7 +448,17 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         add_mandatory_param("replica name");
     }
 
-    if (!is_extended_storage_def)
+    if (is_mutable_engine)
+    {
+        add_optional_param("partition number");
+        add_mandatory_param("primary key expression");
+        add_mandatory_param("index granularity");
+        if (is_txn_engine)
+        {
+            add_mandatory_param("table info");
+        }
+    }
+    else if (!is_extended_storage_def)
     {
         add_mandatory_param("name of column with date");
         add_optional_param("sampling element of primary key");
@@ -457,7 +511,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         else
             msg += "no parameters";
 
-        msg += getMergeTreeVerboseHelp(is_extended_storage_def);
+        msg += is_mutable_engine ? (is_txn_engine ? getTxnMergeTreeVerboseHelp() : getMutableMergeTreeVerboseHelp()) : getMergeTreeVerboseHelp(is_extended_storage_def);
 
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
@@ -494,6 +548,8 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     ASTPtr secondary_sorting_expr_list;
 
+    auto columns = args.columns;
+
     if (merging_params.mode == MergeTreeData::MergingParams::Collapsing)
     {
         if (auto ast = typeid_cast<const ASTIdentifier *>(engine_args.back().get()))
@@ -518,6 +574,22 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                     ErrorCodes::BAD_ARGUMENTS);
 
             engine_args.pop_back();
+        }
+    }
+    else if (merging_params.mode == MergeTreeData::MergingParams::Mutable ||
+             merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        // Add version column and del-mark column, set to engine params.
+        const Names & names = args.columns.getNamesOfPhysical();
+        if (std::find(names.begin(), names.end(), MutableSupport::version_column_name) == names.end())
+            columns.ordinary.push_back(NameAndTypePair(MutableSupport::version_column_name, std::make_shared<DataTypeUInt64>()));
+        if (std::find(names.begin(), names.end(), MutableSupport::delmark_column_name) == names.end())
+            columns.ordinary.push_back(NameAndTypePair(MutableSupport::delmark_column_name, std::make_shared<DataTypeUInt8>()));
+        merging_params.version_column = MutableSupport::version_column_name;
+        if (merging_params.mode == MergeTreeData::MergingParams::Txn)
+        {
+            secondary_sorting_expr_list = std::make_shared<ASTExpressionList>();
+            secondary_sorting_expr_list->children.push_back(ASTPtr(new ASTIdentifier(MutableSupport::version_column_name)));
         }
     }
     else if (merging_params.mode == MergeTreeData::MergingParams::Summing)
@@ -577,6 +649,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     ASTPtr partition_expr_list;
     ASTPtr primary_expr_list;
     ASTPtr sampling_expression;
+    TiDB::TableInfo table_info;
     MergeTreeSettings storage_settings = args.context.getMergeTreeSettings();
 
     if (is_extended_storage_def)
@@ -595,6 +668,45 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             sampling_expression = args.storage_def->sample_by->ptr();
 
         storage_settings.loadFromQuery(*args.storage_def);
+    }
+    else if (is_mutable_engine)
+    {
+        if (is_txn_engine)
+        {
+            auto ast = typeid_cast<const ASTLiteral *>(engine_args.back().get());
+            if (ast && ast->value.getType() == Field::Types::String)
+            {
+                auto table_info_json = safeGet<String>(ast->value);
+                // TODO: examine if this unescaping is necessary.
+                table_info.deserialize(table_info_json, true);
+            }
+            else
+                throw Exception(
+                    "Table info must be a string" + getMutableMergeTreeVerboseHelp(),
+                    ErrorCodes::BAD_ARGUMENTS);
+            engine_args.pop_back();
+        }
+        if (engine_args.size() == 3)
+        {
+            auto ast = typeid_cast<const ASTLiteral *>(engine_args[0].get());
+            if (ast && ast->value.getType() == Field::Types::UInt64)
+                storage_settings.mutable_mergetree_partition_number = safeGet<UInt64>(ast->value);
+            else
+                throw Exception(
+                    "Partition number  must be a positive integer" + getMutableMergeTreeVerboseHelp(),
+                    ErrorCodes::BAD_ARGUMENTS);
+            engine_args.erase(engine_args.begin());
+        }
+
+        primary_expr_list = extractKeyExpressionList(*engine_args[0]);
+
+        auto ast = typeid_cast<const ASTLiteral *>(engine_args[1].get());
+        if (ast && ast->value.getType() == Field::Types::UInt64)
+            storage_settings.index_granularity = safeGet<UInt64>(ast->value);
+        else
+            throw Exception(
+                "Index granularity must be a positive integer" + getMutableMergeTreeVerboseHelp(),
+                ErrorCodes::BAD_ARGUMENTS);
     }
     else
     {
@@ -628,14 +740,14 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (replicated)
         return StorageReplicatedMergeTree::create(
             zookeeper_path, replica_name, args.attach, args.data_path, args.database_name, args.table_name,
-            args.columns,
+            columns,
             args.context, primary_expr_list, secondary_sorting_expr_list, date_column_name, partition_expr_list,
             sampling_expression, merging_params, storage_settings,
             args.has_force_restore_data_flag);
     else
         return StorageMergeTree::create(
-            args.data_path, args.database_name, args.table_name, args.columns, args.attach,
-            args.context, primary_expr_list, secondary_sorting_expr_list, date_column_name, partition_expr_list,
+            args.data_path, args.database_name, args.table_name, columns, args.attach,
+            args.context, table_info, primary_expr_list, secondary_sorting_expr_list, date_column_name, partition_expr_list,
             sampling_expression, merging_params, storage_settings,
             args.has_force_restore_data_flag);
 }
@@ -646,6 +758,8 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("MergeTree", create);
     factory.registerStorage("CollapsingMergeTree", create);
     factory.registerStorage("ReplacingMergeTree", create);
+    factory.registerStorage(MutableSupport::storage_name, create);
+    factory.registerStorage(MutableSupport::txn_storage_name, create);
     factory.registerStorage("AggregatingMergeTree", create);
     factory.registerStorage("SummingMergeTree", create);
     factory.registerStorage("GraphiteMergeTree", create);
@@ -654,6 +768,7 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("ReplicatedMergeTree", create);
     factory.registerStorage("ReplicatedCollapsingMergeTree", create);
     factory.registerStorage("ReplicatedReplacingMergeTree", create);
+    // factory.registerStorage("Replicated" + MutableSupport::storage_name, create);
     factory.registerStorage("ReplicatedAggregatingMergeTree", create);
     factory.registerStorage("ReplicatedSummingMergeTree", create);
     factory.registerStorage("ReplicatedGraphiteMergeTree", create);

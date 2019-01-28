@@ -27,6 +27,7 @@ public:
         size_t max_read_buffer_size,
         bool use_uncompressed_cache,
         bool save_marks_in_cache = true,
+        bool update_persisted_cache = true,
         const Names & virt_column_names = {});
 
     ~MergeTreeBaseBlockInputStream() override;
@@ -59,6 +60,7 @@ protected:
 
     bool use_uncompressed_cache;
     bool save_marks_in_cache;
+    bool update_persisted_cache;
 
     Names virt_column_names;
 

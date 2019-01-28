@@ -27,12 +27,14 @@ using DB::UInt64;
             1) interval between adjacent floats less or equal 1
             2) interval between adjacent floats greater then 2
             3) float is outside [MIN_INT64; MAX_INT64]
+    4) decimal_type vs integral_type
+    5) decimal_type vs floating_type
 */
 
 // Case 1. Is pair of floats or pair of ints or pair of uints
 template <typename A, typename B>
 constexpr bool is_safe_conversion = (std::is_floating_point_v<A> && std::is_floating_point_v<B>)
-    || (std::is_integral_v<A> && std::is_integral_v<B> && !(std::is_signed_v<A> ^ std::is_signed_v<B>));
+    || ((std::is_integral_v<A> && std::is_integral_v<B> && !(std::is_signed_v<A> ^ std::is_signed_v<B>)) || (DB::IsDecimal<A> && DB::IsDecimal<B>));
 template <typename A, typename B>
 using bool_if_safe_conversion = std::enable_if_t<is_safe_conversion<A, B>, bool>;
 template <typename A, typename B>
@@ -139,6 +141,51 @@ inline bool_if_double_can_be_used<TAInt, TAFloat> equalsOpTmpl(TAFloat a, TAInt 
     return static_cast<double>(a) == static_cast<double>(b);
 }
 
+template <typename Dec, typename TInt>
+using bool_if_dec_int = std::enable_if_t<DB::IsDecimal<Dec> && std::is_integral_v<TInt>, bool>;
+
+template <typename Dec, typename TInt>
+inline bool_if_dec_int<Dec, TInt> equalsOpTmpl(Dec d, TInt i) {
+    return d == DB::Decimal(i);
+}
+
+template <typename TInt, typename Dec>
+inline bool_if_dec_int<Dec, TInt> equalsOpTmpl(TInt i, Dec d) {
+    return d == DB::Decimal(i);
+}
+
+template <typename Dec, typename TInt>
+inline bool_if_dec_int<Dec, TInt> greaterOpTmpl(Dec d, TInt i) {
+    return d > DB::Decimal(i);
+}
+
+template <typename TInt, typename Dec>
+inline bool_if_dec_int<Dec, TInt> greaterOpTmpl(TInt i, Dec d) {
+    return DB::Decimal(i) > d;
+}
+
+template <typename Dec, typename TFlt>
+using bool_if_dec_flt = std::enable_if_t<DB::IsDecimal<Dec> && std::is_floating_point_v<TFlt>, bool>;
+
+template <typename Dec, typename TFlt>
+inline bool_if_dec_flt<Dec, TFlt> equalsOpTmpl(Dec d, TFlt f) {
+    return static_cast<TFlt>(d) == f;
+}
+
+template <typename TFlt, typename Dec>
+inline bool_if_dec_flt<Dec, TFlt> equalsOpTmpl(TFlt f, Dec d) {
+    return static_cast<TFlt>(d) == f;
+}
+
+template <typename Dec, typename TFlt>
+inline bool_if_dec_flt<Dec, TFlt> greaterOpTmpl(Dec d, TFlt f) {
+    return static_cast<TFlt>(d) > f;
+}
+
+template <typename TFlt, typename Dec>
+inline bool_if_dec_flt<Dec, TFlt> greaterOpTmpl(TFlt f, Dec d) {
+    return f > static_cast<TFlt>(d);
+}
 
 /* Final realiztions */
 
@@ -384,6 +431,5 @@ inline bool_if_safe_conversion<A, B> greaterOrEqualsOp(A a, B b)
 {
     return a >= b;
 }
-
 
 }

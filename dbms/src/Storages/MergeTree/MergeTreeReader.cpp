@@ -4,6 +4,7 @@
 #include <Common/MemoryTracker.h>
 #include <IO/CachedCompressedReadBuffer.h>
 #include <IO/CompressedReadBufferFromFile.h>
+#include <IO/PersistedCache.h>
 #include <Columns/ColumnArray.h>
 #include <Interpreters/evaluateMissingDefaults.h>
 #include <Storages/MergeTree/MergeTreeReader.h>
@@ -35,12 +36,14 @@ MergeTreeReader::~MergeTreeReader() = default;
 
 MergeTreeReader::MergeTreeReader(const String & path,
     const MergeTreeData::DataPartPtr & data_part, const NamesAndTypesList & columns,
+    PersistedCache * persisted_cache, bool update_persisted_cache,
     UncompressedCache * uncompressed_cache, MarkCache * mark_cache, bool save_marks_in_cache,
     MergeTreeData & storage, const MarkRanges & all_mark_ranges,
     size_t aio_threshold, size_t max_read_buffer_size, const ValueSizeMap & avg_value_size_hints,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback,
     clockid_t clock_type)
     : avg_value_size_hints(avg_value_size_hints), path(path), data_part(data_part), columns(columns)
+    , persisted_cache(persisted_cache), update_persisted_cache(update_persisted_cache)
     , uncompressed_cache(uncompressed_cache), mark_cache(mark_cache), save_marks_in_cache(save_marks_in_cache), storage(storage)
     , all_mark_ranges(all_mark_ranges), aio_threshold(aio_threshold), max_read_buffer_size(max_read_buffer_size)
 {
@@ -49,6 +52,11 @@ MergeTreeReader::MergeTreeReader(const String & path,
         if (!Poco::File(path).exists())
             throw Exception("Part " + path + " is missing", ErrorCodes::NOT_FOUND_EXPECTED_DATA_PART);
 
+        compactContextPtr = CompactContextFactory::tryToGetCompactReadCtxPtr(path);
+        if (compactContextPtr != nullptr) {
+            persisted_cache = nullptr;
+        }
+        
         for (const NameAndTypePair & column : columns)
             addStreams(column.name, *column.type, all_mark_ranges, profile_callback, clock_type);
     }
@@ -157,13 +165,17 @@ size_t MergeTreeReader::readRows(size_t from_mark, bool continue_reading, size_t
 
 
 MergeTreeReader::Stream::Stream(
-    const String & path_prefix_, const String & extension_, size_t marks_count_,
+    const String & path_prefix_, const String & stream_name_, const String & extension_, size_t marks_count_,
     const MarkRanges & all_mark_ranges,
+    PersistedCache * persisted_cache_, bool update_persisted_cache_,
+    CompactReadContextPtr compactContextPtr_,
     MarkCache * mark_cache_, bool save_marks_in_cache_,
     UncompressedCache * uncompressed_cache,
     size_t aio_threshold, size_t max_read_buffer_size,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type)
-    : path_prefix(path_prefix_), extension(extension_), marks_count(marks_count_)
+    : path_prefix(path_prefix_ + stream_name_), stream_name(stream_name_), extension(extension_), marks_count(marks_count_)
+    , persisted_cache(persisted_cache_), update_persisted_cache(update_persisted_cache_)
+    , compactContextPtr(compactContextPtr_)
     , mark_cache(mark_cache_), save_marks_in_cache(save_marks_in_cache_)
 {
     /// Compute the size of the buffer.
@@ -202,6 +214,26 @@ MergeTreeReader::Stream::Stream(
 
     size_t buffer_size = std::min(max_read_buffer_size, max_mark_range);
 
+    String path = path_prefix + extension;
+    if (compactContextPtr != nullptr) {
+        path = compactContextPtr->compact_path;
+    }
+    if (persisted_cache)
+    {
+        // TODO: Can be improved
+        //
+        // Now:    (read)origin data -> (write)cache data -> (read)cache -> (use data)
+        //
+        // Better: (read)origin data -> (write)cache data
+        //                           -> (use data)
+        if (!marks)
+            loadMarks();
+        if (update_persisted_cache)
+            persisted_cache->cacheRangesInDataFile(path, all_mark_ranges, *marks, marks_count, buffer_size);
+        // May fail, but we can ignore it and read from origin file
+        persisted_cache->redirectDataFile(path, all_mark_ranges, *marks, marks_count, update_persisted_cache);
+    }
+
     /// Estimate size of the data to be read.
     size_t estimated_size = 0;
     if (aio_threshold > 0)
@@ -214,7 +246,7 @@ MergeTreeReader::Stream::Stream(
 
             size_t offset_end = (mark_range.end < marks_count)
                 ? getMark(mark_range.end).offset_in_compressed_file
-                : Poco::File(path_prefix + extension).getSize();
+                : Poco::File(path).getSize();
 
             if (offset_end > offset_begin)
                 estimated_size += offset_end - offset_begin;
@@ -225,7 +257,7 @@ MergeTreeReader::Stream::Stream(
     if (uncompressed_cache)
     {
         auto buffer = std::make_unique<CachedCompressedReadBuffer>(
-            path_prefix + extension, uncompressed_cache, estimated_size, aio_threshold, buffer_size);
+            path, uncompressed_cache, estimated_size, aio_threshold, buffer_size);
 
         if (profile_callback)
             buffer->setProfileCallback(profile_callback, clock_type);
@@ -236,7 +268,7 @@ MergeTreeReader::Stream::Stream(
     else
     {
         auto buffer = std::make_unique<CompressedReadBufferFromFile>(
-            path_prefix + extension, estimated_size, aio_threshold, buffer_size);
+            path, estimated_size, aio_threshold, buffer_size);
 
         if (profile_callback)
             buffer->setProfileCallback(profile_callback, clock_type);
@@ -264,20 +296,56 @@ void MergeTreeReader::Stream::loadMarks()
         /// Memory for marks must not be accounted as memory usage for query, because they are stored in shared cache.
         TemporarilyDisableMemoryTracker temporarily_disable_memory_tracker;
 
+        bool using_cached_marks_file = false;
+        if (persisted_cache)
+            using_cached_marks_file = persisted_cache->redirectMarksFile(path, marks_count);
+
         size_t file_size = Poco::File(path).getSize();
         size_t expected_file_size = sizeof(MarkInCompressedFile) * marks_count;
+        // TODO: If is a broken cache file, just clear it and read from origin path
         if (expected_file_size != file_size)
             throw Exception(
-                "bad size of marks file `" + path + "':" + std::to_string(file_size) + ", must be: "  + std::to_string(expected_file_size),
+                "bad size of marks file `" + path + "'("
+                + (using_cached_marks_file ? "cached" : "origin")
+                + "):" + std::to_string(file_size) + ", must be: "  + std::to_string(expected_file_size),
                 ErrorCodes::CORRUPTED_DATA);
 
         auto res = std::make_shared<MarksInCompressedFile>(marks_count);
 
         /// Read directly to marks.
         ReadBufferFromFile buffer(path, file_size, -1, reinterpret_cast<char *>(res->data()));
+        if (persisted_cache && update_persisted_cache && !using_cached_marks_file)
+            persisted_cache->cacheMarksFile(path, marks_count);
 
         if (buffer.eof() || buffer.buffer().size() != file_size)
-            throw Exception("Cannot read all marks from file " + path, ErrorCodes::CANNOT_READ_ALL_DATA);
+            throw Exception("Cannot read all marks from file " + path
+                    + "(" + (using_cached_marks_file ? "cached" : "origin") + ")",
+                    ErrorCodes::CANNOT_READ_ALL_DATA);
+
+        return res;
+    };
+
+    auto loadByCompact = [&]() -> MarkCache::MappedPtr
+    {
+        std::string compact_path = compactContextPtr->compact_path;
+
+        auto markRange = compactContextPtr->getMarkRange(stream_name);
+        size_t file_size = markRange.end - markRange.begin;
+
+        size_t expected_file_size = sizeof(MarkInCompressedFile) * marks_count;
+        if (expected_file_size != file_size)
+            throw Exception(
+                "bad size of marks file `" + compact_path + "' for stream name " + stream_name + ":" + std::to_string(file_size) + ", must be: "  + std::to_string(expected_file_size),
+                ErrorCodes::CORRUPTED_DATA);
+
+        auto res = std::make_shared<MarksInCompressedFile>(marks_count);
+
+        ReadBufferFromFile buffer(compact_path, file_size, -1, reinterpret_cast<char *>(res->data()));
+
+        buffer.seek(markRange.begin);
+
+        if (buffer.eof() || buffer.buffer().size() != file_size)
+            throw Exception("Cannot read all marks from file " + compact_path, ErrorCodes::CANNOT_READ_ALL_DATA);
 
         return res;
     };
@@ -287,17 +355,28 @@ void MergeTreeReader::Stream::loadMarks()
         auto key = mark_cache->hash(path);
         if (save_marks_in_cache)
         {
-            marks = mark_cache->getOrSet(key, load);
+            if (compactContextPtr != nullptr) 
+                marks = mark_cache->getOrSet(key, loadByCompact);
+            else
+                marks = mark_cache->getOrSet(key, load);
         }
         else
         {
             marks = mark_cache->get(key);
             if (!marks)
-                marks = load();
+            {
+                if (compactContextPtr != nullptr) 
+                    marks = loadByCompact();
+                else 
+                    marks = load();
+            }
         }
     }
     else
-        marks = load();
+        if (compactContextPtr != nullptr) 
+            marks = loadByCompact();
+        else 
+            marks = load();
 
     if (!marks)
         throw Exception("Failed to load marks: " + path, ErrorCodes::LOGICAL_ERROR);
@@ -344,12 +423,12 @@ void MergeTreeReader::addStreams(const String & name, const IDataType & type, co
         /** If data file is missing then we will not try to open it.
           * It is necessary since it allows to add new column to structure of the table without creating new files for old parts.
           */
-        if (!data_file_exists)
+        if (!data_file_exists && compactContextPtr == nullptr)
             return;
 
         streams.emplace(stream_name, std::make_unique<Stream>(
-            path + stream_name, DATA_FILE_EXTENSION, data_part->marks_count,
-            all_mark_ranges, mark_cache, save_marks_in_cache,
+            path , stream_name, DATA_FILE_EXTENSION, data_part->marks_count,
+            all_mark_ranges, persisted_cache, update_persisted_cache, compactContextPtr, mark_cache, save_marks_in_cache,
             uncompressed_cache, aio_threshold, max_read_buffer_size, profile_callback, clock_type));
     };
 

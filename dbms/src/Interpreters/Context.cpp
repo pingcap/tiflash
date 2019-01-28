@@ -15,6 +15,8 @@
 #include <Common/setThreadName.h>
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
+#include <Debug/DBGInvoker.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
 #include <Storages/IStorage.h>
@@ -38,13 +40,17 @@
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/PartLog.h>
+#include <Interpreters/SharedQueries.h>
 #include <Interpreters/Context.h>
 #include <Common/DNSCache.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
+#include <IO/PersistedCache.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Raft/RaftService.h>
+#include <TiDB/TiDBService.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -124,6 +130,9 @@ struct ContextShared
     std::shared_ptr<ISecurityManager> security_manager;     /// Known users.
     Quotas quotas;                                          /// Known quotas for resource use.
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
+    mutable PersistedCachePtr persisted_cache;              /// The persisted cache of compressed blocks written in fast(er) disk device.
+    mutable DBGInvoker dbg_invoker;                         /// Execute inner functions, debug only.
+    mutable TMTContextPtr tmt_context;
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     ProcessList process_list;                               /// Executing queries at the moment.
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
@@ -140,6 +149,9 @@ struct ContextShared
     size_t max_table_size_to_drop = 50000000000lu;          /// Protects MergeTree tables from accidental DROP (50GB by default)
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
 
+    SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
+    RaftServicePtr raft_service;                            /// Raft service instance.
+    TiDBServicePtr tidb_service;                            /// TiDB service instance.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1283,6 +1295,47 @@ void Context::dropUncompressedCache() const
 }
 
 
+void Context::setPersistedCache(size_t max_size_in_bytes, const std::string & persisted_path)
+{
+    auto lock = getLock();
+
+    if (shared->persisted_cache)
+        throw Exception("Persisted cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->persisted_cache = std::make_shared<PersistedCache>(max_size_in_bytes, shared->path, persisted_path);
+}
+
+
+PersistedCachePtr Context::getPersistedCache() const
+{
+    auto lock = getLock();
+    return shared->persisted_cache;
+}
+
+
+DBGInvoker & Context::getDBGInvoker() const
+{
+    auto lock = getLock();
+    return shared->dbg_invoker;
+}
+
+
+TMTContext & Context::getTMTContext()
+{
+    auto lock = getLock();
+    if (!shared->tmt_context)
+        shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs);
+    return *(shared->tmt_context);
+}
+
+TMTContext & Context::getTMTContext() const
+{
+    auto lock = getLock();
+    if (!shared->tmt_context)
+        throw Exception("no tmt context");
+    return *(shared->tmt_context);
+}
+
 void Context::setMarkCache(size_t cache_size_in_bytes)
 {
     auto lock = getLock();
@@ -1342,6 +1395,38 @@ DDLWorker & Context::getDDLWorker() const
     if (!shared->ddl_worker)
         throw Exception("DDL background thread is not initialized.", ErrorCodes::LOGICAL_ERROR);
     return *shared->ddl_worker;
+}
+
+void Context::initializeRaftService(const std::string & service_addr)
+{
+    auto lock = getLock();
+    if (shared->raft_service)
+        throw Exception("Raft Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
+}
+
+RaftService & Context::getRaftService()
+{
+    auto lock = getLock();
+    if (!shared->raft_service)
+        throw Exception("Raft Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
+    return *shared->raft_service;
+}
+
+void Context::initializeTiDBService(const std::string & service_ip, const std::string & status_port)
+{
+    auto lock = getLock();
+    if (shared->tidb_service)
+        throw Exception("TiDB Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->tidb_service = std::make_shared<TiDBService>(service_ip, status_port);
+}
+
+TiDBService & Context::getTiDBService()
+{
+    auto lock = getLock();
+    if (!shared->tidb_service)
+        throw Exception("TiDB Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
+    return *shared->tidb_service;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const
@@ -1703,6 +1788,22 @@ void Context::setFormatSchemaPath(const String & path)
     shared->format_schema_path = path;
 }
 
+void Context::setUseL0Opt(bool use_l0) {
+    use_l0_opt = use_l0;
+}
+
+bool Context::useL0Opt() const {
+    return use_l0_opt;
+}
+
+SharedQueriesPtr Context::getSharedQueries()
+{
+    auto lock = getLock();
+
+    if(!shared->shared_queries)
+        shared->shared_queries = std::make_shared<SharedQueries>();
+    return shared->shared_queries;
+}
 
 SessionCleaner::~SessionCleaner()
 {

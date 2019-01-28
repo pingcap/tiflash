@@ -378,6 +378,13 @@ namespace ErrorCodes
     extern const int POCO_EXCEPTION = 1000;
     extern const int STD_EXCEPTION = 1001;
     extern const int UNKNOWN_EXCEPTION = 1002;
+
+    extern const int THEFLASH_UNHANDLED_TYPE_CONVERTION = 9000;
+    extern const int THEFLASH_BAD_REQUEST = 9001;
+    extern const int THEFLASH_ENCODER_ERROR = 9002;
+    extern const int THEFLASH_SESSION_ERROR = 9003;
+    extern const int DECIMAL_OVERFLOW_ERROR = 9004;
+    extern const int LOCK_EXCEPTION = 10000;
 }
 
 }

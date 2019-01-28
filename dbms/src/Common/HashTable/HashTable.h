@@ -21,9 +21,9 @@
 #include <IO/VarInt.h>
 
 #include <Common/HashTable/HashTableAllocator.h>
+    #include <iostream>
 
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
-    #include <iostream>
     #include <iomanip>
     #include <Common/Stopwatch.h>
 #endif
@@ -71,8 +71,18 @@ namespace ZeroTraits
 template <typename T>
 bool check(const T x) { return x == 0; }
 
+inline bool check(const DB::Decimal x) {
+    return x.isZero();
+}
+
 template <typename T>
 void set(T & x) { x = 0; }
+
+inline void set(DB::Decimal & x) {
+    x.scale = 0;
+    x.precision = 0;
+    x.value = 0;
+}
 
 };
 
@@ -600,7 +610,7 @@ protected:
 
 
     /// If the key is zero, insert it into a special place and return true.
-    bool ALWAYS_INLINE emplaceIfZero(Key x, iterator & it, bool & inserted, size_t hash_value)
+    bool ALWAYS_INLINE emplaceIfZero(const Key & x, iterator & it, bool & inserted, size_t hash_value)
     {
         /// If it is claimed that the zero key can not be inserted into the table.
         if (!Cell::need_zero_value_storage)
@@ -627,7 +637,7 @@ protected:
 
 
     /// Only for non-zero keys. Find the right place, insert the key there, if it does not already exist. Set iterator to the cell in output parameter.
-    void ALWAYS_INLINE emplaceNonZero(Key x, iterator & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplaceNonZero(const Key & x, iterator & it, bool & inserted, size_t hash_value)
     {
         size_t place_value = findCell(x, hash_value, grower.place(hash_value));
 
@@ -705,7 +715,7 @@ public:
       * if (inserted)
       *     new(&it->second) Mapped(value);
       */
-    void ALWAYS_INLINE emplace(Key x, iterator & it, bool & inserted)
+    void ALWAYS_INLINE emplace(const Key & x, iterator & it, bool & inserted)
     {
         size_t hash_value = hash(x);
         if (!emplaceIfZero(x, it, inserted, hash_value))
@@ -714,7 +724,7 @@ public:
 
 
     /// Same, but with a precalculated value of hash function.
-    void ALWAYS_INLINE emplace(Key x, iterator & it, bool & inserted, size_t hash_value)
+    void ALWAYS_INLINE emplace(const Key & x, iterator & it, bool & inserted, size_t hash_value)
     {
         if (!emplaceIfZero(x, it, inserted, hash_value))
             emplaceNonZero(x, it, inserted, hash_value);
@@ -734,7 +744,7 @@ public:
     }
 
 
-    iterator ALWAYS_INLINE find(Key x)
+    iterator ALWAYS_INLINE find(const Key & x)
     {
         if (Cell::isZero(x, *this))
             return this->hasZero() ? iteratorToZero() : end();
@@ -745,7 +755,7 @@ public:
     }
 
 
-    const_iterator ALWAYS_INLINE find(Key x) const
+    const_iterator ALWAYS_INLINE find(const Key & x) const
     {
         if (Cell::isZero(x, *this))
             return this->hasZero() ? iteratorToZero() : end();
@@ -756,7 +766,7 @@ public:
     }
 
 
-    iterator ALWAYS_INLINE find(Key x, size_t hash_value)
+    iterator ALWAYS_INLINE find(const Key & x, size_t hash_value)
     {
         if (Cell::isZero(x, *this))
             return this->hasZero() ? iteratorToZero() : end();
@@ -766,7 +776,7 @@ public:
     }
 
 
-    const_iterator ALWAYS_INLINE find(Key x, size_t hash_value) const
+    const_iterator ALWAYS_INLINE find(const Key & x, size_t hash_value) const
     {
         if (Cell::isZero(x, *this))
             return this->hasZero() ? iteratorToZero() : end();
@@ -776,7 +786,7 @@ public:
     }
 
 
-    bool ALWAYS_INLINE has(Key x) const
+    bool ALWAYS_INLINE has(const Key & x) const
     {
         if (Cell::isZero(x, *this))
             return this->hasZero();
@@ -787,7 +797,7 @@ public:
     }
 
 
-    bool ALWAYS_INLINE has(Key x, size_t hash_value) const
+    bool ALWAYS_INLINE has(const Key & x, size_t hash_value) const
     {
         if (Cell::isZero(x, *this))
             return this->hasZero();

@@ -24,6 +24,7 @@ public:
     DataTypePtr operator() (const String & x) const;
     DataTypePtr operator() (const Array & x) const;
     DataTypePtr operator() (const Tuple & x) const;
+    DataTypePtr operator() (const Decimal & x) const;
 };
 
 }

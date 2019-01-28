@@ -102,7 +102,7 @@ private:
     const Context & context;
 
     static void parseAlter(const ASTAlterQuery::ParameterContainer & params,
-        AlterCommands & out_alter_commands, PartitionCommands & out_partition_commands);
+        AlterCommands & out_alter_commands, PartitionCommands & out_partition_commands, StoragePtr table);
 };
 
 }

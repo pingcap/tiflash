@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <Poco/Types.h>
+#include <Common/Decimal.h>
 
 
 namespace DB
@@ -42,6 +43,7 @@ template <> constexpr bool IsNumber<Int32> = true;
 template <> constexpr bool IsNumber<Int64> = true;
 template <> constexpr bool IsNumber<Float32> = true;
 template <> constexpr bool IsNumber<Float64> = true;
+template <> constexpr bool IsNumber<Decimal> = true;
 
 template <typename T> struct TypeName;
 
@@ -56,6 +58,7 @@ template <> struct TypeName<Int64>   { static const char * get() { return "Int64
 template <> struct TypeName<Float32> { static const char * get() { return "Float32"; } };
 template <> struct TypeName<Float64> { static const char * get() { return "Float64"; } };
 template <> struct TypeName<String>  { static const char * get() { return "String";  } };
+template <> struct TypeName<Decimal>  { static const char * get() { return "Decimal";  } };
 
 
 /// Not a data type in database, defined just for convenience.

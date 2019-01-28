@@ -6,6 +6,8 @@
 #include <IO/HashingWriteBuffer.h>
 #include <Poco/File.h>
 
+#include <Storages/MutableSupport.h>
+
 
 namespace ProfileEvents
 {
@@ -24,7 +26,9 @@ namespace
 
 void buildScatterSelector(
         const ColumnRawPtrs & columns,
+        const size_t partition_mod,
         PODArray<size_t> & partition_num_to_first_row,
+        PODArray<UInt128> & partition_num_to_key,
         IColumn::Selector & selector)
 {
     /// Use generic hashed variant since partitioning is unlikely to be a bottleneck.
@@ -36,6 +40,9 @@ void buildScatterSelector(
     for (size_t i = 0; i < num_rows; ++i)
     {
         Data::key_type key = hash128(i, columns.size(), columns);
+        // TODO: Better mod calculating.
+        key = UInt128(key.low % partition_mod);
+
         typename Data::iterator it;
         bool inserted;
         partitions_map.emplace(key, it, inserted);
@@ -43,6 +50,8 @@ void buildScatterSelector(
         if (inserted)
         {
             partition_num_to_first_row.push_back(i);
+            partition_num_to_key.push_back(key);
+
             it->second = partitions_count;
 
             ++partitions_count;
@@ -71,29 +80,48 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(const Block & block
     data.check(block, true);
     block.checkNumberOfRows();
 
-    if (!data.partition_expr) /// Table is not partitioned.
+    if (!data.partition_expr && data.merging_params.mode != MergeTreeData::MergingParams::Mutable && data.merging_params.mode != MergeTreeData::MergingParams::Txn) /// Table is not partitioned.
     {
         result.emplace_back(Block(block), Row());
         return result;
     }
 
     Block block_copy = block;
-    data.partition_expr->execute(block_copy);
-
     ColumnRawPtrs partition_columns;
-    partition_columns.reserve(data.partition_key_sample.columns());
-    for (const ColumnWithTypeAndName & element : data.partition_key_sample)
-        partition_columns.emplace_back(block_copy.getByName(element.name).column.get());
+    if (data.merging_params.mode != MergeTreeData::MergingParams::Mutable && data.merging_params.mode != MergeTreeData::MergingParams::Txn)
+    {
+        data.partition_expr->execute(block_copy);
+        partition_columns.reserve(data.partition_key_sample.columns());
+        for (const ColumnWithTypeAndName & element : data.partition_key_sample)
+            partition_columns.emplace_back(block_copy.getByName(element.name).column.get());
+    }
+    else
+    {
+        std::vector<String> primary_columns = data.getPrimaryExpression()->getRequiredColumns();
+        partition_columns.reserve(primary_columns.size());
+        for (const String & name : primary_columns)
+            partition_columns.emplace_back(block_copy.getByName(name).column.get());
+    }
 
     PODArray<size_t> partition_num_to_first_row;
+    PODArray<UInt128> partition_num_to_key;
     IColumn::Selector selector;
-    buildScatterSelector(partition_columns, partition_num_to_first_row, selector);
+    size_t partition_mod = (data.merging_params.mode != MergeTreeData::MergingParams::Mutable && data.merging_params.mode != MergeTreeData::MergingParams::Txn)
+        ? 1 : size_t(data.settings.mutable_mergetree_partition_number);
+    buildScatterSelector(partition_columns, partition_mod, partition_num_to_first_row, partition_num_to_key, selector);
 
     size_t partitions_count = partition_num_to_first_row.size();
     result.reserve(partitions_count);
 
     auto get_partition = [&](size_t num)
     {
+        if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable || data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        {
+            Row partition(1);
+            partition[0] = partition_num_to_key[num].low;
+            return partition;
+        }
+
         Row partition(partition_columns.size());
         for (size_t i = 0; i < partition_columns.size(); ++i)
             partition[i] = Field((*partition_columns[i])[partition_num_to_first_row[num]]);
@@ -205,8 +233,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
     ///  either default lz4 or compression method with zero thresholds on absolute and relative part size.
     auto compression_settings = data.context.chooseCompressionSettings(0, 0);
 
+    // TODO: pass use_l0_opt as arg from caller
+    bool use_l0_opt = data.context.useL0Opt() && data.merging_params.mode == MergeTreeData::MergingParams::Mutable;
+
     NamesAndTypesList columns = data.getColumns().getAllPhysical().filter(block.getNames());
-    MergedBlockOutputStream out(data, new_data_part->getFullPath(), columns, compression_settings);
+    MergedBlockOutputStream out(data, new_data_part->getFullPath(), columns, use_l0_opt, compression_settings);
 
     out.writePrefix();
     out.writeWithPermutation(block, perm_ptr);

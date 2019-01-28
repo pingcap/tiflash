@@ -1,8 +1,10 @@
 #pragma once
 
 #include <IO/WriteBufferFromFile.h>
+#include <IO/WriteBufferFromOStream.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
+#include <IO/CompactContext.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <DataStreams/IBlockOutputStream.h>
 
@@ -39,18 +41,28 @@ protected:
             size_t estimated_size,
             size_t aio_threshold);
 
+        ColumnStream(
+            const String & escaped_column_name_,
+            CompressionSettings compression_settings,
+            const CompactWriteContextPtr& compactCtxPtr,
+            bool is_substream);
+
         String escaped_column_name;
         std::string data_file_extension;
         std::string marks_file_extension;
 
         /// compressed -> compressed_buf -> plain_hashing -> plain_file
         std::unique_ptr<WriteBufferFromFileBase> plain_file;
-        HashingWriteBuffer plain_hashing;
+        std::ostringstream substream_col_stream;
+        std::ostringstream substream_mark_stream;
+        std::unique_ptr<WriteBufferFromOStream> substream_ostream;
+        std::shared_ptr<HashingWriteBuffer> plain_hashing;
         CompressedWriteBuffer compressed_buf;
         HashingWriteBuffer compressed;
 
         /// marks -> marks_file
-        WriteBufferFromFile marks_file;
+        std::unique_ptr<WriteBufferFromFile> marks_file;
+        std::unique_ptr<WriteBufferFromOStream> marks_sstream;
         HashingWriteBuffer marks;
 
         void finalize();
@@ -80,6 +92,8 @@ protected:
     size_t aio_threshold;
 
     CompressionSettings compression_settings;
+
+    CompactWriteContextPtr compactCtxPtr;
 };
 
 
@@ -93,12 +107,14 @@ public:
         MergeTreeData & storage_,
         String part_path_,
         const NamesAndTypesList & columns_list_,
+        bool use_compact_write,
         CompressionSettings compression_settings);
 
     MergedBlockOutputStream(
         MergeTreeData & storage_,
         String part_path_,
         const NamesAndTypesList & columns_list_,
+        bool use_compact_write,
         CompressionSettings compression_settings,
         const MergeTreeData::DataPart::ColumnToSize & merged_column_to_size_,
         size_t aio_threshold_);
@@ -121,9 +137,6 @@ public:
             MergeTreeData::MutableDataPartPtr & new_part,
             const NamesAndTypesList * total_columns_list = nullptr,
             MergeTreeData::DataPart::Checksums * additional_column_checksums = nullptr);
-
-    /// How many rows are already written.
-    size_t getRowsCount() const { return rows_count; }
 
 private:
     void init();

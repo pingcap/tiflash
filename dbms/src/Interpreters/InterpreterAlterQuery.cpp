@@ -15,6 +15,9 @@
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
 
+#include <Storages/MutableSupport.h>
+#include <Storages/StorageMergeTree.h>
+
 #include <Poco/FileStream.h>
 
 #include <algorithm>
@@ -50,7 +53,7 @@ BlockIO InterpreterAlterQuery::execute()
 
     AlterCommands alter_commands;
     PartitionCommands partition_commands;
-    parseAlter(alter.parameters, alter_commands, partition_commands);
+    parseAlter(alter.parameters, alter_commands, partition_commands, table);
 
     partition_commands.validate(table.get());
     for (const PartitionCommand & command : partition_commands)
@@ -90,9 +93,11 @@ BlockIO InterpreterAlterQuery::execute()
 
 void InterpreterAlterQuery::parseAlter(
     const ASTAlterQuery::ParameterContainer & params_container,
-    AlterCommands & out_alter_commands, PartitionCommands & out_partition_commands)
+    AlterCommands & out_alter_commands, PartitionCommands & out_partition_commands, StoragePtr table)
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+
+    OrderedNameSet filtered_names = MutableSupport::instance().hiddenColumns(table->getName());
 
     for (const auto & params : params_container)
     {
@@ -102,6 +107,10 @@ void InterpreterAlterQuery::parseAlter(
             command.type = AlterCommand::ADD_COLUMN;
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
+
+            if (ast_col_decl.name == MutableSupport::version_column_name ||
+                ast_col_decl.name == MutableSupport::delmark_column_name)
+                throw Exception("Internal column name can not be used: " + ast_col_decl.name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
             command.column_name = ast_col_decl.name;
             if (ast_col_decl.type)
@@ -128,6 +137,13 @@ void InterpreterAlterQuery::parseAlter(
 
                 const Field & column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
+                if (column_name == MutableSupport::version_column_name ||
+                    column_name == MutableSupport::delmark_column_name)
+                {
+                    FieldVisitorToString to_string;
+                    auto err_msg = "Internal column name can not be dropped: " + applyVisitor(to_string, column_name);
+                    throw Exception(err_msg, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+                }
                 out_partition_commands.emplace_back(PartitionCommand::clearColumn(params.partition, column_name));
             }
             else
@@ -139,6 +155,10 @@ void InterpreterAlterQuery::parseAlter(
                 command.type = AlterCommand::DROP_COLUMN;
                 command.column_name = typeid_cast<const ASTIdentifier &>(*(params.column)).name;
 
+                if (command.column_name == MutableSupport::version_column_name ||
+                    command.column_name == MutableSupport::delmark_column_name)
+                    throw Exception("Internal column name can not be dropped: " + command.column_name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+
                 out_alter_commands.emplace_back(std::move(command));
             }
         }
@@ -148,6 +168,10 @@ void InterpreterAlterQuery::parseAlter(
             command.type = AlterCommand::MODIFY_COLUMN;
 
             const auto & ast_col_decl = typeid_cast<const ASTColumnDeclaration &>(*params.col_decl);
+
+            if (ast_col_decl.name == MutableSupport::version_column_name ||
+                ast_col_decl.name == MutableSupport::delmark_column_name)
+                throw Exception("Internal column name can not be modified: " + ast_col_decl.name, ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
             command.column_name = ast_col_decl.name;
             if (ast_col_decl.type)

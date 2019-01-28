@@ -19,6 +19,7 @@ bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     ParserKeyword s_partition("PARTITION");
     ParserKeyword s_final("FINAL");
     ParserKeyword s_deduplicate("DEDUPLICATE");
+    ParserKeyword s_eliminate("ELIMINATE");
     ParserToken s_dot(TokenType::Dot);
     ParserIdentifier name_p;
     ParserPartition partition_p;
@@ -28,6 +29,7 @@ bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     ASTPtr partition;
     bool final = false;
     bool deduplicate = false;
+    bool eliminate = false;
 
     if (!s_optimize_table.ignore(pos, expected))
         return false;
@@ -54,6 +56,9 @@ bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     if (s_deduplicate.ignore(pos, expected))
         deduplicate = true;
 
+    if (s_eliminate.ignore(pos, expected))
+        eliminate = true;
+
     auto query = std::make_shared<ASTOptimizeQuery>();
     node = query;
 
@@ -64,6 +69,7 @@ bool ParserOptimizeQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     query->partition = partition;
     query->final = final;
     query->deduplicate = deduplicate;
+    query->eliminate = eliminate;
 
     return true;
 }

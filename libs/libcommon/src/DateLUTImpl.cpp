@@ -18,9 +18,6 @@
 #include <cstring>
 #include <iostream>
 
-#define DATE_LUT_MIN 0
-
-
 namespace
 {
 
@@ -54,17 +51,17 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
     if (!cctz::load_time_zone(time_zone.data(), &cctz_time_zone))
         throw Poco::Exception("Cannot load time zone " + time_zone_);
 
-    cctz::time_zone::absolute_lookup start_of_epoch_lookup = cctz_time_zone.lookup(std::chrono::system_clock::from_time_t(start_of_day));
+    cctz::time_zone::absolute_lookup start_of_epoch_lookup = cctz_time_zone.lookup(std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>(std::chrono::seconds(DATE_LUT_MIN)));
     offset_at_start_of_epoch = start_of_epoch_lookup.offset;
     offset_is_whole_number_of_hours_everytime = true;
 
-    cctz::civil_day date{1970, 1, 1};
+    cctz::civil_day date{1000, 1, 1};
 
     do
     {
         cctz::time_zone::civil_lookup lookup = cctz_time_zone.lookup(date);
 
-        start_of_day = std::chrono::system_clock::to_time_t(lookup.pre);    /// Ambiguity is possible.
+        start_of_day = lookup.pre.time_since_epoch().count(); /*fuck chrono*/    /// Ambiguity is possible.
 
         Values & values = lut[i];
         values.year = date.year();

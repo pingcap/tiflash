@@ -11,6 +11,7 @@
 #include <Parsers/ASTFunction.h>
 
 #include <Common/typeid_cast.h>
+#include <common/logger_useful.h>
 
 
 namespace DB
@@ -25,6 +26,8 @@ namespace ErrorCodes
 bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_insert_into("INSERT INTO");
+    ParserKeyword s_upsert_into("UPSERT INTO");
+    ParserKeyword s_import_into("IMPORT INTO");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_function("FUNCTION");
     ParserToken s_dot(TokenType::Dot);
@@ -47,7 +50,10 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// Insertion data
     const char * data = nullptr;
 
-    if (!s_insert_into.ignore(pos, expected))
+    bool is_insert = s_insert_into.ignore(pos, expected) ||
+                     s_upsert_into.ignore(pos, expected);
+    bool is_import = s_import_into.ignore(pos, expected);
+    if (!is_insert && !is_import)
         return false;
 
     s_table.ignore(pos, expected);
@@ -150,6 +156,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->select = select;
     query->data = data != end ? data : nullptr;
     query->end = end;
+    query->is_import = is_import;
 
     if (columns)
         query->children.push_back(columns);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Poco/Logger.h>
 
 
 namespace DB
@@ -49,6 +50,8 @@ private:
     void append(Block && block);
 
     bool isEnoughSize(size_t rows, size_t bytes) const;
+
+    Poco::Logger * log;
 };
 
 }

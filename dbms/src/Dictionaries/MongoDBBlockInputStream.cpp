@@ -116,8 +116,8 @@ namespace
                         "Type mismatch, expected Timestamp, got type id = " + toString(value.type()) +
                             " for column " + name, ErrorCodes::TYPE_MISMATCH};
 
-                static_cast<ColumnUInt16 &>(column).getData().push_back(
-                    UInt16{DateLUT::instance().toDayNum(
+                static_cast<ColumnUInt32 &>(column).getData().push_back(
+                    UInt32{DateLUT::instance().toDayNum(
                         static_cast<const Poco::MongoDB::ConcreteElement<Poco::Timestamp> &>(value).value().epochTime())});
                 break;
             }

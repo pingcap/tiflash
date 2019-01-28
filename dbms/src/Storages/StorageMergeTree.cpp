@@ -2,6 +2,7 @@
 #include <Common/FieldVisitors.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
+#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Databases/IDatabase.h>
@@ -14,8 +15,20 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/ActiveDataPartSet.h>
 
+#include <Storages/MutableSupport.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTDeleteQuery.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTOptimizeQuery.h>
+
+#include <DataStreams/RemoveColumnsBlockInputStream.h>
+#include <DataStreams/AdditionalColumnsBlockOutputStream.h>
+#include <DataStreams/DedupSortedBlockInputStream.h>
+#include <DataStreams/InBlockDedupBlockOutputStream.h>
+
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
+#include <Storages/Transaction/TMTContext.h>
 
 
 namespace DB
@@ -38,6 +51,7 @@ StorageMergeTree::StorageMergeTree(
     const ColumnsDescription & columns_,
     bool attach,
     Context & context_,
+    const TableInfo & table_info_,
     const ASTPtr & primary_expr_ast_,
     const ASTPtr & secondary_sorting_expr_list_,
     const String & date_column_name,
@@ -56,6 +70,7 @@ StorageMergeTree::StorageMergeTree(
     reader(data), writer(data), merger(data, context.getBackgroundPool()),
     log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
 {
+    data.table_info = table_info_;
     if (path_.empty())
         throw Exception("MergeTree storages require data path", ErrorCodes::INCORRECT_FILE_NAME);
 
@@ -70,6 +85,12 @@ StorageMergeTree::StorageMergeTree(
 
 void StorageMergeTree::startup()
 {
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        TMTContext & tmt = context.getTMTContext();
+        tmt.storages.put(shared_from_this());
+    }
+
     merge_task_handle = background_pool.addTask([this] { return mergeTask(); });
 
     data.clearOldPartsFromFilesystem();
@@ -77,7 +98,6 @@ void StorageMergeTree::startup()
     /// Temporary directories contain incomplete results of merges (after forced restart)
     ///  and don't allow to reinitialize them, so delete each of them immediately
     data.clearOldTemporaryDirectories(0);
-
 }
 
 
@@ -89,6 +109,12 @@ void StorageMergeTree::shutdown()
     merger.merges_blocker.cancelForever();
     if (merge_task_handle)
         background_pool.removeTask(merge_task_handle);
+
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        TMTContext &tmt_context = context.getTMTContext();
+        tmt_context.storages.remove(data.table_info.id);
+    }
 }
 
 
@@ -105,12 +131,136 @@ BlockInputStreams StorageMergeTree::read(
     const size_t max_block_size,
     const unsigned num_streams)
 {
-    return reader.read(column_names, query_info, context, processed_stage, max_block_size, num_streams, 0);
+    auto res = reader.read(column_names, query_info, context, processed_stage, max_block_size, num_streams, 0);
+    const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get());
+
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable ||
+        data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        if (select_query && !select_query->raw_for_mutable)
+        {
+            LOG_DEBUG(log, "Mutable table dedup read.");
+            Names filtered_names;
+            filtered_names.push_back(MutableSupport::version_column_name);
+            filtered_names.push_back(MutableSupport::delmark_column_name);
+            BlockInputStreams filtered(res.size());
+            for (size_t i = 0; i < res.size(); ++i)
+                filtered[i] = std::make_shared<RemoveColumnsBlockInputStream>(res[i], filtered_names);
+            res = filtered;
+        }
+        else
+            LOG_DEBUG(log, "Mutable table raw read.");
+    }
+    else if (select_query && select_query->raw_for_mutable)
+    {
+        throw Exception("Only " + MutableSupport::storage_name + " support SELRAW.", ErrorCodes::BAD_ARGUMENTS);
+    }
+    return res;
 }
 
-BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & /*query*/, const Settings & /*settings*/)
+UInt64 StorageMergeTree::getVersionSeed(const Settings & /* settings */) const
 {
-    return std::make_shared<MergeTreeBlockOutputStream>(*this);
+    // NOTE:
+    // We don't guarantee thread safe.
+    // In that case, we assume data not related in diffent thread.
+    // So we can use the same version number.
+    //
+    // WARNING: NOT safe in distribed mode.
+
+    // TODO:
+    // It's faster if we use (increment.value << 32).
+    // We use '* 1000000' for readable results, just for now
+    return (increment.value + 1) * 1000000;
+}
+
+BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Settings & settings)
+{
+    BlockOutputStreamPtr res = std::make_shared<MergeTreeBlockOutputStream>(*this);
+
+    const ASTInsertQuery * insert_query = typeid_cast<const ASTInsertQuery *>(&*query);
+    const ASTDeleteQuery * delete_query = typeid_cast<const ASTDeleteQuery *>(&*query);
+
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        const ASTLiteral * ASTLit = typeid_cast<const ASTLiteral *>(&*query);
+        UInt64 partition_id = 0;
+        if (ASTLit)
+        {
+            // we have added version and del_mark columns
+            partition_id = ASTLit -> value.get<size_t>();
+            res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this, partition_id);
+        }
+        else if (insert_query)
+        {
+            if (!insert_query->is_import)
+            {
+                LOG_DEBUG(log, "Mutable table writing, add version column and del-mark column.");
+                AdditionalBlockGenerators gens
+                {
+                    std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
+                        context.getTMTContext().getPDClient()),
+                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 0)
+                };
+                res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
+                res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
+            }
+            else
+                LOG_DEBUG(log, "Mutable table importing.");
+        }
+        else if (delete_query)
+        {
+            AdditionalBlockGenerators gens
+            {
+                std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
+                    context.getTMTContext().getPDClient()),
+                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 1)
+            };
+            res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
+            res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
+        }
+        else {
+            throw Exception("Use TMT by wrong way");
+        }
+    }
+    else if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable)
+    {
+        if (insert_query)
+        {
+            if (!insert_query->is_import)
+            {
+                LOG_DEBUG(log, "Mutable table writing, add version column and del-mark column.");
+                AdditionalBlockGenerators gens
+                {
+                    std::make_shared<AdditionalBlockGeneratorIncrease<UInt64>>(MutableSupport::version_column_name,
+                        getVersionSeed(settings)),
+                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 0)
+                };
+                res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
+                // TODO: Dedup in MergeTreeDataWriter may be better, in case some one glue some blocks together
+                res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
+            }
+            else
+                LOG_DEBUG(log, "Mutable table importing.");
+        }
+        else if (delete_query)
+        {
+            LOG_DEBUG(log, "Mutable table deleting.");
+            AdditionalBlockGenerators gens
+            {
+                std::make_shared<AdditionalBlockGeneratorConst<UInt64>>(MutableSupport::version_column_name,
+                    getVersionSeed(settings)),
+                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 1)
+            };
+            res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
+            res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
+        }
+    }
+    else if ((insert_query && insert_query->is_import) || delete_query)
+    {
+        throw Exception("Only " + MutableSupport::storage_name + " support IMPORT or DELETE.", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    return res;
 }
 
 bool StorageMergeTree::checkTableCanBeDropped() const
@@ -118,6 +268,11 @@ bool StorageMergeTree::checkTableCanBeDropped() const
     const_cast<MergeTreeData &>(getData()).recalculateColumnSizes();
     context.checkTableCanBeDropped(database_name, table_name, getData().getTotalActiveSizeInBytes());
     return true;
+}
+
+const OrderedNameSet & StorageMergeTree::getHiddenColumnsImpl() const
+{
+    return MutableSupport::instance().hiddenColumns(getName());
 }
 
 void StorageMergeTree::drop()
@@ -183,10 +338,11 @@ void StorageMergeTree::alter(
 
     auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    IDatabase::ASTModifier storage_modifier;
-    if (primary_key_is_modified)
+    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, this] (IAST & ast)
     {
-        storage_modifier = [&new_primary_key_ast] (IAST & ast)
+        auto & storage_ast = typeid_cast<ASTStorage &>(ast);
+
+        if (primary_key_is_modified)
         {
             auto tuple = std::make_shared<ASTFunction>();
             tuple->name = "tuple";
@@ -195,10 +351,12 @@ void StorageMergeTree::alter(
 
             /// Primary key is in the second place in table engine description and can be represented as a tuple.
             /// TODO: Not always in second place. If there is a sampling key, then the third one. Fix it.
-            auto & storage_ast = typeid_cast<ASTStorage &>(ast);
             typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(1) = tuple;
-        };
-    }
+        }
+
+        auto literal = std::make_shared<ASTLiteral>(Field(data.table_info.serialize(true)));
+        typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
+    };
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
     setColumns(std::move(new_columns));
@@ -264,6 +422,7 @@ bool StorageMergeTree::merge(
     const String & partition_id,
     bool final,
     bool deduplicate,
+    bool eliminate,
     String * out_disable_reason)
 {
     /// Clear old parts. It does not matter to do it more frequently than each second.
@@ -300,7 +459,7 @@ bool StorageMergeTree::merge(
         }
         else
         {
-            selected = merger.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, out_disable_reason);
+            selected = merger.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, eliminate, out_disable_reason);
         }
 
         if (!selected)
@@ -360,7 +519,7 @@ bool StorageMergeTree::merge(
     try
     {
         new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr),
-                                                    merging_tagger->reserved_space.get(), deduplicate);
+                                                    merging_tagger->reserved_space.get(), deduplicate, eliminate);
         merger.renameMergedTemporaryPart(new_part, future_part.parts, nullptr);
 
         write_part_log({});
@@ -442,14 +601,16 @@ void StorageMergeTree::clearColumnInPartition(const ASTPtr & partition, const Fi
 
 
 bool StorageMergeTree::optimize(
-    const ASTPtr & /*query*/, const ASTPtr & partition, bool final, bool deduplicate, const Context & context)
+    const ASTPtr & query, const ASTPtr & partition, bool final, bool deduplicate, const Context & context)
 {
+    const ASTOptimizeQuery * optimize_query = typeid_cast<const ASTOptimizeQuery *>(&*query);
+
     String partition_id;
     if (partition)
         partition_id = data.getPartitionIDFromQuery(partition, context);
 
     String disable_reason;
-    if (!merge(context.getSettingsRef().min_bytes_to_use_direct_io, true, partition_id, final, deduplicate, &disable_reason))
+    if (!merge(context.getSettingsRef().min_bytes_to_use_direct_io, true, partition_id, final, deduplicate, optimize_query->eliminate, &disable_reason))
     {
         if (context.getSettingsRef().optimize_throw_if_noop)
             throw Exception(disable_reason.empty() ? "Can't OPTIMIZE by some reason" : disable_reason, ErrorCodes::CANNOT_ASSIGN_OPTIMIZE);
@@ -490,6 +651,18 @@ void StorageMergeTree::dropPartition(const ASTPtr & /*query*/, const ASTPtr & pa
     LOG_INFO(log, (detach ? "Detached " : "Removed ") << removed_parts << " parts inside partition ID " << partition_id << ".");
 }
 
+void StorageMergeTree::truncate(const ASTPtr & /*query*/, const Context & /*context*/)
+{
+    auto lock = lockForAlter(__PRETTY_FUNCTION__);
+    
+    MergeTreeData::DataParts parts = data.getDataParts();
+
+    for (const auto & part : parts)
+    {
+        LOG_DEBUG(log, "Removing part " << part->name);
+        data.removePartsFromWorkingSet({part}, true);
+    }
+}
 
 void StorageMergeTree::attachPartition(const ASTPtr & partition, bool part, const Context & context)
 {

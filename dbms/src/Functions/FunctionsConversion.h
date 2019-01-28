@@ -103,6 +103,84 @@ struct ConvertImpl
     }
 };
 
+template <typename FromDataType, typename Name>
+struct ConvertToDecimalImpl
+{
+    using FromFieldType = typename FromDataType::FieldType;
+    using ToFieldType = Decimal;
+
+    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec, ScaleType scale)
+    {
+        if (const ColumnVector<FromFieldType> * col_from
+            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+        {
+            auto col_to = ColumnVector<ToFieldType>::create();
+
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+            typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
+            size_t size = vec_from.size();
+            vec_to.resize(size);
+
+            for (size_t i = 0; i < size; ++i) {
+                vec_to[i] = ToDecimal(vec_from[i], prec, scale);
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else
+            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of first argument of function " + Name::name,
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
+
+/** Throw exception with verbose message when string value is not parsed completely.
+  */
+void throwExceptionForIncompletelyParsedValue(ReadBuffer & read_buffer, Block & block, size_t result);
+
+
+template<typename Name>
+struct ConvertToDecimalImpl<DataTypeString, Name> 
+{
+    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType, ScaleType)
+    {
+        const IColumn & col_from = *block.getByPosition(arguments[0]).column;
+        size_t size = col_from.size();
+
+        const IDataType & data_type_to = *block.getByPosition(result).type;
+
+        if (const ColumnString * col_from_string = checkAndGetColumn<ColumnString>(&col_from))
+        {
+            auto res = data_type_to.createColumn();
+
+            IColumn & column_to = *res;
+            column_to.reserve(size);
+
+            const ColumnString::Chars_t & chars = col_from_string->getChars();
+            const IColumn::Offsets & offsets = col_from_string->getOffsets();
+
+            size_t current_offset = 0;
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                ReadBufferFromMemory read_buffer(&chars[current_offset], offsets[i] - current_offset - 1);
+
+                data_type_to.deserializeTextEscaped(column_to, read_buffer);
+
+                if (!read_buffer.eof())
+                    throwExceptionForIncompletelyParsedValue(read_buffer, block, result);
+
+                current_offset = offsets[i];
+            }
+
+            block.getByPosition(result).column = std::move(res);
+        }
+        else
+            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of first argument of conversion function from string",
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 /** Conversion of Date to DateTime: adding 00:00:00 time component.
   */
@@ -117,7 +195,7 @@ struct ToDateTimeImpl
 };
 
 template <typename Name> struct ConvertImpl<DataTypeDate, DataTypeDateTime, Name>
-    : DateTimeTransformImpl<UInt16, UInt32, ToDateTimeImpl> {};
+    : DateTimeTransformImpl<UInt32, Int64, ToDateTimeImpl> {};
 
 
 /// Implementation of toDate function.
@@ -136,7 +214,7 @@ struct ToDateTransform32Or64
 /** Conversion of DateTime to Date: throw off time component.
   */
 template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeDate, Name>
-    : DateTimeTransformImpl<UInt32, UInt16, ToDateImpl> {};
+    : DateTimeTransformImpl<Int64, UInt32, ToDateImpl> {};
 
 /** Special case of converting (U)Int32 or (U)Int64 (and also, for convenience, Float32, Float64) to Date.
   * If number is less than 65536, then it is treated as DayNum, and if greater or equals, then as unix timestamp.
@@ -335,11 +413,6 @@ bool tryParseImpl(typename DataType::FieldType & x, ReadBuffer & rb)
         return tryReadFloatText(x, rb);
     /// NOTE Need to implement for Date and DateTime too.
 }
-
-
-/** Throw exception with verbose message when string value is not parsed completely.
-  */
-void throwExceptionForIncompletelyParsedValue(ReadBuffer & read_buffer, Block & block, size_t result);
 
 
 enum class ConvertFromStringExceptionMode
@@ -772,6 +845,7 @@ private:
         else if (checkDataType<DataTypeFixedString>(from_type)) ConvertImpl<DataTypeFixedString, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeEnum8>(from_type)) ConvertImpl<DataTypeEnum8, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeEnum16>(from_type)) ConvertImpl<DataTypeEnum16, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal>(from_type)) ConvertImpl<DataTypeDecimal, ToDataType, Name>::execute(block, arguments, result);
         else
         {
             /// Generic conversion of any type to String.
@@ -866,6 +940,55 @@ public:
     }
 };
 
+class FunctionToDecimal : public IFunction
+{
+public:
+    struct NameToDecimal { static constexpr auto name = "toDecimal"; };
+    static constexpr auto name = "toDecimal";
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionToDecimal>(); };
+
+    String getName() const override
+    {
+        return name;
+    }
+    size_t getNumberOfArguments() const override { return 3; }
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        const size_t prec = arguments[1].column->getUInt(0);
+        const size_t scale = arguments[2].column->getUInt(0);
+        return std::make_shared<DataTypeDecimal>(prec, scale);
+    }
+
+    // This function seems not to be called.
+    void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) override
+    {
+        const PrecType prec = block.getByPosition(arguments[1]).column->getUInt(0);
+        const ScaleType scale = block.getByPosition(arguments[2]).column->getUInt(0);
+        return execute(block, arguments, result, prec, scale);
+    }
+
+    static void execute(Block & block, const ColumnNumbers & arguments, const size_t result, PrecType prec, ScaleType scale)
+    {
+        const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
+
+        if      (checkDataType<DataTypeUInt8>(from_type)) ConvertToDecimalImpl<DataTypeUInt8, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeUInt16>(from_type)) ConvertToDecimalImpl<DataTypeUInt16, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeUInt32>(from_type)) ConvertToDecimalImpl<DataTypeUInt32, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeUInt64>(from_type)) ConvertToDecimalImpl<DataTypeUInt64, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt8>(from_type)) ConvertToDecimalImpl<DataTypeInt8, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt16>(from_type)) ConvertToDecimalImpl<DataTypeInt16, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt32>(from_type)) ConvertToDecimalImpl<DataTypeInt32, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt64>(from_type)) ConvertToDecimalImpl<DataTypeInt64, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeFloat32>(from_type)) ConvertToDecimalImpl<DataTypeFloat32, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeFloat64>(from_type)) ConvertToDecimalImpl<DataTypeFloat64, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeString>(from_type)) ConvertToDecimalImpl<DataTypeString, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        //else if (checkDataType<DataTypeFixedString>(from_type)) ConvertToDecimalImpl<DataTypeFixedString, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeDecimal>(from_type)) ConvertToDecimalImpl<DataTypeDecimal, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else
+            throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + name,
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+};
 
 /** Conversion to fixed string is implemented only for strings.
   */
@@ -1110,6 +1233,7 @@ template <> struct FunctionTo<DataTypeInt32> { using Type = FunctionToInt32; };
 template <> struct FunctionTo<DataTypeInt64> { using Type = FunctionToInt64; };
 template <> struct FunctionTo<DataTypeFloat32> { using Type = FunctionToFloat32; };
 template <> struct FunctionTo<DataTypeFloat64> { using Type = FunctionToFloat64; };
+template <> struct FunctionTo<DataTypeDecimal> { using Type = FunctionToDecimal; };
 template <> struct FunctionTo<DataTypeDate> { using Type = FunctionToDate; };
 template <> struct FunctionTo<DataTypeDateTime> { using Type = FunctionToDateTime; };
 template <> struct FunctionTo<DataTypeUUID> { using Type = FunctionToUUID; };
@@ -1272,6 +1396,14 @@ private:
         return [function] (Block & block, const ColumnNumbers & arguments, const size_t result)
         {
             function->execute(block, arguments, result);
+        };
+    }
+
+    static WrapperType createDecimalWrapper(PrecType prec, ScaleType scale)
+    {
+        return [prec, scale] (Block & block, const ColumnNumbers & arguments, const size_t result)
+        {
+            FunctionToDecimal::execute(block, arguments, result, prec, scale);
         };
     }
 
@@ -1642,6 +1774,8 @@ private:
             return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeFloat64>(to_type.get()))
             return createWrapper(from_type, to_actual_type);
+        else if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal>(to_type.get()))
+            return createDecimalWrapper(decimal_type->getPrec(), decimal_type->getScale());
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeDate>(to_type.get()))
             return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeDateTime>(to_type.get()))

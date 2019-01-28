@@ -312,6 +312,12 @@
         <!-- <profile>default</profile> -->
     </distributed_ddl>
 
+    <raft>
+        <service_addr>0.0.0.0:20021</service_addr>
+        <kvstore_path>/var/lib/clickhouse/kvstore</kvstore_path>
+        <pd_addr>http://127.0.0.1:13579</pd_addr>
+    </raft>
+
     <!-- Settings to fine tune MergeTree tables. See documentation in source code, in MergeTreeSettings.h -->
     <!--
     <merge_tree>
