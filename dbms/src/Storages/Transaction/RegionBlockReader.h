@@ -31,20 +31,15 @@ public:
         if (regions.empty())
             throw Exception("empty regions", ErrorCodes::LOGICAL_ERROR);
 
-        auto order_by_start_table_id = [](const RegionPtr & r1, const RegionPtr & r2) { return getStartTableId(r1) < getStartTableId(r2); };
-        std::sort(regions.begin(), regions.end(), order_by_start_table_id);
+        std::sort(regions.begin(), regions.end(), [](const RegionPtr & r1, const RegionPtr & r2) {
+            return r1->getRange() < r2->getRange();
+        });
 
         curr_region_index = 0;
         curr_region_id = regions[curr_region_index]->id();
         curr_scanner = regions[0]->createCommittedScanRemover(InvalidTableID);
 
         if (!remove_on_read && resolve_locks) curr_lock_info = curr_scanner->getLockInfo(expected_table_id, start_ts);
-    }
-
-    static TableID getStartTableId(const RegionPtr & region)
-    {
-        auto start_key = region->getRange().first;
-        return start_key.empty() ? TableID(InvalidTableID) : RecordKVFormat::getTableId(start_key);
     }
 
     // return {InvalidTableID, InvalidRegionID} when no more data
