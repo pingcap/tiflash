@@ -66,7 +66,7 @@ Block RegionBlockReader::read(RegionID my_region_id, const TiDB::TableInfo & tab
 
     if (!table_info.pk_is_handle)
     {
-        auto ch_col           = columns.getPhysical("_tidb_rowid");
+        auto ch_col           = columns.getPhysical(MutableSupport::tidb_pk_column_name);
         column_map[handle_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
     }
 
