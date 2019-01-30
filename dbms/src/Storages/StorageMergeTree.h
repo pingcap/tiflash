@@ -42,6 +42,7 @@ public:
     bool supportsPrewhere() const override { return data.supportsPrewhere(); }
     bool supportsFinal() const override { return data.supportsFinal(); }
     bool supportsIndexForIn() const override { return true; }
+    bool supportsModification() const override { return data.merging_params.mode == MergeTreeData::MergingParams::Mode::Mutable || data.merging_params.mode == MergeTreeData::MergingParams::Mode::Txn; }
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand) const override { return data.mayBenefitFromIndexForIn(left_in_operand); }
 
     const ColumnsDescription & getColumns() const override { return data.getColumns(); }
