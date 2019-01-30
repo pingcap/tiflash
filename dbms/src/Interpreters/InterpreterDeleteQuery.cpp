@@ -50,6 +50,8 @@ BlockIO InterpreterDeleteQuery::execute()
     checkAccess(query);
 
     StoragePtr table = context.getTable(query.database, query.table);
+    if (!table->supportsModification())
+       throw Exception("Table engine " + table->getName() + " does not support Delete.");
 
     auto table_lock = table->lockStructure(true, __PRETTY_FUNCTION__);
 
