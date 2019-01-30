@@ -689,7 +689,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                         MutableSupport::delmark_column_name);
                     res.emplace_back(deleting);
                      */
-                    
+
+                    /*
                     auto merge_stream = std::make_shared<ReplacingDeletingSortedBlockInputStream>(
                         merging,
                         data.getPrimarySortDescription(),
@@ -699,12 +700,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                         nullptr,
                         true);
                     res.emplace_back(merge_stream);
+                     */
 
-                    // res.emplace_back(std::make_shared<MvccTMTSortedBlockInputStream>(
-                    //     merging, data.getPrimarySortDescription(),
-                    //     MutableSupport::version_column_name, MutableSupport::delmark_column_name,
-                    //     DEFAULT_MERGE_BLOCK_SIZE,
-                    //     query_info.read_tso));
+                    res.emplace_back(std::make_shared<MvccTMTSortedBlockInputStream>(
+                        merging, data.getPrimarySortDescription(),
+                        MutableSupport::version_column_name, MutableSupport::delmark_column_name,
+                        DEFAULT_MERGE_BLOCK_SIZE,
+                        query_info.read_tso));
                 }
             }
         }

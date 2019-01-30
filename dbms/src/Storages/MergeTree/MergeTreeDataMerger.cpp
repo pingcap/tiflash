@@ -679,20 +679,20 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             }
             else
             {
+/*
                 merged_stream = std::make_unique<ReplacingSortedBlockInputStream>(
                     src_streams,
                     data.getPrimarySortDescription(),
                     MutableSupport::version_column_name,
                     DEFAULT_MERGE_BLOCK_SIZE,
                     nullptr);
-/*
+*/
                 auto &tmt = data.context.getTMTContext();
                 merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
                     src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
                     data.getPrimarySortDescription()[0].column_name, DEFAULT_MERGE_BLOCK_SIZE,
                     tmt.getPDClient()->getGCSafePoint(), false,
                     tmt.isEnabledDataHistoryVersionGc());
-*/
             }
             break;
         }
