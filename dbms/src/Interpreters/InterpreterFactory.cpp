@@ -16,6 +16,7 @@
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTTruncateQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
+#include <Parsers/ASTManageQuery.h>
 
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
@@ -39,6 +40,7 @@
 #include <Interpreters/InterpreterSystemQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterTruncateQuery.h>
+#include <Interpreters/InterpreterManageQuery.h>
 
 #include <Parsers/ASTSystemQuery.h>
 #include <Common/typeid_cast.h>
@@ -167,6 +169,11 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, Context & 
     {
         throwIfReadOnly(context);
         return std::make_unique<InterpreterTruncateQuery>(query, context);
+    }
+    else if (typeid_cast<ASTManageQuery *>(query.get()))
+    {
+        throwIfReadOnly(context);
+        return std::make_unique<InterpreterManageQuery>(query, context);
     }
     else
         throw Exception("Unknown type of query: " + query->getID(), ErrorCodes::UNKNOWN_TYPE_OF_QUERY);
