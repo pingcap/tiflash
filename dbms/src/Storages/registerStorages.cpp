@@ -9,6 +9,7 @@ namespace DB
 
 void registerStorageLog(StorageFactory & factory);
 void registerStorageTinyLog(StorageFactory & factory);
+void registerStorageDeltaMerge(StorageFactory & factory);
 void registerStorageStripeLog(StorageFactory & factory);
 void registerStorageMergeTree(StorageFactory & factory);
 void registerStorageNull(StorageFactory & factory);
