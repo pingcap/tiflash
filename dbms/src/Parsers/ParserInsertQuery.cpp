@@ -54,10 +54,10 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// Insertion data
     const char * data = nullptr;
 
-    bool is_insert = s_insert_into.ignore(pos, expected) ||
-                     s_upsert_into.ignore(pos, expected);
+    bool is_insert = s_insert_into.ignore(pos, expected);
+    bool is_upsert = s_upsert_into.ignore(pos, expected);
     bool is_import = s_import_into.ignore(pos, expected);
-    if (!is_insert && !is_import)
+    if (!is_insert && !is_upsert && !is_import)
         return false;
 
     s_table.ignore(pos, expected);
@@ -168,6 +168,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->data = data != end ? data : nullptr;
     query->end = end;
     query->is_import = is_import;
+    query->is_upsert = is_upsert;
 
     if (columns)
         query->children.push_back(columns);
