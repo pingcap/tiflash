@@ -43,7 +43,7 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
         setPrimaryKeyRef(next_key, current);
 
         bool key_differs = next_key != current_key;
-        
+
         if (key_differs && merged_rows >= max_block_size)
             return;
 
@@ -57,7 +57,7 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
             selected_row.reset();
 
             current_key.swap(next_key);
-        } 
+        }
 
         if ((*(current->all_columns[version_column_number]))[current->pos].template get<UInt64>() <= read_tso && 
             (selected_row.empty() 
