@@ -1,6 +1,7 @@
-#include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
-#include <Columns/ColumnsNumber.h>
 #include <common/logger_useful.h>
+#include <Columns/ColumnsNumber.h>
+#include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
+#include <Storages/MutableSupport.h>
 
 
 namespace DB
@@ -105,7 +106,7 @@ void ReplacingDeletingSortedBlockInputStream::merge(MutableColumns & merged_colu
         {
             max_version = 0;
             /// Write the data for the previous primary key.
-            if (!max_delmark)
+            if (!MutableSupport::DelMark::isDel(UInt8(max_delmark)))
                 insertRow(merged_columns, merged_rows);
             max_delmark = 0;
             current_key.swap(next_key);
@@ -136,7 +137,7 @@ void ReplacingDeletingSortedBlockInputStream::merge(MutableColumns & merged_colu
     }
 
     /// We will write the data for the last primary key.
-    if (!max_delmark)
+    if (!MutableSupport::DelMark::isDel(UInt8(max_delmark)))
         insertRow(merged_columns, merged_rows);
 
     finished = true;
@@ -223,13 +224,14 @@ void ReplacingDeletingSortedBlockInputStream::merge_optimized(MutableColumns & m
 
                 max_version = 0;
                 /// Write the data for the previous primary key.
-                if (!max_delmark)
+                if (!MutableSupport::DelMark::isDel(UInt8(max_delmark)))
                     insertRow(merged_columns, merged_rows);
 
-                if(is_clean_top){
+                if(is_clean_top)
+                {
                     /// Delete current cache and return.
                     /// We will come back later and use current block's data directly.
-                    max_delmark = 1;
+                    max_delmark = MutableSupport::DelMark::genDelMark(true);
                     current_key.reset();
                     selected_row.reset();
                     current_row_sources.resize(0);
@@ -237,7 +239,9 @@ void ReplacingDeletingSortedBlockInputStream::merge_optimized(MutableColumns & m
                     if (current != cur_block_cursor)
                         queue.push(current);
                     return;
-                }else{
+                }
+                else
+                {
                     max_delmark = 0;
                     current_key.swap(next_key);
                 }
@@ -297,7 +301,7 @@ void ReplacingDeletingSortedBlockInputStream::merge_optimized(MutableColumns & m
     }
 
     /// We will write the data for the last primary key.
-    if (!max_delmark && !current_key.empty())
+    if (!MutableSupport::DelMark::isDel(UInt8(max_delmark)) && !current_key.empty())
         insertRow(merged_columns, merged_rows);
 
     if (cur_block)
@@ -310,6 +314,7 @@ void ReplacingDeletingSortedBlockInputStream::merge_optimized(MutableColumns & m
     finished = true;
 }
 
+// TODO: use MutableSupport::DelMark here to check and generate del-mark
 bool ReplacingDeletingSortedBlockInputStream::insertByColumn(SortCursor current,
                                                              size_t & merged_rows,
                                                              MutableColumns & merged_columns)

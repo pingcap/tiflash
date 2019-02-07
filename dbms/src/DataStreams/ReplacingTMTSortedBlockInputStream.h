@@ -40,7 +40,7 @@ private:
     bool shouldOutput();
     bool behindGcTso();
     bool nextHasDiffPk();
-    bool isDeletedOnFinal();
+    bool isDeleted();
 
     void logRowGoing(const std::string & reason, bool is_output);
 

@@ -1,4 +1,5 @@
 #include <DataStreams/ReplacingTMTSortedBlockInputStream.h>
+#include <Storages/MutableSupport.h>
 
 namespace DB
 {
@@ -87,7 +88,7 @@ void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, 
 
 bool ReplacingTMTSortedBlockInputStream::shouldOutput()
 {
-    if (isDeletedOnFinal())
+    if (isDeleted())
     {
         logRowGoing("DeleteOnFinal", false);
         return false;
@@ -128,10 +129,10 @@ bool ReplacingTMTSortedBlockInputStream::nextHasDiffPk()
         (*(*next_key.columns)[0])[next_key.row_num];
 }
 
-bool ReplacingTMTSortedBlockInputStream::isDeletedOnFinal()
+bool ReplacingTMTSortedBlockInputStream::isDeleted()
 {
-    return final &&
-        (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
+    UInt8 val = (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
+    return (final && MutableSupport::DelMark::isDel(val)) || MutableSupport::DelMark::isDefiniteDel(val);
 }
 
 void ReplacingTMTSortedBlockInputStream::logRowGoing(const std::string & msg, bool is_output)

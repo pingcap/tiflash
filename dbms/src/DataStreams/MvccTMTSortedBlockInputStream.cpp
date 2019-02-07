@@ -1,4 +1,5 @@
 #include <DataStreams/MvccTMTSortedBlockInputStream.h>
+#include <Storages/MutableSupport.h>
 
 namespace DB
 {
@@ -87,7 +88,8 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
 
 bool MvccTMTSortedBlockInputStream::hasDeleteFlag()
 {
-    return (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>() > 0;
+    UInt8 val = (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
+    return MutableSupport::DelMark::isDel(val);
 }
 
 }

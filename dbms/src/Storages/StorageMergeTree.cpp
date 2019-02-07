@@ -199,7 +199,8 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
                 {
                     std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
                         context.getTMTContext().getPDClient()),
-                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 0)
+                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                        MutableSupport::DelMark::genDelMark(false))
                 };
                 res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
                 res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
@@ -213,7 +214,8 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
             {
                 std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
                     context.getTMTContext().getPDClient()),
-                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 1)
+                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                    MutableSupport::DelMark::genDelMark(true))
             };
             res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
             res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
@@ -233,7 +235,8 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
                 {
                     std::make_shared<AdditionalBlockGeneratorIncrease<UInt64>>(MutableSupport::version_column_name,
                         getVersionSeed(settings)),
-                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 0)
+                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                        MutableSupport::DelMark::genDelMark(false))
                 };
                 res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
                 // TODO: Dedup in MergeTreeDataWriter may be better, in case some one glue some blocks together
@@ -249,7 +252,8 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
             {
                 std::make_shared<AdditionalBlockGeneratorConst<UInt64>>(MutableSupport::version_column_name,
                     getVersionSeed(settings)),
-                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 1)
+                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                    MutableSupport::DelMark::genDelMark(true))
             };
             res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
             res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());

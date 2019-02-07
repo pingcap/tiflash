@@ -79,7 +79,7 @@ void markDeleteAllInBlock(Block & block)
     ColumnUInt8 * delmark_col = typeid_cast<ColumnUInt8 *>(delmark_new_col.get());
     ColumnUInt8::Container & delmark_data = delmark_col->getData();
     for (size_t i = 0; i < delmark_data.size(); ++i)
-        delmark_data[i] = 1;
+        delmark_data[i] = MutableSupport::DelMark::genDelMark(false, true);
     block.erase(delmark_col_pos);
     block.insert(delmark_col_pos, ColumnWithTypeAndName{std::move(delmark_new_col),
         delmark_type, MutableSupport::delmark_column_name});
