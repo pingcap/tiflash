@@ -326,6 +326,9 @@ Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_
             regions.insert(regions.end(), d.begin(), d.end());
         });
     }
+
+    std::shuffle(regions.begin(), regions.end(), std::default_random_engine());
+
     std::list<std::thread> threads;
     Int64 tol = 0;
     for (auto region : regions)

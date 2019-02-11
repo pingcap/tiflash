@@ -20,6 +20,8 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Parsers/ASTFunction.h>
 
+#include <Storages/MutableSupport.h>
+
 
 namespace ProfileEvents
 {
@@ -100,6 +102,9 @@ BlockIO InterpreterInsertQuery::execute()
     ASTInsertQuery & query = typeid_cast<ASTInsertQuery &>(*query_ptr);
     checkAccess(query);
     StoragePtr table = getTable(query);
+
+    if (table->getName() == MutableSupport::txn_storage_name)
+        throw Exception(MutableSupport::txn_storage_name + " doesn't support Insert");
 
     auto table_lock = table->lockStructure(true, __PRETTY_FUNCTION__);
 

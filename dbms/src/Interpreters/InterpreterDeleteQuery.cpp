@@ -49,8 +49,8 @@ BlockIO InterpreterDeleteQuery::execute()
     checkAccess(query);
 
     StoragePtr table = context.getTable(query.database, query.table);
-    if (table->getName() != MutableSupport::storage_name && table->getName() != MutableSupport::txn_storage_name)
-        throw Exception("Only " + MutableSupport::storage_name + " or " + MutableSupport::txn_storage_name + " support Delete.");
+    if (table->getName() != MutableSupport::storage_name)
+        throw Exception("Only " + MutableSupport::storage_name  + " support Delete");
 
     auto table_lock = table->lockStructure(true, __PRETTY_FUNCTION__);
 
