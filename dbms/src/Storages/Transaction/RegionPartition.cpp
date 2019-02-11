@@ -158,6 +158,11 @@ void RegionPartition::removeRegion(const RegionPtr & region, Context & context)
     for (auto [table_id, partition_id] : table_partitions)
     {
         auto storage = tmt_ctx.storages.get(table_id);
+        if (storage == nullptr)
+        {
+            LOG_WARNING(log, "RegionPartition::removeRegion: " << table_id << " does not exist.");
+            continue;
+        }
         auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
         auto [start_key, end_key] = region->getRange();
         auto [start_field, end_field] = getRegionRangeField(start_key, end_key, table_id);
@@ -301,6 +306,12 @@ void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPt
         // So I decide to leave it here until we implement atomic range data move.
 
         auto storage = tmt_ctx.storages.get(table_id);
+        if (storage == nullptr)
+        {
+            LOG_WARNING(log, "RegionPartition::splitRegion: " << table_id << " does not exist.");
+            continue;
+        }
+
         auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
 
         auto & table = getTable(table_id, context);
