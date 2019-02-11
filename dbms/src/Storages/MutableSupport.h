@@ -82,7 +82,7 @@ public:
             return raw_data & DEFINITE_DEL;
         }
 
-        static UInt8 setDelMark(bool internal_del, bool definite_del, UInt8 src_data = 0)
+        static UInt8 genDelMark(bool internal_del, bool definite_del, UInt8 src_data)
         {
             return (internal_del ? INTERNAL_DEL : NONE) |
                 (definite_del ? DEFINITE_DEL : NONE) | getData(src_data);
@@ -90,7 +90,7 @@ public:
 
         static UInt8 genDelMark(bool internal_del, bool definite_del = false)
         {
-            return setDelMark(internal_del, definite_del);
+            return genDelMark(internal_del, definite_del, 0);
         }
     };
 
