@@ -49,14 +49,4 @@ pingcap::kv::RpcClientPtr TMTContext::getRpcClient() {
     return rpc_client;
 }
 
-bool TMTContext::isEnabledDataHistoryVersionGc()
-{
-    return enabled_history_gc;
-}
-
-void TMTContext::enableDataHistoryVersionGc(bool history_gc)
-{
-    enabled_history_gc = history_gc;
-}
-
 } // namespace DB

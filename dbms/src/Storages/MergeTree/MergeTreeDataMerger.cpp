@@ -660,14 +660,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
 
         case MergeTreeData::MergingParams::Txn:
         {
+            // TODO: Remove flag 'eliminate', no use anymore
             if (eliminate)
             {
-                /*
-                BlockInputStreamPtr to_merge = std::make_shared<MergingSortedBlockInputStream>(src_streams,
-                    data.getPrimarySortDescription(), DEFAULT_MERGE_BLOCK_SIZE);
-                merged_stream = std::make_shared<DeletingDeletedBlockInputStream>(to_merge,
-                    MutableSupport::delmark_column_name);
-                */
                 merged_stream = std::make_unique<ReplacingDeletingSortedBlockInputStream>(
                     src_streams,
                     data.getPrimarySortDescription(),
@@ -679,20 +674,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             }
             else
             {
-/*
-                merged_stream = std::make_unique<ReplacingSortedBlockInputStream>(
-                    src_streams,
-                    data.getPrimarySortDescription(),
-                    MutableSupport::version_column_name,
-                    DEFAULT_MERGE_BLOCK_SIZE,
-                    nullptr);
-*/
                 auto &tmt = data.context.getTMTContext();
                 merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
                     src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
                     data.getPrimarySortDescription()[0].column_name, DEFAULT_MERGE_BLOCK_SIZE,
-                    tmt.getPDClient()->getGCSafePoint(), false,
-                    tmt.isEnabledDataHistoryVersionGc());
+                    tmt.getPDClient()->getGCSafePoint(), false);
             }
             break;
         }

@@ -56,9 +56,6 @@ DBGInvoker::DBGInvoker()
     regFunc("check_partition", dbgFuncCheckPartitionRegionRows);
     regFunc("scan_partition", dbgFuncScanPartitionExtraRows);
     regFunc("check_region_correct", dbgFuncCheckRegionCorrect);
-
-    regFunc("enable_history_gc", dbgFuncEnableHistoryGc);
-    regFunc("show_enable_history_gc", dbgFuncShowEnableHistoryGc);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

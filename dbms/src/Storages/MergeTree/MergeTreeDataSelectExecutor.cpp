@@ -682,26 +682,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
                 if (merging.size())
                 {
-                    /*
-                    BlockInputStreamPtr merge_stream = std::make_shared<MergingSortedBlockInputStream>(merging,
-                        data.getPrimarySortDescription(), max_block_size);
-                    BlockInputStreamPtr deleting = std::make_shared<DeletingDeletedBlockInputStream>(merge_stream,
-                        MutableSupport::delmark_column_name);
-                    res.emplace_back(deleting);
-                     */
-
-                    /*
-                    auto merge_stream = std::make_shared<ReplacingDeletingSortedBlockInputStream>(
-                        merging,
-                        data.getPrimarySortDescription(),
-                        MutableSupport::version_column_name,
-                        MutableSupport::delmark_column_name,
-                        DEFAULT_MERGE_BLOCK_SIZE,
-                        nullptr,
-                        true);
-                    res.emplace_back(merge_stream);
-                     */
-
                     res.emplace_back(std::make_shared<MvccTMTSortedBlockInputStream>(
                         merging, data.getPrimarySortDescription(),
                         MutableSupport::version_column_name, MutableSupport::delmark_column_name,

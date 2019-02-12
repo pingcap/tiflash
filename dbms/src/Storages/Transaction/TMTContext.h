@@ -36,16 +36,11 @@ public:
 
     pingcap::kv::RpcClientPtr getRpcClient();
 
-    bool isEnabledDataHistoryVersionGc();
-    void enableDataHistoryVersionGc(bool history_gc);
-
 private:
     SchemaSyncerPtr             schema_syncer;
     pingcap::pd::ClientPtr      pd_client;
     pingcap::kv::RegionCachePtr region_cache;
     pingcap::kv::RpcClientPtr   rpc_client;
-
-    std::atomic<bool> enabled_history_gc = false;
 
     mutable std::mutex mutex;
 };

@@ -18,10 +18,8 @@ public:
         const String & pk_column,
         size_t max_block_size_,
         size_t gc_tso_,
-        bool final_,
-        bool collapse_versions_)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL), gc_tso(gc_tso_),
-        final(final_), collapse_versions(collapse_versions_)
+        bool final_)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL), gc_tso(gc_tso_), final(final_)
     {
         version_column_number = header.getPositionByName(version_column);
         del_column_number = header.getPositionByName(del_column);
@@ -37,10 +35,11 @@ private:
     void merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue);
     void insertRow(MutableColumns &, size_t &);
 
-    bool shouldOutput();
+    bool shouldOutput(SortCursor & next_row);
     bool behindGcTso();
     bool nextHasDiffPk();
     bool isDeletedOnFinal();
+    bool isDefiniteDeleted(SortCursor & next_row);
 
     void logRowGoing(const std::string & reason, bool is_output);
 
@@ -59,7 +58,7 @@ private:
 
     size_t gc_tso;
     bool final;
-    bool collapse_versions;
+    bool matched_definite_deleted = false;
 };
 
 }
