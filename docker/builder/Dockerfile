@@ -11,11 +11,14 @@ RUN apt update -y && \
 RUN apt install -y build-essential autoconf libtool pkg-config
 RUN apt install -y libgflags-dev libgtest-dev
 RUN apt install -y clang-5.0 libc++-dev
-RUN apt install -y golang libcurl4-gnutls-dev
+RUN apt install -y golang
+
+RUN git clone https://github.com/curl/curl.git
+RUN cd /curl && mkdir .build && cd .build && cmake .. && make && make install
 
 RUN git clone https://github.com/grpc/grpc.git && cd grpc && git checkout v1.14.2 && git submodule update --init
-RUN cd /grpc && mkdir .build && cd .build && CC=clang CXX=clang++ cmake .. -DgRPC_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo)
-RUN cd /grpc && rm -rf .build && mkdir .build && cd .build && CC=clang CXX=clang++ cmake .. -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DgRPC_PROTOBUF_PROVIDER=package -DgRPC_ZLIB_PROVIDER=package -DgRPC_CARES_PROVIDER=package -DgRPC_SSL_PROVIDER=package -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo)
+RUN cd /grpc && mkdir .build && cd .build && CC=/usr/lib/llvm-5.0/bin/clang CXX=/usr/lib/llvm-5.0/bin/clang++ cmake .. -DgRPC_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo)
+RUN cd /grpc && rm -rf .build && mkdir .build && cd .build && CC=/usr/lib/llvm-5.0/bin/clang CXX=/usr/lib/llvm-5.0/bin/clang++ && cmake .. -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DgRPC_PROTOBUF_PROVIDER=package -DgRPC_ZLIB_PROVIDER=package -DgRPC_CARES_PROVIDER=package -DgRPC_SSL_PROVIDER=package -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo)
 
 ADD build.sh /
 RUN chmod +x /build.sh
