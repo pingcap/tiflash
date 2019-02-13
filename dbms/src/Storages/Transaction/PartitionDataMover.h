@@ -1,7 +1,10 @@
 #pragma once
 
-#include "Storages/Transaction/Region.h"
-#include "Storages/Transaction/TiKVKeyValue.h"
+#include <Interpreters/Context.h>
+
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/StorageMergeTree.h>
 
 namespace DB
 {

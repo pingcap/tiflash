@@ -32,7 +32,7 @@ public:
     const static String write_cf_name;
 
     // In both lock_cf and write_cf.
-    enum CFModifyFlag: UInt8
+    enum CFModifyFlag : UInt8
     {
         PutFlag = 'P',
         DelFlag = 'D',
@@ -75,7 +75,8 @@ public:
             : lock(store_->mutex), store(store_), expected_table_id(expected_table_id_), write_map_it(store->write_cf.begin())
         {}
 
-        // TODO: 3 times finding is slow: hasNext/next/remove
+        /// Check if next kv exists.
+        /// Return InvalidTableID if not.
         TableID hasNext()
         {
             if (expected_table_id != InvalidTableID)
@@ -107,10 +108,7 @@ public:
             }
         }
 
-        LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts)
-        {
-            return store->getLockInfo(expected_table_id, start_ts);
-        }
+        LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
 
     private:
         std::lock_guard<std::mutex> lock;
@@ -125,14 +123,18 @@ public:
 
     explicit Region(const RegionMeta & meta_) : meta(meta_), client(nullptr), log(&Logger::get("Region")) {}
 
-    explicit Region(RegionMeta && meta_, pingcap::kv::RegionClientPtr client_) : meta(std::move(meta_)), client(client_), log(&Logger::get("Region")) {}
+    explicit Region(RegionMeta && meta_, pingcap::kv::RegionClientPtr client_)
+        : meta(std::move(meta_)), client(client_), log(&Logger::get("Region"))
+    {}
 
-    explicit Region(const RegionMeta & meta_, const pingcap::kv::RegionClientPtr & client_) : meta(meta_), client(client_), log(&Logger::get("Region")) {}
+    explicit Region(const RegionMeta & meta_, const pingcap::kv::RegionClientPtr & client_)
+        : meta(meta_), client(client_), log(&Logger::get("Region"))
+    {}
 
-    void insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
-    void remove(const std::string & cf, const TiKVKey & key);
+    TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
+    TableID remove(const std::string & cf, const TiKVKey & key);
 
-    std::tuple<RegionPtr, std::vector<RegionPtr>, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
+    std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
 
     std::unique_ptr<CommittedScanRemover> createCommittedScanRemover(TableID expected_table_id);
 
@@ -140,8 +142,6 @@ public:
     static RegionPtr deserialize(ReadBuffer & buf);
 
     void calculateCfCrc32(Crc32 & crc32) const;
-
-    void markPersisted();
 
     RegionID id() const;
     RegionRange getRange() const;
@@ -152,10 +152,10 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
 
-    const Poco::Timestamp & lastPersistTime() const;
+    size_t dataSize() const;
 
-    size_t getNewlyAddedRows() const;
-    void resetNewlyAddedRows();
+    void markPersisted();
+    Timepoint lastPersistTime() const;
 
     void swap(Region & other)
     {
@@ -170,9 +170,6 @@ public:
 
         cf_data_size = size_t(other.cf_data_size);
         other.cf_data_size = size_t(cf_data_size);
-
-        newly_added_rows = size_t (other.newly_added_rows);
-        other.newly_added_rows = size_t (newly_added_rows);
     }
 
     friend bool operator==(const Region & region1, const Region & region2)
@@ -193,8 +190,8 @@ public:
 private:
     // Private methods no need to lock mutex, normally
 
-    void doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
-    void doRemove(const std::string & cf, const TiKVKey & key);
+    TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
+    TableID doRemove(const std::string & cf, const TiKVKey & key);
 
     bool checkIndex(UInt64 index);
     KVMap & getCf(const std::string & cf);
@@ -215,27 +212,16 @@ private:
     KVMap write_cf;
     KVMap lock_cf;
 
-    // Protect CFs only
     mutable std::mutex mutex;
 
-    std::condition_variable cv;
-
-    // Vars below are thread safe
-
-    // The meta_mutex can protect a group operating on meta, during the operating time all reading to meta can be blocked.
-    // Since only one thread (onCommand) would modify meta for now, we remove meta_mutex.
-    // mutable std::mutex meta_mutex;
     RegionMeta meta;
 
     pingcap::kv::RegionClientPtr client;
 
-    // These two vars are not exactly correct, because they are not protected by mutex when region splitted
+    // Size of data cf & write cf, without lock cf.
     std::atomic<size_t> cf_data_size = 0;
-    std::atomic<size_t> newly_added_rows = 0;
 
-    // Poco::timestamp is not trivially copyable, use a extra mutex for this member
-    Poco::Timestamp last_persist_time{0};
-    mutable std::mutex persist_time_mutex;
+    Timepoint last_persist_time = Clock::now();
 
     Logger * log;
 };

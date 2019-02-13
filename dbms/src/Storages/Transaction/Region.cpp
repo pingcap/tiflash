@@ -35,12 +35,10 @@ Region::KVMap::iterator Region::removeDataByWriteIt(const KVMap::iterator & writ
         }
 
         cf_data_size -= data_it->first.dataSize() + data_it->second.dataSize();
-        newly_added_rows--;
         data_cf.erase(data_it);
     }
 
     cf_data_size -= write_it->first.dataSize() + write_it->second.dataSize();
-    newly_added_rows--;
 
     return write_cf.erase(write_it);
 }
@@ -76,7 +74,6 @@ Region::ReadInfo Region::readDataByWriteIt(const KVMap::iterator & write_it)
 
 Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts)
 {
-    // TODO: Should we check data cf as well?
     for (auto && [key, value] : lock_cf)
     {
         auto decode_key = std::get<0>(RecordKVFormat::decodeTiKVKey(key));
@@ -97,48 +94,50 @@ Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_
     return nullptr;
 }
 
-void Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
-    // TODO: this will be slow, use batch to speed up
     std::lock_guard<std::mutex> lock(mutex);
-    doInsert(cf, key, value);
+    return doInsert(cf, key, value);
 }
 
-void Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
     // Ignoring all keys other than records.
     String raw_key = std::get<0>(RecordKVFormat::decodeTiKVKey(key));
     if (!RecordKVFormat::isRecord(raw_key))
-        return;
+        return InvalidTableID;
 
-    if (isTiDBSystemTable(RecordKVFormat::getTableId(raw_key)))
-        return;
+    auto table_id = RecordKVFormat::getTableId(raw_key);
+    if (isTiDBSystemTable(table_id))
+        return InvalidTableID;
 
     auto & map = getCf(cf);
     auto p = map.try_emplace(key, value);
     if (!p.second)
         throw Exception(toString() + " found existing key [" + key.toString() + "]", ErrorCodes::LOGICAL_ERROR);
 
-    cf_data_size += key.dataSize() + value.dataSize();
-    newly_added_rows += 1;
+    if (cf != lock_cf_name)
+        cf_data_size += key.dataSize() + value.dataSize();
+
+    return table_id;
 }
 
-void Region::remove(const std::string & cf, const TiKVKey & key)
+TableID Region::remove(const std::string & cf, const TiKVKey & key)
 {
-    // TODO: this will be slow, use batch insert to speed up
     std::lock_guard<std::mutex> lock(mutex);
-    doRemove(cf, key);
+    return doRemove(cf, key);
 }
 
-void Region::doRemove(const std::string & cf, const TiKVKey & key)
+TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
     // Ignoring all keys other than records.
     String raw_key = std::get<0>(RecordKVFormat::decodeTiKVKey(key));
     if (!RecordKVFormat::isRecord(raw_key))
-        return;
+        return InvalidTableID;
 
-    if (isTiDBSystemTable(RecordKVFormat::getTableId(raw_key)))
-        return;
+    auto table_id = RecordKVFormat::getTableId(raw_key);
+    if (isTiDBSystemTable(table_id))
+        return InvalidTableID;
 
     auto & map = getCf(cf);
     auto it = map.find(key);
@@ -148,28 +147,29 @@ void Region::doRemove(const std::string & cf, const TiKVKey & key)
         // tikv gc will delete useless data in write & default cf.
         if (unlikely(&map == &lock_cf))
             LOG_WARNING(log, toString() << " key not found [" << key.toString() << "] in cf " << cf);
-        return;
+        return table_id;
     }
 
     map.erase(it);
 
-    cf_data_size -= key.dataSize() + it->second.dataSize();
-    newly_added_rows--;
+    if (cf != lock_cf_name)
+        cf_data_size -= key.dataSize() + it->second.dataSize();
+    return table_id;
 }
 
-UInt64 Region::getIndex() {
-    return meta.appliedIndex();
-}
+UInt64 Region::getIndex() { return meta.appliedIndex(); }
 
 RegionPtr Region::splitInto(const RegionMeta & meta) const
 {
-    // TODO: remove data in corresponding partition
-
     auto [start_key, end_key] = meta.getRange();
     RegionPtr new_region;
-    if (client != nullptr) {
-        new_region = std::make_shared<Region>(meta, std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID()));
-    } else {
+    if (client != nullptr)
+    {
+        new_region = std::make_shared<Region>(
+            meta, std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID()));
+    }
+    else
+    {
         new_region = std::make_shared<Region>(meta);
     }
 
@@ -181,7 +181,6 @@ RegionPtr Region::splitInto(const RegionMeta & meta) const
         {
             new_region->data_cf.emplace(key, value);
             new_region->cf_data_size += key.dataSize() + value.dataSize();
-            new_region->newly_added_rows += 1;
         }
     }
 
@@ -193,7 +192,6 @@ RegionPtr Region::splitInto(const RegionMeta & meta) const
         {
             new_region->write_cf.emplace(key, value);
             new_region->cf_data_size += key.dataSize() + value.dataSize();
-            new_region->newly_added_rows += 1;
         }
     }
 
@@ -204,8 +202,6 @@ RegionPtr Region::splitInto(const RegionMeta & meta) const
         if (ok)
         {
             new_region->lock_cf.emplace(key, value);
-            new_region->cf_data_size += key.dataSize() + value.dataSize();
-            new_region->newly_added_rows += 1;
         }
     }
 
@@ -277,8 +273,8 @@ std::pair<RegionPtr, Regions> Region::execBatchSplit(const raft_cmdpb::AdminRequ
         {
             const auto & peer = findPeer(region_info, store_id);
             RegionMeta new_meta(peer, region_info, initialApplyState());
-            auto new_region = splitInto(new_meta);
-            split_regions.emplace_back(new_region);
+            auto split_region = splitInto(new_meta);
+            split_regions.emplace_back(split_region);
         }
     }
 
@@ -291,7 +287,8 @@ std::pair<RegionPtr, Regions> Region::execBatchSplit(const raft_cmdpb::AdminRequ
     return {new_region, split_regions};
 }
 
-std::tuple<RegionPtr, std::vector<RegionPtr>, bool> Region::onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & /*callback*/)
+std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(
+    const enginepb::CommandRequest & cmd, CmdCallBack & /*callback*/)
 {
     auto & header = cmd.header();
     RegionID region_id = header.region_id();
@@ -309,11 +306,13 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, bool> Region::onCommand(const engi
     {
         if (!sync_log)
             throw Exception("sync_log should be true", ErrorCodes::LOGICAL_ERROR);
-        return {{}, {}, true};
+        return {{}, {}, {}, true};
     }
 
     if (!checkIndex(index))
-        return {{}, {}, false};
+        return {{}, {}, {}, false};
+
+    TableIDSet table_ids;
 
     if (cmd.has_admin_request())
     {
@@ -334,23 +333,10 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, bool> Region::onCommand(const engi
                 std::tie(new_region, split_regions) = execBatchSplit(request, response);
                 break;
             case raft_cmdpb::AdminCmdType::CompactLog:
+            case raft_cmdpb::AdminCmdType::ComputeHash:
+            case raft_cmdpb::AdminCmdType::VerifyHash:
                 // Ignore
                 break;
-            case raft_cmdpb::AdminCmdType::ComputeHash:
-            {
-                // Currently hash is borken, because data in region will be flush and remove
-                // auto & raft_local_state = header.context();
-                // callback.compute_hash(this->shared_from_this(), index, raft_local_state);
-                break;
-            }
-            case raft_cmdpb::AdminCmdType::VerifyHash:
-            {
-                // const auto & verify_req     = request.verify_hash();
-                // auto         expected_index = verify_req.index();
-                // const auto & expected_hash  = verify_req.hash();
-                // callback.verify_hash(this->shared_from_this(), expected_index, expected_hash);
-                break;
-            }
             default:
                 LOG_ERROR(log, "Unsupported admin command type " << raft_cmdpb::AdminCmdType_Name(type));
                 break;
@@ -372,13 +358,17 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, bool> Region::onCommand(const engi
                 {
                     const auto & put = req.put();
                     auto [key, value] = RecordKVFormat::genKV(put);
-                    insert(put.cf(), key, value);
+                    auto table_id = insert(put.cf(), key, value);
+                    if (table_id != InvalidTableID)
+                        table_ids.emplace(table_id);
                     break;
                 }
                 case raft_cmdpb::CmdType::Delete:
                 {
                     const auto & del = req.delete_();
-                    remove(del.cf(), RecordKVFormat::genKey(del));
+                    auto table_id = remove(del.cf(), RecordKVFormat::genKey(del));
+                    if (table_id != InvalidTableID)
+                        table_ids.emplace(table_id);
                     break;
                 }
                 case raft_cmdpb::CmdType::DeleteRange:
@@ -390,7 +380,8 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, bool> Region::onCommand(const engi
                 case raft_cmdpb::CmdType::Prewrite:
                 case raft_cmdpb::CmdType::Invalid:
                 default:
-                    throw Exception("Illegal cmd type: " + raft_cmdpb::CmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
+                    LOG_ERROR(log, "Unsupported command type " << raft_cmdpb::CmdType_Name(type));
+                    break;
             }
         }
     }
@@ -401,7 +392,7 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, bool> Region::onCommand(const engi
     if (new_region)
         (*new_region).meta.setApplied(index, term);
 
-    return {new_region, split_regions, sync_log};
+    return {new_region, split_regions, table_ids, sync_log};
 }
 
 size_t Region::serialize(WriteBuffer & buf)
@@ -444,7 +435,6 @@ RegionPtr Region::deserialize(ReadBuffer & buf)
         auto value = TiKVValue::deserialize(buf);
         region->data_cf.emplace(key, value);
         region->cf_data_size += key.dataSize() + value.dataSize();
-        region->newly_added_rows += 1;
     }
 
     size = readBinary2<KVMap::size_type>(buf);
@@ -454,7 +444,6 @@ RegionPtr Region::deserialize(ReadBuffer & buf)
         auto value = TiKVValue::deserialize(buf);
         region->write_cf.emplace(key, value);
         region->cf_data_size += key.dataSize() + value.dataSize();
-        region->newly_added_rows += 1;
     }
 
     size = readBinary2<KVMap::size_type>(buf);
@@ -463,8 +452,6 @@ RegionPtr Region::deserialize(ReadBuffer & buf)
         auto key = TiKVKey::deserialize(buf);
         auto value = TiKVValue::deserialize(buf);
         region->lock_cf.emplace(key, value);
-        region->cf_data_size += key.dataSize() + value.dataSize();
-        region->newly_added_rows += 1;
     }
 
     return region;
@@ -502,7 +489,6 @@ void Region::calculateCfCrc32(Crc32 & crc32) const
 {
     std::lock_guard<std::mutex> lock1(mutex);
 
-    // TODO: is it calculating key order need?
     auto crc_cal = [&](const Region::KVMap & map) {
         for (auto && [key, value] : map)
         {
@@ -522,15 +508,17 @@ bool Region::isPendingRemove() const { return meta.isPendingRemove(); }
 
 void Region::setPendingRemove() { meta.setPendingRemove(); }
 
+size_t Region::dataSize() const { return cf_data_size; }
+
 void Region::markPersisted()
 {
-    std::lock_guard<std::mutex> lock(persist_time_mutex);
-    last_persist_time = Poco::Timestamp();
+    std::lock_guard<std::mutex> lock(mutex);
+    last_persist_time = Clock::now();
 }
 
-const Poco::Timestamp & Region::lastPersistTime() const
+Timepoint Region::lastPersistTime() const
 {
-    std::lock_guard<std::mutex> lock(persist_time_mutex);
+    std::lock_guard<std::mutex> lock(mutex);
     return last_persist_time;
 }
 
@@ -539,24 +527,23 @@ std::unique_ptr<Region::CommittedScanRemover> Region::createCommittedScanRemover
     return std::make_unique<Region::CommittedScanRemover>(this->shared_from_this(), expected_table_id);
 }
 
-size_t Region::getNewlyAddedRows() const { return newly_added_rows; }
-
-void Region::resetNewlyAddedRows() { newly_added_rows = 0; }
-
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
 
 enginepb::CommandResponse Region::toCommandResponse() const { return meta.toCommandResponse(); }
 
 RegionRange Region::getRange() const { return meta.getRange(); }
 
-UInt64 Region::learner_read() {
+UInt64 Region::learner_read()
+{
     if (client != nullptr)
         return client->getReadIndex();
     return 0;
 }
 
-void Region::wait_index(UInt64 index) {
-    if (client != nullptr) {
+void Region::wait_index(UInt64 index)
+{
+    if (client != nullptr)
+    {
         LOG_TRACE(log, "begin to wait learner index : " + std::to_string(index));
         meta.wait_index(index);
     }
