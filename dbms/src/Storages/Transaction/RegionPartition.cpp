@@ -52,9 +52,7 @@ void RegionPartition::updateRegionRange(const RegionPtr & region)
     std::lock_guard<std::mutex> lock(mutex);
 
     auto region_id = region->id();
-    auto [start_key, end_key] = region->getRange();
-    TableID start_table_id = start_key.empty() ? 0 : RecordKVFormat::getTableId(start_key);
-    TableID end_table_id = end_key.empty() ? std::numeric_limits<TableID>::max() : RecordKVFormat::getTableId(end_key);
+    const auto range = region->getRange();
 
     auto it = regions.find(region_id);
     // if this region does not exist already, then nothing to shrink.
@@ -67,7 +65,7 @@ void RegionPartition::updateRegionRange(const RegionPtr & region)
     {
         auto table_id = t_it->first;
         auto partition_id = t_it->second;
-        if (start_table_id <= table_id && table_id <= end_table_id)
+        if (TiKVRange::checkTableInvolveRange(table_id, range))
         {
             ++t_it;
             continue;
@@ -322,12 +320,10 @@ void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPt
 
         for (const RegionPtr & split_region : split_regions)
         {
-            auto [start_key, end_key] = split_region->getRange();
-            TableID start_table_id = start_key.empty() ? 0 : RecordKVFormat::getTableId(start_key);
-            TableID end_table_id = end_key.empty() ? std::numeric_limits<TableID>::max() : RecordKVFormat::getTableId(end_key);
+            const auto range = split_region->getRange();
 
             // This region definitely does not contain any data in this table.
-            if (start_table_id > table_id || end_table_id < table_id)
+            if (!TiKVRange::checkTableInvolveRange(table_id, range))
                 continue;
 
             // Select another partition other than current_partition_id;
@@ -335,7 +331,7 @@ void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPt
             size_t new_partition_id;
             while ((new_partition_id = selectPartitionId(table, split_region_id)) == current_partition_id) {}
 
-            auto [start_field, end_field] = getRegionRangeField(start_key, end_key, table_id);
+            auto [start_field, end_field] = getRegionRangeField(range.first, range.second, table_id);
             moveRangeBetweenPartitions(context, merge_tree, current_partition_id, new_partition_id, start_field, end_field);
 
             insertRegion(table, new_partition_id, split_region_id);

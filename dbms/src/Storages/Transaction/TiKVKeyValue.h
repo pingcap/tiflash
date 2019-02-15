@@ -457,6 +457,15 @@ inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
     return RecordKVFormat::getHandle(key);
 }
 
+inline bool checkTableInvolveRange(const TableID table_id, const std::pair<TiKVKey, TiKVKey>& range)
+{
+    const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
+    const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
+    if (end_key < range.first || (!range.second.empty() && start_key >= range.second))
+        return false;
+    return true;
+}
+
 }
 
 namespace DataKVFormat
