@@ -104,7 +104,7 @@ BlockIO InterpreterInsertQuery::execute()
     StoragePtr table = getTable(query);
 
     if (table->getName() == MutableSupport::txn_storage_name)
-        throw Exception(MutableSupport::txn_storage_name + " doesn't support Insert");
+        throw Exception(MutableSupport::txn_storage_name + " doesn't support Insert", ErrorCodes::LOGICAL_ERROR);
 
     auto table_lock = table->lockStructure(true, __PRETTY_FUNCTION__);
 
