@@ -144,8 +144,6 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
         addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, false);
         tmt.kvstore->onServiceCommand(cmds, raft_ctx);
     }
-
-    tmt.table_flushers.onPutTryFlush(region);
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)
@@ -167,7 +165,6 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, true);
 
     tmt.kvstore->onServiceCommand(cmds, raft_ctx);
-    tmt.table_flushers.onPutTryFlush(region);
 }
 
 struct BatchCtrl
@@ -271,7 +268,6 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         }
 
         tmt.kvstore->onServiceCommand(cmds, raft_ctx);
-        tmt.table_flushers.onPutTryFlush(region);
     }
 }
 
@@ -322,7 +318,7 @@ Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_
     for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.region_partition.traverseRegionsByTablePartition(table_info.id, partition_id, context, [&](Regions d){
+        tmt.region_partition.traverseRegionsByTablePartition(table_info.id, partition_id, [&](Regions d){
             regions.insert(regions.end(), d.begin(), d.end());
         });
     }

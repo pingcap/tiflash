@@ -38,8 +38,7 @@ DBGInvoker::DBGInvoker()
     regFunc("mock_tidb_table", dbgFuncMockTiDBTable);
     regFunc("drop_tidb_table", dbgFuncDropTiDBTable);
 
-    regFunc("set_flush_rows", dbgFuncSetFlushRows);
-    regFunc("set_deadline_seconds", dbgFuncSetDeadlineSeconds);
+    regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 
     regFunc("raft_insert_row", dbgFuncRaftInsertRow);
     regFunc("raft_insert_rows", dbgFuncRaftInsertRows);

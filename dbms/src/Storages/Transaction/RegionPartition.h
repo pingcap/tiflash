@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <random>
 #include <vector>
@@ -30,48 +31,18 @@ namespace DB
 class RegionPartition : private boost::noncopyable
 {
 public:
-    RegionPartition(const std::string & parent_path_);
-
-    /// Remove range data of splitted_regions, from corresponding partitions
-    void splitRegion(const RegionPtr & region, std::vector<RegionPtr> split_regions, Context & context);
-
-    /// Return partition_id. If region does not exist in this table, choose one partition to insert.
-    UInt64 getOrInsertRegion(TableID table_id, RegionID region_id, Context & context);
-    void removeRegion(const RegionPtr & region, Context & context);
-
-    // TODO optimize the params.
-    BlockInputStreamPtr getBlockInputStreamByPartition(TableID table_id,
-                                                       UInt64 partition_id,
-                                                       const TiDB::TableInfo & table_info,
-                                                       const ColumnsDescription & columns,
-                                                       const Names & ordered_columns,
-                                                       Context & context,
-                                                       bool remove_on_read,
-                                                       bool learner_read,
-                                                       bool resolve_locks,
-                                                       UInt64 start_ts);
-
-    /// This functional only shrink the table range of this region_id, range expand will (only) be done at flush.
-    /// Note that region update range should not affect the data in storage.
-    void updateRegionRange(const RegionPtr & region);
-
-    void dropRegionsInTable(TableID table_id);
-
-    void traverseTablesOfRegion(RegionID region_id, std::function<void(TableID)> callback);
-
-    void traverseRegionsByTablePartition(const TableID table_id, const PartitionID partition_id, Context& context,
-                                         std::function<void(Regions)> callback);
-
-public:
-    using RegionIDSet = std::set<RegionID>;
-
     struct Partition
     {
+        using RegionIDSet = std::set<RegionID>;
         RegionIDSet region_ids;
+
+        Partition() {}
+        Partition(const Partition & p) : region_ids(p.region_ids) {}
+        Partition(RegionIDSet && region_ids_) : region_ids(std::move(region_ids_)) {}
 
         struct Write
         {
-            void operator()(Partition p, DB::WriteBuffer & buf)
+            void operator()(const Partition & p, DB::WriteBuffer & buf)
             {
                 writeIntBinary(p.region_ids.size(), buf);
                 for (auto id : p.region_ids)
@@ -83,20 +54,32 @@ public:
 
         struct Read
         {
-            auto operator()(DB::ReadBuffer & buf)
+            Partition operator()(DB::ReadBuffer & buf)
             {
                 UInt64 size;
-                Partition p;
                 readIntBinary(size, buf);
+                RegionIDSet region_ids;
                 for (size_t i = 0; i < size; ++i)
                 {
                     RegionID id;
                     readIntBinary(id, buf);
-                    p.region_ids.insert(id);
+                    region_ids.insert(id);
                 }
-                return p;
+                return {std::move(region_ids)};
             }
         };
+
+        // Statistics to serve flush.
+        // Note that it is not 100% accurate because one region could belongs to more than one partition by different tables.
+        // And when a region is updated, we don't distinguish carefully which partition, simply update them all.
+        // It is not a real issue as do flush on a partition is not harmful. Besides, the situation is very rare that a region belongs to many partitions.
+        // Those members below are not persisted.
+
+        bool pause_flush = false;
+        bool must_flush = false;
+        bool updated = false;
+        Int64 cache_bytes = 0;
+        Timepoint last_flush_time = Clock::now();
     };
 
     struct Table
@@ -131,40 +114,76 @@ public:
         std::unordered_map<TableID, PartitionID> table_to_partition;
     };
 
-    Table & getTable(TableID table_id, Context & context);
-
-    void insertRegion(Table & table, size_t partition_id, RegionID region_id);
-
-    size_t selectPartitionId(Table & table, RegionID region_id)
-    {
-        // size_t partition_id = rng() % table.partitions.get().size();
-        size_t partition_id = (next_partition_id ++) % table.partitions.get().size();
-        LOG_DEBUG(log, "Table " << table.table_id << " assign region " << region_id << " to partition " << partition_id);
-        return partition_id;
-    }
-
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionMap = std::unordered_map<RegionID, RegionInfo>;
-
-    // For debug
-    void dumpRegionMap(RegionPartition::RegionMap & res);
+    using FlushThresholds = std::vector<std::pair<Int64, Seconds>>;
 
 private:
     const std::string parent_path;
 
-    // TODO: One container mutex + one mutext for per partition will be faster
-    // Partition info persisting is slow, it's slow when all persistings are under one mutex
     TableMap tables;
     RegionMap regions;
 
-    mutable std::mutex mutex;
+    FlushThresholds flush_thresholds;
 
-    // TODO fix me: currently we use random to pick one partition here, may need to change that.
     // std::minstd_rand rng = std::minstd_rand(randomSeed());
-
     size_t next_partition_id = 0;
 
+    Context & context;
+
+    mutable std::mutex mutex;
     Logger * log;
+
+private:
+    Table & getOrCreateTable(TableID table_id);
+    size_t selectPartitionId(Table & table, RegionID region_id);
+    std::pair<PartitionID, Partition &> insertRegion(Table & table, size_t partition_id, RegionID region_id);
+    std::pair<PartitionID, Partition &> getOrInsertRegion(TableID table_id, RegionID region_id);
+
+    /// This functional only shrink the table range of this region_id, range expand will (only) be done at flush.
+    /// Note that region update range should not affect the data in storage.
+    void updateRegionRange(const RegionPtr & region);
+
+    bool shouldFlush(const Partition & partition);
+    void flushPartition(TableID table_id, PartitionID partition_id);
+
+public:
+    RegionPartition(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher);
+    void setFlushThresholds(FlushThresholds flush_thresholds_) { flush_thresholds = std::move(flush_thresholds_); }
+
+    /// After the region is updated (insert or delete KVs).
+    void updateRegion(const RegionPtr & region, size_t before_cache_bytes, TableIDSet relative_table_ids);
+    /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
+    void applySnapshotRegion(const RegionPtr & region);
+    /// Manage data after region split into split_regions.
+    /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
+    void splitRegion(const RegionPtr & region, std::vector<RegionPtr> split_regions);
+    /// Remove a region from corresponding partitions.
+    void removeRegion(const RegionPtr & region);
+
+    /// Try pick some regions and flush.
+    /// Note that flush is organized by partition. i.e. if a regions is selected to be flushed, all regions belong to its partition will also flushed.
+    /// This function will be called constantly by background threads.
+    /// Returns whether this function has done any meaningful job.
+    bool tryFlushRegions();
+
+    void traversePartitions(std::function<void(TableID, PartitionID, Partition &)> callback);
+    void traverseRegionsByTablePartition(const TableID table_id, const PartitionID partition_id, std::function<void(Regions)> callback);
+
+    BlockInputStreamPtr getBlockInputStreamByPartition( //
+        TableID table_id,
+        UInt64 partition_id,
+        const TiDB::TableInfo & table_info,
+        const ColumnsDescription & columns,
+        const Names & ordered_columns,
+        bool remove_on_read,
+        bool learner_read,
+        bool resolve_locks,
+        UInt64 start_ts);
+
+    // For debug
+    void dumpRegionMap(RegionPartition::RegionMap & res);
+    void dropRegionsInTable(TableID table_id);
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionPartition>;

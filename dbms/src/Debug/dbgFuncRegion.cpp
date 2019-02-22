@@ -295,7 +295,7 @@ std::vector<std::tuple<HandleID, HandleID, RegionID>> getPartitionRegionRanges(
     };
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, context, callback);
+    tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, callback);
     return handle_ranges;
 }
 
@@ -494,7 +494,7 @@ void dbgFuncCheckRegionCorrect(Context & context, const ASTs & args, DBGInvoker:
     for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         std::unordered_map<RegionID, RegionPtr> partition_regions;
-        tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, context, [&](Regions regions)
+        tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, [&](Regions regions)
         {
             for (auto region : regions)
                 partition_regions[region->id()] = region;
