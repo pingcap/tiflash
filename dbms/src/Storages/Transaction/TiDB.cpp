@@ -176,7 +176,7 @@ void ColumnInfo::deserialize(const JSON & json) try
 }
 catch (const JSONException & e)
 {
-    throw DB::Exception("Parse TiDB schema JSON failed.", DB::Exception(e));
+    throw DB::Exception("Parse TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
 TableInfo::TableInfo(const String & table_info_json, bool escaped)
@@ -230,6 +230,13 @@ String TableInfo::serialize(bool escaped) const
 
 void TableInfo::deserialize(const String & json_str, bool escaped) try
 {
+
+    if (json_str.empty())
+    {
+        id = DB::InvalidTableID;
+        return;
+    }
+
     String unescaped_json_str;
     if (escaped)
     {
@@ -266,7 +273,7 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
 }
 catch (const JSONException & e)
 {
-    throw DB::Exception("Parse TiDB schema JSON failed.", DB::Exception(e));
+    throw DB::Exception("Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + json_str, DB::Exception(e));
 }
 
 }

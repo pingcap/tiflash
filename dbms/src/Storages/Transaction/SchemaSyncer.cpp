@@ -11,6 +11,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/MutableSupport.h>
 #include <TiDB/TiDBService.h>
 #include <common/JSON.h>
 
@@ -130,9 +131,9 @@ String createTableStmt(const TableInfo & table_info)
 
     if (pks.size() != 1 || !table_info.pk_is_handle)
     {
-        columns.emplace_back(NameAndTypePair("_tidb_rowid", std::make_shared<DataTypeInt64>()));
+        columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>()));
         pks.clear();
-        pks.emplace_back("_tidb_rowid");
+        pks.emplace_back(MutableSupport::tidb_pk_column_name);
     }
 
     String stmt;

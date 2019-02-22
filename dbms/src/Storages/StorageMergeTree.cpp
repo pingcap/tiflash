@@ -182,19 +182,25 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
 
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
-        const ASTLiteral * ASTLit = typeid_cast<const ASTLiteral *>(&*query);
-        UInt64 partition_id = 0;
-        if (ASTLit)
+        NameSet partitions;
+        if (insert_query && insert_query->partition_expression_list)
+            partitions = data.getPartitionIDsInLiteral(insert_query->partition_expression_list, context);
+        else if (delete_query && delete_query->partition_expression_list)
+            partitions = data.getPartitionIDsInLiteral(delete_query->partition_expression_list, context);
+        if (partitions.size() > 1)
+            throw Exception("INSERT into a TMT table should only specify one partition.", ErrorCodes::BAD_ARGUMENTS);
+
+        if (partitions.size() == 1)
         {
-            // we have added version and del_mark columns
-            partition_id = ASTLit -> value.get<size_t>();
+            UInt64 partition_id = parse<UInt64>(*(partitions.begin()));
             res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this, partition_id);
         }
-        else if (insert_query)
+
+        if (insert_query)
         {
             if (!insert_query->is_import)
             {
-                LOG_DEBUG(log, "Mutable table writing, add version column and del-mark column.");
+                LOG_DEBUG(log, "TMT table writing, add version column and del-mark column.");
                 AdditionalBlockGenerators gens
                 {
                     std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
@@ -206,7 +212,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
                 res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
             }
             else
-                LOG_DEBUG(log, "Mutable table importing.");
+                LOG_DEBUG(log, "TMT table importing.");
         }
         else if (delete_query)
         {
@@ -220,8 +226,9 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
             res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
             res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
         }
-        else {
-            throw Exception("Use TMT by wrong way");
+        else
+        {
+            throw Exception("Use TMT table by wrong way", ErrorCodes::BAD_ARGUMENTS);
         }
     }
     else if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable)

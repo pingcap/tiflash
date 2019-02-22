@@ -5,6 +5,7 @@
 
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
+#include <Storages/MutableSupport.h>
 
 // TODO: Remove this
 #include <Storages/Transaction/tests/region_helper.h>
@@ -307,7 +308,7 @@ void dbgFuncCheckPartitionRegionRows(Context & context, const ASTs & args, DBGIn
             ErrorCodes::BAD_ARGUMENTS);
     }
 
-    const static String pk_name = "_tidb_rowid";
+    const String & pk_name = MutableSupport::tidb_pk_column_name;
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -376,7 +377,7 @@ void dbgFuncScanPartitionExtraRows(Context & context, const ASTs & args, DBGInvo
     if (args.size() != 2)
         throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
 
-    const static String pk_name = "_tidb_rowid";
+    const String & pk_name = MutableSupport::tidb_pk_column_name;
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -458,7 +459,7 @@ void dbgFuncCheckRegionCorrect(Context & context, const ASTs & args, DBGInvoker:
     if (args.size() != 2)
         throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
 
-    const static String pk_name = "_tidb_rowid";
+    const String & pk_name = MutableSupport::tidb_pk_column_name;
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;

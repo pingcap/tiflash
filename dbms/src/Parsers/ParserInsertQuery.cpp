@@ -9,6 +9,7 @@
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ParserPartition.h>
 
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
@@ -25,10 +26,13 @@ namespace ErrorCodes
 
 bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
+    // TODO: support partition in sub query
+
     ParserKeyword s_insert_into("INSERT INTO");
     ParserKeyword s_upsert_into("UPSERT INTO");
     ParserKeyword s_import_into("IMPORT INTO");
     ParserKeyword s_table("TABLE");
+    ParserKeyword s_partition("PARTITION");
     ParserKeyword s_function("FUNCTION");
     ParserToken s_dot(TokenType::Dot);
     ParserKeyword s_values("VALUES");
@@ -74,6 +78,16 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             if (!name_p.parse(pos, table, expected))
                 return false;
         }
+    }
+
+    auto query = std::make_shared<ASTInsertQuery>();
+    node = query;
+
+    /// PARTITION p or PARTITION (p1, p2, ...)
+    if (s_partition.ignore(pos, expected))
+    {
+        if (!ParserPartition().parse(pos, query->partition_expression_list, expected))
+            return false;
     }
 
     /// Is there a list of columns
@@ -133,9 +147,6 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         return false;
     }
-
-    auto query = std::make_shared<ASTInsertQuery>();
-    node = query;
 
     if (table_function)
     {
