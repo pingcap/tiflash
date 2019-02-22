@@ -58,6 +58,8 @@ ASTPtr ASTSelectQuery::clone() const
 
 void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const
 {
+    // TODO: print partition_list
+
     frame.current_select = this;
     frame.need_parens = false;
     std::string indent_str = s.one_line ? "" : std::string(4 * frame.indent, ' ');
@@ -87,6 +89,12 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "FROM " << (s.hilite ? hilite_none : "");
         tables->formatImpl(s, state, frame);
+    }
+
+    if (partition_expression_list)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "PARTITION " << (s.hilite ? hilite_none : "");
+        partition_expression_list->formatImpl(s, state, frame);
     }
 
     if (prewhere_expression)

@@ -32,6 +32,7 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 DBGInvoker::DBGInvoker()
 {
     regFunc("echo", dbgFuncEcho);
+    // TODO: remove this, use sleep in bash script
     regFunc("sleep", dbgFuncSleep);
 
     regFunc("mock_schema_syncer", dbgFuncMockSchemaSyncer);
@@ -45,7 +46,6 @@ DBGInvoker::DBGInvoker()
     regFunc("raft_insert_rows", dbgFuncRaftInsertRows);
     regFunc("raft_update_rows", dbgFuncRaftUpdateRows);
     regFunc("raft_delete_rows", dbgFuncRaftDelRows);
-
     regFunc("raft_delete_row", dbgFuncRaftDeleteRow);
 
     regFunc("put_region", dbgFuncPutRegion);
@@ -105,7 +105,6 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
         res->append(s);
     };
 
-    auto version_col = ColumnUInt64::create();
     (it->second)(context, args, printer);
 
     return print_res ? res : std::shared_ptr<StringStreamBlockInputStream>();

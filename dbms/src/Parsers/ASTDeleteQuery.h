@@ -14,6 +14,7 @@ class ASTDeleteQuery : public IAST
 public:
     String database;
     String table;
+    ASTPtr partition_expression_list;
     ASTPtr where;
 
     // Just for execute.

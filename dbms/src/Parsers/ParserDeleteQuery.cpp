@@ -11,6 +11,7 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/ParserDeleteQuery.h>
+#include <Parsers/ParserPartition.h>
 
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
@@ -29,6 +30,7 @@ bool ParserDeleteQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_delete_from("DELETE FROM");
     ParserToken s_dot(TokenType::Dot);
+    ParserKeyword s_partition("PARTITION");
     ParserKeyword s_where("WHERE");
     ParserIdentifier name_p;
 
@@ -51,14 +53,21 @@ bool ParserDeleteQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
     }
 
+    std::shared_ptr<ASTDeleteQuery> query = std::make_shared<ASTDeleteQuery>();
+    node = query;
+
+    /// PARTITION p or PARTITION (p1, p2, ...)
+    if (s_partition.ignore(pos, expected))
+    {
+        if (!ParserPartition().parse(pos, query->partition_expression_list, expected))
+            return false;
+    }
+
     if (!s_where.ignore(pos, expected))
         return false;
 
     if (!exp_elem.parse(pos, where, expected))
         return false;
-
-    std::shared_ptr<ASTDeleteQuery> query = std::make_shared<ASTDeleteQuery>();
-    node = query;
 
     if (database)
         query->database = typeid_cast<ASTIdentifier &>(*database).name;
