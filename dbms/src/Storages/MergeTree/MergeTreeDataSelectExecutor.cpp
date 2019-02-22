@@ -622,7 +622,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                         continue;
                     auto region_input_stream = tmt.region_partition.getBlockInputStreamByPartition(
                         data.table_info.id, partition_id, data.table_info, data.getColumns(), column_names_to_read,
-                        const_cast<Context &>(context), false, true, query_info.resolve_locks, query_info.read_tso);
+                        false, true, query_info.resolve_locks, query_info.read_tso);
                     if (region_input_stream)
                         res.emplace_back(region_input_stream);
                 }
@@ -671,7 +671,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 {
                     auto region_input_stream = tmt.region_partition.getBlockInputStreamByPartition(
                         data.table_info.id, partition_id, data.table_info, data.getColumns(), column_names_to_read,
-                        const_cast<Context &>(context), false, true, query_info.resolve_locks, query_info.read_tso);
+                        false, true, query_info.resolve_locks, query_info.read_tso);
                     if (region_input_stream)
                     {
                         BlockInputStreamPtr version_filtered_stream = std::make_shared<VersionFilterBlockInputStream>(

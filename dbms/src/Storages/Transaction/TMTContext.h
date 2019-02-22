@@ -1,13 +1,12 @@
 #pragma once
 
-#include <atomic>
 #include <pd/IClient.h>
+#include <atomic>
 
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionPartition.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTStorages.h>
-#include <Storages/Transaction/TMTTableFlusher.h>
 
 namespace DB
 {
@@ -19,12 +18,11 @@ class TMTContext
 public:
     KVStorePtr kvstore;
     TMTStorages storages;
-    TMTTableFlushers table_flushers;
     RegionPartition region_partition;
 
 public:
     // TODO: get flusher args from config file
-    explicit TMTContext(Context & context_, std::vector<String> addrs, size_t deadline_seconds = 5, size_t flush_threshold_rows = 1024);
+    explicit TMTContext(Context & context_, std::vector<String> addrs);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -37,10 +35,10 @@ public:
     pingcap::kv::RpcClientPtr getRpcClient();
 
 private:
-    SchemaSyncerPtr             schema_syncer;
-    pingcap::pd::ClientPtr      pd_client;
+    SchemaSyncerPtr schema_syncer;
+    pingcap::pd::ClientPtr pd_client;
     pingcap::kv::RegionCachePtr region_cache;
-    pingcap::kv::RpcClientPtr   rpc_client;
+    pingcap::kv::RpcClientPtr rpc_client;
 
     mutable std::mutex mutex;
 };

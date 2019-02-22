@@ -11,8 +11,8 @@ extern const int LOGICAL_ERROR;
 }
 
 // TODO move to Settings.h
-//static constexpr Int64 REGION_PERSIST_PERIOD      = 60 * 1000 * 1000; // 1 minutes
-//static constexpr Int64 KVSTORE_TRY_PERSIST_PERIOD = 10 * 1000 * 1000; // 10 seconds
+static Seconds REGION_PERSIST_PERIOD(60); // 1 minutes
+static Seconds KVSTORE_TRY_PERSIST_PERIOD(10); // 10 seconds
 
 KVStore::KVStore(const std::string & data_dir, Context * context) : region_persister(data_dir), log(&Logger::get("KVStore"))
 {
@@ -65,7 +65,7 @@ void KVStore::onSnapshot(const RegionPtr & region, Context * context)
     }
 
     if (tmt_ctx && old_region)
-        tmt_ctx->region_partition.removeRegion(old_region, *context);
+        tmt_ctx->region_partition.removeRegion(old_region);
 
     region_persister.persist(region);
 
@@ -75,7 +75,7 @@ void KVStore::onSnapshot(const RegionPtr & region, Context * context)
     }
 
     if (tmt_ctx)
-        tmt_ctx->table_flushers.onPutTryFlush(region);
+        tmt_ctx->region_partition.applySnapshotRegion(region);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
@@ -134,7 +134,9 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        auto [new_region, split_regions, sync] = curr_region->onCommand(cmd, callback);
+        auto before_cache_bytes = curr_region->dataSize();
+
+        auto [new_region, split_regions, table_ids, sync] = curr_region->onCommand(cmd, callback);
 
         if (curr_region->isPendingRemove())
         {
@@ -147,10 +149,11 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        // Persist current region and split regions, and mange data in partition
-        // Add to regions map so that queries can see them.
+
         if (!split_regions.empty())
         {
+            // Persist current region and split regions, and mange data in partition
+            // Add to regions map so that queries can see them.
             // TODO: support atomic or idempotent operation.
             {
                 std::lock_guard<std::mutex> lock(mutex);
@@ -168,23 +171,19 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             }
 
             if (tmt_ctx)
-            {
-                tmt_ctx->region_partition.splitRegion(curr_region, split_regions, *context);
-
-                tmt_ctx->table_flushers.onPutTryFlush(curr_region);
-                for (const auto & region : split_regions)
-                    tmt_ctx->table_flushers.onPutTryFlush(region);
-            }
+                tmt_ctx->region_partition.splitRegion(curr_region, split_regions);
 
             region_persister.persist(curr_region);
             for (const auto & region : split_regions)
                 region_persister.persist(region);
         }
-        else if (sync)
+        else
         {
             if (tmt_ctx)
-                tmt_ctx->table_flushers.onPutTryFlush(curr_region);
-            region_persister.persist(curr_region);
+                tmt_ctx->region_partition.updateRegion(curr_region, before_cache_bytes, table_ids);
+
+            if (sync)
+                region_persister.persist(curr_region);
         }
 
         if (sync)
@@ -218,7 +217,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    Poco::Timestamp now;
+    Timepoint now = Clock::now();
     if (now < (last_try_persist_time + KVSTORE_TRY_PERSIST_PERIOD))
         return false;
     last_try_persist_time = now;
@@ -229,7 +228,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context)
     for (const auto & p : regions)
     {
         const auto region = p.second;
-        if (Poco::Timestamp() < (region->lastPersistTime() + REGION_PERSIST_PERIOD))
+        if (now < (region->lastPersistTime() + REGION_PERSIST_PERIOD))
             continue;
 
         persist_job = true;
@@ -263,7 +262,7 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
 
     region_persister.drop(region_id);
     if (context)
-        context->getTMTContext().region_partition.removeRegion(region, *context);
+        context->getTMTContext().region_partition.removeRegion(region);
 }
 
 } // namespace DB

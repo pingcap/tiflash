@@ -17,32 +17,19 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
 }
 
-void dbgFuncSetFlushRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 1)
-        throw Exception("Args not matched, should be: threshold-rows", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: bytes, seconds", ErrorCodes::BAD_ARGUMENTS);
 
-    auto rows = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    TMTContext & tmt = context.getTMTContext();
-    tmt.table_flushers.setFlushThresholdRows(rows);
-
-    std::stringstream ss;
-    ss << "set flush threshold to " << rows << " rows";
-    output(ss.str());
-}
-
-void dbgFuncSetDeadlineSeconds(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 1)
-        throw Exception("Args not matched, should be: second-uint", ErrorCodes::BAD_ARGUMENTS);
-
-    const UInt64 second = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto bytes = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto seconds = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.table_flushers.setDeadlineSeconds(second);
+    tmt.region_partition.setFlushThresholds({{bytes, Seconds(seconds)}});
 
     std::stringstream ss;
-    ss << "set deadline seconds to " << second << "s";
+    ss << "set flush threshold to (" << bytes << " bytes, " << seconds << " seconds)";
     output(ss.str());
 }
 

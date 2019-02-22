@@ -122,7 +122,8 @@ private:
     bool ever_seen_lock = false;
 };
 
-// FIXME: remove_on_read is not safe because cache will be remove before data flush into storage.
+// FIXME: remove_on_read is not safe because cache will be removed before data flush into storage.
+// If the process reboot during flush, it could lead to data loss.
 // Please design another mechanism to gracefully remove cache after flush.
 class RegionBlockReader
 {

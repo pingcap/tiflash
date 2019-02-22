@@ -1,6 +1,9 @@
 #pragma once
 
 #include <set>
+#include <unordered_set>
+#include <ctime>
+#include <chrono>
 
 #include <Core/Types.h>
 
@@ -8,6 +11,7 @@ namespace DB
 {
 
 using TableID = Int64;
+using TableIDSet = std::unordered_set<TableID>;
 
 enum : TableID
 {
@@ -35,5 +39,10 @@ enum : RegionID
 {
     InvalidRegionID = 0
 };
+
+using Clock = std::chrono::system_clock;
+using Timepoint = Clock::time_point;
+using Duration = Clock::duration;
+using Seconds = std::chrono::seconds;
 
 } // namespace DB

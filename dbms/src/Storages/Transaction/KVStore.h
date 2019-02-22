@@ -11,15 +11,11 @@
 #include <Storages/Transaction/Consistency.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionPersister.h>
-#include <Storages/Transaction/TMTTableFlusher.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 
 namespace DB
 {
-// TODO move to Settings.h
-static constexpr Int64 REGION_PERSIST_PERIOD      = 60 * 1000 * 1000; // 1 minutes
-static constexpr Int64 KVSTORE_TRY_PERSIST_PERIOD = 10 * 1000 * 1000; // 10 seconds
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
@@ -40,7 +36,6 @@ public:
     // Currently we also trigger region files GC in it.
     bool tryPersistAndReport(RaftContext & context);
 
-    // TODO: Value copy instead of value ref
     // For test, please do NOT remove.
     RegionMap & _regions() { return regions; }
 
@@ -54,7 +49,7 @@ private:
     std::mutex mutex;
 
     Consistency consistency;
-    Poco::Timestamp last_try_persist_time{};
+    Timepoint last_try_persist_time = Clock::now();
 
     Logger * log;
 };

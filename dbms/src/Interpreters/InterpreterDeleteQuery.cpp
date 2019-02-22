@@ -50,7 +50,7 @@ BlockIO InterpreterDeleteQuery::execute()
 
     StoragePtr table = context.getTable(query.database, query.table);
     if (table->getName() != MutableSupport::storage_name)
-        throw Exception("Only " + MutableSupport::storage_name  + " support Delete");
+        throw Exception("Only " + MutableSupport::storage_name  + " support Delete", ErrorCodes::LOGICAL_ERROR);
 
     auto table_lock = table->lockStructure(true, __PRETTY_FUNCTION__);
 
