@@ -195,6 +195,10 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
             UInt64 partition_id = parse<UInt64>(*(partitions.begin()));
             res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this, partition_id);
         }
+        else if (delete_query)
+        {
+            throw Exception("DELETE from a TMT table should specify one partition.", ErrorCodes::BAD_ARGUMENTS);
+        }
 
         if (insert_query)
         {
@@ -216,6 +220,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
         }
         else if (delete_query)
         {
+            LOG_DEBUG(log, "Delete from TMT table, add version column and del-mark column.");
             AdditionalBlockGenerators gens
             {
                 std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,

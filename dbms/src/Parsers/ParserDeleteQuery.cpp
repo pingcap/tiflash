@@ -113,6 +113,7 @@ bool ParserDeleteQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         select_query->where_expression = query->where;
         select_query->children.push_back(query->where);
+        select_query->partition_expression_list = query->partition_expression_list;
 
         query->select = select_query;
         query->children.push_back(select_query);

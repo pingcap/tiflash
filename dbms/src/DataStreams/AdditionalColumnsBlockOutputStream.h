@@ -28,10 +28,13 @@ public:
     {
         auto data_type = std::make_shared<DataTypeNumber<UInt64> >();
         auto column = data_type->createColumn();
-        Field data(pd->getTS());
         size_t size = ref.rows();
         for (size_t i = 0; i < size; i++)
+        {
+            auto ts = pd->getTS();
+            Field data(ts);
             column->insert(data);
+        }
         return ColumnWithTypeAndName(std::move(column), data_type, name);
     }
 
