@@ -27,6 +27,8 @@ using Regions = std::vector<RegionPtr>;
 class Region : public std::enable_shared_from_this<Region>
 {
 public:
+    const static UInt32 CURRENT_VERSION;
+
     const static String lock_cf_name;
     const static String default_cf_name;
     const static String write_cf_name;

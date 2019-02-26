@@ -159,6 +159,8 @@ void RegionPersister::restore(RegionMap & regions)
             }
         }
 
+        reader.checkHash(use);
+
         UInt64 region_id;
         size_t index = 0;
         while ((region_id = reader.hasNext()) != InvalidRegionID)
@@ -234,6 +236,8 @@ bool RegionPersister::gc()
             auto reader = file->createReader();
             auto metas = reader.regionMetas();
             std::vector<bool> use = valid_regions_in_file(metas);
+
+            reader.checkHash(use);
 
             UInt64 region_id;
             size_t index = 0;

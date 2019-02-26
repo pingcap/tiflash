@@ -384,6 +384,7 @@ namespace ErrorCodes
     extern const int THEFLASH_ENCODER_ERROR = 9002;
     extern const int THEFLASH_SESSION_ERROR = 9003;
     extern const int DECIMAL_OVERFLOW_ERROR = 9004;
+    extern const int SIZE_CHECK_FAILED = 9004;
     extern const int LOCK_EXCEPTION = 10000;
 }
 
