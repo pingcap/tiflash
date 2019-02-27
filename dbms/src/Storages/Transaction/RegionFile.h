@@ -62,7 +62,7 @@ public:
             HashingWriteBuffer::uint128 hashcode;
         };
 
-        void checkHash(std::vector<bool> use);
+        void checkHash(const std::vector<bool> & use);
 
         RegionID hasNext();
         RegionPtr next();

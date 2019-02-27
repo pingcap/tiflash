@@ -67,7 +67,7 @@ RegionFile::Reader::Reader(RegionFile & region_file)
     }
 }
 
-void RegionFile::Reader::checkHash(std::vector<bool> use)
+void RegionFile::Reader::checkHash(const std::vector<bool> & use)
 {
     std::vector<size_t> region_bytes(use.size());
     std::vector<HashingWriteBuffer::uint128> expected_hashcodes(use.size());
