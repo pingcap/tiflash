@@ -76,11 +76,10 @@ RegionPartition::Table & RegionPartition::getOrCreateTable(TableID table_id)
     return it->second;
 }
 
-size_t RegionPartition::selectPartitionId(Table & table, RegionID region_id)
+size_t RegionPartition::selectPartitionId(Table & table, RegionID /*region_id*/)
 {
     // size_t partition_id = rng() % table.partitions.get().size();
     size_t partition_id = (next_partition_id++) % table.partitions.get().size();
-    LOG_DEBUG(log, "Table " << table.table_id << " assign region " << region_id << " to partition " << partition_id);
     return partition_id;
 }
 
@@ -115,13 +114,13 @@ std::pair<PartitionID, RegionPartition::Partition &> RegionPartition::getOrInser
 
     // Currently region_id does not exist in any regions in this table, let's insert into one.
     size_t partition_id = selectPartitionId(table, region_id);
+    LOG_DEBUG(log, "Table " << table_id << " assign region " << region_id << " to partition " << partition_id);
+
     return insertRegion(table, partition_id, region_id);
 }
 
 void RegionPartition::updateRegionRange(const RegionPtr & region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
     auto region_id = region->id();
     const auto range = region->getRange();
 
@@ -272,12 +271,24 @@ RegionPartition::RegionPartition(Context & context_, const std::string & parent_
         for (PartitionID partition_id = 0; partition_id < table.partitions.get().size(); ++partition_id)
         {
             auto & partition = table.partitions.get()[partition_id];
-            for (auto region_id : partition.region_ids)
+            auto it = partition.region_ids.begin();
+            while (it != partition.region_ids.end())
             {
                 // Update cache infos
+                auto region_id = *it;
                 auto region_ptr = region_fetcher(region_id);
                 if (!region_ptr)
-                    throw Exception("Region with id " + DB::toString(region_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+                {
+                    // It could happen that process crash after region split or region snapshot apply,
+                    // and region has not been persisted, but region <-> partition mapping does.
+                    it = partition.region_ids.erase(it);
+                    LOG_WARNING(log, "Region " << region_id << " not found from KVStore, dropped.");
+                    continue;
+                }
+                else
+                {
+                    ++it;
+                }
                 partition.cache_bytes += region_ptr->dataSize();
 
                 // Update region_id -> table_id & partition_id
@@ -288,6 +299,8 @@ RegionPartition::RegionPartition(Context & context_, const std::string & parent_
                 region_info.table_to_partition.emplace(table_id, partition_id);
             }
         }
+
+        table.partitions.persist();
     }
 }
 
@@ -372,6 +385,7 @@ void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPt
                 auto split_region_id = split_region->id();
                 size_t new_partition_id;
                 while ((new_partition_id = selectPartitionId(table, split_region_id)) == current_partition_id) {}
+                LOG_DEBUG(log, "Table " << table.table_id << " assign region " << split_region_id << " to partition " << new_partition_id);
 
                 auto [start_field, end_field] = getRegionRangeField(range.first, range.second, table_id);
                 move_actions.push_back({merge_tree_storage, current_partition_id, new_partition_id, start_field, end_field});
