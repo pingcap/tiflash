@@ -120,8 +120,6 @@ std::pair<PartitionID, RegionPartition::Partition &> RegionPartition::getOrInser
 
 void RegionPartition::updateRegionRange(const RegionPtr & region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
     auto region_id = region->id();
     const auto range = region->getRange();
 
