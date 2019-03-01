@@ -1,0 +1,12 @@
+FROM ubuntu:17.10
+
+RUN apt update && \
+    apt install -y tzdata
+
+COPY tics /tics
+
+WORKDIR /tics
+
+ENV LD_LIBRARY_PATH /tics
+
+ENTRYPOINT ["./theflash", "server"]
