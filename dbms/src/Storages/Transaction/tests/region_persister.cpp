@@ -90,7 +90,7 @@ int main(int, char **)
     }
 
     {
-        RegionPersister persister([](UInt64) -> RegionPtr { return {}; }, dir_path);
+        RegionPersister persister(dir_path);
         persister.persist(region1);
         persister.persist(region1);
         persister.persist(region2);
@@ -114,7 +114,7 @@ int main(int, char **)
         regions.emplace(3, region3);
 
         {
-            RegionPersister persister([](UInt64) -> RegionPtr { return {}; }, dir_path, config);
+            RegionPersister persister(dir_path, config);
             persister.persist(region1);
             persister.persist(region1);
             persister.persist(region1);
@@ -131,7 +131,7 @@ int main(int, char **)
         }
 
         {
-            RegionPersister persister([&](UInt64 id) -> RegionPtr { return regions.find(id)->second; }, dir_path, config);
+            RegionPersister persister(dir_path, config);
             RegionMap restore_regions;
             persister.restore(restore_regions);
             ASSERT_CHECK_EQUAL(3, restore_regions.size(), suc);
@@ -155,7 +155,7 @@ int main(int, char **)
         regions.emplace(2, region2);
         regions.emplace(3, region3);
 
-        RegionPersister persister([&](UInt64 id) -> RegionPtr { return regions.find(id)->second; }, dir_path, config);
+        RegionPersister persister(dir_path, config);
         persister.persist(region1);
         persister.persist(region1);
         persister.persist(region1);

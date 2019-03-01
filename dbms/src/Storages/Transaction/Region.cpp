@@ -10,7 +10,10 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_FORMAT_VERSION;
+} // namespace ErrorCodes
+
+const UInt32 Region::CURRENT_VERSION = 0;
 
 const String Region::lock_cf_name = "lock";
 const String Region::default_cf_name = "default";
@@ -399,7 +402,9 @@ size_t Region::serialize(WriteBuffer & buf)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    size_t total_size = meta.serialize(buf);
+    size_t total_size = writeBinary2(Region::CURRENT_VERSION, buf);
+
+    total_size += meta.serialize(buf);
 
     total_size += writeBinary2(data_cf.size(), buf);
     for (auto && [key, value] : data_cf)
@@ -426,6 +431,11 @@ size_t Region::serialize(WriteBuffer & buf)
 
 RegionPtr Region::deserialize(ReadBuffer & buf)
 {
+    auto version = readBinary2<UInt32>(buf);
+    if (version != Region::CURRENT_VERSION)
+        throw Exception("Unexpected region version: " + DB::toString(version) + ", expected: " + DB::toString(CURRENT_VERSION),
+            ErrorCodes::UNKNOWN_FORMAT_VERSION);
+
     auto region = std::make_shared<Region>(RegionMeta::deserialize(buf));
 
     auto size = readBinary2<KVMap::size_type>(buf);

@@ -159,6 +159,8 @@ void RegionPersister::restore(RegionMap & regions)
             }
         }
 
+        reader.checkHash(use);
+
         UInt64 region_id;
         size_t index = 0;
         while ((region_id = reader.hasNext()) != InvalidRegionID)
@@ -225,15 +227,19 @@ bool RegionPersister::gc()
 
     LOG_DEBUG(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_region_count << " regions");
 
-    if (!merge_files.empty())
+    if (!merge_files.empty() && migrate_region_count)
     {
+        // Create the GC file if needed.
         RegionFile * gc_file = createGCFile();
-        auto writer = gc_file->createWriter();
+        RegionFile::Writer gc_file_writer = gc_file->createWriter();
+
         for (auto & [file, migrate_region_ids] : merge_files)
         {
             auto reader = file->createReader();
             auto metas = reader.regionMetas();
             std::vector<bool> use = valid_regions_in_file(metas);
+
+            reader.checkHash(use);
 
             UInt64 region_id;
             size_t index = 0;
@@ -242,7 +248,7 @@ bool RegionPersister::gc()
                 if (use[index] && migrate_region_ids.count(region_id))
                 {
                     auto region = reader.next();
-                    auto region_size = writer.write(region);
+                    auto region_size = gc_file_writer.write(region);
                     {
                         std::lock_guard<std::mutex> map_lock(region_map_mutex);
 
@@ -262,6 +268,7 @@ bool RegionPersister::gc()
         }
     }
 
+    if (!merge_files.empty())
     {
         std::lock_guard<std::mutex> map_lock(region_map_mutex);
 
