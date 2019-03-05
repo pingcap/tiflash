@@ -1,0 +1,43 @@
+>> drop table if exists test
+>> create table test (
+	dt Date,
+	k Int32,
+	v Int32
+	) engine = TxnMergeTree((k), 8192, '')
+
+>> insert into test partition('0') values (0, 1, 11), (0, 2, 22)
+>> select * from test
+┌─────────dt─┬─k─┬──v─┐
+│ 0000-00-00 │ 1 │ 11 │
+│ 0000-00-00 │ 2 │ 22 │
+└────────────┴───┴────┘
+
+>> delete from test
+Code: 62. DB::Exception: Syntax error: failed at position 17 (end of query): . Expected one of: token, Dot, WHERE, PARTITION
+
+>> delete from test where k = 1
+Received exception from server (version 1.1.54381):
+Code: 36. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: DELETE from a TMT table should specify one partition..
+
+>> delete from test partition('0') where k = 1
+
+>> selraw _part, dt, k, v, _INTERNAL_DELMARK from test
+┌─_part───┬─────────dt─┬─k─┬──v─┬─_INTERNAL_DELMARK─┐
+│ 0_1_1_0 │ 0000-00-00 │ 1 │ 11 │                 0 │
+│ 0_1_1_0 │ 0000-00-00 │ 2 │ 22 │                 0 │
+└─────────┴────────────┴───┴────┴───────────────────┘
+┌─_part───┬─────────dt─┬─k─┬──v─┬─_INTERNAL_DELMARK─┐
+│ 0_2_2_0 │ 0000-00-00 │ 1 │ 11 │                 1 │
+└─────────┴────────────┴───┴────┴───────────────────┘
+
+>> select _part, * from test
+┌─_part───┬─────────dt─┬─k─┬──v─┐
+│ 0_1_1_0 │ 0000-00-00 │ 2 │ 22 │
+└─────────┴────────────┴───┴────┘
+
+>> select * from test
+┌─────────dt─┬─k─┬──v─┐
+│ 0000-00-00 │ 2 │ 22 │
+└────────────┴───┴────┘
+
+>> drop table if exists test
