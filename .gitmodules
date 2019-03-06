@@ -44,3 +44,6 @@
 [submodule "contrib/client-c"]
 	path = contrib/client-c
 	url = git@github.com:tikv/client-c.git
+[submodule "contrib/leveldb"]
+	path = contrib/leveldb
+	url = https://github.com/google/leveldb.git
