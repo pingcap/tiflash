@@ -1,5 +1,7 @@
 #!/bin/bash
 
+rm -rf ./data ./log
+
 docker-compose up -d
 
 docker-compose exec tics0 bash -c 'cd /tests ; ./run-test.sh mutable-test'

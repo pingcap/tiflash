@@ -13,8 +13,8 @@ services:
       - ./config/users.xml:/users.xml:ro
       - ./data:/data
       - ./log:/log
-      - ..:/tests:ro
-      - ./_env.sh:/tests/_env.sh:ro
+      - ..:/tests
+      - ./_env.sh:/tests/_env.sh
     command:
       - --config-file
       - /config.xml
