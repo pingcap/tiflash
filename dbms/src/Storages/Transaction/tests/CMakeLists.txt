@@ -14,3 +14,7 @@ target_link_libraries (table_info dbms)
 
 add_executable (region_test region.cpp)
 target_link_libraries (region_test dbms)
+
+add_executable (leveldb_test leveldb_test.cpp)
+target_link_libraries (leveldb_test dbms)
+
