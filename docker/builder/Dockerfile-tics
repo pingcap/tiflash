@@ -1,12 +1,12 @@
 FROM ubuntu:17.10
 
 RUN apt update && \
-    apt install -y tzdata
+    apt install -y tzdata python
 
 COPY tics /tics
 
-WORKDIR /tics
+WORKDIR /
 
 ENV LD_LIBRARY_PATH /tics
 
-ENTRYPOINT ["./theflash", "server"]
+ENTRYPOINT ["/tics/theflash", "server"]
