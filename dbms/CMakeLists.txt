@@ -150,6 +150,7 @@ target_link_libraries (dbms
     clickhouse_common_config
     clickhouse_common_io
     kvproto
+    leveldb
     kv_client
     ${Protobuf_LIBRARIES}
     gRPC::grpc++_unsecure

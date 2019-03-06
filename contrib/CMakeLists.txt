@@ -1,4 +1,5 @@
 add_subdirectory (kvproto/cpp)
+add_subdirectory (leveldb)
 add_subdirectory (client-c)
 
 if (NOT MSVC)
