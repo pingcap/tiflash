@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits>
+
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeDate.h>
@@ -18,6 +20,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <ext/range.h>
 #include <common/intExp.h>
+#include <common/check_inf.h>
 #include <boost/math/common_factor.hpp>
 
 
@@ -108,7 +111,37 @@ struct PlusImpl<A,B,false>
     static inline Result apply(A a, B b)
     {
         /// Next everywhere, static_cast - so that there is no wrong result in expressions of the form Int64 c = UInt32(a) * Int32(-1).
-        return static_cast<Result>(a) + b;
+        Result ret = static_cast<Result>(a) + b;
+        if constexpr (std::is_integral_v<Result>) {
+            if constexpr (!std::is_signed_v<A> && !std::is_signed_v<B>) {
+                if (a > std::numeric_limits<Result>::max() - b) {
+                    throw Exception("overflow");
+                }
+            } else if constexpr (std::is_signed_v<A> && !std::is_signed_v<B>) {
+                if (a < 0 && static_cast<UInt64>(-a) > b) {
+                    throw Exception("overflow");
+                }
+                if (a > 0 && b > static_cast<UInt64>(std::numeric_limits<Result>::max() - a)) {
+                    throw Exception("overflow");
+                }
+            } else if constexpr (!std::is_signed_v<A> && std::is_signed_v<B>) {
+                if (b < 0 && static_cast<UInt64>(-b) > a) {
+                    throw Exception("overflow");
+                }
+                if (b > 0 && a > static_cast<UInt64>(std::numeric_limits<Result>::max() - b)) {
+                    throw Exception("overflow");
+                }
+            } else {
+                if ((a > 0 && b > std::numeric_limits<Result>::max() - a) || (a < 0 && b < std::numeric_limits<Result>::min() - a)) {
+                    throw Exception("overflow");
+                }
+            }
+        } else if constexpr (std::is_floating_point_v<Result>) {
+            if (unlikely(isInf(ret))) {
+                throw Exception("overflow");
+            }
+        }
+        return ret;
     }
 };
 
@@ -135,7 +168,17 @@ struct MultiplyImpl<A,B,false>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        return static_cast<Result>(a) * b;
+        ResultType ret = static_cast<Result>(a) * b;
+        if constexpr (std::is_integral_v<Result>) {
+            if (b != 0 && unlikely(ret / static_cast<Result>(b) != static_cast<Result>(a))) {
+                throw Exception("overflow");
+            }
+        } else if constexpr (std::is_floating_point_v<Result>) {
+            if (unlikely(isInf(ret))) {
+                throw Exception("overflow");
+            }
+        }
+        return ret;
     }
 };
 
@@ -158,11 +201,38 @@ template <typename A, typename B>
 struct MinusImpl<A,B,false>
 {
     using ResultType = typename NumberTraits::ResultOfSubtraction<A, B>::Type;
-    
+
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        return static_cast<Result>(a) - b;
+        Result ret = static_cast<Result>(a) - b;
+        if constexpr (std::is_integral_v<Result>) {
+            if constexpr (!std::is_signed_v<A> && !std::is_signed_v<B>) {
+                if (a < b) {
+                    throw Exception("overflow");
+                }
+            } else if constexpr (std::is_signed_v<A> && !std::is_signed_v<B>) {
+                if (static_cast<UInt64>(a - std::numeric_limits<Int64>::min()) > b) {
+                    throw Exception("overflow");
+                }
+            } else if constexpr (!std::is_signed_v<A> && std::is_signed_v<B>) {
+                if (b < 0 && a > static_cast<UInt64>(std::numeric_limits<Result>::max() - static_cast<Result>(-b))) {
+                    throw Exception("overflow");
+                }
+                if (b > 0 && a > static_cast<UInt64>(std::numeric_limits<Result>::max() - b)) {
+                    throw Exception("overflow");
+                }
+            } else {
+                if ((a > 0 && -b > std::numeric_limits<Result>::max() - a) || (a < 0 && -b < std::numeric_limits<Result>::min() - a)) {
+                    throw Exception("overflow");
+                }
+            }
+        } else if constexpr (std::is_floating_point_v<Result>) {
+            if (unlikely(isInf(ret))) {
+                throw Exception("overflow");
+            }
+        }
+        return ret;
     }
 };
 
