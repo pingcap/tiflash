@@ -154,6 +154,8 @@ public:
 
     size_t sizeOfData() const override
     {
+        if constexpr (IsDecimal<T>)
+            return sizeof(Data) + 32;
         return sizeof(Data);
     }
 

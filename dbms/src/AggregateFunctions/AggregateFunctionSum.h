@@ -107,7 +107,7 @@ public:
     PrecType result_prec;
 
     AggregateFunctionSum(){}
-    
+
     AggregateFunctionSum(PrecType prec, ScaleType scale) {
         SumDecimalInferer::infer(prec, scale, result_prec, result_scale);
     };
@@ -120,35 +120,58 @@ public:
         }
     }
 
+    AggregateDataPtr adjust_place(AggregateDataPtr place) const {
+        size_t pad = (32 - uint64_t(place) % 32) % 32;
+        return place + pad;
+    }
+
+    AggregateDataPtr adjust_place(ConstAggregateDataPtr place) const {
+        size_t pad = (32 - uint64_t(place) % 32) % 32;
+        return (char*)(place + pad);
+    }
+
     void create(AggregateDataPtr place) const override {
-        if constexpr (IsDecimal<T> && IsDecimal<TResult>)
-            new (place) Data(result_prec, result_scale);
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>) {
+            new (adjust_place(place)) Data(result_prec, result_scale);
+        }
         else
             new (place) Data;
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>)
+            place = adjust_place(place);
         this->data(place).add(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
     {
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>) {
+            place = adjust_place(place);
+            rhs = adjust_place(rhs);
+        }
         this->data(place).merge(this->data(rhs));
     }
 
     void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
     {
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>)
+            place = adjust_place(place);
         this->data(place).write(buf);
     }
 
     void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
     {
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>)
+            place = adjust_place(place);
         this->data(place).read(buf);
     }
 
     void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
     {
+        if constexpr (IsDecimal<T> && IsDecimal<TResult>)
+            place = adjust_place(place);
         static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
     }
 
