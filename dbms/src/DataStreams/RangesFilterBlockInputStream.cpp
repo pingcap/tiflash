@@ -35,7 +35,7 @@ Block RangesFilterBlockInputStream::readImpl()
         auto handle_bg = column->getElement(0);
         auto handle_ed = column->getElement(rows - 1);
 
-        if (handle_bg >= ranges.second || ranges.first >= handle_ed)
+        if (handle_bg >= ranges.second || ranges.first > handle_ed)
             continue;
 
         if (handle_bg >= ranges.first)
@@ -67,6 +67,8 @@ Block RangesFilterBlockInputStream::readImpl()
                 pos_ed = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
 
             size_t len = pos_ed - pos_bg;
+            if (!len)
+                continue;
             for (size_t i = 0; i < block.columns(); i++)
             {
                 ColumnWithTypeAndName & ori_column = block.getByPosition(i);

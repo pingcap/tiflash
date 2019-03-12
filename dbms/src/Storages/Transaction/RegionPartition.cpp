@@ -185,6 +185,8 @@ void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
     if (!input)
         return;
 
+    std::ignore = status;
+
     TxnMergeTreeBlockOutputStream output(*merge_tree);
     input->readPrefix();
     output.writePrefix();

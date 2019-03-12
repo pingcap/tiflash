@@ -654,6 +654,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     else
     {
         // get data block from region first.
+        extend_mutable_engine_column_names(column_names_to_read, data);
+
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
         {
             const RegionQueryInfo & region_query_info = regions_query_info[region_index];
