@@ -37,14 +37,9 @@ auto getRegionTableIds(const RegionPtr & region)
     return table_ids;
 }
 
-Int64 calculatePartitionCacheBytes(KVStore & kvstore, const std::set<RegionID> & region_ids)
+Int64 calculatePartitionCacheBytes(KVStore & kvstore, RegionID region_id)
 {
-    Int64 bytes = 0;
-    for (auto region_id : region_ids)
-    {
-        bytes += kvstore.getRegion(region_id)->dataSize();
-    }
-    return bytes;
+    return kvstore.getRegion(region_id)->dataSize();
 }
 
 // =============================================================
@@ -65,58 +60,39 @@ RegionPartition::Table & RegionPartition::getOrCreateTable(TableID table_id)
             storage = tmt_ctx.storages.get(table_id);
         }
 
-        auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-        auto partition_number = merge_tree->getData().settings.mutable_mergetree_partition_number;
-
-        std::tie(it, std::ignore) = tables.try_emplace(table_id, parent_path + "tables/", table_id, partition_number);
+        std::tie(it, std::ignore) = tables.try_emplace(table_id, parent_path + "tables/", table_id);
 
         auto & table = it->second;
-        table.partitions.persist();
+        table.regions.persist();
     }
     return it->second;
 }
 
-size_t RegionPartition::selectPartitionId(Table & table, RegionID /*region_id*/)
+RegionPartition::InternalRegion & RegionPartition::insertRegion(Table & table, RegionID region_id)
 {
-    // size_t partition_id = rng() % table.partitions.get().size();
-    size_t partition_id = (next_partition_id++) % table.partitions.get().size();
-    return partition_id;
-}
-
-std::pair<PartitionID, RegionPartition::Partition &> RegionPartition::insertRegion(Table & table, size_t partition_id, RegionID region_id)
-{
-    auto & table_partitions = table.partitions.get();
+    auto & table_regions = table.regions.get();
     // Insert table mapping.
-    table_partitions[partition_id].region_ids.emplace(region_id);
-    table.partitions.persist();
+    table.regions.get().emplace(region_id, InternalRegion(region_id));
+    table.regions.persist();
 
     // Insert region mapping.
     auto r_it = regions.find(region_id);
     if (r_it == regions.end())
         std::tie(r_it, std::ignore) = regions.try_emplace(region_id);
     RegionInfo & region_info = r_it->second;
-    region_info.table_to_partition.emplace(table.table_id, partition_id);
+    region_info.tables.emplace(table.table_id);
 
-    return {partition_id, table_partitions[partition_id]};
+    return table_regions[region_id];
 }
 
-std::pair<PartitionID, RegionPartition::Partition &> RegionPartition::getOrInsertRegion(TableID table_id, RegionID region_id)
+RegionPartition::InternalRegion & RegionPartition::getOrInsertRegion(TableID table_id, RegionID region_id)
 {
     auto & table = getOrCreateTable(table_id);
-    auto & table_partitions = table.partitions.get();
+    auto & table_regions = table.regions.get();
+    if (auto it = table_regions.find(region_id); it != table_regions.end())
+        return it->second;
 
-    for (size_t partition_index = 0; partition_index < table_partitions.size(); ++partition_index)
-    {
-        const auto & partition = table_partitions[partition_index];
-        if (partition.region_ids.find(region_id) != partition.region_ids.end())
-            return {partition_index, table_partitions[partition_index]};
-    }
-
-    // Currently region_id does not exist in any regions in this table, let's insert into one.
-    size_t partition_id = selectPartitionId(table, region_id);
-    LOG_DEBUG(log, "Table " << table_id << " assign region " << region_id << " to partition " << partition_id);
-
-    return insertRegion(table, partition_id, region_id);
+    return insertRegion(table, region_id);
 }
 
 void RegionPartition::updateRegionRange(const RegionPtr & region)
@@ -130,11 +106,10 @@ void RegionPartition::updateRegionRange(const RegionPtr & region)
         return;
 
     RegionInfo & region_info = it->second;
-    auto t_it = region_info.table_to_partition.begin();
-    while (t_it != region_info.table_to_partition.end())
+    auto t_it = region_info.tables.begin();
+    while (t_it != region_info.tables.end())
     {
-        auto table_id = t_it->first;
-        auto partition_id = t_it->second;
+        auto table_id = *t_it;
         if (TiKVRange::checkTableInvolveRange(table_id, range))
         {
             ++t_it;
@@ -149,46 +124,40 @@ void RegionPartition::updateRegionRange(const RegionPtr & region)
         }
 
         Table & table = table_it->second;
-        auto & partition = table.partitions.get().at(partition_id);
-        partition.region_ids.erase(region_id);
-        table.partitions.persist();
+        table.regions.get().erase(region_id);
+        table.regions.persist();
 
         // remove from region mapping
-        t_it = region_info.table_to_partition.erase(t_it);
+        t_it = region_info.tables.erase(t_it);
     }
 }
 
-bool RegionPartition::shouldFlush(const Partition & partition)
+bool RegionPartition::shouldFlush(const InternalRegion & region)
 {
-    if (partition.pause_flush)
+    if (region.pause_flush)
         return false;
-    if (partition.must_flush)
+    if (region.must_flush)
         return true;
-    if (!partition.updated || !partition.cache_bytes)
+    if (!region.updated || !region.cache_bytes)
         return false;
-    auto period_time = Clock::now() - partition.last_flush_time;
+    auto period_time = Clock::now() - region.last_flush_time;
     for (auto && [th_bytes, th_duration] : flush_thresholds)
     {
-        if (partition.cache_bytes >= th_bytes && period_time >= th_duration)
+        if (region.cache_bytes >= th_bytes && period_time >= th_duration)
             return true;
     }
     return false;
 }
 
-void RegionPartition::flushPartition(TableID table_id, PartitionID partition_id)
+void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
 {
     if (log->debug())
     {
         auto & table = getOrCreateTable(table_id);
-        auto & partition = table.partitions.get()[partition_id];
-        std::string region_ids;
-        for (auto id : partition.region_ids)
-            region_ids += DB::toString(id) + ",";
-        if (!region_ids.empty())
-            region_ids.pop_back();
+        auto & region = table.regions.get()[region_id];
         LOG_DEBUG(log,
-            "Flush regions - table_id: " + DB::toString(table_id) + ", partition_id: " + DB::toString(partition_id) + ", ~ "
-                + DB::toString(partition.cache_bytes) + " bytes, containing region_ids: " + region_ids);
+            "Flush regions - table_id: " + DB::toString(table_id) + ", ~ "
+                + DB::toString(region.cache_bytes) + " bytes, containing region_ids: " + DB::toString(region_id));
     }
 
     TMTContext & tmt = context.getTMTContext();
@@ -200,8 +169,7 @@ void RegionPartition::flushPartition(TableID table_id, PartitionID partition_id)
     // drop table and create another with same name, but the previous one will still flush
     if (storage == nullptr)
     {
-
-        LOG_ERROR(log, "table " << table_id << " flush partition " << partition_id << " , but storage is not found");
+        LOG_ERROR(log, "table " << table_id << " flush region " << region_id << " , but storage is not found");
         return;
     }
 
@@ -211,12 +179,13 @@ void RegionPartition::flushPartition(TableID table_id, PartitionID partition_id)
     const auto & columns = merge_tree->getColumns();
     // TODO: confirm names is right
     Names names = columns.getNamesOfPhysical();
-
-    BlockInputStreamPtr input = getBlockInputStreamByPartition(table_id, partition_id, table_info, columns, names, true, false, false, 0);
+    std::vector<TiKVKey> keys;
+    auto [input, status] =
+        getBlockInputStreamByRegion(table_id, region_id, -1, table_info, columns, names, false, false, 0, &keys);
     if (!input)
         return;
 
-    TxnMergeTreeBlockOutputStream output(*merge_tree, partition_id);
+    TxnMergeTreeBlockOutputStream output(*merge_tree);
     input->readPrefix();
     output.writePrefix();
     while (true)
@@ -228,6 +197,17 @@ void RegionPartition::flushPartition(TableID table_id, PartitionID partition_id)
     }
     output.writeSuffix();
     input->readSuffix();
+
+    // remove data in region
+    {
+        auto & kvstore = context.getTMTContext().kvstore;
+        auto region = kvstore->getRegion(region_id);
+        if (!region)
+            return;
+        auto scanner = region->createCommittedScanRemover(table_id);
+        for (const auto & key : keys)
+            scanner->remove(key);
+    }
 }
 
 // =============================================================
@@ -246,7 +226,8 @@ static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
 RegionPartition::RegionPartition(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher)
     : parent_path(parent_path_),
-      flush_thresholds{
+      flush_thresholds
+      {
           {FTH_BYTES_1, FTH_PERIOD_1},
           {FTH_BYTES_2, FTH_PERIOD_2},
           {FTH_BYTES_3, FTH_PERIOD_3},
@@ -268,43 +249,41 @@ RegionPartition::RegionPartition(Context & context_, const std::string & parent_
         TableID table_id = std::stoull(name);
         auto p = tables.try_emplace(table_id, parent_path + "tables/", table_id);
         Table & table = p.first->second;
-        for (PartitionID partition_id = 0; partition_id < table.partitions.get().size(); ++partition_id)
-        {
-            auto & partition = table.partitions.get()[partition_id];
-            auto it = partition.region_ids.begin();
-            while (it != partition.region_ids.end())
-            {
-                // Update cache infos
-                auto region_id = *it;
-                auto region_ptr = region_fetcher(region_id);
-                if (!region_ptr)
-                {
-                    // It could happen that process crash after region split or region snapshot apply,
-                    // and region has not been persisted, but region <-> partition mapping does.
-                    it = partition.region_ids.erase(it);
-                    LOG_WARNING(log, "Region " << region_id << " not found from KVStore, dropped.");
-                    continue;
-                }
-                else
-                {
-                    ++it;
-                }
-                partition.cache_bytes += region_ptr->dataSize();
 
-                // Update region_id -> table_id & partition_id
+        for (auto it = table.regions.get().begin(); it != table.regions.get().end();)
+        {
+            auto region_id = it->first;
+            auto & region = it->second;
+            auto region_ptr = region_fetcher(region_id);
+            if (!region_ptr)
+            {
+                // It could happen that process crash after region split or region snapshot apply,
+                // and region has not been persisted, but region <-> partition mapping does.
+                it = table.regions.get().erase(it);
+                LOG_WARNING(log, "Region " << region_id << " not found from KVStore, dropped.");
+                continue;
+            }
+            else
+            {
+                ++it;
+            }
+            region.cache_bytes += region_ptr->dataSize();
+
+            // Update region_id -> table_id & partition_id
+            {
                 auto it = regions.find(region_id);
                 if (it == regions.end())
                     std::tie(it, std::ignore) = regions.try_emplace(region_id);
                 RegionInfo & region_info = it->second;
-                region_info.table_to_partition.emplace(table_id, partition_id);
+                region_info.tables.emplace(table_id);
             }
         }
 
-        table.partitions.persist();
+        table.regions.persist();
     }
 }
 
-void RegionPartition::updateRegion(const RegionPtr & region, size_t before_cache_bytes, TableIDSet relative_table_ids)
+void RegionPartition::updateRegion(const RegionPtr & region, size_t before_cache_bytes, const TableIDSet & relative_table_ids)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -312,9 +291,9 @@ void RegionPartition::updateRegion(const RegionPtr & region, size_t before_cache
     Int64 delta = region->dataSize() - before_cache_bytes;
     for (auto table_id : relative_table_ids)
     {
-        auto & partition = getOrInsertRegion(table_id, region_id).second;
-        partition.updated = true;
-        partition.cache_bytes += delta;
+        auto & region = getOrInsertRegion(table_id, region_id);
+        region.updated = true;
+        region.cache_bytes += delta;
     }
 }
 
@@ -326,92 +305,58 @@ void RegionPartition::applySnapshotRegion(const RegionPtr & region)
     auto table_ids = getRegionTableIds(region);
     for (auto table_id : table_ids)
     {
-        auto & partition = getOrInsertRegion(table_id, region_id).second;
-        partition.must_flush = true;
-        partition.cache_bytes += region->dataSize();
+        auto & internal_region = getOrInsertRegion(table_id, region_id);
+        internal_region.must_flush = true;
+        internal_region.cache_bytes += region->dataSize();
     }
 }
 
 void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPtr> split_regions)
 {
-    struct MoveAction
+    std::lock_guard<std::mutex> lock(mutex);
+
+    auto region_id = region->id();
+    auto it = regions.find(region_id);
+
+    if (it == regions.end())
     {
-        StorageMergeTree * storage;
-        PartitionID current_partition_id;
-        PartitionID new_partition_id;
-        Field start;
-        Field end;
-    };
-    std::vector<MoveAction> move_actions;
+        // If region doesn't exist, usually means it does not contain any data we interested. Just ignore it.
+        return;
+    }
 
+    RegionInfo & region_info = it->second;
+    auto & tmt_ctx = context.getTMTContext();
+    for (auto table_id : region_info.tables)
     {
-        std::lock_guard<std::mutex> lock(mutex);
-
-        auto region_id = region->id();
-        auto it = regions.find(region_id);
-
-        if (it == regions.end())
+        auto storage = tmt_ctx.storages.get(table_id);
+        if (storage == nullptr)
         {
-            // If region doesn't exist, usually means it does not contain any data we interested. Just ignore it.
-            return;
+            throw Exception("Table " + DB::toString(table_id) + " not found", ErrorCodes::UNKNOWN_TABLE);
         }
 
-        RegionInfo & region_info = it->second;
-        auto & tmt_ctx = context.getTMTContext();
-        for (auto [table_id, current_partition_id] : region_info.table_to_partition)
+        auto & table = getOrCreateTable(table_id);
+
+        for (const RegionPtr & split_region : split_regions)
         {
-            auto storage = tmt_ctx.storages.get(table_id);
-            if (storage == nullptr)
-            {
-                throw Exception("Table " + DB::toString(table_id) + " not found", ErrorCodes::UNKNOWN_TABLE);
-            }
-
-            auto * merge_tree_storage = dynamic_cast<StorageMergeTree *>(storage.get());
-
-            auto & table = getOrCreateTable(table_id);
-            auto & table_partitions = table.partitions.get();
-            // Tables which have only one partition don't need to move data.
-            if (table_partitions.size() == 1)
+            const auto range = split_region->getRange();
+            if (!TiKVRange::checkTableInvolveRange(table_id, range))
                 continue;
 
-            for (const RegionPtr & split_region : split_regions)
-            {
-                const auto range = split_region->getRange();
-                // This region definitely does not contain any data in this table.
-                if (!TiKVRange::checkTableInvolveRange(table_id, range))
-                    continue;
+            auto split_region_id = split_region->id();
 
-                // Select another partition other than current_partition_id;
-                auto split_region_id = split_region->id();
-                size_t new_partition_id;
-                while ((new_partition_id = selectPartitionId(table, split_region_id)) == current_partition_id) {}
-                LOG_DEBUG(log, "Table " << table.table_id << " assign region " << split_region_id << " to partition " << new_partition_id);
-
-                auto [start_field, end_field] = getRegionRangeField(range.first, range.second, table_id);
-                move_actions.push_back({merge_tree_storage, current_partition_id, new_partition_id, start_field, end_field});
-
-                auto & partition = insertRegion(table, new_partition_id, split_region_id).second;
-                // Mark flush flag.
-                partition.must_flush = true;
-            }
+            insertRegion(table, split_region_id);
         }
-
-        updateRegionRange(region);
     }
 
-    // FIXME: move data should be locked for safety, and do it aysnchronized.
-    for (const auto & action : move_actions)
-    {
-        moveRangeBetweenPartitions(context, action.storage, action.current_partition_id, action.new_partition_id, action.start, action.end);
-    }
+    updateRegionRange(region);
 }
 
 void RegionPartition::removeRegion(const RegionPtr & region)
 {
-    std::unordered_map<TableID, PartitionID> table_partitions;
-    auto region_id = region->id();
-    auto region_cache_bytes = region->dataSize();
+    std::unordered_set<TableID> tables;
     {
+        auto region_id = region->id();
+
         std::lock_guard<std::mutex> lock(mutex);
 
         auto r_it = regions.find(region_id);
@@ -421,24 +366,20 @@ void RegionPartition::removeRegion(const RegionPtr & region)
             return;
         }
         RegionInfo & region_info = r_it->second;
-        table_partitions.swap(region_info.table_to_partition);
+        tables.swap(region_info.tables);
 
         regions.erase(region_id);
 
-        for (auto [table_id, partition_id] : table_partitions)
+        for (auto table_id : tables)
         {
             auto & table = getOrCreateTable(table_id);
-            Partition & partition = table.partitions.get().at(partition_id);
-            partition.cache_bytes -= region_cache_bytes;
-            partition.region_ids.erase(region_id);
-            table.partitions.persist();
+            table.regions.get().erase(region_id);
+            table.regions.persist();
         }
     }
 
-    // Note that we cannot use lock to protect following code, as deleteRangeInPartition will result in
-    // calling getBlockInputStreamByPartition and lead to dead lock.
     auto & tmt_ctx = context.getTMTContext();
-    for (auto [table_id, partition_id] : table_partitions)
+    for (auto table_id : tables)
     {
         auto storage = tmt_ctx.storages.get(table_id);
         if (storage == nullptr)
@@ -448,42 +389,40 @@ void RegionPartition::removeRegion(const RegionPtr & region)
         }
         auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
         auto [start_key, end_key] = region->getRange();
-        auto [start_field, end_field] = getRegionRangeField(start_key, end_key, table_id);
-        deleteRangeInPartition(context, merge_tree, partition_id, start_field, end_field);
+        auto [start_handle, end_handle] = getRegionRangeField(start_key, end_key, table_id);
+        deleteRange(context, merge_tree, start_handle, end_handle);
     }
 }
 
 bool RegionPartition::tryFlushRegions()
 {
     KVStore & kvstore = *context.getTMTContext().kvstore;
-    std::set<std::pair<TableID, PartitionID>> to_flush;
+    std::set<std::pair<TableID, RegionID>> to_flush;
     {
-        traversePartitions([&](TableID table_id, PartitionID partition_id, Partition & partition) {
-            if (shouldFlush(partition))
-            {
-                to_flush.emplace(table_id, partition_id);
+        traverseRegions([&](TableID table_id, InternalRegion& region) {
+            if (shouldFlush(region)) {
+                to_flush.emplace(table_id, region.region_id);
                 // Stop other flush threads.
-                partition.pause_flush = true;
+                region.pause_flush = true;
             }
         });
     }
 
-    for (auto [table_id, partition_id] : to_flush)
+    for (auto [table_id, region_id] : to_flush)
     {
-        flushPartition(table_id, partition_id);
+        flushRegion(table_id, region_id);
     }
 
     {
         // Now reset status infomations.
         Timepoint now = Clock::now();
-        traversePartitions([&](TableID table_id, PartitionID partition_id, Partition & partition) {
-            if (to_flush.count({table_id, partition_id}))
-            {
-                partition.pause_flush = false;
-                partition.must_flush = false;
-                partition.updated = false;
-                partition.cache_bytes = calculatePartitionCacheBytes(kvstore, partition.region_ids);
-                partition.last_flush_time = now;
+        traverseRegions([&](TableID table_id, InternalRegion& region) {
+            if (to_flush.count({table_id, region.region_id})) {
+                region.pause_flush = false;
+                region.must_flush = false;
+                region.updated = false;
+                region.cache_bytes = calculatePartitionCacheBytes(kvstore, region.region_id);
+                region.last_flush_time = now;
             }
         });
     }
@@ -491,39 +430,36 @@ bool RegionPartition::tryFlushRegions()
     return !to_flush.empty();
 }
 
-void RegionPartition::traversePartitions(std::function<void(TableID, PartitionID, Partition &)> callback)
+void RegionPartition::traverseRegions(std::function<void(TableID, InternalRegion&)> && callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto && [table_id, table] : tables)
     {
-        size_t id = 0;
-        for (auto & partition : table.partitions.get())
+        for (auto & region_info : table.regions.get())
         {
-            callback(table_id, id, partition);
-            ++id;
+            callback(table_id, region_info.second);
         }
     }
 }
 
-void RegionPartition::traverseRegionsByTablePartition(
-    const TableID table_id, const PartitionID partition_id, std::function<void(Regions)> callback)
+void RegionPartition::traverseRegionsByTable(
+    const TableID table_id, std::function<void(Regions)> && callback)
 {
     auto & kvstore = context.getTMTContext().kvstore;
-    Regions partition_regions;
+    Regions regions;
     {
         std::lock_guard<std::mutex> lock(mutex);
         auto & table = getOrCreateTable(table_id);
-        auto & partition = table.partitions.get()[partition_id];
 
-        for (auto & region_id : partition.region_ids)
+        for (const auto & region_info : table.regions.get())
         {
-            auto region = kvstore->getRegion(region_id);
+            auto region = kvstore->getRegion(region_info.second.region_id);
             if (!region)
-                throw Exception("Region " + DB::toString(region_id) + " not found!", ErrorCodes::LOGICAL_ERROR);
-            partition_regions.push_back(region);
+                throw Exception("Region " + DB::toString(region_info.second.region_id) + " not found!", ErrorCodes::LOGICAL_ERROR);
+            regions.push_back(region);
         }
     }
-    callback(partition_regions);
+    callback(regions);
 }
 
 void RegionPartition::dumpRegionMap(RegionPartition::RegionMap & res)

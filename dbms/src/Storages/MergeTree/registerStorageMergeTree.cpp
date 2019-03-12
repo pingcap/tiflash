@@ -173,7 +173,7 @@ static void setGraphitePatternsFromConfig(const Context & context,
     params.path_column_name = config.getString(config_element + ".path_column_name", "Path");
     params.time_column_name = config.getString(config_element + ".time_column_name", "Time");
     params.value_column_name = config.getString(config_element + ".value_column_name", "Value");
-    params.version_column_name = config.getString(config_element + ".version_column_name", "Timestamp");
+    params.version_column_name = config.getString(config_element + ".target_column_name", "Timestamp");
 
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_element, keys);
@@ -191,7 +191,7 @@ static void setGraphitePatternsFromConfig(const Context & context,
         else if (key == "path_column_name"
             || key == "time_column_name"
             || key == "value_column_name"
-            || key == "version_column_name")
+            || key == "target_column_name")
         {
             /// See above.
         }

@@ -40,10 +40,14 @@ public:
     pingcap::kv::RegionVerID getRegionVerID() const {
         return pingcap::kv::RegionVerID {
             region.id(),
-            region.region_epoch().conf_ver(),
-            region.region_epoch().version()
+            conf_ver(),
+            version()
         };
     }
+
+    UInt64 version() const;
+
+    UInt64 conf_ver() const;
 
     raft_serverpb::RaftApplyState getApplyState() const;
 

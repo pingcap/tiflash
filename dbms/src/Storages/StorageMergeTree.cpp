@@ -182,23 +182,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
 
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
-        NameSet partitions;
-        if (insert_query && insert_query->partition_expression_list)
-            partitions = data.getPartitionIDsInLiteral(insert_query->partition_expression_list, context);
-        else if (delete_query && delete_query->partition_expression_list)
-            partitions = data.getPartitionIDsInLiteral(delete_query->partition_expression_list, context);
-        if (partitions.size() > 1)
-            throw Exception("INSERT into a TMT table should only specify one partition.", ErrorCodes::BAD_ARGUMENTS);
-
-        if (partitions.size() == 1)
-        {
-            UInt64 partition_id = parse<UInt64>(*(partitions.begin()));
-            res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this, partition_id);
-        }
-        else if (delete_query)
-        {
-            throw Exception("DELETE from a TMT table should specify one partition.", ErrorCodes::BAD_ARGUMENTS);
-        }
+        res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this);
 
         if (insert_query)
         {

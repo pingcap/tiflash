@@ -43,10 +43,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     }
 
     // context may be null in test cases.
-    if (context)
-        kvstore->onSnapshot(region, context);
-    else
-        kvstore->onSnapshot(region, nullptr);
+    kvstore->onSnapshot(region, context);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot done.");
 }

@@ -53,9 +53,6 @@ void KVStore::onSnapshot(const RegionPtr & region, Context * context)
     TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
     auto region_id = region->id();
 
-    // Remove old region data in partition before apply snapshot.
-    // TODO support atomic remove & insert new region.
-
     RegionPtr old_region;
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -64,8 +61,8 @@ void KVStore::onSnapshot(const RegionPtr & region, Context * context)
             old_region = it->second;
     }
 
-    if (tmt_ctx && old_region)
-        tmt_ctx->region_partition.removeRegion(old_region);
+    if (old_region != nullptr && old_region->getIndex() >= region->getIndex())
+        return;
 
     region_persister.persist(region);
 
@@ -149,16 +146,15 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-
         if (!split_regions.empty())
         {
-            // Persist current region and split regions, and mange data in partition
-            // Add to regions map so that queries can see them.
-            // TODO: support atomic or idempotent operation.
             {
                 std::lock_guard<std::mutex> lock(mutex);
 
-                curr_region->swap(*new_region);
+                regions[new_region->id()] = new_region;
+
+                curr_region = new_region;
+
                 for (const auto & region : split_regions)
                 {
                     auto [it, ok] = regions.emplace(region->id(), region);
@@ -170,12 +166,14 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                 }
             }
 
+            {
+                region_persister.persist(curr_region);
+                for (const auto & region : split_regions)
+                    region_persister.persist(region);
+            }
+
             if (tmt_ctx)
                 tmt_ctx->region_partition.splitRegion(curr_region, split_regions);
-
-            region_persister.persist(curr_region);
-            for (const auto & region : split_regions)
-                region_persister.persist(region);
         }
         else
         {
@@ -250,7 +248,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context)
     return persist_job || gc_job;
 }
 
-void KVStore::removeRegion(RegionID region_id, Context * context)
+void KVStore::removeRegion(RegionID region_id, Context *)
 {
     RegionPtr region;
     {
@@ -261,8 +259,6 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
     }
 
     region_persister.drop(region_id);
-    if (context)
-        context->getTMTContext().region_partition.removeRegion(region);
 }
 
 } // namespace DB

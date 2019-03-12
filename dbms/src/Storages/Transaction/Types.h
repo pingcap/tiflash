@@ -35,6 +35,8 @@ using RegionKey = Int64;
 
 using RegionID = UInt64;
 
+using RegionVersion = UInt64;
+
 enum : RegionID
 {
     InvalidRegionID = 0

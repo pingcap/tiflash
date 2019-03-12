@@ -23,13 +23,14 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 // Dump region-partition relationship
 // Usage:
 //   ./storage-client.sh "DBGInvoke dump_region_partition()"
-void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Printer output);
+void dbgFuncRegion(Context& context, const ASTs& args, DBGInvoker::Printer output);
 
 // Remove region's data from partition
 // Usage:
 //   ./storage-client.sh "DBGInvoke rm_region_data(region_id)"
 void dbgFuncRegionRmData(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+/*
 // Check each partition: rows == sum(regions rows)
 // Usage:
 //   ./storage-client.sh "DBGInvoke check_partition_region(database_name, table_name)"
@@ -44,5 +45,6 @@ void dbgFuncScanPartitionExtraRows(Context & context, const ASTs & args, DBGInvo
 // Usage:
 //   ./storage-client.sh "DBGInvoke check_region_correct(database_name, table_name)"
 void dbgFuncCheckRegionCorrect(Context & context, const ASTs & args, DBGInvoker::Printer output);
+*/
 
 }

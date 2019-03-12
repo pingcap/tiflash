@@ -46,10 +46,13 @@ Region::KVMap::iterator Region::removeDataByWriteIt(const KVMap::iterator & writ
     return write_cf.erase(write_it);
 }
 
-Region::ReadInfo Region::readDataByWriteIt(const KVMap::iterator & write_it)
+Region::ReadInfo Region::readDataByWriteIt(const KVMap::iterator & write_it, std::vector<TiKVKey> * keys)
 {
     auto & write_key = write_it->first;
     auto & write_value = write_it->second;
+
+    if (keys)
+        (*keys).push_back(write_key);
 
     auto [write_type, prewrite_ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
 
@@ -160,7 +163,7 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
     return table_id;
 }
 
-UInt64 Region::getIndex() { return meta.appliedIndex(); }
+UInt64 Region::getIndex() const { return meta.appliedIndex(); }
 
 RegionPtr Region::splitInto(const RegionMeta & meta) const
 {
@@ -557,6 +560,31 @@ void Region::wait_index(UInt64 index)
         LOG_TRACE(log, "begin to wait learner index : " + std::to_string(index));
         meta.wait_index(index);
     }
+}
+
+UInt64 Region::version() const { return meta.version(); }
+
+UInt64 Region::conf_ver() const { return meta.conf_ver(); }
+
+std::pair<HandleID, HandleID> Region::getRegionRangeField(TableID table_id) const
+{
+    return ::DB::getRegionRangeField(getRange(), table_id);
+}
+
+std::pair<HandleID, HandleID> getRegionRangeField(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
+{
+    return getRegionRangeField(range.first, range.second, table_id);
+}
+
+std::pair<HandleID, HandleID> getRegionRangeField(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
+{
+    // Example:
+    // Range: [100_10, 200_5), table_id: 100, then start_handle: 10, end_handle: MAX_HANDLE_ID
+
+    HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
+    HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
+
+    return {start_handle, end_handle};
 }
 
 } // namespace DB

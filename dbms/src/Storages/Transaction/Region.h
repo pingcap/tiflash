@@ -21,6 +21,28 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
+using HandleRange = std::pair<HandleID, HandleID>;
+
+struct RegionQueryInfo
+{
+    RegionID region_id;
+    UInt64 version;
+    HandleRange range_in_table;
+
+    bool operator < (const RegionQueryInfo & o) const
+    {
+        return range_in_table < o.range_in_table;
+    }
+
+    bool operator == (const RegionQueryInfo & o) const
+    {
+        return range_in_table == o.range_in_table;
+    }
+};
+
+std::pair<HandleID, HandleID> getRegionRangeField(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
+
+std::pair<HandleID, HandleID> getRegionRangeField(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -97,7 +119,7 @@ public:
             return InvalidTableID;
         }
 
-        auto next() { return store->readDataByWriteIt(write_map_it++); }
+        auto next(std::vector<TiKVKey> * keys = nullptr) { return store->readDataByWriteIt(write_map_it++, keys); }
 
         void remove(TableID remove_table_id)
         {
@@ -107,6 +129,14 @@ public:
                     it = store->removeDataByWriteIt(it);
                 else
                     ++it;
+            }
+        }
+
+        void remove(const TiKVKey & key)
+        {
+            if (auto it = store->write_cf.find(key); it != store->write_cf.end())
+            {
+                store->removeDataByWriteIt(it);
             }
         }
 
@@ -187,7 +217,12 @@ public:
 
     void wait_index(UInt64 index);
 
-    UInt64 getIndex();
+    UInt64 getIndex() const;
+
+    RegionVersion version() const;
+    RegionVersion conf_ver() const;
+
+    std::pair<HandleID, HandleID> getRegionRangeField(TableID table_id) const;
 
 private:
     // Private methods no need to lock mutex, normally
@@ -199,7 +234,7 @@ private:
     KVMap & getCf(const std::string & cf);
 
     using ReadInfo = std::tuple<UInt64, UInt8, UInt64, TiKVValue>;
-    ReadInfo readDataByWriteIt(const KVMap::iterator & write_it);
+    ReadInfo readDataByWriteIt(const KVMap::iterator & write_it, std::vector<TiKVKey> * keys=nullptr);
     KVMap::iterator removeDataByWriteIt(const KVMap::iterator & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);

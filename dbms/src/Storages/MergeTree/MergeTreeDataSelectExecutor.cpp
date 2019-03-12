@@ -38,6 +38,8 @@ namespace std
 #include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
 #include <DataStreams/DeletingDeletedBlockInputStream.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
+#include <DataStreams/RangesFilterBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
 
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -153,6 +155,61 @@ void extend_mutable_engine_column_names(Names& column_names_to_read, const Merge
 
     std::sort(column_names_to_read.begin(), column_names_to_read.end());
     column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
+}
+
+MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & index, const Int64 handle_bg,
+    const Int64 handle_ed, MarkRanges mark_ranges, size_t min_marks_for_seek, const Settings & settings)
+{
+    MarkRanges res;
+
+    size_t marks_count = index.at(0)->size();
+    if (marks_count == 0)
+        return res;
+
+    reverse(mark_ranges.begin(), mark_ranges.end());
+    MarkRanges ranges_stack = std::move(mark_ranges);
+
+    Field index_left;
+    Field index_right;
+
+    while (!ranges_stack.empty())
+    {
+        MarkRange range = ranges_stack.back();
+        ranges_stack.pop_back();
+
+        index[0]->get(range.begin, index_left);
+
+        if (range.end != marks_count)
+            index[0]->get(range.end, index_right);
+        else
+            index_right = Field(std::numeric_limits<Int64>::max());
+
+        Int64 index_left_handle = index_left.get<Int64>();
+        Int64 index_right_handle = index_right.get<Int64>();
+
+        if (handle_bg >= index_right_handle || index_left_handle >= handle_ed)
+            continue;
+
+        if (range.end == range.begin + 1)
+        {
+            if (res.empty() || range.begin - res.back().end > min_marks_for_seek)
+                res.push_back(range);
+            else
+                res.back().end = range.end;
+        }
+        else
+        {
+            size_t step = (range.end - range.begin - 1) / settings.merge_tree_coarse_index_granularity + 1;
+            size_t end;
+
+            for (end = range.end; end > range.begin + step; end -= step)
+                ranges_stack.push_back(MarkRange(end - step, end));
+
+            ranges_stack.push_back(MarkRange(range.begin, end));
+        }
+    }
+
+    return res;
 }
 
 BlockInputStreams MergeTreeDataSelectExecutor::read(
@@ -542,16 +599,29 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
     /// @todo Make sure partition select works properly when sampling is used!
 
-    NameSet specific_partitions;
-    bool use_specific_partitions = false;
-    if (const auto * select = typeid_cast<const ASTSelectQuery *>(query_info.query.get()))
+    // TODO: set regions_query_info from setting.
+
+    std::vector<RegionQueryInfo> regions_query_info;
+    std::vector<bool> regions_query_res;
+    BlockInputStreams region_block_data;
+
+    TMTContext & tmt = context.getTMTContext();
+
+    if (is_txn_engine)
     {
-        if (select->partition_expression_list)
-        {
-            specific_partitions = data.getPartitionIDsInLiteral(select->partition_expression_list, context);
-            use_specific_partitions = true;
-        }
+        tmt.region_partition.traverseRegionsByTable(data.table_info.id, [&](Regions regions){
+            for (const auto & region : regions)
+            {
+                regions_query_info.push_back({region->id(), region->version(), region->getRegionRangeField(data.table_info.id)});
+            }
+        });
     }
+
+    std::sort(regions_query_info.begin(), regions_query_info.end());
+    size_t region_cnt = regions_query_info.size();
+    std::vector<RangesInDataParts> region_range_parts(region_cnt);
+    regions_query_res.assign(region_cnt, true);
+    region_block_data.assign(region_cnt, nullptr);
 
     RangesInDataParts parts_with_ranges;
 
@@ -568,8 +638,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             ranges.ranges = MarkRanges{MarkRange{0, part->marks_count}};
 
         /// Make sure this part is in mark range and contained by valid partitions.
-        if (!ranges.ranges.empty()
-            && (specific_partitions.empty() || specific_partitions.find(part->partition.getID(data)) != specific_partitions.end()))
+        if (!ranges.ranges.empty())
         {
             parts_with_ranges.push_back(ranges);
 
@@ -579,8 +648,64 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
     }
 
-    LOG_DEBUG(log, "Selected " << parts.size() << " parts by date, " << parts_with_ranges.size() << " parts by key, "
-        << sum_marks << " marks to read from " << sum_ranges << " ranges");
+    if (!is_txn_engine)
+        LOG_DEBUG(log, "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, "
+            << sum_marks << " marks to read from " << sum_ranges << " ranges");
+    else
+    {
+        // get data block from region first.
+        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+        {
+            const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+
+            auto [region_input_stream, status] = tmt.region_partition.getBlockInputStreamByRegion(
+                data.table_info.id, region_query_info.region_id, region_query_info.version,
+                data.table_info, data.getColumns(), column_names_to_read,
+                true, query_info.resolve_locks, query_info.read_tso);
+            if (status != RegionPartition::OK)
+            {
+                regions_query_res[region_index] = false;
+                LOG_INFO(log, "Region " << region_query_info.region_id << ", version " << regions_query_info[region_index].version
+                                        <<  ", handle range [" << regions_query_info[region_index].range_in_table.first
+                                        << ", " << regions_query_info[region_index].range_in_table.second << ") , status "
+                                        << RegionPartition::RegionReadStatusString(status));
+                continue;
+            }
+            region_block_data[region_index] = region_input_stream;
+        }
+
+        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+        {
+            if (!regions_query_res[region_index])
+                continue;
+
+            size_t sum_marks = 0;
+            size_t sum_ranges = 0;
+            for (const RangesInDataPart & ranges : parts_with_ranges)
+            {
+                MarkRanges mark_ranges = MarkRangesFromRegionRange(ranges.data_part->index,
+                                                                   regions_query_info[region_index].range_in_table.first,
+                                                                   regions_query_info[region_index].range_in_table.second,
+                                                                   ranges.ranges,
+                                                                   (settings.merge_tree_min_rows_for_seek
+                                                                       + data.index_granularity - 1)
+                                                                       / data.index_granularity,
+                                                                   settings);
+                if (mark_ranges.empty())
+                    continue;
+                region_range_parts[region_index].push_back({ranges.data_part, ranges.part_index_in_query, mark_ranges});
+                sum_ranges += mark_ranges.size();
+                for (const auto & range : mark_ranges)
+                    sum_marks += range.end - range.begin;
+            }
+
+            LOG_TRACE(log, "Region " << regions_query_info[region_index].region_id << ", version "
+                << regions_query_info[region_index].version
+                <<  ", handle range [" << regions_query_info[region_index].range_in_table.first
+                << ", " << regions_query_info[region_index].range_in_table.second << "), selected "
+                << parts.size() << " parts, " << sum_marks << " marks to read from " << sum_ranges << " ranges");
+        }
+    }
 
     if (parts_with_ranges.empty() && !is_txn_engine)
         return {};
@@ -591,6 +716,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
     BlockInputStreams res;
 
+    // TODO: By now, selraw will output all parts and all regions. Fix it if needed.
     if (is_txn_engine)
     {
         bool use_uncompressed_cache = settings.use_uncompressed_cache;
@@ -614,15 +740,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
             if (!select.no_kvstore)
             {
-                TMTContext &tmt = context.getTMTContext();
-                for (UInt64 partition_id = 0; partition_id < data.settings.mutable_mergetree_partition_number;
-                     ++partition_id) {
-                    if (use_specific_partitions
-                        && specific_partitions.find(toString(partition_id)) == specific_partitions.end())
+                for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                {
+                    if (!regions_query_res[region_index])
                         continue;
-                    auto region_input_stream = tmt.region_partition.getBlockInputStreamByPartition(
-                        data.table_info.id, partition_id, data.table_info, data.getColumns(), column_names_to_read,
-                        false, true, query_info.resolve_locks, query_info.read_tso);
+                    auto region_input_stream = region_block_data[region_index];
                     if (region_input_stream)
                         res.emplace_back(region_input_stream);
                 }
@@ -632,24 +754,23 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         {
             extend_mutable_engine_column_names(column_names_to_read, data);
 
-            std::unordered_map<UInt64, RangesInDataParts> partitions;
-            for (size_t part_index = 0; part_index < parts_with_ranges.size(); ++part_index)
-            {
-                const RangesInDataPart & part = parts_with_ranges[part_index];
-                // TODO: use part.data_part->info.partition_id?
-                UInt64 partition_id = part.data_part->partition.value[0].get<UInt64>();
-                partitions[partition_id].emplace_back(part);
-            }
+            std::vector<std::vector<size_t>> region_streams(num_streams);
 
-            TMTContext & tmt = context.getTMTContext();
-            for (UInt64 partition_id = 0; partition_id < data.settings.mutable_mergetree_partition_number; ++partition_id)
+            for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                region_streams[region_index % num_streams].push_back(region_index);
+
+            for (const auto & region_idx_list : region_streams)
             {
-                BlockInputStreams merging;
-                const auto partition_it = partitions.find(partition_id);
-                if (partition_it != partitions.cend())
+                BlockInputStreams union_regions_stream;
+                for (size_t region_index : region_idx_list)
                 {
-                    auto parts = partition_it->second;
-                    for (const auto & part : parts)
+                    if (!regions_query_res[region_index])
+                        continue;
+
+                    const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+
+                    BlockInputStreams merging;
+                    for (const RangesInDataPart & part : region_range_parts[region_index])
                     {
                         BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(
                             data, part.data_part, max_block_size, settings.preferred_block_size_bytes,
@@ -657,37 +778,35 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                             use_uncompressed_cache, prewhere_actions, prewhere_column, true,
                             settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size,
                             true, true, virt_column_names, part.part_index_in_query);
+
                         source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream,
-                            data.getPrimaryExpression());
+                                                                                     data.getPrimaryExpression());
 
-                        BlockInputStreamPtr version_filtered_stream = std::make_shared<VersionFilterBlockInputStream>(
+                        source_stream = std::make_shared<RangesFilterBlockInputStream>(source_stream, region_query_info.range_in_table);
+
+                        source_stream = std::make_shared<VersionFilterBlockInputStream>(
                             source_stream, MutableSupport::version_column_name, query_info.read_tso);
-                        merging.emplace_back(version_filtered_stream);
+                        merging.emplace_back(source_stream);
                     }
-                }
-
-                if (!select.no_kvstore && (!use_specific_partitions ||
-                    specific_partitions.find(toString(partition_id)) != specific_partitions.end()))
-                {
-                    auto region_input_stream = tmt.region_partition.getBlockInputStreamByPartition(
-                        data.table_info.id, partition_id, data.table_info, data.getColumns(), column_names_to_read,
-                        false, true, query_info.resolve_locks, query_info.read_tso);
+                    auto region_input_stream = region_block_data[region_index];
                     if (region_input_stream)
                     {
-                        BlockInputStreamPtr version_filtered_stream = std::make_shared<VersionFilterBlockInputStream>(
+                        region_input_stream = std::make_shared<ExpressionBlockInputStream>(region_input_stream,
+                                                                                           data.getPrimaryExpression());
+                        region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
                             region_input_stream, MutableSupport::version_column_name, query_info.read_tso);
-                        merging.emplace_back(version_filtered_stream);
+                        merging.emplace_back(region_input_stream);
                     }
+                    if (merging.size())
+                        union_regions_stream.emplace_back(
+                            std::make_shared<MvccTMTSortedBlockInputStream>(
+                            merging, data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name, MutableSupport::delmark_column_name,
+                            DEFAULT_MERGE_BLOCK_SIZE,
+                            query_info.read_tso));
                 }
-
-                if (merging.size())
-                {
-                    res.emplace_back(std::make_shared<MvccTMTSortedBlockInputStream>(
-                        merging, data.getPrimarySortDescription(),
-                        MutableSupport::version_column_name, MutableSupport::delmark_column_name,
-                        DEFAULT_MERGE_BLOCK_SIZE,
-                        query_info.read_tso));
-                }
+                if (union_regions_stream.size())
+                    res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
             }
         }
     }

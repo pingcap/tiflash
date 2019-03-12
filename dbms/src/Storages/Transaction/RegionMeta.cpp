@@ -174,4 +174,16 @@ void RegionMeta::wait_index(UInt64 index) {
             });
 }
 
+UInt64 RegionMeta::version() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return region.region_epoch().version();
+}
+
+UInt64 RegionMeta::conf_ver() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return region.region_epoch().conf_ver();
+}
+
 } // namespace DB

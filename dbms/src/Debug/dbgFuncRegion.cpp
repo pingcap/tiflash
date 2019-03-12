@@ -176,7 +176,7 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
     }
 }
 
-void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void dbgFuncRegion(Context& context, const ASTs& args, DBGInvoker::Printer output)
 {
     if (args.size() > 1)
     {
@@ -196,12 +196,9 @@ void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Pr
     for (const auto & it: regions)
     {
         auto region_id = it.first;
-        auto & t2p = it.second.table_to_partition;
-        for (const auto & info: t2p)
+        const auto & table_ids = it.second.tables;
+        for (const auto table_id : table_ids)
         {
-            auto table_id = info.first;
-            auto partition_id = info.second;
-
             std::stringstream region_range_info;
             if (show_region)
             {
@@ -222,8 +219,7 @@ void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Pr
             }
 
             std::stringstream ss;
-            ss << "table #" << table_id << " partition #" << partition_id <<
-                " region #" << region_id << region_range_info.str();
+            ss << "table #" << table_id << " region #" << region_id << region_range_info.str();
             output(ss.str());
         }
     }
@@ -276,11 +272,11 @@ size_t executeQueryAndCountRows(Context & context,const std::string & query)
     return count;
 }
 
-std::vector<std::tuple<HandleID, HandleID, RegionID>> getPartitionRegionRanges(
-    Context & context, TableID table_id, PartitionID partition_id, std::vector<RegionRange> * vec = nullptr)
+std::vector<std::tuple<HandleID, HandleID, RegionID>> getRegionRanges(
+    Context& context, TableID table_id, std::vector<RegionRange>* vec = nullptr)
 {
     std::vector<std::tuple<HandleID, HandleID, RegionID>> handle_ranges;
-    std::function<void(Regions)> callback = [&](Regions regions)
+    auto callback = [&](Regions regions)
     {
         for (auto region : regions)
         {
@@ -296,10 +292,11 @@ std::vector<std::tuple<HandleID, HandleID, RegionID>> getPartitionRegionRanges(
     };
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, callback);
+    tmt.region_partition.traverseRegionsByTable(table_id, callback);
     return handle_ranges;
 }
 
+/*
 void dbgFuncCheckPartitionRegionRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 2)
@@ -325,7 +322,7 @@ void dbgFuncCheckPartitionRegionRows(Context & context, const ASTs & args, DBGIn
     for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         std::vector<RegionRange> tikv_keys;
-        auto handle_ranges = getPartitionRegionRanges(context, table_id, partition_id, &tikv_keys);
+        auto handle_ranges = getRegionRanges(context, table_id, partition_id, &tikv_keys);
         std::vector<size_t> rows_list(handle_ranges.size(), 0);
 
         size_t regions_rows = 0;
@@ -389,7 +386,7 @@ void dbgFuncScanPartitionExtraRows(Context & context, const ASTs & args, DBGInvo
 
     for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
-        auto handle_ranges = getPartitionRegionRanges(context, table_id, partition_id);
+        auto handle_ranges = getRegionRanges(context, table_id, partition_id);
         sort(handle_ranges.begin(), handle_ranges.end());
 
         std::vector<std::pair<HandleID, int>> handle_ranges_check;
@@ -495,8 +492,7 @@ void dbgFuncCheckRegionCorrect(Context & context, const ASTs & args, DBGInvoker:
     for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         std::unordered_map<RegionID, RegionPtr> partition_regions;
-        tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, [&](Regions regions)
-        {
+        tmt.region_partition.traverseRegionsByTable(table_id, [&](Regions regions) {
             for (auto region : regions)
                 partition_regions[region->id()] = region;
         });
@@ -558,5 +554,7 @@ void dbgFuncCheckRegionCorrect(Context & context, const ASTs & args, DBGInvoker:
 
     output("sum(patitions rows): " + toString(partitions_rows));
 }
+
+ */
 
 }
