@@ -3,7 +3,7 @@
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/Transaction/PartitionDataMover.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/RegionPartition.h>
+#include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -41,7 +41,7 @@ auto getRegionTableIds(const RegionPtr & region)
 // Private member functions.
 // =============================================================
 
-RegionPartition::Table & RegionPartition::getOrCreateTable(TableID table_id)
+RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
 {
     auto it = tables.find(table_id);
     if (it == tables.end())
@@ -63,7 +63,7 @@ RegionPartition::Table & RegionPartition::getOrCreateTable(TableID table_id)
     return it->second;
 }
 
-RegionPartition::InternalRegion & RegionPartition::insertRegion(Table & table, RegionID region_id)
+RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, RegionID region_id)
 {
     auto & table_regions = table.regions.get();
     // Insert table mapping.
@@ -80,7 +80,7 @@ RegionPartition::InternalRegion & RegionPartition::insertRegion(Table & table, R
     return table_regions[region_id];
 }
 
-RegionPartition::InternalRegion & RegionPartition::getOrInsertRegion(TableID table_id, RegionID region_id)
+RegionTable::InternalRegion & RegionTable::getOrInsertRegion(TableID table_id, RegionID region_id)
 {
     auto & table = getOrCreateTable(table_id);
     auto & table_regions = table.regions.get();
@@ -90,7 +90,7 @@ RegionPartition::InternalRegion & RegionPartition::getOrInsertRegion(TableID tab
     return insertRegion(table, region_id);
 }
 
-void RegionPartition::updateRegionRange(const RegionPtr & region)
+void RegionTable::updateRegionRange(const RegionPtr & region)
 {
     auto region_id = region->id();
     const auto range = region->getRange();
@@ -127,7 +127,7 @@ void RegionPartition::updateRegionRange(const RegionPtr & region)
     }
 }
 
-bool RegionPartition::shouldFlush(const InternalRegion & region)
+bool RegionTable::shouldFlush(const InternalRegion & region)
 {
     if (region.pause_flush)
         return false;
@@ -144,7 +144,7 @@ bool RegionPartition::shouldFlush(const InternalRegion & region)
     return false;
 }
 
-void RegionPartition::flushRegion(TableID table_id, RegionID region_id, size_t & rest_cache_size)
+void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & rest_cache_size)
 {
     if (log->debug())
     {
@@ -224,7 +224,7 @@ static const Seconds FTH_PERIOD_2(60 * 5);  // 5 minutes
 static const Seconds FTH_PERIOD_3(60);      // 1 minute
 static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
-RegionPartition::RegionPartition(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher)
+RegionTable::RegionTable(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher)
     : parent_path(parent_path_),
       flush_thresholds
       {
@@ -234,7 +234,7 @@ RegionPartition::RegionPartition(Context & context_, const std::string & parent_
           {FTH_BYTES_4, FTH_PERIOD_4},
       },
       context(context_),
-      log(&Logger::get("RegionPartition"))
+      log(&Logger::get("RegionTable"))
 {
     Poco::File dir(parent_path + "tables/");
     if (!dir.exists())
@@ -282,7 +282,7 @@ RegionPartition::RegionPartition(Context & context_, const std::string & parent_
     }
 }
 
-void RegionPartition::updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids)
+void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -296,7 +296,7 @@ void RegionPartition::updateRegion(const RegionPtr & region, const TableIDSet & 
     }
 }
 
-void RegionPartition::applySnapshotRegion(const RegionPtr & region)
+void RegionTable::applySnapshotRegion(const RegionPtr & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -310,7 +310,7 @@ void RegionPartition::applySnapshotRegion(const RegionPtr & region)
     }
 }
 
-void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPtr> split_regions)
+void RegionTable::splitRegion(const RegionPtr & region, std::vector<RegionPtr> split_regions)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -351,7 +351,7 @@ void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPt
     updateRegionRange(region);
 }
 
-void RegionPartition::removeRegion(const RegionPtr & region)
+void RegionTable::removeRegion(const RegionPtr & region)
 {
     std::unordered_set<TableID> tables;
     {
@@ -384,7 +384,7 @@ void RegionPartition::removeRegion(const RegionPtr & region)
         auto storage = tmt_ctx.storages.get(table_id);
         if (storage == nullptr)
         {
-            LOG_WARNING(log, "RegionPartition::removeRegion: " << table_id << " does not exist.");
+            LOG_WARNING(log, "RegionTable::removeRegion: " << table_id << " does not exist.");
             continue;
         }
         auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
@@ -394,7 +394,7 @@ void RegionPartition::removeRegion(const RegionPtr & region)
     }
 }
 
-bool RegionPartition::tryFlushRegions()
+bool RegionTable::tryFlushRegions()
 {
     std::map<std::pair<TableID, RegionID>, size_t> to_flush;
     {
@@ -431,7 +431,7 @@ bool RegionPartition::tryFlushRegions()
     return !to_flush.empty();
 }
 
-void RegionPartition::traverseRegions(std::function<void(TableID, InternalRegion&)> callback)
+void RegionTable::traverseRegions(std::function<void(TableID, InternalRegion&)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto && [table_id, table] : tables)
@@ -443,7 +443,7 @@ void RegionPartition::traverseRegions(std::function<void(TableID, InternalRegion
     }
 }
 
-void RegionPartition::traverseRegionsByTable(
+void RegionTable::traverseRegionsByTable(
     const TableID table_id, std::function<void(Regions)> callback)
 {
     auto & kvstore = context.getTMTContext().kvstore;
@@ -463,13 +463,13 @@ void RegionPartition::traverseRegionsByTable(
     callback(regions);
 }
 
-void RegionPartition::dumpRegionMap(RegionPartition::RegionMap & res)
+void RegionTable::dumpRegionMap(RegionTable::RegionMap & res)
 {
     std::lock_guard<std::mutex> lock(mutex);
     res = regions;
 }
 
-void RegionPartition::dropRegionsInTable(TableID /*table_id*/)
+void RegionTable::dropRegionsInTable(TableID /*table_id*/)
 {
     // TODO: impl
 }

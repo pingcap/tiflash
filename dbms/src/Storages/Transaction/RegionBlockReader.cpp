@@ -72,7 +72,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     const auto & date_lut = DateLUT::instance();
 
-    // TODO: lock partition, to avoid region adding/droping while writing data
+    // TODO: lock region, to avoid region adding/droping while writing data
 
     TableID  my_table_id = table_info.id;
     TableID  next_table_id = InvalidTableID;

@@ -190,8 +190,8 @@ void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer o
 
     auto & tmt = context.getTMTContext();
 
-    RegionPartition::RegionMap regions;
-    tmt.region_partition.dumpRegionMap(regions);
+    RegionTable::RegionMap regions;
+    tmt.region_table.dumpRegionMap(regions);
 
     for (const auto & it: regions)
     {
@@ -227,7 +227,7 @@ void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer o
 
 void dbgFuncRegionRmData(Context & /*context*/, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)
 {
-    // TODO: port from RegionPartitionMgr to RegionPartition
+    // TODO: port from RegionPartitionMgr to RegionTable
     /*
     if (args.size() != 1)
         throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);
@@ -292,7 +292,7 @@ std::vector<std::tuple<HandleID, HandleID, RegionID>> getRegionRanges(
     };
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.region_partition.traverseRegionsByTable(table_id, callback);
+    tmt.region_table.traverseRegionsByTable(table_id, callback);
     return handle_ranges;
 }
 

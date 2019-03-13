@@ -8,7 +8,7 @@ namespace DB
 
 TMTContext::TMTContext(Context & context, std::vector<String> addrs)
     : kvstore(std::make_shared<KVStore>(context.getPath() + "kvstore/", &context)),
-      region_partition(context, context.getPath() + "regmap/", std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1)),
+      region_table(context, context.getPath() + "regmap/", std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1)),
       schema_syncer(std::make_shared<HttpJsonSchemaSyncer>()),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),

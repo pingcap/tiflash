@@ -14,7 +14,7 @@ extern const int LOGICAL_ERROR;
 static Seconds REGION_PERSIST_PERIOD(60); // 1 minutes
 static Seconds KVSTORE_TRY_PERSIST_PERIOD(10); // 10 seconds
 
-KVStore::KVStore(const std::string & data_dir, Context * context) : region_persister(data_dir), log(&Logger::get("KVStore"))
+KVStore::KVStore(const std::string & data_dir, Context *) : region_persister(data_dir), log(&Logger::get("KVStore"))
 {
     std::lock_guard<std::mutex> lock(mutex);
     region_persister.restore(regions);
@@ -27,10 +27,15 @@ KVStore::KVStore(const std::string & data_dir, Context * context) : region_persi
         if (region->isPendingRemove())
             to_remove.push_back(region->id());
     }
+
     for (auto & region_id : to_remove)
     {
         LOG_INFO(log, "Region [" << region_id << "] is removed after restored.");
-        removeRegion(region_id, context);
+        auto it = regions.find(region_id);
+        RegionPtr region = it->second;
+        regions.erase(it);
+        std::ignore = region;
+        // TODO: remove region from region_table later, not now
     }
 }
 
@@ -72,7 +77,7 @@ void KVStore::onSnapshot(const RegionPtr & region, Context * context)
     }
 
     if (tmt_ctx)
-        tmt_ctx->region_partition.applySnapshotRegion(region);
+        tmt_ctx->region_table.applySnapshotRegion(region);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
@@ -171,12 +176,12 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             }
 
             if (tmt_ctx)
-                tmt_ctx->region_partition.splitRegion(curr_region, split_regions);
+                tmt_ctx->region_table.splitRegion(curr_region, split_regions);
         }
         else
         {
             if (tmt_ctx)
-                tmt_ctx->region_partition.updateRegion(curr_region, table_ids);
+                tmt_ctx->region_table.updateRegion(curr_region, table_ids);
 
             if (sync)
                 region_persister.persist(curr_region);
@@ -246,7 +251,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context)
     return persist_job || gc_job;
 }
 
-void KVStore::removeRegion(RegionID region_id, Context *)
+void KVStore::removeRegion(RegionID region_id, Context * context)
 {
     RegionPtr region;
     {
@@ -257,6 +262,8 @@ void KVStore::removeRegion(RegionID region_id, Context *)
     }
 
     region_persister.drop(region_id);
+    if (context)
+        context->getTMTContext().region_table.removeRegion(region);
 }
 
 } // namespace DB

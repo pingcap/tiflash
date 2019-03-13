@@ -268,7 +268,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         }
 
         tmt.kvstore->onServiceCommand(cmds, raft_ctx);
-        tmt.region_partition.tryFlushRegions();
+        tmt.region_table.tryFlushRegions();
     }
 }
 
@@ -319,7 +319,7 @@ Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_
     for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.region_partition.traverseRegionsByTable(table_info.id, [&](Regions d) {
+        tmt.region_table.traverseRegionsByTable(table_info.id, [&](Regions d) {
             regions.insert(regions.end(), d.begin(), d.end());
         });
     }

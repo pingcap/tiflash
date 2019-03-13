@@ -14,7 +14,7 @@
 namespace DB
 {
 
-class RegionPartition : private boost::noncopyable
+class RegionTable : private boost::noncopyable
 {
 public:
     struct InternalRegion
@@ -116,7 +116,7 @@ private:
     void flushRegion(TableID table_id, RegionID partition_id, size_t & rest_cache_size);
 
 public:
-    RegionPartition(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher);
+    RegionTable(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher);
     void setFlushThresholds(FlushThresholds flush_thresholds_) { flush_thresholds = std::move(flush_thresholds_); }
 
     /// After the region is updated (insert or delete KVs).
@@ -151,10 +151,10 @@ public:
         std::vector<TiKVKey> * keys=nullptr);
 
     // For debug
-    void dumpRegionMap(RegionPartition::RegionMap & res);
+    void dumpRegionMap(RegionTable::RegionMap & res);
     void dropRegionsInTable(TableID table_id);
 };
 
-using RegionPartitionPtr = std::shared_ptr<RegionPartition>;
+using RegionPartitionPtr = std::shared_ptr<RegionTable>;
 
 } // namespace DB

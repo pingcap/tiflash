@@ -4,7 +4,7 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/PartitionDataMover.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/RegionPartition.h>
+#include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <DataStreams/BlocksListBlockInputStream.h>
@@ -12,7 +12,7 @@
 namespace DB
 {
 
-std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus, size_t> RegionPartition::getBlockInputStreamByRegion(
+std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(
     TableID table_id,
     const RegionID region_id,
     const RegionVersion region_version,
