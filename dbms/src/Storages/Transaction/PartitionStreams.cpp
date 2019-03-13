@@ -30,7 +30,7 @@ std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus, size_t> Regio
     if (!region)
         return {nullptr, NOT_FOUND, 0};
 
-    if (region_version != RegionVersion(-1) && region->version() != region_version)
+    if (region_version != InvalidRegionVersion && region->version() != region_version)
         return {nullptr, VERSION_ERROR, 0};
 
     if (learner_read)
@@ -65,6 +65,7 @@ std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus, size_t> Regio
 
         BlocksList blocks;
         blocks.emplace_back(std::move(block));
+
         return {std::make_shared<BlocksListBlockInputStream>(std::move(blocks)), OK, tol};
     }
 }

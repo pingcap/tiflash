@@ -88,7 +88,7 @@ void increaseVersionInBlock(Block & block, size_t increasement = 1)
 {
     if (!block.has(MutableSupport::version_column_name))
     {
-        throw Exception("PartitionDataMover: block without target_column_name. Columns: " + columnNames(block),
+        throw Exception("PartitionDataMover: block without version_column_name. Columns: " + columnNames(block),
             ErrorCodes::LOGICAL_ERROR);
     }
 

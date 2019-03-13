@@ -51,12 +51,7 @@ DBGInvoker::DBGInvoker()
     regFunc("region_snapshot", dbgFuncRegionSnapshot);
     regFunc("rm_region_data", dbgFuncRegionRmData);
 
-    regFunc("dump_partition", dbgFuncRegion);
-    /*
-    regFunc("check_partition", dbgFuncCheckPartitionRegionRows);
-    regFunc("scan_partition", dbgFuncScanPartitionExtraRows);
-    regFunc("check_region_correct", dbgFuncCheckRegionCorrect);
-    */
+    regFunc("dump_region", dbgFuncDumpRegion);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

@@ -145,7 +145,7 @@ static RelativeSize convertAbsoluteSampleSizeToRelative(const ASTPtr & node, siz
     return std::min(RelativeSize(1), RelativeSize(absolute_sample_size) / RelativeSize(approx_total_rows));
 }
 
-void extend_mutable_engine_column_names(Names& column_names_to_read, const MergeTreeData& data)
+void extend_mutable_engine_column_names(Names& column_names_to_read, const MergeTreeData & data)
 {
     column_names_to_read.insert(column_names_to_read.end(), MutableSupport::version_column_name);
     column_names_to_read.insert(column_names_to_read.end(), MutableSupport::delmark_column_name);
@@ -653,9 +653,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             << sum_marks << " marks to read from " << sum_ranges << " ranges");
     else
     {
-        // get data block from region first.
         extend_mutable_engine_column_names(column_names_to_read, data);
 
+        // get data block from region first.
         std::vector<size_t> rows_in_mem(region_cnt, 0);
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
@@ -758,8 +758,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
         else
         {
-            extend_mutable_engine_column_names(column_names_to_read, data);
-
             std::vector<std::vector<size_t>> region_streams(num_streams);
 
             for (size_t region_index = 0; region_index < region_cnt; ++region_index)

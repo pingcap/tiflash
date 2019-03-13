@@ -37,11 +37,6 @@ auto getRegionTableIds(const RegionPtr & region)
     return table_ids;
 }
 
-Int64 calculatePartitionCacheBytes(KVStore & kvstore, RegionID region_id)
-{
-    return kvstore.getRegion(region_id)->dataSize();
-}
-
 // =============================================================
 // Private member functions.
 // =============================================================
@@ -149,7 +144,7 @@ bool RegionPartition::shouldFlush(const InternalRegion & region)
     return false;
 }
 
-void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
+void RegionPartition::flushRegion(TableID table_id, RegionID region_id, size_t & rest_cache_size)
 {
     if (log->debug())
     {
@@ -181,8 +176,8 @@ void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
     Names names = columns.getNamesOfPhysical();
     std::vector<TiKVKey> keys;
     auto [input, status, tol] =
-        getBlockInputStreamByRegion(table_id, region_id, -1, table_info, columns, names, false, false, 0, &keys);
-    if (!input)
+        getBlockInputStreamByRegion(table_id, region_id, InvalidRegionVersion, table_info, columns, names, false, false, 0, &keys);
+    if (input == nullptr)
         return;
 
     std::ignore = status;
@@ -210,7 +205,8 @@ void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
         auto scanner = region->createCommittedScanRemover(table_id);
         for (const auto & key : keys)
             scanner->remove(key);
-        LOG_TRACE(log, "region " << region_id << "data size after flush " << region->dataSize());
+        rest_cache_size = region->dataSize();
+        LOG_TRACE(log, "region " << region_id << "data size after flush " << rest_cache_size);
     }
 }
 
@@ -268,12 +264,11 @@ RegionPartition::RegionPartition(Context & context_, const std::string & parent_
                 continue;
             }
             else
-            {
                 ++it;
-            }
-            region.cache_bytes += region_ptr->dataSize();
 
-            // Update region_id -> table_id & partition_id
+            region.cache_bytes = region_ptr->dataSize();
+
+            // Update region_id -> table_id
             {
                 auto it = regions.find(region_id);
                 if (it == regions.end())
@@ -401,32 +396,33 @@ void RegionPartition::removeRegion(const RegionPtr & region)
 
 bool RegionPartition::tryFlushRegions()
 {
-    KVStore & kvstore = *context.getTMTContext().kvstore;
-    std::set<std::pair<TableID, RegionID>> to_flush;
+    std::map<std::pair<TableID, RegionID>, size_t> to_flush;
     {
         traverseRegions([&](TableID table_id, InternalRegion & region) {
-            if (shouldFlush(region)) {
-                to_flush.emplace(table_id, region.region_id);
+            if (shouldFlush(region))
+            {
+                to_flush.insert_or_assign({table_id, region.region_id}, region.cache_bytes);
                 // Stop other flush threads.
                 region.pause_flush = true;
             }
         });
     }
 
-    for (auto [table_id, region_id] : to_flush)
+    for (auto && [id, data]: to_flush)
     {
-        flushRegion(table_id, region_id);
+        flushRegion(id.first, id.second, data);
     }
 
     {
         // Now reset status infomations.
         Timepoint now = Clock::now();
         traverseRegions([&](TableID table_id, InternalRegion & region) {
-            if (to_flush.count({table_id, region.region_id})) {
+            if (auto it = to_flush.find({table_id, region.region_id}); it != to_flush.end())
+            {
                 region.pause_flush = false;
                 region.must_flush = false;
                 region.updated = false;
-                region.cache_bytes = calculatePartitionCacheBytes(kvstore, region.region_id);
+                region.cache_bytes = it->second;
                 region.last_flush_time = now;
             }
         });

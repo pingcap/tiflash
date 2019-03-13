@@ -35,11 +35,16 @@ using RegionKey = Int64;
 
 using RegionID = UInt64;
 
-using RegionVersion = UInt64;
-
 enum : RegionID
 {
     InvalidRegionID = 0
+};
+
+using RegionVersion = UInt64;
+
+enum : RegionVersion
+{
+    InvalidRegionVersion = std::numeric_limits<RegionVersion>::max()
 };
 
 using Clock = std::chrono::system_clock;

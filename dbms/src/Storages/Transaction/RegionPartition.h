@@ -113,7 +113,7 @@ private:
     void updateRegionRange(const RegionPtr & region);
 
     bool shouldFlush(const InternalRegion & region);
-    void flushRegion(TableID table_id, RegionID partition_id);
+    void flushRegion(TableID table_id, RegionID partition_id, size_t & rest_cache_size);
 
 public:
     RegionPartition(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher);
