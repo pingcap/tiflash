@@ -23,12 +23,6 @@ public:
         InternalRegion(const InternalRegion & p) : region_id(p.region_id) {}
         InternalRegion(RegionID region_id_) : region_id(region_id_) {}
 
-        // Statistics to serve flush.
-        // Note that it is not 100% accurate because one region could belongs to more than one partition by different tables.
-        // And when a region is updated, we don't distinguish carefully which partition, simply update them all.
-        // It is not a real issue as do flush on a partition is not harmful. Besides, the situation is very rare that a region belongs to many partitions.
-        // Those members below are not persisted.
-
         RegionID region_id;
         bool pause_flush = false;
         bool must_flush = false;
@@ -126,7 +120,7 @@ public:
     void setFlushThresholds(FlushThresholds flush_thresholds_) { flush_thresholds = std::move(flush_thresholds_); }
 
     /// After the region is updated (insert or delete KVs).
-    void updateRegion(const RegionPtr & region, size_t before_cache_bytes, const TableIDSet & relative_table_ids);
+    void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const RegionPtr & region);
     /// Manage data after region split into split_regions.

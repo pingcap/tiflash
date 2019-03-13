@@ -285,17 +285,17 @@ RegionPartition::RegionPartition(Context & context_, const std::string & parent_
     }
 }
 
-void RegionPartition::updateRegion(const RegionPtr & region, size_t before_cache_bytes, const TableIDSet & relative_table_ids)
+void RegionPartition::updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
     auto region_id = region->id();
-    Int64 delta = region->dataSize() - before_cache_bytes;
+    size_t cache_bytes = region->dataSize();
     for (auto table_id : relative_table_ids)
     {
         auto & region = getOrInsertRegion(table_id, region_id);
         region.updated = true;
-        region.cache_bytes += delta;
+        region.cache_bytes = cache_bytes;
     }
 }
 
@@ -309,7 +309,7 @@ void RegionPartition::applySnapshotRegion(const RegionPtr & region)
     {
         auto & internal_region = getOrInsertRegion(table_id, region_id);
         internal_region.must_flush = true;
-        internal_region.cache_bytes += region->dataSize();
+        internal_region.cache_bytes = region->dataSize();
     }
 }
 
@@ -401,7 +401,7 @@ bool RegionPartition::tryFlushRegions()
     KVStore & kvstore = *context.getTMTContext().kvstore;
     std::set<std::pair<TableID, RegionID>> to_flush;
     {
-        traverseRegions([&](TableID table_id, InternalRegion& region) {
+        traverseRegions([&](TableID table_id, InternalRegion & region) {
             if (shouldFlush(region)) {
                 to_flush.emplace(table_id, region.region_id);
                 // Stop other flush threads.

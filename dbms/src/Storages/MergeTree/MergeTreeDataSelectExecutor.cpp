@@ -780,23 +780,24 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                             use_uncompressed_cache, prewhere_actions, prewhere_column, true,
                             settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size,
                             true, true, virt_column_names, part.part_index_in_query);
-
-                        source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream,
-                                                                                     data.getPrimaryExpression());
-
                         source_stream = std::make_shared<RangesFilterBlockInputStream>(source_stream, region_query_info.range_in_table);
 
                         source_stream = std::make_shared<VersionFilterBlockInputStream>(
                             source_stream, MutableSupport::version_column_name, query_info.read_tso);
+
+                        source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream,
+                                                                                     data.getPrimaryExpression());
+
                         merging.emplace_back(source_stream);
                     }
                     auto region_input_stream = region_block_data[region_index];
                     if (region_input_stream)
                     {
-                        region_input_stream = std::make_shared<ExpressionBlockInputStream>(region_input_stream,
-                                                                                           data.getPrimaryExpression());
                         region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
                             region_input_stream, MutableSupport::version_column_name, query_info.read_tso);
+
+                        region_input_stream = std::make_shared<ExpressionBlockInputStream>(region_input_stream,
+                                                                                           data.getPrimaryExpression());
                         merging.emplace_back(region_input_stream);
                     }
                     if (merging.size())

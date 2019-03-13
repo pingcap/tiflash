@@ -131,8 +131,6 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        auto before_cache_bytes = curr_region->dataSize();
-
         auto [new_region, split_regions, table_ids, sync] = curr_region->onCommand(cmd, callback);
 
         if (curr_region->isPendingRemove())
@@ -178,7 +176,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
         else
         {
             if (tmt_ctx)
-                tmt_ctx->region_partition.updateRegion(curr_region, before_cache_bytes, table_ids);
+                tmt_ctx->region_partition.updateRegion(curr_region, table_ids);
 
             if (sync)
                 region_persister.persist(curr_region);
