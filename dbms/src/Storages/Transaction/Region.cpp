@@ -354,10 +354,6 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onComman
         {
             auto type = req.cmd_type();
 
-            LOG_TRACE(log,
-                "Region [" << region_id << "] execute command " << raft_cmdpb::CmdType_Name(type) << " at [term: " << term
-                           << ", index: " << index << "]");
-
             switch (type)
             {
                 case raft_cmdpb::CmdType::Put:
