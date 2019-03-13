@@ -388,8 +388,6 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onComman
         }
     }
 
-    LOG_TRACE(log, toString() << " advance applied index " << index << " and term " << term);
-
     meta.setApplied(index, term);
     if (new_region)
         (*new_region).meta.setApplied(index, term);

@@ -656,11 +656,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         // get data block from region first.
         extend_mutable_engine_column_names(column_names_to_read, data);
 
+        std::vector<size_t> rows_in_mem(region_cnt, 0);
+
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
         {
             const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-            auto [region_input_stream, status] = tmt.region_partition.getBlockInputStreamByRegion(
+            auto [region_input_stream, status, tol] = tmt.region_partition.getBlockInputStreamByRegion(
                 data.table_info.id, region_query_info.region_id, region_query_info.version,
                 data.table_info, data.getColumns(), column_names_to_read,
                 true, query_info.resolve_locks, query_info.read_tso);
@@ -674,6 +676,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 continue;
             }
             region_block_data[region_index] = region_input_stream;
+            rows_in_mem[region_index] = tol;
         }
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
@@ -706,7 +709,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 <<  ", handle range [" << regions_query_info[region_index].range_in_table.first
                 << ", " << regions_query_info[region_index].range_in_table.second << "), selected "
                 << region_range_parts[region_index].size() << " parts, " << sum_marks << " marks to read from "
-                << sum_ranges << " ranges");
+                << sum_ranges << " ranges, read " << rows_in_mem[region_index] << " rows from memory");
         }
     }
 

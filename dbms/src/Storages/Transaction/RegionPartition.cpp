@@ -180,12 +180,13 @@ void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
     // TODO: confirm names is right
     Names names = columns.getNamesOfPhysical();
     std::vector<TiKVKey> keys;
-    auto [input, status] =
+    auto [input, status, tol] =
         getBlockInputStreamByRegion(table_id, region_id, -1, table_info, columns, names, false, false, 0, &keys);
     if (!input)
         return;
 
     std::ignore = status;
+    std::ignore = tol;
 
     TxnMergeTreeBlockOutputStream output(*merge_tree);
     input->readPrefix();
@@ -209,7 +210,7 @@ void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
         auto scanner = region->createCommittedScanRemover(table_id);
         for (const auto & key : keys)
             scanner->remove(key);
-        LOG_TRACE(log, "region data size " << region->dataSize());
+        LOG_TRACE(log, "region " << region_id << "data size after flush " << region->dataSize());
     }
 }
 

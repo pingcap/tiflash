@@ -138,7 +138,7 @@ public:
     void traverseRegions(std::function<void(TableID, InternalRegion & )> callback);
     void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> callback);
 
-    std::tuple<BlockInputStreamPtr, RegionReadStatus> getBlockInputStreamByRegion(
+    std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(
         TableID table_id,
         const RegionID region_id,
         const RegionVersion region_version,

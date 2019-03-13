@@ -12,7 +12,7 @@
 namespace DB
 {
 
-std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus> RegionPartition::getBlockInputStreamByRegion(
+std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus, size_t> RegionPartition::getBlockInputStreamByRegion(
     TableID table_id,
     const RegionID region_id,
     const RegionVersion region_version,
@@ -28,10 +28,10 @@ std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus> RegionPartiti
 
     auto region = kvstore->getRegion(region_id);
     if (!region)
-        return {nullptr, NOT_FOUND};
+        return {nullptr, NOT_FOUND, 0};
 
     if (region_version != RegionVersion(-1) && region->version() != region_version)
-        return {nullptr, VERSION_ERROR};
+        return {nullptr, VERSION_ERROR, 0};
 
     if (learner_read)
         region->wait_index(region->learner_read());
@@ -56,16 +56,16 @@ std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus> RegionPartiti
 
         auto next_table_id = scanner->hasNext();
         if (next_table_id == InvalidTableID)
-            return {nullptr, OK};
+            return {nullptr, OK, 0};
 
         const auto [table_info, columns, ordered_columns] = schema_fetcher(next_table_id);
         auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, scanner, keys);
 
-        LOG_TRACE(log, "getBlockInputStreamByRegion Region " << region_id << ", rows " << block.columns());
+        size_t tol = block.rows();
 
         BlocksList blocks;
         blocks.emplace_back(std::move(block));
-        return {std::make_shared<BlocksListBlockInputStream>(std::move(blocks)), OK};
+        return {std::make_shared<BlocksListBlockInputStream>(std::move(blocks)), OK, tol};
     }
 }
 
