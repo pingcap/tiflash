@@ -60,6 +60,9 @@ std::tuple<BlockInputStreamPtr, RegionPartition::RegionReadStatus> RegionPartiti
 
         const auto [table_info, columns, ordered_columns] = schema_fetcher(next_table_id);
         auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, scanner, keys);
+
+        LOG_TRACE(log, "getBlockInputStreamByRegion Region " << region_id << ", rows " << block.columns());
+
         BlocksList blocks;
         blocks.emplace_back(std::move(block));
         return {std::make_shared<BlocksListBlockInputStream>(std::move(blocks)), OK};

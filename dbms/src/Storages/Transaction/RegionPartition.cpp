@@ -347,7 +347,8 @@ void RegionPartition::splitRegion(const RegionPtr & region, std::vector<RegionPt
 
             auto split_region_id = split_region->id();
 
-            insertRegion(table, split_region_id);
+            auto & region = insertRegion(table, split_region_id);
+            region.must_flush = true;
         }
     }
 
