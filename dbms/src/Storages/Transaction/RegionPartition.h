@@ -113,7 +113,7 @@ private:
     void updateRegionRange(const RegionPtr & region);
 
     bool shouldFlush(const InternalRegion & region);
-    void flushRegion(TableID table_id, PartitionID partition_id);
+    void flushRegion(TableID table_id, RegionID partition_id);
 
 public:
     RegionPartition(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher);
@@ -135,8 +135,8 @@ public:
     /// Returns whether this function has done any meaningful job.
     bool tryFlushRegions();
 
-    void traverseRegions(std::function<void(TableID, InternalRegion & )> && callback);
-    void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> && callback);
+    void traverseRegions(std::function<void(TableID, InternalRegion & )> callback);
+    void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> callback);
 
     std::tuple<BlockInputStreamPtr, RegionReadStatus> getBlockInputStreamByRegion(
         TableID table_id,

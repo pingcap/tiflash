@@ -209,6 +209,7 @@ void RegionPartition::flushRegion(TableID table_id, RegionID region_id)
         auto scanner = region->createCommittedScanRemover(table_id);
         for (const auto & key : keys)
             scanner->remove(key);
+        LOG_TRACE(log, "region data size " << region->dataSize());
     }
 }
 
@@ -418,7 +419,7 @@ bool RegionPartition::tryFlushRegions()
     {
         // Now reset status infomations.
         Timepoint now = Clock::now();
-        traverseRegions([&](TableID table_id, InternalRegion& region) {
+        traverseRegions([&](TableID table_id, InternalRegion & region) {
             if (to_flush.count({table_id, region.region_id})) {
                 region.pause_flush = false;
                 region.must_flush = false;
@@ -432,7 +433,7 @@ bool RegionPartition::tryFlushRegions()
     return !to_flush.empty();
 }
 
-void RegionPartition::traverseRegions(std::function<void(TableID, InternalRegion&)> && callback)
+void RegionPartition::traverseRegions(std::function<void(TableID, InternalRegion&)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto && [table_id, table] : tables)
@@ -445,7 +446,7 @@ void RegionPartition::traverseRegions(std::function<void(TableID, InternalRegion
 }
 
 void RegionPartition::traverseRegionsByTable(
-    const TableID table_id, std::function<void(Regions)> && callback)
+    const TableID table_id, std::function<void(Regions)> callback)
 {
     auto & kvstore = context.getTMTContext().kvstore;
     Regions regions;

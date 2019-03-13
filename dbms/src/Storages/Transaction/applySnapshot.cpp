@@ -37,7 +37,6 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
         if (!request.has_data())
             throw Exception("Failed to read snapshot data", ErrorCodes::LOGICAL_ERROR);
         const auto & data = request.data();
-        data.cf();
         for (const auto & kv : data.data())
             region->insert(data.cf(), TiKVKey{kv.key()}, TiKVValue{kv.value()});
     }
