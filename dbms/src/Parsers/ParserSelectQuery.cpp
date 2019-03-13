@@ -66,6 +66,9 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
         select_query->raw_for_mutable = is_selraw;
 
+        if (s_no_kvstore.ignore(pos, expected))
+            select_query->no_kvstore = true;
+
         if (s_distinct.ignore(pos, expected))
             select_query->distinct = true;
 

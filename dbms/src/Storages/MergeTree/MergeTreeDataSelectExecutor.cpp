@@ -705,7 +705,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 << regions_query_info[region_index].version
                 <<  ", handle range [" << regions_query_info[region_index].range_in_table.first
                 << ", " << regions_query_info[region_index].range_in_table.second << "), selected "
-                << parts.size() << " parts, " << sum_marks << " marks to read from " << sum_ranges << " ranges");
+                << region_range_parts[region_index].size() << " parts, " << sum_marks << " marks to read from "
+                << sum_ranges << " ranges");
         }
     }
 
