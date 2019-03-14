@@ -386,8 +386,7 @@ void RegionTable::removeRegion(const RegionPtr & region)
             continue;
         }
         auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-        auto [start_key, end_key] = region->getRange();
-        auto [start_handle, end_handle] = getRegionRangeField(start_key, end_key, table_id);
+        auto [start_handle, end_handle] = region->getHandleRangeByTable(table_id);
         deleteRange(context, merge_tree, start_handle, end_handle);
     }
 }

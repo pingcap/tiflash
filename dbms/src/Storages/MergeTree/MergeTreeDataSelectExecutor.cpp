@@ -613,7 +613,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions){
             for (const auto & region : regions)
             {
-                regions_query_info.push_back({region->id(), region->version(), region->getRegionRangeField(data.table_info.id)});
+                regions_query_info.push_back({region->id(), region->version(), region->getHandleRangeByTable(data.table_info.id)});
             }
         });
     }

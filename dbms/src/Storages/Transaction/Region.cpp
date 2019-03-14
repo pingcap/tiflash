@@ -574,17 +574,17 @@ UInt64 Region::version() const { return meta.version(); }
 
 UInt64 Region::conf_ver() const { return meta.conf_ver(); }
 
-std::pair<HandleID, HandleID> Region::getRegionRangeField(TableID table_id) const
+std::pair<HandleID, HandleID> Region::getHandleRangeByTable(TableID table_id) const
 {
-    return ::DB::getRegionRangeField(getRange(), table_id);
+    return ::DB::getHandleRangeByTable(getRange(), table_id);
 }
 
-std::pair<HandleID, HandleID> getRegionRangeField(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
+std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
 {
-    return getRegionRangeField(range.first, range.second, table_id);
+    return getHandleRangeByTable(range.first, range.second, table_id);
 }
 
-std::pair<HandleID, HandleID> getRegionRangeField(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
+std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
 {
     // Example:
     // Range: [100_10, 200_5), table_id: 100, then start_handle: 10, end_handle: MAX_HANDLE_ID

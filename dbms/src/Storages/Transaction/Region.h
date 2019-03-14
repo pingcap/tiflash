@@ -40,9 +40,9 @@ struct RegionQueryInfo
     }
 };
 
-std::pair<HandleID, HandleID> getRegionRangeField(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
+std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
 
-std::pair<HandleID, HandleID> getRegionRangeField(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
+std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -225,7 +225,7 @@ public:
     RegionVersion version() const;
     RegionVersion conf_ver() const;
 
-    std::pair<HandleID, HandleID> getRegionRangeField(TableID table_id) const;
+    std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
 
 private:
     // Private methods no need to lock mutex, normally
