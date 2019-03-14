@@ -12,10 +12,8 @@ size_t RegionMeta::serializeSize() const
 
     auto peer_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(bool);
     // TODO: this region_size not right, 4 bytes missed
-    auto region_size = sizeof(UInt64)
-        + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS
-        + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS
-        + sizeof(UInt64) + sizeof(UInt64);
+    auto region_size
+        = sizeof(UInt64) + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt64) + sizeof(UInt64);
     region_size += peer_size * region.peers_size();
     auto apply_state_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(UInt64);
     return peer_size + region_size + apply_state_size + sizeof(UInt64) + sizeof(bool);
@@ -149,8 +147,8 @@ RegionRange RegionMeta::getRange() const
 std::string RegionMeta::toString(bool dump_status) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    std::string status_str = !dump_status ? "" : ", term: " + DB::toString(applied_term) +
-        ", applied_index: " + DB::toString(apply_state.applied_index());
+    std::string status_str
+        = !dump_status ? "" : ", term: " + DB::toString(applied_term) + ", applied_index: " + DB::toString(apply_state.applied_index());
     return "region[id: " + DB::toString(region.id()) + status_str + "]";
 }
 
@@ -166,12 +164,10 @@ void RegionMeta::setPendingRemove()
     pending_remove = true;
 }
 
-void RegionMeta::wait_index(UInt64 index) {
-    std::cout<<"get index: "<<apply_state.applied_index()<<" wanted index "<< index <<" region id: "<<region.id()<<std::endl;
+void RegionMeta::wait_index(UInt64 index)
+{
     std::unique_lock<std::mutex> lk(mutex);
-    cv.wait(lk, [this, index]{
-            return apply_state.applied_index() >= index;
-            });
+    cv.wait(lk, [this, index] { return apply_state.applied_index() >= index; });
 }
 
 UInt64 RegionMeta::version() const

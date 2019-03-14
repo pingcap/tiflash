@@ -166,6 +166,9 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
+    using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
+    void batchInsert(std::function<bool(BatchInsertNode &)> f);
+
     std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
 
     std::unique_ptr<CommittedScanRemover> createCommittedScanRemover(TableID expected_table_id);
@@ -258,7 +261,7 @@ private:
     // Size of data cf & write cf, without lock cf.
     std::atomic<size_t> cf_data_size = 0;
 
-    Timepoint last_persist_time = Clock::now();
+    std::atomic<Timepoint> last_persist_time = Clock::now();
 
     Logger * log;
 };

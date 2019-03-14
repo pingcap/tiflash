@@ -151,8 +151,8 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & res
         auto & table = getOrCreateTable(table_id);
         auto & region = table.regions.get()[region_id];
         LOG_DEBUG(log,
-            "Flush regions - table_id: " + DB::toString(table_id) + ", ~ "
-                + DB::toString(region.cache_bytes) + " bytes, containing region_ids: " + DB::toString(region_id));
+            "Flush region - table_id: " + DB::toString(table_id) + ", original " + DB::toString(region.cache_bytes)
+                + " bytes, region_id: " + DB::toString(region_id));
     }
 
     TMTContext & tmt = context.getTMTContext();
@@ -168,33 +168,37 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & res
         return;
     }
 
-    auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-
-    const auto & table_info = merge_tree->getTableInfo();
-    const auto & columns = merge_tree->getColumns();
-    // TODO: confirm names is right
-    Names names = columns.getNamesOfPhysical();
-    std::vector<TiKVKey> keys;
-    auto [input, status, tol] =
-        getBlockInputStreamByRegion(table_id, region_id, InvalidRegionVersion, table_info, columns, names, false, false, 0, &keys);
-    if (input == nullptr)
-        return;
-
-    std::ignore = status;
-    std::ignore = tol;
-
-    TxnMergeTreeBlockOutputStream output(*merge_tree);
-    input->readPrefix();
-    output.writePrefix();
-    while (true)
+    std::vector<TiKVKey> keys_to_remove;
     {
-        Block block = input->read();
-        if (!block || block.rows() == 0)
-            break;
-        output.write(block);
+        auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+
+        auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
+
+        const auto & table_info = merge_tree->getTableInfo();
+        const auto & columns = merge_tree->getColumns();
+        // TODO: confirm names is right
+        Names names = columns.getNamesOfPhysical();
+        auto [input, status, tol] = getBlockInputStreamByRegion(
+            table_id, region_id, InvalidRegionVersion, table_info, columns, names, false, false, 0, &keys_to_remove);
+        if (input == nullptr)
+            return;
+
+        std::ignore = status;
+        std::ignore = tol;
+
+        TxnMergeTreeBlockOutputStream output(*merge_tree);
+        input->readPrefix();
+        output.writePrefix();
+        while (true)
+        {
+            Block block = input->read();
+            if (!block || block.rows() == 0)
+                break;
+            output.write(block);
+        }
+        output.writeSuffix();
+        input->readSuffix();
     }
-    output.writeSuffix();
-    input->readSuffix();
 
     // remove data in region
     {
@@ -203,10 +207,10 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & res
         if (!region)
             return;
         auto scanner = region->createCommittedScanRemover(table_id);
-        for (const auto & key : keys)
+        for (const auto & key : keys_to_remove)
             scanner->remove(key);
         rest_cache_size = region->dataSize();
-        LOG_TRACE(log, "region " << region_id << "data size after flush " << rest_cache_size);
+        LOG_TRACE(log, "region " << region_id << " data size after flush " << rest_cache_size);
     }
 }
 
@@ -226,13 +230,7 @@ static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
 RegionTable::RegionTable(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher)
     : parent_path(parent_path_),
-      flush_thresholds
-      {
-          {FTH_BYTES_1, FTH_PERIOD_1},
-          {FTH_BYTES_2, FTH_PERIOD_2},
-          {FTH_BYTES_3, FTH_PERIOD_3},
-          {FTH_BYTES_4, FTH_PERIOD_4},
-      },
+      flush_thresholds{{FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}},
       context(context_),
       log(&Logger::get("RegionTable"))
 {
@@ -408,7 +406,7 @@ bool RegionTable::tryFlushRegions()
         });
     }
 
-    for (auto && [id, data]: to_flush)
+    for (auto && [id, data] : to_flush)
     {
         flushRegion(id.first, id.second, data);
     }
@@ -431,7 +429,7 @@ bool RegionTable::tryFlushRegions()
     return !to_flush.empty();
 }
 
-void RegionTable::traverseRegions(std::function<void(TableID, InternalRegion&)> callback)
+void RegionTable::traverseRegions(std::function<void(TableID, InternalRegion &)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto && [table_id, table] : tables)
@@ -443,8 +441,7 @@ void RegionTable::traverseRegions(std::function<void(TableID, InternalRegion&)> 
     }
 }
 
-void RegionTable::traverseRegionsByTable(
-    const TableID table_id, std::function<void(Regions)> callback)
+void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> callback)
 {
     auto & kvstore = context.getTMTContext().kvstore;
     Regions regions;

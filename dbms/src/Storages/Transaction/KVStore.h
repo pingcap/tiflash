@@ -23,7 +23,7 @@ class KVStore final : private boost::noncopyable
 public:
     KVStore(const std::string & data_dir, Context * context = nullptr);
     RegionPtr getRegion(RegionID region_id);
-    void traverseRegions(std::function<void(Region * region)> callback);
+    void traverseRegions(std::function<void(const RegionPtr & region)> callback);
 
     void onSnapshot(const RegionPtr & region, Context * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
@@ -36,8 +36,7 @@ public:
     // Currently we also trigger region files GC in it.
     bool tryPersistAndReport(RaftContext & context);
 
-    // For test, please do NOT remove.
-    RegionMap & _regions() { return regions; }
+    RegionMap getRegions();
 
 private:
     void removeRegion(RegionID region_id, Context * context);
@@ -49,7 +48,7 @@ private:
     std::mutex mutex;
 
     Consistency consistency;
-    Timepoint last_try_persist_time = Clock::now();
+    std::atomic<Timepoint> last_try_persist_time = Clock::now();
 
     Logger * log;
 };

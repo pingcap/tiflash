@@ -11,7 +11,7 @@ extern const int LOGICAL_ERROR;
 }
 
 // TODO move to Settings.h
-static Seconds REGION_PERSIST_PERIOD(60); // 1 minutes
+static Seconds REGION_PERSIST_PERIOD(60);      // 1 minutes
 static Seconds KVSTORE_TRY_PERSIST_PERIOD(10); // 10 seconds
 
 KVStore::KVStore(const std::string & data_dir, Context *) : region_persister(data_dir), log(&Logger::get("KVStore"))
@@ -46,11 +46,17 @@ RegionPtr KVStore::getRegion(RegionID region_id)
     return (it == regions.end()) ? nullptr : it->second;
 }
 
-void KVStore::traverseRegions(std::function<void(Region * region)> callback)
+RegionMap KVStore::getRegions()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return regions;
+}
+
+void KVStore::traverseRegions(std::function<void(const RegionPtr & region)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = regions.begin(); it != regions.end(); ++it)
-        callback(it->second.get());
+        callback(it->second);
 }
 
 void KVStore::onSnapshot(const RegionPtr & region, Context * context)
@@ -216,19 +222,20 @@ void KVStore::report(RaftContext & raft_ctx)
 
 bool KVStore::tryPersistAndReport(RaftContext & context)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
     Timepoint now = Clock::now();
-    if (now < (last_try_persist_time + KVSTORE_TRY_PERSIST_PERIOD))
+    if (now < (last_try_persist_time.load() + KVSTORE_TRY_PERSIST_PERIOD))
         return false;
     last_try_persist_time = now;
 
     bool persist_job = false;
 
     enginepb::CommandResponseBatch responseBatch;
-    for (const auto & p : regions)
+
+    auto all_region_copy = getRegions();
+
+    for (auto && [region_id, region] : all_region_copy)
     {
-        const auto region = p.second;
+        std::ignore = region;
         if (now < (region->lastPersistTime() + REGION_PERSIST_PERIOD))
             continue;
 

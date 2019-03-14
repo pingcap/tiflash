@@ -68,7 +68,7 @@ public:
         std::unordered_set<TableID> tables;
     };
 
-    enum RegionReadStatus: UInt8
+    enum RegionReadStatus : UInt8
     {
         OK,
         NOT_FOUND,
@@ -77,11 +77,14 @@ public:
 
     static const String RegionReadStatusString(RegionReadStatus s)
     {
-        switch(s)
+        switch (s)
         {
-            case OK: return "OK";
-            case NOT_FOUND: return "NOT_FOUND";
-            case VERSION_ERROR: return "VERSION_ERROR";
+            case OK:
+                return "OK";
+            case NOT_FOUND:
+                return "NOT_FOUND";
+            case VERSION_ERROR:
+                return "VERSION_ERROR";
         }
         return "Unknown";
     };
@@ -135,11 +138,10 @@ public:
     /// Returns whether this function has done any meaningful job.
     bool tryFlushRegions();
 
-    void traverseRegions(std::function<void(TableID, InternalRegion & )> callback);
+    void traverseRegions(std::function<void(TableID, InternalRegion &)> callback);
     void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> callback);
 
-    std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(
-        TableID table_id,
+    std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         const RegionID region_id,
         const RegionVersion region_version,
         const TiDB::TableInfo & table_info,
@@ -148,7 +150,7 @@ public:
         bool learner_read,
         bool resolve_locks,
         UInt64 start_ts,
-        std::vector<TiKVKey> * keys=nullptr);
+        std::vector<TiKVKey> * keys = nullptr);
 
     // For debug
     void dumpRegionMap(RegionTable::RegionMap & res);

@@ -106,6 +106,21 @@ TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVVa
     return doInsert(cf, key, value);
 }
 
+void Region::batchInsert(std::function<bool(BatchInsertNode &)> f)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    for (;;)
+    {
+        if (BatchInsertNode p; f(p))
+        {
+            auto && [k, v, cf] = p;
+            doInsert(*cf, *k, *v);
+        }
+        else
+            break;
+    }
+}
+
 TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
     // Ignoring all keys other than records.
@@ -312,7 +327,7 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onComman
     {
         if (!sync_log)
             throw Exception("sync_log should be true", ErrorCodes::LOGICAL_ERROR);
-        return {{}, {}, {}, true};
+        return {{}, {}, {}, sync_log};
     }
 
     if (!checkIndex(index))
@@ -519,13 +534,11 @@ size_t Region::dataSize() const { return cf_data_size; }
 
 void Region::markPersisted()
 {
-    std::lock_guard<std::mutex> lock(mutex);
     last_persist_time = Clock::now();
 }
 
 Timepoint Region::lastPersistTime() const
 {
-    std::lock_guard<std::mutex> lock(mutex);
     return last_persist_time;
 }
 
@@ -551,8 +564,9 @@ void Region::wait_index(UInt64 index)
 {
     if (client != nullptr)
     {
-        LOG_TRACE(log, "begin to wait learner index : " + std::to_string(index));
+        LOG_TRACE(log, "Region " << id() << " begin to wait learner index: " << index);
         meta.wait_index(index);
+        LOG_TRACE(log, "Region " << id() << " wait learner index done");
     }
 }
 
