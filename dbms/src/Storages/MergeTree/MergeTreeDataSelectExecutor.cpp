@@ -604,10 +604,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     std::vector<RegionQueryInfo> regions_query_info;
     std::vector<bool> regions_query_res;
     BlockInputStreams region_block_data;
-    String handle_col_name = data.primary_expr_ast->children[0]->getColumnName();
+    String handle_col_name;
 
     if (is_txn_engine)
     {
+        handle_col_name = data.primary_expr_ast->children[0]->getColumnName();
+
         TMTContext & tmt = context.getTMTContext();
 
         tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions){
