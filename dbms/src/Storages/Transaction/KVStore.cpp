@@ -235,7 +235,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context)
 
     for (auto && [region_id, region] : all_region_copy)
     {
-        std::ignore = region;
+        std::ignore = region_id;
         if (now < (region->lastPersistTime() + REGION_PERSIST_PERIOD))
             continue;
 
