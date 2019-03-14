@@ -10,7 +10,7 @@ namespace DB
 class RangesFilterBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    RangesFilterBlockInputStream(const BlockInputStreamPtr & input_, const HandleRange & ranges_) : input(input_), ranges(ranges_) {}
+    RangesFilterBlockInputStream(const BlockInputStreamPtr & input_, const HandleRange & ranges_, const String & handle_col_name_) : input(input_), ranges(ranges_), handle_col_name(handle_col_name_) {}
 
 protected:
     Block getHeader() const override { return input->getHeader(); }
@@ -28,6 +28,7 @@ protected:
 private:
     BlockInputStreamPtr input;
     const HandleRange ranges;
+    const String handle_col_name;
     Logger * log = &Logger::get("RangesFilterBlockInputStream");
 };
 

@@ -604,11 +604,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     std::vector<RegionQueryInfo> regions_query_info;
     std::vector<bool> regions_query_res;
     BlockInputStreams region_block_data;
-
-    TMTContext & tmt = context.getTMTContext();
+    String handle_col_name = data.primary_expr_ast->children[0]->getColumnName();
 
     if (is_txn_engine)
     {
+        TMTContext & tmt = context.getTMTContext();
+
         tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions){
             for (const auto & region : regions)
             {
@@ -653,6 +654,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             << sum_marks << " marks to read from " << sum_ranges << " ranges");
     else
     {
+        TMTContext & tmt = context.getTMTContext();
+
         extend_mutable_engine_column_names(column_names_to_read, data);
 
         // get data block from region first.
@@ -782,7 +785,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                             use_uncompressed_cache, prewhere_actions, prewhere_column, true,
                             settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size,
                             true, true, virt_column_names, part.part_index_in_query);
-                        source_stream = std::make_shared<RangesFilterBlockInputStream>(source_stream, region_query_info.range_in_table);
+                        source_stream = std::make_shared<RangesFilterBlockInputStream>(source_stream, region_query_info.range_in_table, handle_col_name);
 
                         source_stream = std::make_shared<VersionFilterBlockInputStream>(
                             source_stream, MutableSupport::version_column_name, query_info.read_tso);

@@ -18,12 +18,10 @@ Block RangesFilterBlockInputStream::readImpl()
         if (!block)
             return block;
 
-        if (!block.has(MutableSupport::tidb_pk_column_name))
-        {
+        if (!block.has(handle_col_name))
             throw Exception("RangesFilterBlockInputStream: block without _tidb_rowid.", ErrorCodes::LOGICAL_ERROR);
-        }
 
-        const ColumnWithTypeAndName & handle_column = block.getByName(MutableSupport::tidb_pk_column_name);
+        const ColumnWithTypeAndName & handle_column = block.getByName(handle_col_name);
         const ColumnInt64 * column = typeid_cast<const ColumnInt64 *>(handle_column.column.get());
         if (!column)
         {
