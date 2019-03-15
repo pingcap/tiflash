@@ -280,9 +280,9 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
     tmt.kvstore->traverseRegions(
-        [&](const RegionPtr & region) {
-            curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region->id() :
-                                 std::max<RegionID>(curr_max_region_id, region->id());
+        [&](const RegionID region_id, const RegionPtr & region) {
+            curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id :
+                                 std::max<RegionID>(curr_max_region_id, region_id);
             auto range = region->getRange();
             curr_max_handle_id = std::max(RecordKVFormat::getHandle(range.second), curr_max_handle_id);
         });

@@ -10,10 +10,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-// TODO move to Settings.h
-static Seconds REGION_PERSIST_PERIOD(60);      // 1 minutes
-static Seconds KVSTORE_TRY_PERSIST_PERIOD(10); // 10 seconds
-
 KVStore::KVStore(const std::string & data_dir, Context *) : region_persister(data_dir), log(&Logger::get("KVStore"))
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -52,11 +48,11 @@ RegionMap KVStore::getRegions()
     return regions;
 }
 
-void KVStore::traverseRegions(std::function<void(const RegionPtr & region)> callback)
+void KVStore::traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = regions.begin(); it != regions.end(); ++it)
-        callback(it->second);
+        callback(it->first, it->second);
 }
 
 void KVStore::onSnapshot(const RegionPtr & region, Context * context)
@@ -160,7 +156,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             {
                 std::lock_guard<std::mutex> lock(mutex);
 
-                regions[new_region->id()] = new_region;
+                regions[curr_region_id] = new_region;
 
                 curr_region = new_region;
 
@@ -198,7 +194,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             LOG_INFO(log, "Sync status: " << curr_region->toString(true));
 
             *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse();
-            for (auto & region : split_regions)
+            for (const auto & region : split_regions)
                 *(responseBatch.mutable_responses()->Add()) = region->toCommandResponse();
         }
     }
@@ -220,10 +216,10 @@ void KVStore::report(RaftContext & raft_ctx)
     raft_ctx.send(responseBatch);
 }
 
-bool KVStore::tryPersistAndReport(RaftContext & context)
+bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
 {
     Timepoint now = Clock::now();
-    if (now < (last_try_persist_time.load() + KVSTORE_TRY_PERSIST_PERIOD))
+    if (now < (last_try_persist_time.load() + kvstore_try_persist_period))
         return false;
     last_try_persist_time = now;
 
@@ -231,25 +227,35 @@ bool KVStore::tryPersistAndReport(RaftContext & context)
 
     enginepb::CommandResponseBatch responseBatch;
 
-    auto all_region_copy = getRegions();
+    RegionMap all_region_copy;
+    traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+        if (now < (region->lastPersistTime() + region_persist_period))
+            return;
+        if (region->persistParm() == 0)
+            return;
+        all_region_copy[region_id] = region;
+    });
+
+    std::stringstream ss;
 
     for (auto && [region_id, region] : all_region_copy)
     {
-        std::ignore = region_id;
-        if (now < (region->lastPersistTime() + REGION_PERSIST_PERIOD))
-            continue;
-
         persist_job = true;
+
+        size_t persist_parm = region->persistParm();
         region_persister.persist(region);
         region->markPersisted();
+        region->updatePersistParm(persist_parm);
 
-        LOG_TRACE(log, "Region " << region->id() << " report status");
+        ss << "(" << region_id << "," << region->persistParm() << ") ";
         *(responseBatch.mutable_responses()->Add()) = region->toCommandResponse();
     }
 
+    LOG_TRACE(log, "Regions " << ss.str() << "report status");
+
     if (persist_job)
     {
-        LOG_INFO(log, "Batch report regions status");
+        LOG_TRACE(log, "Batch report regions status");
         context.send(responseBatch);
     }
 

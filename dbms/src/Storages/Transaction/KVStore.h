@@ -17,13 +17,17 @@
 namespace DB
 {
 
+// TODO move to Settings.h
+static const Seconds REGION_PERSIST_PERIOD(120);      // 2 minutes
+static const Seconds KVSTORE_TRY_PERSIST_PERIOD(20); // 20 seconds
+
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(const std::string & data_dir, Context * context = nullptr);
     RegionPtr getRegion(RegionID region_id);
-    void traverseRegions(std::function<void(const RegionPtr & region)> callback);
+    void traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback);
 
     void onSnapshot(const RegionPtr & region, Context * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
@@ -34,7 +38,8 @@ public:
 
     // Persist and report those expired regions.
     // Currently we also trigger region files GC in it.
-    bool tryPersistAndReport(RaftContext & context);
+    bool tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period=KVSTORE_TRY_PERSIST_PERIOD,
+        const Seconds region_persist_period=REGION_PERSIST_PERIOD);
 
     RegionMap getRegions();
 

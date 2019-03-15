@@ -191,6 +191,8 @@ public:
 
     void markPersisted();
     Timepoint lastPersistTime() const;
+    size_t persistParm() const;
+    void updatePersistParm(size_t x);
 
     void swap(Region & other)
     {
@@ -262,6 +264,8 @@ private:
     std::atomic<size_t> cf_data_size = 0;
 
     std::atomic<Timepoint> last_persist_time = Clock::now();
+
+    std::atomic<size_t> persist_parm = 1;
 
     Logger * log;
 };
