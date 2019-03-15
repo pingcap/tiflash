@@ -132,4 +132,49 @@ void deleteRange(const Context& context, StorageMergeTree* storage,
     output.writeSuffix();
 }
 
+/*
+// TODO: use `new_ver = old_ver+1` to delete data is not a good way, may conflict with data in the future
+void moveRangeBetweenPartitions(const Context & context, StorageMergeTree * storage,
+    UInt64 src_partition_id, UInt64 dest_partition_id, const Field & begin, const Field & excluded_end) 
+{   
+    if (src_partition_id == dest_partition_id)  
+    {   
+        LOG_DEBUG(&Logger::get("PartitionDataMover"), "Partition " << src_partition_id <<   
+            " equal " << dest_partition_id << ", skipped moving");  
+        return; 
+    }   
+
+     // TODO: we should lock all    
+    auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);    
+
+     BlockInputStreamPtr input = PartitionDataMover::createBlockInputStreamFromRangeInPartition(    
+        context, storage, src_partition_id, begin, excluded_end);   
+    TxnMergeTreeBlockOutputStream del_output(*storage, src_partition_id);   
+    TxnMergeTreeBlockOutputStream dest_output(*storage, dest_partition_id); 
+
+     del_output.writePrefix();  
+    dest_output.writePrefix();  
+
+     size_t count = 0;  
+    while (true)    
+    {   
+        Block block = input->read();    
+        if (!block || block.rows() == 0)    
+            break;  
+        count += block.rows();  
+        PartitionDataMover::increaseVersionInBlock(block);  
+        dest_output.write(block);   
+        PartitionDataMover::markDeleteAllInBlock(block);    
+        del_output.write(block);    
+    }   
+    del_output.writeSuffix();   
+    dest_output.writeSuffix();  
+
+     LOG_DEBUG(&Logger::get("PartitionDataMover"),  
+        "Moved " << count << " raw rows from partition " << src_partition_id << " to " <<   
+        dest_partition_id << ", range: [" << applyVisitor(FieldVisitorToString(), begin) << 
+        ", " << applyVisitor(FieldVisitorToString(), excluded_end) << ")"); 
+}
+*/
+
 }
