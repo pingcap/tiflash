@@ -404,10 +404,16 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onComman
     }
 
     meta.setApplied(index, term);
-    if (new_region)
-        (*new_region).meta.setApplied(index, term);
 
     ++persist_parm;
+
+    if (new_region)
+    {
+        new_region->meta.setApplied(index, term);
+        new_region->last_persist_time.store(last_persist_time);
+    }
+    for (auto & region : split_regions)
+        region->last_persist_time.store(last_persist_time);
 
     return {new_region, split_regions, table_ids, sync_log};
 }
