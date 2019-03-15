@@ -42,11 +42,13 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
             auto cf_data = data.data();
             auto it = cf_data.begin();
             auto cf_name = data.cf();
+            auto key = TiKVKey();
+            auto value = TiKVValue();
             region->batchInsert([&](Region::BatchInsertNode & node) -> bool {
                 if (it == cf_data.end())
                     return false;
-                auto key = TiKVKey(it->key());
-                auto value = TiKVValue(it->value());
+                key = TiKVKey(it->key());
+                value = TiKVValue(it->value());
                 node = Region::BatchInsertNode(&key, &value, &cf_name);
                 ++it;
                 return true;
