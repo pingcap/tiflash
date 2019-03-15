@@ -1,0 +1,20 @@
+>> drop table if exists test
+>> create table test (
+	v Int32,
+	k Int32
+	) engine = TxnMergeTree((k), 8192, '')
+
+>> import into test partition ('0') values (1, 1, 101, 0)
+>> import into test partition ('0') values (0, 1, 100, 0)
+>> import into test partition ('0') values (2, 1, 102, 1)
+
+>> optimize table test partition id '0' final
+
+>> select _part, * from test
+
+>> selraw _part, * from test
+┌─_part───┬─v─┬─k─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
+│ 0_1_3_1 │ 2 │ 1 │               102 │                 1 │
+└─────────┴───┴───┴───────────────────┴───────────────────┘
+
+>> drop table if exists test

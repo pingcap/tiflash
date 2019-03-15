@@ -1,0 +1,20 @@
+version: '2.3'
+
+services:
+  tics0:
+    image: hub.pingcap.net/tiflash/tics:${TAG:-raft}
+    ports:
+      - "3930:3930"
+      - "9000:9000"
+      - "8123:8123"
+      - "9009:9009"
+    volumes:
+      - ./config/config.xml:/config.xml:ro
+      - ./config/users.xml:/users.xml:ro
+      - ./data:/data
+      - ./log:/log
+      - ..:/tests
+      - ./_env.sh:/tests/_env.sh
+    command:
+      - --config-file
+      - /config.xml

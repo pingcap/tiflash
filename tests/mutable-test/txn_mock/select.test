@@ -1,0 +1,43 @@
+=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test)
+
+=> DBGInvoke __set_flush_threshold(100000, 0)
+=> DBGInvoke mock_schema_syncer('true')
+┌─mock_schema_syncer("true")─┐
+│ mock schema syncer enabled │
+└────────────────────────────┘
+
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
+=> DBGInvoke __put_region(0, 0, 100, default, test)
+
+=> DBGInvoke __raft_insert_row(default, test, 0, 50, 'test1', 1)
+=> DBGInvoke __raft_insert_row(default, test, 0, 51, 'test2', 2)
+=> DBGInvoke __raft_insert_row(default, test, 0, 52, 'test3', 3)
+=> DBGInvoke __raft_insert_row(default, test, 0, 53, 'test3', 4)
+
+=> select * from default.test
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ test1 │     1 │          50 │
+│ test2 │     2 │          51 │
+│ test3 │     3 │          52 │
+│ test3 │     4 │          53 │
+└───────┴───────┴─────────────┘
+
+=> select count(*) from default.test
+┌─count()─┐
+│       4 │
+└─────────┘
+
+=> select avg(col_2) from default.test
+┌─avg(col_2)─┐
+│        2.5 │
+└────────────┘
+
+=> select avg(col_2), col_1 from default.test where col_1 > 'test1' group by col_1
+┌─avg(col_2)─┬─col_1─┐
+│        3.5 │ test3 │
+│          2 │ test2 │
+└────────────┴───────┘
+
+=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test)

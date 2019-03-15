@@ -1,0 +1,24 @@
+>> drop table if exists test
+
+>> create table test (
+	a Int32
+	) engine = Log
+
+>> insert into test values (0)
+>> insert into test values (1), (1)
+
+>> select * from test
+┌─a─┐
+│ 1 │
+│ 1 │
+└───┘
+┌─a─┐
+│ 0 │
+└───┘
+
+>> select * from test where a <= 0
+┌─a─┐
+│ 0 │
+└───┘
+
+>> drop table if exists test

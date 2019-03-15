@@ -236,3 +236,9 @@ node_modules
 public
 website/docs
 website/presentations
+
+# TiCS built and test files
+build_docker
+docker/builder/tics
+tests/docker/data
+tests/docker/log
