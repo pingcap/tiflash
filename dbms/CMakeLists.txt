@@ -32,7 +32,7 @@ find_package (Threads)
 add_subdirectory (src)
 
 set(dbms_headers)
-set(dbms_sources)
+set(dbms_sources src/Storages/DeltaMerge/ValueSpace.cpp)
 
 include(${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
