@@ -223,7 +223,7 @@ private:
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
             {
                 auto offset = vs_column_offsets[column_id];
-                if (has_modifies[offset] != INVALID_ID)
+                if (has_modifies[offset] == INVALID_ID)
                 {
                     output_columns[column_id]->insertFrom(*stable_block_columns[column_id], stable_block_pos);
                 }
