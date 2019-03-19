@@ -247,7 +247,10 @@ struct RidGenerator
                 if (modify_block_dup_next[modify_block_pos++])
                     return rid;
                 else
+                {
+                    ++stable_block_pos;
                     return rid++;
+                }
             }
             else if (res > 0)
             {
