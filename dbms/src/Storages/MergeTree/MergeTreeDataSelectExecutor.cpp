@@ -157,8 +157,8 @@ void extend_mutable_engine_column_names(Names& column_names_to_read, const Merge
     column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
 }
 
-MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & index, const Int64 handle_bg,
-    const Int64 handle_ed, MarkRanges mark_ranges, size_t min_marks_for_seek, const Settings & settings)
+MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & index, const Int64 handle_begin,
+    const Int64 handle_end, MarkRanges mark_ranges, size_t min_marks_for_seek, const Settings & settings)
 {
     MarkRanges res;
 
@@ -187,7 +187,7 @@ MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & inde
         Int64 index_left_handle = index_left.get<Int64>();
         Int64 index_right_handle = index_right.get<Int64>();
 
-        if (handle_bg >= index_right_handle || index_left_handle >= handle_ed)
+        if (handle_begin >= index_right_handle || index_left_handle >= handle_end)
             continue;
 
         if (range.end == range.begin + 1)

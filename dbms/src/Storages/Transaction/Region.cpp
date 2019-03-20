@@ -180,50 +180,61 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 
 UInt64 Region::getIndex() const { return meta.appliedIndex(); }
 
-RegionPtr Region::splitInto(const RegionMeta & meta) const
+RegionPtr Region::splitInto(const RegionMeta & meta)
 {
     auto [start_key, end_key] = meta.getRange();
     RegionPtr new_region;
     if (client != nullptr)
-    {
         new_region = std::make_shared<Region>(
             meta, std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID()));
-    }
     else
-    {
         new_region = std::make_shared<Region>(meta);
-    }
 
-    for (auto && [key, value] : data_cf)
+    std::lock_guard<std::mutex> lock(mutex);
+
+    for (auto it = data_cf.begin(); it != data_cf.end(); )
     {
-        bool ok = start_key ? key >= start_key : true;
-        ok = ok && (end_key ? key < end_key : true);
+        bool ok = start_key ? it->first >= start_key : true;
+        ok = ok && (end_key ? it->first < end_key : true);
         if (ok)
         {
-            new_region->data_cf.emplace(key, value);
-            new_region->cf_data_size += key.dataSize() + value.dataSize();
+            cf_data_size -= it->first.dataSize() + it->second.dataSize();
+            new_region->cf_data_size += it->first.dataSize() + it->second.dataSize();
+
+            new_region->data_cf.insert(std::move(*it));
+            it = data_cf.erase(it);
         }
+        else
+            ++it;
     }
 
-    for (auto && [key, value] : write_cf)
+    for (auto it = write_cf.begin(); it != write_cf.end(); )
     {
-        bool ok = start_key ? key >= start_key : true;
-        ok = ok && (end_key ? key < end_key : true);
+        bool ok = start_key ? it->first >= start_key : true;
+        ok = ok && (end_key ? it->first < end_key : true);
         if (ok)
         {
-            new_region->write_cf.emplace(key, value);
-            new_region->cf_data_size += key.dataSize() + value.dataSize();
+            cf_data_size -= it->first.dataSize() + it->second.dataSize();
+            new_region->cf_data_size += it->first.dataSize() + it->second.dataSize();
+
+            new_region->write_cf.insert(std::move(*it));
+            it = write_cf.erase(it);
         }
+        else
+            ++it;
     }
 
-    for (auto && [key, value] : lock_cf)
+    for (auto it = lock_cf.begin(); it != lock_cf.end(); )
     {
-        bool ok = start_key ? key >= start_key : true;
-        ok = ok && (end_key ? key < end_key : true);
+        bool ok = start_key ? it->first >= start_key : true;
+        ok = ok && (end_key ? it->first < end_key : true);
         if (ok)
         {
-            new_region->lock_cf.emplace(key, value);
+            new_region->lock_cf.insert(std::move(*it));
+            it = lock_cf.erase(it);
         }
+        else
+            ++it;
     }
 
     return new_region;
@@ -231,26 +242,29 @@ RegionPtr Region::splitInto(const RegionMeta & meta) const
 
 void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response)
 {
-    const auto & change_peer = request.change_peer();
+    const auto & change_peer_request = request.change_peer();
     const auto & new_region = response.change_peer().region();
 
-    LOG_INFO(log, toString() << " change peer " << eraftpb::ConfChangeType_Name(change_peer.change_type()));
+    LOG_INFO(log, toString() << " change peer " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
-    switch (change_peer.change_type())
+    switch (change_peer_request.change_type())
     {
         case eraftpb::ConfChangeType::AddNode:
         case eraftpb::ConfChangeType::AddLearnerNode:
+        {
+            // change the peers of region, add conf_ver.
             meta.setRegion(new_region);
             return;
+        }
         case eraftpb::ConfChangeType::RemoveNode:
         {
-            const auto & peer = change_peer.peer();
+            const auto & peer = change_peer_request.peer();
+            auto store_id = peer.store_id();
+
+            meta.removePeer(store_id);
+
             if (meta.peerId() == peer.id())
-            {
-                // Remove ourself, we will destroy all region data later.
-                // So we need not to apply following logs.
-                meta.setPendingRemove();
-            }
+                setPendingRemove();
             return;
         }
         default:
@@ -258,7 +272,7 @@ void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft
     }
 }
 
-const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
+const metapb::Peer & FindPeer(const metapb::Region & region, UInt64 store_id)
 {
     for (const auto & peer : region.peers())
     {
@@ -268,7 +282,7 @@ const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
     throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-std::pair<RegionPtr, Regions> Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response)
+Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response)
 {
     const auto & split_reqs = request.splits();
     const auto & new_region_infos = response.splits().regions();
@@ -280,60 +294,60 @@ std::pair<RegionPtr, Regions> Region::execBatchSplit(const raft_cmdpb::AdminRequ
     }
 
     std::vector<RegionPtr> split_regions;
-    auto store_id = meta.storeId();
-    RegionPtr new_region;
 
     for (const auto & region_info : new_region_infos)
     {
-        if (region_info.id() == meta.regionId())
+        if (region_info.id() != meta.regionId())
         {
-            RegionMeta new_meta(meta.getPeer(), region_info, meta.getApplyState());
-            new_region = splitInto(new_meta);
-        }
-        else
-        {
-            const auto & peer = findPeer(region_info, store_id);
+            const auto & peer = FindPeer(region_info, meta.storeId());
             RegionMeta new_meta(peer, region_info, initialApplyState());
             auto split_region = splitInto(new_meta);
             split_regions.emplace_back(split_region);
         }
     }
 
+    for (const auto & region_info : new_region_infos)
+    {
+        if (region_info.id() == meta.regionId())
+        {
+            RegionMeta new_meta(meta.getPeer(), region_info, meta.getApplyState());
+            meta.swap(new_meta);
+            break;
+        }
+    }
+
     std::string ids;
     for (const auto & region : split_regions)
         ids += DB::toString(region->id()) + ",";
-    ids += DB::toString(new_region->id());
+    ids += id();
     LOG_INFO(log, toString() << " split into [" << ids << "]");
 
-    return {new_region, split_regions};
+    return split_regions;
 }
 
-std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(
+std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(
     const enginepb::CommandRequest & cmd, CmdCallBack & /*callback*/)
 {
     auto & header = cmd.header();
-    RegionID region_id = header.region_id();
+    RegionID region_id = id();
     UInt64 term = header.term();
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
 
-    RegionPtr new_region;
     std::vector<RegionPtr> split_regions;
-
-    if (meta.isPendingRemove())
-        throw Exception("Pending remove flag should be false", ErrorCodes::LOGICAL_ERROR);
 
     if (term == 0 && index == 0)
     {
         if (!sync_log)
             throw Exception("sync_log should be true", ErrorCodes::LOGICAL_ERROR);
-        return {{}, {}, {}, sync_log};
+        return {{}, {}, sync_log};
     }
 
     if (!checkIndex(index))
-        return {{}, {}, {}, false};
+        return {{}, {}, false};
 
     TableIDSet table_ids;
+    bool need_persist = true;
 
     if (cmd.has_admin_request())
     {
@@ -351,12 +365,13 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onComman
                 execChangePeer(request, response);
                 break;
             case raft_cmdpb::AdminCmdType::BatchSplit:
-                std::tie(new_region, split_regions) = execBatchSplit(request, response);
+                split_regions = execBatchSplit(request, response);
                 break;
             case raft_cmdpb::AdminCmdType::CompactLog:
             case raft_cmdpb::AdminCmdType::ComputeHash:
             case raft_cmdpb::AdminCmdType::VerifyHash:
                 // Ignore
+                need_persist = false;
                 break;
             default:
                 LOG_ERROR(log, "Unsupported admin command type " << raft_cmdpb::AdminCmdType_Name(type));
@@ -393,11 +408,13 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onComman
                 case raft_cmdpb::CmdType::Snap:
                 case raft_cmdpb::CmdType::Get:
                     LOG_WARNING(log, "Region [" << region_id << "] skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
+                    need_persist = false;
                     break;
                 case raft_cmdpb::CmdType::Prewrite:
                 case raft_cmdpb::CmdType::Invalid:
                 default:
                     LOG_ERROR(log, "Unsupported command type " << raft_cmdpb::CmdType_Name(type));
+                    need_persist = false;
                     break;
             }
         }
@@ -405,17 +422,13 @@ std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> Region::onComman
 
     meta.setApplied(index, term);
 
-    ++persist_parm;
+    if (need_persist)
+        ++persist_parm;
 
-    if (new_region)
-    {
-        new_region->meta.setApplied(index, term);
-        new_region->last_persist_time.store(last_persist_time);
-    }
     for (auto & region : split_regions)
         region->last_persist_time.store(last_persist_time);
 
-    return {new_region, split_regions, table_ids, sync_log};
+    return {split_regions, table_ids, sync_log};
 }
 
 size_t Region::serialize(WriteBuffer & buf)
@@ -571,26 +584,26 @@ enginepb::CommandResponse Region::toCommandResponse() const { return meta.toComm
 
 RegionRange Region::getRange() const { return meta.getRange(); }
 
-UInt64 Region::learner_read()
+UInt64 Region::learnerRead()
 {
     if (client != nullptr)
         return client->getReadIndex();
     return 0;
 }
 
-void Region::wait_index(UInt64 index)
+void Region::waitIndex(UInt64 index)
 {
     if (client != nullptr)
     {
         LOG_TRACE(log, "Region " << id() << " begin to wait learner index: " << index);
-        meta.wait_index(index);
+        meta.waitIndex(index);
         LOG_TRACE(log, "Region " << id() << " wait learner index done");
     }
 }
 
 UInt64 Region::version() const { return meta.version(); }
 
-UInt64 Region::conf_ver() const { return meta.conf_ver(); }
+UInt64 Region::confVer() const { return meta.confVer(); }
 
 std::pair<HandleID, HandleID> Region::getHandleRangeByTable(TableID table_id) const
 {

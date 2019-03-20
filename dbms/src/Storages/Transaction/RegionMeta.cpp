@@ -72,7 +72,7 @@ metapb::Region RegionMeta::getRegion() const
     return region;
 }
 
-raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
+const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return apply_state;
@@ -160,14 +160,19 @@ bool RegionMeta::isPendingRemove() const
 
 void RegionMeta::setPendingRemove()
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    pending_remove = true;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        pending_remove = true;
+    }
+    cv.notify_all();
 }
 
-void RegionMeta::wait_index(UInt64 index)
+void RegionMeta::waitIndex(UInt64 index)
 {
     std::unique_lock<std::mutex> lk(mutex);
-    cv.wait(lk, [this, index] { return apply_state.applied_index() >= index; });
+    cv.wait(lk, [this, index] {
+        return pending_remove || apply_state.applied_index() >= index;
+    });
 }
 
 UInt64 RegionMeta::version() const
@@ -176,10 +181,37 @@ UInt64 RegionMeta::version() const
     return region.region_epoch().version();
 }
 
-UInt64 RegionMeta::conf_ver() const
+UInt64 RegionMeta::confVer() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return region.region_epoch().conf_ver();
+}
+
+void RegionMeta::swap(RegionMeta & other)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    peer.Swap(&other.peer);
+    region.Swap(&other.region);
+    apply_state.Swap(&other.apply_state);
+    std::swap(applied_term, other.applied_term);
+    std::swap(pending_remove, other.pending_remove);
+}
+
+void RegionMeta::removePeer(UInt64 store_id)
+{
+    std::unique_lock<std::mutex> lk(mutex);
+
+    auto mutable_peers = region.mutable_peers();
+
+    for (auto it = mutable_peers->begin(); it != mutable_peers->end(); ++it)
+    {
+        if (it->store_id() == store_id)
+        {
+            mutable_peers->erase(it);
+            return;
+        }
+    }
+    throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
 } // namespace DB

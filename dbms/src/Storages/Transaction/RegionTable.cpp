@@ -265,6 +265,7 @@ RegionTable::RegionTable(Context & context_, const std::string & parent_path_, s
                 ++it;
 
             region.cache_bytes = region_ptr->dataSize();
+            region.updated = true;
 
             // Update region_id -> table_id
             {

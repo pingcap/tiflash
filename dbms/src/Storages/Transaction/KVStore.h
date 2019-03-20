@@ -25,7 +25,7 @@ static const Seconds KVSTORE_TRY_PERSIST_PERIOD(20); // 20 seconds
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(const std::string & data_dir, Context * context = nullptr);
+    KVStore(const std::string & data_dir, Context * context = nullptr, std::vector<RegionID> * regions_to_remove = nullptr);
     RegionPtr getRegion(RegionID region_id);
     void traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback);
 
@@ -41,9 +41,8 @@ public:
     bool tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period=KVSTORE_TRY_PERSIST_PERIOD,
         const Seconds region_persist_period=REGION_PERSIST_PERIOD);
 
-    RegionMap getRegions();
+    const RegionMap & getRegions();
 
-private:
     void removeRegion(RegionID region_id, Context * context);
 
 private:

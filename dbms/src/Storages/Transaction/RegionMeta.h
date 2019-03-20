@@ -40,16 +40,16 @@ public:
     pingcap::kv::RegionVerID getRegionVerID() const {
         return pingcap::kv::RegionVerID {
             region.id(),
-            conf_ver(),
+            confVer(),
             version()
         };
     }
 
     UInt64 version() const;
 
-    UInt64 conf_ver() const;
+    UInt64 confVer() const;
 
-    raft_serverpb::RaftApplyState getApplyState() const;
+    const raft_serverpb::RaftApplyState & getApplyState() const;
 
     void setRegion(const metapb::Region & region);
     void setApplied(UInt64 index, UInt64 term);
@@ -66,14 +66,7 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
 
-    void swap(RegionMeta & other)
-    {
-        peer.Swap(&other.peer);
-        region.Swap(&other.region);
-        apply_state.Swap(&other.apply_state);
-        std::swap(applied_term, other.applied_term);
-        std::swap(pending_remove, other.pending_remove);
-    }
+    void swap(RegionMeta & other);
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
     {
@@ -81,7 +74,9 @@ public:
             && meta1.applied_term == meta2.applied_term;
     }
 
-    void wait_index(UInt64 index);
+    void waitIndex(UInt64 index);
+
+    void removePeer(UInt64 store_id);
 
 private:
     metapb::Peer peer;

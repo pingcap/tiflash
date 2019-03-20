@@ -71,6 +71,7 @@ void RegionPersister::persist(const RegionPtr & region)
 {
     /// Multi threads persist is not yet supported.
     std::lock_guard<std::mutex> persist_lock(persist_mutex);
+    size_t persist_parm = region->persistParm();
 
     auto region_id = region->id();
 
@@ -94,6 +95,9 @@ void RegionPersister::persist(const RegionPtr & region)
         if (!exists)
             coverOldRegion(cur_file, region_id);
     }
+
+    region->markPersisted();
+    region->updatePersistParm(persist_parm);
 }
 
 /// Old regions are cover by newer regions with the same id.

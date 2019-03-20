@@ -30,11 +30,8 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     if (!region)
         return {nullptr, NOT_FOUND, 0};
 
-    if (region_version != InvalidRegionVersion && region->version() != region_version)
-        return {nullptr, VERSION_ERROR, 0};
-
     if (learner_read)
-        region->wait_index(region->learner_read());
+        region->waitIndex(region->learnerRead());
 
     auto schema_fetcher = [&](TableID) {
         return std::make_tuple<const TiDB::TableInfo *, const ColumnsDescription *, const Names *>(&table_info, &columns, &ordered_columns);
@@ -42,6 +39,13 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
 
     {
         auto scanner = region->createCommittedScanRemover(table_id);
+
+        if (region->isPendingRemove())
+            return {nullptr, PENDING_REMOVE, 0};
+
+        if (region_version != InvalidRegionVersion && region->version() != region_version)
+            return {nullptr, VERSION_ERROR, 0};
+
         {
             Region::LockInfoPtr lock_info = nullptr;
             if (resolve_locks)

@@ -30,15 +30,15 @@ Block RangesFilterBlockInputStream::readImpl()
 
         size_t rows = block.rows();
 
-        auto handle_bg = column->getElement(0);
-        auto handle_ed = column->getElement(rows - 1);
+        auto handle_begin = column->getElement(0);
+        auto handle_end = column->getElement(rows - 1);
 
-        if (handle_bg >= ranges.second || ranges.first > handle_ed)
+        if (handle_begin >= ranges.second || ranges.first > handle_end)
             continue;
 
-        if (handle_bg >= ranges.first)
+        if (handle_begin >= ranges.first)
         {
-            if (handle_ed < ranges.second)
+            if (handle_end < ranges.second)
             {
                 return block;
             }
@@ -58,20 +58,20 @@ Block RangesFilterBlockInputStream::readImpl()
         }
         else
         {
-            size_t pos_bg
+            size_t pos_begin
                 = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.first) - column->getData().cbegin();
-            size_t pos_ed = rows;
-            if (handle_ed >= ranges.second)
-                pos_ed = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
+            size_t pos_end = rows;
+            if (handle_end >= ranges.second)
+                pos_end = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
 
-            size_t len = pos_ed - pos_bg;
+            size_t len = pos_end - pos_begin;
             if (!len)
                 continue;
             for (size_t i = 0; i < block.columns(); i++)
             {
                 ColumnWithTypeAndName & ori_column = block.getByPosition(i);
                 auto new_column = ori_column.column->cloneEmpty();
-                new_column->insertRangeFrom(*ori_column.column, pos_bg, len);
+                new_column->insertRangeFrom(*ori_column.column, pos_begin, len);
                 ori_column.column = std::move(new_column);
             }
         }

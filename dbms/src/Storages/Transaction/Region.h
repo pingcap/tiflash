@@ -169,7 +169,7 @@ public:
     using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
     void batchInsert(std::function<bool(BatchInsertNode &)> f);
 
-    std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
+    std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
 
     std::unique_ptr<CommittedScanRemover> createCommittedScanRemover(TableID expected_table_id);
 
@@ -205,8 +205,9 @@ public:
         write_cf.swap(other.write_cf);
         lock_cf.swap(other.lock_cf);
 
-        cf_data_size = size_t(other.cf_data_size);
+        auto tmp = size_t(other.cf_data_size);
         other.cf_data_size = size_t(cf_data_size);
+        cf_data_size = tmp;
     }
 
     friend bool operator==(const Region & region1, const Region & region2)
@@ -218,14 +219,14 @@ public:
             && region1.lock_cf == region2.lock_cf && region1.cf_data_size == region2.cf_data_size;
     }
 
-    UInt64 learner_read();
+    UInt64 learnerRead();
 
-    void wait_index(UInt64 index);
+    void waitIndex(UInt64 index);
 
     UInt64 getIndex() const;
 
     RegionVersion version() const;
-    RegionVersion conf_ver() const;
+    RegionVersion confVer() const;
 
     std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
 
@@ -244,8 +245,8 @@ private:
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
 
-    RegionPtr splitInto(const RegionMeta & meta) const;
-    std::pair<RegionPtr, Regions> execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
+    RegionPtr splitInto(const RegionMeta & meta);
+    Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
 
 private:
