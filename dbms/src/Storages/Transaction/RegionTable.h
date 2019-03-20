@@ -147,6 +147,7 @@ public:
     std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         const RegionID region_id,
         const RegionVersion region_version,
+        const RegionVersion conf_version,
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,

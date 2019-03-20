@@ -179,7 +179,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & res
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
         auto [input, status, tol] = getBlockInputStreamByRegion(
-            table_id, region_id, InvalidRegionVersion, table_info, columns, names, false, false, 0, &keys_to_remove);
+            table_id, region_id, InvalidRegionVersion, InvalidRegionVersion, table_info, columns, names, false, false, 0, &keys_to_remove);
         if (input == nullptr)
             return;
 

@@ -142,6 +142,7 @@ private:
     void sendHello();
     void sendData(const Block & block);    /// Write a block to the network.
     void sendException(const Exception & e);
+    void sendRegionException(const std::vector<UInt64> & region_ids);
     void sendLockInfos(const Region::LockInfos & lock_infos);
     void sendProgress();
     void sendEndOfStream();

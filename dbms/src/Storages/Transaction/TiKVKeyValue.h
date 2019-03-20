@@ -431,7 +431,7 @@ inline UInt64 getTsFromWriteCf(const TiKVValue & value)
 namespace TiKVRange
 {
 
-template <bool start>
+template <bool start, bool decoded = false>
 inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
 {
     constexpr HandleID min = std::numeric_limits<HandleID>::min();
@@ -445,7 +445,12 @@ inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
             return max;
     }
 
-    const auto key = std::get<0>(RecordKVFormat::decodeTiKVKey(tikv_key));
+    String key;
+    if constexpr (decoded) {
+        key = tikv_key.getStr();
+    } else {
+        key = std::get<0>(RecordKVFormat::decodeTiKVKey(tikv_key));
+    }
 
     if (key <= RecordKVFormat::genRawKey(table_id, min))
         return min;

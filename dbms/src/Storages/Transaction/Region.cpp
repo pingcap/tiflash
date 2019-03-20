@@ -94,6 +94,7 @@ Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_
         {
             continue;
         }
+        std::cout<<"got primary lock: "<<primary<<std::endl;
         return std::make_unique<LockInfo>(LockInfo{primary, ts, decode_key, ttl});
     }
 

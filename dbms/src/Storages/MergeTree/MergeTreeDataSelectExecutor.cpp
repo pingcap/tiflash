@@ -29,6 +29,7 @@ namespace std
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSampleRatio.h>
 
@@ -79,6 +80,8 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
     extern const int ILLEGAL_COLUMN;
     extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int VERSION_ERROR;
+    extern const int REGION_MISS;
 }
 
 
@@ -601,7 +604,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
     // TODO: set regions_query_info from setting.
 
-    std::vector<RegionQueryInfo> regions_query_info;
+    std::vector<RegionQueryInfo> regions_query_info = query_info.regions_query_info;
     std::vector<bool> regions_query_res;
     BlockInputStreams region_block_data;
     String handle_col_name;
@@ -609,15 +612,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     if (is_txn_engine)
     {
         handle_col_name = data.primary_expr_ast->children[0]->getColumnName();
-
-        TMTContext & tmt = context.getTMTContext();
-
-        tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions){
-            for (const auto & region : regions)
-            {
-                regions_query_info.push_back({region->id(), region->version(), region->getHandleRangeByTable(data.table_info.id)});
-            }
-        });
     }
 
     std::sort(regions_query_info.begin(), regions_query_info.end());
@@ -668,7 +662,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
             auto [region_input_stream, status, tol] = tmt.region_table.getBlockInputStreamByRegion(
-                data.table_info.id, region_query_info.region_id, region_query_info.version,
+                data.table_info.id, region_query_info.region_id, region_query_info.version, region_query_info.conf_version,
                 data.table_info, data.getColumns(), column_names_to_read,
                 true, query_info.resolve_locks, query_info.read_tso);
             if (status != RegionTable::OK)
@@ -678,7 +672,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                         <<  ", handle range [" << regions_query_info[region_index].range_in_table.first
                                         << ", " << regions_query_info[region_index].range_in_table.second << ") , status "
                                         << RegionTable::RegionReadStatusString(status));
-                continue;
+                std::vector<RegionID> region_ids;
+                for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                {
+                    region_ids.push_back(regions_query_info[region_index].region_id);
+                }
+                throw RegionException(region_ids);
             }
             region_block_data[region_index] = region_input_stream;
             rows_in_mem[region_index] = tol;

@@ -16,6 +16,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     TableID table_id,
     const RegionID region_id,
     const RegionVersion region_version,
+    const RegionVersion conf_version,
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & ordered_columns,
@@ -43,7 +44,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         if (region->isPendingRemove())
             return {nullptr, PENDING_REMOVE, 0};
 
-        if (region_version != InvalidRegionVersion && region->version() != region_version)
+        if (region_version != InvalidRegionVersion && region->version() != region_version && region->confVer() != conf_version)
             return {nullptr, VERSION_ERROR, 0};
 
         {
