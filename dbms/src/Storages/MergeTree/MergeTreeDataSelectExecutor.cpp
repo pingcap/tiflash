@@ -651,7 +651,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
     }
 
-    if (!is_txn_engine)
+    if (!is_txn_engine || select.raw_for_mutable)
         LOG_DEBUG(log, "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, "
             << sum_marks << " marks to read from " << sum_ranges << " ranges");
     else
