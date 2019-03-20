@@ -651,7 +651,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
     }
 
-    if (!is_txn_engine || select.raw_for_mutable)
+    if (!is_txn_engine)
         LOG_DEBUG(log, "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, "
             << sum_marks << " marks to read from " << sum_ranges << " ranges");
     else
@@ -665,6 +665,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
         {
+            if (select.no_kvstore)
+                continue;
+
             const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
             auto [region_input_stream, status, tol] = tmt.region_table.getBlockInputStreamByRegion(
@@ -686,6 +689,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
         {
+            if (select.no_kvstore)
+                continue;
+
             if (!regions_query_res[region_index])
                 continue;
 
@@ -727,7 +733,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
     BlockInputStreams res;
 
-    // TODO: By now, selraw will output all parts and all regions. Fix it if needed.
     if (is_txn_engine)
     {
         bool use_uncompressed_cache = settings.use_uncompressed_cache;
