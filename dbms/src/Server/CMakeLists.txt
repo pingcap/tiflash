@@ -198,20 +198,3 @@ install (
     FILES config.xml users.xml
     DESTINATION  ${CLICKHOUSE_ETC_DIR}/clickhouse-server
     COMPONENT theflash)
-
-add_executable (gserver GServer.cpp)
-add_executable (gclient GClient.cpp)
-
-target_link_libraries (gserver
-    kvproto
-    ${Protobuf_LIBRARIES}
-    gRPC::grpc++_unsecure)
-
-target_link_libraries (gclient
-    kvproto
-    ${Protobuf_LIBRARIES}
-    gRPC::grpc++_unsecure)
-
-target_include_directories (gserver PUBLIC ${DBMS_INCLUDE_DIR})
-target_include_directories (gclient PUBLIC ${DBMS_INCLUDE_DIR})
-
