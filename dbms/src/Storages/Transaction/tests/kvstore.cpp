@@ -257,12 +257,12 @@ int main(int, char **)
     }
 
     {
-        kvstore->tryPersistAndReport(context);
+        kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
 
         {
             auto         kvstore2 = std::make_shared<KVStore>(dir_path);
-            const auto & regions1 = kvstore->_regions();
-            const auto & regions2 = kvstore2->_regions();
+            const auto & regions1 = kvstore->getRegions();
+            const auto & regions2 = kvstore2->getRegions();
             for (auto && [region_id1, region1] : regions1)
             {
                 auto it = regions2.find(region_id1);
@@ -299,9 +299,9 @@ int main(int, char **)
 
         kvstore->onServiceCommand(cmds, context);
 
-        ASSERT_CHECK_EQUAL(1, kvstore->_regions().size(), suc);
+        ASSERT_CHECK_EQUAL(1, kvstore->getRegions().size(), suc);
 
-        kvstore->tryPersistAndReport(context);
+        kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
     }
 
     return suc ? 0 : 1;

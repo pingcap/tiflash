@@ -39,6 +39,18 @@ public:
     StringObject() = default;
     explicit StringObject(std::string && str_) : str(std::move(str_)) {}
     explicit StringObject(const std::string & str_) : str(str_) {}
+    StringObject(StringObject && obj) : str(std::move(obj.str)) {}
+    StringObject(const StringObject & obj) : str(obj.str) {}
+    StringObject & operator=(const StringObject & a)
+    {
+        str = a.str;
+        return *this;
+    }
+    StringObject & operator=(StringObject && a)
+    {
+        str = std::move(a.str);
+        return *this;
+    }
 
     const std::string & getStr() const { return str; }
     std::string &       getStrRef() { return str; }
@@ -69,7 +81,7 @@ public:
 
     size_t serialize(WriteBuffer & buf) const { return writeBinary2(str, buf); }
 
-    static T deserialize(ReadBuffer & buf) { return T {readBinary2<std::string>(buf)}; }
+    static T deserialize(ReadBuffer & buf) { return T(readBinary2<std::string>(buf)); }
 
 private:
     std::string str;

@@ -37,16 +37,28 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
         if (!request.has_data())
             throw Exception("Failed to read snapshot data", ErrorCodes::LOGICAL_ERROR);
         const auto & data = request.data();
-        data.cf();
-        for (const auto & kv : data.data())
-            region->insert(data.cf(), TiKVKey{kv.key()}, TiKVValue{kv.value()});
+
+        {
+            auto cf_data = data.data();
+            auto it = cf_data.begin();
+            auto cf_name = data.cf();
+            auto key = TiKVKey();
+            auto value = TiKVValue();
+            region->batchInsert([&](Region::BatchInsertNode & node) -> bool {
+                if (it == cf_data.end())
+                    return false;
+                key = TiKVKey(it->key());
+                value = TiKVValue(it->value());
+                node = Region::BatchInsertNode(&key, &value, &cf_name);
+                ++it;
+                return true;
+            });
+
+        }
     }
 
     // context may be null in test cases.
-    if (context)
-        kvstore->onSnapshot(region, context);
-    else
-        kvstore->onSnapshot(region, nullptr);
+    kvstore->onSnapshot(region, context);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot done.");
 }

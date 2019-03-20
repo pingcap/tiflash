@@ -10,27 +10,20 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-// TODO move to Settings.h
-static Seconds REGION_PERSIST_PERIOD(60); // 1 minutes
-static Seconds KVSTORE_TRY_PERSIST_PERIOD(10); // 10 seconds
-
-KVStore::KVStore(const std::string & data_dir, Context * context) : region_persister(data_dir), log(&Logger::get("KVStore"))
+KVStore::KVStore(const std::string & data_dir, Context *, std::vector<RegionID> * regions_to_remove) : region_persister(data_dir), log(&Logger::get("KVStore"))
 {
     std::lock_guard<std::mutex> lock(mutex);
     region_persister.restore(regions);
 
     // Remove regions which pending_remove = true, those regions still exist because progress crash after persisted and before removal.
-    std::vector<RegionID> to_remove;
-    for (auto p : regions)
+    if (regions_to_remove != nullptr)
     {
-        RegionPtr & region = p.second;
-        if (region->isPendingRemove())
-            to_remove.push_back(region->id());
-    }
-    for (auto & region_id : to_remove)
-    {
-        LOG_INFO(log, "Region [" << region_id << "] is removed after restored.");
-        removeRegion(region_id, context);
+        for (auto & p : regions)
+        {
+            RegionPtr & region = p.second;
+            if (region->isPendingRemove())
+                regions_to_remove->push_back(region->id());
+        }
     }
 }
 
@@ -41,20 +34,23 @@ RegionPtr KVStore::getRegion(RegionID region_id)
     return (it == regions.end()) ? nullptr : it->second;
 }
 
-void KVStore::traverseRegions(std::function<void(Region * region)> callback)
+const RegionMap & KVStore::getRegions()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return regions;
+}
+
+void KVStore::traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = regions.begin(); it != regions.end(); ++it)
-        callback(it->second.get());
+        callback(it->first, it->second);
 }
 
 void KVStore::onSnapshot(const RegionPtr & region, Context * context)
 {
     TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
     auto region_id = region->id();
-
-    // Remove old region data in partition before apply snapshot.
-    // TODO support atomic remove & insert new region.
 
     RegionPtr old_region;
     {
@@ -64,8 +60,8 @@ void KVStore::onSnapshot(const RegionPtr & region, Context * context)
             old_region = it->second;
     }
 
-    if (tmt_ctx && old_region)
-        tmt_ctx->region_partition.removeRegion(old_region);
+    if (old_region != nullptr && old_region->getIndex() >= region->getIndex())
+        return;
 
     region_persister.persist(region);
 
@@ -75,7 +71,7 @@ void KVStore::onSnapshot(const RegionPtr & region, Context * context)
     }
 
     if (tmt_ctx)
-        tmt_ctx->region_partition.applySnapshotRegion(region);
+        tmt_ctx->region_table.applySnapshotRegion(region);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
@@ -108,18 +104,6 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             curr_region = it->second;
         }
 
-        if (curr_region->isPendingRemove())
-        {
-            // Normally this situation should not exist. Unless some exceptions throw during former removeRegion.
-            LOG_DEBUG(log, curr_region->toString() << " (before cmd) is in pending remove status, remove it now.");
-            removeRegion(curr_region_id, context);
-
-            LOG_INFO(log, "Sync status because of removal: " << curr_region->toString(true));
-            *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse();
-
-            continue;
-        }
-
         if (header.destroy())
         {
             LOG_INFO(log, curr_region->toString() << " is removed by tombstone.");
@@ -134,9 +118,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        auto before_cache_bytes = curr_region->dataSize();
-
-        auto [new_region, split_regions, table_ids, sync] = curr_region->onCommand(cmd, callback);
+        auto [split_regions, table_ids, sync] = curr_region->onCommand(cmd, callback);
 
         if (curr_region->isPendingRemove())
         {
@@ -149,16 +131,11 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-
         if (!split_regions.empty())
         {
-            // Persist current region and split regions, and mange data in partition
-            // Add to regions map so that queries can see them.
-            // TODO: support atomic or idempotent operation.
             {
                 std::lock_guard<std::mutex> lock(mutex);
 
-                curr_region->swap(*new_region);
                 for (const auto & region : split_regions)
                 {
                     auto [it, ok] = regions.emplace(region->id(), region);
@@ -170,17 +147,19 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                 }
             }
 
-            if (tmt_ctx)
-                tmt_ctx->region_partition.splitRegion(curr_region, split_regions);
+            {
+                region_persister.persist(curr_region);
+                for (const auto & region : split_regions)
+                    region_persister.persist(region);
+            }
 
-            region_persister.persist(curr_region);
-            for (const auto & region : split_regions)
-                region_persister.persist(region);
+            if (tmt_ctx)
+                tmt_ctx->region_table.splitRegion(curr_region, split_regions);
         }
         else
         {
             if (tmt_ctx)
-                tmt_ctx->region_partition.updateRegion(curr_region, before_cache_bytes, table_ids);
+                tmt_ctx->region_table.updateRegion(curr_region, table_ids);
 
             if (sync)
                 region_persister.persist(curr_region);
@@ -191,7 +170,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             LOG_INFO(log, "Sync status: " << curr_region->toString(true));
 
             *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse();
-            for (auto & region : split_regions)
+            for (const auto & region : split_regions)
                 *(responseBatch.mutable_responses()->Add()) = region->toCommandResponse();
         }
     }
@@ -213,35 +192,42 @@ void KVStore::report(RaftContext & raft_ctx)
     raft_ctx.send(responseBatch);
 }
 
-bool KVStore::tryPersistAndReport(RaftContext & context)
+bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
     Timepoint now = Clock::now();
-    if (now < (last_try_persist_time + KVSTORE_TRY_PERSIST_PERIOD))
+    if (now < (last_try_persist_time.load() + kvstore_try_persist_period))
         return false;
     last_try_persist_time = now;
 
     bool persist_job = false;
 
     enginepb::CommandResponseBatch responseBatch;
-    for (const auto & p : regions)
+
+    RegionMap all_region_copy;
+    traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+        if (now < (region->lastPersistTime() + region_persist_period))
+            return;
+        if (region->persistParm() == 0)
+            return;
+        all_region_copy[region_id] = region;
+    });
+
+    std::stringstream ss;
+
+    for (auto && [region_id, region] : all_region_copy)
     {
-        const auto region = p.second;
-        if (now < (region->lastPersistTime() + REGION_PERSIST_PERIOD))
-            continue;
-
         persist_job = true;
-        region_persister.persist(region);
-        region->markPersisted();
 
-        LOG_TRACE(log, "Region " << region->id() << " report status");
+        region_persister.persist(region);
+
+        ss << "(" << region_id << "," << region->persistParm() << ") ";
         *(responseBatch.mutable_responses()->Add()) = region->toCommandResponse();
     }
 
     if (persist_job)
     {
-        LOG_INFO(log, "Batch report regions status");
+        LOG_TRACE(log, "Regions " << ss.str() << "report status");
+        LOG_TRACE(log, "Batch report regions status");
         context.send(responseBatch);
     }
 
@@ -262,7 +248,7 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
 
     region_persister.drop(region_id);
     if (context)
-        context->getTMTContext().region_partition.removeRegion(region);
+        context->getTMTContext().region_table.removeRegion(region);
 }
 
 } // namespace DB

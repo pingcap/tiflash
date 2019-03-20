@@ -21,6 +21,28 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
+using HandleRange = std::pair<HandleID, HandleID>;
+
+struct RegionQueryInfo
+{
+    RegionID region_id;
+    UInt64 version;
+    HandleRange range_in_table;
+
+    bool operator < (const RegionQueryInfo & o) const
+    {
+        return range_in_table < o.range_in_table;
+    }
+
+    bool operator == (const RegionQueryInfo & o) const
+    {
+        return range_in_table == o.range_in_table;
+    }
+};
+
+std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
+
+std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -97,7 +119,7 @@ public:
             return InvalidTableID;
         }
 
-        auto next() { return store->readDataByWriteIt(write_map_it++); }
+        auto next(std::vector<TiKVKey> * keys = nullptr) { return store->readDataByWriteIt(write_map_it++, keys); }
 
         void remove(TableID remove_table_id)
         {
@@ -107,6 +129,14 @@ public:
                     it = store->removeDataByWriteIt(it);
                 else
                     ++it;
+            }
+        }
+
+        void remove(const TiKVKey & key)
+        {
+            if (auto it = store->write_cf.find(key); it != store->write_cf.end())
+            {
+                store->removeDataByWriteIt(it);
             }
         }
 
@@ -136,7 +166,10 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    std::tuple<RegionPtr, std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
+    using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
+    void batchInsert(std::function<bool(BatchInsertNode &)> f);
+
+    std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
 
     std::unique_ptr<CommittedScanRemover> createCommittedScanRemover(TableID expected_table_id);
 
@@ -158,21 +191,8 @@ public:
 
     void markPersisted();
     Timepoint lastPersistTime() const;
-
-    void swap(Region & other)
-    {
-        std::lock_guard<std::mutex> lock1(mutex);
-        std::lock_guard<std::mutex> lock2(other.mutex);
-
-        meta.swap(other.meta);
-
-        data_cf.swap(other.data_cf);
-        write_cf.swap(other.write_cf);
-        lock_cf.swap(other.lock_cf);
-
-        cf_data_size = size_t(other.cf_data_size);
-        other.cf_data_size = size_t(cf_data_size);
-    }
+    size_t persistParm() const;
+    void updatePersistParm(size_t x);
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -183,11 +203,16 @@ public:
             && region1.lock_cf == region2.lock_cf && region1.cf_data_size == region2.cf_data_size;
     }
 
-    UInt64 learner_read();
+    UInt64 learnerRead();
 
-    void wait_index(UInt64 index);
+    void waitIndex(UInt64 index);
 
-    UInt64 getIndex();
+    UInt64 getIndex() const;
+
+    RegionVersion version() const;
+    RegionVersion confVer() const;
+
+    std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
 
 private:
     // Private methods no need to lock mutex, normally
@@ -199,13 +224,13 @@ private:
     KVMap & getCf(const std::string & cf);
 
     using ReadInfo = std::tuple<UInt64, UInt8, UInt64, TiKVValue>;
-    ReadInfo readDataByWriteIt(const KVMap::iterator & write_it);
+    ReadInfo readDataByWriteIt(const KVMap::iterator & write_it, std::vector<TiKVKey> * keys=nullptr);
     KVMap::iterator removeDataByWriteIt(const KVMap::iterator & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
 
-    RegionPtr splitInto(const RegionMeta & meta) const;
-    std::pair<RegionPtr, Regions> execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
+    RegionPtr splitInto(const RegionMeta & meta);
+    Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
 
 private:
@@ -223,7 +248,9 @@ private:
     // Size of data cf & write cf, without lock cf.
     std::atomic<size_t> cf_data_size = 0;
 
-    Timepoint last_persist_time = Clock::now();
+    std::atomic<Timepoint> last_persist_time = Clock::now();
+
+    std::atomic<size_t> persist_parm = 1;
 
     Logger * log;
 };

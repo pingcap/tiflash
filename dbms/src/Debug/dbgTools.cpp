@@ -268,6 +268,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         }
 
         tmt.kvstore->onServiceCommand(cmds, raft_ctx);
+        tmt.region_table.tryFlushRegions();
     }
 }
 
@@ -279,9 +280,9 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
     tmt.kvstore->traverseRegions(
-        [&](Region * region) {
-            curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region->id() :
-                                 std::max<RegionID>(curr_max_region_id, region->id());
+        [&](const RegionID region_id, const RegionPtr & region) {
+            curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id :
+                                 std::max<RegionID>(curr_max_region_id, region_id);
             auto range = region->getRange();
             curr_max_handle_id = std::max(RecordKVFormat::getHandle(range.second), curr_max_handle_id);
         });
@@ -318,7 +319,7 @@ Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_
     for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.region_partition.traverseRegionsByTablePartition(table_info.id, partition_id, [&](Regions d){
+        tmt.region_table.traverseRegionsByTable(table_info.id, [&](Regions d) {
             regions.insert(regions.end(), d.begin(), d.end());
         });
     }

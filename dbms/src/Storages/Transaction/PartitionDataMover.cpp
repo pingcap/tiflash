@@ -19,8 +19,8 @@ namespace ErrorCodes
 namespace PartitionDataMover
 {
 
-BlockInputStreamPtr createBlockInputStreamFromRangeInPartition(const Context & context, StorageMergeTree * storage,
-    UInt64 partition_id, const Field & begin, const Field & excluded_end)
+BlockInputStreamPtr createBlockInputStreamFromRange(const Context& context, StorageMergeTree* storage,
+                                                    const HandleID begin, const HandleID excluded_end)
 {
     SortDescription pk_columns = storage->getData().getPrimarySortDescription();
     // TODO: make sure PKs are all uint64
@@ -34,13 +34,12 @@ BlockInputStreamPtr createBlockInputStreamFromRangeInPartition(const Context & c
         throw Exception("PartitionDataMover: primary key should be Int64", ErrorCodes::LOGICAL_ERROR);
 
     std::stringstream ss;
-    ss << "SELRAW NOKVSTORE * FROM " << storage->getDatabaseName() << "." << storage->getTableName() <<
-        " PARTITION ('" << partition_id << "') WHERE (" <<
-        applyVisitor(FieldVisitorToString(), begin) << " <= " << pk_name << ") AND (" <<
-        pk_name << " < " + applyVisitor(FieldVisitorToString(), excluded_end) << ")";
+    ss << "SELRAW NOKVSTORE * FROM " << storage->getDatabaseName() << "." << storage->getTableName() << " WHERE (" <<
+        begin << " <= " << pk_name << ") AND (" <<
+        pk_name << " < " << excluded_end << ")";
     std::string query = ss.str();
 
-    LOG_DEBUG(&Logger::get("PartitionDataMover"), "createBlockInputStreamFromRangeInPartition sql: " << query);
+    LOG_DEBUG(&Logger::get("PartitionDataMover"), "createBlockInputStreamFromRange sql: " << query);
 
     Context query_context = context;
     query_context.setSessionContext(query_context);
@@ -110,25 +109,14 @@ void increaseVersionInBlock(Block & block, size_t increasement = 1)
 
 } // namespace PartitionDataMover
 
-std::pair<Field, Field> getRegionRangeField(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
-{
-    // Example:
-    // Range: [100_10, 200_5), table_id: 100, then start_handle: 10, end_handle: MAX_HANDLE_ID
-
-    HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-    HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
-
-    return {Field(start_handle), Field(end_handle)};
-}
-
-void deleteRangeInPartition(const Context & context, StorageMergeTree * storage,
-    UInt64 partition_id, const Field & begin, const Field & excluded_end)
+void deleteRange(const Context& context, StorageMergeTree* storage,
+                 const HandleID begin, const HandleID excluded_end)
 {
     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
 
-    BlockInputStreamPtr input = PartitionDataMover::createBlockInputStreamFromRangeInPartition(
-        context, storage, partition_id, begin, excluded_end);
-    TxnMergeTreeBlockOutputStream output(*storage, partition_id);
+    BlockInputStreamPtr input = PartitionDataMover::createBlockInputStreamFromRange(
+        context, storage, begin, excluded_end);
+    TxnMergeTreeBlockOutputStream output(*storage);
 
     output.writePrefix();
 
@@ -144,6 +132,7 @@ void deleteRangeInPartition(const Context & context, StorageMergeTree * storage,
     output.writeSuffix();
 }
 
+/*
 // TODO: use `new_ver = old_ver+1` to delete data is not a good way, may conflict with data in the future
 void moveRangeBetweenPartitions(const Context & context, StorageMergeTree * storage,
     UInt64 src_partition_id, UInt64 dest_partition_id, const Field & begin, const Field & excluded_end)
@@ -186,5 +175,6 @@ void moveRangeBetweenPartitions(const Context & context, StorageMergeTree * stor
         dest_partition_id << ", range: [" << applyVisitor(FieldVisitorToString(), begin) <<
         ", " << applyVisitor(FieldVisitorToString(), excluded_end) << ")");
 }
+*/
 
 }

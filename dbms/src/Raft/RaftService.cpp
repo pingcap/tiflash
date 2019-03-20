@@ -36,14 +36,14 @@ grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, 
     BackgroundProcessingPool::TaskHandle persist_handle;
     BackgroundProcessingPool::TaskHandle flush_handle;
 
-    RegionPartition & region_partition = db_context.getTMTContext().region_partition;
+    RegionTable & region_table = db_context.getTMTContext().region_table;
 
     try
     {
         kvstore->report(rctx);
 
         persist_handle = background_pool.addTask([&, this] { return kvstore->tryPersistAndReport(rctx); });
-        flush_handle = background_pool.addTask([&] { return region_partition.tryFlushRegions(); });
+        flush_handle = background_pool.addTask([&] { return region_table.tryFlushRegions(); });
 
         enginepb::CommandRequestBatch request;
         while (stream->Read(&request))
