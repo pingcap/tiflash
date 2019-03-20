@@ -194,22 +194,6 @@ public:
     size_t persistParm() const;
     void updatePersistParm(size_t x);
 
-    void swap(Region & other)
-    {
-        std::lock_guard<std::mutex> lock1(mutex);
-        std::lock_guard<std::mutex> lock2(other.mutex);
-
-        meta.swap(other.meta);
-
-        data_cf.swap(other.data_cf);
-        write_cf.swap(other.write_cf);
-        lock_cf.swap(other.lock_cf);
-
-        auto tmp = size_t(other.cf_data_size);
-        other.cf_data_size = size_t(cf_data_size);
-        cf_data_size = tmp;
-    }
-
     friend bool operator==(const Region & region1, const Region & region2)
     {
         std::lock_guard<std::mutex> lock1(region1.mutex);
