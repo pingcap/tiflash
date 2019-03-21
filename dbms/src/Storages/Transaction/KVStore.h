@@ -12,6 +12,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/RegionTable.h>
 
 
 namespace DB
@@ -44,6 +45,8 @@ public:
     const RegionMap & getRegions();
 
     void removeRegion(RegionID region_id, Context * context);
+
+    void checkRegion(RegionTable & region_table);
 
 private:
     RegionPersister region_persister;

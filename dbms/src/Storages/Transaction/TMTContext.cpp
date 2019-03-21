@@ -17,6 +17,7 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs)
     for (RegionID id : regions_to_remove)
         kvstore->removeRegion(id, &context);
     regions_to_remove.clear();
+    kvstore->checkRegion(region_table);
 }
 
 SchemaSyncerPtr TMTContext::getSchemaSyncer() const

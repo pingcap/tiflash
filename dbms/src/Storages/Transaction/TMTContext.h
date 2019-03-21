@@ -35,7 +35,7 @@ public:
     pingcap::kv::RpcClientPtr getRpcClient();
 
 private:
-    std::vector<RegionID> regions_to_remove;
+    std::vector<RegionID> regions_to_remove = {};
 
     SchemaSyncerPtr schema_syncer;
     pingcap::pd::ClientPtr pd_client;
