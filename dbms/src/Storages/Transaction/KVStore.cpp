@@ -255,4 +255,19 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
         context->getTMTContext().region_table.removeRegion(region);
 }
 
+void KVStore::checkRegion(RegionTable & region_table)
+{
+    std::unordered_set<RegionID> region_in_table;
+    region_table.traverseRegions([&](TableID, RegionTable::InternalRegion & internal_region){
+        region_in_table.insert(internal_region.region_id);
+    });
+    for (auto && [id, region] : regions)
+    {
+        if (region_in_table.count(id))
+            continue;
+        LOG_INFO(log, region->toString() << " is not in RegionTable, init by apply snapshot");
+        region_table.applySnapshotRegion(region);
+    }
+}
+
 } // namespace DB
