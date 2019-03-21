@@ -155,12 +155,14 @@ public:
 
     explicit Region(const RegionMeta & meta_) : meta(meta_), client(nullptr), log(&Logger::get("Region")) {}
 
-    explicit Region(RegionMeta && meta_, pingcap::kv::RegionClientPtr client_)
-        : meta(std::move(meta_)), client(client_), log(&Logger::get("Region"))
+    using RegionClientCreateFunc = std::function<pingcap::kv::RegionClientPtr(pingcap::kv::RegionVerID)>;
+
+    explicit Region(RegionMeta && meta_, const RegionClientCreateFunc & region_client_create)
+        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID ())), log(&Logger::get("Region"))
     {}
 
-    explicit Region(const RegionMeta & meta_, const pingcap::kv::RegionClientPtr & client_)
-        : meta(meta_), client(client_), log(&Logger::get("Region"))
+    explicit Region(const RegionMeta & meta_, const RegionClientCreateFunc & region_client_create)
+        : meta(meta_), client(region_client_create(meta.getRegionVerID())), log(&Logger::get("Region"))
     {}
 
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
@@ -174,7 +176,7 @@ public:
     std::unique_ptr<CommittedScanRemover> createCommittedScanRemover(TableID expected_table_id);
 
     size_t serialize(WriteBuffer & buf);
-    static RegionPtr deserialize(ReadBuffer & buf);
+    static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc & region_client_create);
 
     void calculateCfCrc32(Crc32 & crc32) const;
 

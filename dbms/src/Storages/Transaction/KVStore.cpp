@@ -10,10 +10,14 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir, Context *, std::vector<RegionID> * regions_to_remove) : region_persister(data_dir), log(&Logger::get("KVStore"))
+KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore"))
+{
+}
+
+void KVStore::restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    region_persister.restore(regions);
+    region_persister.restore(regions, region_client_create);
 
     // Remove regions which pending_remove = true, those regions still exist because progress crash after persisted and before removal.
     if (regions_to_remove != nullptr)

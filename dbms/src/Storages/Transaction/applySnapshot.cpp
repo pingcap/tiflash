@@ -20,15 +20,15 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     const auto & state = request.state();
     pingcap::kv::RegionClientPtr region_client = nullptr;
     auto meta = RegionMeta(state.peer(), state.region(), state.apply_state());
-    if (context) {
-        auto & tmt_ctx = context->getTMTContext();
-        auto pd_client = tmt_ctx.getPDClient();
-        if (!pd_client->isMock()) {
-            auto region_cache = tmt_ctx.getRegionCache();
-            region_client = std::make_shared<pingcap::kv::RegionClient>(region_cache, tmt_ctx.getRpcClient(), meta.getRegionVerID());
+    Region::RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
+        if (context)
+        {
+            auto & tmt_ctx = context->getTMTContext();
+            return tmt_ctx.createRegionClient(id);
         }
-    }
-    auto region = std::make_shared<Region>(meta, region_client);
+        return nullptr;
+    };
+    auto region = std::make_shared<Region>(meta, region_client_create);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot " << region->toString(true));
 
