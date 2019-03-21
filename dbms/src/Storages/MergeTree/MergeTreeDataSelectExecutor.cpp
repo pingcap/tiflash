@@ -612,7 +612,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         TMTContext & tmt = context.getTMTContext();
 
-        tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions){
+        tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions) {
             for (const auto & region : regions)
             {
                 regions_query_info.push_back({region->id(), region->version(), region->getHandleRangeByTable(data.table_info.id)});

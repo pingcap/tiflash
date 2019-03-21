@@ -190,9 +190,7 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
     else
         new_region = std::make_shared<Region>(meta);
 
-    std::lock_guard<std::mutex> lock(mutex);
-
-    for (auto it = data_cf.begin(); it != data_cf.end(); )
+    for (auto it = data_cf.begin(); it != data_cf.end();)
     {
         bool ok = start_key ? it->first >= start_key : true;
         ok = ok && (end_key ? it->first < end_key : true);
@@ -208,7 +206,7 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
             ++it;
     }
 
-    for (auto it = write_cf.begin(); it != write_cf.end(); )
+    for (auto it = write_cf.begin(); it != write_cf.end();)
     {
         bool ok = start_key ? it->first >= start_key : true;
         ok = ok && (end_key ? it->first < end_key : true);
@@ -224,7 +222,7 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
             ++it;
     }
 
-    for (auto it = lock_cf.begin(); it != lock_cf.end(); )
+    for (auto it = lock_cf.begin(); it != lock_cf.end();)
     {
         bool ok = start_key ? it->first >= start_key : true;
         ok = ok && (end_key ? it->first < end_key : true);
@@ -295,38 +293,38 @@ Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const r
 
     std::vector<RegionPtr> split_regions;
 
-    for (const auto & region_info : new_region_infos)
     {
-        if (region_info.id() != meta.regionId())
+        std::lock_guard<std::mutex> lock(mutex);
+
+        int new_region_index = 0;
+        for (int i = 0; i < new_region_infos.size(); ++i)
         {
-            const auto & peer = FindPeer(region_info, meta.storeId());
-            RegionMeta new_meta(peer, region_info, initialApplyState());
-            auto split_region = splitInto(new_meta);
-            split_regions.emplace_back(split_region);
+            const auto & region_info = new_region_infos[i];
+            if (region_info.id() != meta.regionId())
+            {
+                const auto & peer = FindPeer(region_info, meta.storeId());
+                RegionMeta new_meta(peer, region_info, initialApplyState());
+                auto split_region = splitInto(new_meta);
+                split_regions.emplace_back(split_region);
+            }
+            else
+                new_region_index = i;
         }
+
+        RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
+        meta.swap(new_meta);
     }
 
-    for (const auto & region_info : new_region_infos)
-    {
-        if (region_info.id() == meta.regionId())
-        {
-            RegionMeta new_meta(meta.getPeer(), region_info, meta.getApplyState());
-            meta.swap(new_meta);
-            break;
-        }
-    }
-
-    std::string ids;
+    std::stringstream ids;
     for (const auto & region : split_regions)
-        ids += DB::toString(region->id()) + ",";
-    ids += id();
-    LOG_INFO(log, toString() << " split into [" << ids << "]");
+        ids << region->id() << ",";
+    ids << id();
+    LOG_INFO(log, toString() << " split into [" << ids.str() << "]");
 
     return split_regions;
 }
 
-std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(
-    const enginepb::CommandRequest & cmd, CmdCallBack & /*callback*/)
+std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & /*callback*/)
 {
     auto & header = cmd.header();
     RegionID region_id = id();
@@ -553,25 +551,13 @@ void Region::setPendingRemove() { meta.setPendingRemove(); }
 
 size_t Region::dataSize() const { return cf_data_size; }
 
-void Region::markPersisted()
-{
-    last_persist_time = Clock::now();
-}
+void Region::markPersisted() { last_persist_time = Clock::now(); }
 
-Timepoint Region::lastPersistTime() const
-{
-    return last_persist_time;
-}
+Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
-size_t Region::persistParm() const
-{
-    return persist_parm;
-}
+size_t Region::persistParm() const { return persist_parm; }
 
-void Region::updatePersistParm(size_t x)
-{
-    persist_parm -= x;
-}
+void Region::updatePersistParm(size_t x) { persist_parm -= x; }
 
 std::unique_ptr<Region::CommittedScanRemover> Region::createCommittedScanRemover(TableID expected_table_id)
 {
