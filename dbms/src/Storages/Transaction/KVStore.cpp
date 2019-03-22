@@ -47,31 +47,33 @@ void KVStore::traverseRegions(std::function<void(const RegionID region_id, const
         callback(it->first, it->second);
 }
 
-void KVStore::onSnapshot(const RegionPtr & region, Context * context)
+void KVStore::onSnapshot(const RegionPtr & new_region, Context * context)
 {
     TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
-    auto region_id = region->id();
+    auto region_id = new_region->id();
 
-    RegionPtr old_region;
+    RegionPtr old_region = getRegion(region_id);
+
+    if (old_region != nullptr)
     {
-        std::lock_guard<std::mutex> lock(mutex);
-        auto it = regions.find(region_id);
-        if (it != regions.end())
-            old_region = it->second;
+        LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+
+        if (old_region->getIndex() >= new_region->getIndex())
+        {
+            LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
+            return;
+        }
     }
 
-    if (old_region != nullptr && old_region->getIndex() >= region->getIndex())
-        return;
-
-    region_persister.persist(region);
+    region_persister.persist(new_region);
 
     {
         std::lock_guard<std::mutex> lock(mutex);
-        regions.insert_or_assign(region_id, region);
+        regions.insert_or_assign(region_id, new_region);
     }
 
     if (tmt_ctx)
-        tmt_ctx->region_table.applySnapshotRegion(region);
+        tmt_ctx->region_table.applySnapshotRegion(new_region);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)

@@ -6,7 +6,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
@@ -53,7 +53,6 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
                 ++it;
                 return true;
             });
-
         }
     }
 
