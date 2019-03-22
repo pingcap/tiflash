@@ -121,7 +121,7 @@ std::vector<bool> valid_regions_in_file(std::vector<RegionFile::Reader::PersistM
     return use;
 }
 
-void RegionPersister::restore(RegionMap & regions)
+void RegionPersister::restore(RegionMap & regions, const Region::RegionClientCreateFunc & region_client_create)
 {
     std::lock_guard<std::mutex> persist_lock(persist_mutex);
     std::lock_guard<std::mutex> map_lock(region_map_mutex);
@@ -171,7 +171,7 @@ void RegionPersister::restore(RegionMap & regions)
         {
             if (use[index])
             {
-                regions.emplace(region_id, reader.next());
+                regions.emplace(region_id, reader.next(region_client_create));
                 file->addRegion(region_id, metas[index].region_size);
             }
             else
@@ -251,7 +251,7 @@ bool RegionPersister::gc()
             {
                 if (use[index] && migrate_region_ids.count(region_id))
                 {
-                    auto region = reader.next();
+                    auto region = reader.next([](pingcap::kv::RegionVerID) -> pingcap::kv::RegionClientPtr { return nullptr; });
                     auto region_size = gc_file_writer.write(region);
                     {
                         std::lock_guard<std::mutex> map_lock(region_map_mutex);

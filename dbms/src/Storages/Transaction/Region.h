@@ -156,12 +156,14 @@ public:
 
     explicit Region(const RegionMeta & meta_) : meta(meta_), client(nullptr), log(&Logger::get("Region")) {}
 
-    explicit Region(RegionMeta && meta_, pingcap::kv::RegionClientPtr client_)
-        : meta(std::move(meta_)), client(client_), log(&Logger::get("Region"))
+    using RegionClientCreateFunc = std::function<pingcap::kv::RegionClientPtr(pingcap::kv::RegionVerID)>;
+
+    explicit Region(RegionMeta && meta_, const RegionClientCreateFunc & region_client_create)
+        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID ())), log(&Logger::get("Region"))
     {}
 
-    explicit Region(const RegionMeta & meta_, const pingcap::kv::RegionClientPtr & client_)
-        : meta(meta_), client(client_), log(&Logger::get("Region"))
+    explicit Region(const RegionMeta & meta_, const RegionClientCreateFunc & region_client_create)
+        : meta(meta_), client(region_client_create(meta.getRegionVerID())), log(&Logger::get("Region"))
     {}
 
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
@@ -175,7 +177,7 @@ public:
     std::unique_ptr<CommittedScanRemover> createCommittedScanRemover(TableID expected_table_id);
 
     size_t serialize(WriteBuffer & buf);
-    static RegionPtr deserialize(ReadBuffer & buf);
+    static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc & region_client_create);
 
     void calculateCfCrc32(Crc32 & crc32) const;
 
@@ -194,22 +196,6 @@ public:
     Timepoint lastPersistTime() const;
     size_t persistParm() const;
     void updatePersistParm(size_t x);
-
-    void swap(Region & other)
-    {
-        std::lock_guard<std::mutex> lock1(mutex);
-        std::lock_guard<std::mutex> lock2(other.mutex);
-
-        meta.swap(other.meta);
-
-        data_cf.swap(other.data_cf);
-        write_cf.swap(other.write_cf);
-        lock_cf.swap(other.lock_cf);
-
-        auto tmp = size_t(other.cf_data_size);
-        other.cf_data_size = size_t(cf_data_size);
-        cf_data_size = tmp;
-    }
 
     friend bool operator==(const Region & region1, const Region & region2)
     {

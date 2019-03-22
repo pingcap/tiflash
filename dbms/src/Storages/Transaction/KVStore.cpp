@@ -10,10 +10,14 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir, Context *, std::vector<RegionID> * regions_to_remove) : region_persister(data_dir), log(&Logger::get("KVStore"))
+KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore"))
+{
+}
+
+void KVStore::restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    region_persister.restore(regions);
+    region_persister.restore(regions, region_client_create);
 
     // Remove regions which pending_remove = true, those regions still exist because progress crash after persisted and before removal.
     if (regions_to_remove != nullptr)
@@ -249,6 +253,21 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
     region_persister.drop(region_id);
     if (context)
         context->getTMTContext().region_table.removeRegion(region);
+}
+
+void KVStore::checkRegion(RegionTable & region_table)
+{
+    std::unordered_set<RegionID> region_in_table;
+    region_table.traverseRegions([&](TableID, RegionTable::InternalRegion & internal_region){
+        region_in_table.insert(internal_region.region_id);
+    });
+    for (auto && [id, region] : regions)
+    {
+        if (region_in_table.count(id))
+            continue;
+        LOG_INFO(log, region->toString() << " is not in RegionTable, init by apply snapshot");
+        region_table.applySnapshotRegion(region);
+    }
 }
 
 } // namespace DB

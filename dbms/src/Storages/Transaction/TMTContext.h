@@ -30,12 +30,14 @@ public:
     pingcap::pd::ClientPtr getPDClient() const;
     void setPDClient(pingcap::pd::ClientPtr);
 
+    pingcap::kv::RegionClientPtr createRegionClient(pingcap::kv::RegionVerID region_version_id) const;
+
     pingcap::kv::RegionCachePtr getRegionCache() const;
 
     pingcap::kv::RpcClientPtr getRpcClient();
 
 private:
-    std::vector<RegionID> regions_to_remove;
+    std::vector<RegionID> regions_to_remove = {};
 
     SchemaSyncerPtr schema_syncer;
     pingcap::pd::ClientPtr pd_client;

@@ -12,6 +12,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/RegionTable.h>
 
 
 namespace DB
@@ -25,7 +26,9 @@ static const Seconds KVSTORE_TRY_PERSIST_PERIOD(20); // 20 seconds
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(const std::string & data_dir, Context * context = nullptr, std::vector<RegionID> * regions_to_remove = nullptr);
+    KVStore(const std::string & data_dir);
+    void restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove = nullptr);
+
     RegionPtr getRegion(RegionID region_id);
     void traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback);
 
@@ -44,6 +47,8 @@ public:
     const RegionMap & getRegions();
 
     void removeRegion(RegionID region_id, Context * context);
+
+    void checkRegion(RegionTable & region_table);
 
 private:
     RegionPersister region_persister;

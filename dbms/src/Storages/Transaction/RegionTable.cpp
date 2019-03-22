@@ -47,13 +47,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
     if (it == tables.end())
     {
         // Load persisted info.
-        auto & tmt_ctx = context.getTMTContext();
-        auto storage = tmt_ctx.storages.get(table_id);
-        if (!storage)
-        {
-            tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context);
-            storage = tmt_ctx.storages.get(table_id);
-        }
+        getOrCreateStorage(table_id);
 
         std::tie(it, std::ignore) = tables.try_emplace(table_id, parent_path + "tables/", table_id);
 
@@ -61,6 +55,18 @@ RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
         table.regions.persist();
     }
     return it->second;
+}
+
+StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
+{
+    auto & tmt_ctx = context.getTMTContext();
+    auto storage = tmt_ctx.storages.get(table_id);
+    if (storage == nullptr)
+    {
+        tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context);
+        storage = tmt_ctx.storages.get(table_id);
+    }
+    return storage;
 }
 
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, RegionID region_id)
@@ -136,40 +142,29 @@ bool RegionTable::shouldFlush(const InternalRegion & region)
     if (!region.updated || !region.cache_bytes)
         return false;
     auto period_time = Clock::now() - region.last_flush_time;
-    for (auto && [th_bytes, th_duration] : flush_thresholds)
-    {
-        if (region.cache_bytes >= th_bytes && period_time >= th_duration)
-            return true;
-    }
-    return false;
+    return flush_thresholds.traverse<bool>([&](const FlushThresholds::FlushThresholdsData & data) -> bool {
+        for (const auto & [th_bytes, th_duration] : data)
+        {
+            if (region.cache_bytes >= th_bytes && period_time >= th_duration)
+                return true;
+        }
+        return false;
+    });
 }
 
 void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & rest_cache_size)
 {
-    if (log->debug())
     {
         auto & table = getOrCreateTable(table_id);
         auto & region = table.regions.get()[region_id];
         LOG_DEBUG(log,
-            "Flush region - table_id: " + DB::toString(table_id) + ", original " + DB::toString(region.cache_bytes)
-                + " bytes, region_id: " + DB::toString(region_id));
-    }
-
-    TMTContext & tmt = context.getTMTContext();
-    tmt.getSchemaSyncer()->syncSchema(table_id, context);
-
-    StoragePtr storage = tmt.storages.get(table_id);
-
-    // TODO: handle if storage is nullptr
-    // drop table and create another with same name, but the previous one will still flush
-    if (storage == nullptr)
-    {
-        LOG_ERROR(log, "table " << table_id << " flush region " << region_id << " , but storage is not found");
-        return;
+            "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", original " << region.cache_bytes << " bytes");
     }
 
     std::vector<TiKVKey> keys_to_remove;
     {
+        StoragePtr storage = getOrCreateStorage(table_id);
+
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
 
         auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
@@ -210,7 +205,8 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & res
         for (const auto & key : keys_to_remove)
             scanner->remove(key);
         rest_cache_size = region->dataSize();
-        LOG_TRACE(log, "region " << region_id << " data size after flush " << rest_cache_size);
+        LOG_DEBUG(log,
+            "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", after flush " << rest_cache_size << " bytes");
     }
 }
 
@@ -228,11 +224,16 @@ static const Seconds FTH_PERIOD_2(60 * 5);  // 5 minutes
 static const Seconds FTH_PERIOD_3(60);      // 1 minute
 static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
-RegionTable::RegionTable(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher)
+RegionTable::RegionTable(Context & context_, const std::string & parent_path_)
     : parent_path(parent_path_),
-      flush_thresholds{{FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}},
+      flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
+          {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
       context(context_),
       log(&Logger::get("RegionTable"))
+{
+}
+
+void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
 {
     Poco::File dir(parent_path + "tables/");
     if (!dir.exists())
@@ -309,7 +310,7 @@ void RegionTable::applySnapshotRegion(const RegionPtr & region)
     }
 }
 
-void RegionTable::splitRegion(const RegionPtr & region, std::vector<RegionPtr> split_regions)
+void RegionTable::splitRegion(const RegionPtr & region, const std::vector<RegionPtr> & split_regions)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -323,15 +324,8 @@ void RegionTable::splitRegion(const RegionPtr & region, std::vector<RegionPtr> s
     }
 
     RegionInfo & region_info = it->second;
-    auto & tmt_ctx = context.getTMTContext();
     for (auto table_id : region_info.tables)
     {
-        auto storage = tmt_ctx.storages.get(table_id);
-        if (storage == nullptr)
-        {
-            throw Exception("Table " + DB::toString(table_id) + " not found", ErrorCodes::UNKNOWN_TABLE);
-        }
-
         auto & table = getOrCreateTable(table_id);
 
         for (const RegionPtr & split_region : split_regions)
@@ -361,7 +355,7 @@ void RegionTable::removeRegion(const RegionPtr & region)
         auto r_it = regions.find(region_id);
         if (r_it == regions.end())
         {
-            LOG_WARNING(log, "Being removed region " << region_id << " does not exist.");
+            LOG_WARNING(log, "RegionTable::removeRegion: region " << region_id << " does not exist.");
             return;
         }
         RegionInfo & region_info = r_it->second;
@@ -377,13 +371,12 @@ void RegionTable::removeRegion(const RegionPtr & region)
         }
     }
 
-    auto & tmt_ctx = context.getTMTContext();
     for (auto table_id : tables)
     {
-        auto storage = tmt_ctx.storages.get(table_id);
+        auto storage = getOrCreateStorage(table_id);
         if (storage == nullptr)
         {
-            LOG_WARNING(log, "RegionTable::removeRegion: " << table_id << " does not exist.");
+            LOG_WARNING(log, "RegionTable::removeRegion: table " << table_id << " does not exist.");
             continue;
         }
         auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
@@ -429,7 +422,7 @@ bool RegionTable::tryFlushRegions()
     return !to_flush.empty();
 }
 
-void RegionTable::traverseRegions(std::function<void(TableID, InternalRegion &)> callback)
+void RegionTable::traverseRegions(std::function<void(TableID, InternalRegion &)> && callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto && [table_id, table] : tables)
@@ -441,7 +434,7 @@ void RegionTable::traverseRegions(std::function<void(TableID, InternalRegion &)>
     }
 }
 
-void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> callback)
+void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> && callback)
 {
     auto & kvstore = context.getTMTContext().kvstore;
     Regions regions;
@@ -452,8 +445,8 @@ void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<v
         for (const auto & region_info : table.regions.get())
         {
             auto region = kvstore->getRegion(region_info.second.region_id);
-            if (!region)
-                throw Exception("Region " + DB::toString(region_info.second.region_id) + " not found!", ErrorCodes::LOGICAL_ERROR);
+            if (region == nullptr)
+                continue;
             regions.push_back(region);
         }
     }
@@ -469,6 +462,11 @@ void RegionTable::dumpRegionMap(RegionTable::RegionMap & res)
 void RegionTable::dropRegionsInTable(TableID /*table_id*/)
 {
     // TODO: impl
+}
+
+void RegionTable::setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_)
+{
+    flush_thresholds.setFlushThresholds(flush_thresholds_);
 }
 
 } // namespace DB

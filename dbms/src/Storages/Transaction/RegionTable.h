@@ -94,7 +94,36 @@ public:
 
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionMap = std::unordered_map<RegionID, RegionInfo>;
-    using FlushThresholds = std::vector<std::pair<Int64, Seconds>>;
+
+    struct FlushThresholds
+    {
+        using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
+
+        FlushThresholdsData data;
+        std::mutex mutex;
+
+        FlushThresholds(const FlushThresholdsData & data_) { data = data_; }
+        FlushThresholds(FlushThresholdsData && data_) { data = std::move(data_); }
+
+        void setFlushThresholds(const FlushThresholdsData & flush_thresholds_)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            data = flush_thresholds_;
+        }
+
+        const FlushThresholdsData & getData()
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            return data;
+        }
+
+        template <typename T>
+        T traverse(std::function<T(const FlushThresholdsData & data)> && f)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            return f(data);
+        }
+    };
 
 private:
     const std::string parent_path;
@@ -111,6 +140,8 @@ private:
 
 private:
     Table & getOrCreateTable(TableID table_id);
+    StoragePtr getOrCreateStorage(TableID table_id);
+
     InternalRegion & insertRegion(Table & table, RegionID region_id);
     InternalRegion & getOrInsertRegion(TableID table_id, RegionID region_id);
 
@@ -119,11 +150,14 @@ private:
     void updateRegionRange(const RegionPtr & region);
 
     bool shouldFlush(const InternalRegion & region);
+
     void flushRegion(TableID table_id, RegionID partition_id, size_t & rest_cache_size);
 
 public:
-    RegionTable(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher);
-    void setFlushThresholds(FlushThresholds flush_thresholds_) { flush_thresholds = std::move(flush_thresholds_); }
+    RegionTable(Context & context_, const std::string & parent_path_);
+    void restore(std::function<RegionPtr(RegionID)> region_fetcher);
+
+    void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
     /// After the region is updated (insert or delete KVs).
     void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
@@ -131,7 +165,7 @@ public:
     void applySnapshotRegion(const RegionPtr & region);
     /// Manage data after region split into split_regions.
     /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
-    void splitRegion(const RegionPtr & region, std::vector<RegionPtr> split_regions);
+    void splitRegion(const RegionPtr & region, const std::vector<RegionPtr> & split_regions);
     /// Remove a region from corresponding partitions.
     void removeRegion(const RegionPtr & region);
 
@@ -141,8 +175,8 @@ public:
     /// Returns whether this function has done any meaningful job.
     bool tryFlushRegions();
 
-    void traverseRegions(std::function<void(TableID, InternalRegion &)> callback);
-    void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> callback);
+    void traverseRegions(std::function<void(TableID, InternalRegion &)> && callback);
+    void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> && callback);
 
     std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         const RegionID region_id,
