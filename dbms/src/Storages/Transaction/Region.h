@@ -216,6 +216,8 @@ public:
 
     std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
 
+    void reset(Region && new_region);
+
 private:
     // Private methods no need to lock mutex, normally
 

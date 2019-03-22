@@ -32,7 +32,7 @@ public:
     RegionPtr getRegion(RegionID region_id);
     void traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback);
 
-    void onSnapshot(const RegionPtr & region, Context * context);
+    void onSnapshot(RegionPtr region, Context * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & context);
 
@@ -58,6 +58,9 @@ private:
 
     Consistency consistency;
     std::atomic<Timepoint> last_try_persist_time = Clock::now();
+
+    // onServiceCommand and onSnapshot should not be called concurrently
+    mutable std::mutex task_mutex;
 
     Logger * log;
 };

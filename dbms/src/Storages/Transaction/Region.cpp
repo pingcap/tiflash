@@ -612,4 +612,19 @@ std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, c
     return {start_handle, end_handle};
 }
 
+void Region::reset(Region && new_region)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    data_cf = std::move(new_region.data_cf);
+    write_cf = std::move(new_region.write_cf);
+    lock_cf = std::move(new_region.lock_cf);
+
+    cf_data_size = new_region.cf_data_size.load();
+
+    persist_parm++;
+
+    meta.swap(new_region.meta);
+}
+
 } // namespace DB

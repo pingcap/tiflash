@@ -51,30 +51,35 @@ void KVStore::traverseRegions(std::function<void(const RegionID region_id, const
         callback(it->first, it->second);
 }
 
-void KVStore::onSnapshot(const RegionPtr & new_region, Context * context)
+void KVStore::onSnapshot(RegionPtr new_region, Context * context)
 {
-    TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
-    auto region_id = new_region->id();
+    TMTContext * tmt_ctx = context ? &(context->getTMTContext()) : nullptr;
 
-    RegionPtr old_region = getRegion(region_id);
-
-    if (old_region != nullptr)
     {
-        LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+        std::lock_guard<std::mutex> lock(task_mutex);
 
-        if (old_region->getIndex() >= new_region->getIndex())
+        RegionID region_id = new_region->id();
+        RegionPtr old_region = getRegion(region_id);
+        if (old_region != nullptr)
         {
-            LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
-            return;
+            LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+
+            if (old_region->getIndex() >= new_region->getIndex())
+            {
+                LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
+                return;
+            }
+            old_region->reset(std::move(*new_region));
+            new_region = old_region;
+        }
+        else
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            regions[region_id] = new_region;
         }
     }
 
     region_persister.persist(new_region);
-
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        regions.insert_or_assign(region_id, new_region);
-    }
 
     if (tmt_ctx)
         tmt_ctx->region_table.applySnapshotRegion(new_region);
@@ -98,6 +103,9 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
     {
         auto & header = cmd.header();
         auto curr_region_id = header.region_id();
+
+        std::lock_guard<std::mutex> lock(task_mutex);
+
         RegionPtr curr_region;
         {
             std::lock_guard<std::mutex> lock(mutex);
