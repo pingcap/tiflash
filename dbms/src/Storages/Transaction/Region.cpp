@@ -186,7 +186,7 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
     RegionPtr new_region;
     if (client != nullptr)
         new_region = std::make_shared<Region>(
-            meta, std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID()));
+            meta, [&](pingcap::kv::RegionVerID) { return std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID()); });
     else
         new_region = std::make_shared<Region>(meta);
 
@@ -460,14 +460,14 @@ size_t Region::serialize(WriteBuffer & buf)
     return total_size;
 }
 
-RegionPtr Region::deserialize(ReadBuffer & buf)
+RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc & region_client_create)
 {
     auto version = readBinary2<UInt32>(buf);
     if (version != Region::CURRENT_VERSION)
         throw Exception("Unexpected region version: " + DB::toString(version) + ", expected: " + DB::toString(CURRENT_VERSION),
             ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
-    auto region = std::make_shared<Region>(RegionMeta::deserialize(buf));
+    auto region = std::make_shared<Region>(RegionMeta::deserialize(buf), region_client_create);
 
     auto size = readBinary2<KVMap::size_type>(buf);
     for (size_t i = 0; i < size; ++i)

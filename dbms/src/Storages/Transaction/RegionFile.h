@@ -65,7 +65,7 @@ public:
         void checkHash(const std::vector<bool> & use);
 
         RegionID hasNext();
-        RegionPtr next();
+        RegionPtr next(const Region::RegionClientCreateFunc & region_create_func);
         void skipNext();
 
         const std::vector<PersistMeta> & regionMetas() { return metas; }

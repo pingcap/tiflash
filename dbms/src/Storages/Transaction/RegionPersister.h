@@ -58,7 +58,7 @@ public:
 
     void drop(UInt64 region_id);
     void persist(const RegionPtr & region);
-    void restore(RegionMap &);
+    void restore(RegionMap &, const Region::RegionClientCreateFunc &);
     bool gc();
 
     // For tests.

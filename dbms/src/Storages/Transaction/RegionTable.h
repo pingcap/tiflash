@@ -154,7 +154,9 @@ private:
     void flushRegion(TableID table_id, RegionID partition_id, size_t & rest_cache_size);
 
 public:
-    RegionTable(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher);
+    RegionTable(Context & context_, const std::string & parent_path_);
+    void restore(std::function<RegionPtr(RegionID)> region_fetcher);
+
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
     /// After the region is updated (insert or delete KVs).

@@ -224,12 +224,16 @@ static const Seconds FTH_PERIOD_2(60 * 5);  // 5 minutes
 static const Seconds FTH_PERIOD_3(60);      // 1 minute
 static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
-RegionTable::RegionTable(Context & context_, const std::string & parent_path_, std::function<RegionPtr(RegionID)> region_fetcher)
+RegionTable::RegionTable(Context & context_, const std::string & parent_path_)
     : parent_path(parent_path_),
       flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
           {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
       context(context_),
       log(&Logger::get("RegionTable"))
+{
+}
+
+void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
 {
     Poco::File dir(parent_path + "tables/");
     if (!dir.exists())
