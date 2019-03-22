@@ -8,7 +8,7 @@ namespace DB
 
 TMTContext::TMTContext(Context & context, std::vector<String> addrs)
     : kvstore(std::make_shared<KVStore>(context.getPath() + "kvstore/")),
-      region_table(context, context.getPath() + "regmap/", std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1)),
+      region_table(context, context.getPath() + "regmap/"),
       schema_syncer(std::make_shared<HttpJsonSchemaSyncer>()),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
@@ -18,6 +18,7 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs)
     kvstore->restore([&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
             return this->createRegionClient(id);
         }, &regions_to_remove);
+    region_table.restore(std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1));
     for (RegionID id : regions_to_remove)
         kvstore->removeRegion(id, &context);
     regions_to_remove.clear();
