@@ -502,7 +502,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     bool use_sampling = relative_sample_size > 0 || settings.parallel_replicas_count > 1;
     bool no_data = false;   /// There is nothing left after sampling.
 
-    if (use_sampling && !is_txn_engine)
+    if (use_sampling)
     {
         if (!data.sampling_expression)
             throw Exception("Illegal SAMPLE: table doesn't support sampling", ErrorCodes::SAMPLING_NOT_SUPPORTED);
