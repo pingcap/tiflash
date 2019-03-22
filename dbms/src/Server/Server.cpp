@@ -307,7 +307,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
-    /// Load raft related configs ahead of loading metadata, as TMT storage relies of TMT context, which needs these configs.
+    /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
     if (config().has("raft"))
     {
         String raft_service_addr = config().getString("raft.service_addr");
