@@ -10,9 +10,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore"))
-{
-}
+KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore")) {}
 
 void KVStore::restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
 {
@@ -268,9 +266,8 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
 void KVStore::checkRegion(RegionTable & region_table)
 {
     std::unordered_set<RegionID> region_in_table;
-    region_table.traverseRegions([&](TableID, RegionTable::InternalRegion & internal_region){
-        region_in_table.insert(internal_region.region_id);
-    });
+    region_table.traverseRegions(
+        [&](TableID, RegionTable::InternalRegion & internal_region) { region_in_table.insert(internal_region.region_id); });
     for (auto && [id, region] : regions)
     {
         if (region_in_table.count(id))

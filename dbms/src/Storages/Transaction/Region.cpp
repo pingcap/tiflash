@@ -185,8 +185,9 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
     auto [start_key, end_key] = meta.getRange();
     RegionPtr new_region;
     if (client != nullptr)
-        new_region = std::make_shared<Region>(
-            meta, [&](pingcap::kv::RegionVerID) { return std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID()); });
+        new_region = std::make_shared<Region>(meta, [&](pingcap::kv::RegionVerID) {
+            return std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID());
+        });
     else
         new_region = std::make_shared<Region>(meta);
 

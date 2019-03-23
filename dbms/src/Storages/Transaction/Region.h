@@ -29,15 +29,7 @@ struct RegionQueryInfo
     UInt64 version;
     HandleRange range_in_table;
 
-    bool operator < (const RegionQueryInfo & o) const
-    {
-        return range_in_table < o.range_in_table;
-    }
-
-    bool operator == (const RegionQueryInfo & o) const
-    {
-        return range_in_table == o.range_in_table;
-    }
+    bool operator<(const RegionQueryInfo & o) const { return range_in_table < o.range_in_table; }
 };
 
 std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
@@ -158,7 +150,7 @@ public:
     using RegionClientCreateFunc = std::function<pingcap::kv::RegionClientPtr(pingcap::kv::RegionVerID)>;
 
     explicit Region(RegionMeta && meta_, const RegionClientCreateFunc & region_client_create)
-        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID ())), log(&Logger::get("Region"))
+        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get("Region"))
     {}
 
     explicit Region(const RegionMeta & meta_, const RegionClientCreateFunc & region_client_create)
@@ -228,7 +220,7 @@ private:
     KVMap & getCf(const std::string & cf);
 
     using ReadInfo = std::tuple<UInt64, UInt8, UInt64, TiKVValue>;
-    ReadInfo readDataByWriteIt(const KVMap::iterator & write_it, std::vector<TiKVKey> * keys=nullptr);
+    ReadInfo readDataByWriteIt(const KVMap::iterator & write_it, std::vector<TiKVKey> * keys = nullptr);
     KVMap::iterator removeDataByWriteIt(const KVMap::iterator & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
