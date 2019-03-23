@@ -315,16 +315,16 @@ void RegionTable::applySnapshotRegion(const RegionPtr & region)
     }
 }
 
-void RegionTable::splitRegion(const RegionPtr & region, const std::vector<RegionPtr> & split_regions)
+void RegionTable::splitRegion(const RegionPtr & kvstore_region, const std::vector<RegionPtr> & split_regions)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto region_id = region->id();
+    auto region_id = kvstore_region->id();
     auto it = regions.find(region_id);
 
     if (it == regions.end())
     {
-        // If region doesn't exist, usually means it does not contain any data we interested. Just ignore it.
+        // If kvstore_region doesn't exist, usually means it does not contain any data we interested. Just ignore it.
         return;
     }
 
@@ -343,10 +343,11 @@ void RegionTable::splitRegion(const RegionPtr & region, const std::vector<Region
 
             auto & region = insertRegion(table, split_region_id);
             region.must_flush = true;
+            region.cache_bytes = kvstore_region->dataSize();
         }
     }
 
-    updateRegionRange(region);
+    updateRegionRange(kvstore_region);
 }
 
 void RegionTable::removeRegion(const RegionPtr & region)
