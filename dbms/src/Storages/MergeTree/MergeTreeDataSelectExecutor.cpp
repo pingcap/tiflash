@@ -300,8 +300,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         {
             const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-            auto [region_input_stream, status, tol] = tmt.region_table.getBlockInputStreamByRegion(
-                data.table_info.id, region_query_info.region_id, region_query_info.version,
+            auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(
+                tmt, data.table_info.id, region_query_info.region_id, region_query_info.version,
                 data.table_info, data.getColumns(), column_names_to_read,
                 true, query_info.resolve_locks, query_info.read_tso);
             if (status != RegionTable::OK)

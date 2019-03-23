@@ -151,7 +151,7 @@ private:
 
     bool shouldFlush(const InternalRegion & region);
 
-    void flushRegion(TableID table_id, RegionID partition_id, size_t & rest_cache_size);
+    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
 
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
@@ -178,7 +178,8 @@ public:
     void traverseRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> && callback);
 
-    std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
+    static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TMTContext & tmt,
+        TableID table_id,
         const RegionID region_id,
         const RegionVersion region_version,
         const TiDB::TableInfo & table_info,

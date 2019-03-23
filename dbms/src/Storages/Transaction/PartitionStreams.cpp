@@ -12,7 +12,7 @@
 namespace DB
 {
 
-std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(
+std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
     TableID table_id,
     const RegionID region_id,
     const RegionVersion region_version,
@@ -24,9 +24,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     UInt64 start_ts,
     std::vector<TiKVKey> * keys)
 {
-    auto & kvstore = context.getTMTContext().kvstore;
-
-    auto region = kvstore->getRegion(region_id);
+    auto region = tmt.kvstore->getRegion(region_id);
     if (!region)
         return {nullptr, NOT_FOUND, 0};
 
