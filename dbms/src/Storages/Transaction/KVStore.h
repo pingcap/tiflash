@@ -30,7 +30,8 @@ public:
     void restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove = nullptr);
 
     RegionPtr getRegion(RegionID region_id);
-    void traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback);
+
+    void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback);
 
     void onSnapshot(RegionPtr region, Context * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
@@ -44,7 +45,7 @@ public:
     bool tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD,
         const Seconds region_persist_period = REGION_PERSIST_PERIOD);
 
-    const RegionMap & getRegions();
+    size_t regionSize() const;
 
     void removeRegion(RegionID region_id, Context * context);
 
@@ -54,7 +55,7 @@ private:
     RegionPersister region_persister;
     RegionMap regions;
 
-    std::mutex mutex;
+    mutable std::mutex mutex;
 
     Consistency consistency;
     std::atomic<Timepoint> last_try_persist_time = Clock::now();

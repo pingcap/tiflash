@@ -422,7 +422,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     meta.setApplied(index, term);
 
     if (need_persist)
-        ++persist_parm;
+        incPersistParm();
 
     for (auto & region : split_regions)
         region->last_persist_time.store(last_persist_time);
@@ -558,7 +558,9 @@ Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
 size_t Region::persistParm() const { return persist_parm; }
 
-void Region::updatePersistParm(size_t x) { persist_parm -= x; }
+void Region::decPersistParm(size_t x) { persist_parm -= x; }
+
+void Region::incPersistParm() { persist_parm++; }
 
 std::unique_ptr<Region::CommittedScanRemover> Region::createCommittedScanRemover(TableID expected_table_id)
 {
@@ -623,7 +625,7 @@ void Region::reset(Region && new_region)
 
     cf_data_size = new_region.cf_data_size.load();
 
-    persist_parm++;
+    incPersistParm();
 
     meta.swap(new_region.meta);
 }

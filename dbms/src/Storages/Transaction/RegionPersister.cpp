@@ -97,7 +97,7 @@ void RegionPersister::persist(const RegionPtr & region)
     }
 
     region->markPersisted();
-    region->updatePersistParm(persist_parm);
+    region->decPersistParm(persist_parm);
 }
 
 /// Old regions are cover by newer regions with the same id.

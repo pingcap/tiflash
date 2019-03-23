@@ -191,8 +191,8 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & res
                 break;
             output.write(block);
         }
-        output.writeSuffix();
         input->readSuffix();
+        output.writeSuffix();
     }
 
     // remove data in region
@@ -205,6 +205,10 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & res
         for (const auto & key : keys_to_remove)
             scanner->remove(key);
         rest_cache_size = region->dataSize();
+
+        if (rest_cache_size == 0)
+            region->incPersistParm();
+
         LOG_DEBUG(log,
             "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", after flush " << rest_cache_size << " bytes");
     }
@@ -266,7 +270,8 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
                 ++it;
 
             region.cache_bytes = region_ptr->dataSize();
-            region.updated = true;
+            if (region.cache_bytes)
+                region.updated = true;
 
             // Update region_id -> table_id
             {

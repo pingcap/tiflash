@@ -259,23 +259,23 @@ int main(int, char **)
     {
         kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
 
-        {
-            auto         kvstore2 = std::make_shared<KVStore>(dir_path);
-            const auto & regions1 = kvstore->getRegions();
-            const auto & regions2 = kvstore2->getRegions();
-            for (auto && [region_id1, region1] : regions1)
-            {
-                auto it = regions2.find(region_id1);
-                ASSERT_CHECK(it != regions2.end(), suc);
-                ASSERT_CHECK_EQUAL(*(it->second), *region1, suc);
-            }
-            for (auto && [region_id2, region2] : regions2)
-            {
-                auto it = regions1.find(region_id2);
-                ASSERT_CHECK(it != regions1.end(), suc);
-                ASSERT_CHECK_EQUAL(*(it->second), *region2, suc);
-            }
-        }
+        auto kvstore2 = std::make_shared<KVStore>(dir_path);
+
+        kvstore2->restore([&](pingcap::kv::RegionVerID) -> pingcap::kv::RegionClientPtr {
+            return nullptr;
+        }, nullptr);
+
+        kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region1){
+            auto region2 = kvstore2->getRegion(region_id);
+            ASSERT_CHECK(region2 != nullptr, suc);
+            ASSERT_CHECK_EQUAL(*region2, *region1, suc);
+        });
+
+        kvstore2->traverseRegions([&](const RegionID region_id, const RegionPtr & region2){
+            auto region1 = kvstore->getRegion(region_id);
+            ASSERT_CHECK(region1 != nullptr, suc);
+            ASSERT_CHECK_EQUAL(*region2, *region1, suc);
+        });
     }
 
     {
@@ -299,7 +299,7 @@ int main(int, char **)
 
         kvstore->onServiceCommand(cmds, context);
 
-        ASSERT_CHECK_EQUAL(1, kvstore->getRegions().size(), suc);
+        ASSERT_CHECK_EQUAL(1, kvstore->regionSize(), suc);
 
         kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
     }

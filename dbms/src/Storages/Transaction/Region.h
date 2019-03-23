@@ -186,7 +186,8 @@ public:
     void markPersisted();
     Timepoint lastPersistTime() const;
     size_t persistParm() const;
-    void updatePersistParm(size_t x);
+    void decPersistParm(size_t x);
+    void incPersistParm();
 
     friend bool operator==(const Region & region1, const Region & region2)
     {

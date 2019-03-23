@@ -36,13 +36,13 @@ RegionPtr KVStore::getRegion(RegionID region_id)
     return (it == regions.end()) ? nullptr : it->second;
 }
 
-const RegionMap & KVStore::getRegions()
+size_t KVStore::regionSize() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return regions;
+    return regions.size();
 }
 
-void KVStore::traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback)
+void KVStore::traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = regions.begin(); it != regions.end(); ++it)
