@@ -496,6 +496,8 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc & r
         region->lock_cf.emplace(key, value);
     }
 
+    region->persist_parm = 0;
+
     return region;
 }
 
