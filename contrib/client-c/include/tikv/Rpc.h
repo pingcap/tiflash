@@ -78,9 +78,12 @@ public:
     void call(std::unique_ptr<tikvpb::Tikv::Stub> stub) {
         if constexpr(std::is_same<T, kvrpcpb::ReadIndexRequest>::value) {
             grpc::ClientContext context;
+            context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(1));
             auto status = stub->ReadIndex(&context, *req, resp);
             if (!status.ok()) {
-                log -> error("read index failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
+                std::string err_msg = ("read index failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
+                log->error(err_msg);
+                throw Exception(err_msg, GRPCErrorCode);
             }
         }
     }

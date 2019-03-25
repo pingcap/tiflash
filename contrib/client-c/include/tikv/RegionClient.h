@@ -17,28 +17,77 @@ struct RegionClient {
 
     int64_t getReadIndex() {
         auto request = new kvrpcpb::ReadIndexRequest();
-        Backoffer bo(10000);
+        Backoffer bo(readIndexMaxBackoff);
         auto rpc_call = std::make_shared<RpcCall<kvrpcpb::ReadIndexRequest>>(request);
-        auto ctx = cache -> getRPCContext(bo, region_id, true);
-        store_addr = ctx->addr;
-        sendReqToRegion(bo, rpc_call, ctx);
+        sendReqToRegion(bo, rpc_call, true);
         return rpc_call -> getResp() -> read_index();
     }
 
     template<typename T>
-    void sendReqToRegion(Backoffer & bo, RpcCallPtr<T> rpc, RPCContextPtr rpc_ctx) {
-        try {
-            rpc -> setCtx(rpc_ctx);
-            client -> sendRequest(store_addr, rpc);
+    void sendReqToRegion(Backoffer & bo, RpcCallPtr<T> rpc, bool learner) {
+        for (;;) {
+            auto ctx = cache -> getRPCContext(bo, region_id, learner);
+            store_addr = ctx->addr;
+            std::cout<<"store_addr "<< store_addr <<std::endl;
+            rpc -> setCtx(ctx);
+            try {
+                client -> sendRequest(store_addr, rpc);
+            } catch(const Exception & e) {
+                onSendFail(bo, e, ctx);
+                continue;
+            }
+            auto resp = rpc -> getResp();
+            if (resp -> has_region_error()) {
+                onRegionError(bo, ctx, resp->region_error());
+            } else {
+                return;
+            }
         }
-        catch(const Exception & e) {
-            onSendFail(bo, e);
-        }
-
     }
 
-    void onSendFail(Backoffer & ,const Exception & e) {
-        e.rethrow();
+    void onRegionError(Backoffer & bo, RPCContextPtr rpc_ctx, const errorpb::Error & err) {
+        if (err.has_not_leader()) {
+            auto not_leader = err.not_leader();
+            if (not_leader.has_leader()) {
+                cache -> updateLeader(bo, rpc_ctx->region, not_leader.leader().store_id());
+                bo.backoff(boUpdateLeader, Exception("not leader"));
+            } else {
+                cache -> dropRegion(rpc_ctx->region);
+                bo.backoff(boRegionMiss, Exception("not leader"));
+            }
+            return;
+        }
+
+        if (err.has_store_not_match()) {
+            cache -> dropStore(rpc_ctx->peer.store_id());
+            return;
+        }
+
+        if (err.has_stale_epoch()) {
+            cache -> onRegionStale(rpc_ctx, err.stale_epoch());
+            return;
+        }
+
+        if (err.has_server_is_busy()) {
+            bo.backoff(boServerBusy, Exception("server busy"));
+            return;
+        }
+
+        if (err.has_stale_command()) {
+            return;
+        }
+
+        if (err.has_raft_entry_too_large()) {
+            throw Exception("entry too large");
+        }
+
+        cache -> dropRegion(rpc_ctx -> region);
+    }
+
+    void onSendFail(Backoffer & bo, const Exception & e, RPCContextPtr rpc_ctx) {
+        std::cout<<"send failed!!\n";
+        cache->dropStoreOnSendReqFail(rpc_ctx, e);
+        bo.backoff(boTiKVRPC, e);
     }
 };
 
