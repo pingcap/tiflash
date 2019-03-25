@@ -28,7 +28,6 @@ struct RegionClient {
         for (;;) {
             auto ctx = cache -> getRPCContext(bo, region_id, learner);
             store_addr = ctx->addr;
-            std::cout<<"store_addr "<< store_addr <<std::endl;
             rpc -> setCtx(ctx);
             try {
                 client -> sendRequest(store_addr, rpc);
@@ -85,7 +84,6 @@ struct RegionClient {
     }
 
     void onSendFail(Backoffer & bo, const Exception & e, RPCContextPtr rpc_ctx) {
-        std::cout<<"send failed!!\n";
         cache->dropStoreOnSendReqFail(rpc_ctx, e);
         bo.backoff(boTiKVRPC, e);
     }

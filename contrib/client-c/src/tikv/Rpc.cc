@@ -5,7 +5,6 @@ namespace kv {
 
 ConnArray::ConnArray(size_t max_size, std::string addr) : index(0) {
     vec.resize(max_size);
-    std::cout<<"create addr: "<<addr<<std::endl;
     for (size_t i = 0; i < max_size; i++) {
         vec[i] = grpc::CreateChannel(addr, grpc::InsecureChannelCredentials());
     }

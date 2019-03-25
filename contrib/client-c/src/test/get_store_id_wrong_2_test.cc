@@ -36,7 +36,6 @@ bool testReadIndex () {
     if( 5 != client.getReadIndex()) {
         return false;
     }
-    std::cout<<"success!!!!!!!!!!!\n";
     return true;
 }
 }

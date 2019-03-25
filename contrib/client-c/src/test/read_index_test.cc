@@ -32,7 +32,6 @@ bool testReadIndex () {
     if (idx != 5) {
         return false;
     }
-    std::cout<<"success!!!!!\n";
     return true;
 }
 }

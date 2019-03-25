@@ -28,7 +28,6 @@ bool testPDGetGCSafePoint() {
     if (safe != 233) {
         return false;
     }
-    std::cout<<"success!!!!!\n";
     return true;
 }
 

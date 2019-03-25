@@ -144,9 +144,7 @@ void RegionCache::dropRegion(const RegionVerID & region_id) {
 
 void RegionCache::dropStore(uint64_t failed_store_id) {
     std::lock_guard<std::mutex> lock(store_mutex);
-    std::cout<<"try to drop store: "<<failed_store_id<<std::endl;
     if (stores.erase(failed_store_id)) {
-        std::cout<<"drop store: "<<failed_store_id<<std::endl;
         log->information("drop store " + std::to_string(failed_store_id) + " because of send failure");
     }
 }

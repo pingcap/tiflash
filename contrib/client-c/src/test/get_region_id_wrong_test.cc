@@ -32,10 +32,8 @@ bool testReadIndex () {
     kv::RegionClient client(cache, rpc, verID);
     int idx = client.getReadIndex();
     if (idx != 5) {
-        std::cout<<"wrong idx: "<<idx<<std::endl;
         return false;
     }
-    std::cout<<"success!!!!!\n";
     return true;
 }
 }
