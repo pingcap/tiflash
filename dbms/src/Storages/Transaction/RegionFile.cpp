@@ -90,7 +90,7 @@ RegionID RegionFile::Reader::hasNext()
 RegionPtr RegionFile::Reader::next(const Region::RegionClientCreateFunc & region_create_func)
 {
     next_region_offset += next_region_meta->region_size;
-    return Region::deserialize(data_file_buf, region_create_func);
+    return Region::deserialize(data_file_buf, &region_create_func);
 }
 
 void RegionFile::Reader::skipNext()

@@ -252,7 +252,7 @@ void RegionMeta::execChangePeer(const raft_cmdpb::AdminRequest & request, const 
 
             doRemovePeer(store_id);
 
-            if (peerId() == peer.id())
+            if (this->peer.id() == peer.id())
                 doSetPendingRemove();
             doSetApplied(index, term);
             return;

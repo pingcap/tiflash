@@ -158,7 +158,7 @@ public:
     std::unique_ptr<CommittedRemover> createCommittedRemover();
 
     size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr);
-    static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc & region_client_create);
+    static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
     RegionRange getRange() const;

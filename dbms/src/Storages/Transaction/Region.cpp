@@ -264,7 +264,8 @@ const metapb::Peer & FindPeer(const metapb::Region & region, UInt64 store_id)
     throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
+Regions Region::execBatchSplit(
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & split_reqs = request.splits();
     const auto & new_region_infos = response.splits().regions();
@@ -457,14 +458,15 @@ size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response
     return total_size;
 }
 
-RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc & region_client_create)
+RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create)
 {
     auto version = readBinary2<UInt32>(buf);
     if (version != Region::CURRENT_VERSION)
         throw Exception("Unexpected region version: " + DB::toString(version) + ", expected: " + DB::toString(CURRENT_VERSION),
             ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
-    auto region = std::make_shared<Region>(RegionMeta::deserialize(buf), region_client_create);
+    auto region = region_client_create == nullptr ? std::make_shared<Region>(RegionMeta::deserialize(buf))
+                                                  : std::make_shared<Region>(RegionMeta::deserialize(buf), *region_client_create);
 
     auto size = readBinary2<KVMap::size_type>(buf);
     for (size_t i = 0; i < size; ++i)
