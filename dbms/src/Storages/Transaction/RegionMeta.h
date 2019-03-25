@@ -53,6 +53,7 @@ public:
 
     void setRegion(const metapb::Region & region);
     void setApplied(UInt64 index, UInt64 term);
+    void notifyAll();
 
     std::string toString(bool dump_status = true) const;
 
@@ -76,7 +77,18 @@ public:
 
     void waitIndex(UInt64 index);
 
-    void removePeer(UInt64 store_id);
+
+    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+
+private:
+
+    void doRemovePeer(UInt64 store_id);
+
+    void doSetPendingRemove();
+
+    void doSetRegion(const metapb::Region & region);
+
+    void doSetApplied(UInt64 index, UInt64 term);
 
 private:
     metapb::Peer peer;

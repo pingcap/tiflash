@@ -65,15 +65,35 @@ void RegionPersister::drop(UInt64 region_id)
         if (p.second->dropRegion(region_id))
             break;
     }
+
+    region_index_map.erase(region_id);
 }
 
-void RegionPersister::persist(const RegionPtr & region)
+void RegionPersister::persist(const RegionPtr & region, enginepb::CommandResponse * response)
 {
     /// Multi threads persist is not yet supported.
     std::lock_guard<std::mutex> persist_lock(persist_mutex);
     size_t persist_parm = region->persistParm();
+    doPersist(region, response);
+    region->markPersisted();
+    region->decPersistParm(persist_parm);
+}
 
+void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandResponse * response)
+{
     auto region_id = region->id();
+    UInt64 applied_index = region->getIndex();
+
+    auto [it, ok] = region_index_map.emplace(region_id, applied_index);
+    if (!ok)
+    {
+        // if equal, we should still overwrite it.
+        if (it->second > applied_index)
+        {
+            LOG_INFO(log, region->toString() << " have already persisted index: " << it->second);
+            return;
+        }
+    }
 
     auto & valid_region_set = valid_regions.get();
     if (valid_region_set.find(region_id) == valid_region_set.end())
@@ -84,7 +104,7 @@ void RegionPersister::persist(const RegionPtr & region)
 
     RegionFile * cur_file = getOrCreateCurrentFile();
     auto writer = cur_file->createWriter();
-    auto region_size = writer.write(region);
+    auto region_size = writer.write(region, response);
 
     {
         std::lock_guard<std::mutex> map_lock(region_map_mutex);
@@ -96,8 +116,7 @@ void RegionPersister::persist(const RegionPtr & region)
             coverOldRegion(cur_file, region_id);
     }
 
-    region->markPersisted();
-    region->decPersistParm(persist_parm);
+    it->second = applied_index;
 }
 
 /// Old regions are cover by newer regions with the same id.
@@ -184,6 +203,12 @@ void RegionPersister::restore(RegionMap & regions, const Region::RegionClientCre
         files.emplace(file_id, file);
         if (file_id != CURRENT_REGION_FILE_ID && file_id > max_file_id)
             max_file_id = file_id;
+    }
+
+    for (auto && [_, region] : regions)
+    {
+        std::ignore = _;
+        region_index_map[region->id()] = region->getIndex();
     }
 
     LOG_INFO(log, "restore " << regions.size() << " regions");

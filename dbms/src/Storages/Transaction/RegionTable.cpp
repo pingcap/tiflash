@@ -24,7 +24,7 @@ auto getRegionTableIds(const RegionPtr & region)
 {
     std::unordered_set<TableID> table_ids;
     {
-        auto scanner = region->createCommittedScanRemover(InvalidTableID);
+        auto scanner = region->createCommittedScanner(InvalidTableID);
         while (true)
         {
             TableID table_id = scanner->hasNext();
@@ -201,9 +201,9 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         auto region = tmt.kvstore->getRegion(region_id);
         if (!region)
             return;
-        auto scanner = region->createCommittedScanRemover(table_id);
+        auto remover = region->createCommittedRemover();
         for (const auto & key : keys_to_remove)
-            scanner->remove(key);
+            remover->remove(key);
         cache_size = region->dataSize();
 
         if (cache_size == 0)

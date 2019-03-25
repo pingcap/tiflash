@@ -22,6 +22,7 @@ static constexpr UInt64 CURRENT_REGION_FILE_ID = std::numeric_limits<UInt64>::ma
 static const std::string VALID_REGIONS_FILE_NAME = "regions";
 
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+using RegionIndexMap = std::unordered_map<RegionID, UInt64>;
 
 // TODO: use RegionID instead of UInt64
 
@@ -57,7 +58,7 @@ public:
     }
 
     void drop(UInt64 region_id);
-    void persist(const RegionPtr & region);
+    void persist(const RegionPtr & region, enginepb::CommandResponse * response = nullptr);
     void restore(RegionMap &, const Region::RegionClientCreateFunc &);
     bool gc();
 
@@ -69,6 +70,8 @@ public:
     }
 
 private:
+    void doPersist(const RegionPtr & region, enginepb::CommandResponse * response = nullptr);
+
     // Current file is the one which to persist regions always append into.
     // It's file id is CURRENT_REGION_FILE_ID, which is a very large id to make sure it is larger than other files.
     // Current file will be converted into normal file by reset it's file_id to max_file_id + 1, when it is big enough.
@@ -90,6 +93,8 @@ private:
     UInt64 max_file_id = 0;
     // Protect all above
     std::mutex region_map_mutex;
+
+    RegionIndexMap region_index_map;
 
     PersistedUnorderedUInt64Set valid_regions;
     // Protect persist_mutex

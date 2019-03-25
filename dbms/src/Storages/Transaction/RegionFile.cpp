@@ -27,10 +27,10 @@ RegionFile::Writer::~Writer()
     index_file_buf.sync();
 }
 
-size_t RegionFile::Writer::write(const RegionPtr & region)
+size_t RegionFile::Writer::write(const RegionPtr & region, enginepb::CommandResponse * response)
 {
     HashingWriteBuffer hash_buf(data_file_buf);
-    size_t region_size = region->serialize(hash_buf);
+    size_t region_size = region->serialize(hash_buf, response);
     auto hashcode = hash_buf.getHash();
 
     // index file format: [ version(4 bytes), region_id(8 bytes), region_size(8 bytes), region hash(16 bytes] , [ ... ] ...

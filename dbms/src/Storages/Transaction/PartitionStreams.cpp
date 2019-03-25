@@ -36,7 +36,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     };
 
     {
-        auto scanner = region->createCommittedScanRemover(table_id);
+        auto scanner = region->createCommittedScanner(table_id);
 
         if (region->isPendingRemove())
             return {nullptr, PENDING_REMOVE, 0};

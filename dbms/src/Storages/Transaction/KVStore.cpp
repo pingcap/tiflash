@@ -62,7 +62,7 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
         {
             LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
 
-            if (old_region->getIndex() >= new_region->getIndex())
+            if (old_region->getProbableIndex() >= new_region->getProbableIndex())
             {
                 LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
                 return;
@@ -87,14 +87,6 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
 {
     Context * context = raft_ctx.context;
     TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
-
-    using std::placeholders::_1;
-    using std::placeholders::_2;
-    using std::placeholders::_3;
-
-    Region::CmdCallBack callback;
-    callback.compute_hash = std::bind(&Consistency::compute, &consistency, _1, _2, _3);
-    callback.verify_hash = std::bind(&Consistency::check, &consistency, _1, _2, _3);
 
     enginepb::CommandResponseBatch responseBatch;
     for (const auto & cmd : cmds.requests())
@@ -130,7 +122,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        auto [split_regions, table_ids, sync] = curr_region->onCommand(cmd, callback);
+        auto [split_regions, table_ids, sync] = curr_region->onCommand(cmd);
 
         if (curr_region->isPendingRemove())
         {
@@ -230,10 +222,11 @@ bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_t
     {
         persist_job = true;
 
-        region_persister.persist(region);
+        auto response = responseBatch.mutable_responses()->Add();
+
+        region_persister.persist(region, response);
 
         ss << "(" << region_id << "," << region->persistParm() << ") ";
-        *(responseBatch.mutable_responses()->Add()) = region->toCommandResponse();
     }
 
     if (persist_job)

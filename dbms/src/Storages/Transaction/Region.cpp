@@ -46,7 +46,7 @@ Region::KVMap::iterator Region::removeDataByWriteIt(const KVMap::iterator & writ
     return write_cf.erase(write_it);
 }
 
-Region::ReadInfo Region::readDataByWriteIt(const KVMap::iterator & write_it, std::vector<TiKVKey> * keys)
+Region::ReadInfo Region::readDataByWriteIt(const KVMap::const_iterator & write_it, std::vector<TiKVKey> * keys)
 {
     auto & write_key = write_it->first;
     auto & write_value = write_it->second;
@@ -102,13 +102,13 @@ Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_
 
 TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::unique_lock<std::shared_mutex> lock(mutex);
     return doInsert(cf, key, value);
 }
 
-void Region::batchInsert(std::function<bool(BatchInsertNode &)> f)
+void Region::batchInsert(std::function<bool(BatchInsertNode &)> && f)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::unique_lock<std::shared_mutex> lock(mutex);
     for (;;)
     {
         if (BatchInsertNode p; f(p))
@@ -145,7 +145,7 @@ TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKV
 
 TableID Region::remove(const std::string & cf, const TiKVKey & key)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::unique_lock<std::shared_mutex> lock(mutex);
     return doRemove(cf, key);
 }
 
@@ -178,7 +178,13 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
     return table_id;
 }
 
-UInt64 Region::getIndex() const { return meta.appliedIndex(); }
+UInt64 Region::getIndex() const
+{
+    std::shared_lock<std::shared_mutex> lock(mutex);
+    return meta.appliedIndex();
+}
+
+UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
 
 RegionPtr Region::splitInto(const RegionMeta & meta)
 {
@@ -239,36 +245,13 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
     return new_region;
 }
 
-void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response)
+void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
-    const auto & new_region = response.change_peer().region();
 
     LOG_INFO(log, toString() << " change peer " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
-    switch (change_peer_request.change_type())
-    {
-        case eraftpb::ConfChangeType::AddNode:
-        case eraftpb::ConfChangeType::AddLearnerNode:
-        {
-            // change the peers of region, add conf_ver.
-            meta.setRegion(new_region);
-            return;
-        }
-        case eraftpb::ConfChangeType::RemoveNode:
-        {
-            const auto & peer = change_peer_request.peer();
-            auto store_id = peer.store_id();
-
-            meta.removePeer(store_id);
-
-            if (meta.peerId() == peer.id())
-                setPendingRemove();
-            return;
-        }
-        default:
-            throw Exception("execChangePeer: unsupported cmd", ErrorCodes::LOGICAL_ERROR);
-    }
+    meta.execChangePeer(request, response, index, term);
 }
 
 const metapb::Peer & FindPeer(const metapb::Region & region, UInt64 store_id)
@@ -281,7 +264,7 @@ const metapb::Peer & FindPeer(const metapb::Region & region, UInt64 store_id)
     throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response)
+Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & split_reqs = request.splits();
     const auto & new_region_infos = response.splits().regions();
@@ -295,7 +278,7 @@ Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const r
     std::vector<RegionPtr> split_regions;
 
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::unique_lock<std::shared_mutex> lock(mutex);
 
         int new_region_index = 0;
         for (int i = 0; i < new_region_infos.size(); ++i)
@@ -314,6 +297,7 @@ Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const r
 
         RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
         meta.swap(new_meta);
+        meta.setApplied(index, term);
     }
 
     std::stringstream ids;
@@ -325,7 +309,7 @@ Regions Region::execBatchSplit(const raft_cmdpb::AdminRequest & request, const r
     return split_regions;
 }
 
-std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & /*callback*/)
+std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const enginepb::CommandRequest & cmd)
 {
     auto & header = cmd.header();
     RegionID region_id = id();
@@ -346,7 +330,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
         return {{}, {}, false};
 
     TableIDSet table_ids;
-    bool need_persist = true;
+    bool need_persist = false;
 
     if (cmd.has_admin_request())
     {
@@ -361,16 +345,17 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
         switch (type)
         {
             case raft_cmdpb::AdminCmdType::ChangePeer:
-                execChangePeer(request, response);
+                execChangePeer(request, response, index, term);
+                need_persist = true;
                 break;
             case raft_cmdpb::AdminCmdType::BatchSplit:
-                split_regions = execBatchSplit(request, response);
+                split_regions = execBatchSplit(request, response, index, term);
+                need_persist = true;
                 break;
             case raft_cmdpb::AdminCmdType::CompactLog:
             case raft_cmdpb::AdminCmdType::ComputeHash:
             case raft_cmdpb::AdminCmdType::VerifyHash:
                 // Ignore
-                need_persist = false;
                 break;
             default:
                 LOG_ERROR(log, "Unsupported admin command type " << raft_cmdpb::AdminCmdType_Name(type));
@@ -379,6 +364,8 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     }
     else
     {
+        std::unique_lock<std::shared_mutex> lock(mutex);
+
         for (const auto & req : cmd.requests())
         {
             auto type = req.cmd_type();
@@ -389,17 +376,23 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
                 {
                     const auto & put = req.put();
                     auto [key, value] = RecordKVFormat::genKV(put);
-                    auto table_id = insert(put.cf(), key, value);
+                    auto table_id = doInsert(put.cf(), key, value);
                     if (table_id != InvalidTableID)
+                    {
                         table_ids.emplace(table_id);
+                        need_persist = true;
+                    }
                     break;
                 }
                 case raft_cmdpb::CmdType::Delete:
                 {
                     const auto & del = req.delete_();
-                    auto table_id = remove(del.cf(), RecordKVFormat::genKey(del));
+                    auto table_id = doRemove(del.cf(), RecordKVFormat::genKey(del));
                     if (table_id != InvalidTableID)
+                    {
                         table_ids.emplace(table_id);
+                        need_persist = true;
+                    }
                     break;
                 }
                 case raft_cmdpb::CmdType::DeleteRange:
@@ -407,19 +400,18 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
                 case raft_cmdpb::CmdType::Snap:
                 case raft_cmdpb::CmdType::Get:
                     LOG_WARNING(log, "Region [" << region_id << "] skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
-                    need_persist = false;
                     break;
                 case raft_cmdpb::CmdType::Prewrite:
                 case raft_cmdpb::CmdType::Invalid:
                 default:
                     LOG_ERROR(log, "Unsupported command type " << raft_cmdpb::CmdType_Name(type));
-                    need_persist = false;
                     break;
             }
         }
+        meta.setApplied(index, term);
     }
 
-    meta.setApplied(index, term);
+    meta.notifyAll();
 
     if (need_persist)
         incPersistParm();
@@ -430,9 +422,9 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     return {split_regions, table_ids, sync_log};
 }
 
-size_t Region::serialize(WriteBuffer & buf)
+size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::shared_lock<std::shared_mutex> lock(mutex);
 
     size_t total_size = writeBinary2(Region::CURRENT_VERSION, buf);
 
@@ -458,6 +450,10 @@ size_t Region::serialize(WriteBuffer & buf)
         total_size += key.serialize(buf);
         total_size += value.serialize(buf);
     }
+
+    if (response != nullptr)
+        *response = toCommandResponse();
+
     return total_size;
 }
 
@@ -529,28 +525,15 @@ Region::KVMap & Region::getCf(const std::string & cf)
         throw Exception("Illegal cf: " + cf, ErrorCodes::LOGICAL_ERROR);
 }
 
-void Region::calculateCfCrc32(Crc32 & crc32) const
-{
-    std::lock_guard<std::mutex> lock1(mutex);
-
-    auto crc_cal = [&](const Region::KVMap & map) {
-        for (auto && [key, value] : map)
-        {
-            auto encoded_key = DataKVFormat::data_key(key);
-            crc32.put(encoded_key.data(), encoded_key.size());
-            crc32.put(value.data(), value.dataSize());
-        }
-    };
-    crc_cal(data_cf);
-    crc_cal(lock_cf);
-    crc_cal(write_cf);
-}
-
 RegionID Region::id() const { return meta.regionId(); }
 
 bool Region::isPendingRemove() const { return meta.isPendingRemove(); }
 
-void Region::setPendingRemove() { meta.setPendingRemove(); }
+void Region::setPendingRemove()
+{
+    meta.setPendingRemove();
+    meta.notifyAll();
+}
 
 size_t Region::dataSize() const { return cf_data_size; }
 
@@ -564,9 +547,14 @@ void Region::decPersistParm(size_t x) { persist_parm -= x; }
 
 void Region::incPersistParm() { persist_parm++; }
 
-std::unique_ptr<Region::CommittedScanRemover> Region::createCommittedScanRemover(TableID expected_table_id)
+std::unique_ptr<Region::CommittedScanner> Region::createCommittedScanner(TableID expected_table_id)
 {
-    return std::make_unique<Region::CommittedScanRemover>(this->shared_from_this(), expected_table_id);
+    return std::make_unique<Region::CommittedScanner>(this->shared_from_this(), expected_table_id);
+}
+
+std::unique_ptr<Region::CommittedRemover> Region::createCommittedRemover()
+{
+    return std::make_unique<Region::CommittedRemover>(this->shared_from_this());
 }
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
@@ -619,7 +607,7 @@ std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, c
 
 void Region::reset(Region && new_region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
+    std::unique_lock<std::shared_mutex> lock(mutex);
 
     data_cf = std::move(new_region.data_cf);
     write_cf = std::move(new_region.write_cf);
@@ -630,6 +618,7 @@ void Region::reset(Region && new_region)
     incPersistParm();
 
     meta.swap(new_region.meta);
+    meta.notifyAll();
 }
 
 } // namespace DB
