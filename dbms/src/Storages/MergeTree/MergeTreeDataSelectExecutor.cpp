@@ -296,26 +296,35 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         // get data block from region first.
 
+        ThreadPool pool(num_streams);
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
         {
-            const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+            pool.schedule([&, region_index] {
 
-            auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(
-                tmt, data.table_info.id, region_query_info.region_id, region_query_info.version,
-                data.table_info, data.getColumns(), column_names_to_read,
-                true, query_info.resolve_locks, query_info.read_tso);
-            if (status != RegionTable::OK)
-            {
-                regions_query_res[region_index] = false;
-                LOG_INFO(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
-                                        <<  ", handle range [" << region_query_info.range_in_table.first
-                                        << ", " << region_query_info.range_in_table.second << ") , status "
-                                        << RegionTable::RegionReadStatusString(status));
-                continue;
-            }
-            region_block_data[region_index] = region_input_stream;
-            rows_in_mem[region_index] = tol;
+                const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+
+                auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(
+                    tmt, data.table_info.id, region_query_info.region_id, region_query_info.version,
+                    data.table_info, data.getColumns(), column_names_to_read,
+                    true, query_info.resolve_locks, query_info.read_tso);
+
+                if (status != RegionTable::OK)
+                {
+                    regions_query_res[region_index] = false;
+                    LOG_INFO(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
+                                            <<  ", handle range [" << region_query_info.range_in_table.first
+                                            << ", " << region_query_info.range_in_table.second << ") , status "
+                                            << RegionTable::RegionReadStatusString(status));
+                }
+                else
+                {
+                    region_block_data[region_index] = region_input_stream;
+                    rows_in_mem[region_index] = tol;
+                }
+            });
         }
+
+        pool.wait();
     }
 
     size_t part_index = 0;
