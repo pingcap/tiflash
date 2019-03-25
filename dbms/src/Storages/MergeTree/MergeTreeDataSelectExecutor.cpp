@@ -612,6 +612,18 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     if (is_txn_engine)
     {
         handle_col_name = data.primary_expr_ast->children[0]->getColumnName();
+        // just for test.
+        if (regions_query_info.empty())
+        {
+            TMTContext & tmt = context.getTMTContext();
+
+            tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions) {
+                for (const auto & region : regions)
+                {
+                    regions_query_info.push_back({region->id(), region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info.id)});
+                }
+            });
+        }
     }
 
     std::sort(regions_query_info.begin(), regions_query_info.end());
