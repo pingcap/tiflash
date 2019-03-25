@@ -362,6 +362,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
                 LOG_ERROR(log, "Unsupported admin command type " << raft_cmdpb::AdminCmdType_Name(type));
                 break;
         }
+        meta.setApplied(index, term);
     }
     else
     {
