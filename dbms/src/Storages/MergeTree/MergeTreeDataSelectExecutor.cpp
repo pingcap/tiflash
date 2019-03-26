@@ -800,15 +800,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
         else
         {
-            std::vector<std::vector<size_t>> region_streams(num_streams);
-
-            for (size_t region_index = 0; region_index < region_cnt; ++region_index)
-                region_streams[region_index % num_streams].push_back(region_index);
-
-            for (const auto & region_idx_list : region_streams)
+            for (size_t region_begin = 0, size = region_cnt / num_streams; region_begin < region_cnt; region_begin += size)
             {
                 BlockInputStreams union_regions_stream;
-                for (size_t region_index : region_idx_list)
+                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
                     if (!regions_query_res[region_index])
                         continue;
@@ -844,7 +839,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                                                                            data.getPrimaryExpression());
                         merging.emplace_back(region_input_stream);
                     }
-                    if (merging.size())
+                    if (!merging.empty())
                         union_regions_stream.emplace_back(
                             std::make_shared<MvccTMTSortedBlockInputStream>(
                             merging, data.getPrimarySortDescription(),
@@ -852,7 +847,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                             DEFAULT_MERGE_BLOCK_SIZE,
                             query_info.read_tso));
                 }
-                if (union_regions_stream.size())
+                if (!union_regions_stream.empty())
                     res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
             }
         }
