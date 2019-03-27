@@ -376,19 +376,6 @@ void RegionTable::removeRegion(const RegionPtr & region)
             table.regions.persist();
         }
     }
-
-    for (auto table_id : tables)
-    {
-        auto storage = getOrCreateStorage(table_id);
-        if (storage == nullptr)
-        {
-            LOG_WARNING(log, "RegionTable::removeRegion: table " << table_id << " does not exist.");
-            continue;
-        }
-        auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-        auto [start_handle, end_handle] = region->getHandleRangeByTable(table_id);
-        deleteRange(context, merge_tree, start_handle, end_handle);
-    }
 }
 
 bool RegionTable::tryFlushRegions()

@@ -422,7 +422,6 @@ bool StorageMergeTree::merge(
     const String & partition_id,
     bool final,
     bool deduplicate,
-    bool eliminate,
     String * out_disable_reason)
 {
     /// Clear old parts. It does not matter to do it more frequently than each second.
@@ -459,7 +458,7 @@ bool StorageMergeTree::merge(
         }
         else
         {
-            selected = merger.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, eliminate, out_disable_reason);
+            selected = merger.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, out_disable_reason);
         }
 
         if (!selected)
@@ -519,7 +518,7 @@ bool StorageMergeTree::merge(
     try
     {
         new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr),
-                                                    merging_tagger->reserved_space.get(), deduplicate, eliminate);
+                                                    merging_tagger->reserved_space.get(), deduplicate);
         merger.renameMergedTemporaryPart(new_part, future_part.parts, nullptr);
 
         write_part_log({});
@@ -603,14 +602,14 @@ void StorageMergeTree::clearColumnInPartition(const ASTPtr & partition, const Fi
 bool StorageMergeTree::optimize(
     const ASTPtr & query, const ASTPtr & partition, bool final, bool deduplicate, const Context & context)
 {
-    const ASTOptimizeQuery * optimize_query = typeid_cast<const ASTOptimizeQuery *>(&*query);
+    std::ignore = query;
 
     String partition_id;
     if (partition)
         partition_id = data.getPartitionIDFromQuery(partition, context);
 
     String disable_reason;
-    if (!merge(context.getSettingsRef().min_bytes_to_use_direct_io, true, partition_id, final, deduplicate, optimize_query->eliminate, &disable_reason))
+    if (!merge(context.getSettingsRef().min_bytes_to_use_direct_io, true, partition_id, final, deduplicate, &disable_reason))
     {
         if (context.getSettingsRef().optimize_throw_if_noop)
             throw Exception(disable_reason.empty() ? "Can't OPTIMIZE by some reason" : disable_reason, ErrorCodes::CANNOT_ASSIGN_OPTIMIZE);

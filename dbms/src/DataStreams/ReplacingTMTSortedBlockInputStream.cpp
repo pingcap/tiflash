@@ -57,7 +57,7 @@ void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, 
 
         if (key_differs)
         {
-            if (shouldOutput(current))
+            if (shouldOutput())
                 insertRow(merged_columns, merged_rows);
 
             selected_row.reset();
@@ -86,23 +86,8 @@ void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, 
     finished = true;
 }
 
-bool ReplacingTMTSortedBlockInputStream::shouldOutput(SortCursor & next_row)
+bool ReplacingTMTSortedBlockInputStream::shouldOutput()
 {
-    // TODO: Need optimizations on versions and delmarks getting.
-
-    if (isDeletedOnFinal())
-    {
-        logRowGoing("DeleteOnFinal", false);
-        return false;
-    }
-
-    if (matched_definite_deleted)
-    {
-        logRowGoing("DefiniteDeleteSecond", false);
-        matched_definite_deleted = false;
-        return false;
-    }
-
     if (nextHasDiffPk())
     {
         logRowGoing("PkLastRow", true);
@@ -111,9 +96,8 @@ bool ReplacingTMTSortedBlockInputStream::shouldOutput(SortCursor & next_row)
 
     if (!behindGcTso())
     {
-        if (isDefiniteDeleted(next_row))
+        if (isDefiniteDeleted())
         {
-            matched_definite_deleted = true;
             logRowGoing("DefiniteDeleteFirst", false);
             return false;
         }
@@ -130,7 +114,7 @@ bool ReplacingTMTSortedBlockInputStream::shouldOutput(SortCursor & next_row)
 
 bool ReplacingTMTSortedBlockInputStream::behindGcTso()
 {
-    return (*(*selected_row.columns)[version_column_number])[selected_row.row_num].template get<size_t>() < gc_tso;
+    return (*(*selected_row.columns)[version_column_number])[selected_row.row_num].template get<UInt64>() < gc_tso;
 }
 
 bool ReplacingTMTSortedBlockInputStream::nextHasDiffPk()
@@ -139,20 +123,20 @@ bool ReplacingTMTSortedBlockInputStream::nextHasDiffPk()
         (*(*next_key.columns)[0])[next_key.row_num];
 }
 
-bool ReplacingTMTSortedBlockInputStream::isDeletedOnFinal()
+bool ReplacingTMTSortedBlockInputStream::isDefiniteDeleted()
 {
-    UInt8 val = (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
-    return final && MutableSupport::DelMark::isDel(val);
-}
-
-bool ReplacingTMTSortedBlockInputStream::isDefiniteDeleted(SortCursor & next_cursor)
-{
-    auto curr_ver = (*(*selected_row.columns)[version_column_number])[selected_row.row_num].template get<size_t>();
-    RowRef next_row;
-    setRowRef(next_row, next_cursor);
-    auto next_ver = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), (*(*next_row.columns)[version_column_number])[next_row.row_num]);
-    auto next_del = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), (*(*next_row.columns)[del_column_number])[next_row.row_num]);
-    return (curr_ver + 1 == next_ver) && MutableSupport::DelMark::isDefiniteDel(next_del);
+    if (begin_handle_ranges.empty())
+        return true;
+    HandleID handle_id = (*(*selected_row.columns)[pk_column_number])[selected_row.row_num].template get<HandleID>();
+    int pa = std::upper_bound(begin_handle_ranges.begin(), begin_handle_ranges.end(), handle_id) - begin_handle_ranges.begin();
+    if (pa == 0)
+        return true;
+    else
+    {
+        if (handle_id < end_handle_ranges[pa - 1])
+            return false;
+        return true;
+    }
 }
 
 void ReplacingTMTSortedBlockInputStream::logRowGoing(const std::string & msg, bool is_output)
@@ -166,7 +150,7 @@ void ReplacingTMTSortedBlockInputStream::logRowGoing(const std::string & msg, bo
 
     auto next_pk = applyVisitor(FieldVisitorToString(), (*(*next_key.columns)[0])[next_key.row_num]);
 
-    LOG_DEBUG(log, "gc tso: " << gc_tso << ", final: " << final <<
+    LOG_DEBUG(log, "gc tso: " << gc_tso <<
         ". " << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del) <<
         ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") <<
         ". why{" << msg << "}, output: " << is_output);

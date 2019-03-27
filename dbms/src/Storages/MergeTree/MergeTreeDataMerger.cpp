@@ -246,20 +246,12 @@ bool MergeTreeDataMerger::selectAllPartsToMergeWithinPartition(
     const AllowedMergingPredicate & can_merge,
     const String & partition_id,
     bool final,
-    bool eliminate,
     String * out_disable_reason)
 {
     MergeTreeData::DataPartsVector parts = selectAllPartsFromPartition(partition_id);
 
     if (parts.empty())
         return false;
-
-    if (final && eliminate && data.merging_params.mode == MergeTreeData::MergingParams::Txn)
-    {
-        LOG_DEBUG(log, "Selected " << parts.size() << " parts from " << parts.front()->name << " to " << parts.back()->name);
-        future_part.assign(std::move(parts));
-        return true;
-    }
 
     if (!final && parts.size() == 1)
     {
@@ -524,8 +516,7 @@ public:
 /// parts should be sorted.
 MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart(
     const FuturePart & future_part, MergeList::Entry & merge_entry,
-    size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplicate,
-    bool eliminate)
+    size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplicate)
 {
     static const String TMP_PREFIX = "tmp_merge_";
 
@@ -660,26 +651,36 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
 
         case MergeTreeData::MergingParams::Txn:
         {
-            // TODO: Remove flag 'eliminate', no use anymore
-            if (eliminate)
-            {
-                merged_stream = std::make_unique<ReplacingDeletingSortedBlockInputStream>(
-                    src_streams,
-                    data.getPrimarySortDescription(),
-                    MutableSupport::version_column_name,
-                    MutableSupport::delmark_column_name,
-                    DEFAULT_MERGE_BLOCK_SIZE,
-                    nullptr,
-                    true);
-            }
-            else
-            {
-                auto &tmt = data.context.getTMTContext();
-                merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
-                    src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
-                    data.getPrimarySortDescription()[0].column_name, DEFAULT_MERGE_BLOCK_SIZE,
-                    tmt.getPDClient()->getGCSafePoint(), false);
-            }
+            auto &tmt = data.context.getTMTContext();
+
+            std::vector<std::pair<HandleID, HandleID>> ranges;
+            tmt.region_table.traverseRegionsByTable(
+                data.table_info.id,
+                [&](Regions regions) {
+                    for (auto & region : regions)
+                    {
+                        std::pair<HandleID, HandleID> range = region->getHandleRangeByTable(data.table_info.id);
+                        if (range.first == range.second)
+                            continue;
+                        ranges.push_back(range);
+                    }
+                    std::sort(ranges.begin(), ranges.end());
+                    size_t size = 0;
+                    for (size_t i = 1; i < ranges.size(); ++i)
+                    {
+                        if (ranges[i].first == ranges[size].second)
+                            ranges[size].second = ranges[i].second;
+                        else
+                            ranges[++size] = ranges[i];
+                    }
+                    size = std::min(size + 1, ranges.size());
+                    ranges.resize(size);
+                });
+
+            merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
+                ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
+                data.getPrimarySortDescription()[0].column_name, DEFAULT_MERGE_BLOCK_SIZE,
+                tmt.getPDClient()->getGCSafePoint());
             break;
         }
         case MergeTreeData::MergingParams::Graphite:
