@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -xe
+
 docker-compose down
 
 rm -rf ./data ./log
