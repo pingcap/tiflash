@@ -26,6 +26,14 @@ Block ReplacingTMTSortedBlockInputStream::readImpl()
         return Block();
 
     merge(merged_columns, queue);
+
+    {
+        std::ostringstream ss;
+        for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
+            ss << "(" << begin_handle_ranges[i] << "," << end_handle_ranges[i] << ") ";
+        LOG_TRACE(log, "deleted by handle range: " << deleted_by_range << " rows, handle ranges: " << ss.str());
+    }
+
     return header.cloneWithColumns(std::move(merged_columns));
 }
 
@@ -88,6 +96,13 @@ void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, 
 
 bool ReplacingTMTSortedBlockInputStream::shouldOutput()
 {
+    if (isDefiniteDeleted())
+    {
+        ++deleted_by_range;
+        logRowGoing("DefiniteDelete", false);
+        return false;
+    }
+
     if (nextHasDiffPk())
     {
         logRowGoing("PkLastRow", true);
@@ -96,16 +111,8 @@ bool ReplacingTMTSortedBlockInputStream::shouldOutput()
 
     if (!behindGcTso())
     {
-        if (isDefiniteDeleted())
-        {
-            logRowGoing("DefiniteDeleteFirst", false);
-            return false;
-        }
-        else
-        {
-            logRowGoing("KeepHistory", true);
-            return true;
-        }
+        logRowGoing("KeepHistory", true);
+        return true;
     }
 
     logRowGoing("DiscardHistory", false);

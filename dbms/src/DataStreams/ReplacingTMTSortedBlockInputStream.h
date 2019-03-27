@@ -33,6 +33,7 @@ public:
         version_column_number = header.getPositionByName(version_column);
         del_column_number = header.getPositionByName(del_column);
         pk_column_number = header.getPositionByName(pk_column);
+        deleted_by_range = 0;
     }
 
     String getName() const override { return "ReplacingTMTSorted"; }
@@ -66,6 +67,8 @@ private:
     RowRef current_key;
     RowRef next_key;
     RowRef selected_row;
+
+    size_t deleted_by_range;
 
     UInt64 gc_tso;
 };
