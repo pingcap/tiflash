@@ -31,6 +31,7 @@
 #include <Common/typeid_cast.h>
 
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/RegionTable.h>
 
 #include <Poco/File.h>
 
@@ -653,29 +654,24 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
         {
             auto &tmt = data.context.getTMTContext();
 
-            std::vector<std::pair<HandleID, HandleID>> ranges;
-            tmt.region_table.traverseRegionsByTable(
+            std::vector<HandleRange> ranges;
+            tmt.region_table.traverseInternalRegionsByTable(
                 data.table_info.id,
-                [&](Regions regions) {
-                    for (auto & region : regions)
-                    {
-                        std::pair<HandleID, HandleID> range = region->getHandleRangeByTable(data.table_info.id);
-                        if (range.first == range.second)
-                            continue;
-                        ranges.push_back(range);
-                    }
-                    std::sort(ranges.begin(), ranges.end());
-                    size_t size = 0;
-                    for (size_t i = 1; i < ranges.size(); ++i)
-                    {
-                        if (ranges[i].first == ranges[size].second)
-                            ranges[size].second = ranges[i].second;
-                        else
-                            ranges[++size] = ranges[i];
-                    }
-                    size = std::min(size + 1, ranges.size());
-                    ranges.resize(size);
+                [&](const RegionTable::InternalRegion & region) {
+                    ranges.push_back(region.range_in_table);
                 });
+
+            std::sort(ranges.begin(), ranges.end());
+            size_t size = 0;
+            for (size_t i = 1; i < ranges.size(); ++i)
+            {
+                if (ranges[i].first == ranges[size].second)
+                    ranges[size].second = ranges[i].second;
+                else
+                    ranges[++size] = ranges[i];
+            }
+            size = std::min(size + 1, ranges.size());
+            ranges.resize(size);
 
             merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
                 ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,

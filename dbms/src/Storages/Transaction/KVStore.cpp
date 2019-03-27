@@ -259,7 +259,7 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
 void KVStore::checkRegion(RegionTable & region_table)
 {
     std::unordered_set<RegionID> region_in_table;
-    region_table.traverseRegions(
+    region_table.traverseInternalRegions(
         [&](TableID, RegionTable::InternalRegion & internal_region) { region_in_table.insert(internal_region.region_id); });
     for (auto && [id, region] : regions)
     {
