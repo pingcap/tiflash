@@ -27,6 +27,7 @@ Block ReplacingTMTSortedBlockInputStream::readImpl()
 
     merge(merged_columns, queue);
 
+    if (deleted_by_range)
     {
         std::ostringstream ss;
         for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
@@ -126,8 +127,7 @@ bool ReplacingTMTSortedBlockInputStream::behindGcTso()
 
 bool ReplacingTMTSortedBlockInputStream::nextHasDiffPk()
 {
-    return (*(*selected_row.columns)[pk_column_number])[selected_row.row_num] !=
-        (*(*next_key.columns)[0])[next_key.row_num];
+    return (*(*selected_row.columns)[pk_column_number])[selected_row.row_num] != (*(*next_key.columns)[0])[next_key.row_num];
 }
 
 bool ReplacingTMTSortedBlockInputStream::isDefiniteDeleted()
@@ -157,10 +157,10 @@ void ReplacingTMTSortedBlockInputStream::logRowGoing(const std::string & msg, bo
 
     auto next_pk = applyVisitor(FieldVisitorToString(), (*(*next_key.columns)[0])[next_key.row_num]);
 
-    LOG_DEBUG(log, "gc tso: " << gc_tso <<
-        ". " << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del) <<
-        ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") <<
-        ". why{" << msg << "}, output: " << is_output);
+    LOG_DEBUG(log,
+        "gc tso: " << gc_tso << ". "
+                   << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del)
+                   << ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") << ". why{" << msg << "}, output: " << is_output);
 }
 
-}
+} // namespace DB
