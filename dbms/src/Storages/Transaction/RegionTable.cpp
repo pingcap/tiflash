@@ -302,10 +302,11 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
 
 void RegionTable::applySnapshotRegion(const RegionPtr & region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
     auto region_id = region->id();
     auto table_ids = getRegionTableIds(region);
+
+    std::lock_guard<std::mutex> lock(mutex);
+
     for (auto table_id : table_ids)
     {
         auto & internal_region = getOrInsertRegion(table_id, region_id);

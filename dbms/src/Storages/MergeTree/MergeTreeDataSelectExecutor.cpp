@@ -297,7 +297,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         // get data block from region first.
 
         ThreadPool pool(num_streams);
-        for (size_t region_begin = 0, size = region_cnt / num_streams; region_begin < region_cnt; region_begin += size)
+        for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
         {
             pool.schedule([&, region_begin, size] {
 
@@ -800,7 +800,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
         else
         {
-            for (size_t region_begin = 0, size = region_cnt / num_streams; region_begin < region_cnt; region_begin += size)
+            for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
             {
                 BlockInputStreams union_regions_stream;
                 for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
