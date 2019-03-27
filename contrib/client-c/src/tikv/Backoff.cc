@@ -1,4 +1,5 @@
 #include <tikv/Backoff.h>
+#include <common/Exception.h>
 
 namespace pingcap {
 namespace kv {
@@ -23,6 +24,24 @@ BackoffPtr newBackoff(BackoffType tp) {
     return nullptr;
 }
 
+Exception Type2Exception(BackoffType tp) {
+    switch(tp) {
+        case boTiKVRPC:
+            return Exception("TiKV Timeout", TimeoutError);
+        case boTxnLock:
+        case boTxnLockFast:
+            return Exception("Resolve lock Timeout", TimeoutError);
+        case boPDRPC:
+            return Exception("PD Timeout", TimeoutError);
+        case boRegionMiss:
+        case boUpdateLeader:
+            return Exception("Region Unavaliable", RegionUnavailable);
+        case boServerBusy:
+            return Exception("TiKV Server Busy", TimeoutError);
+    }
+    return Exception("Unknown Exception, tp is :" + std::to_string(tp));
+}
+
 void Backoffer::backoff(BackoffType tp, const Exception & exc) {
     if (exc.code() == MismatchClusterIDCode) {
         exc.rethrow();
@@ -32,12 +51,13 @@ void Backoffer::backoff(BackoffType tp, const Exception & exc) {
     auto it = backoff_map.find(tp);
     if (it != backoff_map.end()) {
         bo = it -> second;
+    } else {
+        bo = newBackoff(tp);
+        backoff_map[tp] = bo;
     }
-    bo = newBackoff(tp);
-    backoff_map[tp] = bo;
     total_sleep += bo->sleep();
     if (max_sleep > 0 && total_sleep > max_sleep) {
-        throw Exception("total sleep time exceeded\n");
+        throw Type2Exception(tp);
     }
 }
 
