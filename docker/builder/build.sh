@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -xe
+
 mkdir -p /server/build_docker
 cd /server/contrib/kvproto
 ./generate_cpp.sh
