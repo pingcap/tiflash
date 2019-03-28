@@ -4,10 +4,11 @@ set -xe
 
 mkdir -p /server/build_docker
 cd /server/contrib/kvproto
+rm -rf cpp/kvproto
 ./generate_cpp.sh
 cd /server/build_docker
-cmake /server -DENABLE_EMBEDDED_COMPILER=1 -DENABLE_TESTS=0
-make -j $(nproc || grep -c ^processor /proc/cpuinfo) theflash
+cmake /server -DENABLE_EMBEDDED_COMPILER=1 -DENABLE_TESTS=1 -DCMAKE_BUILD_TYPE=Debug
+make -j $(nproc || grep -c ^processor /proc/cpuinfo)
 #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
 
 install_dir="/server/docker/builder/tics"
