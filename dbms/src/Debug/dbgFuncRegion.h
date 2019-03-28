@@ -22,7 +22,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 
 // Dump region-partition relationship
 // Usage:
-//   ./storage-client.sh "DBGInvoke dump_region_partition()"
+//   ./storage-client.sh "DBGInvoke dump_region()"
 void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer output);
 
 // Remove region's data from partition

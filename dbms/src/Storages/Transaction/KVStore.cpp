@@ -10,9 +10,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore"))
-{
-}
+KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore")) {}
 
 void KVStore::restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
 {
@@ -38,43 +36,48 @@ RegionPtr KVStore::getRegion(RegionID region_id)
     return (it == regions.end()) ? nullptr : it->second;
 }
 
-const RegionMap & KVStore::getRegions()
+size_t KVStore::regionSize() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return regions;
+    return regions.size();
 }
 
-void KVStore::traverseRegions(std::function<void(const RegionID region_id, const RegionPtr & region)> callback)
+void KVStore::traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback)
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = regions.begin(); it != regions.end(); ++it)
         callback(it->first, it->second);
 }
 
-void KVStore::onSnapshot(const RegionPtr & new_region, Context * context)
+void KVStore::onSnapshot(RegionPtr new_region, Context * context)
 {
-    TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
-    auto region_id = new_region->id();
+    TMTContext * tmt_ctx = context ? &(context->getTMTContext()) : nullptr;
 
-    RegionPtr old_region = getRegion(region_id);
-
-    if (old_region != nullptr)
     {
-        LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+        std::lock_guard<std::mutex> lock(task_mutex);
 
-        if (old_region->getIndex() >= new_region->getIndex())
+        RegionID region_id = new_region->id();
+        RegionPtr old_region = getRegion(region_id);
+        if (old_region != nullptr)
         {
-            LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
-            return;
+            LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+
+            if (old_region->getProbableIndex() >= new_region->getProbableIndex())
+            {
+                LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
+                return;
+            }
+            old_region->reset(std::move(*new_region));
+            new_region = old_region;
+        }
+        else
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            regions[region_id] = new_region;
         }
     }
 
     region_persister.persist(new_region);
-
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        regions.insert_or_assign(region_id, new_region);
-    }
 
     if (tmt_ctx)
         tmt_ctx->region_table.applySnapshotRegion(new_region);
@@ -85,19 +88,14 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
     Context * context = raft_ctx.context;
     TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
 
-    using std::placeholders::_1;
-    using std::placeholders::_2;
-    using std::placeholders::_3;
-
-    Region::CmdCallBack callback;
-    callback.compute_hash = std::bind(&Consistency::compute, &consistency, _1, _2, _3);
-    callback.verify_hash = std::bind(&Consistency::check, &consistency, _1, _2, _3);
-
     enginepb::CommandResponseBatch responseBatch;
     for (const auto & cmd : cmds.requests())
     {
         auto & header = cmd.header();
         auto curr_region_id = header.region_id();
+
+        std::lock_guard<std::mutex> lock(task_mutex);
+
         RegionPtr curr_region;
         {
             std::lock_guard<std::mutex> lock(mutex);
@@ -124,7 +122,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        auto [split_regions, table_ids, sync] = curr_region->onCommand(cmd, callback);
+        auto [split_regions, table_ids, sync] = curr_region->onCommand(cmd);
 
         if (curr_region->isPendingRemove())
         {
@@ -224,10 +222,11 @@ bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_t
     {
         persist_job = true;
 
-        region_persister.persist(region);
+        auto response = responseBatch.mutable_responses()->Add();
+
+        region_persister.persist(region, response);
 
         ss << "(" << region_id << "," << region->persistParm() << ") ";
-        *(responseBatch.mutable_responses()->Add()) = region->toCommandResponse();
     }
 
     if (persist_job)
@@ -260,9 +259,8 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
 void KVStore::checkRegion(RegionTable & region_table)
 {
     std::unordered_set<RegionID> region_in_table;
-    region_table.traverseRegions([&](TableID, RegionTable::InternalRegion & internal_region){
-        region_in_table.insert(internal_region.region_id);
-    });
+    region_table.traverseRegions(
+        [&](TableID, RegionTable::InternalRegion & internal_region) { region_in_table.insert(internal_region.region_id); });
     for (auto && [id, region] : regions)
     {
         if (region_in_table.count(id))

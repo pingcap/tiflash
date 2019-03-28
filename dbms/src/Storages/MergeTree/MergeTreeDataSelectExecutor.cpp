@@ -296,26 +296,38 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         // get data block from region first.
 
-        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+        ThreadPool pool(num_streams);
+        for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
         {
-            const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+            pool.schedule([&, region_begin, size] {
 
-            auto [region_input_stream, status, tol] = tmt.region_table.getBlockInputStreamByRegion(
-                data.table_info.id, region_query_info.region_id, region_query_info.version,
-                data.table_info, data.getColumns(), column_names_to_read,
-                true, query_info.resolve_locks, query_info.read_tso);
-            if (status != RegionTable::OK)
-            {
-                regions_query_res[region_index] = false;
-                LOG_INFO(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
-                                        <<  ", handle range [" << region_query_info.range_in_table.first
-                                        << ", " << region_query_info.range_in_table.second << ") , status "
-                                        << RegionTable::RegionReadStatusString(status));
-                continue;
-            }
-            region_block_data[region_index] = region_input_stream;
-            rows_in_mem[region_index] = tol;
+                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
+                {
+                    const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+
+                    auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(
+                        tmt, data.table_info.id, region_query_info.region_id, region_query_info.version,
+                        data.table_info, data.getColumns(), column_names_to_read,
+                        true, query_info.resolve_locks, query_info.read_tso);
+
+                    if (status != RegionTable::OK)
+                    {
+                        regions_query_res[region_index] = false;
+                        LOG_INFO(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
+                                                <<  ", handle range [" << region_query_info.range_in_table.first
+                                                << ", " << region_query_info.range_in_table.second << ") , status "
+                                                << RegionTable::RegionReadStatusString(status));
+                    }
+                    else
+                    {
+                        region_block_data[region_index] = region_input_stream;
+                        rows_in_mem[region_index] = tol;
+                    }
+                }
+            });
         }
+
+        pool.wait();
     }
 
     size_t part_index = 0;
@@ -788,15 +800,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
         else
         {
-            std::vector<std::vector<size_t>> region_streams(num_streams);
-
-            for (size_t region_index = 0; region_index < region_cnt; ++region_index)
-                region_streams[region_index % num_streams].push_back(region_index);
-
-            for (const auto & region_idx_list : region_streams)
+            for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
             {
                 BlockInputStreams union_regions_stream;
-                for (size_t region_index : region_idx_list)
+                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
                     if (!regions_query_res[region_index])
                         continue;
@@ -832,7 +839,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                                                                            data.getPrimaryExpression());
                         merging.emplace_back(region_input_stream);
                     }
-                    if (merging.size())
+                    if (!merging.empty())
                         union_regions_stream.emplace_back(
                             std::make_shared<MvccTMTSortedBlockInputStream>(
                             merging, data.getPrimarySortDescription(),
@@ -840,7 +847,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                             DEFAULT_MERGE_BLOCK_SIZE,
                             query_info.read_tso));
                 }
-                if (union_regions_stream.size())
+                if (!union_regions_stream.empty())
                     res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
             }
         }

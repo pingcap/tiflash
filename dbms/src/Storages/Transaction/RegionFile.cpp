@@ -27,10 +27,10 @@ RegionFile::Writer::~Writer()
     index_file_buf.sync();
 }
 
-size_t RegionFile::Writer::write(const RegionPtr & region)
+size_t RegionFile::Writer::write(const RegionPtr & region, enginepb::CommandResponse * response)
 {
     HashingWriteBuffer hash_buf(data_file_buf);
-    size_t region_size = region->serialize(hash_buf);
+    size_t region_size = region->serialize(hash_buf, response);
     auto hashcode = hash_buf.getHash();
 
     // index file format: [ version(4 bytes), region_id(8 bytes), region_size(8 bytes), region hash(16 bytes] , [ ... ] ...
@@ -90,7 +90,7 @@ RegionID RegionFile::Reader::hasNext()
 RegionPtr RegionFile::Reader::next(const Region::RegionClientCreateFunc & region_create_func)
 {
     next_region_offset += next_region_meta->region_size;
-    return Region::deserialize(data_file_buf, region_create_func);
+    return Region::deserialize(data_file_buf, &region_create_func);
 }
 
 void RegionFile::Reader::skipNext()

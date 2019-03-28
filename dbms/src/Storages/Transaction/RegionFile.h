@@ -37,7 +37,7 @@ public:
 
         ~Writer();
 
-        size_t write(const RegionPtr & region);
+        size_t write(const RegionPtr & region, enginepb::CommandResponse * response = nullptr);
 
     private:
         // It is a reference to file_size in RegionFile, will be updated after write.
