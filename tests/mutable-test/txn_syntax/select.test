@@ -1,3 +1,4 @@
+#RETURN
 ## Prepare data:
 
 >> drop table if exists test
