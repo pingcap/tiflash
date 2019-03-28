@@ -66,12 +66,6 @@ int main(int, char **)
         assert(nullptr == short_value);
     }
 
-    auto key = RecordKVFormat::genKey(1222, 100023, 452321);
-    std::cout << escapeString(key.toString()) << std::endl;
-    std::cout << escapeString(DataKVFormat::enc_start_key(key)) << std::endl;
-    std::cout << escapeString(DataKVFormat::enc_end_key(key)) << std::endl;
-    std::cout << escapeString(DataKVFormat::region_state_key(331231)) << std::endl;
-
     {
 
         UInt64 a = 13241432453554;
