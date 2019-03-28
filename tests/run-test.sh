@@ -97,7 +97,7 @@ function run_path()
 	fi
 }
 
-set -xe
+set -e
 
 target="$1"
 fuzz="$2"
