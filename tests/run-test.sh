@@ -97,6 +97,8 @@ function run_path()
 	fi
 }
 
+set -xe
+
 target="$1"
 fuzz="$2"
 skip_raw_test="$3"
