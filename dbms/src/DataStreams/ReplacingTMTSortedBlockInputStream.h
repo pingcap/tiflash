@@ -12,7 +12,7 @@ class ReplacingTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
     ReplacingTMTSortedBlockInputStream(
-        std::vector<std::pair<HandleID, HandleID>> ranges_,
+        const std::vector<std::pair<HandleID, HandleID>> & ranges_,
         const BlockInputStreams & inputs_,
         const SortDescription & description_,
         const String & version_column,
