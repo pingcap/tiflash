@@ -1,4 +1,5 @@
 #include <pd/Client.h>
+#include <common/Exception.h>
 #include <grpcpp/security/credentials.h>
 #include <grpcpp/create_channel.h>
 #include <Poco/URI.h>
@@ -76,7 +77,9 @@ pdpb::GetMembersResponse Client::getMembers(std::string url)
 
     auto status = pdpb::PD::NewStub(cc)->GetMembers(&context, pdpb::GetMembersRequest{}, &resp);
     if (!status.ok()) {
-        log->error("get member failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
+        std::string err_msg = "get member failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
+        log->error(err_msg);
+        throw Exception(err_msg, GRPCErrorCode);
     }
     return resp;
 }
@@ -100,7 +103,7 @@ void Client::initClusterID() {
         };
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-    throw "failed to init cluster id";
+    throw Exception("failed to init cluster id", InitClusterIDFailed);
 }
 
 void Client::updateLeader() {
@@ -115,7 +118,7 @@ void Client::updateLeader() {
         switchLeader(resp.leader().client_urls());
         return;
     }
-    throw "failed to update leader";
+    throw Exception("failed to update leader", UpdatePDLeaderFailed);
 }
 
 void Client::switchLeader(const ::google::protobuf::RepeatedPtrField<std::string>& leader_urls) {
@@ -162,8 +165,8 @@ void Client::leaderLoop() {
             try {
                 check_leader = false;
                 updateLeader();
-            } catch (...) {
-                log->error("update leader failed.");
+            } catch (Exception & e) {
+                log->error(e.displayText());
             }
         }
     }
@@ -186,7 +189,9 @@ uint64_t Client::getGCSafePoint() {
 
     auto status = leaderStub()->GetGCSafePoint(&context, request, &response);
     if (!status.ok()) {
-        log->error("get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
+        std::string err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
+        log->error(err_msg);
+        throw Exception(err_msg, GRPCErrorCode);
     }
     return response.safe_point();
 }
@@ -204,7 +209,9 @@ std::tuple<metapb::Region, metapb::Peer, metapb::Peer> Client::getRegion(std::st
 
     auto status = leaderStub()->GetRegion(&context, request, &response);
     if (!status.ok()) {
-        log->error("get region failed: " + std::to_string(status.error_code()) + " : " + status.error_message());
+        std::string err_msg = ("get region failed: " + std::to_string(status.error_code()) + " : " + status.error_message());
+        log->error(err_msg);
+        throw Exception(err_msg, GRPCErrorCode);
     }
     if (response.slaves_size() == 0) {
         return std::make_tuple(response.region(), response.leader(), metapb::Peer::default_instance());
@@ -225,7 +232,9 @@ std::tuple<metapb::Region, metapb::Peer, metapb::Peer> Client::getRegionByID(uin
 
     auto status = leaderStub()->GetRegionByID(&context, request, &response);
     if (!status.ok()) {
-        log-> error("get region by id failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
+        std::string err_msg = ("get region by id failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
+        log->error(err_msg);
+        throw Exception(err_msg, GRPCErrorCode);
     }
     if (response.slaves_size() == 0) {
         return std::make_tuple(response.region(), response.leader(), metapb::Peer::default_instance());
@@ -246,7 +255,9 @@ metapb::Store Client::getStore(uint64_t store_id) {
 
     auto status = leaderStub()->GetStore(&context, request, &response);
     if (!status.ok()) {
-        log-> error("get store failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
+        std::string err_msg = ("get store failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
+        log->error(err_msg);
+        throw Exception(err_msg, GRPCErrorCode);
     }
     return response.store();
 }

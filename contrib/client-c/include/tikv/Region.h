@@ -7,6 +7,8 @@
 #include <pd/MockPDClient.h>
 #include <kvproto/metapb.pb.h>
 #include <tikv/Backoff.h>
+#include <common/Log.h>
+#include <kvproto/errorpb.pb.h>
 
 namespace pingcap {
 namespace kv {
@@ -30,6 +32,8 @@ struct RegionVerID {
     uint64_t id;
     uint64_t confVer;
     uint64_t ver;
+
+    RegionVerID(uint64_t id_, uint64_t conf_ver, uint64_t ver_): id(id_), confVer(conf_ver), ver(ver_){}
 
     bool operator == (const RegionVerID & rhs) const {
         return id == rhs.id && confVer == rhs.confVer && ver == rhs.ver;
@@ -55,6 +59,8 @@ struct Region {
     metapb::Region meta;
     metapb::Peer   peer;
     metapb::Peer   learner;
+
+    Region(const metapb::Region & meta_, const metapb::Peer & peer_) : meta(meta_), peer(peer_), learner(metapb::Peer::default_instance()) {}
 
     Region(const metapb::Region & meta_, const metapb::Peer & peer_, const metapb::Peer & learner_)
         : meta(meta_), peer(peer_), learner(learner_) {}
@@ -118,12 +124,22 @@ using RPCContextPtr = std::shared_ptr<RPCContext>;
 
 class RegionCache {
 public:
-    RegionCache(pd::ClientPtr pdClient_) : pdClient(pdClient_) {
+    RegionCache(pd::ClientPtr pdClient_) : pdClient(pdClient_), log(&Logger::get("pingcap.tikv")) {
     }
 
     RPCContextPtr getRPCContext(Backoffer & bo, const RegionVerID & id, bool is_learner);
 
+    void updateLeader(Backoffer & bo, const RegionVerID & region_id, uint64_t leader_store_id);
+
     //KeyLocation locateKey(Backoffer & bo, std::string key);
+    //
+    void dropRegion(const RegionVerID &);
+
+    void dropStore(uint64_t failed_store_id);
+
+    void dropStoreOnSendReqFail(RPCContextPtr & ctx, const Exception & exc);
+
+    void onRegionStale(RPCContextPtr ctx, const errorpb::StaleEpoch & stale_epoch);
 
 private:
     RegionPtr getCachedRegion(Backoffer & bo, const RegionVerID & id);
@@ -153,6 +169,8 @@ private:
     std::mutex region_mutex;
 
     std::mutex store_mutex;
+
+    Logger * log;
 };
 
 using RegionCachePtr = std::shared_ptr<RegionCache>;
