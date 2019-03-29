@@ -2,7 +2,8 @@
 
 #include <memory>
 #include <unordered_map>
-
+#include <kvproto/flash.pb.h>
+#include <Storages/Transaction/Region.h>
 
 namespace DB
 {
@@ -32,6 +33,8 @@ struct SelectQueryInfo
     bool resolve_locks = false;
 
     UInt64 read_tso;
+
+    std::vector<RegionQueryInfo> regions_query_info;
 };
 
 }

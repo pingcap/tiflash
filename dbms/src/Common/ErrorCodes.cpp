@@ -386,6 +386,8 @@ namespace ErrorCodes
     extern const int DECIMAL_OVERFLOW_ERROR = 9004;
     extern const int FILE_SIZE_NOT_MATCH = 9005;
     extern const int LOCK_EXCEPTION = 10000;
+    extern const int VERSION_ERROR = 10001;
+    extern const int REGION_MISS = 10002;
 }
 
 }
