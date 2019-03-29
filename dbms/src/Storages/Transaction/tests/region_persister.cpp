@@ -133,7 +133,9 @@ int main(int, char **)
         {
             RegionPersister persister(dir_path, config);
             RegionMap restore_regions;
-            persister.restore(restore_regions);
+            persister.restore(restore_regions, [](pingcap::kv::RegionVerID) -> pingcap::kv::RegionClientPtr {
+                return nullptr;
+            });
             ASSERT_CHECK_EQUAL(3, restore_regions.size(), suc);
 
             persister.gc();

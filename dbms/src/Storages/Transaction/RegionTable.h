@@ -20,10 +20,11 @@ public:
     struct InternalRegion
     {
         InternalRegion() {}
-        InternalRegion(const InternalRegion & p) : region_id(p.region_id) {}
-        InternalRegion(RegionID region_id_) : region_id(region_id_) {}
+        InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
+        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_) : region_id(region_id_), range_in_table(range_in_table_) {}
 
         RegionID region_id;
+        HandleRange range_in_table;
         bool pause_flush = false;
         bool must_flush = false;
         bool updated = false;
@@ -42,8 +43,9 @@ public:
         {
             void operator()(const RegionID k, const InternalRegion & v, DB::WriteBuffer & buf)
             {
-                std::ignore = v;
                 writeIntBinary(k, buf);
+                writeIntBinary(v.range_in_table.first, buf);
+                writeIntBinary(v.range_in_table.second, buf);
             }
         };
 
@@ -52,10 +54,15 @@ public:
             std::pair<RegionID, InternalRegion> operator()(DB::ReadBuffer & buf)
             {
                 RegionID region_id;
+                HandleRange range_in_table;
                 readIntBinary(region_id, buf);
-                return {region_id, InternalRegion(region_id)};
+                readIntBinary(range_in_table.first, buf);
+                readIntBinary(range_in_table.second, buf);
+                return {region_id, InternalRegion(region_id, range_in_table)};
             }
         };
+
+        void persist() { regions.persist(); }
 
         using InternalRegions = PersistedContainerMap<RegionID, InternalRegion, std::unordered_map, Write, Read>;
 
@@ -142,16 +149,16 @@ private:
     Table & getOrCreateTable(TableID table_id);
     StoragePtr getOrCreateStorage(TableID table_id);
 
-    InternalRegion & insertRegion(Table & table, RegionID region_id);
-    InternalRegion & getOrInsertRegion(TableID table_id, RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const RegionPtr & region);
+    InternalRegion & getOrInsertRegion(TableID table_id, const RegionPtr & region, TableIDSet & table_to_persist);
 
     /// This functional only shrink the table range of this region_id, range expand will (only) be done at flush.
     /// Note that region update range should not affect the data in storage.
-    void updateRegionRange(const RegionPtr & region);
+    void updateRegionRange(const RegionPtr & region, TableIDSet & table_to_persist);
 
     bool shouldFlush(const InternalRegion & region);
 
-    void flushRegion(TableID table_id, RegionID partition_id, size_t & rest_cache_size);
+    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
 
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
@@ -175,10 +182,12 @@ public:
     /// Returns whether this function has done any meaningful job.
     bool tryFlushRegions();
 
-    void traverseRegions(std::function<void(TableID, InternalRegion &)> && callback);
+    void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
+    void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> && callback);
 
-    std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
+    static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TMTContext & tmt,
+        TableID table_id,
         const RegionID region_id,
         const RegionVersion region_version,
         const RegionVersion conf_version,

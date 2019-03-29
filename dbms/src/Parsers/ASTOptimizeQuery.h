@@ -21,11 +21,9 @@ public:
     bool final;
     /// Do deduplicate (default: false)
     bool deduplicate;
-    /// Do eliminate rows with delete mark (default: false)
-    bool eliminate;
 
     /** Get the text that identifies this element. */
-    String getID() const override { return "OptimizeQuery_" + database + "_" + table + (final ? "_final" : "") + (deduplicate ? "_deduplicate" : "") + (eliminate ? "_eliminate" : ""); };
+    String getID() const override { return "OptimizeQuery_" + database + "_" + table + (final ? "_final" : "") + (deduplicate ? "_deduplicate" : ""); };
 
     ASTPtr clone() const override
     {
@@ -58,9 +56,6 @@ protected:
 
         if (deduplicate)
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " DEDUPLICATE" << (settings.hilite ? hilite_none : "");
-
-        if (eliminate)
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << " ELIMINATE" << (settings.hilite ? hilite_none : "");
     }
 };
 

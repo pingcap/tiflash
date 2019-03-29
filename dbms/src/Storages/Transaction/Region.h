@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <shared_mutex>
 #include <unordered_map>
 
 #include <IO/ReadHelpers.h>
@@ -30,15 +31,7 @@ struct RegionQueryInfo
     UInt64 conf_version;
     HandleRange range_in_table;
 
-    bool operator < (const RegionQueryInfo & o) const
-    {
-        return range_in_table < o.range_in_table;
-    }
-
-    bool operator == (const RegionQueryInfo & o) const
-    {
-        return range_in_table == o.range_in_table;
-    }
+    bool operator<(const RegionQueryInfo & o) const { return range_in_table < o.range_in_table; }
 };
 
 std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
@@ -69,17 +62,8 @@ public:
         */
     };
 
-    using ComputeHash = std::function<void(const RegionPtr &, UInt64, const std::string)>;
-    using VerifyHash = std::function<void(const RegionPtr &, UInt64, const std::string)>;
-
     // This must be an ordered map. Many logics rely on it, like iterating.
     using KVMap = std::map<TiKVKey, TiKVValue>;
-
-    struct CmdCallBack
-    {
-        ComputeHash compute_hash;
-        VerifyHash verify_hash;
-    };
 
     /// A quick-and-dirty copy of LockInfo structure in kvproto.
     /// Used to transmit to client using non-ProtoBuf protocol.
@@ -93,11 +77,11 @@ public:
     using LockInfoPtr = std::unique_ptr<LockInfo>;
     using LockInfos = std::vector<LockInfoPtr>;
 
-    class CommittedScanRemover : private boost::noncopyable
+    class CommittedScanner : private boost::noncopyable
     {
     public:
-        CommittedScanRemover(const RegionPtr & store_, TableID expected_table_id_)
-            : lock(store_->mutex), store(store_), expected_table_id(expected_table_id_), write_map_it(store->write_cf.begin())
+        CommittedScanner(const RegionPtr & store_, TableID expected_table_id_)
+            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_), write_map_it(store->write_cf.cbegin())
         {}
 
         /// Check if next kv exists.
@@ -106,7 +90,7 @@ public:
         {
             if (expected_table_id != InvalidTableID)
             {
-                for (; write_map_it != store->write_cf.end(); ++write_map_it)
+                for (; write_map_it != store->write_cf.cend(); ++write_map_it)
                 {
                     if (likely(RecordKVFormat::getTableId(write_map_it->first) == expected_table_id))
                         return expected_table_id;
@@ -114,7 +98,7 @@ public:
             }
             else
             {
-                if (write_map_it != store->write_cf.end())
+                if (write_map_it != store->write_cf.cend())
                     return RecordKVFormat::getTableId(write_map_it->first);
             }
             return InvalidTableID;
@@ -122,33 +106,30 @@ public:
 
         auto next(std::vector<TiKVKey> * keys = nullptr) { return store->readDataByWriteIt(write_map_it++, keys); }
 
-        void remove(TableID remove_table_id)
-        {
-            for (auto it = store->write_cf.begin(); it != store->write_cf.end();)
-            {
-                if (RecordKVFormat::getTableId(it->first) == remove_table_id)
-                    it = store->removeDataByWriteIt(it);
-                else
-                    ++it;
-            }
-        }
+        LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
+
+    private:
+        RegionPtr store;
+        std::shared_lock<std::shared_mutex> lock;
+
+        TableID expected_table_id;
+        KVMap::const_iterator write_map_it;
+    };
+
+    class CommittedRemover : private boost::noncopyable
+    {
+    public:
+        CommittedRemover(const RegionPtr & store_) : store(store_), lock(store_->mutex) {}
 
         void remove(const TiKVKey & key)
         {
             if (auto it = store->write_cf.find(key); it != store->write_cf.end())
-            {
                 store->removeDataByWriteIt(it);
-            }
         }
 
-        LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
-
     private:
-        std::lock_guard<std::mutex> lock;
-
         RegionPtr store;
-        TableID expected_table_id;
-        KVMap::iterator write_map_it;
+        std::unique_lock<std::shared_mutex> lock;
     };
 
 public:
@@ -159,7 +140,7 @@ public:
     using RegionClientCreateFunc = std::function<pingcap::kv::RegionClientPtr(pingcap::kv::RegionVerID)>;
 
     explicit Region(RegionMeta && meta_, const RegionClientCreateFunc & region_client_create)
-        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID ())), log(&Logger::get("Region"))
+        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get("Region"))
     {}
 
     explicit Region(const RegionMeta & meta_, const RegionClientCreateFunc & region_client_create)
@@ -170,16 +151,15 @@ public:
     TableID remove(const std::string & cf, const TiKVKey & key);
 
     using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
-    void batchInsert(std::function<bool(BatchInsertNode &)> f);
+    void batchInsert(std::function<bool(BatchInsertNode &)> && f);
 
-    std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd, CmdCallBack & persis);
+    std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd);
 
-    std::unique_ptr<CommittedScanRemover> createCommittedScanRemover(TableID expected_table_id);
+    std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
+    std::unique_ptr<CommittedRemover> createCommittedRemover();
 
-    size_t serialize(WriteBuffer & buf);
-    static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc & region_client_create);
-
-    void calculateCfCrc32(Crc32 & crc32) const;
+    size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr);
+    static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
     RegionRange getRange() const;
@@ -195,12 +175,13 @@ public:
     void markPersisted();
     Timepoint lastPersistTime() const;
     size_t persistParm() const;
-    void updatePersistParm(size_t x);
+    void decPersistParm(size_t x);
+    void incPersistParm();
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
-        std::lock_guard<std::mutex> lock1(region1.mutex);
-        std::lock_guard<std::mutex> lock2(region2.mutex);
+        std::shared_lock<std::shared_mutex> lock1(region1.mutex);
+        std::shared_lock<std::shared_mutex> lock2(region2.mutex);
 
         return region1.meta == region2.meta && region1.data_cf == region2.data_cf && region1.write_cf == region2.write_cf
             && region1.lock_cf == region2.lock_cf && region1.cf_data_size == region2.cf_data_size;
@@ -211,11 +192,14 @@ public:
     void waitIndex(UInt64 index);
 
     UInt64 getIndex() const;
+    UInt64 getProbableIndex() const;
 
     RegionVersion version() const;
     RegionVersion confVer() const;
 
     std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
+
+    void reset(Region && new_region);
 
 private:
     // Private methods no need to lock mutex, normally
@@ -227,14 +211,14 @@ private:
     KVMap & getCf(const std::string & cf);
 
     using ReadInfo = std::tuple<UInt64, UInt8, UInt64, TiKVValue>;
-    ReadInfo readDataByWriteIt(const KVMap::iterator & write_it, std::vector<TiKVKey> * keys=nullptr);
+    ReadInfo readDataByWriteIt(const KVMap::const_iterator & write_it, std::vector<TiKVKey> * keys = nullptr);
     KVMap::iterator removeDataByWriteIt(const KVMap::iterator & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
 
     RegionPtr splitInto(const RegionMeta & meta);
-    Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
-    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response);
+    Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
 
 private:
     // TODO: We should later change to lock free structure if needed.
@@ -242,7 +226,7 @@ private:
     KVMap write_cf;
     KVMap lock_cf;
 
-    mutable std::mutex mutex;
+    mutable std::shared_mutex mutex;
 
     RegionMeta meta;
 

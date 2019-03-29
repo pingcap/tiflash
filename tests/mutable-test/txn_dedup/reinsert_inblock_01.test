@@ -1,3 +1,4 @@
+#RETURN
 >> drop table if exists test
 >> create table test (
 	v Int32,

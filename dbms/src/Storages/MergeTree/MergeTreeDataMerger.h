@@ -77,7 +77,6 @@ public:
         const AllowedMergingPredicate & can_merge,
         const String & partition_id,
         bool final,
-        bool eliminate,
         String * out_disable_reason = nullptr);
 
     /** Merge the parts.
@@ -93,8 +92,7 @@ public:
     MergeTreeData::MutableDataPartPtr mergePartsToTemporaryPart(
         const FuturePart & future_part,
         MergeListEntry & merge_entry,
-        size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplication,
-        bool eliminate = false);
+        size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplication);
 
     MergeTreeData::DataPartPtr renameMergedTemporaryPart(
         MergeTreeData::MutableDataPartPtr & new_data_part,

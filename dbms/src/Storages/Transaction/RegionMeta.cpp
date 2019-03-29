@@ -78,19 +78,31 @@ const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
     return apply_state;
 }
 
-void RegionMeta::setRegion(const metapb::Region & region_)
+void RegionMeta::setRegion(const metapb::Region & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    region = region_;
+    doSetRegion(region);
+}
+
+void RegionMeta::doSetRegion(const metapb::Region & region)
+{
+    this->region = region;
 }
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
 {
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        apply_state.set_applied_index(index);
-        applied_term = term;
-    }
+    std::lock_guard<std::mutex> lock(mutex);
+    doSetApplied(index, term);
+}
+
+void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
+{
+    apply_state.set_applied_index(index);
+    applied_term = term;
+}
+
+void RegionMeta::notifyAll()
+{
     cv.notify_all();
 }
 
@@ -160,11 +172,13 @@ bool RegionMeta::isPendingRemove() const
 
 void RegionMeta::setPendingRemove()
 {
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        pending_remove = true;
-    }
-    cv.notify_all();
+    std::lock_guard<std::mutex> lock(mutex);
+    doSetPendingRemove();
+}
+
+void RegionMeta::doSetPendingRemove()
+{
+    pending_remove = true;
 }
 
 void RegionMeta::waitIndex(UInt64 index)
@@ -197,10 +211,8 @@ void RegionMeta::swap(RegionMeta & other)
     std::swap(pending_remove, other.pending_remove);
 }
 
-void RegionMeta::removePeer(UInt64 store_id)
+void RegionMeta::doRemovePeer(UInt64 store_id)
 {
-    std::unique_lock<std::mutex> lk(mutex);
-
     auto mutable_peers = region.mutable_peers();
 
     for (auto it = mutable_peers->begin(); it != mutable_peers->end(); ++it)
@@ -213,5 +225,42 @@ void RegionMeta::removePeer(UInt64 store_id)
     }
     throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
+
+void RegionMeta::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
+{
+    const auto & change_peer_request = request.change_peer();
+    const auto & new_region = response.change_peer().region();
+
+    switch (change_peer_request.change_type())
+    {
+        case eraftpb::ConfChangeType::AddNode:
+        case eraftpb::ConfChangeType::AddLearnerNode:
+        {
+            std::lock_guard<std::mutex> lk(mutex);
+
+            // change the peers of region, add conf_ver.
+            doSetRegion(new_region);
+            doSetApplied(index, term);
+            return;
+        }
+        case eraftpb::ConfChangeType::RemoveNode:
+        {
+            const auto & peer = change_peer_request.peer();
+            auto store_id = peer.store_id();
+
+            std::lock_guard<std::mutex> lk(mutex);
+
+            doRemovePeer(store_id);
+
+            if (this->peer.id() == peer.id())
+                doSetPendingRemove();
+            doSetApplied(index, term);
+            return;
+        }
+        default:
+            throw Exception("execChangePeer: unsupported cmd", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 
 } // namespace DB

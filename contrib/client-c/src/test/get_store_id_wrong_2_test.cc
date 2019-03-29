@@ -1,7 +1,7 @@
 #include "MockPDServer.h"
 #include <tikv/RegionClient.h>
 #include <tikv/Rpc.h>
-#include <common/Exception.h>
+#include <common/CltException.h>
 
 namespace pingcap {
 namespace test {

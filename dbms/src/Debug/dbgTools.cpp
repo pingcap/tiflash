@@ -312,11 +312,8 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_handle, HandleID end_handle, Context & context,
     Int64 magic_num, bool del)
 {
-    const auto partition_number = context.getMergeTreeSettings().mutable_mergetree_partition_number;
-
     Regions regions;
 
-    for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         TMTContext & tmt = context.getTMTContext();
         tmt.region_table.traverseRegionsByTable(table_info.id, [&](Regions d) {
