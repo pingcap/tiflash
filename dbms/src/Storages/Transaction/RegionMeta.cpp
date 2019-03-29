@@ -72,6 +72,13 @@ metapb::Region RegionMeta::getRegion() const
     return region;
 }
 
+pingcap::kv::RegionVerID RegionMeta::getRegionVerID() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    return pingcap::kv::RegionVerID{region.id(), region.region_epoch().conf_ver(), region.region_epoch().version()};
+}
+
 const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -84,10 +91,7 @@ void RegionMeta::setRegion(const metapb::Region & region)
     doSetRegion(region);
 }
 
-void RegionMeta::doSetRegion(const metapb::Region & region)
-{
-    this->region = region;
-}
+void RegionMeta::doSetRegion(const metapb::Region & region) { this->region = region; }
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
 {
@@ -101,10 +105,7 @@ void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
     applied_term = term;
 }
 
-void RegionMeta::notifyAll()
-{
-    cv.notify_all();
-}
+void RegionMeta::notifyAll() { cv.notify_all(); }
 
 UInt64 RegionMeta::appliedIndex() const
 {
@@ -176,17 +177,12 @@ void RegionMeta::setPendingRemove()
     doSetPendingRemove();
 }
 
-void RegionMeta::doSetPendingRemove()
-{
-    pending_remove = true;
-}
+void RegionMeta::doSetPendingRemove() { pending_remove = true; }
 
 void RegionMeta::waitIndex(UInt64 index)
 {
-    std::unique_lock<std::mutex> lk(mutex);
-    cv.wait(lk, [this, index] {
-        return pending_remove || apply_state.applied_index() >= index;
-    });
+    std::unique_lock<std::mutex> lock(mutex);
+    cv.wait(lock, [this, index] { return pending_remove || apply_state.applied_index() >= index; });
 }
 
 UInt64 RegionMeta::version() const
@@ -226,7 +222,8 @@ void RegionMeta::doRemovePeer(UInt64 store_id)
     throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
-void RegionMeta::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
+void RegionMeta::execChangePeer(
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
     const auto & new_region = response.change_peer().region();
@@ -236,7 +233,7 @@ void RegionMeta::execChangePeer(const raft_cmdpb::AdminRequest & request, const 
         case eraftpb::ConfChangeType::AddNode:
         case eraftpb::ConfChangeType::AddLearnerNode:
         {
-            std::lock_guard<std::mutex> lk(mutex);
+            std::lock_guard<std::mutex> lock(mutex);
 
             // change the peers of region, add conf_ver.
             doSetRegion(new_region);
@@ -248,7 +245,7 @@ void RegionMeta::execChangePeer(const raft_cmdpb::AdminRequest & request, const 
             const auto & peer = change_peer_request.peer();
             auto store_id = peer.store_id();
 
-            std::lock_guard<std::mutex> lk(mutex);
+            std::lock_guard<std::mutex> lock(mutex);
 
             doRemovePeer(store_id);
 
@@ -262,5 +259,18 @@ void RegionMeta::execChangePeer(const raft_cmdpb::AdminRequest & request, const 
     }
 }
 
+bool RegionMeta::isPeerRemoved() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    if (pending_remove)
+        return true;
+    for (auto region_peer : region.peers())
+    {
+        if (region_peer.id() == peer.id())
+            return false;
+    }
+    return true;
+}
 
 } // namespace DB

@@ -56,6 +56,11 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
         }
     }
 
+    {
+        if (region->isPeerRemoved())
+            region->setPendingRemove();
+    }
+
     // context may be null in test cases.
     kvstore->onSnapshot(region, context);
 

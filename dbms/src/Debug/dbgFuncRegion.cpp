@@ -272,28 +272,4 @@ size_t executeQueryAndCountRows(Context & context,const std::string & query)
     return count;
 }
 
-std::vector<std::tuple<HandleID, HandleID, RegionID>> getRegionRanges(
-    Context& context, TableID table_id, std::vector<RegionRange>* vec = nullptr)
-{
-    std::vector<std::tuple<HandleID, HandleID, RegionID>> handle_ranges;
-    auto callback = [&](Regions regions)
-    {
-        for (auto region : regions)
-        {
-            auto [start_key, end_key] = region->getRange();
-            HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-            HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
-            handle_ranges.push_back({start_handle, end_handle, region->id()});
-            if (vec)
-            {
-                vec->push_back(region->getRange());
-            }
-        }
-    };
-
-    TMTContext & tmt = context.getTMTContext();
-    tmt.region_table.traverseRegionsByTable(table_id, callback);
-    return handle_ranges;
-}
-
 }

@@ -37,13 +37,7 @@ public:
 
     metapb::Peer getPeer() const;
     metapb::Region getRegion() const;
-    pingcap::kv::RegionVerID getRegionVerID() const {
-        return pingcap::kv::RegionVerID {
-            region.id(),
-            confVer(),
-            version()
-        };
-    }
+    pingcap::kv::RegionVerID getRegionVerID() const;
 
     UInt64 version() const;
 
@@ -77,11 +71,11 @@ public:
 
     void waitIndex(UInt64 index);
 
+    bool isPeerRemoved() const;
 
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
 
 private:
-
     void doRemovePeer(UInt64 store_id);
 
     void doSetPendingRemove();

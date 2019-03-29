@@ -53,6 +53,8 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
 {
     TMTContext * tmt_ctx = context ? &(context->getTMTContext()) : nullptr;
 
+    auto table_ids = RegionTable::getRegionTableIds(new_region);
+
     {
         std::lock_guard<std::mutex> lock(task_mutex);
 
@@ -75,12 +77,18 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
             std::lock_guard<std::mutex> lock(mutex);
             regions[region_id] = new_region;
         }
+
+        if (tmt_ctx)
+            tmt_ctx->region_table.updateRegion(new_region, table_ids);
+
+        if (new_region->isPendingRemove())
+        {
+            removeRegion(region_id, context);
+            return;
+        }
     }
 
     region_persister.persist(new_region);
-
-    if (tmt_ctx)
-        tmt_ctx->region_table.applySnapshotRegion(new_region);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)

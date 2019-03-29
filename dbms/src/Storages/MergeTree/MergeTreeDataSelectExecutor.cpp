@@ -229,7 +229,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     bool is_txn_engine = data.merging_params.mode == MergeTreeData::MergingParams::Txn;
 
     std::vector<RegionQueryInfo> regions_query_info = query_info.regions_query_info;
-    std::vector<bool> regions_query_res;
+    RegionMap kvstore_region;
+    std::vector<RegionTable::RegionReadStatus> regions_query_res;
     BlockInputStreams region_block_data;
     String handle_col_name;
     size_t region_cnt = 0;
@@ -277,10 +278,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         if (!select.no_kvstore && regions_query_info.empty())
         {
-            tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](Regions regions) {
-                for (const auto & region : regions)
+            tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+                for (const auto & [id, region]: regions)
                 {
-                    regions_query_info.push_back({region->id(), region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info.id)});
+                    kvstore_region.emplace(id, region);
+                    if (region == nullptr)
+                        // maybe region is removed.
+                        regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
+                    else
+                        regions_query_info.push_back({id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info.id)});
                 }
             });
         }
@@ -288,7 +294,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         std::sort(regions_query_info.begin(), regions_query_info.end());
         region_cnt = regions_query_info.size();
         region_range_parts.assign(region_cnt, {});
-        regions_query_res.assign(region_cnt, true);
+        regions_query_res.assign(region_cnt, RegionTable::OK);
         region_block_data.assign(region_cnt, nullptr);
         rows_in_mem.assign(region_cnt, 0);
 
@@ -298,32 +304,38 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         // get data block from region first.
 
-        ThreadPool pool(num_streams);
+        ThreadPool pool(std::min(region_cnt, num_streams));
         for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
         {
             pool.schedule([&, region_begin, size] {
-                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index) 
+
+                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                    auto [region_input_stream, status, tol] = tmt.region_table.getBlockInputStreamByRegion(
-                        tmt, data.table_info.id, region_query_info.region_id, region_query_info.version, region_query_info.conf_version,
-                        data.table_info, data.getColumns(), column_names_to_read,
+                    auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(
+                        data.table_info.id, kvstore_region[region_query_info.region_id], region_query_info.version,
+                        region_query_info.conf_version, data.table_info, data.getColumns(), column_names_to_read,
                         true, query_info.resolve_locks, query_info.read_tso);
+
+                    regions_query_res[region_index] = status;
+
                     if (status != RegionTable::OK)
                     {
-                        regions_query_res[region_index] = false;
-                        LOG_INFO(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
-                                                <<  ", handle range [" << region_query_info.range_in_table.first
-                                                << ", " << region_query_info.range_in_table.second << ") , status "
-                                                << RegionTable::RegionReadStatusString(status));
-                        std::vector<RegionID> region_ids;
-                        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                        LOG_WARNING(log, "Region " << region_query_info.region_id << ", version "
+                                                   << region_query_info.version
+                                                   << ", handle range [" << region_query_info.range_in_table.first
+                                                   << ", " << region_query_info.range_in_table.second << ") , status "
+                                                   << RegionTable::RegionReadStatusString(status));
                         {
-                            region_ids.push_back(regions_query_info[region_index].region_id);
+                            std::vector<RegionID> region_ids;
+                            for(size_t region_index = 0; region_index < region_cnt; ++region_index)
+                                region_ids.push_back(regions_query_info[region_index].region_id);
+                            throw RegionException(region_ids);
                         }
-                        throw RegionException(region_ids);
-                    } else {
+                    }
+                    else
+                    {
                         region_block_data[region_index] = region_input_stream;
                         rows_in_mem[region_index] = tol;
                     }
@@ -712,26 +724,37 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             if (select.no_kvstore)
                 continue;
 
-            if (!regions_query_res[region_index])
+            if (regions_query_res[region_index] != RegionTable::OK)
                 continue;
 
             const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-            if (tmt.kvstore->getRegion(region_query_info.region_id) == nullptr)
             {
-                // Region may be removed.
-                // If region is in kvstore, even if its state is pending_remove, the new parts with del data are not flushed into ch.
-                regions_query_res[region_index] = false;
-                LOG_INFO(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
-                                        <<  ", handle range [" << region_query_info.range_in_table.first
-                                        << ", " << region_query_info.range_in_table.second << ") , status "
-                                        << RegionTable::RegionReadStatusString(RegionTable::RegionReadStatus::NOT_FOUND));
-                std::vector<RegionID> region_ids;
-                for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                auto region = tmt.kvstore->getRegion(region_query_info.region_id);
+                RegionTable::RegionReadStatus status = RegionTable::OK;
+                if (region != kvstore_region[region_query_info.region_id])
+                    status = RegionTable::NOT_FOUND;
+                else if (region->version() != region_query_info.version)
+                    status = RegionTable::VERSION_ERROR;
+
+                if (status != RegionTable::OK)
                 {
-                    region_ids.push_back(regions_query_info[region_index].region_id);
+                    regions_query_res[region_index] = status;
+                    // ABA problem may cause because one region is removed and inserted back.
+                    // if the version of region is changed, the part may has less data because of compaction.
+                    LOG_WARNING(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
+                                               <<  ", handle range [" << region_query_info.range_in_table.first
+                                               << ", " << region_query_info.range_in_table.second << ") , status "
+                                               << RegionTable::RegionReadStatusString(status));
+                    {
+                        std::vector<RegionID> region_ids;
+                        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                        {
+                            region_ids.push_back(regions_query_info[region_index].region_id);
+                        }
+                        throw RegionException(region_ids);
+                    }
                 }
-                throw RegionException(region_ids);
             }
 
             size_t sum_marks = 0;
@@ -799,7 +822,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             {
                 for (size_t region_index = 0; region_index < region_cnt; ++region_index)
                 {
-                    if (!regions_query_res[region_index])
+                    if (regions_query_res[region_index] != RegionTable::OK)
                         continue;
                     auto region_input_stream = region_block_data[region_index];
                     if (region_input_stream)
@@ -814,7 +837,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 BlockInputStreams union_regions_stream;
                 for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
-                    if (!regions_query_res[region_index])
+                    if (regions_query_res[region_index] != RegionTable::OK)
                         continue;
 
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
