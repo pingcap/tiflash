@@ -79,7 +79,7 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
         }
 
         if (tmt_ctx)
-            tmt_ctx->region_table.updateRegion(new_region, table_ids);
+            tmt_ctx->region_table.applySnapshotRegion(new_region, table_ids);
 
         if (new_region->isPendingRemove())
         {

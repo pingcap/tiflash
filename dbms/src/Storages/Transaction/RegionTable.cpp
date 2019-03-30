@@ -315,8 +315,26 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
 void RegionTable::applySnapshotRegion(const RegionPtr & region)
 {
     auto table_ids = getRegionTableIds(region);
+    return applySnapshotRegion(region, table_ids);
+}
 
-    updateRegion(region, table_ids);
+void RegionTable::applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids)
+{
+    TableIDSet table_to_persist;
+    size_t cache_bytes = region->dataSize();
+
+    std::lock_guard<std::mutex> lock(mutex);
+
+    for (auto table_id : table_ids)
+    {
+        auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);
+        internal_region.updated = true;
+        internal_region.cache_bytes = cache_bytes;
+        internal_region.range_in_table = region->getHandleRangeByTable(table_id);
+    }
+
+    for (auto table_id : table_to_persist)
+        tables.find(table_id)->second.persist();
 }
 
 void RegionTable::splitRegion(const RegionPtr & kvstore_region, const std::vector<RegionPtr> & split_regions)

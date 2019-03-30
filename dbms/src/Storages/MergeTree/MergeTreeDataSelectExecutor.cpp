@@ -309,6 +309,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         {
             pool.schedule([&, region_begin, size] {
 
+                std::vector<RegionID> region_ids;
+
                 for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
@@ -327,12 +329,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                                    << ", handle range [" << region_query_info.range_in_table.first
                                                    << ", " << region_query_info.range_in_table.second << ") , status "
                                                    << RegionTable::RegionReadStatusString(status));
-                        {
-                            std::vector<RegionID> region_ids;
-                            for(size_t region_index = 0; region_index < region_cnt; ++region_index)
-                                region_ids.push_back(regions_query_info[region_index].region_id);
-                            throw RegionException(region_ids);
-                        }
+                        region_ids.push_back(region_query_info.region_id);
                     }
                     else
                     {
@@ -340,6 +337,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                         rows_in_mem[region_index] = tol;
                     }
                 }
+
+                if (!region_ids.empty())
+                    throw RegionException(region_ids);
             });
         }
 
@@ -718,6 +718,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     else
     {
         TMTContext & tmt = context.getTMTContext();
+        std::vector<RegionID> region_ids;
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
         {
@@ -746,14 +747,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                                <<  ", handle range [" << region_query_info.range_in_table.first
                                                << ", " << region_query_info.range_in_table.second << ") , status "
                                                << RegionTable::RegionReadStatusString(status));
-                    {
-                        std::vector<RegionID> region_ids;
-                        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
-                        {
-                            region_ids.push_back(regions_query_info[region_index].region_id);
-                        }
-                        throw RegionException(region_ids);
-                    }
+                    region_ids.push_back(region_query_info.region_id);
+                    continue;
                 }
             }
 
@@ -784,6 +779,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 << region_range_parts[region_index].size() << " parts, " << sum_marks << " marks to read from "
                 << sum_ranges << " ranges, read " << rows_in_mem[region_index] << " rows from memory");
         }
+
+        if (!region_ids.empty())
+            throw RegionException(region_ids);
     }
 
     if (parts_with_ranges.empty() && !is_txn_engine)
