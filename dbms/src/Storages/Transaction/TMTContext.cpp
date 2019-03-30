@@ -15,9 +15,8 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs)
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client)),
       rpc_client(std::make_shared<pingcap::kv::RpcClient>())
 {
-    kvstore->restore([&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
-            return this->createRegionClient(id);
-        }, &regions_to_remove);
+    kvstore->restore(
+        [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); }, &regions_to_remove);
     region_table.restore(std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1));
     for (RegionID id : regions_to_remove)
         kvstore->removeRegion(id, &context);
@@ -57,9 +56,6 @@ pingcap::kv::RegionClientPtr TMTContext::createRegionClient(pingcap::kv::RegionV
 
 pingcap::kv::RegionCachePtr TMTContext::getRegionCache() const { return region_cache; }
 
-pingcap::kv::RpcClientPtr TMTContext::getRpcClient()
-{
-    return rpc_client;
-}
+pingcap::kv::RpcClientPtr TMTContext::getRpcClient() { return rpc_client; }
 
 } // namespace DB

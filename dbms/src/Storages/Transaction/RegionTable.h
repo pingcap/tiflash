@@ -21,7 +21,9 @@ public:
     {
         InternalRegion() {}
         InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
-        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_) : region_id(region_id_), range_in_table(range_in_table_) {}
+        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_)
+            : region_id(region_id_), range_in_table(range_in_table_)
+        {}
 
         RegionID region_id;
         HandleRange range_in_table;
@@ -170,6 +172,8 @@ public:
     void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const RegionPtr & region);
+    void applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids);
+
     /// Manage data after region split into split_regions.
     /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
     void splitRegion(const RegionPtr & region, const std::vector<RegionPtr> & split_regions);
@@ -184,11 +188,18 @@ public:
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
-    void traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> && callback);
+    void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>>&)> && callback);
 
     static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TMTContext & tmt,
         TableID table_id,
         const RegionID region_id,
+        const TiDB::TableInfo & table_info,
+        const ColumnsDescription & columns,
+        const Names & ordered_columns,
+        std::vector<TiKVKey> * keys);
+
+    static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
+        RegionPtr region,
         const RegionVersion region_version,
         const RegionVersion conf_version,
         const TiDB::TableInfo & table_info,
@@ -198,6 +209,8 @@ public:
         bool resolve_locks,
         UInt64 start_ts,
         std::vector<TiKVKey> * keys = nullptr);
+
+    static TableIDSet getRegionTableIds(const RegionPtr & region);
 
     // For debug
     void dumpRegionMap(RegionTable::RegionMap & res);

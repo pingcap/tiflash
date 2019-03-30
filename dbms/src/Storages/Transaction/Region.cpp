@@ -625,4 +625,6 @@ void Region::reset(Region && new_region)
     meta.notifyAll();
 }
 
+bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
+
 } // namespace DB

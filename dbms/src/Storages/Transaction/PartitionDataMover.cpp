@@ -18,7 +18,7 @@ namespace ErrorCodes
 
 namespace PartitionDataMover
 {
-
+/*
 BlockInputStreamPtr createBlockInputStreamFromRange(const Context& context, StorageMergeTree* storage,
                                                     const HandleID begin, const HandleID excluded_end)
 {
@@ -106,9 +106,9 @@ void increaseVersionInBlock(Block & block, size_t increasement = 1)
     block.insert(version_col_pos, ColumnWithTypeAndName{std::move(version_new_col),
         version_type, MutableSupport::version_column_name});
 }
-
+*/
 } // namespace PartitionDataMover
-
+/*
 void deleteRange(const Context& context, StorageMergeTree* storage,
                  const HandleID begin, const HandleID excluded_end)
 {
@@ -132,7 +132,6 @@ void deleteRange(const Context& context, StorageMergeTree* storage,
     output.writeSuffix();
 }
 
-/*
 // TODO: use `new_ver = old_ver+1` to delete data is not a good way, may conflict with data in the future
 void moveRangeBetweenPartitions(const Context & context, StorageMergeTree * storage,
     UInt64 src_partition_id, UInt64 dest_partition_id, const Field & begin, const Field & excluded_end)

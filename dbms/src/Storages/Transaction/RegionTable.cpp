@@ -1,7 +1,6 @@
 #include <Raft/RaftService.h>
 
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
-#include <Storages/Transaction/PartitionDataMover.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -20,9 +19,9 @@ extern const int UNKNOWN_TABLE;
 // Static methods.
 // =============================================================
 
-auto getRegionTableIds(const RegionPtr & region)
+TableIDSet RegionTable::getRegionTableIds(const RegionPtr & region)
 {
-    std::unordered_set<TableID> table_ids;
+    TableIDSet table_ids;
     {
         auto scanner = region->createCommittedScanner(InvalidTableID);
         while (true)
@@ -182,7 +181,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
         auto [input, status, tol] = getBlockInputStreamByRegion(
-            tmt, table_id, region_id, InvalidRegionVersion, InvalidRegionVersion, table_info, columns, names, false, false, 0, &keys_to_remove);
+            tmt, table_id, region_id, table_info, columns, names, &keys_to_remove);
         if (input == nullptr)
             return;
 
@@ -245,6 +244,8 @@ RegionTable::RegionTable(Context & context_, const std::string & parent_path_)
 
 void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
 {
+    std::lock_guard<std::mutex> lock(mutex);
+
     Poco::File dir(parent_path + "tables/");
     if (!dir.exists())
         dir.createDirectories();
@@ -259,16 +260,17 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
         auto p = tables.try_emplace(table_id, parent_path + "tables/", table_id);
         Table & table = p.first->second;
 
-        for (auto it = table.regions.get().begin(); it != table.regions.get().end();)
+        auto & table_regions = table.regions.get();
+        for (auto it = table_regions.begin(); it != table_regions.end();)
         {
             auto region_id = it->first;
             auto & region = it->second;
             auto region_ptr = region_fetcher(region_id);
-            if (!region_ptr)
+            if (region_ptr == nullptr)
             {
-                // It could happen that process crash after region split or region snapshot apply,
-                // and region has not been persisted, but region <-> partition mapping does.
-                it = table.regions.get().erase(it);
+                // It could happen that process crash after region split or apply snapshot,
+                // and region has not been persisted, but region <-> table mapping does.
+                it = table_regions.erase(it);
                 LOG_WARNING(log, "Region " << region_id << " not found from KVStore, dropped.");
                 continue;
             }
@@ -278,14 +280,13 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
             region.cache_bytes = region_ptr->dataSize();
             if (region.cache_bytes)
                 region.updated = true;
+            region.range_in_table = region_ptr->getHandleRangeByTable(table_id);
 
             // Update region_id -> table_id
             {
-                auto it = regions.find(region_id);
-                if (it == regions.end())
-                    std::tie(it, std::ignore) = regions.try_emplace(region_id);
-                RegionInfo & region_info = it->second;
-                region_info.tables.emplace(table_id);
+                auto [it, ok] = regions.emplace(region_id, RegionInfo{});
+                std::ignore = ok;
+                it->second.tables.emplace(table_id);
             }
         }
 
@@ -314,8 +315,26 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
 void RegionTable::applySnapshotRegion(const RegionPtr & region)
 {
     auto table_ids = getRegionTableIds(region);
+    return applySnapshotRegion(region, table_ids);
+}
 
-    updateRegion(region, table_ids);
+void RegionTable::applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids)
+{
+    TableIDSet table_to_persist;
+    size_t cache_bytes = region->dataSize();
+
+    std::lock_guard<std::mutex> lock(mutex);
+
+    for (auto table_id : table_ids)
+    {
+        auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);
+        internal_region.updated = true;
+        internal_region.cache_bytes = cache_bytes;
+        internal_region.range_in_table = region->getHandleRangeByTable(table_id);
+    }
+
+    for (auto table_id : table_to_persist)
+        tables.find(table_id)->second.persist();
 }
 
 void RegionTable::splitRegion(const RegionPtr & kvstore_region, const std::vector<RegionPtr> & split_regions)
@@ -439,10 +458,10 @@ void RegionTable::traverseInternalRegionsByTable(const TableID table_id, std::fu
         callback(region_info.second);
 }
 
-void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<void(Regions)> && callback)
+void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>>&)> && callback)
 {
     auto & kvstore = context.getTMTContext().kvstore;
-    Regions regions;
+    std::vector<std::pair<RegionID, RegionPtr>> regions;
     {
         std::lock_guard<std::mutex> lock(mutex);
         auto & table = getOrCreateTable(table_id);
@@ -450,9 +469,7 @@ void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<v
         for (const auto & region_info : table.regions.get())
         {
             auto region = kvstore->getRegion(region_info.second.region_id);
-            if (region == nullptr)
-                continue;
-            regions.push_back(region);
+            regions.emplace_back(region_info.second.region_id, region);
         }
     }
     callback(regions);

@@ -316,8 +316,14 @@ Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_
 
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.region_table.traverseRegionsByTable(table_info.id, [&](Regions d) {
-            regions.insert(regions.end(), d.begin(), d.end());
+        tmt.region_table.traverseRegionsByTable(table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & d) {
+            for (auto && [_, r] : d)
+            {
+                std::ignore = _;
+                if (r == nullptr)
+                    continue;
+                regions.push_back(r);
+            }
         });
     }
 

@@ -169,6 +169,7 @@ public:
 
     bool isPendingRemove() const;
     void setPendingRemove();
+    bool isPeerRemoved() const;
 
     size_t dataSize() const;
 

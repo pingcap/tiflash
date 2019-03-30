@@ -2,7 +2,6 @@
 #include <functional>
 
 #include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/PartitionDataMover.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -15,6 +14,17 @@ namespace DB
 std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
     TableID table_id,
     const RegionID region_id,
+    const TiDB::TableInfo & table_info,
+    const ColumnsDescription & columns,
+    const Names & ordered_columns,
+    std::vector<TiKVKey> * keys)
+{
+    return getBlockInputStreamByRegion(
+        table_id, tmt.kvstore->getRegion(region_id), InvalidRegionVersion, InvalidRegionVersion, table_info, columns, ordered_columns, false, false, 0, keys);
+}
+
+std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TableID table_id,
+    RegionPtr region,
     const RegionVersion region_version,
     const RegionVersion conf_version,
     const TiDB::TableInfo & table_info,
@@ -25,7 +35,6 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     UInt64 start_ts,
     std::vector<TiKVKey> * keys)
 {
-    auto region = tmt.kvstore->getRegion(region_id);
     if (!region)
         return {nullptr, NOT_FOUND, 0};
 
@@ -42,7 +51,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         if (region->isPendingRemove())
             return {nullptr, PENDING_REMOVE, 0};
 
-        if (region_version != InvalidRegionVersion && region->version() != region_version && region->confVer() != conf_version)
+        if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
             return {nullptr, VERSION_ERROR, 0};
 
         {
