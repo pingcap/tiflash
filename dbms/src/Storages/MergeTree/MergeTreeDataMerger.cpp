@@ -661,12 +661,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                     ranges.push_back(region.range_in_table);
                 });
 
+            // ranged may overlap, should merge them
             std::sort(ranges.begin(), ranges.end());
             size_t size = 0;
             for (size_t i = 1; i < ranges.size(); ++i)
             {
-                if (ranges[i].first == ranges[size].second)
-                    ranges[size].second = ranges[i].second;
+                if (ranges[i].first <= ranges[size].second)
+                    ranges[size].second = std::max(ranges[i].second, ranges[size].second);
                 else
                     ranges[++size] = ranges[i];
             }
