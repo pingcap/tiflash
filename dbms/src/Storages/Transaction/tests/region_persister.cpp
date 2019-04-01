@@ -19,41 +19,41 @@ int main(int, char **)
 
     bool suc = true;
     {
-        auto                peer = createPeer(100, true);
-        auto                path = dir_path + "peer.test";
+        auto peer = createPeer(100, true);
+        auto path = dir_path + "peer.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        auto                size = writeBinary2(peer, write_buf);
+        auto size = writeBinary2(peer, write_buf);
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(size, (size_t)Poco::File(path).getSize(), suc);
         ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-        auto               new_peer = readPeer(read_buf);
+        auto new_peer = readPeer(read_buf);
         ASSERT_CHECK_EQUAL(new_peer, peer, suc);
     }
 
     {
-        auto                region_info = createRegionInfo(233, "", "");
-        auto                path        = dir_path + "region_info.test";
+        auto region_info = createRegionInfo(233, "", "");
+        auto path = dir_path + "region_info.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        auto                size = writeBinary2(region_info, write_buf);
+        auto size = writeBinary2(region_info, write_buf);
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(size, (size_t)Poco::File(path).getSize(), suc);
         ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-        auto               new_region_info = readRegion(read_buf);
+        auto new_region_info = readRegion(read_buf);
         ASSERT_CHECK_EQUAL(new_region_info, region_info, suc);
     }
 
     {
-        RegionMeta          meta = createRegionMeta(888);
-        auto                path = dir_path + "meta.test";
+        RegionMeta meta = createRegionMeta(888);
+        auto path = dir_path + "meta.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        auto                size = meta.serialize(write_buf);
+        auto size = meta.serialize(write_buf);
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(size, (size_t)Poco::File(path).getSize(), suc);
         ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-        auto               new_meta = RegionMeta::deserialize(read_buf);
+        auto new_meta = RegionMeta::deserialize(read_buf);
         ASSERT_CHECK_EQUAL(new_meta, meta, suc);
     }
 
@@ -64,120 +64,200 @@ int main(int, char **)
         region->insert("write", key, TiKVValue("value1"));
         region->insert("lock", key, TiKVValue("value1"));
 
-        auto                path = dir_path + "region.test";
+        auto path = dir_path + "region.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
         size_t region_ser_size = region->serialize(write_buf);
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(region_ser_size, (size_t)Poco::File(path).getSize(), suc);
         ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-        auto               new_region = Region::deserialize(read_buf);
+        auto new_region = Region::deserialize(read_buf);
 
 
         ASSERT_CHECK_EQUAL(*new_region, *region, suc);
     }
 
-    auto region1 = std::make_shared<Region>(createRegionMeta(1));
-    auto region2 = std::make_shared<Region>(createRegionMeta(2));
-    auto region3 = std::make_shared<Region>(createRegionMeta(3));
-
-    size_t region_ser_size;
-    {
-        auto                path = dir_path + "region.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        region_ser_size = region1->serialize(write_buf);
-        write_buf.next();
-    }
+    auto remove_dir = [](const std::string & path) {
+        Poco::File file(path);
+        if (file.exists())
+            file.remove(true);
+    };
 
     {
-        RegionPersister persister(dir_path);
-        persister.persist(region1);
-        persister.persist(region1);
-        persister.persist(region2);
-        persister.persist(region2);
-        persister.persist(region1);
+        std::string path = dir_path + "broken_file";
+        remove_dir(path);
+        SCOPE_EXIT({ remove_dir(path); });
 
-        ASSERT_CHECK_EQUAL(persister._getFiles().size(), 1, suc);
-    }
-
-    {
-        dir.remove(true);
-        dir.createDirectory();
-
-        RegionPersister::Config config;
-        config.file_size                    = region_ser_size + 1; // two region per file.
-        config.merge_hint_low_used_file_num = 1;                   // do merge even there is only one low used file.
-
+        size_t region_num = 100;
         RegionMap regions;
-        regions.emplace(1, region1);
-        regions.emplace(2, region2);
-        regions.emplace(3, region3);
-
+        RegionMap new_regions;
         {
-            RegionPersister persister(dir_path, config);
-            persister.persist(region1);
-            persister.persist(region1);
-            persister.persist(region1);
-            persister.persist(region2);
-            persister.persist(region3);
-            persister.persist(region1);
-            persister.persist(region3);
-            persister.persist(region2);
-            persister.persist(region1);
-            persister.persist(region1);
+            UInt64 diff = 0;
+            PageStorage::Config config;
+            config.file_roll_size = 128 * MB;
+            RegionPersister persister(path);
+            for (size_t i = 0; i < region_num; ++i)
+            {
+                auto region = std::make_shared<Region>(createRegionMeta(i));
+                TiKVKey key = RecordKVFormat::genKey(100, i, diff++);
+                region->insert("default", key, TiKVValue("value1"));
+                region->insert("write", key, TiKVValue("value1"));
+                region->insert("lock", key, TiKVValue("value1"));
 
-            auto size = persister._getFiles().size();
-            ASSERT_CHECK_EQUAL(size, 5, suc);
+                persister.persist(region);
+
+                regions.emplace(region->id(), region);
+            }
+
+            // If we truncate page data file, exception will throw instead of droping last region.
+            auto meta_path = path + "/page_1_0/meta"; // First page
+            Poco::File meta_file(meta_path);
+            size_t size = meta_file.getSize();
+            int rt = ::truncate(meta_path.c_str(), size - 1); // Remove last one byte
+            ASSERT_CHECK(!rt, suc);
         }
 
         {
-            RegionPersister persister(dir_path, config);
-            RegionMap restore_regions;
-            persister.restore(restore_regions, [](pingcap::kv::RegionVerID) -> pingcap::kv::RegionClientPtr {
-                return nullptr;
-            });
-            ASSERT_CHECK_EQUAL(3, restore_regions.size(), suc);
+            RegionPersister persister(path);
+            persister.restore(new_regions);
+            for (size_t i = 0; i < region_num; ++i)
+            {
+                if (i == region_num - 1)
+                {
+                    // The last region is broken and should not exist.
+                    ASSERT_CHECK_EQUAL(new_regions.find(i), new_regions.end(), suc);
+                }
+                else
+                {
+                    auto old_region = regions[i];
+                    auto new_region = new_regions[i];
+                    ASSERT_CHECK_EQUAL(*new_region, *old_region, suc);
+                }
+            }
+        }
+    }
 
+
+    UInt64 diff = 0;
+    auto test_func1 = [&](const std::string & path, const PageStorage::Config & config, int region_num, bool is_gc, bool clean_up) {
+        if (clean_up)
+            remove_dir(path);
+
+        RegionPersister persister(path, config);
+        RegionMap regions;
+        for (int i = 0; i < region_num; ++i)
+        {
+            auto region = std::make_shared<Region>(createRegionMeta(i));
+            TiKVKey key = RecordKVFormat::genKey(100, i, diff++);
+            region->insert("default", key, TiKVValue("value1"));
+            region->insert("write", key, TiKVValue("value1"));
+            region->insert("lock", key, TiKVValue("value1"));
+
+            persister.persist(region);
+
+            regions.emplace(region->id(), region);
+        }
+
+        if (is_gc)
             persister.gc();
 
-            ASSERT_CHECK_EQUAL(persister._getFiles().size(), 2, suc);
+        RegionMap new_regions;
+        persister.restore(new_regions);
+
+        for (int i = 0; i < region_num; ++i)
+        {
+            auto old_region = regions[i];
+            auto new_region = new_regions[i];
+            ASSERT_CHECK_EQUAL(*new_region, *old_region, suc);
         }
-    }
 
-    {
-        dir.remove(true);
-        dir.createDirectory();
+        if (clean_up)
+            remove_dir(path);
+    };
 
-        RegionPersister::Config config;
-        config.file_size                    = 1; // one region per file
-        config.merge_hint_low_used_file_num = 1; // do merge even there is only one low used file.
+    auto run_test = [&](const std::string & path, bool sync_on_write) {
+        Timepoint t1 = Clock::now();
 
-        RegionMap regions;
-        regions.emplace(1, region1);
-        regions.emplace(2, region2);
-        regions.emplace(3, region3);
+        remove_dir(path);
+        SCOPE_EXIT({ remove_dir(path); });
 
-        RegionPersister persister(dir_path, config);
-        persister.persist(region1);
-        persister.persist(region1);
-        persister.persist(region1);
+        {
+            PageStorage::Config conf;
+            conf.sync_on_write = sync_on_write;
+            conf.file_roll_size = 1;
+            conf.merge_hint_low_used_file_total_size = 1;
 
-        ASSERT_CHECK_EQUAL(persister._getFiles().size(), 3, suc);
+            test_func1(path, conf, 10, false, false);
+            test_func1(path, conf, 10, true, false);
 
-        persister.gc();
+            test_func1(path, conf, 10, false, true);
+            test_func1(path, conf, 10, true, true);
+        }
+        {
+            PageStorage::Config conf;
+            conf.sync_on_write = sync_on_write;
+            conf.file_roll_size = 500;
+            conf.merge_hint_low_used_file_total_size = 1;
 
-        // remove the other 2 files, except the current file.
-        ASSERT_CHECK_EQUAL(persister._getFiles().size(), 1, suc);
+            test_func1(path, conf, 100, false, false);
+            test_func1(path, conf, 100, false, false);
+            test_func1(path, conf, 100, false, false);
+            test_func1(path, conf, 100, false, true);
 
-        persister.persist(region2);
-        persister.persist(region3);
+            test_func1(path, conf, 100, true, false);
+            test_func1(path, conf, 100, true, false);
+            test_func1(path, conf, 100, true, false);
+            test_func1(path, conf, 100, true, false);
+        }
+        {
+            PageStorage::Config conf;
+            conf.sync_on_write = sync_on_write;
+            conf.file_roll_size = 500;
+            conf.merge_hint_low_used_file_total_size = 1;
 
-        ASSERT_CHECK_EQUAL(persister._getFiles().size(), 3, suc);
+            test_func1(path, conf, 100, false, false);
+            test_func1(path, conf, 100, false, false);
+            test_func1(path, conf, 100, false, false);
+            test_func1(path, conf, 100, false, true);
 
-        persister.gc();
+            test_func1(path, conf, 100, true, false);
+            test_func1(path, conf, 100, true, false);
+            test_func1(path, conf, 100, true, false);
+            test_func1(path, conf, 100, true, false);
+        }
+        {
+            PageStorage::Config conf;
+            conf.sync_on_write = sync_on_write;
 
-        ASSERT_CHECK_EQUAL(persister._getFiles().size(), 2, suc);
-    }
+            test_func1(path, conf, 10000, false, false);
+            test_func1(path, conf, 10000, false, false);
+            test_func1(path, conf, 10000, false, false);
+            test_func1(path, conf, 10000, false, false);
+            test_func1(path, conf, 10000, false, false);
+            test_func1(path, conf, 10000, false, false);
+            test_func1(path, conf, 10000, false, false);
+        }
+        {
+            PageStorage::Config conf;
+            conf.sync_on_write = sync_on_write;
+
+            test_func1(path, conf, 10000, true, false);
+            test_func1(path, conf, 10000, true, false);
+            test_func1(path, conf, 10000, true, false);
+            test_func1(path, conf, 10000, true, false);
+            test_func1(path, conf, 10000, true, false);
+            test_func1(path, conf, 10000, true, false);
+            test_func1(path, conf, 10000, true, false);
+        }
+
+        Timepoint t2 = Clock::now();
+        Seconds seconds = std::chrono::duration_cast<Seconds>(t2 - t1);
+        std::cout << "sync_on_write[" << sync_on_write << "] time: " << seconds.count() << " seconds" << std::endl;
+    };
+
+    run_test(dir_path + "region_persist_storage_sow_false", false);
+    run_test(dir_path + "region_persist_storage_sow_true", true);
+
 
     return suc ? 0 : 1;
 }
