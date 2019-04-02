@@ -16,7 +16,7 @@ void KVStore::restore(const Region::RegionClientCreateFunc & region_client_creat
 {
     std::lock_guard<std::mutex> lock(mutex);
     LOG_INFO(log, "start to restore regions");
-    region_persister.restore(regions, region_client_create);
+    region_persister.restore(regions, const_cast<Region::RegionClientCreateFunc *>(&region_client_create));
     LOG_INFO(log, "restore regions done");
 
     // Remove regions which pending_remove = true, those regions still exist because progress crash after persisted and before removal.
