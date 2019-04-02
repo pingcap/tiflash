@@ -80,9 +80,6 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
             regions[region_id] = new_region;
         }
 
-        if (tmt_ctx)
-            tmt_ctx->region_table.applySnapshotRegion(new_region, table_ids);
-
         if (new_region->isPendingRemove())
         {
             removeRegion(region_id, context);
@@ -91,6 +88,9 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
     }
 
     region_persister.persist(new_region);
+
+    if (tmt_ctx)
+        tmt_ctx->region_table.applySnapshotRegion(new_region, table_ids);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
