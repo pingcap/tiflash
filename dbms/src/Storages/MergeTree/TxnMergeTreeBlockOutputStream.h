@@ -13,7 +13,7 @@ class StorageMergeTree;
 class TxnMergeTreeBlockOutputStream : public IBlockOutputStream
 {
 public:
-    TxnMergeTreeBlockOutputStream(StorageMergeTree & storage_, UInt64 partition_id_) :
+    TxnMergeTreeBlockOutputStream(StorageMergeTree & storage_, UInt64 partition_id_ = 0) :
         storage(storage_), log(&Logger::get("TxnMergeTreeBlockOutputStream")), partition_id(partition_id_)
     {
     }

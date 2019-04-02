@@ -6,7 +6,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
@@ -20,15 +20,15 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     const auto & state = request.state();
     pingcap::kv::RegionClientPtr region_client = nullptr;
     auto meta = RegionMeta(state.peer(), state.region(), state.apply_state());
-    if (context) {
-        auto & tmt_ctx = context->getTMTContext();
-        auto pd_client = tmt_ctx.getPDClient();
-        if (!pd_client->isMock()) {
-            auto region_cache = tmt_ctx.getRegionCache();
-            region_client = std::make_shared<pingcap::kv::RegionClient>(region_cache, tmt_ctx.getRpcClient(), meta.getRegionVerID());
+    Region::RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
+        if (context)
+        {
+            auto & tmt_ctx = context->getTMTContext();
+            return tmt_ctx.createRegionClient(id);
         }
-    }
-    auto region = std::make_shared<Region>(meta, region_client);
+        return nullptr;
+    };
+    auto region = std::make_shared<Region>(meta, region_client_create);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot " << region->toString(true));
 
@@ -37,16 +37,32 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
         if (!request.has_data())
             throw Exception("Failed to read snapshot data", ErrorCodes::LOGICAL_ERROR);
         const auto & data = request.data();
-        data.cf();
-        for (const auto & kv : data.data())
-            region->insert(data.cf(), TiKVKey{kv.key()}, TiKVValue{kv.value()});
+
+        {
+            auto cf_data = data.data();
+            auto it = cf_data.begin();
+            auto cf_name = data.cf();
+            auto key = TiKVKey();
+            auto value = TiKVValue();
+            region->batchInsert([&](Region::BatchInsertNode & node) -> bool {
+                if (it == cf_data.end())
+                    return false;
+                key = TiKVKey(it->key());
+                value = TiKVValue(it->value());
+                node = Region::BatchInsertNode(&key, &value, &cf_name);
+                ++it;
+                return true;
+            });
+        }
+    }
+
+    {
+        if (region->isPeerRemoved())
+            region->setPendingRemove();
     }
 
     // context may be null in test cases.
-    if (context)
-        kvstore->onSnapshot(region, context);
-    else
-        kvstore->onSnapshot(region, nullptr);
+    kvstore->onSnapshot(region, context);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot done.");
 }

@@ -11,7 +11,7 @@ Block DeletingDeletedBlockInputStream::readImpl()
     if (!block)
         return block;
     IColumn::Filter filter(block.rows());
-    size_t count = setFilterByDeleteMarkColumn(block, filter);
+    size_t count = setFilterByDelMarkColumn(block, filter);
     if (count > 0)
         deleteRows(block, filter);
     return block;

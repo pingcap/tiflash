@@ -12,7 +12,7 @@ namespace DB
 // Change flush threshold rows
 // Usage:
 //   ./storages-client.sh "DBGInvoke set_flush_rows(threshold_rows)"
-void dbgFuncSetFlushRows(Context & context, const ASTs & args, DBGInvoker::Printer output);
+void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Change flush deadline seconds
 // Usage:

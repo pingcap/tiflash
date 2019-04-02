@@ -9,9 +9,9 @@ namespace DB
 
 class MvccTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
-public :
+public:
     MvccTMTSortedBlockInputStream(
-        const BlockInputStreams & inputs_, 
+        const BlockInputStreams & inputs_,
         const SortDescription & description_,
         const String & version_column,
         const String & del_column,
@@ -23,15 +23,15 @@ public :
         version_column_number = header.getPositionByName(version_column);
         del_column_number = header.getPositionByName(del_column);
     }
-    
+
     String getName() const override { return "MvccTMTSorted"; }
 
 protected:
     Block readImpl() override;
 
 private:
-    ssize_t version_column_number ;
-    ssize_t del_column_number ;
+    ssize_t version_column_number;
+    ssize_t del_column_number;
     Logger * log = &Logger::get("MvccTMTStortedBlockInputStream");
 
     bool finished = false;
@@ -39,7 +39,7 @@ private:
     RowRef current_key;
     RowRef next_key;
     RowRef selected_row;
-    
+
     size_t read_tso;
 
     void merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue);
@@ -47,7 +47,6 @@ private:
     bool hasDeleteFlag();
 
     void insertRow(MutableColumns &, size_t &);
-    
 };
 
 }

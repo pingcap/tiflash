@@ -1,11 +1,14 @@
 build:
-	docker run --rm --workdir /server -v $(realpath ../..):/server -it yandex/clickhouse-builder
+	docker run --rm --workdir /server -v $(realpath ../..):/server hub.pingcap.net/tiflash/tics-builder
 
 pull:
-	docker pull yandex/clickhouse-builder
+	docker pull hub.pingcap.net/tiflash/tics-builder
 
 image:
-	docker build -t yandex/clickhouse-builder .
+	docker build -t hub.pingcap.net/tiflash/tics-builder .
 
 image_push:
-	docker push yandex/clickhouse-builder
+	docker push hub.pingcap.net/tiflash/tics-builder
+
+tics_image:
+	docker build -f Dockerfile-tics -t hub.pingcap.net/tiflash/tics .

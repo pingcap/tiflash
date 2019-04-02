@@ -33,6 +33,7 @@
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
 
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
@@ -45,6 +46,7 @@
 #include <Columns/Collator.h>
 #include <Common/typeid_cast.h>
 
+#include <google/protobuf/text_format.h>
 
 namespace ProfileEvents
 {
@@ -662,6 +664,27 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         query_info.sets = query_analyzer->getPreparedSets();
         query_info.resolve_locks = settings.resolve_locks;
         query_info.read_tso = settings.read_tso;
+
+        String request_str = settings.regions;
+
+        if (request_str.size() > 0) {
+           ::flashpb::FlashRequest req;
+           ::google::protobuf::TextFormat::ParseFromString(request_str, &req);
+           for (int i = 0; i < req.regions_size(); i++) {
+               auto region = req.regions(i);
+               RegionQueryInfo info;
+               info.region_id = region.region().id();
+               auto epoch = region.region().region_epoch();
+               info.version = epoch.version();
+               info.conf_version = epoch.conf_ver();
+
+                auto table_id = static_cast<StorageMergeTree*>(storage.get()) -> getTableInfo().id;
+               Int64 start_key = TiKVRange::getRangeHandle<true, true>(TiKVKey(region.region().start_key()), table_id);
+               Int64 end_key = TiKVRange::getRangeHandle<false, true>(TiKVKey(region.region().end_key()), table_id);
+               info.range_in_table = HandleRange(start_key, end_key);
+               query_info.regions_query_info.push_back(info);
+           }
+        }
 
         /// PREWHERE optimization
         {

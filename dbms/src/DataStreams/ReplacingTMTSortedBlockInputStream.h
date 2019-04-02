@@ -3,6 +3,7 @@
 #include <common/logger_useful.h>
 
 #include <DataStreams/MergingSortedBlockInputStream.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -11,21 +12,28 @@ class ReplacingTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
     ReplacingTMTSortedBlockInputStream(
+        const std::vector<std::pair<HandleID, HandleID>> & ranges_,
         const BlockInputStreams & inputs_,
         const SortDescription & description_,
         const String & version_column,
         const String & del_column,
         const String & pk_column,
         size_t max_block_size_,
-        size_t gc_tso_,
-        bool final_,
-        bool collapse_versions_)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL), gc_tso(gc_tso_),
-        final(final_), collapse_versions(collapse_versions_)
+        UInt64 gc_tso_)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL), gc_tso(gc_tso_)
     {
+        {
+            begin_handle_ranges.resize(ranges_.size());
+            for (size_t i = 0; i < ranges_.size(); ++i)
+                begin_handle_ranges[i] = ranges_[i].first;
+            end_handle_ranges.resize(ranges_.size());
+            for (size_t i = 0; i < ranges_.size(); ++i)
+                end_handle_ranges[i] = ranges_[i].second;
+        }
         version_column_number = header.getPositionByName(version_column);
         del_column_number = header.getPositionByName(del_column);
         pk_column_number = header.getPositionByName(pk_column);
+        deleted_by_range = 0;
     }
 
     String getName() const override { return "ReplacingTMTSorted"; }
@@ -40,11 +48,14 @@ private:
     bool shouldOutput();
     bool behindGcTso();
     bool nextHasDiffPk();
-    bool isDeletedOnFinal();
+    bool isDefiniteDeleted();
 
     void logRowGoing(const std::string & reason, bool is_output);
 
 private:
+    std::vector<HandleID> begin_handle_ranges;
+    std::vector<HandleID> end_handle_ranges;
+
     size_t version_column_number;
     size_t del_column_number;
     size_t pk_column_number;
@@ -57,9 +68,9 @@ private:
     RowRef next_key;
     RowRef selected_row;
 
-    size_t gc_tso;
-    bool final;
-    bool collapse_versions;
+    size_t deleted_by_range;
+
+    UInt64 gc_tso;
 };
 
 }

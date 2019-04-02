@@ -39,6 +39,18 @@ public:
     StringObject() = default;
     explicit StringObject(std::string && str_) : str(std::move(str_)) {}
     explicit StringObject(const std::string & str_) : str(str_) {}
+    StringObject(StringObject && obj) : str(std::move(obj.str)) {}
+    StringObject(const StringObject & obj) : str(obj.str) {}
+    StringObject & operator=(const StringObject & a)
+    {
+        str = a.str;
+        return *this;
+    }
+    StringObject & operator=(StringObject && a)
+    {
+        str = std::move(a.str);
+        return *this;
+    }
 
     const std::string & getStr() const { return str; }
     std::string &       getStrRef() { return str; }
@@ -69,7 +81,7 @@ public:
 
     size_t serialize(WriteBuffer & buf) const { return writeBinary2(str, buf); }
 
-    static T deserialize(ReadBuffer & buf) { return T {readBinary2<std::string>(buf)}; }
+    static T deserialize(ReadBuffer & buf) { return T(readBinary2<std::string>(buf)); }
 
 private:
     std::string str;
@@ -419,7 +431,7 @@ inline UInt64 getTsFromWriteCf(const TiKVValue & value)
 namespace TiKVRange
 {
 
-template <bool start>
+template <bool start, bool decoded = false>
 inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
 {
     constexpr HandleID min = std::numeric_limits<HandleID>::min();
@@ -433,7 +445,12 @@ inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
             return max;
     }
 
-    const auto key = std::get<0>(RecordKVFormat::decodeTiKVKey(tikv_key));
+    String key;
+    if constexpr (decoded) {
+        key = tikv_key.getStr();
+    } else {
+        key = std::get<0>(RecordKVFormat::decodeTiKVKey(tikv_key));
+    }
 
     if (key <= RecordKVFormat::genRawKey(table_id, min))
         return min;
@@ -457,53 +474,15 @@ inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
     return RecordKVFormat::getHandle(key);
 }
 
+inline bool checkTableInvolveRange(const TableID table_id, const std::pair<TiKVKey, TiKVKey>& range)
+{
+    const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
+    const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
+    if (end_key < range.first || (!range.second.empty() && start_key >= range.second))
+        return false;
+    return true;
 }
 
-namespace DataKVFormat
-{
-
-static const char DATA_PREFIX       = 'z';
-static const char DATA_MAX_KEY[]    = {DATA_PREFIX + 1, '\0'};
-static const char DATA_PREFIX_KEY[] = {DATA_PREFIX, '\0'};
-
-static const char LOCAL_PREFIX       = 0x01;
-static const char REGION_META_PREFIX = 0x03;
-
-static const char REGION_STATE_SUFFIX = 0x01;
-
-static const char REGION_META_PREFIX_KEY[] = {LOCAL_PREFIX, REGION_META_PREFIX, '\0'};
-
-inline std::string data_key(const TiKVKey & key)
-{
-    std::string s(DATA_PREFIX_KEY);
-    s += key.getStr();
-    return s;
 }
-
-inline std::string enc_start_key(const TiKVKey & key)
-{
-    return data_key(key);
-}
-
-inline std::string enc_end_key(const TiKVKey & key)
-{
-    if (key.getStr().empty())
-        return DATA_MAX_KEY;
-    else
-        return data_key(key);
-}
-
-inline std::string region_state_key(UInt64 region_id)
-{
-    std::string s;
-    s.reserve(11);
-    s += REGION_META_PREFIX_KEY;
-    region_id = toBigEndian(region_id);
-    s.append(reinterpret_cast<const char *>(&region_id), 8);
-    s += REGION_STATE_SUFFIX;
-    return s;
-}
-
-} // namespace DataKVFormat
 
 } // namespace DB

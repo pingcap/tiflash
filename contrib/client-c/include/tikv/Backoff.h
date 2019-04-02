@@ -6,7 +6,7 @@
 #include <map>
 #include <memory>
 
-#include <tikv/Exception.h>
+#include <common/CltException.h>
 
 namespace pingcap {
 namespace kv {
@@ -70,6 +70,8 @@ struct Backoff {
         return last_sleep;
     }
 };
+
+constexpr int readIndexMaxBackoff = 20000;
 
 using BackoffPtr = std::shared_ptr<Backoff>;
 

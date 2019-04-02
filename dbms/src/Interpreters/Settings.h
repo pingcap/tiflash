@@ -26,6 +26,7 @@ struct Settings
       */
 
 #define APPLY_FOR_SETTINGS(M) \
+    M(SettingString, regions, "", "the region need to be read.") \
     M(SettingBool, resolve_locks, false, "tmt read tso.") \
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.") \
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value and no less than the volume of data for one mark.") \

@@ -384,7 +384,12 @@ namespace ErrorCodes
     extern const int THEFLASH_ENCODER_ERROR = 9002;
     extern const int THEFLASH_SESSION_ERROR = 9003;
     extern const int DECIMAL_OVERFLOW_ERROR = 9004;
+    extern const int FILE_SIZE_NOT_MATCH = 9005;
+    extern const int PAGE_SIZE_NOT_MATCH = 9006;
+    extern const int ILLFORMED_PAGE_NAME = 9007;
     extern const int LOCK_EXCEPTION = 10000;
+    extern const int VERSION_ERROR = 10001;
+    extern const int REGION_MISS = 10002;
 }
 
 }

@@ -18,6 +18,7 @@ public:
     String format;
     ASTPtr select;
     ASTPtr table_function;
+    ASTPtr partition_expression_list;
 
     // Set to true if the data should only be inserted into attached views
     bool no_destination = false;

@@ -144,8 +144,6 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
         addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, false);
         tmt.kvstore->onServiceCommand(cmds, raft_ctx);
     }
-
-    tmt.table_flushers.onPutTryFlush(region);
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)
@@ -167,7 +165,6 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, true);
 
     tmt.kvstore->onServiceCommand(cmds, raft_ctx);
-    tmt.table_flushers.onPutTryFlush(region);
 }
 
 struct BatchCtrl
@@ -271,7 +268,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         }
 
         tmt.kvstore->onServiceCommand(cmds, raft_ctx);
-        tmt.table_flushers.onPutTryFlush(region);
+        tmt.region_table.tryFlushRegions();
     }
 }
 
@@ -283,9 +280,9 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
     tmt.kvstore->traverseRegions(
-        [&](Region * region) {
-            curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region->id() :
-                                 std::max<RegionID>(curr_max_region_id, region->id());
+        [&](const RegionID region_id, const RegionPtr & region) {
+            curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id :
+                                 std::max<RegionID>(curr_max_region_id, region_id);
             auto range = region->getRange();
             curr_max_handle_id = std::max(RecordKVFormat::getHandle(range.second), curr_max_handle_id);
         });
@@ -315,17 +312,23 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_handle, HandleID end_handle, Context & context,
     Int64 magic_num, bool del)
 {
-    const auto partition_number = context.getMergeTreeSettings().mutable_mergetree_partition_number;
-
     Regions regions;
 
-    for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.region_partition.traverseRegionsByTablePartition(table_info.id, partition_id, context, [&](Regions d){
-            regions.insert(regions.end(), d.begin(), d.end());
+        tmt.region_table.traverseRegionsByTable(table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & d) {
+            for (auto && [_, r] : d)
+            {
+                std::ignore = _;
+                if (r == nullptr)
+                    continue;
+                regions.push_back(r);
+            }
         });
     }
+
+    std::shuffle(regions.begin(), regions.end(), std::default_random_engine());
+
     std::list<std::thread> threads;
     Int64 tol = 0;
     for (auto region : regions)

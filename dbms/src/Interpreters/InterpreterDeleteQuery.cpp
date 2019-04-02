@@ -35,6 +35,7 @@ namespace ErrorCodes
     extern const int NO_SUCH_COLUMN_IN_TABLE;
     extern const int READONLY;
     extern const int ILLEGAL_COLUMN;
+    extern const int LOGICAL_ERROR;
 }
 
 InterpreterDeleteQuery::InterpreterDeleteQuery(const ASTPtr & query_ptr_, const Context & context_, bool allow_materialized_)
@@ -49,8 +50,6 @@ BlockIO InterpreterDeleteQuery::execute()
     checkAccess(query);
 
     StoragePtr table = context.getTable(query.database, query.table);
-    if (table->getName() != MutableSupport::storage_name && table->getName() != MutableSupport::txn_storage_name)
-        throw Exception("Only " + MutableSupport::storage_name + " or " + MutableSupport::txn_storage_name + " support Delete.");
 
     auto table_lock = table->lockStructure(true, __PRETTY_FUNCTION__);
 
@@ -74,7 +73,7 @@ BlockIO InterpreterDeleteQuery::execute()
     res.out = std::move(out);
 
     if (!query.where)
-        throw Exception("Delete query must have WHERE.");
+        throw Exception("Delete query must have WHERE.", ErrorCodes::LOGICAL_ERROR);
 
     InterpreterSelectQuery interpreter_select(query.select, context);
 

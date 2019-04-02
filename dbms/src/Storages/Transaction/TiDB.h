@@ -208,6 +208,7 @@ struct TableInfo
                 return col.id;
             }
         }
+        // TODO: use DB::MutableSupport::tidb_pk_column_name instead
         if (name == "_tidb_rowid")
         {
             // TODO: use XXXColumnID

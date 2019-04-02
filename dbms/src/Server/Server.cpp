@@ -307,6 +307,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeSystemLogs();
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
+    /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
+    if (config().has("raft"))
+    {
+        String raft_service_addr = config().getString("raft.service_addr");
+        if (config().has("raft.pd_addr"))
+        {
+            String pd_service_addrs = config().getString("raft.pd_addr");
+            Poco::StringTokenizer string_tokens(pd_service_addrs, ";");
+            std::vector<std::string> pd_addrs;
+            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
+                pd_addrs.push_back(*it);
+              }
+            global_context->setPDAddrs(pd_addrs);
+            LOG_INFO(log, "Found pd addrs.");
+        } else {
+            LOG_INFO(log, "Not found pd addrs.");
+        }
+        global_context->initializeRaftService(raft_service_addr);
+    }
+    if (config().has("tidb"))
+    {
+        String service_ip = config().getString("tidb.service_ip");
+        String status_port = config().getString("tidb.status_port");
+        global_context->initializeTiDBService(service_ip, status_port);
+    }
     /// Then, load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Loaded metadata.");
@@ -331,31 +356,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setDDLWorker(std::make_shared<DDLWorker>(ddl_zookeeper_path, *global_context, &config(), "distributed_ddl"));
     }
 
-    if (config().has("raft"))
-    {
-        String raft_service_addr = config().getString("raft.service_addr");
-        if (config().has("raft.pd_addr"))
-        {
-            String pd_service_addrs = config().getString("raft.pd_addr");
-            Poco::StringTokenizer string_tokens(pd_service_addrs, ";");
-            std::vector<std::string> pd_addrs;
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
-                pd_addrs.push_back(*it);
-            }
-            global_context->setPDAddrs(pd_addrs);
-            LOG_INFO(log, "Found pd addrs.");
-        } else {
-            LOG_INFO(log, "Not found pd addrs.");
-        }
-        global_context->initializeRaftService(raft_service_addr);
-    }
-
-    if (config().has("tidb"))
-    {
-        String service_ip = config().getString("tidb.service_ip");
-        String status_port = config().getString("tidb.status_port");
-        global_context->initializeTiDBService(service_ip, status_port);
-    }
 
     {
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);

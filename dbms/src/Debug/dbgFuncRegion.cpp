@@ -5,6 +5,7 @@
 
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
+#include <Storages/MutableSupport.h>
 
 // TODO: Remove this
 #include <Storages/Transaction/tests/region_helper.h>
@@ -175,7 +176,7 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
     }
 }
 
-void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer output)
 {
     if (args.size() > 1)
     {
@@ -189,18 +190,15 @@ void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Pr
 
     auto & tmt = context.getTMTContext();
 
-    RegionPartition::RegionMap regions;
-    tmt.region_partition.dumpRegionMap(regions);
+    RegionTable::RegionMap regions;
+    tmt.region_table.dumpRegionMap(regions);
 
     for (const auto & it: regions)
     {
         auto region_id = it.first;
-        auto & t2p = it.second.table_to_partition;
-        for (const auto & info: t2p)
+        const auto & table_ids = it.second.tables;
+        for (const auto table_id : table_ids)
         {
-            auto table_id = info.first;
-            auto partition_id = info.second;
-
             std::stringstream region_range_info;
             if (show_region)
             {
@@ -221,8 +219,7 @@ void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Pr
             }
 
             std::stringstream ss;
-            ss << "table #" << table_id << " partition #" << partition_id <<
-                " region #" << region_id << region_range_info.str();
+            ss << "table #" << table_id << " region #" << region_id << region_range_info.str();
             output(ss.str());
         }
     }
@@ -230,7 +227,7 @@ void dbgFuncRegionPartition(Context & context, const ASTs & args, DBGInvoker::Pr
 
 void dbgFuncRegionRmData(Context & /*context*/, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)
 {
-    // TODO: port from RegionPartitionMgr to RegionPartition
+    // TODO: port from RegionPartitionMgr to RegionTable
     /*
     if (args.size() != 1)
         throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);
@@ -273,289 +270,6 @@ size_t executeQueryAndCountRows(Context & context,const std::string & query)
     }
     input->readSuffix();
     return count;
-}
-
-std::vector<std::tuple<HandleID, HandleID, RegionID>> getPartitionRegionRanges(
-    Context & context, TableID table_id, PartitionID partition_id, std::vector<RegionRange> * vec = nullptr)
-{
-    std::vector<std::tuple<HandleID, HandleID, RegionID>> handle_ranges;
-    std::function<void(Regions)> callback = [&](Regions regions)
-    {
-        for (auto region : regions)
-        {
-            auto [start_key, end_key] = region->getRange();
-            HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-            HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
-            handle_ranges.push_back({start_handle, end_handle, region->id()});
-            if (vec)
-            {
-                vec->push_back(region->getRange());
-            }
-        }
-    };
-
-    TMTContext & tmt = context.getTMTContext();
-    tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, context, callback);
-    return handle_ranges;
-}
-
-void dbgFuncCheckPartitionRegionRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() < 2)
-    {
-        throw Exception("Args not matched, should be: database-name, table-name, [show-region-ranges]",
-            ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    const static String pk_name = "_tidb_rowid";
-
-    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-
-    bool show_region = false;
-    if (args.size() > 2)
-        show_region = (std::string(typeid_cast<const ASTIdentifier &>(*args[2]).name) == "true");
-
-    TableID table_id = getTableID(context, database_name, table_name);
-    const auto partition_number = context.getMergeTreeSettings().mutable_mergetree_partition_number;
-
-    size_t partitions_rows = 0;
-
-    for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
-    {
-        std::vector<RegionRange> tikv_keys;
-        auto handle_ranges = getPartitionRegionRanges(context, table_id, partition_id, &tikv_keys);
-        std::vector<size_t> rows_list(handle_ranges.size(), 0);
-
-        size_t regions_rows = 0;
-        for (size_t i = 0; i < handle_ranges.size(); ++i)
-        {
-            const auto [start_handle, end_handle, region_id] = handle_ranges[i];
-            (void)region_id; // ignore region_id
-            std::stringstream query;
-            query << "SELECT " << pk_name << " FROM " << database_name << "." << table_name <<
-               " PARTITION ('" << partition_id << "') WHERE (" <<
-               start_handle << " <= " << pk_name << ") AND (" <<
-               pk_name << " < " << end_handle << ")";
-            size_t rows = executeQueryAndCountRows(context, query.str());
-            regions_rows += rows;
-            rows_list[i] = rows;
-        }
-
-        std::stringstream query;
-        query << "SELECT " << pk_name << " FROM " << database_name << "." <<
-            table_name << " PARTITION ('" << partition_id << "')";
-        size_t partition_rows = executeQueryAndCountRows(context, query.str());
-
-        std::stringstream out;
-        out << ((partition_rows != regions_rows) ? "EE" : "OK") <<
-            " partition #" << partition_id << ": " << partition_rows << " rows, " <<
-            handle_ranges.size() << " regions, sum(regions rows): " << regions_rows;
-        if (show_region && !handle_ranges.empty())
-        {
-            std::stringstream ss;
-            ss << ", regions:";
-            for (size_t i = 0; i< handle_ranges.size(); ++i)
-            {
-                const auto & [start_handle, end_handle, region_id] = handle_ranges[i];
-                const auto & [start_key, end_key] = tikv_keys[i];
-                ss << " #" << region_id << "(" << getRegionKeyString(start_handle, start_key) <<
-                    ", " << getRegionKeyString(end_handle, end_key) << ". " << rows_list[i] << " rows)";
-            }
-            out << ss.str();
-        }
-        output(out.str());
-        partitions_rows += partition_rows;
-    }
-
-    output("sum(partitions rows): " + toString(partitions_rows));
-}
-
-void dbgFuncScanPartitionExtraRows(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
-
-    const static String pk_name = "_tidb_rowid";
-
-    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-
-    TableID table_id = getTableID(context, database_name, table_name);
-    const auto partition_number = context.getMergeTreeSettings().mutable_mergetree_partition_number;
-
-    size_t partitions_rows = 0;
-
-    for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
-    {
-        auto handle_ranges = getPartitionRegionRanges(context, table_id, partition_id);
-        sort(handle_ranges.begin(), handle_ranges.end());
-
-        std::vector<std::pair<HandleID, int>> handle_ranges_check;
-
-        for (int i = 0; i < (int) handle_ranges.size(); ++i)
-        {
-            handle_ranges_check.push_back({std::get<0>(handle_ranges[i]), i});
-            handle_ranges_check.push_back({std::get<1>(handle_ranges[i]), i});
-        }
-        sort(handle_ranges_check.begin(), handle_ranges_check.end());
-
-        std::stringstream ss;
-        ss << "SELECT " << pk_name << " FROM " << database_name << "." << table_name <<
-           " PARTITION ('" << partition_id << "')";
-        std::string query = ss.str();
-
-        Context query_context = context;
-        query_context.setSessionContext(query_context);
-        BlockInputStreamPtr input = executeQuery(query, query_context, true, QueryProcessingStage::Complete).in;
-
-        input->readPrefix();
-        while (true)
-        {
-            Block block = input->read();
-            if (!block || block.rows() == 0)
-                break;
-            partitions_rows += block.rows();
-
-            auto col = block.begin()->column;
-            for (size_t i = 0, n = col->size(); i < n; ++i)
-            {
-                Field field = (*col)[i];
-                auto handle_id = field.get<Int64>();
-                auto it = std::upper_bound(handle_ranges_check.begin(), handle_ranges_check.end(),
-                    std::make_pair(handle_id, std::numeric_limits<int>::max()));
-
-                bool is_handle_not_found = false;
-                if (it == handle_ranges_check.end())
-                {
-                    is_handle_not_found = true;
-                }
-                else
-                {
-                    int idx = it->second;
-                    if (!(std::get<0>(handle_ranges[idx]) <= handle_id &&
-                        std::get<1>(handle_ranges[idx]) > handle_id))
-                    {
-                        is_handle_not_found = true;
-                    }
-                }
-
-                if (is_handle_not_found)
-                {
-                    output("partition #" + toString(partition_id) + " handle " + toString(handle_id) +
-                        " not in the regions of partition");
-                }
-            }
-        }
-        input->readSuffix();
-    }
-
-    output("sum(partitions rows): " + toString(partitions_rows));
-}
-
-void dbgFuncCheckRegionCorrect(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
-
-    const static String pk_name = "_tidb_rowid";
-
-    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
-    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-
-    TableID table_id = getTableID(context, database_name, table_name);
-    const auto partition_number = context.getMergeTreeSettings().mutable_mergetree_partition_number;
-
-    // TODO: usa a struct
-    std::vector<std::tuple<HandleID, HandleID, UInt64>> handle_ranges;
-    auto & kvstore = context.getTMTContext().kvstore;
-    kvstore->traverseRegions([&](Region * region)
-    {
-        auto [start_key, end_key] = region->getRange();
-        HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-        HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
-        // TODO: use plain ptr?
-        handle_ranges.push_back({start_handle, end_handle, reinterpret_cast<UInt64>(region)});
-    });
-
-    sort(handle_ranges.begin(), handle_ranges.end());
-
-    std::vector<std::pair<HandleID, int>> handle_ranges_check;
-    for (int i = 0; i < (int) handle_ranges.size(); ++i)
-    {
-        handle_ranges_check.push_back({std::get<0>(handle_ranges[i]), i});
-        handle_ranges_check.push_back({std::get<1>(handle_ranges[i]), i});
-    }
-    sort(handle_ranges_check.begin(), handle_ranges_check.end());
-
-    TMTContext & tmt = context.getTMTContext();
-    size_t partitions_rows = 0;
-
-    for (UInt64 partition_id = 0; partition_id < partition_number; ++partition_id)
-    {
-        std::unordered_map<RegionID, RegionPtr> partition_regions;
-        tmt.region_partition.traverseRegionsByTablePartition(table_id, partition_id, context, [&](Regions regions)
-        {
-            for (auto region : regions)
-                partition_regions[region->id()] = region;
-        });
-
-        std::stringstream query;
-        query << "SELECT " << pk_name << " FROM " << database_name << "." << table_name <<
-           " PARTITION ('" << partition_id << "')";
-        Context query_context = context;
-        query_context.setSessionContext(query_context);
-        BlockInputStreamPtr input = executeQuery(query.str(), query_context, true, QueryProcessingStage::Complete).in;
-
-        while (true)
-        {
-            Block block = input->read();
-            if (!block || block.rows() == 0)
-                break;
-            partitions_rows += block.rows();
-
-            auto col = block.begin()->column;
-            for (size_t i = 0, n = col->size(); i< n; ++i)
-            {
-                Field field = (*col)[i];
-                auto handle_id = field.get<Int64>();
-                auto it = std::upper_bound(handle_ranges_check.begin(), handle_ranges_check.end(),
-                    std::make_pair(handle_id, std::numeric_limits<int>::max()));
-                bool is_handle_not_found = false;
-                int idx;
-                if (it == handle_ranges_check.end())
-                {
-                    is_handle_not_found = true;
-                }
-                else
-                {
-                    idx = it->second;
-                    if (!(std::get<0>(handle_ranges[idx]) <= handle_id && std::get<1>(handle_ranges[idx]) > handle_id))
-                        is_handle_not_found = true;
-                }
-
-                if (is_handle_not_found)
-                {
-                    output("partition #" + toString(partition_id) + " handle " + toString(handle_id) + " not in the regions of partition");
-                    continue;
-                }
-
-                Region * region = reinterpret_cast<Region*>(std::get<2>(handle_ranges[idx]));
-                auto partition_regions_it = partition_regions.find(region->id());
-                if (partition_regions_it == partition_regions.end())
-                {
-                    output("region not found in kvstore. region info: " + region->toString());
-                }
-                else
-                {
-                    if ((*partition_regions_it).second.get() != region)
-                        output("region not match. region info:" + region->toString());
-                }
-            }
-        }
-    }
-
-    output("sum(patitions rows): " + toString(partitions_rows));
 }
 
 }

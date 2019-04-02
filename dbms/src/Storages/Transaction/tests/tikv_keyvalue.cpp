@@ -66,18 +66,38 @@ int main(int, char **)
         assert(nullptr == short_value);
     }
 
-    auto key = RecordKVFormat::genKey(1222, 100023, 452321);
-    std::cout << escapeString(key.toString()) << std::endl;
-    std::cout << escapeString(DataKVFormat::enc_start_key(key)) << std::endl;
-    std::cout << escapeString(DataKVFormat::enc_end_key(key)) << std::endl;
-    std::cout << escapeString(DataKVFormat::region_state_key(331231)) << std::endl;
-
     {
 
         UInt64 a = 13241432453554;
         Crc32 crc32;
         crc32.put(&a, sizeof(a));
         assert(crc32.checkSum() == 3312221216);
+    }
+
+    {
+        TiKVKey start_key = RecordKVFormat::genKey(200, 123);
+        TiKVKey end_key = RecordKVFormat::genKey(300, 124);
+
+        assert(TiKVRange::checkTableInvolveRange(200, std::make_pair(start_key, end_key)));
+        assert(TiKVRange::checkTableInvolveRange(250, std::make_pair(start_key, end_key)));
+        assert(TiKVRange::checkTableInvolveRange(300, std::make_pair(start_key, end_key)));
+        assert(!TiKVRange::checkTableInvolveRange(400, std::make_pair(start_key, end_key)));
+    }
+    {
+        TiKVKey start_key = RecordKVFormat::genKey(200, std::numeric_limits<HandleID>::min());
+        TiKVKey end_key = RecordKVFormat::genKey(200, 100);
+
+        assert(TiKVRange::checkTableInvolveRange(200, std::make_pair(start_key, end_key)));
+        assert(!TiKVRange::checkTableInvolveRange(100, std::make_pair(start_key, end_key)));
+    }
+    {
+        TiKVKey start_key;
+        TiKVKey end_key;
+
+        assert(TiKVRange::checkTableInvolveRange(200, std::make_pair(start_key, end_key)));
+        assert(TiKVRange::checkTableInvolveRange(250, std::make_pair(start_key, end_key)));
+        assert(TiKVRange::checkTableInvolveRange(300, std::make_pair(start_key, end_key)));
+        assert(TiKVRange::checkTableInvolveRange(400, std::make_pair(start_key, end_key)));
     }
 
     return res ? 0 : 1;
