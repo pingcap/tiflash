@@ -32,33 +32,26 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 DBGInvoker::DBGInvoker()
 {
     regFunc("echo", dbgFuncEcho);
+    // TODO: remove this, use sleep in bash script
     regFunc("sleep", dbgFuncSleep);
 
     regFunc("mock_schema_syncer", dbgFuncMockSchemaSyncer);
     regFunc("mock_tidb_table", dbgFuncMockTiDBTable);
     regFunc("drop_tidb_table", dbgFuncDropTiDBTable);
 
-    regFunc("set_flush_rows", dbgFuncSetFlushRows);
-    regFunc("set_deadline_seconds", dbgFuncSetDeadlineSeconds);
+    regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 
     regFunc("raft_insert_row", dbgFuncRaftInsertRow);
     regFunc("raft_insert_rows", dbgFuncRaftInsertRows);
     regFunc("raft_update_rows", dbgFuncRaftUpdateRows);
     regFunc("raft_delete_rows", dbgFuncRaftDelRows);
-
     regFunc("raft_delete_row", dbgFuncRaftDeleteRow);
 
     regFunc("put_region", dbgFuncPutRegion);
     regFunc("region_snapshot", dbgFuncRegionSnapshot);
     regFunc("rm_region_data", dbgFuncRegionRmData);
 
-    regFunc("dump_partition", dbgFuncRegionPartition);
-    regFunc("check_partition", dbgFuncCheckPartitionRegionRows);
-    regFunc("scan_partition", dbgFuncScanPartitionExtraRows);
-    regFunc("check_region_correct", dbgFuncCheckRegionCorrect);
-
-    regFunc("enable_history_gc", dbgFuncEnableHistoryGc);
-    regFunc("show_enable_history_gc", dbgFuncShowEnableHistoryGc);
+    regFunc("dump_region", dbgFuncDumpRegion);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
@@ -108,7 +101,6 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
         res->append(s);
     };
 
-    auto version_col = ColumnUInt64::create();
     (it->second)(context, args, printer);
 
     return print_res ? res : std::shared_ptr<StringStreamBlockInputStream>();

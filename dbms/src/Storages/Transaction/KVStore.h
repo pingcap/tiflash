@@ -8,28 +8,31 @@
 #include <Raft/RaftContext.h>
 
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/Consistency.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionPersister.h>
-#include <Storages/Transaction/TMTTableFlusher.h>
+#include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 
 namespace DB
 {
+
 // TODO move to Settings.h
-static constexpr Int64 REGION_PERSIST_PERIOD      = 60 * 1000 * 1000; // 1 minutes
-static constexpr Int64 KVSTORE_TRY_PERSIST_PERIOD = 10 * 1000 * 1000; // 10 seconds
+static const Seconds REGION_PERSIST_PERIOD(300);      // 5 minutes
+static const Seconds KVSTORE_TRY_PERSIST_PERIOD(180); // 3 minutes
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(const std::string & data_dir, Context * context = nullptr);
-    RegionPtr getRegion(RegionID region_id);
-    void traverseRegions(std::function<void(Region * region)> callback);
+    KVStore(const std::string & data_dir);
+    void restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove = nullptr);
 
-    void onSnapshot(const RegionPtr & region, Context * context);
+    RegionPtr getRegion(RegionID region_id);
+
+    void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback);
+
+    void onSnapshot(RegionPtr region, Context * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & context);
 
@@ -38,23 +41,25 @@ public:
 
     // Persist and report those expired regions.
     // Currently we also trigger region files GC in it.
-    bool tryPersistAndReport(RaftContext & context);
+    bool tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD,
+        const Seconds region_persist_period = REGION_PERSIST_PERIOD);
 
-    // TODO: Value copy instead of value ref
-    // For test, please do NOT remove.
-    RegionMap & _regions() { return regions; }
+    size_t regionSize() const;
 
-private:
     void removeRegion(RegionID region_id, Context * context);
+
+    void updateRegionTableBySnapshot(RegionTable & region_table);
 
 private:
     RegionPersister region_persister;
     RegionMap regions;
 
-    std::mutex mutex;
+    mutable std::mutex mutex;
 
-    Consistency consistency;
-    Poco::Timestamp last_try_persist_time{};
+    std::atomic<Timepoint> last_try_persist_time = Clock::now();
+
+    // onServiceCommand and onSnapshot should not be called concurrently
+    mutable std::mutex task_mutex;
 
     Logger * log;
 };

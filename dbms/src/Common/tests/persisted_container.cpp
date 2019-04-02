@@ -5,15 +5,21 @@
 
 #include <Common/PersistedContainer.h>
 
+using namespace DB;
+
 int main(int, char **)
 {
+    auto clear_file = [=](std::string path) {
+        Poco::File file(path);
+        if (file.exists())
+            file.remove();
+    };
+
     {
         std::string file_path = "persisted_container_set_test.dat";
-        SCOPE_EXIT({
-            Poco::File file(file_path);
-            if (file.exists())
-                file.remove();
-        });
+        clear_file(file_path);
+        SCOPE_EXIT({ clear_file(file_path); });
+
         {
             PersistedUnorderedUInt64Set set(file_path);
             set.restore();
@@ -38,11 +44,9 @@ int main(int, char **)
 
     {
         std::string file_path = "persisted_container_map_test.dat";
-        SCOPE_EXIT({
-            Poco::File file(file_path);
-            if (file.exists())
-                file.remove();
-        });
+        clear_file(file_path);
+        SCOPE_EXIT({ clear_file(file_path); });
+
         {
             PersistedUnorderedUInt64ToStringMap map(file_path);
             map.restore();

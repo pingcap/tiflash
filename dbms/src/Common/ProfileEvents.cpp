@@ -149,7 +149,18 @@
     M(RWLockAcquiredReadLocks) \
     M(RWLockAcquiredWriteLocks) \
     M(RWLockReadersWaitMilliseconds) \
-    M(RWLockWritersWaitMilliseconds)
+    M(RWLockWritersWaitMilliseconds) \
+    \
+    M(PSMWritePages) \
+    M(PSMWritePageCalls) \
+    M(PSMWriteIOCalls) \
+    M(PSMWriteBytes) \
+    M(PSMReadPages) \
+    M(PSMReadPageCalls) \
+    M(PSMReadIOCalls) \
+    M(PSMReadBytes) \
+    M(PSMWriteFailed) \
+    M(PSMReadFailed)
 
 namespace ProfileEvents
 {

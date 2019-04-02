@@ -25,7 +25,7 @@ inline void deleteRows(Block & block, const IColumn::Filter & filter)
 }
 
 
-inline size_t setFilterByDeleteMarkColumn(const Block & block, IColumn::Filter & filter)
+inline size_t setFilterByDelMarkColumn(const Block & block, IColumn::Filter & filter)
 {
     if (!block.has(MutableSupport::delmark_column_name))
         return 0;
@@ -37,12 +37,13 @@ inline size_t setFilterByDeleteMarkColumn(const Block & block, IColumn::Filter &
 
     size_t rows = block.rows();
     if (filter.size() != rows)
-        throw("Filter array not inited.");
+        throw("Filter array not fully inited, filter.size() != rows");
 
     size_t sum = 0;
     for (size_t i = 0; i < rows; i++)
     {
-        if (column->getElement(i))
+        UInt8 val = column->getElement(i);
+        if (MutableSupport::DelMark::isDel(val))
         {
             filter[i] = 0;
             sum += 1;
@@ -85,7 +86,7 @@ public:
         : stream_position(stream_position_), block(block_), filter(block_.rows(), 1), deleted_rows(0)
     {
         if (set_deleted_rows)
-            deleted_rows = setFilterByDeleteMarkColumn(block, filter);
+            deleted_rows = setFilterByDelMarkColumn(block, filter);
     }
 
     operator bool ()

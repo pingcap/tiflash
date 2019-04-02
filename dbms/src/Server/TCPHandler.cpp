@@ -36,6 +36,7 @@
 
 #include <Storages/Transaction/LockException.h>
 #include <Interpreters/SharedQueries.h>
+#include <Storages/Transaction/RegionException.h>
 
 namespace ProfileEvents
 {
@@ -154,6 +155,7 @@ void TCPHandler::runImpl()
          */
         std::unique_ptr<Exception> exception;
         Region::LockInfos lock_infos;
+        std::vector<UInt64> region_ids;
         bool network_error = false;
 
         String shared_query_id;
@@ -227,6 +229,10 @@ void TCPHandler::runImpl()
         {
             state.io.onException();
             lock_infos = std::move(e.lock_infos);
+        }
+        catch (RegionException & e)
+        {
+            sendRegionException(e.region_ids);
         }
         catch (const Exception & e)
         {
@@ -846,6 +852,13 @@ void TCPHandler::sendException(const Exception & e)
     out->next();
 }
 
+void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
+    writeVarUInt(Protocol::Server::RegionException, *out);
+    writeVarUInt(region_ids.size(), *out);
+    for (size_t i = 0; i < region_ids.size(); i++)
+        writeVarUInt(region_ids[i], *out);
+    out->next();
+}
 
 void TCPHandler::sendLockInfos(const Region::LockInfos & lock_infos)
 {

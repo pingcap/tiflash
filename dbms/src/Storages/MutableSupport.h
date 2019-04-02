@@ -58,6 +58,42 @@ public:
         return (DeduperType)type;
     }
 
+    // TODO: detail doc about these delete marks
+    struct DelMark
+    {
+        static const UInt8 NONE = 0x00;
+        static const UInt8 INTERNAL_DEL = 0x01;
+        static const UInt8 DEFINITE_DEL = (INTERNAL_DEL << 1);
+        static const UInt8 DEL_MASK = (INTERNAL_DEL | DEFINITE_DEL);
+        static const UInt8 DATA_MASK = ~DEL_MASK;
+
+        static UInt8 getData(UInt8 raw_data)
+        {
+            return raw_data & DATA_MASK;
+        }
+
+        static bool isDel(UInt8 raw_data)
+        {
+            return raw_data & DEL_MASK;
+        }
+
+        static bool isDefiniteDel(UInt8 raw_data)
+        {
+            return raw_data & DEFINITE_DEL;
+        }
+
+        static UInt8 genDelMark(bool internal_del, bool definite_del, UInt8 src_data)
+        {
+            return (internal_del ? INTERNAL_DEL : NONE) |
+                (definite_del ? DEFINITE_DEL : NONE) | getData(src_data);
+        }
+
+        static UInt8 genDelMark(bool internal_del, bool definite_del = false)
+        {
+            return genDelMark(internal_del, definite_del, 0);
+        }
+    };
+
 private:
     OrderedNameSet empty;
     OrderedNameSet mutable_hidden;

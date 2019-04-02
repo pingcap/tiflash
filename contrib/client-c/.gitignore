@@ -38,6 +38,7 @@ build
 .idea
 *.iml
 *.swp
+*.swo
 tags
 .clang-format
 

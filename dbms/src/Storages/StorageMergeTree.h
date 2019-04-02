@@ -134,7 +134,7 @@ private:
       * Returns true if merge is finished successfully.
       */
     bool merge(size_t aio_threshold, bool aggressive, const String & partition_id, bool final, bool deduplicate,
-               bool eliminate = false, String * out_disable_reason = nullptr);
+               String * out_disable_reason = nullptr);
 
     bool mergeTask();
 

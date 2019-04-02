@@ -1,0 +1,32 @@
+# Generated from: mutable-test/mutable_dedup/small_parts.visual#L1052
+#
+# -  +
+#    +-
+#  --
+#
+
+>> drop table if exists test
+>> create table test (
+	dt Date,
+	k Int32,
+	v Int32
+	) engine = MutableMergeTree((k), 8192)
+
+>> insert into test values (0, 10, 10), (0, 13, 13)
+>> insert into test values (0, 13, 14), (0, 14, 15)
+>> insert into test values (0, 11, 13), (0, 12, 14)
+
+>> select * from test
+┌─────────dt─┬──k─┬──v─┐
+│ 0000-00-00 │ 10 │ 10 │
+└────────────┴────┴────┘
+┌─────────dt─┬──k─┬──v─┐
+│ 0000-00-00 │ 13 │ 14 │
+│ 0000-00-00 │ 14 │ 15 │
+└────────────┴────┴────┘
+┌─────────dt─┬──k─┬──v─┐
+│ 0000-00-00 │ 11 │ 13 │
+│ 0000-00-00 │ 12 │ 14 │
+└────────────┴────┴────┘
+
+>> drop table if exists test

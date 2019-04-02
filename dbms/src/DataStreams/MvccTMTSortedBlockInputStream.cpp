@@ -1,4 +1,5 @@
 #include <DataStreams/MvccTMTSortedBlockInputStream.h>
+#include <Storages/MutableSupport.h>
 
 namespace DB
 {
@@ -42,7 +43,7 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
         setPrimaryKeyRef(next_key, current);
 
         bool key_differs = next_key != current_key;
-        
+
         if (key_differs && merged_rows >= max_block_size)
             return;
 
@@ -56,7 +57,7 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
             selected_row.reset();
 
             current_key.swap(next_key);
-        } 
+        }
 
         if ((*(current->all_columns[version_column_number]))[current->pos].template get<UInt64>() <= read_tso && 
             (selected_row.empty() 
@@ -87,7 +88,8 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
 
 bool MvccTMTSortedBlockInputStream::hasDeleteFlag()
 {
-    return (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>() > 0;
+    UInt8 val = (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
+    return MutableSupport::DelMark::isDel(val);
 }
 
 }

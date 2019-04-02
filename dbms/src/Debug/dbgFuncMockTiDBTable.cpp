@@ -93,8 +93,7 @@ void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     }
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.region_partition.dropRegionsInTable(table_id);
-    tmt.table_flushers.dropRegionsInTable(table_id);
+    tmt.region_table.dropRegionsInTable(table_id);
 
     MockTiDB::instance().dropTable(database_name, table_name);
 

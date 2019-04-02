@@ -12,10 +12,8 @@ size_t RegionMeta::serializeSize() const
 
     auto peer_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(bool);
     // TODO: this region_size not right, 4 bytes missed
-    auto region_size = sizeof(UInt64)
-        + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS
-        + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS
-        + sizeof(UInt64) + sizeof(UInt64);
+    auto region_size
+        = sizeof(UInt64) + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt64) + sizeof(UInt64);
     region_size += peer_size * region.peers_size();
     auto apply_state_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(UInt64);
     return peer_size + region_size + apply_state_size + sizeof(UInt64) + sizeof(bool);
@@ -44,11 +42,7 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     return RegionMeta(peer, region, apply_state, applied_term, pending_remove);
 }
 
-RegionID RegionMeta::regionId() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    return region.id();
-}
+RegionID RegionMeta::regionId() const { return region.id(); }
 
 UInt64 RegionMeta::peerId() const
 {
@@ -74,27 +68,40 @@ metapb::Region RegionMeta::getRegion() const
     return region;
 }
 
-raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
+pingcap::kv::RegionVerID RegionMeta::getRegionVerID() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    return pingcap::kv::RegionVerID{regionId(), region.region_epoch().conf_ver(), region.region_epoch().version()};
+}
+
+const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return apply_state;
 }
 
-void RegionMeta::setRegion(const metapb::Region & region_)
+void RegionMeta::setRegion(const metapb::Region & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    region = region_;
+    doSetRegion(region);
 }
+
+void RegionMeta::doSetRegion(const metapb::Region & region) { this->region = region; }
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
 {
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        apply_state.set_applied_index(index);
-        applied_term = term;
-    }
-    cv.notify_all();
+    std::lock_guard<std::mutex> lock(mutex);
+    doSetApplied(index, term);
 }
+
+void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
+{
+    apply_state.set_applied_index(index);
+    applied_term = term;
+}
+
+void RegionMeta::notifyAll() { cv.notify_all(); }
 
 UInt64 RegionMeta::appliedIndex() const
 {
@@ -112,32 +119,30 @@ enginepb::CommandResponse RegionMeta::toCommandResponse() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     enginepb::CommandResponse resp;
-    resp.mutable_header()->set_region_id(region.id());
+    resp.mutable_header()->set_region_id(regionId());
     resp.mutable_apply_state()->CopyFrom(apply_state);
     resp.set_applied_term(applied_term);
     return resp;
 }
 
-RegionMeta::RegionMeta(RegionMeta && rhs)
+RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
-    std::lock_guard<std::mutex> lock1(mutex);
-    std::lock_guard<std::mutex> lock2(rhs.mutex);
-
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
     apply_state = std::move(rhs.apply_state);
     applied_term = rhs.applied_term;
+    pending_remove = rhs.pending_remove;
 }
 
-RegionMeta::RegionMeta(const RegionMeta & rhs)
+RegionMeta::RegionMeta(const RegionMeta & rhs) : region_id(rhs.regionId())
 {
-    std::lock_guard<std::mutex> lock1(mutex);
-    std::lock_guard<std::mutex> lock2(rhs.mutex);
+    std::lock_guard<std::mutex> lock(rhs.mutex);
 
     peer = rhs.peer;
     region = rhs.region;
     apply_state = rhs.apply_state;
     applied_term = rhs.applied_term;
+    pending_remove = rhs.pending_remove;
 }
 
 RegionRange RegionMeta::getRange() const
@@ -149,9 +154,9 @@ RegionRange RegionMeta::getRange() const
 std::string RegionMeta::toString(bool dump_status) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    std::string status_str = !dump_status ? "" : ", term: " + DB::toString(applied_term) +
-        ", applied_index: " + DB::toString(apply_state.applied_index());
-    return "region[id: " + DB::toString(region.id()) + status_str + "]";
+    std::string status_str
+        = !dump_status ? "" : ", term: " + DB::toString(applied_term) + ", applied_index: " + DB::toString(apply_state.applied_index());
+    return "region[id: " + DB::toString(regionId()) + status_str + "]";
 }
 
 bool RegionMeta::isPendingRemove() const
@@ -163,15 +168,104 @@ bool RegionMeta::isPendingRemove() const
 void RegionMeta::setPendingRemove()
 {
     std::lock_guard<std::mutex> lock(mutex);
-    pending_remove = true;
+    doSetPendingRemove();
 }
 
-void RegionMeta::wait_index(UInt64 index) {
-    std::cout<<"get index: "<<apply_state.applied_index()<<" wanted index "<< index <<" region id: "<<region.id()<<std::endl;
-    std::unique_lock<std::mutex> lk(mutex);
-    cv.wait(lk, [this, index]{
-            return apply_state.applied_index() >= index;
-            });
+void RegionMeta::doSetPendingRemove() { pending_remove = true; }
+
+void RegionMeta::waitIndex(UInt64 index)
+{
+    std::unique_lock<std::mutex> lock(mutex);
+    cv.wait(lock, [this, index] { return pending_remove || apply_state.applied_index() >= index; });
+}
+
+UInt64 RegionMeta::version() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return region.region_epoch().version();
+}
+
+UInt64 RegionMeta::confVer() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return region.region_epoch().conf_ver();
+}
+
+void RegionMeta::reset(RegionMeta && rhs)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    peer = std::move(rhs.peer);
+    region = std::move(rhs.region);
+    apply_state = std::move(rhs.apply_state);
+    applied_term = rhs.applied_term;
+    pending_remove = rhs.pending_remove;
+}
+
+void RegionMeta::doRemovePeer(UInt64 store_id)
+{
+    auto mutable_peers = region.mutable_peers();
+
+    for (auto it = mutable_peers->begin(); it != mutable_peers->end(); ++it)
+    {
+        if (it->store_id() == store_id)
+        {
+            mutable_peers->erase(it);
+            return;
+        }
+    }
+    throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+}
+
+void RegionMeta::execChangePeer(
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
+{
+    const auto & change_peer_request = request.change_peer();
+    const auto & new_region = response.change_peer().region();
+
+    switch (change_peer_request.change_type())
+    {
+        case eraftpb::ConfChangeType::AddNode:
+        case eraftpb::ConfChangeType::AddLearnerNode:
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+
+            // change the peers of region, add conf_ver.
+            doSetRegion(new_region);
+            doSetApplied(index, term);
+            return;
+        }
+        case eraftpb::ConfChangeType::RemoveNode:
+        {
+            const auto & peer = change_peer_request.peer();
+            auto store_id = peer.store_id();
+
+            std::lock_guard<std::mutex> lock(mutex);
+
+            doRemovePeer(store_id);
+
+            if (this->peer.id() == peer.id())
+                doSetPendingRemove();
+            doSetApplied(index, term);
+            return;
+        }
+        default:
+            throw Exception("execChangePeer: unsupported cmd", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+bool RegionMeta::isPeerRemoved() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    if (pending_remove)
+        return true;
+    for (auto region_peer : region.peers())
+    {
+        if (region_peer.id() == peer.id())
+            return false;
+    }
+    return true;
 }
 
 } // namespace DB

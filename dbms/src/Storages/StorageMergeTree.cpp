@@ -182,44 +182,42 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
 
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
-        const ASTLiteral * ASTLit = typeid_cast<const ASTLiteral *>(&*query);
-        UInt64 partition_id = 0;
-        if (ASTLit)
-        {
-            // we have added version and del_mark columns
-            partition_id = ASTLit -> value.get<size_t>();
-            res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this, partition_id);
-        }
-        else if (insert_query)
+        res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this);
+
+        if (insert_query)
         {
             if (!insert_query->is_import)
             {
-                LOG_DEBUG(log, "Mutable table writing, add version column and del-mark column.");
+                LOG_DEBUG(log, "TMT table writing, add version column and del-mark column.");
                 AdditionalBlockGenerators gens
                 {
                     std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
                         context.getTMTContext().getPDClient()),
-                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 0)
+                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                        MutableSupport::DelMark::genDelMark(false))
                 };
                 res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
                 res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
             }
             else
-                LOG_DEBUG(log, "Mutable table importing.");
+                LOG_DEBUG(log, "TMT table importing.");
         }
         else if (delete_query)
         {
+            LOG_DEBUG(log, "Delete from TMT table, add version column and del-mark column.");
             AdditionalBlockGenerators gens
             {
                 std::make_shared<AdditionalBlockGeneratorPD>(MutableSupport::version_column_name,
                     context.getTMTContext().getPDClient()),
-                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 1)
+                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                    MutableSupport::DelMark::genDelMark(true))
             };
             res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
             res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
         }
-        else {
-            throw Exception("Use TMT by wrong way");
+        else
+        {
+            throw Exception("Use TMT table by wrong way", ErrorCodes::BAD_ARGUMENTS);
         }
     }
     else if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable)
@@ -233,7 +231,8 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
                 {
                     std::make_shared<AdditionalBlockGeneratorIncrease<UInt64>>(MutableSupport::version_column_name,
                         getVersionSeed(settings)),
-                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 0)
+                    std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                        MutableSupport::DelMark::genDelMark(false))
                 };
                 res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
                 // TODO: Dedup in MergeTreeDataWriter may be better, in case some one glue some blocks together
@@ -249,7 +248,8 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
             {
                 std::make_shared<AdditionalBlockGeneratorConst<UInt64>>(MutableSupport::version_column_name,
                     getVersionSeed(settings)),
-                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name, 1)
+                std::make_shared<AdditionalBlockGeneratorConst<UInt8>>(MutableSupport::delmark_column_name,
+                    MutableSupport::DelMark::genDelMark(true))
             };
             res = std::make_shared<AdditionalColumnsBlockOutputStream>(res, gens);
             res = std::make_shared<InBlockDedupBlockOutputStream>(res, data.getSortDescription());
@@ -422,7 +422,6 @@ bool StorageMergeTree::merge(
     const String & partition_id,
     bool final,
     bool deduplicate,
-    bool eliminate,
     String * out_disable_reason)
 {
     /// Clear old parts. It does not matter to do it more frequently than each second.
@@ -459,7 +458,7 @@ bool StorageMergeTree::merge(
         }
         else
         {
-            selected = merger.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, eliminate, out_disable_reason);
+            selected = merger.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, out_disable_reason);
         }
 
         if (!selected)
@@ -519,7 +518,7 @@ bool StorageMergeTree::merge(
     try
     {
         new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr),
-                                                    merging_tagger->reserved_space.get(), deduplicate, eliminate);
+                                                    merging_tagger->reserved_space.get(), deduplicate);
         merger.renameMergedTemporaryPart(new_part, future_part.parts, nullptr);
 
         write_part_log({});
@@ -603,14 +602,14 @@ void StorageMergeTree::clearColumnInPartition(const ASTPtr & partition, const Fi
 bool StorageMergeTree::optimize(
     const ASTPtr & query, const ASTPtr & partition, bool final, bool deduplicate, const Context & context)
 {
-    const ASTOptimizeQuery * optimize_query = typeid_cast<const ASTOptimizeQuery *>(&*query);
+    std::ignore = query;
 
     String partition_id;
     if (partition)
         partition_id = data.getPartitionIDFromQuery(partition, context);
 
     String disable_reason;
-    if (!merge(context.getSettingsRef().min_bytes_to_use_direct_io, true, partition_id, final, deduplicate, optimize_query->eliminate, &disable_reason))
+    if (!merge(context.getSettingsRef().min_bytes_to_use_direct_io, true, partition_id, final, deduplicate, &disable_reason))
     {
         if (context.getSettingsRef().optimize_throw_if_noop)
             throw Exception(disable_reason.empty() ? "Can't OPTIMIZE by some reason" : disable_reason, ErrorCodes::CANNOT_ASSIGN_OPTIMIZE);

@@ -171,6 +171,67 @@ int main(int, char **)
         kvstore->onServiceCommand(cmds, context);
     }
 
+    {// snapshot
+        {
+            enginepb::SnapshotRequest request;
+            enginepb::SnapshotState * state = request.mutable_state();
+            state->mutable_region()->set_id(666);
+
+            TiKVKey start_key = RecordKVFormat::genKey(table_id, 200);
+            TiKVKey end_key = RecordKVFormat::genKey(table_id, 300);
+
+            state->mutable_region()->set_start_key(start_key.getStr());
+            state->mutable_region()->set_end_key(end_key.getStr());
+
+            RegionMeta region_meta(state->peer(), state->region(), initialApplyState());
+            region_meta.setApplied(index + 10, term);
+            RegionPtr region = std::make_shared<Region>(std::move(region_meta));
+
+            kvstore->onSnapshot(region, context.context);
+        }
+
+        {
+            enginepb::CommandRequestBatch cmds;
+            enginepb::CommandRequest & cmd = *(cmds.mutable_requests()->Add());
+
+            cmd.mutable_header()->set_region_id(region_id);
+            cmd.mutable_header()->set_term(term);
+            cmd.mutable_header()->set_index(index++);
+            cmd.mutable_header()->set_sync_log(true);
+
+            auto & req = *(cmd.mutable_admin_request());
+            auto & resp = *(cmd.mutable_admin_response());
+
+            req.set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
+            resp.set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
+
+            {
+                auto & splits = *(req.mutable_splits());
+                splits.set_right_derive(false);
+                auto & split_reqs = *(splits.mutable_requests());
+
+                auto & sr = *(split_reqs.Add());
+                sr.set_split_key(RecordKVFormat::genKey(table_id, 200).getStr());
+                sr.set_new_region_id(666);
+                sr.add_new_peer_ids(111);
+            }
+            {
+                auto & splits = *(resp.mutable_splits());
+                auto region1 = createRegionInfo(region_id, //
+                                                RecordKVFormat::genKey(table_id, 1).getStr(),
+                                                RecordKVFormat::genKey(table_id, 3).getStr());
+                auto region2 = createRegionInfo(666, //
+                                                RecordKVFormat::genKey(table_id, 200).getStr(),
+                                                RecordKVFormat::genKey(table_id, 300).getStr());
+
+                *(splits.mutable_regions()->Add()) = region1;
+                *(splits.mutable_regions()->Add()) = region2;
+            }
+
+            kvstore->onServiceCommand(cmds, context);
+        }
+    }
+
     {
         enginepb::CommandRequestBatch cmds;
         enginepb::CommandRequest &    cmd = *(cmds.mutable_requests()->Add());
@@ -257,25 +318,25 @@ int main(int, char **)
     }
 
     {
-        kvstore->tryPersistAndReport(context);
+        kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
 
-        {
-            auto         kvstore2 = std::make_shared<KVStore>(dir_path);
-            const auto & regions1 = kvstore->_regions();
-            const auto & regions2 = kvstore2->_regions();
-            for (auto && [region_id1, region1] : regions1)
-            {
-                auto it = regions2.find(region_id1);
-                ASSERT_CHECK(it != regions2.end(), suc);
-                ASSERT_CHECK_EQUAL(*(it->second), *region1, suc);
-            }
-            for (auto && [region_id2, region2] : regions2)
-            {
-                auto it = regions1.find(region_id2);
-                ASSERT_CHECK(it != regions1.end(), suc);
-                ASSERT_CHECK_EQUAL(*(it->second), *region2, suc);
-            }
-        }
+        auto kvstore2 = std::make_shared<KVStore>(dir_path);
+
+        kvstore2->restore([&](pingcap::kv::RegionVerID) -> pingcap::kv::RegionClientPtr {
+            return nullptr;
+        }, nullptr);
+
+        kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region1){
+            auto region2 = kvstore2->getRegion(region_id);
+            ASSERT_CHECK(region2 != nullptr, suc);
+            ASSERT_CHECK_EQUAL(*region2, *region1, suc);
+        });
+
+        kvstore2->traverseRegions([&](const RegionID region_id, const RegionPtr & region2){
+            auto region1 = kvstore->getRegion(region_id);
+            ASSERT_CHECK(region1 != nullptr, suc);
+            ASSERT_CHECK_EQUAL(*region2, *region1, suc);
+        });
     }
 
     {
@@ -299,9 +360,9 @@ int main(int, char **)
 
         kvstore->onServiceCommand(cmds, context);
 
-        ASSERT_CHECK_EQUAL(1, kvstore->_regions().size(), suc);
+        ASSERT_CHECK_EQUAL(2, kvstore->regionSize(), suc);
 
-        kvstore->tryPersistAndReport(context);
+        kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
     }
 
     return suc ? 0 : 1;

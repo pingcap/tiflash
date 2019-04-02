@@ -1,4 +1,5 @@
 #include <DataStreams/ReplacingTMTSortedBlockInputStream.h>
+#include <Storages/MutableSupport.h>
 
 namespace DB
 {
@@ -25,6 +26,15 @@ Block ReplacingTMTSortedBlockInputStream::readImpl()
         return Block();
 
     merge(merged_columns, queue);
+
+    if (deleted_by_range)
+    {
+        std::ostringstream ss;
+        for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
+            ss << "(" << begin_handle_ranges[i] << "," << end_handle_ranges[i] << ") ";
+        LOG_TRACE(log, "deleted by handle range: " << deleted_by_range << " rows, handle ranges: " << ss.str());
+    }
+
     return header.cloneWithColumns(std::move(merged_columns));
 }
 
@@ -87,9 +97,10 @@ void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, 
 
 bool ReplacingTMTSortedBlockInputStream::shouldOutput()
 {
-    if (isDeletedOnFinal())
+    if (isDefiniteDeleted())
     {
-        logRowGoing("DeleteOnFinal", false);
+        ++deleted_by_range;
+        logRowGoing("DefiniteDelete", false);
         return false;
     }
 
@@ -101,16 +112,8 @@ bool ReplacingTMTSortedBlockInputStream::shouldOutput()
 
     if (!behindGcTso())
     {
-        if (!collapse_versions)
-        {
-            logRowGoing("KeepHistory", true);
-            return true;
-        }
-        else
-        {
-            logRowGoing("ForceCollapse", false);
-            return false;
-        }
+        logRowGoing("KeepHistory", true);
+        return true;
     }
 
     logRowGoing("DiscardHistory", false);
@@ -119,19 +122,28 @@ bool ReplacingTMTSortedBlockInputStream::shouldOutput()
 
 bool ReplacingTMTSortedBlockInputStream::behindGcTso()
 {
-    return (*(*selected_row.columns)[version_column_number])[selected_row.row_num].template get<size_t>() < gc_tso;
+    return (*(*selected_row.columns)[version_column_number])[selected_row.row_num].template get<UInt64>() < gc_tso;
 }
 
 bool ReplacingTMTSortedBlockInputStream::nextHasDiffPk()
 {
-    return (*(*selected_row.columns)[pk_column_number])[selected_row.row_num] !=
-        (*(*next_key.columns)[0])[next_key.row_num];
+    return (*(*selected_row.columns)[pk_column_number])[selected_row.row_num] != (*(*next_key.columns)[0])[next_key.row_num];
 }
 
-bool ReplacingTMTSortedBlockInputStream::isDeletedOnFinal()
+bool ReplacingTMTSortedBlockInputStream::isDefiniteDeleted()
 {
-    return final &&
-        (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
+    if (begin_handle_ranges.empty())
+        return true;
+    HandleID handle_id = (*(*selected_row.columns)[pk_column_number])[selected_row.row_num].template get<HandleID>();
+    int pa = std::upper_bound(begin_handle_ranges.begin(), begin_handle_ranges.end(), handle_id) - begin_handle_ranges.begin();
+    if (pa == 0)
+        return true;
+    else
+    {
+        if (handle_id < end_handle_ranges[pa - 1])
+            return false;
+        return true;
+    }
 }
 
 void ReplacingTMTSortedBlockInputStream::logRowGoing(const std::string & msg, bool is_output)
@@ -145,10 +157,10 @@ void ReplacingTMTSortedBlockInputStream::logRowGoing(const std::string & msg, bo
 
     auto next_pk = applyVisitor(FieldVisitorToString(), (*(*next_key.columns)[0])[next_key.row_num]);
 
-    LOG_DEBUG(log, "gc tso: " << gc_tso << ", final: " << final << ", collapse: " << collapse_versions <<
-        ". " << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del) <<
-        ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") <<
-        ". why{" << msg << "}, output: " << is_output);
+    LOG_DEBUG(log,
+        "gc tso: " << gc_tso << ". "
+                   << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del)
+                   << ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") << ". why{" << msg << "}, output: " << is_output);
 }
 
-}
+} // namespace DB

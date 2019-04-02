@@ -106,8 +106,10 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(const Block & block
     PODArray<size_t> partition_num_to_first_row;
     PODArray<UInt128> partition_num_to_key;
     IColumn::Selector selector;
-    size_t partition_mod = (data.merging_params.mode != MergeTreeData::MergingParams::Mutable && data.merging_params.mode != MergeTreeData::MergingParams::Txn)
-        ? 1 : size_t(data.settings.mutable_mergetree_partition_number);
+
+    size_t partition_mod = 1;
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable)
+        partition_mod = size_t(data.settings.mutable_mergetree_partition_number);
     buildScatterSelector(partition_columns, partition_mod, partition_num_to_first_row, partition_num_to_key, selector);
 
     size_t partitions_count = partition_num_to_first_row.size();

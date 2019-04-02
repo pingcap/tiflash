@@ -2549,7 +2549,7 @@ bool StorageReplicatedMergeTree::optimize(const ASTPtr & query, const ASTPtr & p
         else
         {
             String partition_id = data.getPartitionIDFromQuery(partition, context);
-            selected = merger.selectAllPartsToMergeWithinPartition(future_merged_part, disk_space, can_merge, partition_id, final, false /*eliminate*/, &disable_reason);
+            selected = merger.selectAllPartsToMergeWithinPartition(future_merged_part, disk_space, can_merge, partition_id, final, &disable_reason);
         }
 
         auto handle_noop = [&] (const String & message)
