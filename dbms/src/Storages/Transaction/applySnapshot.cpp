@@ -15,12 +15,16 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
 
     enginepb::SnapshotRequest request;
     auto ok = read(&request);
+    // REVIEW: use two 'throw' here, 'not ok' and 'no state'
     if (!ok || !request.has_state())
         throw Exception("Failed to read snapshot state", ErrorCodes::LOGICAL_ERROR);
+
     const auto & state = request.state();
     pingcap::kv::RegionClientPtr region_client = nullptr;
     auto meta = RegionMeta(state.peer(), state.region(), state.apply_state());
+
     Region::RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
+        // context may be null in test cases.
         if (context)
         {
             auto & tmt_ctx = context->getTMTContext();
@@ -44,6 +48,8 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
             auto cf_name = data.cf();
             auto key = TiKVKey();
             auto value = TiKVValue();
+            // REVIEW: the batch inserting logic is OK, but the calling stack is weird.
+            //   May be we should just do lock action on each node-inserting, it's also fast when lock contention is low.
             region->batchInsert([&](Region::BatchInsertNode & node) -> bool {
                 if (it == cf_data.end())
                     return false;

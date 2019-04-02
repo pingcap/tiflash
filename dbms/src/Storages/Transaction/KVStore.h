@@ -58,6 +58,7 @@ private:
 
     std::atomic<Timepoint> last_try_persist_time = Clock::now();
 
+    // REVIEW: the task_mutex looks should be one mutex per region than one big lock in kvstore
     // onServiceCommand and onSnapshot should not be called concurrently
     mutable std::mutex task_mutex;
 
