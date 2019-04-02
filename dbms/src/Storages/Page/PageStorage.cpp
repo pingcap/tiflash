@@ -48,23 +48,9 @@ PageStorage::PageStorage(const std::string & storage_path_, const Config & confi
     auto page_files = listAllPageFiles(storage_path, true, page_file_log);
     for (auto & page_file : page_files)
     {
-        auto cpfs = const_cast<PageFile &>(page_file).readCoveredPageFiles();
-        if (cpfs)
-        {
-            for (auto file_id_level : *cpfs)
-            {
-                auto page_file_to_remove
-                    = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
-                page_file_to_remove.destroy();
-            }
-        }
-    }
-
-    for (auto & page_file : page_files)
-    {
         const_cast<PageFile &>(page_file).readAndSetPageMetas(page_cache_map);
 
-        // Only level 0 can be written.
+        // Only level 0 is writable.
         if (page_file.getLevel() == 0)
             write_file = page_file;
     }

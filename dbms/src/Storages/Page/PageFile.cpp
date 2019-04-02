@@ -460,10 +460,7 @@ void PageFile::Writer::write(const WriteBatch & wb, PageCacheMap & page_cache_ma
 // PageFile::Reader
 // =========================================================
 
-PageFile::Reader::Reader(PageFile & page_file_)
-    : page_file(page_file_), data_file_path(page_file.dataPath()), data_file_fd(openFile<true>(data_file_path))
-{
-}
+PageFile::Reader::Reader(PageFile & page_file) : data_file_path(page_file.dataPath()), data_file_fd(openFile<true>(data_file_path)) {}
 
 PageFile::Reader::~Reader()
 {
@@ -486,8 +483,8 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
     // 2. Pages with small gaps between them can also read together.
     // 3. Refactor this function to support iterator mode, and then use hint to do data pre-read.
 
-    char *    data_buf   = (char *)page_file.alloc(buf_size);
-    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { page_file.free(p, buf_size); });
+    char *    data_buf   = (char *)alloc(buf_size);
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     char *  pos = data_buf;
     PageMap page_map;
@@ -565,6 +562,7 @@ PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::stri
 {
     return PageFile(file_id, level, parent_path, is_tmp, true, log);
 }
+
 PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, Logger * log)
 {
     return PageFile(file_id, level, parent_path, false, false, log);
@@ -586,16 +584,6 @@ void PageFile::readAndSetPageMetas(PageCacheMap & page_caches)
     readFile(file_fd, 0, data, file_size, path);
 
     std::tie(this->meta_file_pos, this->data_file_pos) = PageMetaFormat::analyzeMetaFile(file_id, level, data, file_size, page_caches, log);
-}
-
-std::unique_ptr<PageFileIdAndLevels> PageFile::readCoveredPageFiles()
-{
-    return readValuesFromFile<PageFileIdAndLevels>(cpfsPath(), *this);
-}
-
-void PageFile::writeCoveredPageFiles(const PageFileIdAndLevels & covered)
-{
-    writeValuesIntoFile(covered, cpfsPath(), *this);
 }
 
 void PageFile::setFormal()

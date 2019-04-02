@@ -41,6 +41,8 @@ void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandRespo
 
     MemoryWriteBuffer buffer;
     size_t region_size = region->serialize(buffer, response);
+    if (unlikely(region_size > std::numeric_limits<UInt32>::max()))
+        throw Exception("Region is too big to persist", ErrorCodes::LOGICAL_ERROR);
 
     WriteBatch wb;
     auto read_buf = buffer.tryGetReadBuffer();

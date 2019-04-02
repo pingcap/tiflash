@@ -46,9 +46,9 @@ private:
 };
 
 /// https://stackoverflow.com/a/13938417
-inline size_t alignPage(size_t n, bool real = true)
+inline size_t alignPage(size_t n)
 {
-    return real ? (n + PAGE_SIZE_STEP - 1) & ~(PAGE_SIZE_STEP - 1) : n;
+    return (n + PAGE_SIZE_STEP - 1) & ~(PAGE_SIZE_STEP - 1);
 }
 
 } // namespace DB
