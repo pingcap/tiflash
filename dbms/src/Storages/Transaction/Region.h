@@ -139,6 +139,7 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
+    // REVIEW: 'node' seems not a good name here
     using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
     void batchInsert(std::function<bool(BatchInsertNode &)> && f);
 

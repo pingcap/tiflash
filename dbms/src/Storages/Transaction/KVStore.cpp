@@ -66,6 +66,7 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
         {
             LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
 
+            // REVIEW: in what case this can happen? rngine crushed?
             if (old_region->getProbableIndex() >= new_region->getProbableIndex())
             {
                 LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
@@ -82,11 +83,13 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
 
         if (new_region->isPendingRemove())
         {
+            // REVIEW: here we remove the region in persister, then below the region is added to persister again
             removeRegion(region_id, context);
             return;
         }
     }
 
+    // REVIEW: we don't need to persist region on any change.
     region_persister.persist(new_region);
 
     if (tmt_ctx)
@@ -160,6 +163,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                     auto [it, ok] = regions.emplace(new_region->id(), new_region);
                     if (!ok)
                     {
+                        // REVIEW: do we need to compare the old one and the new one?
                         // definitely, any region's index is greater or equal than the initial one, discard it.
                         continue;
                     }
@@ -177,11 +181,17 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                     region_persister.persist(region);
             }
 
+            // REVIEW: if process crushed here ...
+
             if (tmt_ctx)
                 tmt_ctx->region_table.splitRegion(curr_region, split_regions);
+
+            // REVIEW: do region_table need to updateRegion of the splitted regions?
         }
         else
         {
+            // REVIEW: is the persisting order OK?
+
             if (tmt_ctx)
                 tmt_ctx->region_table.updateRegion(curr_region, table_ids);
 
@@ -272,6 +282,9 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
     }
 
     region_persister.drop(region_id);
+
+    // REVIEW: if process crushed here, then when the process start again, the region_table will not find this region, is it OK?
+
     if (context)
         context->getTMTContext().region_table.removeRegion(region);
 }
