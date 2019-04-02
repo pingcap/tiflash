@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {

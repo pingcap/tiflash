@@ -305,14 +305,17 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         // get data block from region first.
 
         ThreadPool pool(std::min(region_cnt, num_streams));
+        std::atomic_bool need_retry = false;
+
         for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
         {
             pool.schedule([&, region_begin, size] {
 
-                std::vector<RegionID> region_ids;
-
                 for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
+                    if (need_retry)
+                        return;
+
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
                     auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(
@@ -329,7 +332,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                                    << ", handle range [" << region_query_info.range_in_table.first
                                                    << ", " << region_query_info.range_in_table.second << ") , status "
                                                    << RegionTable::RegionReadStatusString(status));
-                        region_ids.push_back(region_query_info.region_id);
+                        need_retry = true;
                     }
                     else
                     {
@@ -337,13 +340,17 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                         rows_in_mem[region_index] = tol;
                     }
                 }
-
-                if (!region_ids.empty())
-                    throw RegionException(region_ids);
             });
         }
-
         pool.wait();
+
+        if (need_retry)
+        {
+            std::vector<RegionID> region_ids;
+            for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                region_ids.push_back(regions_query_info[region_index].region_id);
+            throw RegionException(region_ids);
+        }
     }
 
     size_t part_index = 0;
@@ -718,7 +725,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     else
     {
         TMTContext & tmt = context.getTMTContext();
-        std::vector<RegionID> region_ids;
+        bool need_retry = false;
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
         {
@@ -747,8 +754,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                                <<  ", handle range [" << region_query_info.range_in_table.first
                                                << ", " << region_query_info.range_in_table.second << ") , status "
                                                << RegionTable::RegionReadStatusString(status));
-                    region_ids.push_back(region_query_info.region_id);
-                    continue;
+                    need_retry = true;
+                    break;
                 }
             }
 
@@ -780,8 +787,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 << sum_ranges << " ranges, read " << rows_in_mem[region_index] << " rows from memory");
         }
 
-        if (!region_ids.empty())
+        if (need_retry)
+        {
+            std::vector<RegionID> region_ids;
+            for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+                region_ids.push_back(regions_query_info[region_index].region_id);
             throw RegionException(region_ids);
+        }
     }
 
     if (parts_with_ranges.empty() && !is_txn_engine)

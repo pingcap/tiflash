@@ -22,17 +22,6 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
-using HandleRange = std::pair<HandleID, HandleID>;
-
-struct RegionQueryInfo
-{
-    RegionID region_id;
-    UInt64 version;
-    UInt64 conf_version;
-    HandleRange range_in_table;
-
-    bool operator<(const RegionQueryInfo & o) const { return range_in_table < o.range_in_table; }
-};
 
 std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
 

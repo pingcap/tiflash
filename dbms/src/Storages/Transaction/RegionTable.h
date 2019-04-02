@@ -21,7 +21,7 @@ public:
     {
         InternalRegion() {}
         InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
-        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_)
+        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_ = {0, 0})
             : region_id(region_id_), range_in_table(range_in_table_)
         {}
 
@@ -43,12 +43,7 @@ public:
 
         struct Write
         {
-            void operator()(const RegionID k, const InternalRegion & v, DB::WriteBuffer & buf)
-            {
-                writeIntBinary(k, buf);
-                writeIntBinary(v.range_in_table.first, buf);
-                writeIntBinary(v.range_in_table.second, buf);
-            }
+            void operator()(const RegionID k, const InternalRegion &, DB::WriteBuffer & buf) { writeIntBinary(k, buf); }
         };
 
         struct Read
@@ -56,11 +51,8 @@ public:
             std::pair<RegionID, InternalRegion> operator()(DB::ReadBuffer & buf)
             {
                 RegionID region_id;
-                HandleRange range_in_table;
                 readIntBinary(region_id, buf);
-                readIntBinary(range_in_table.first, buf);
-                readIntBinary(range_in_table.second, buf);
-                return {region_id, InternalRegion(region_id, range_in_table)};
+                return {region_id, InternalRegion(region_id)};
             }
         };
 
@@ -172,6 +164,7 @@ public:
     void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const RegionPtr & region);
+    void applySnapshotRegions(const ::DB::RegionMap & regions);
     void applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids);
 
     /// Manage data after region split into split_regions.
@@ -188,7 +181,7 @@ public:
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
-    void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>>&)> && callback);
+    void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback);
 
     static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TMTContext & tmt,
         TableID table_id,

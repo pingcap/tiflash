@@ -34,6 +34,7 @@ using PartitionID = UInt64;
 using RegionKey = Int64;
 
 using RegionID = UInt64;
+using HandleRange = std::pair<HandleID, HandleID>;
 
 enum : RegionID
 {

@@ -48,7 +48,7 @@ public:
 
     void removeRegion(RegionID region_id, Context * context);
 
-    void checkRegion(RegionTable & region_table);
+    void updateRegionTableBySnapshot(RegionTable & region_table);
 
 private:
     RegionPersister region_persister;

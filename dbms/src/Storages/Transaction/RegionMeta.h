@@ -15,12 +15,21 @@ class RegionMeta
 {
 public:
     RegionMeta(const metapb::Peer & peer_, const metapb::Region & region_, const raft_serverpb::RaftApplyState & apply_state_)
-        : peer(peer_), region(region_), apply_state(apply_state_), applied_term(apply_state.truncated_state().term())
+        : peer(peer_),
+          region(region_),
+          apply_state(apply_state_),
+          applied_term(apply_state.truncated_state().term()),
+          region_id(region.id())
     {}
 
     RegionMeta(const metapb::Peer & peer_, const metapb::Region & region_, const raft_serverpb::RaftApplyState & apply_state_,
         UInt64 applied_term_, bool pending_remove_)
-        : peer(peer_), region(region_), apply_state(apply_state_), applied_term(applied_term_), pending_remove(pending_remove_)
+        : peer(peer_),
+          region(region_),
+          apply_state(apply_state_),
+          applied_term(applied_term_),
+          region_id(region.id()),
+          pending_remove(pending_remove_)
     {}
 
     RegionMeta(RegionMeta && meta);
@@ -61,7 +70,7 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
 
-    void swap(RegionMeta & other);
+    void reset(RegionMeta && other);
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
     {
@@ -89,6 +98,7 @@ private:
     metapb::Region region;
     raft_serverpb::RaftApplyState apply_state;
     UInt64 applied_term;
+    const RegionID region_id;
 
     bool pending_remove = false;
 
