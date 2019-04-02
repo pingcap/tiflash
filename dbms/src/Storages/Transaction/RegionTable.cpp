@@ -180,8 +180,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         const auto & columns = merge_tree->getColumns();
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
-        auto [input, status, tol] = getBlockInputStreamByRegion(
-            tmt, table_id, region_id, table_info, columns, names, &keys_to_remove);
+        auto [input, status, tol] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, &keys_to_remove);
         if (input == nullptr)
             return;
 
@@ -264,7 +263,6 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
         for (auto it = table_regions.begin(); it != table_regions.end();)
         {
             auto region_id = it->first;
-            auto & region = it->second;
             auto region_ptr = region_fetcher(region_id);
             if (region_ptr == nullptr)
             {
@@ -276,11 +274,6 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
             }
             else
                 ++it;
-
-            region.cache_bytes = region_ptr->dataSize();
-            if (region.cache_bytes)
-                region.updated = true;
-            region.range_in_table = region_ptr->getHandleRangeByTable(table_id);
 
             // Update region_id -> table_id
             {
@@ -318,6 +311,29 @@ void RegionTable::applySnapshotRegion(const RegionPtr & region)
     return applySnapshotRegion(region, table_ids);
 }
 
+void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    TableIDSet table_to_persist;
+    for (const auto & [id, region] : region_map)
+    {
+        std::ignore = id;
+        size_t cache_bytes = region->dataSize();
+        auto table_ids = getRegionTableIds(region);
+        for (auto table_id : table_ids)
+        {
+            auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);
+            internal_region.cache_bytes = cache_bytes;
+            if (cache_bytes)
+                internal_region.updated = true;
+        }
+        updateRegionRange(region, table_to_persist);
+    }
+    for (auto table_id : table_to_persist)
+        tables.find(table_id)->second.persist();
+}
+
 void RegionTable::applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids)
 {
     TableIDSet table_to_persist;
@@ -330,8 +346,9 @@ void RegionTable::applySnapshotRegion(const RegionPtr & region, const TableIDSet
         auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);
         internal_region.updated = true;
         internal_region.cache_bytes = cache_bytes;
-        internal_region.range_in_table = region->getHandleRangeByTable(table_id);
     }
+
+    updateRegionRange(region, table_to_persist);
 
     for (auto table_id : table_to_persist)
         tables.find(table_id)->second.persist();
@@ -458,7 +475,8 @@ void RegionTable::traverseInternalRegionsByTable(const TableID table_id, std::fu
         callback(region_info.second);
 }
 
-void RegionTable::traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>>&)> && callback)
+void RegionTable::traverseRegionsByTable(
+    const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback)
 {
     auto & kvstore = context.getTMTContext().kvstore;
     std::vector<std::pair<RegionID, RegionPtr>> regions;

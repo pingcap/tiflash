@@ -15,7 +15,9 @@ KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log
 void KVStore::restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
 {
     std::lock_guard<std::mutex> lock(mutex);
+    LOG_INFO(log, "start to restore regions");
     region_persister.restore(regions, region_client_create);
+    LOG_INFO(log, "restore regions done");
 
     // Remove regions which pending_remove = true, those regions still exist because progress crash after persisted and before removal.
     if (regions_to_remove != nullptr)
@@ -78,9 +80,6 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
             regions[region_id] = new_region;
         }
 
-        if (tmt_ctx)
-            tmt_ctx->region_table.applySnapshotRegion(new_region, table_ids);
-
         if (new_region->isPendingRemove())
         {
             removeRegion(region_id, context);
@@ -89,6 +88,9 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
     }
 
     region_persister.persist(new_region);
+
+    if (tmt_ctx)
+        tmt_ctx->region_table.applySnapshotRegion(new_region, table_ids);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
@@ -143,18 +145,28 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
+        // TODO: split update kvstore first then region_table, merge should reverse.
         if (!split_regions.empty())
         {
             {
+                std::vector<RegionPtr> tmp_split_regions;
+                tmp_split_regions.reserve(split_regions.size());
+                tmp_split_regions.swap(split_regions);
+
                 std::lock_guard<std::mutex> lock(mutex);
 
-                for (const auto & region : split_regions)
+                for (const auto & new_region : tmp_split_regions)
                 {
-                    auto [it, ok] = regions.emplace(region->id(), region);
+                    auto [it, ok] = regions.emplace(new_region->id(), new_region);
                     if (!ok)
                     {
-                        it->second = region;
-                        LOG_INFO(log, "Override existing region " + DB::toString(region->id()));
+                        // definitely, any region's index is greater or equal than the initial one, discard it.
+                        continue;
+                    }
+                    else
+                    {
+                        // add new region
+                        split_regions.push_back(it->second);
                     }
                 }
             }
@@ -264,18 +276,12 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
         context->getTMTContext().region_table.removeRegion(region);
 }
 
-void KVStore::checkRegion(RegionTable & region_table)
+void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)
 {
-    std::unordered_set<RegionID> region_in_table;
-    region_table.traverseInternalRegions(
-        [&](TableID, RegionTable::InternalRegion & internal_region) { region_in_table.insert(internal_region.region_id); });
-    for (auto && [id, region] : regions)
-    {
-        if (region_in_table.count(id))
-            continue;
-        LOG_INFO(log, region->toString() << " is not in RegionTable, init by apply snapshot");
-        region_table.applySnapshotRegion(region);
-    }
+    std::lock_guard<std::mutex> lock(mutex);
+    LOG_INFO(log, "start to update RegionTable by snapshot");
+    region_table.applySnapshotRegions(regions);
+    LOG_INFO(log, "update RegionTable done");
 }
 
 } // namespace DB

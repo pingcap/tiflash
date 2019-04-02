@@ -94,7 +94,7 @@ Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_
         {
             continue;
         }
-        std::cout<<"got primary lock: "<<primary<<std::endl;
+        std::cout << "got primary lock: " << primary << std::endl;
         return std::make_unique<LockInfo>(LockInfo{primary, ts, decode_key, ttl});
     }
 
@@ -298,7 +298,7 @@ Regions Region::execBatchSplit(
         }
 
         RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
-        meta.swap(new_meta);
+        meta.reset(std::move(new_meta));
         meta.setApplied(index, term);
     }
 
@@ -621,7 +621,7 @@ void Region::reset(Region && new_region)
 
     incPersistParm();
 
-    meta.swap(new_region.meta);
+    meta.reset(std::move(new_region.meta));
     meta.notifyAll();
 }
 
