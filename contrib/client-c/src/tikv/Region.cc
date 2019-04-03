@@ -164,7 +164,7 @@ void RegionCache::updateLeader(Backoffer & bo, const RegionVerID & region_id, ui
 
 }
 
-void RegionCache::onRegionStale(RPCContextPtr ctx, const errorpb::StaleEpoch & stale_epoch) {
+void RegionCache::onRegionStale(RPCContextPtr ctx, const errorpb::EpochNotMatch & stale_epoch) {
 
     dropRegion(ctx->region);
 
