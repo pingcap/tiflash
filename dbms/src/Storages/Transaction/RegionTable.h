@@ -189,7 +189,7 @@ public:
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
-        std::vector<TiKVKey> * keys);
+        std::vector<RegionWriteCFData::Key> * keys);
 
     static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
@@ -201,7 +201,7 @@ public:
         bool learner_read,
         bool resolve_locks,
         UInt64 start_ts,
-        std::vector<TiKVKey> * keys = nullptr);
+        std::vector<RegionWriteCFData::Key> * keys = nullptr);
 
     static TableIDSet getRegionTableIds(const RegionPtr & region);
 

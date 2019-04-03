@@ -17,10 +17,19 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & ordered_columns,
-    std::vector<TiKVKey> * keys)
+    std::vector<RegionWriteCFData::Key> * keys)
 {
-    return getBlockInputStreamByRegion(
-        table_id, tmt.kvstore->getRegion(region_id), InvalidRegionVersion, InvalidRegionVersion, table_info, columns, ordered_columns, false, false, 0, keys);
+    return getBlockInputStreamByRegion(table_id,
+        tmt.kvstore->getRegion(region_id),
+        InvalidRegionVersion,
+        InvalidRegionVersion,
+        table_info,
+        columns,
+        ordered_columns,
+        false,
+        false,
+        0,
+        keys);
 }
 
 std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TableID table_id,
@@ -33,7 +42,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     bool learner_read,
     bool resolve_locks,
     UInt64 start_ts,
-    std::vector<TiKVKey> * keys)
+    std::vector<RegionWriteCFData::Key> * keys)
 {
     if (!region)
         return {nullptr, NOT_FOUND, 0};

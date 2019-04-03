@@ -170,7 +170,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     TMTContext & tmt = context.getTMTContext();
 
-    std::vector<TiKVKey> keys_to_remove;
+    std::vector<RegionWriteCFData::Key> keys_to_remove;
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
 
