@@ -176,6 +176,46 @@ struct ColumnInfo
     }
 };
 
+enum PartitionType
+{
+    PartitionTypeRange = 1,
+    PartitionTypeHash = 2,
+    PartitionTypeList = 3,
+};
+
+struct PartitionDefinition
+{
+    PartitionDefinition() = default;
+
+    PartitionDefinition(const JSON & json);
+
+    String serialize() const;
+
+    void deserialize(const JSON & json);
+
+    Int64 id = -1;
+    String name;
+    // LessThan []string `json:"less_than"`
+    String comment;
+};
+
+struct PartitionInfo
+{
+    PartitionInfo() = default;
+
+    PartitionInfo(const JSON & json);
+
+    String serialize() const;
+
+    void deserialize(const JSON & json);
+
+    PartitionType type;
+    String expr;
+    // Columns []CIStr       `json:"columns"`
+    bool enable;
+    std::vector<PartitionDefinition> definitions;
+    UInt64 num;
+};
 
 struct TableInfo
 {
@@ -196,7 +236,8 @@ struct TableInfo
     UInt8 state = 0;
     bool pk_is_handle = false;
     String comment;
-    // Partition *PartitionInfo `json:"partition"`
+    bool is_partition_table;
+    PartitionInfo partition;
     Int64 schema_version = -1;
 
     ColumnID getColumnID(const String & name) const
