@@ -40,3 +40,6 @@
 [submodule "contrib/leveldb"]
 	path = contrib/leveldb
 	url = https://github.com/google/leveldb.git
+[submodule "contrib/junction"]
+	path = contrib/junction
+	url = https://github.com/preshing/junction.git
