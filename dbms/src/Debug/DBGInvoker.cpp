@@ -52,6 +52,7 @@ DBGInvoker::DBGInvoker()
     regFunc("rm_region_data", dbgFuncRegionRmData);
 
     regFunc("dump_region", dbgFuncDumpRegion);
+    regFunc("dump_all_region", dbgFuncDumpAllRegion);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

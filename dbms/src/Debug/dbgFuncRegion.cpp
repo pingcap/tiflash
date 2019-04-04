@@ -172,6 +172,22 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
     }
 }
 
+void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    auto & tmt = context.getTMTContext();
+    TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    size_t size = 0;
+    tmt.kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+        std::ignore = region_id;
+        auto range = region->getHandleRangeByTable(table_id);
+        size += 1;
+        std::stringstream ss;
+        ss << "table #" << table_id << " " << region->toString() << " ranges: " << range.first << ", " << range.second;
+        output(ss.str());
+    });
+    output("total size: " + toString(size));
+}
+
 void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() > 1)
