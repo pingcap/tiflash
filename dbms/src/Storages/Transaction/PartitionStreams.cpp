@@ -66,7 +66,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         {
             Region::LockInfoPtr lock_info = nullptr;
             if (resolve_locks)
-                lock_info = scanner->getLockInfo(table_id, start_ts);
+                lock_info = scanner->getLockInfo(start_ts);
             if (lock_info)
             {
                 Region::LockInfos lock_infos;

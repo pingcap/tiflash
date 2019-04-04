@@ -46,55 +46,71 @@ public:
     {
     public:
         CommittedScanner(const RegionPtr & store_, TableID expected_table_id_)
-            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_), write_map_it(store->data.write_cf.map.cbegin())
-        {}
-
-        /// Check if next kv exists.
-        /// Return InvalidTableID if not.
-        TableID hasNext()
+            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
         {
-            if (expected_table_id != InvalidTableID)
+            const auto & data = store->data.write_cf.getData();
+            if (auto it = data.find(expected_table_id); it != data.end())
             {
-                for (; write_map_it != store->data.write_cf.map.cend(); ++write_map_it)
-                {
-                    if (likely(std::get<0>(write_map_it->first) == expected_table_id))
-                        return expected_table_id;
-                }
+                found = true;
+                write_map_it = it->second.begin();
+                write_map_it_end = it->second.end();
             }
             else
-            {
-                if (write_map_it != store->data.write_cf.map.cend())
-                    return std::get<0>(write_map_it->first);
-            }
-            return InvalidTableID;
+                found = false;
         }
 
-        auto next(std::vector<RegionWriteCFData::Key> * keys = nullptr) { return store->readDataByWriteIt(write_map_it++, keys); }
+        bool hasNext() const { return found && write_map_it != write_map_it_end; }
 
-        LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
+        auto next(RegionWriteCFDataTrait::Keys * keys = nullptr)
+        {
+            if (!found)
+                throw Exception(String() + "table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
+            return store->readDataByWriteIt(expected_table_id, write_map_it++, keys);
+        }
+
+        LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
 
     private:
         RegionPtr store;
         std::shared_lock<std::shared_mutex> lock;
 
+        bool found;
         TableID expected_table_id;
         RegionData::ConstWriteCFIter write_map_it;
+        RegionData::ConstWriteCFIter write_map_it_end;
     };
 
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_) : store(store_), lock(store_->mutex) {}
+        CommittedRemover(const RegionPtr & store_, TableID expected_table_id_)
+            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
+        {
+            auto & data = store->data.write_cf.getDataMut();
+            if (auto it = data.find(expected_table_id); it != data.end())
+            {
+                found = true;
+                data_map = &(it->second);
+            }
+            else
+                found = false;
+        }
 
         void remove(const RegionWriteCFData::Key & key)
         {
-            if (auto it = store->data.write_cf.map.find(key); it != store->data.write_cf.map.end())
-                store->removeDataByWriteIt(it);
+            if (!found)
+                return;
+            if (auto it = data_map->find(key); it != data_map->end())
+                store->removeDataByWriteIt(expected_table_id, it);
         }
 
     private:
         RegionPtr store;
         std::unique_lock<std::shared_mutex> lock;
+
+        bool found;
+        TableID expected_table_id;
+        RegionWriteCFData::Map * data_map;
     };
 
 public:
@@ -121,7 +137,7 @@ public:
     std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd);
 
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
-    std::unique_ptr<CommittedRemover> createCommittedRemover();
+    std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
 
     size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr);
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
@@ -176,8 +192,8 @@ private:
     ColumnFamilyType getCf(const String & cf);
 
     RegionData::ReadInfo readDataByWriteIt(
-        const RegionData::ConstWriteCFIter & write_it, std::vector<RegionWriteCFData::Key> * keys = nullptr);
-    RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
+        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys = nullptr);
+    RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
 

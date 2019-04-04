@@ -206,7 +206,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         auto region = tmt.kvstore->getRegion(region_id);
         if (!region)
             return;
-        auto remover = region->createCommittedRemover();
+        auto remover = region->createCommittedRemover(table_id);
         for (const auto & key : keys_to_remove)
             remover->remove(key);
         cache_size = region->dataSize();

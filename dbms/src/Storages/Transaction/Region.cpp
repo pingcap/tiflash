@@ -19,11 +19,15 @@ const String Region::lock_cf_name = "lock";
 const String Region::default_cf_name = "default";
 const String Region::write_cf_name = "write";
 
-RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it) { return data.removeDataByWriteIt(write_it); }
-
-RegionData::ReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, std::vector<RegionWriteCFData::Key> * keys)
+RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it)
 {
-    return data.readDataByWriteIt(write_it, keys);
+    return data.removeDataByWriteIt(table_id, write_it);
+}
+
+RegionData::ReadInfo Region::readDataByWriteIt(
+    const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys)
+{
+    return data.readDataByWriteIt(table_id, write_it, keys);
 }
 
 Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts)
@@ -379,9 +383,9 @@ std::unique_ptr<Region::CommittedScanner> Region::createCommittedScanner(TableID
     return std::make_unique<Region::CommittedScanner>(this->shared_from_this(), expected_table_id);
 }
 
-std::unique_ptr<Region::CommittedRemover> Region::createCommittedRemover()
+std::unique_ptr<Region::CommittedRemover> Region::createCommittedRemover(TableID expected_table_id)
 {
-    return std::make_unique<Region::CommittedRemover>(this->shared_from_this());
+    return std::make_unique<Region::CommittedRemover>(this->shared_from_this(), expected_table_id);
 }
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
