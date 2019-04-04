@@ -48,7 +48,7 @@ public:
         CommittedScanner(const RegionPtr & store_, TableID expected_table_id_)
             : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
         {
-            const auto & data = store->data.write_cf.getData();
+            const auto & data = store->data.writeCF().getData();
             if (auto it = data.find(expected_table_id); it != data.end())
             {
                 found = true;
@@ -86,7 +86,7 @@ public:
         CommittedRemover(const RegionPtr & store_, TableID expected_table_id_)
             : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
         {
-            auto & data = store->data.write_cf.getDataMut();
+            auto & data = store->data.writeCFMute().getDataMut();
             if (auto it = data.find(expected_table_id); it != data.end())
             {
                 found = true;
@@ -181,6 +181,8 @@ public:
     std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
 
     void reset(Region && new_region);
+
+    TableIDSet getCommittedRecordTableID();
 
 private:
     // Private methods no need to lock mutex, normally

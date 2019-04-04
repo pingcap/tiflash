@@ -203,8 +203,6 @@ public:
         UInt64 start_ts,
         RegionWriteCFDataTrait::Keys * keys = nullptr);
 
-    static TableIDSet getRegionTableIds(const RegionPtr & region);
-
     // For debug
     void dumpRegionMap(RegionTable::RegionMap & res);
     void dropRegionsInTable(TableID table_id);

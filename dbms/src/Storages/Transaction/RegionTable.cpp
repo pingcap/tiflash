@@ -15,31 +15,6 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-// =============================================================
-// Static methods.
-// =============================================================
-
-TableIDSet RegionTable::getRegionTableIds(const RegionPtr & region)
-{
-    TableIDSet table_ids;
-    {
-        auto scanner = region->createCommittedScanner(InvalidTableID);
-        while (true)
-        {
-            TableID table_id = scanner->hasNext();
-            if (table_id == InvalidTableID)
-                break;
-            table_ids.emplace(table_id);
-            scanner->next();
-        }
-    }
-    return table_ids;
-}
-
-// =============================================================
-// Private member functions.
-// =============================================================
-
 RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
 {
     auto it = tables.find(table_id);
@@ -219,10 +194,6 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
     }
 }
 
-// =============================================================
-// Public member functions.
-// =============================================================
-
 static const Int64 FTH_BYTES_1 = 1024;             // 1 KB
 static const Int64 FTH_BYTES_2 = 1024 * 1024;      // 1 MB
 static const Int64 FTH_BYTES_3 = 1024 * 1024 * 10; // 10 MBs
@@ -307,7 +278,7 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
 
 void RegionTable::applySnapshotRegion(const RegionPtr & region)
 {
-    auto table_ids = getRegionTableIds(region);
+    auto table_ids = region->getCommittedRecordTableID();
     return applySnapshotRegion(region, table_ids);
 }
 
@@ -320,7 +291,7 @@ void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
     {
         std::ignore = id;
         size_t cache_bytes = region->dataSize();
-        auto table_ids = getRegionTableIds(region);
+        auto table_ids = region->getCommittedRecordTableID();
         for (auto table_id : table_ids)
         {
             auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);

@@ -288,6 +288,18 @@ struct RegionCFDataBase
         return data;
     }
 
+    TableIDSet getAllRecordTableID() const
+    {
+        TableIDSet tables;
+        for (const auto & [table_id, map] : data)
+        {
+            if (map.empty())
+                continue;
+            tables.insert(table_id);
+        }
+        return tables;
+    }
+
 private:
     std::unordered_map<TableID, Map> data;
 };
@@ -515,11 +527,26 @@ public:
             && r1.lock_cf == r2.lock_cf && r1.cf_data_size == r2.cf_data_size;
     }
 
+    RegionWriteCFData & writeCFMute()
+    {
+        return write_cf;
+    }
+
+    const RegionWriteCFData & writeCF() const
+    {
+        return write_cf;
+    }
+
+    TableIDSet getCommittedRecordTableID() const
+    {
+        return writeCF().getAllRecordTableID();
+    }
+
     RegionData() {}
 
     RegionData(RegionData && data):write_cf(std::move(data.write_cf)),default_cf(std::move(data.default_cf)),lock_cf(std::move(data.lock_cf)) {}
 
-public:
+private:
     RegionWriteCFData write_cf;
     RegionDefaultCFData default_cf;
     RegionLockCFData lock_cf;

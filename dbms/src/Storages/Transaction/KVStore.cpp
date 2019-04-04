@@ -55,7 +55,7 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
 {
     TMTContext * tmt_ctx = context ? &(context->getTMTContext()) : nullptr;
 
-    auto table_ids = RegionTable::getRegionTableIds(new_region);
+    auto table_ids = new_region->getCommittedRecordTableID();
 
     {
         std::lock_guard<std::mutex> lock(task_mutex);

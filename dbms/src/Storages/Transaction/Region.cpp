@@ -450,4 +450,6 @@ void Region::reset(Region && new_region)
 
 bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
 
+TableIDSet Region::getCommittedRecordTableID() { return data.getCommittedRecordTableID(); }
+
 } // namespace DB
