@@ -43,6 +43,7 @@ grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, 
     {
         kvstore->report(rctx);
 
+        // REVIEW: persisting interval is?
         persist_handle = background_pool.addTask([&, this] { return kvstore->tryPersistAndReport(rctx); });
         flush_handle = background_pool.addTask([&] { return region_table.tryFlushRegions(); });
 

@@ -541,6 +541,7 @@ void Region::setPendingRemove()
 
 size_t Region::dataSize() const { return cf_data_size; }
 
+// REVIEW: reset persist_parm here?
 void Region::markPersisted() { last_persist_time = Clock::now(); }
 
 Timepoint Region::lastPersistTime() const { return last_persist_time; }

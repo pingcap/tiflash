@@ -165,6 +165,8 @@ public:
 
     void markPersisted();
     Timepoint lastPersistTime() const;
+
+    // REVIEW: use a dirty flag instead?
     size_t persistParm() const;
     void decPersistParm(size_t x);
     void incPersistParm();
