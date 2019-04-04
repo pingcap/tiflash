@@ -134,6 +134,7 @@ BlockInputStreams StorageMergeTree::read(
     auto res = reader.read(column_names, query_info, context, processed_stage, max_block_size, num_streams, 0);
     const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get());
 
+    // REVIEW: move engine specified processing to SelectExecutor may be better
     if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable ||
         data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
@@ -180,6 +181,10 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
     const ASTInsertQuery * insert_query = typeid_cast<const ASTInsertQuery *>(&*query);
     const ASTDeleteQuery * delete_query = typeid_cast<const ASTDeleteQuery *>(&*query);
 
+    // REVIEW: move engine specified processing to lower layer may be better:
+    //   switch (engine type) -> MergeTreeBlockOutputStream
+    //                        -> TxnMergeTreeBlockOutputStream
+    //                        -> MutableMergeTreeBlockOutputStream
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         res = std::make_shared<TxnMergeTreeBlockOutputStream>(*this);
