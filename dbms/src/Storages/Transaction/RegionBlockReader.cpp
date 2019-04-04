@@ -36,7 +36,7 @@ static const Field MockDecodeRow(TiDB::CodecFlag flag)
 }
 
 Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_,
-    ScannerPtr & scanner, std::vector<RegionWriteCFData::Key> * keys)
+    ScannerPtr & scanner, RegionWriteCFDataTrait::Keys * keys)
 {
     // Note: this code below is mostly ported from RegionBlockInputStream.
     Names ordered_columns = ordered_columns_;
@@ -73,13 +73,8 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     const auto & date_lut = DateLUT::instance();
 
     // TODO: lock region, to avoid region adding/droping while writing data
-
-    TableID my_table_id = table_info.id;
-    TableID next_table_id = InvalidTableID;
-
-    // Here we use do{}while() instead of while(){},
     // Because the first check of scanner.hasNext() already been done outside of this function.
-    while (true)
+    do
     {
         // TODO: comfirm all this mess
         auto [handle, write_type, commit_ts, value] = scanner->next(keys);
@@ -161,12 +156,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
             }
             column_map[handle_id].first->insert(Field(handle));
         }
-
-        next_table_id = scanner->hasNext();
-
-        if (next_table_id == InvalidTableID || next_table_id != my_table_id)
-            break;
-    }
+    } while (scanner->hasNext());
 
     Block block;
     for (const auto & name : ordered_columns)

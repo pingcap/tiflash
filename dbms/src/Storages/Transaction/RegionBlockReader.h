@@ -25,6 +25,6 @@ extern const int LOGICAL_ERROR;
 using ScannerPtr = std::unique_ptr<Region::CommittedScanner>;
 
 Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_,
-    ScannerPtr & curr_scanner, std::vector<RegionWriteCFData::Key> * keys = nullptr);
+    ScannerPtr & curr_scanner, RegionWriteCFDataTrait::Keys * keys = nullptr);
 
 } // namespace DB

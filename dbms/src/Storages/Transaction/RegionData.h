@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <map>
+#include <list>
 
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/RegionMeta.h>
@@ -24,7 +25,7 @@ struct RegionWriteCFDataTrait
     using Key = std::tuple<HandleID, Timestamp>;
     using Value = std::tuple<TiKVKey, TiKVValue, DecodedWriteCFValue>;
     using Map = std::map<Key, Value>;
-    using Keys = std::vector<Key>;
+    using Keys = std::list<Key>;
 
     static std::pair<Key, Value> genKVPair(const TiKVKey & key, const String & raw_key, const TiKVValue & value)
     {
@@ -165,11 +166,15 @@ struct RegionCFDataBase
 
     bool operator == (const RegionCFDataBase & cf) const
     {
-        const auto & cf_data = cf.data;
-        if (data.size() != cf_data.size())
+        if (getSize() != cf.getSize())
             return false;
+
+        const auto & cf_data = cf.data;
         for (const auto & [table_id, map] : data)
         {
+            if (map.empty())
+                continue;
+
             if (auto it = cf_data.find(table_id); it != cf_data.end())
             {
                 if (!cmp(map, it->second))
@@ -179,6 +184,14 @@ struct RegionCFDataBase
                 return false;
         }
         return true;
+    }
+
+    size_t getSize() const
+    {
+        size_t size = 0;
+        for (auto data_it = data.begin(); data_it != data.end(); ++data_it)
+            size += data_it->second.size();
+        return size;
     }
 
     RegionCFDataBase(){}
@@ -231,9 +244,7 @@ struct RegionCFDataBase
     {
         size_t total_size = 0;
 
-        size_t size = 0;
-        for (auto data_it = data.begin(); data_it != data.end(); ++data_it)
-            size += data_it->second.size();
+        size_t size = getSize();
 
         total_size += writeBinary2(size, buf);
 
