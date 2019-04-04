@@ -1,0 +1,34 @@
+=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test)
+
+=> DBGInvoke __set_flush_threshold(100000, 20000000)
+=> DBGInvoke mock_schema_syncer('true')
+┌─mock_schema_syncer("true")─┐
+│ mock schema syncer enabled │
+└────────────────────────────┘
+
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int32', col_2)
+=> DBGInvoke __put_region(4, 0, 100, default, test)
+
+=> DBGInvoke __raft_insert_row(default, test, 4, 50, 'test1', 50)
+=> DBGInvoke __raft_insert_row(default, test, 4, 51, 'test2', 51)
+=> DBGInvoke __raft_insert_row(default, test, 4, 52, 'test3', 52)
+=> DBGInvoke __raft_insert_row(default, test, 4, 53, 'test3', 53)
+
+=> DBGInvoke raft_insert_rows(default, test, 4, 30, 10, 1, 1)
+┌─raft_insert_rows(default, test, 4, 30, 10, 1, 1)──┐
+│ wrote 1200 row to default.test with raft commands │
+└───────────────────────────────────────────────────┘
+
+=> select count(*) from default.test
+┌─count()─┐
+│    1204 │
+└─────────┘
+
+=> selraw count(*) from default.test
+┌─count()─┐
+│    1204 │
+└─────────┘
+
+=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test)

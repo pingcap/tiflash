@@ -67,7 +67,7 @@ void MockTiDB::dropTable(const String & database_name, const String & table_name
     tables_by_name.erase(it_by_name);
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, const String & primary_key)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -95,6 +95,10 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         column_info.id = (i++);
         column_info.name = column.name;
         const IDataType *nested_type = column.type.get();
+        if (column.name == primary_key)
+        {
+            column_info.setPriKeyFlag();
+        }
         if (!column.type->isNullable())
         {
             column_info.setNotNullFlag();
@@ -127,7 +131,8 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         table_info.columns.emplace_back(column_info);
     }
 
-    table_info.pk_is_handle = false;
+    table_info.pk_is_handle = !(primary_key.empty());
+
     table_info.comment = "Mocked.";
 
     auto table = std::make_shared<Table>(database_name, table_name, std::move(table_info));
