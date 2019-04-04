@@ -235,7 +235,7 @@ String PartitionInfo::serialize() const
 
 void PartitionInfo::deserialize(const JSON & json) try
 {
-    type = static_cast<PartitionType>(json["id"].getInt());
+    type = static_cast<PartitionType>(json["type"].getInt());
     expr = json["expr"].getString();
     enable = json["enable"].getBool();
 
