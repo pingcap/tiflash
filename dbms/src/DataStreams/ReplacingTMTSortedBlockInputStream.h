@@ -3,7 +3,7 @@
 #include <common/logger_useful.h>
 
 #include <DataStreams/MergingSortedBlockInputStream.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -11,8 +11,7 @@ namespace DB
 class ReplacingTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
-    ReplacingTMTSortedBlockInputStream(
-        const std::vector<std::pair<HandleID, HandleID>> & ranges_,
+    ReplacingTMTSortedBlockInputStream(const std::vector<std::pair<HandleID, HandleID>> & ranges_,
         const BlockInputStreams & inputs_,
         const SortDescription & description_,
         const String & version_column,
@@ -73,4 +72,4 @@ private:
     UInt64 gc_tso;
 };
 
-}
+} // namespace DB

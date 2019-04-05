@@ -83,25 +83,19 @@ public:
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_, TableID expected_table_id_)
-            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
+        CommittedRemover(const RegionPtr & store_, TableID expected_table_id_) : store(store_), lock(store_->mutex)
         {
             auto & data = store->data.writeCFMute().getDataMut();
-            if (auto it = data.find(expected_table_id); it != data.end())
-            {
-                found = true;
-                data_map = &(it->second);
-            }
-            else
-                found = false;
+            write_cf_data_it = data.find(expected_table_id_);
+            found = write_cf_data_it != data.end();
         }
 
         void remove(const RegionWriteCFData::Key & key)
         {
             if (!found)
                 return;
-            if (auto it = data_map->find(key); it != data_map->end())
-                store->removeDataByWriteIt(expected_table_id, it);
+            if (auto it = write_cf_data_it->second.find(key); it != write_cf_data_it->second.end())
+                store->removeDataByWriteIt(write_cf_data_it->first, it);
         }
 
     private:
@@ -109,8 +103,7 @@ public:
         std::unique_lock<std::shared_mutex> lock;
 
         bool found;
-        TableID expected_table_id;
-        RegionWriteCFData::Map * data_map;
+        RegionWriteCFData::Data::iterator write_cf_data_it;
     };
 
 public:

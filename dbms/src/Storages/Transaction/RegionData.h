@@ -86,6 +86,7 @@ struct RegionCFDataBase
     using Key = typename Trait::Key;
     using Value = typename Trait::Value;
     using Map = typename Trait::Map;
+    using Data = std::unordered_map<TableID, Map>;
 
     static const TiKVKey & getTiKVKey(const Value & val)
     {
@@ -301,7 +302,7 @@ struct RegionCFDataBase
     }
 
 private:
-    std::unordered_map<TableID, Map> data;
+    Data data;
 };
 
 using RegionWriteCFData = RegionCFDataBase<RegionWriteCFDataTrait>;
