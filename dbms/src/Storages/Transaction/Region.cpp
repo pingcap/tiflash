@@ -25,12 +25,12 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, co
 }
 
 RegionData::ReadInfo Region::readDataByWriteIt(
-    const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys)
+    const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys) const
 {
     return data.readDataByWriteIt(table_id, write_it, keys);
 }
 
-Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts)
+Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const
 {
     return data.getLockInfo(expected_table_id, start_ts);
 }
@@ -295,7 +295,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     return {split_regions, table_ids, sync_log};
 }
 
-size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response)
+size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response) const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
@@ -450,6 +450,6 @@ void Region::reset(Region && new_region)
 
 bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
 
-TableIDSet Region::getCommittedRecordTableID() { return data.getCommittedRecordTableID(); }
+TableIDSet Region::getCommittedRecordTableID() const { return data.getCommittedRecordTableID(); }
 
 } // namespace DB

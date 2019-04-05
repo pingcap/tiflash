@@ -19,7 +19,7 @@ size_t RegionMeta::serializeSize() const
     return peer_size + region_size + apply_state_size + sizeof(UInt64) + sizeof(bool);
 }
 
-size_t RegionMeta::serialize(WriteBuffer & buf)
+size_t RegionMeta::serialize(WriteBuffer & buf) const
 {
     std::lock_guard<std::mutex> lock(mutex);
 

@@ -139,7 +139,7 @@ public:
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
     std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
 
-    size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr);
+    size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
@@ -182,7 +182,7 @@ public:
 
     void reset(Region && new_region);
 
-    TableIDSet getCommittedRecordTableID();
+    TableIDSet getCommittedRecordTableID() const;
 
 private:
     // Private methods no need to lock mutex, normally
@@ -191,13 +191,13 @@ private:
     TableID doRemove(const String & cf, const TiKVKey & key);
 
     bool checkIndex(UInt64 index);
-    ColumnFamilyType getCf(const String & cf);
+    static ColumnFamilyType getCf(const String & cf);
 
     RegionData::ReadInfo readDataByWriteIt(
-        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys = nullptr);
+        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys = nullptr) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
-    LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
+    LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
 
     RegionPtr splitInto(const RegionMeta & meta);
     Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);

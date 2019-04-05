@@ -63,7 +63,7 @@ public:
     enginepb::CommandResponse toCommandResponse() const;
 
     size_t serializeSize() const;
-    size_t serialize(WriteBuffer & buf);
+    size_t serialize(WriteBuffer & buf) const;
 
     static RegionMeta deserialize(ReadBuffer & buf);
 
