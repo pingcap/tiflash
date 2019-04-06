@@ -276,19 +276,27 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         TMTContext & tmt = context.getTMTContext();
 
-        if (!select.no_kvstore && regions_query_info.empty())
+        if (select.no_kvstore)
+            regions_query_info.clear();
+        else
         {
-            tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
-                for (const auto & [id, region]: regions)
-                {
-                    kvstore_region.emplace(id, region);
-                    if (region == nullptr)
-                        // maybe region is removed.
-                        regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
-                    else
-                        regions_query_info.push_back({id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info.id)});
-                }
-            });
+            for (const auto & query_info : regions_query_info)
+                kvstore_region.emplace(query_info.region_id, tmt.kvstore->getRegion(query_info.region_id));
+
+            if (regions_query_info.empty())
+            {
+                tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+                    for (const auto & [id, region]: regions)
+                    {
+                        kvstore_region.emplace(id, region);
+                        if (region == nullptr)
+                            // maybe region is removed.
+                            regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
+                        else
+                            regions_query_info.push_back({id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info.id)});
+                    }
+                });
+            }
         }
 
         std::sort(regions_query_info.begin(), regions_query_info.end());
