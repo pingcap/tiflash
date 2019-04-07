@@ -450,6 +450,10 @@ void Region::reset(Region && new_region)
 
 bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
 
-TableIDSet Region::getCommittedRecordTableID() const { return data.getCommittedRecordTableID(); }
+TableIDSet Region::getCommittedRecordTableID() const
+{
+    std::shared_lock<std::shared_mutex> lock(mutex);
+    return data.getCommittedRecordTableID();
+}
 
 } // namespace DB
