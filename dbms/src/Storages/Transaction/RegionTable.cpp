@@ -278,8 +278,9 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
 
 void RegionTable::applySnapshotRegion(const RegionPtr & region)
 {
+    // make operation about snapshot can only add mapping relations rather than delete.
     auto table_ids = region->getCommittedRecordTableID();
-    return applySnapshotRegion(region, table_ids);
+    updateRegion(region, table_ids);
 }
 
 void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
@@ -301,26 +302,6 @@ void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
         }
         updateRegionRange(region, table_to_persist);
     }
-    for (auto table_id : table_to_persist)
-        tables.find(table_id)->second.persist();
-}
-
-void RegionTable::applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids)
-{
-    TableIDSet table_to_persist;
-    size_t cache_bytes = region->dataSize();
-
-    std::lock_guard<std::mutex> lock(mutex);
-
-    for (auto table_id : table_ids)
-    {
-        auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);
-        internal_region.updated = true;
-        internal_region.cache_bytes = cache_bytes;
-    }
-
-    updateRegionRange(region, table_to_persist);
-
     for (auto table_id : table_to_persist)
         tables.find(table_id)->second.persist();
 }

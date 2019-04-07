@@ -165,7 +165,6 @@ public:
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const RegionPtr & region);
     void applySnapshotRegions(const ::DB::RegionMap & regions);
-    void applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids);
 
     /// Manage data after region split into split_regions.
     /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.

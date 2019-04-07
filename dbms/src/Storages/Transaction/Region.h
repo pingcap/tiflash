@@ -64,7 +64,7 @@ public:
         auto next(RegionWriteCFDataTrait::Keys * keys = nullptr)
         {
             if (!found)
-                throw Exception(String() + "table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("CommittedScanner table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
             return store->readDataByWriteIt(expected_table_id, write_map_it++, keys);
         }
 

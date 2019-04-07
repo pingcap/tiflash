@@ -72,11 +72,10 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     const auto & date_lut = DateLUT::instance();
 
-    // TODO: lock region, to avoid region adding/droping while writing data
     // Because the first check of scanner.hasNext() already been done outside of this function.
     do
     {
-        // TODO: comfirm all this mess
+        // TODO: confirm all this mess
         auto [handle, write_type, commit_ts, value] = scanner->next(keys);
         if (write_type == Region::PutFlag || write_type == Region::DelFlag)
         {
