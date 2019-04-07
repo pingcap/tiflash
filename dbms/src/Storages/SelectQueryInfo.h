@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <unordered_map>
-#include <kvproto/flash.pb.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
