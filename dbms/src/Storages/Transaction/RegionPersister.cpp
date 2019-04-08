@@ -60,6 +60,8 @@ void RegionPersister::restore(RegionMap & regions, Region::RegionClientCreateFun
         regions.emplace(page.page_id, region);
     };
     page_storage.traverse(acceptor);
+
+    LOG_INFO(log, "restore " << regions.size() << " regions");
 }
 
 bool RegionPersister::gc() { return page_storage.gc(); }

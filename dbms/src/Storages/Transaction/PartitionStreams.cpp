@@ -17,10 +17,19 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & ordered_columns,
-    std::vector<TiKVKey> * keys)
+    RegionWriteCFDataTrait::Keys * keys)
 {
-    return getBlockInputStreamByRegion(
-        table_id, tmt.kvstore->getRegion(region_id), InvalidRegionVersion, InvalidRegionVersion, table_info, columns, ordered_columns, false, false, 0, keys);
+    return getBlockInputStreamByRegion(table_id,
+        tmt.kvstore->getRegion(region_id),
+        InvalidRegionVersion,
+        InvalidRegionVersion,
+        table_info,
+        columns,
+        ordered_columns,
+        false,
+        false,
+        0,
+        keys);
 }
 
 std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TableID table_id,
@@ -33,7 +42,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     bool learner_read,
     bool resolve_locks,
     UInt64 start_ts,
-    std::vector<TiKVKey> * keys)
+    RegionWriteCFDataTrait::Keys * keys)
 {
     if (!region)
         return {nullptr, NOT_FOUND, 0};
@@ -57,7 +66,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         {
             Region::LockInfoPtr lock_info = nullptr;
             if (resolve_locks)
-                lock_info = scanner->getLockInfo(table_id, start_ts);
+                lock_info = scanner->getLockInfo(start_ts);
             if (lock_info)
             {
                 Region::LockInfos lock_infos;
@@ -66,11 +75,10 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
             }
         }
 
-        auto next_table_id = scanner->hasNext();
-        if (next_table_id == InvalidTableID)
+        if (!scanner->hasNext())
             return {nullptr, OK, 0};
 
-        const auto [table_info, columns, ordered_columns] = schema_fetcher(next_table_id);
+        const auto [table_info, columns, ordered_columns] = schema_fetcher(table_id);
         auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, scanner, keys);
 
         size_t tol = block.rows();
