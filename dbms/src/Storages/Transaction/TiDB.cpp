@@ -69,9 +69,11 @@ std::function<void(WriteBuffer &)> Nullable(const T & value, bool is_null)
 template<typename T>
 struct Field
 {
-    Field(std::string name_, T value_) : name(std::move(name_)), value(std::move(value_)) {}
+    Field(std::string name_, T value_, bool skip_ = false)
+        : name(std::move(name_)), value(std::move(value_)), skip(skip_) {}
     std::string name;
     T value;
+    bool skip;
 };
 
 template<typename T>
@@ -85,14 +87,18 @@ void serField(WriteBuffer & buf, const Field<T> & field)
 template<typename T>
 void serFields(WriteBuffer & buf, const T & last)
 {
-    serField(buf, last);
+    if (!last.skip)
+        serField(buf, last);
 }
 
 template<typename T, typename... Rest>
 void serFields(WriteBuffer & buf, const T & first, const Rest & ... rest)
 {
-    serField(buf, first);
-    writeString(",", buf);
+    if (!first.skip)
+    {
+        serField(buf, first);
+        writeString(",", buf);
+    }
     serFields(buf, rest...);
 }
 
@@ -289,6 +295,7 @@ String TableInfo::serialize(bool escaped) const
                     JsonSer::Field("state", state),
                     JsonSer::Field("pk_is_handle", pk_is_handle),
                     JsonSer::Field("comment", comment),
+                    JsonSer::Field("belonging_table_id", belonging_table_id, !is_partition_table),
                     JsonSer::Field("partition",
                         // lazy serializing partition as it could be null.
                         JsonSer::Nullable(std::function<void(WriteBuffer &)>([this](WriteBuffer & buf) {
@@ -349,6 +356,8 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
     is_partition_table = !table_json["partition"].isNull();
     if (is_partition_table)
     {
+        if (table_json.has("belonging_table_id"))
+            belonging_table_id = table_json["belonging_table_id"].getInt();
         partition.deserialize(table_json["partition"]);
     }
 

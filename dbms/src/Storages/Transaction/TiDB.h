@@ -229,6 +229,10 @@ struct TableInfo
 
     DatabaseID db_id = -1;
     String db_name;
+    // The meaning of this ID changed after we support TiDB partition ID.
+    // It is the physical table ID, i.e. table ID for non-partition table,
+    // and partition ID for partition table
+    // whereas field `belonging_table_id` actual means the table ID this partition belongs to.
     TableID id = -1;
     String name;
     // Columns are listed in the order in which they appear in the schema.
@@ -236,7 +240,8 @@ struct TableInfo
     UInt8 state = 0;
     bool pk_is_handle = false;
     String comment;
-    bool is_partition_table;
+    bool is_partition_table = false;
+    TableID belonging_table_id = -1;
     PartitionInfo partition;
     Int64 schema_version = -1;
 
@@ -256,6 +261,27 @@ struct TableInfo
             return -1;
         }
         throw Exception("unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
+    }
+
+    void manglePartitionTableIfNeeded(TableID table_or_partition_id)
+    {
+        if (id == table_or_partition_id)
+            // Non-partition table.
+            return;
+
+        // Some sanity checks for partition table.
+        if (unlikely(!(is_partition_table && partition.enable)))
+            throw Exception("Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id) + " but it's not a partition table", DB::ErrorCodes::LOGICAL_ERROR);
+
+        if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) { return d.id == table_or_partition_id; }) == partition.definitions.end()))
+            throw Exception("Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id), DB::ErrorCodes::LOGICAL_ERROR);
+
+        // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
+        belonging_table_id = id;
+        id = table_or_partition_id;
+
+        // Mangle the table name by appending partition name.
+        name += "_" + std::to_string(table_or_partition_id);
     }
 };
 
