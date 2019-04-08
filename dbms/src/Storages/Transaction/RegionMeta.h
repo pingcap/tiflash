@@ -54,7 +54,6 @@ public:
 
     const raft_serverpb::RaftApplyState & getApplyState() const;
 
-    void setRegion(const metapb::Region & region);
     void setApplied(UInt64 index, UInt64 term);
     void notifyAll();
 

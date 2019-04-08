@@ -42,7 +42,7 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     return RegionMeta(peer, region, apply_state, applied_term, pending_remove);
 }
 
-RegionID RegionMeta::regionId() const { return region.id(); }
+RegionID RegionMeta::regionId() const { return region_id; }
 
 UInt64 RegionMeta::peerId() const
 {
@@ -81,13 +81,13 @@ const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
     return apply_state;
 }
 
-void RegionMeta::setRegion(const metapb::Region & region)
+void RegionMeta::doSetRegion(const metapb::Region & region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    doSetRegion(region);
-}
+    if (regionId() != region.id())
+        throw Exception("RegionMeta::doSetRegion region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-void RegionMeta::doSetRegion(const metapb::Region & region) { this->region = region; }
+    this->region = region;
+}
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
 {
@@ -127,6 +127,8 @@ enginepb::CommandResponse RegionMeta::toCommandResponse() const
 
 RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
+    std::lock_guard<std::mutex> lock(rhs.mutex);
+
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
     apply_state = std::move(rhs.apply_state);
@@ -194,6 +196,9 @@ UInt64 RegionMeta::confVer() const
 void RegionMeta::reset(RegionMeta && rhs)
 {
     std::lock_guard<std::mutex> lock(mutex);
+
+    if (regionId() != rhs.regionId())
+        throw Exception("RegionMeta::reset region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
