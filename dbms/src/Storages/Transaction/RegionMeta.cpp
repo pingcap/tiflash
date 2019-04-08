@@ -81,12 +81,6 @@ const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
     return apply_state;
 }
 
-void RegionMeta::setRegion(const metapb::Region & region)
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    doSetRegion(region);
-}
-
 void RegionMeta::doSetRegion(const metapb::Region & region) { this->region = region; }
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
