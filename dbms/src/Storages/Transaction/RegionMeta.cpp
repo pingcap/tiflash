@@ -81,7 +81,13 @@ const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
     return apply_state;
 }
 
-void RegionMeta::doSetRegion(const metapb::Region & region) { this->region = region; }
+void RegionMeta::doSetRegion(const metapb::Region & region)
+{
+    if (regionId() != region.id())
+        throw Exception("RegionMeta::doSetRegion region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
+
+    this->region = region;
+}
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
 {
@@ -121,6 +127,8 @@ enginepb::CommandResponse RegionMeta::toCommandResponse() const
 
 RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
+    std::lock_guard<std::mutex> lock(rhs.mutex);
+
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
     apply_state = std::move(rhs.apply_state);
@@ -188,6 +196,9 @@ UInt64 RegionMeta::confVer() const
 void RegionMeta::reset(RegionMeta && rhs)
 {
     std::lock_guard<std::mutex> lock(mutex);
+
+    if (regionId() != rhs.regionId())
+        throw Exception("RegionMeta::reset region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
