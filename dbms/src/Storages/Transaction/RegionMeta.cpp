@@ -42,6 +42,8 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     return RegionMeta(peer, region, apply_state, applied_term, pending_remove);
 }
 
+// REVIEW: lock? be carefull, can be easily deadlock.
+//  or use member `const RegionID region_id`
 RegionID RegionMeta::regionId() const { return region.id(); }
 
 UInt64 RegionMeta::peerId() const
@@ -101,6 +103,7 @@ void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
     applied_term = term;
 }
 
+// REVIEW: should move this notification to doSetApplied?
 void RegionMeta::notifyAll() { cv.notify_all(); }
 
 UInt64 RegionMeta::appliedIndex() const
@@ -127,9 +130,11 @@ enginepb::CommandResponse RegionMeta::toCommandResponse() const
 
 RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
+    // REVIEW: lock rhs
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
     apply_state = std::move(rhs.apply_state);
+    // REVIEW: set rhs.* to init state
     applied_term = rhs.applied_term;
     pending_remove = rhs.pending_remove;
 }
@@ -176,6 +181,7 @@ void RegionMeta::doSetPendingRemove() { pending_remove = true; }
 void RegionMeta::waitIndex(UInt64 index)
 {
     std::unique_lock<std::mutex> lock(mutex);
+    // REVIEW: should we lock inside the closure function?
     cv.wait(lock, [this, index] { return pending_remove || apply_state.applied_index() >= index; });
 }
 
@@ -193,6 +199,7 @@ UInt64 RegionMeta::confVer() const
 
 void RegionMeta::reset(RegionMeta && rhs)
 {
+    // REVIEW: lock rhs
     std::lock_guard<std::mutex> lock(mutex);
 
     peer = std::move(rhs.peer);
@@ -225,6 +232,7 @@ void RegionMeta::execChangePeer(
 
     switch (change_peer_request.change_type())
     {
+        // REVIEW: throws when meet `AddNode`?
         case eraftpb::ConfChangeType::AddNode:
         case eraftpb::ConfChangeType::AddLearnerNode:
         {

@@ -70,6 +70,7 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
 
+    // REVIEW: assign is a better name
     void reset(RegionMeta && other);
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
@@ -94,6 +95,7 @@ private:
     void doSetApplied(UInt64 index, UInt64 term);
 
 private:
+    // REVIEW: we should make sure all these member are deepcopy, (eg: region.peers())
     metapb::Peer peer;
     metapb::Region region;
     raft_serverpb::RaftApplyState apply_state;
@@ -110,7 +112,9 @@ private:
 
 // When we create a region peer, we should initialize its log term/index > 0,
 // so that we can force the follower peer to sync the snapshot first.
+// REVIEW: why initialize term = 5?
 static constexpr UInt64 RAFT_INIT_LOG_TERM = 5;
+// REVIEW: raft log initialize position should be 0, after received snapshot, the position should move to 5
 static constexpr UInt64 RAFT_INIT_LOG_INDEX = 5;
 
 inline raft_serverpb::RaftApplyState initialApplyState()
