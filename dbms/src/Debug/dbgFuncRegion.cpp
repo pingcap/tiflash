@@ -3,16 +3,15 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 
+#include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
-#include <Storages/MutableSupport.h>
 
-// TODO: Remove this
 #include <Storages/Transaction/tests/region_helper.h>
 
-#include <Debug/dbgTools.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncRegion.h>
+#include <Debug/dbgTools.h>
 
 #include <Interpreters/executeQuery.h>
 
@@ -21,9 +20,9 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
-    extern const int UNKNOWN_TABLE;
-}
+extern const int BAD_ARGUMENTS;
+extern const int UNKNOWN_TABLE;
+} // namespace ErrorCodes
 
 TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name)
 {
@@ -49,8 +48,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 {
     if (args.size() != 5)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name",
-            ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -66,8 +64,8 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     tmt.kvstore->onSnapshot(region, &context);
 
     std::stringstream ss;
-    ss << "put region #" << region_id << ", range[" << start << ", " << end << ")" <<
-        " to table #" << table_id << " with kvstore.onSnapshot";
+    ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
+       << " to table #" << table_id << " with kvstore.onSnapshot";
     output(ss.str());
 }
 
@@ -75,8 +73,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 {
     if (args.size() < 5)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name",
-            ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -106,8 +103,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 
     // TODO: Put data into snapshot cmd
 
-    auto reader = [&] (enginepb::SnapshotRequest * out)
-    {
+    auto reader = [&](enginepb::SnapshotRequest * out) {
         if (is_readed)
             return false;
         *out = req;
@@ -117,8 +113,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     applySnapshot(tmt.kvstore, reader, &context);
 
     std::stringstream ss;
-    ss << "put region #" << region_id << ", range[" << start << ", " << end << ")" <<
-        " to table #" << table_id << " with raft commands";
+    ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
+       << " to table #" << table_id << " with raft commands";
     output(ss.str());
 }
 
@@ -128,7 +124,7 @@ std::string getRegionKeyString(const HandleID s, const TiKVKey & k)
     {
         if (s == std::numeric_limits<HandleID>::min() || s == std::numeric_limits<HandleID>::max())
         {
-            String raw_key = k.empty() ? "" : std::get<0>(RecordKVFormat::decodeTiKVKey(k));
+            String raw_key = k.empty() ? "" : RecordKVFormat::decodeTiKVKey(k);
             bool is_record = RecordKVFormat::isRecord(raw_key);
             std::stringstream ss;
             if (is_record)
@@ -159,7 +155,7 @@ std::string getStartKeyString(TableID table_id, const TiKVKey & start_key)
     }
     catch (...)
     {
-        return"e: " + start_key.toHex();
+        return "e: " + start_key.toHex();
     }
 }
 
@@ -172,16 +168,31 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
     }
     catch (...)
     {
-        return"e: " + end_key.toHex();
+        return "e: " + end_key.toHex();
     }
 }
 
-void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer output)
+void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    auto & tmt = context.getTMTContext();
+    TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    size_t size = 0;
+    tmt.kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+        std::ignore = region_id;
+        auto range = region->getHandleRangeByTable(table_id);
+        size += 1;
+        std::stringstream ss;
+        ss << "table #" << table_id << " " << region->toString() << " ranges: " << range.first << ", " << range.second;
+        output(ss.str());
+    });
+    output("total size: " + toString(size));
+}
+
+void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() > 1)
     {
-        throw Exception("Args not matched, should be: [show-region-range=false]",
-            ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: [show-region-range=false]", ErrorCodes::BAD_ARGUMENTS);
     }
 
     bool show_region = false;
@@ -193,7 +204,7 @@ void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer o
     RegionTable::RegionMap regions;
     tmt.region_table.dumpRegionMap(regions);
 
-    for (const auto & it: regions)
+    for (const auto & it : regions)
     {
         auto region_id = it.first;
         const auto & table_ids = it.second.tables;
@@ -254,7 +265,7 @@ void dbgFuncRegionRmData(Context & /*context*/, const ASTs & /*args*/, DBGInvoke
     */
 }
 
-size_t executeQueryAndCountRows(Context & context,const std::string & query)
+size_t executeQueryAndCountRows(Context & context, const std::string & query)
 {
     size_t count = 0;
     Context query_context = context;
@@ -272,4 +283,4 @@ size_t executeQueryAndCountRows(Context & context,const std::string & query)
     return count;
 }
 
-}
+} // namespace DB
