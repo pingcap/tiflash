@@ -139,7 +139,7 @@ public:
 
     void dropStoreOnSendReqFail(RPCContextPtr & ctx, const Exception & exc);
 
-    void onRegionStale(RPCContextPtr ctx, const errorpb::StaleEpoch & stale_epoch);
+    void onRegionStale(RPCContextPtr ctx, const errorpb::EpochNotMatch & epoch_not_match);
 
 private:
     RegionPtr getCachedRegion(Backoffer & bo, const RegionVerID & id);
