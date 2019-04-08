@@ -42,7 +42,7 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     return RegionMeta(peer, region, apply_state, applied_term, pending_remove);
 }
 
-RegionID RegionMeta::regionId() const { return region.id(); }
+RegionID RegionMeta::regionId() const { return region_id; }
 
 UInt64 RegionMeta::peerId() const
 {
