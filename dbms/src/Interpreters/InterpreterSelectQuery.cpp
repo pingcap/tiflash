@@ -46,10 +46,13 @@
 #include <Columns/Collator.h>
 #include <Common/typeid_cast.h>
 
-#include <Poco/JSON/Parser.h>
-#include <Poco/JSON/Array.h>
-#include <Poco/Dynamic/Var.h>
-#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+    #include <Poco/JSON/Parser.h>
+    #include <Poco/JSON/Array.h>
+    #include <Poco/Dynamic/Var.h>
+    #include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
 
 #include <google/protobuf/text_format.h>
 
