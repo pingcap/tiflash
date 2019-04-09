@@ -48,18 +48,23 @@ void dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::P
 void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 3)
-        throw Exception("Args not matched, should be: database-name, table-name, schema-string[, primary-key]", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: database-name, table-name, schema-string[, primary-key, pk_is_handle]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
     auto schema_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     String primary_key = "";
+    bool pk_is_handle = false;
 
     ASTPtr columns_ast;
-    if (args.size() == 4) {
+    if (args.size() >= 4) {
         primary_key = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     }
+    if (args.size() == 5) {
+        pk_is_handle = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value) == "true";
+    }
+
     ParserColumnDeclarationList schema_parser;
     Tokens tokens(schema_str.data(), schema_str.data() + schema_str.length());
     TokenIterator pos(tokens);
@@ -68,7 +73,7 @@ void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
         throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
     ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
 
-    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, primary_key);
+    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, primary_key, pk_is_handle);
 
     std::stringstream ss;
     ss << "mock table #" << table_id;

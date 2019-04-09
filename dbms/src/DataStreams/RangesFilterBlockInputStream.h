@@ -30,6 +30,9 @@ private:
     const HandleRange ranges;
     const String handle_col_name;
     Logger * log = &Logger::get("RangesFilterBlockInputStream");
+
+    template<typename T>
+    Block readProcess(Block & block, T column);
 };
 
 } // namespace DB

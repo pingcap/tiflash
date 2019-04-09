@@ -45,7 +45,7 @@ public:
 public:
     String getSchemaJson(TableID table_id);
 
-    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, const String & primary_key="");
+    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, const String & primary_key="", bool pk_is_handle=false);
 
     void dropTable(const String & database_name, const String & table_name);
 
