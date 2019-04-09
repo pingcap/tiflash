@@ -704,6 +704,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode)).read();
     }
 
+    /// @todo Make sure partition select works properly when sampling is used!
+    NameSet specific_partitions;
+    if (select.partition_expression_list)
+        specific_partitions = data.getPartitionIDsInLiteral(select.partition_expression_list, context);
+
     /// Let's find what range to read from each part.
     size_t sum_marks = 0;
     size_t sum_ranges = 0;
@@ -717,7 +722,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             ranges.ranges = MarkRanges{MarkRange{0, part->marks_count}};
 
         /// Make sure this part is in mark range and contained by valid partitions.
-        if (!ranges.ranges.empty())
+        if (!ranges.ranges.empty() && (specific_partitions.empty() || specific_partitions.count(part->partition.getID(data))))
         {
             parts_with_ranges.push_back(ranges);
 
