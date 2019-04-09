@@ -46,6 +46,14 @@
 #include <Columns/Collator.h>
 #include <Common/typeid_cast.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+    #include <Poco/JSON/Parser.h>
+    #include <Poco/JSON/Array.h>
+    #include <Poco/Dynamic/Var.h>
+    #include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <google/protobuf/text_format.h>
 
 namespace ProfileEvents
@@ -668,22 +676,29 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         String request_str = settings.regions;
 
         if (request_str.size() > 0) {
-           ::flashpb::FlashRequest req;
-           ::google::protobuf::TextFormat::ParseFromString(request_str, &req);
-           for (int i = 0; i < req.regions_size(); i++) {
-               auto region = req.regions(i);
-               RegionQueryInfo info;
-               info.region_id = region.region().id();
-               auto epoch = region.region().region_epoch();
-               info.version = epoch.version();
-               info.conf_version = epoch.conf_ver();
+            Poco::JSON::Parser parser;
+            Poco::Dynamic::Var result = parser.parse(request_str);
+            auto obj = result.extract<Poco::JSON::Object::Ptr>();
+            Poco::Dynamic::Var regions_obj = obj->get("regions");
+            auto arr = regions_obj.extract<Poco::JSON::Array::Ptr>();
+
+            for (size_t i = 0; i < arr->size() ; i++) {
+                String str =  arr->getElement<String>(i);
+                ::metapb::Region region;
+                ::google::protobuf::TextFormat::ParseFromString(str, &region);
+
+                RegionQueryInfo info;
+                info.region_id = region.id();
+                auto epoch = region.region_epoch();
+                info.version = epoch.version();
+                info.conf_version = epoch.conf_ver();
 
                 auto table_id = static_cast<StorageMergeTree*>(storage.get()) -> getTableInfo().id;
-               Int64 start_key = TiKVRange::getRangeHandle<true, true>(TiKVKey(region.region().start_key()), table_id);
-               Int64 end_key = TiKVRange::getRangeHandle<false, true>(TiKVKey(region.region().end_key()), table_id);
-               info.range_in_table = HandleRange(start_key, end_key);
-               query_info.regions_query_info.push_back(info);
-           }
+                Int64 start_key = TiKVRange::getRangeHandle<true, true>(TiKVKey(region.start_key()), table_id);
+                Int64 end_key = TiKVRange::getRangeHandle<false, true>(TiKVKey(region.end_key()), table_id);
+                info.range_in_table = HandleRange(start_key, end_key);
+                query_info.regions_query_info.push_back(info);
+            }
         }
 
         /// PREWHERE optimization

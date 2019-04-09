@@ -55,8 +55,6 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
 {
     TMTContext * tmt_ctx = context ? &(context->getTMTContext()) : nullptr;
 
-    auto table_ids = RegionTable::getRegionTableIds(new_region);
-
     {
         std::lock_guard<std::mutex> lock(task_mutex);
 
@@ -92,8 +90,9 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
     // REVIEW: we don't need to persist region on any change.
     region_persister.persist(new_region);
 
+    // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
     if (tmt_ctx)
-        tmt_ctx->region_table.applySnapshotRegion(new_region, table_ids);
+        tmt_ctx->region_table.applySnapshotRegion(new_region);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)

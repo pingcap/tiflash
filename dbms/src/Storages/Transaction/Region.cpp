@@ -19,86 +19,20 @@ const String Region::lock_cf_name = "lock";
 const String Region::default_cf_name = "default";
 const String Region::write_cf_name = "write";
 
-Region::KVMap::iterator Region::removeDataByWriteIt(const KVMap::iterator & write_it)
+RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it)
 {
-    auto & write_key = write_it->first;
-    auto & write_value = write_it->second;
-    auto [write_type, prewrite_ts, short_str] = RecordKVFormat::decodeWriteCfValue(write_value);
-
-    auto bare_key = RecordKVFormat::truncateTs(write_key);
-    auto data_key = RecordKVFormat::appendTs(bare_key, prewrite_ts);
-    auto data_it = data_cf.find(data_key);
-
-    if (write_type == PutFlag && !short_str)
-    {
-        if (unlikely(data_it == data_cf.end()))
-        {
-            throw Exception(
-                toString() + " key [" + data_key.toString() + "] not found in data cf when removing", ErrorCodes::LOGICAL_ERROR);
-        }
-
-        cf_data_size -= data_it->first.dataSize() + data_it->second.dataSize();
-        data_cf.erase(data_it);
-    }
-
-    cf_data_size -= write_it->first.dataSize() + write_it->second.dataSize();
-
-    return write_cf.erase(write_it);
+    return data.removeDataByWriteIt(table_id, write_it);
 }
 
-Region::ReadInfo Region::readDataByWriteIt(const KVMap::const_iterator & write_it, std::vector<TiKVKey> * keys)
+RegionData::ReadInfo Region::readDataByWriteIt(
+    const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys) const
 {
-    auto & write_key = write_it->first;
-    auto & write_value = write_it->second;
-
-    if (keys)
-        (*keys).push_back(write_key);
-
-    auto [write_type, prewrite_ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
-
-    String decode_key = std::get<0>(RecordKVFormat::decodeTiKVKey(write_key));
-    auto commit_ts = RecordKVFormat::getTs(write_key);
-    auto handle = RecordKVFormat::getHandle(decode_key);
-
-    if (write_type != PutFlag)
-        return std::make_tuple(handle, write_type, commit_ts, TiKVValue());
-
-    auto bare_key = RecordKVFormat::truncateTs(write_key);
-    auto data_key = RecordKVFormat::appendTs(bare_key, prewrite_ts);
-
-    if (short_value)
-        return std::make_tuple(handle, write_type, commit_ts, TiKVValue(std::move(*short_value)));
-
-    auto data_it = data_cf.find(data_key);
-    if (unlikely(data_it == data_cf.end()))
-    {
-        throw Exception(toString() + " key [" + data_key.toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    return std::make_tuple(handle, write_type, commit_ts, data_it->second);
+    return data.readDataByWriteIt(table_id, write_it, keys);
 }
 
-Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts)
+Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const
 {
-    for (auto && [key, value] : lock_cf)
-    {
-        auto decode_key = std::get<0>(RecordKVFormat::decodeTiKVKey(key));
-        auto table_id = RecordKVFormat::getTableId(decode_key);
-        if (expected_table_id != table_id)
-        {
-            continue;
-        }
-        auto [lock_type, primary, ts, ttl, data] = RecordKVFormat::decodeLockCfValue(value);
-        std::ignore = data;
-        if (lock_type == DelFlag || ts > start_ts)
-        {
-            continue;
-        }
-        std::cout << "got primary lock: " << primary << std::endl;
-        return std::make_unique<LockInfo>(LockInfo{primary, ts, decode_key, ttl});
-    }
-
-    return nullptr;
+    return data.getLockInfo(expected_table_id, start_ts);
 }
 
 TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
@@ -122,10 +56,10 @@ void Region::batchInsert(std::function<bool(BatchInsertNode &)> && f)
     }
 }
 
-TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::doInsert(const String & cf, const TiKVKey & key, const TiKVValue & value)
 {
     // Ignoring all keys other than records.
-    String raw_key = std::get<0>(RecordKVFormat::decodeTiKVKey(key));
+    String raw_key = RecordKVFormat::decodeTiKVKey(key);
     if (!RecordKVFormat::isRecord(raw_key))
         return InvalidTableID;
 
@@ -133,27 +67,20 @@ TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKV
     if (isTiDBSystemTable(table_id))
         return InvalidTableID;
 
-    auto & map = getCf(cf);
-    auto p = map.try_emplace(key, value);
-    if (!p.second)
-        throw Exception(toString() + " found existing key [" + key.toString() + "]", ErrorCodes::LOGICAL_ERROR);
-
-    if (cf != lock_cf_name)
-        cf_data_size += key.dataSize() + value.dataSize();
-
-    return table_id;
+    auto type = getCf(cf);
+    return data.insert(type, key, raw_key, value);
 }
 
-TableID Region::remove(const std::string & cf, const TiKVKey & key)
+TableID Region::remove(const String & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     return doRemove(cf, key);
 }
 
-TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
+TableID Region::doRemove(const String & cf, const TiKVKey & key)
 {
     // Ignoring all keys other than records.
-    String raw_key = std::get<0>(RecordKVFormat::decodeTiKVKey(key));
+    String raw_key = RecordKVFormat::decodeTiKVKey(key);
     if (!RecordKVFormat::isRecord(raw_key))
         return InvalidTableID;
 
@@ -161,21 +88,8 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
     if (isTiDBSystemTable(table_id))
         return InvalidTableID;
 
-    auto & map = getCf(cf);
-    auto it = map.find(key);
-    // TODO following exception could throw currently.
-    if (it == map.end())
-    {
-        // tikv gc will delete useless data in write & default cf.
-        if (unlikely(&map == &lock_cf))
-            LOG_WARNING(log, toString() << " key not found [" << key.toString() << "] in cf " << cf);
-        return table_id;
-    }
-
-    map.erase(it);
-
-    if (cf != lock_cf_name)
-        cf_data_size -= key.dataSize() + it->second.dataSize();
+    auto type = getCf(cf);
+    data.remove(type, key, raw_key);
     return table_id;
 }
 
@@ -189,7 +103,6 @@ UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
 
 RegionPtr Region::splitInto(const RegionMeta & meta)
 {
-    auto [start_key, end_key] = meta.getRange();
     RegionPtr new_region;
     if (client != nullptr)
         new_region = std::make_shared<Region>(meta, [&](pingcap::kv::RegionVerID) {
@@ -198,50 +111,7 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
     else
         new_region = std::make_shared<Region>(meta);
 
-    for (auto it = data_cf.begin(); it != data_cf.end();)
-    {
-        bool ok = start_key ? it->first >= start_key : true;
-        ok = ok && (end_key ? it->first < end_key : true);
-        if (ok)
-        {
-            cf_data_size -= it->first.dataSize() + it->second.dataSize();
-            new_region->cf_data_size += it->first.dataSize() + it->second.dataSize();
-
-            new_region->data_cf.insert(std::move(*it));
-            it = data_cf.erase(it);
-        }
-        else
-            ++it;
-    }
-
-    for (auto it = write_cf.begin(); it != write_cf.end();)
-    {
-        bool ok = start_key ? it->first >= start_key : true;
-        ok = ok && (end_key ? it->first < end_key : true);
-        if (ok)
-        {
-            cf_data_size -= it->first.dataSize() + it->second.dataSize();
-            new_region->cf_data_size += it->first.dataSize() + it->second.dataSize();
-
-            new_region->write_cf.insert(std::move(*it));
-            it = write_cf.erase(it);
-        }
-        else
-            ++it;
-    }
-
-    for (auto it = lock_cf.begin(); it != lock_cf.end();)
-    {
-        bool ok = start_key ? it->first >= start_key : true;
-        ok = ok && (end_key ? it->first < end_key : true);
-        if (ok)
-        {
-            new_region->lock_cf.insert(std::move(*it));
-            it = lock_cf.erase(it);
-        }
-        else
-            ++it;
-    }
+    data.splitInto(meta.getRange(), new_region->data);
 
     return new_region;
 }
@@ -425,7 +295,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     return {split_regions, table_ids, sync_log};
 }
 
-size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response)
+size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response) const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
@@ -433,26 +303,7 @@ size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response
 
     total_size += meta.serialize(buf);
 
-    total_size += writeBinary2(data_cf.size(), buf);
-    for (auto && [key, value] : data_cf)
-    {
-        total_size += key.serialize(buf);
-        total_size += value.serialize(buf);
-    }
-
-    total_size += writeBinary2(write_cf.size(), buf);
-    for (auto && [key, value] : write_cf)
-    {
-        total_size += key.serialize(buf);
-        total_size += value.serialize(buf);
-    }
-
-    total_size += writeBinary2(lock_cf.size(), buf);
-    for (auto && [key, value] : lock_cf)
-    {
-        total_size += key.serialize(buf);
-        total_size += value.serialize(buf);
-    }
+    total_size += data.serialize(buf);
 
     if (response != nullptr)
         *response = toCommandResponse();
@@ -470,31 +321,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * r
     auto region = region_client_create == nullptr ? std::make_shared<Region>(RegionMeta::deserialize(buf))
                                                   : std::make_shared<Region>(RegionMeta::deserialize(buf), *region_client_create);
 
-    auto size = readBinary2<KVMap::size_type>(buf);
-    for (size_t i = 0; i < size; ++i)
-    {
-        auto key = TiKVKey::deserialize(buf);
-        auto value = TiKVValue::deserialize(buf);
-        region->data_cf.emplace(key, value);
-        region->cf_data_size += key.dataSize() + value.dataSize();
-    }
-
-    size = readBinary2<KVMap::size_type>(buf);
-    for (size_t i = 0; i < size; ++i)
-    {
-        auto key = TiKVKey::deserialize(buf);
-        auto value = TiKVValue::deserialize(buf);
-        region->write_cf.emplace(key, value);
-        region->cf_data_size += key.dataSize() + value.dataSize();
-    }
-
-    size = readBinary2<KVMap::size_type>(buf);
-    for (size_t i = 0; i < size; ++i)
-    {
-        auto key = TiKVKey::deserialize(buf);
-        auto value = TiKVValue::deserialize(buf);
-        region->lock_cf.emplace(key, value);
-    }
+    RegionData::deserialize(buf, region->data);
 
     region->persist_parm = 0;
 
@@ -517,14 +344,14 @@ bool Region::checkIndex(UInt64 index)
     return true;
 }
 
-Region::KVMap & Region::getCf(const std::string & cf)
+ColumnFamilyType Region::getCf(const std::string & cf)
 {
     if (cf.empty() || cf == default_cf_name)
-        return data_cf;
+        return ColumnFamilyType::Default;
     else if (cf == write_cf_name)
-        return write_cf;
+        return ColumnFamilyType::Write;
     else if (cf == lock_cf_name)
-        return lock_cf;
+        return ColumnFamilyType::Lock;
     else
         throw Exception("Illegal cf: " + cf, ErrorCodes::LOGICAL_ERROR);
 }
@@ -539,7 +366,7 @@ void Region::setPendingRemove()
     meta.notifyAll();
 }
 
-size_t Region::dataSize() const { return cf_data_size; }
+size_t Region::dataSize() const { return data.dataSize(); }
 
 // REVIEW: reset persist_parm here?
 void Region::markPersisted() { last_persist_time = Clock::now(); }
@@ -557,9 +384,9 @@ std::unique_ptr<Region::CommittedScanner> Region::createCommittedScanner(TableID
     return std::make_unique<Region::CommittedScanner>(this->shared_from_this(), expected_table_id);
 }
 
-std::unique_ptr<Region::CommittedRemover> Region::createCommittedRemover()
+std::unique_ptr<Region::CommittedRemover> Region::createCommittedRemover(TableID expected_table_id)
 {
-    return std::make_unique<Region::CommittedRemover>(this->shared_from_this());
+    return std::make_unique<Region::CommittedRemover>(this->shared_from_this(), expected_table_id);
 }
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
@@ -614,11 +441,7 @@ void Region::reset(Region && new_region)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
 
-    data_cf = std::move(new_region.data_cf);
-    write_cf = std::move(new_region.write_cf);
-    lock_cf = std::move(new_region.lock_cf);
-
-    cf_data_size = new_region.cf_data_size.load();
+    data.reset(std::move(new_region.data));
 
     incPersistParm();
 
@@ -627,5 +450,11 @@ void Region::reset(Region && new_region)
 }
 
 bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
+
+TableIDSet Region::getCommittedRecordTableID() const
+{
+    std::shared_lock<std::shared_mutex> lock(mutex);
+    return data.getCommittedRecordTableID();
+}
 
 } // namespace DB

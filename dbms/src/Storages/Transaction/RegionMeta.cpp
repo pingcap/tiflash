@@ -19,7 +19,7 @@ size_t RegionMeta::serializeSize() const
     return peer_size + region_size + apply_state_size + sizeof(UInt64) + sizeof(bool);
 }
 
-size_t RegionMeta::serialize(WriteBuffer & buf)
+size_t RegionMeta::serialize(WriteBuffer & buf) const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -42,9 +42,13 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     return RegionMeta(peer, region, apply_state, applied_term, pending_remove);
 }
 
+<<<<<<< HEAD
 // REVIEW: lock? be carefull, can be easily deadlock.
 //  or use member `const RegionID region_id`
 RegionID RegionMeta::regionId() const { return region.id(); }
+=======
+RegionID RegionMeta::regionId() const { return region_id; }
+>>>>>>> 89c71d48c315d2cc7d9924f3bca0ffb4d245e1b0
 
 UInt64 RegionMeta::peerId() const
 {
@@ -83,13 +87,13 @@ const raft_serverpb::RaftApplyState & RegionMeta::getApplyState() const
     return apply_state;
 }
 
-void RegionMeta::setRegion(const metapb::Region & region)
+void RegionMeta::doSetRegion(const metapb::Region & region)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-    doSetRegion(region);
-}
+    if (regionId() != region.id())
+        throw Exception("RegionMeta::doSetRegion region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-void RegionMeta::doSetRegion(const metapb::Region & region) { this->region = region; }
+    this->region = region;
+}
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
 {
@@ -130,7 +134,12 @@ enginepb::CommandResponse RegionMeta::toCommandResponse() const
 
 RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
+<<<<<<< HEAD
     // REVIEW: lock rhs
+=======
+    std::lock_guard<std::mutex> lock(rhs.mutex);
+
+>>>>>>> 89c71d48c315d2cc7d9924f3bca0ffb4d245e1b0
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
     apply_state = std::move(rhs.apply_state);
@@ -201,6 +210,9 @@ void RegionMeta::reset(RegionMeta && rhs)
 {
     // REVIEW: lock rhs
     std::lock_guard<std::mutex> lock(mutex);
+
+    if (regionId() != rhs.regionId())
+        throw Exception("RegionMeta::reset region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);

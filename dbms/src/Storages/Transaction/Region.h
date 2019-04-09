@@ -2,14 +2,11 @@
 
 #include <functional>
 #include <shared_mutex>
-#include <unordered_map>
 
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-
+#include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
-#include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
+#include <common/logger_useful.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -38,87 +35,75 @@ public:
     const static String default_cf_name;
     const static String write_cf_name;
 
-    // In both lock_cf and write_cf.
-    enum CFModifyFlag : UInt8
-    {
-        PutFlag = 'P',
-        DelFlag = 'D',
-        // useless for TiFLASH
-        /*
-        LockFlag = 'L',
-        // In write_cf, only raft leader will use RollbackFlag in txn mode. Learner should ignore it.
-        RollbackFlag = 'R',
-        */
-    };
+    static const auto PutFlag = RegionData::CFModifyFlag::PutFlag;
+    static const auto DelFlag = RegionData::CFModifyFlag::DelFlag;
 
-    // This must be an ordered map. Many logics rely on it, like iterating.
-    using KVMap = std::map<TiKVKey, TiKVValue>;
-
-    /// A quick-and-dirty copy of LockInfo structure in kvproto.
-    /// Used to transmit to client using non-ProtoBuf protocol.
-    struct LockInfo
-    {
-        std::string primary_lock;
-        UInt64 lock_version;
-        std::string key;
-        UInt64 lock_ttl;
-    };
-    using LockInfoPtr = std::unique_ptr<LockInfo>;
+    using LockInfo = RegionData::LockInfo;
+    using LockInfoPtr = RegionData::LockInfoPtr;
     using LockInfos = std::vector<LockInfoPtr>;
 
     class CommittedScanner : private boost::noncopyable
     {
     public:
         CommittedScanner(const RegionPtr & store_, TableID expected_table_id_)
-            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_), write_map_it(store->write_cf.cbegin())
-        {}
-
-        /// Check if next kv exists.
-        /// Return InvalidTableID if not.
-        TableID hasNext()
+            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
         {
-            if (expected_table_id != InvalidTableID)
+            const auto & data = store->data.writeCF().getData();
+            if (auto it = data.find(expected_table_id); it != data.end())
             {
-                for (; write_map_it != store->write_cf.cend(); ++write_map_it)
-                {
-                    if (likely(RecordKVFormat::getTableId(write_map_it->first) == expected_table_id))
-                        return expected_table_id;
-                }
+                found = true;
+                write_map_it = it->second.begin();
+                write_map_it_end = it->second.end();
             }
             else
-            {
-                if (write_map_it != store->write_cf.cend())
-                    return RecordKVFormat::getTableId(write_map_it->first);
-            }
-            return InvalidTableID;
+                found = false;
         }
 
-        auto next(std::vector<TiKVKey> * keys = nullptr) { return store->readDataByWriteIt(write_map_it++, keys); }
+        bool hasNext() const { return found && write_map_it != write_map_it_end; }
 
-        LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
+        auto next(RegionWriteCFDataTrait::Keys * keys = nullptr)
+        {
+            if (!found)
+                throw Exception("CommittedScanner table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
+            return store->readDataByWriteIt(expected_table_id, write_map_it++, keys);
+        }
+
+        LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
 
     private:
         RegionPtr store;
         std::shared_lock<std::shared_mutex> lock;
 
+        bool found;
         TableID expected_table_id;
-        KVMap::const_iterator write_map_it;
+        RegionData::ConstWriteCFIter write_map_it;
+        RegionData::ConstWriteCFIter write_map_it_end;
     };
 
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_) : store(store_), lock(store_->mutex) {}
-
-        void remove(const TiKVKey & key)
+        CommittedRemover(const RegionPtr & store_, TableID expected_table_id_) : store(store_), lock(store_->mutex)
         {
-            if (auto it = store->write_cf.find(key); it != store->write_cf.end())
-                store->removeDataByWriteIt(it);
+            auto & data = store->data.writeCFMute().getDataMut();
+            write_cf_data_it = data.find(expected_table_id_);
+            found = write_cf_data_it != data.end();
+        }
+
+        void remove(const RegionWriteCFData::Key & key)
+        {
+            if (!found)
+                return;
+            if (auto it = write_cf_data_it->second.find(key); it != write_cf_data_it->second.end())
+                store->removeDataByWriteIt(write_cf_data_it->first, it);
         }
 
     private:
         RegionPtr store;
         std::unique_lock<std::shared_mutex> lock;
+
+        bool found;
+        RegionWriteCFData::Data::iterator write_cf_data_it;
     };
 
 public:
@@ -146,9 +131,9 @@ public:
     std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd);
 
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
-    std::unique_ptr<CommittedRemover> createCommittedRemover();
+    std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
 
-    size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr);
+    size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
@@ -176,8 +161,7 @@ public:
         std::shared_lock<std::shared_mutex> lock1(region1.mutex);
         std::shared_lock<std::shared_mutex> lock2(region2.mutex);
 
-        return region1.meta == region2.meta && region1.data_cf == region2.data_cf && region1.write_cf == region2.write_cf
-            && region1.lock_cf == region2.lock_cf && region1.cf_data_size == region2.cf_data_size;
+        return region1.meta == region2.meta && region1.data == region2.data;
     }
 
     UInt64 learnerRead();
@@ -194,39 +178,34 @@ public:
 
     void reset(Region && new_region);
 
+    TableIDSet getCommittedRecordTableID() const;
+
 private:
     // Private methods no need to lock mutex, normally
 
-    TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
-    TableID doRemove(const std::string & cf, const TiKVKey & key);
+    TableID doInsert(const String & cf, const TiKVKey & key, const TiKVValue & value);
+    TableID doRemove(const String & cf, const TiKVKey & key);
 
     bool checkIndex(UInt64 index);
-    KVMap & getCf(const std::string & cf);
+    static ColumnFamilyType getCf(const String & cf);
 
-    using ReadInfo = std::tuple<UInt64, UInt8, UInt64, TiKVValue>;
-    ReadInfo readDataByWriteIt(const KVMap::const_iterator & write_it, std::vector<TiKVKey> * keys = nullptr);
-    KVMap::iterator removeDataByWriteIt(const KVMap::iterator & write_it);
+    RegionData::ReadInfo readDataByWriteIt(
+        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys = nullptr) const;
+    RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
-    LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
+    LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
 
     RegionPtr splitInto(const RegionMeta & meta);
     Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
 
 private:
-    // TODO: We should later change to lock free structure if needed.
-    KVMap data_cf;
-    KVMap write_cf;
-    KVMap lock_cf;
-
+    RegionData data;
     mutable std::shared_mutex mutex;
 
     RegionMeta meta;
 
     pingcap::kv::RegionClientPtr client;
-
-    // Size of data cf & write cf, without lock cf.
-    std::atomic<size_t> cf_data_size = 0;
 
     std::atomic<Timepoint> last_persist_time = Clock::now();
 

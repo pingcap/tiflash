@@ -10,11 +10,27 @@ using namespace DB;
 
 const std::string dir_path = "./kvstore_tmp_/";
 
-raft_serverpb::KeyValue kv(TableID table_id, HandleID handle_id, Timestamp ts, const std::string v)
+raft_serverpb::KeyValue lock_kv(TableID table_id, HandleID handle_id)
+{
+    raft_serverpb::KeyValue r;
+    *(r.mutable_key())   = RecordKVFormat::genKey(table_id, handle_id).getStr();
+    *(r.mutable_value()) = RecordKVFormat::encodeLockCfValue('P', "hehe", 0, 0).getStr();
+    return r;
+}
+
+raft_serverpb::KeyValue default_kv(TableID table_id, HandleID handle_id, Timestamp ts, const String v)
 {
     raft_serverpb::KeyValue r;
     *(r.mutable_key())   = RecordKVFormat::genKey(table_id, handle_id, ts).getStr();
     *(r.mutable_value()) = v;
+    return r;
+}
+
+raft_serverpb::KeyValue write_kv(TableID table_id, HandleID handle_id, Timestamp ts, Timestamp pre_ts)
+{
+    raft_serverpb::KeyValue r;
+    *(r.mutable_key())   = RecordKVFormat::genKey(table_id, handle_id, ts).getStr();
+    *(r.mutable_value()) = RecordKVFormat::encodeWriteCfValue('P', pre_ts).getStr();
     return r;
 }
 
@@ -54,9 +70,9 @@ int main(int, char **)
             enginepb::SnapshotRequest r;
             *(r.mutable_data()->mutable_cf()) = "default";
             auto * kvs                        = r.mutable_data()->mutable_data();
-            *(kvs->Add())                     = kv(table_id, 1, 1, "v1");
-            *(kvs->Add())                     = kv(table_id, 2, 2, "v3");
-            *(kvs->Add())                     = kv(table_id, 3, 3, "v3");
+            *(kvs->Add())                     = default_kv(table_id, 1, 1, "v1");
+            *(kvs->Add())                     = default_kv(table_id, 2, 2, "v3");
+            *(kvs->Add())                     = default_kv(table_id, 3, 3, "v3");
 
             reqs.push_back(r);
         }
@@ -65,9 +81,9 @@ int main(int, char **)
             enginepb::SnapshotRequest r;
             *(r.mutable_data()->mutable_cf()) = "lock";
             auto * kvs                        = r.mutable_data()->mutable_data();
-            *(kvs->Add())                     = kv(table_id, 1, 1, "v1");
-            *(kvs->Add())                     = kv(table_id, 2, 2, "v3");
-            *(kvs->Add())                     = kv(table_id, 3, 3, "v3");
+            *(kvs->Add())                     = lock_kv(table_id, 111);
+            *(kvs->Add())                     = lock_kv(table_id, 222);
+            *(kvs->Add())                     = lock_kv(table_id, 333);
 
             reqs.push_back(r);
         }
@@ -76,9 +92,9 @@ int main(int, char **)
             enginepb::SnapshotRequest r;
             *(r.mutable_data()->mutable_cf()) = "write";
             auto * kvs                        = r.mutable_data()->mutable_data();
-            *(kvs->Add())                     = kv(table_id, 1, 1, "v1");
-            *(kvs->Add())                     = kv(table_id, 2, 2, "v3");
-            *(kvs->Add())                     = kv(table_id, 3, 3, "v3");
+            *(kvs->Add())                     = write_kv(table_id, 1, 1, 1);
+            *(kvs->Add())                     = write_kv(table_id, 2, 2, 2);
+            *(kvs->Add())                     = write_kv(table_id, 3, 3, 3);
 
             reqs.push_back(r);
         }

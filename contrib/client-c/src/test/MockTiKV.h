@@ -130,8 +130,8 @@ private:
         //}
 
         if (it->second->verID().confVer != ctx.region_epoch().conf_ver() || it->second->verID().ver != ctx.region_epoch().version()) {
-            ::errorpb::StaleEpoch * stale_epoch = new ::errorpb::StaleEpoch();
-            err -> set_allocated_stale_epoch(stale_epoch);
+            ::errorpb::EpochNotMatch * epoch_not_match = new ::errorpb::EpochNotMatch();
+            err -> set_allocated_epoch_not_match(epoch_not_match);
             return err;
         }
 

@@ -5,7 +5,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 static const Field MockDecodeRow(TiDB::CodecFlag flag)
@@ -35,8 +35,8 @@ static const Field MockDecodeRow(TiDB::CodecFlag flag)
     }
 }
 
-Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns,
-    const Names & ordered_columns_, ScannerPtr & scanner, std::vector<TiKVKey> * keys)
+Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_,
+    ScannerPtr & scanner, RegionWriteCFDataTrait::Keys * keys)
 {
     // Note: this code below is mostly ported from RegionBlockInputStream.
     Names ordered_columns = ordered_columns_;
@@ -54,9 +54,9 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     std::map<UInt64, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
     for (const auto & column_info : table_info.columns)
     {
-        Int64  col_id      = column_info.id;
-        String col_name    = column_info.name;
-        auto   ch_col      = columns.getPhysical(col_name);
+        Int64 col_id = column_info.id;
+        String col_name = column_info.name;
+        auto ch_col = columns.getPhysical(col_name);
         column_map[col_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
         if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
         {
@@ -66,30 +66,24 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     if (!table_info.pk_is_handle)
     {
-        auto ch_col           = columns.getPhysical(MutableSupport::tidb_pk_column_name);
+        auto ch_col = columns.getPhysical(MutableSupport::tidb_pk_column_name);
         column_map[handle_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
     }
 
     const auto & date_lut = DateLUT::instance();
 
-    // TODO: lock region, to avoid region adding/droping while writing data
-
-    TableID  my_table_id = table_info.id;
-    TableID  next_table_id = InvalidTableID;
-
-    // Here we use do{}while() instead of while(){},
     // Because the first check of scanner.hasNext() already been done outside of this function.
-    while (true)
+    do
     {
-        // TODO: comfirm all this mess
+        // TODO: confirm all this mess
         auto [handle, write_type, commit_ts, value] = scanner->next(keys);
         if (write_type == Region::PutFlag || write_type == Region::DelFlag)
         {
 
             // TODO: optimize columns' insertion
 
-            ColumnUInt8::Container &delmark_data = delmark_col->getData();
-            ColumnUInt64::Container &version_data = version_col->getData();
+            ColumnUInt8::Container & delmark_data = delmark_col->getData();
+            ColumnUInt64::Container & version_data = version_col->getData();
 
             // `write_type` does not equal `Op` in proto
             delmark_data.resize(delmark_data.size() + 1);
@@ -117,14 +111,14 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
             for (size_t i = 0; i < row.size(); i += 2)
             {
-                Field &col_id = row[i];
+                Field & col_id = row[i];
                 auto it = column_map.find(col_id.get<Int64>());
                 if (it == column_map.end())
                     continue;
-                std::string tp = it->second.second.type->getName();
+                const auto & tp = it->second.second.type->getName();
                 if (tp == "Nullable(DateTime)" || tp == "Nullable(Date)" || tp == "DateTime" || tp == "Date")
                 {
-                    Field &field = row[i + 1];
+                    Field & field = row[i + 1];
                     UInt64 packed = field.get<Int64>();
                     UInt64 ymdhms = packed >> 24;
                     UInt64 ymd = ymdhms >> 17;
@@ -138,30 +132,30 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     int minute = int((hms >> 6) & ((1 << 6) - 1));
                     int hour = int(hms >> 12);
 
-                    if (tp == "Nullable(DateTime)" || tp == "DataTime") {
+                    if (tp == "Nullable(DateTime)" || tp == "DataTime")
+                    {
                         time_t datetime;
                         if (unlikely(year == 0))
                             datetime = 0;
                         else
                             datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
                         it->second.first->insert(static_cast<Int64>(datetime));
-                    } else {
+                    }
+                    else
+                    {
                         auto date = date_lut.makeDayNum(year, month, day);
                         Field date_field(static_cast<Int64>(date));
                         it->second.first->insert(date_field);
                     }
-                } else {
+                }
+                else
+                {
                     it->second.first->insert(row[i + 1]);
                 }
             }
             column_map[handle_id].first->insert(Field(handle));
         }
-
-        next_table_id = scanner->hasNext();
-
-        if (next_table_id == InvalidTableID || next_table_id != my_table_id)
-            break;
-    }
+    } while (scanner->hasNext());
 
     Block block;
     for (const auto & name : ordered_columns)

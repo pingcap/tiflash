@@ -30,4 +30,6 @@ void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer o
 //   ./storage-client.sh "DBGInvoke rm_region_data(region_id)"
 void dbgFuncRegionRmData(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+void dbgFuncDumpAllRegion(Context& context, const ASTs& args, DBGInvoker::Printer output);
+
 }
