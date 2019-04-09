@@ -437,6 +437,7 @@ std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, c
     return {start_handle, end_handle};
 }
 
+// REVIEW: better method name, eg: assign
 void Region::reset(Region && new_region)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);

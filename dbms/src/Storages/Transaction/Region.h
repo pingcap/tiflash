@@ -20,6 +20,7 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
+// REVIEW: this two function can be move out from Region.h/cpp
 std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
 
 std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
@@ -156,6 +157,7 @@ public:
     void decPersistParm(size_t x);
     void incPersistParm();
 
+    // REVIEW: this is a slow op, for testcases only?
     friend bool operator==(const Region & region1, const Region & region2)
     {
         std::shared_lock<std::shared_mutex> lock1(region1.mutex);
@@ -209,6 +211,7 @@ private:
 
     std::atomic<Timepoint> last_persist_time = Clock::now();
 
+    // REVIEW: use a better name, eg: is_dirty, or dirty_counter
     std::atomic<size_t> persist_parm = 1;
 
     Logger * log;

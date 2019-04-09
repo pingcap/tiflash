@@ -186,6 +186,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
             remover->remove(key);
         cache_size = region->dataSize();
 
+        // REVIEW: why `cache_size == 0`, why not `keys_to_remove != 0`?
         if (cache_size == 0)
             region->incPersistParm();
 
