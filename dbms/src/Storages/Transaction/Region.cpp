@@ -398,7 +398,7 @@ UInt64 Region::learnerRead()
 {
     if (client != nullptr)
         return client->getReadIndex();
-    throw Exception("The kv client is not initialized !");
+    return 0;
 }
 
 void Region::waitIndex(UInt64 index)
