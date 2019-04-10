@@ -207,6 +207,7 @@ private:
     ReadInfo readDataByWriteIt(const KVMap::const_iterator & write_it, std::vector<TiKVKey> * keys = nullptr);
     KVMap::iterator removeDataByWriteIt(const KVMap::iterator & write_it);
 
+    // REVIEW: scanLockInfos? get all lock infos instead of get one lock info
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts);
 
     RegionPtr splitInto(const RegionMeta & meta);
