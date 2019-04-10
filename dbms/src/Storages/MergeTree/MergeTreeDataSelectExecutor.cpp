@@ -237,6 +237,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     std::vector<RangesInDataParts> region_range_parts;
     std::vector<size_t> rows_in_mem;
 
+    static const auto func_throw_retry_region = [&]() {
+        std::vector<RegionID> region_ids;
+        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+            region_ids.push_back(regions_query_info[region_index].region_id);
+        throw RegionException(region_ids);
+    };
+
     /// If query contains restrictions on the virtual column `_part` or `_part_index`, select only parts suitable for it.
     /// The virtual column `_sample_factor` (which is equal to 1 / used sample rate) can be requested in the query.
     Names virt_column_names;
@@ -353,12 +360,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         pool.wait();
 
         if (need_retry)
-        {
-            std::vector<RegionID> region_ids;
-            for (size_t region_index = 0; region_index < region_cnt; ++region_index)
-                region_ids.push_back(regions_query_info[region_index].region_id);
-            throw RegionException(region_ids);
-        }
+            func_throw_retry_region();
     }
 
     size_t part_index = 0;
@@ -738,6 +740,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     else
     {
         TMTContext & tmt = context.getTMTContext();
+
+        auto safe_point = tmt.getPDClient()->getGCSafePoint();
+        if (query_info.read_tso < safe_point)
+            func_throw_retry_region();
+
         bool need_retry = false;
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
@@ -801,12 +808,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
 
         if (need_retry)
-        {
-            std::vector<RegionID> region_ids;
-            for (size_t region_index = 0; region_index < region_cnt; ++region_index)
-                region_ids.push_back(regions_query_info[region_index].region_id);
-            throw RegionException(region_ids);
-        }
+            func_throw_retry_region();
     }
 
     if (parts_with_ranges.empty() && !is_txn_engine)
