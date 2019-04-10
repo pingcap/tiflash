@@ -151,15 +151,15 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                         it->second.first->insert(date_field);
                     }
                 } else if (col_id.get<Int64>() == handle_id) {
-                    it->second.first->insert(Field(handle));
+                    
                 } else {
                     it->second.first->insert(row[i + 1]);
                 }
             }
             // TODO: use InvalidHandleID
-            if (handle_id == -1) {
-                column_map[handle_id].first->insert(Field(handle));
-            }
+
+            column_map[handle_id].first->insert(Field(handle));
+
         }
 
         next_table_id = scanner->hasNext();
