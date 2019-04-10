@@ -396,9 +396,8 @@ RegionRange Region::getRange() const { return meta.getRange(); }
 
 UInt64 Region::learnerRead()
 {
-    if (client != nullptr) {
+    if (client != nullptr)
         return client->getReadIndex();
-    }
     throw Exception("The kv client is not initialized !");
 }
 
