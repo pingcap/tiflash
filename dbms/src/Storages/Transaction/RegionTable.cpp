@@ -15,31 +15,6 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-// =============================================================
-// Static methods.
-// =============================================================
-
-TableIDSet RegionTable::getRegionTableIds(const RegionPtr & region)
-{
-    TableIDSet table_ids;
-    {
-        auto scanner = region->createCommittedScanner(InvalidTableID);
-        while (true)
-        {
-            TableID table_id = scanner->hasNext();
-            if (table_id == InvalidTableID)
-                break;
-            table_ids.emplace(table_id);
-            scanner->next();
-        }
-    }
-    return table_ids;
-}
-
-// =============================================================
-// Private member functions.
-// =============================================================
-
 RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
 {
     auto it = tables.find(table_id);
@@ -170,7 +145,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     TMTContext & tmt = context.getTMTContext();
 
-    std::vector<TiKVKey> keys_to_remove;
+    RegionWriteCFDataTrait::Keys keys_to_remove;
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
 
@@ -206,11 +181,12 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         auto region = tmt.kvstore->getRegion(region_id);
         if (!region)
             return;
-        auto remover = region->createCommittedRemover();
+        auto remover = region->createCommittedRemover(table_id);
         for (const auto & key : keys_to_remove)
             remover->remove(key);
         cache_size = region->dataSize();
 
+        // REVIEW: why `cache_size == 0`, why not `keys_to_remove != 0`?
         if (cache_size == 0)
             region->incPersistParm();
 
@@ -218,10 +194,6 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
             log, "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");
     }
 }
-
-// =============================================================
-// Public member functions.
-// =============================================================
 
 static const Int64 FTH_BYTES_1 = 1024;             // 1 KB
 static const Int64 FTH_BYTES_2 = 1024 * 1024;      // 1 MB
@@ -307,8 +279,9 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
 
 void RegionTable::applySnapshotRegion(const RegionPtr & region)
 {
-    auto table_ids = getRegionTableIds(region);
-    return applySnapshotRegion(region, table_ids);
+    // make operation about snapshot can only add mapping relations rather than delete.
+    auto table_ids = region->getCommittedRecordTableID();
+    updateRegion(region, table_ids);
 }
 
 void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
@@ -320,7 +293,7 @@ void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
     {
         std::ignore = id;
         size_t cache_bytes = region->dataSize();
-        auto table_ids = getRegionTableIds(region);
+        auto table_ids = region->getCommittedRecordTableID();
         for (auto table_id : table_ids)
         {
             auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);
@@ -330,26 +303,6 @@ void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
         }
         updateRegionRange(region, table_to_persist);
     }
-    for (auto table_id : table_to_persist)
-        tables.find(table_id)->second.persist();
-}
-
-void RegionTable::applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids)
-{
-    TableIDSet table_to_persist;
-    size_t cache_bytes = region->dataSize();
-
-    std::lock_guard<std::mutex> lock(mutex);
-
-    for (auto table_id : table_ids)
-    {
-        auto & internal_region = getOrInsertRegion(table_id, region, table_to_persist);
-        internal_region.updated = true;
-        internal_region.cache_bytes = cache_bytes;
-    }
-
-    updateRegionRange(region, table_to_persist);
-
     for (auto table_id : table_to_persist)
         tables.find(table_id)->second.persist();
 }

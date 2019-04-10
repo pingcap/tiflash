@@ -62,8 +62,8 @@ struct RegionClient {
             return;
         }
 
-        if (err.has_stale_epoch()) {
-            cache -> onRegionStale(rpc_ctx, err.stale_epoch());
+        if (err.has_epoch_not_match()) {
+            cache -> onRegionStale(rpc_ctx, err.epoch_not_match());
             return;
         }
 

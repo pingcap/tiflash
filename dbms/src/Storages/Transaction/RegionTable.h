@@ -165,7 +165,6 @@ public:
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const RegionPtr & region);
     void applySnapshotRegions(const ::DB::RegionMap & regions);
-    void applySnapshotRegion(const RegionPtr & region, const TableIDSet & table_ids);
 
     /// Manage data after region split into split_regions.
     /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
@@ -189,7 +188,7 @@ public:
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
-        std::vector<TiKVKey> * keys);
+        RegionWriteCFDataTrait::Keys * keys);
 
     static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
@@ -201,9 +200,7 @@ public:
         bool learner_read,
         bool resolve_locks,
         UInt64 start_ts,
-        std::vector<TiKVKey> * keys = nullptr);
-
-    static TableIDSet getRegionTableIds(const RegionPtr & region);
+        RegionWriteCFDataTrait::Keys * keys = nullptr);
 
     // For debug
     void dumpRegionMap(RegionTable::RegionMap & res);

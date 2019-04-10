@@ -54,7 +54,6 @@ public:
 
     const raft_serverpb::RaftApplyState & getApplyState() const;
 
-    void setRegion(const metapb::Region & region);
     void setApplied(UInt64 index, UInt64 term);
     void notifyAll();
 
@@ -63,7 +62,7 @@ public:
     enginepb::CommandResponse toCommandResponse() const;
 
     size_t serializeSize() const;
-    size_t serialize(WriteBuffer & buf);
+    size_t serialize(WriteBuffer & buf) const;
 
     static RegionMeta deserialize(ReadBuffer & buf);
 
