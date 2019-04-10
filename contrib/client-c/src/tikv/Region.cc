@@ -11,12 +11,14 @@ RPCContextPtr RegionCache::getRPCContext(Backoffer & bo, const RegionVerID & id,
     }
     const auto & meta = region -> meta;
     auto  peer = region -> peer;
+
     if (is_learner) {
         peer = region -> learner;
-        if (!peer.IsInitialized()) {
+        if (peer.store_id() == 0) {
             throw Exception("no learner");
         }
     }
+
     std::string addr = getStoreAddr(bo, peer.store_id());
     if (addr == "") {
         dropRegion(id);
@@ -54,14 +56,14 @@ RegionPtr RegionCache::getCachedRegion(Backoffer & bo, const RegionVerID & id) {
 RegionPtr RegionCache::loadRegionByID(Backoffer & bo, uint64_t region_id) {
     for(;;) {
         try {
-            auto [meta, leader, learner] = pdClient->getRegionByID(region_id);
+            auto [meta, leader, slaves] = pdClient->getRegionByID(region_id);
             if (!meta.IsInitialized()) {
                 throw Exception("meta not found");
             }
             if (meta.peers_size() == 0) {
                 throw Exception("receive Region with no peer.");
             }
-            RegionPtr region = std::make_shared<Region>(meta, meta.peers(0), learner);
+            RegionPtr region = std::make_shared<Region>(meta, meta.peers(0), selectLearner(bo, slaves));
             if (leader.IsInitialized()) {
                 region -> switchPeer(leader.store_id());
             }
@@ -70,19 +72,31 @@ RegionPtr RegionCache::loadRegionByID(Backoffer & bo, uint64_t region_id) {
             bo.backoff(boPDRPC, e);
         }
     }
+}
+
+metapb::Peer RegionCache::selectLearner(Backoffer & bo, const std::vector<metapb::Peer> & slaves) {
+    for (auto slave : slaves) {
+        auto store_id = slave.store_id();
+        auto labels = getStore(bo, store_id).labels;
+        if (labels["zone"] == "engine") {
+            return slave;
+        }
+    }
+    log->error("there is no valid slave.");
+    return metapb::Peer();
 }
 
 RegionPtr RegionCache::loadRegion(Backoffer & bo, std::string key) {
     for(;;) {
         try {
-            auto [meta, leader, learner] = pdClient->getRegion(key);
+            auto [meta, leader, slaves] = pdClient->getRegion(key);
             if (!meta.IsInitialized()) {
                 throw Exception("meta not found");
             }
             if (meta.peers_size() == 0) {
                 throw Exception("receive Region with no peer.");
             }
-            RegionPtr region = std::make_shared<Region>(meta, meta.peers(0), learner);
+            RegionPtr region = std::make_shared<Region>(meta, meta.peers(0), selectLearner(bo, slaves));
             if (leader.IsInitialized()) {
                 region -> switchPeer(leader.store_id());
             }
@@ -93,25 +107,37 @@ RegionPtr RegionCache::loadRegion(Backoffer & bo, std::string key) {
     }
 }
 
-std::string RegionCache::loadStoreAddr(Backoffer & bo, uint64_t id) {
+metapb::Store RegionCache::loadStore(Backoffer & bo, uint64_t id) {
     for (;;) {
         try {
             const auto & store = pdClient->getStore(id);
-            return store.address();
+            return store;
         } catch (Exception & e) {
             bo.backoff(boPDRPC, e);
         }
     }
 }
 
-std::string RegionCache::reloadStoreAddr(Backoffer & bo, uint64_t id) {
-    std::string addr = loadStoreAddr(bo, id);
-    if (addr == "") {
-        return "";
+Store RegionCache::reloadStore(Backoffer & bo, uint64_t id) {
+    auto store = loadStore(bo, id);
+    std::map<std::string, std::string> labels;
+    for (size_t i = 0; i < store.labels_size(); i++) {
+        labels[store.labels(i).key()] = store.labels(i).value();
     }
-    stores[id] = Store(id, addr);
-    return addr;
+    stores[id] = Store(id, store.address(), labels);
+    return stores[id];
 }
+
+Store RegionCache::getStore(Backoffer & bo, uint64_t id) {
+    std::lock_guard<std::mutex> lock(store_mutex);
+    auto it = stores.find(id);
+    if (it != stores.end()) {
+        return (it -> second);
+    }
+    return reloadStore(bo, id);
+}
+
+
 
 std::string RegionCache::getStoreAddr(Backoffer & bo, uint64_t id) {
     std::lock_guard<std::mutex> lock(store_mutex);
@@ -119,7 +145,7 @@ std::string RegionCache::getStoreAddr(Backoffer & bo, uint64_t id) {
     if (it != stores.end()) {
         return it -> second.addr;
     }
-    return reloadStoreAddr(bo, id);
+    return reloadStore(bo, id).addr;
 }
 
 //RegionPtr RegionCache::searchCachedRegion(std::string key) {

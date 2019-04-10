@@ -25,11 +25,11 @@ public:
         return static_cast<uint64_t>(std::time(NULL));
     }
 
-    std::tuple<metapb::Region, metapb::Peer, metapb::Peer> getRegion(std::string) override {
+    std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> getRegion(std::string) override {
         throw "not implemented";
     }
 
-    std::tuple<metapb::Region, metapb::Peer, metapb::Peer> getRegionByID(uint64_t) override {
+    std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> getRegionByID(uint64_t) override {
         throw "not implemented";
     }
 
