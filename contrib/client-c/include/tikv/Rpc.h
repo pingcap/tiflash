@@ -11,6 +11,7 @@
 #include <tikv/Region.h>
 #include <common/Log.h>
 
+// REVIEW: use `namespace pingcap::kv`
 namespace pingcap {
 namespace kv {
 
@@ -39,6 +40,7 @@ struct RpcTypeTraits<kvrpcpb::ReadIndexRequest> {
     using ResultType = kvrpcpb::ReadIndexResponse;
 };
 
+// REVIEW: if this class is just for calling readIndex, extend the class name maybe better
 template<class T>
 class RpcCall {
 
