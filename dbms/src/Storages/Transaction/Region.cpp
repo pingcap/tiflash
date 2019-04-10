@@ -99,7 +99,7 @@ UInt64 Region::getIndex() const
     return meta.appliedIndex();
 }
 
-// REVIEW: should lock for meta? or remove lock in getIndex
+// REVIEW: should lock for meta? what difference between getIndex and getProbableIndex?
 UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
 
 // REVIEW: should lock for meta? or remove lock in getIndex
@@ -236,6 +236,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
                 LOG_ERROR(log, "Unsupported admin command type " << raft_cmdpb::AdminCmdType_Name(type));
                 break;
         }
+        // REVIEW: lock?
         meta.setApplied(index, term);
     }
     else
@@ -287,8 +288,10 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
         meta.setApplied(index, term);
     }
 
+    // REVIEW: notify when setApplied?
     meta.notifyAll();
 
+    // REVIEW: inc without checking need_persist, and then check this flag when we going to persist
     if (need_persist)
         incPersistParm();
 

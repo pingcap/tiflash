@@ -166,6 +166,7 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
+    // REVIEW: this name is confusing
     UInt64 learnerRead();
 
     void waitIndex(UInt64 index);
@@ -178,6 +179,7 @@ public:
 
     std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
 
+    // REVIEW: better name, eg: assign
     void reset(Region && new_region);
 
     TableIDSet getCommittedRecordTableID() const;
@@ -204,8 +206,11 @@ private:
 
 private:
     RegionData data;
+    // REVIEW: we should define what this mutex should protect, if it just protect data, then we should move this lock into data.
     mutable std::shared_mutex mutex;
 
+    // REVIEW: in the last time we clearing all the mutex, we decided that meta don't need to be protect by the mutex above.
+    //   Now we should re-think it. NOTE: deadlock alert! if we do use the mutex above to protect all.
     RegionMeta meta;
 
     pingcap::kv::RegionClientPtr client;
