@@ -196,7 +196,7 @@ uint64_t Client::getGCSafePoint() {
     return response.safe_point();
 }
 
-std::tuple<metapb::Region, metapb::Peer, metapb::Peer> Client::getRegion(std::string key) {
+std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegion(std::string key) {
     pdpb::GetRegionRequest request{};
     pdpb::GetRegionResponse response{};
 
@@ -213,13 +213,15 @@ std::tuple<metapb::Region, metapb::Peer, metapb::Peer> Client::getRegion(std::st
         log->error(err_msg);
         throw Exception(err_msg, GRPCErrorCode);
     }
-    if (response.slaves_size() == 0) {
-        return std::make_tuple(response.region(), response.leader(), metapb::Peer::default_instance());
+
+    std::vector<metapb::Peer> slaves;
+    for (size_t i = 0; i < response.slaves_size(); i++) {
+        slaves.push_back(response.slaves(i));
     }
-    return std::make_tuple(response.region(), response.leader(), response.slaves(0));
+    return std::make_tuple(response.region(), response.leader(), slaves);
 }
 
-std::tuple<metapb::Region, metapb::Peer, metapb::Peer> Client::getRegionByID(uint64_t region_id) {
+std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegionByID(uint64_t region_id) {
     pdpb::GetRegionByIDRequest request{};
     pdpb::GetRegionResponse response{};
 
@@ -236,10 +238,12 @@ std::tuple<metapb::Region, metapb::Peer, metapb::Peer> Client::getRegionByID(uin
         log->error(err_msg);
         throw Exception(err_msg, GRPCErrorCode);
     }
-    if (response.slaves_size() == 0) {
-        return std::make_tuple(response.region(), response.leader(), metapb::Peer::default_instance());
+
+    std::vector<metapb::Peer> slaves;
+    for (size_t i = 0; i < response.slaves_size(); i++) {
+        slaves.push_back(response.slaves(i));
     }
-    return std::make_tuple(response.region(), response.leader(), response.slaves(0));
+    return std::make_tuple(response.region(), response.leader(), slaves);
 }
 
 metapb::Store Client::getStore(uint64_t store_id) {
