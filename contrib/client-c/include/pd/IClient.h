@@ -19,11 +19,11 @@ public:
 
     virtual uint64_t getTS() = 0;
 
-    virtual std::tuple<metapb::Region, metapb::Peer, metapb::Peer> getRegion(std::string key) = 0;
+    virtual std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> getRegion(std::string key) = 0;
 
 //    virtual std::pair<metapb::Region, metapb::Peer> getPrevRegion(std::string key) = 0;
 
-    virtual std::tuple<metapb::Region, metapb::Peer, metapb::Peer> getRegionByID(uint64_t region_id) = 0;
+    virtual std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> getRegionByID(uint64_t region_id) = 0;
 
     virtual metapb::Store getStore(uint64_t store_id) = 0;
 
