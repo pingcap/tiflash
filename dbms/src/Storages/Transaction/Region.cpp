@@ -99,8 +99,10 @@ UInt64 Region::getIndex() const
     return meta.appliedIndex();
 }
 
+// REVIEW: should lock for meta? or remove lock in getIndex
 UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
 
+// REVIEW: should lock for meta? or remove lock in getIndex
 RegionPtr Region::splitInto(const RegionMeta & meta)
 {
     RegionPtr new_region;
@@ -116,6 +118,7 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
     return new_region;
 }
 
+// REVIEW: should lock for meta? or remove lock in getIndex
 void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
