@@ -6,6 +6,7 @@
 namespace DB
 {
 
+// REVIEW: exception code? although nowhere should use the code
 class LockException : public Exception
 {
 public:

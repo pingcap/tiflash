@@ -6,6 +6,7 @@
 namespace DB
 {
 
+// REVIEW: exception code?
  class RegionException : public Exception
 {
 public:
