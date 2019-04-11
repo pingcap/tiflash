@@ -19,6 +19,8 @@ enum ColumnFamilyType
     Lock,
 };
 
+// REVIEW: genKVPair returns a pair, should we consider the cost of object copy? or just let -O3 do the optimization?
+
 struct RegionWriteCFDataTrait
 {
     using DecodedWriteCFValue = RecordKVFormat::DecodedWriteCFValue;
@@ -341,6 +343,7 @@ public:
 
     using LockInfoPtr = std::unique_ptr<LockInfo>;
 
+    // REVIEW: maybe use 3 insert methods to elimate the `switch`? cause we hava already done the cf name matching.
     TableID insert(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key, const TiKVValue & value)
     {
         switch(cf)

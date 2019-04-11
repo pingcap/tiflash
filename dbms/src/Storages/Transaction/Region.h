@@ -202,7 +202,6 @@ private:
         const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys = nullptr) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
-    // REVIEW: scanLockInfos? get all lock infos instead of get one lock info
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
 
     RegionPtr splitInto(const RegionMeta & meta);
