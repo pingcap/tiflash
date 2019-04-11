@@ -194,6 +194,7 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     {
         UInt32 v = readWord(binIdx, dec, 4) ^ mask;
         if (v >= wordMax) {
+            // REVIEW: exception code
             throw Exception("bad number: " + std::to_string(v));
         }
         value *= wordMax;

@@ -145,6 +145,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     TMTContext & tmt = context.getTMTContext();
 
+    // REVIEW: if cache is big, keys_to_remove maybe too big to
     RegionWriteCFDataTrait::Keys keys_to_remove;
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);

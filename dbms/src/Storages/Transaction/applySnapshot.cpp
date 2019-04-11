@@ -36,6 +36,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot " << region->toString(true));
 
+    // REVIEW: this snapshot may be a big one, in that case, we should not hold all data of this region in memory
     while (read(&request))
     {
         if (!request.has_data())
