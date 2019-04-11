@@ -181,14 +181,22 @@ inline Int64 decodeInt64(const UInt64 x)
 
 inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields)
 {
-    if (table_info.columns.size() != fields.size())
+    if (!((table_info.pk_is_handle && (fields.size() == table_info.columns.size() - 1))
+          || (fields.size() == table_info.columns.size())))
+    {
         throw Exception("Encoding row has different sizes between columns and values", ErrorCodes::LOGICAL_ERROR);
+    }
+
     std::stringstream ss;
-    for (size_t i = 0; i < fields.size(); i++)
+    for (size_t i = 0, j = 0; i < table_info.columns.size(); i++)
     {
         const TiDB::ColumnInfo & column = table_info.columns[i];
+        if (table_info.pk_is_handle && column.hasPriKeyFlag()) {
+            continue;
+        }
         EncodeDatum(Field(column.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column.getCodecFlag(), ss);
+        EncodeDatum(fields[j], column.getCodecFlag(), ss);
+        j++;
     }
     return TiKVValue(ss.str());
 }

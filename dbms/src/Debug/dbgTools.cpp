@@ -120,13 +120,24 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 {
     std::vector<Field> fields;
     ASTs::const_iterator it;
+    int i = 0;
     while ((it = begin++) != end)
     {
         auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
-        fields.emplace_back(field);
+        if (table_info.pk_is_handle && table_info.columns[i].hasPriKeyFlag())
+        {
+            handle_id = getFieldValue<Int64>(field);
+        } else
+        {
+            fields.emplace_back(field);
+        }
+        i++;
     }
-    if (fields.size() != table_info.columns.size())
+    if (!((table_info.pk_is_handle && (fields.size() == table_info.columns.size() - 1))
+        || (fields.size() == table_info.columns.size())))
+    {
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
+    }
 
     TiKVKey key = RecordKVFormat::genKey(table_info.id, handle_id);
     TiKVValue value = RecordKVFormat::EncodeRow(table_info, fields);
@@ -234,6 +245,9 @@ struct BatchCtrl
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
             const TiDB::ColumnInfo & column = table_info.columns[i];
+            if (table_info.pk_is_handle && column.hasPriKeyFlag()) {
+                continue;
+            }
             EncodeDatum(ss, TiDB::CodecFlagInt, column.id);
             EncodeDatum(ss, column.getCodecFlag(), magic_num);
         }

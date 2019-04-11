@@ -35,16 +35,22 @@ void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::
 
 void dbgInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() < 4)
-        throw Exception("Args not matched, should be: database-name, table-name, region-id, handle-id, values", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 3)
+        throw Exception("Args not matched, should be: database-name, table-name, region-id[, handle-id], values", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    HandleID handle_id = 0;
 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
-    RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + 4, args.end(), context);
+    int value_offset = 3;
+    if (!table->table_info.pk_is_handle)
+    {
+        value_offset = 4;
+        handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    }
+    RegionBench::insert(table->table_info, region_id, handle_id, args.begin() + value_offset, args.end(), context);
 
     std::stringstream ss;
     ss << "wrote one row to " << database_name << "." + table_name << " region #" << region_id;

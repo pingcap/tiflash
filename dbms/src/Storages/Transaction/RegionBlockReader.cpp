@@ -105,6 +105,10 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 row.reserve(table_info.columns.size() * 2);
                 for (const TiDB::ColumnInfo & column : table_info.columns)
                 {
+                    if (table_info.pk_is_handle && column.hasPriKeyFlag())
+                    {
+                        continue;
+                    }
                     row.push_back(Field(column.id));
                     row.push_back(MockDecodeRow(column.getCodecFlag()));
                 }
@@ -151,14 +155,29 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                         it->second.first->insert(date_field);
                     }
                 } else if (col_id.get<Int64>() == handle_id) {
-                    
+                    throw Exception("handle column is not expected to be encoded in value");
                 } else {
                     it->second.first->insert(row[i + 1]);
                 }
             }
             // TODO: use InvalidHandleID
+            std::string handle_column_type_name(column_map[handle_id].second.type->getFamilyName());
+            if (handle_column_type_name == "Int64"
+                || handle_column_type_name == "Int32"
+                || handle_column_type_name == "Int16"
+                || handle_column_type_name == "Int8") {
+                column_map[handle_id].first->insert(Field((Int64)handle));
+            } else if (handle_column_type_name == "UInt64"
+                       || handle_column_type_name == "UInt32"
+                       || handle_column_type_name == "UInt16"
+                       || handle_column_type_name == "UInt8")
+            {
+                column_map[handle_id].first->insert(Field(handle));
+            } else
+            {
+                throw Exception("handle column type must be one of int type");
+            }
 
-            column_map[handle_id].first->insert(Field(handle));
 
         }
 

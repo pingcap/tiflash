@@ -31,8 +31,8 @@ private:
     const String handle_col_name;
     Logger * log = &Logger::get("RangesFilterBlockInputStream");
 
-    template<typename T>
-    Block readProcess(Block & block, T column);
+    template<typename T, typename ELEM_T>
+    Block readProcess(Block & block, T column, ELEM_T elem);
 };
 
 } // namespace DB

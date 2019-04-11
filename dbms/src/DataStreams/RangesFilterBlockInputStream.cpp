@@ -10,20 +10,20 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-template<typename T>
-Block RangesFilterBlockInputStream::readProcess(Block & block, T column)
+template<typename T, typename ELEM_T>
+Block RangesFilterBlockInputStream::readProcess(Block & block, T column, ELEM_T)
 {
     size_t rows = block.rows();
 
     auto handle_begin = column->getElement(0);
     auto handle_end = column->getElement(rows - 1);
 
-    if (handle_begin >= ranges.second || ranges.first > handle_end)
+    if (handle_begin >= (ELEM_T)ranges.second || (ELEM_T)ranges.first > handle_end)
         return block.cloneEmpty();
 
-    if (handle_begin >= ranges.first)
+    if (handle_begin >= (ELEM_T)ranges.first)
     {
-        if (handle_end < ranges.second)
+        if (handle_end < (ELEM_T)ranges.second)
         {
             return block;
         }
@@ -46,7 +46,7 @@ Block RangesFilterBlockInputStream::readProcess(Block & block, T column)
         size_t pos_begin
             = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.first) - column->getData().cbegin();
         size_t pos_end = rows;
-        if (handle_end >= ranges.second)
+        if (handle_end >= (ELEM_T)ranges.second)
             pos_end = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
 
         size_t len = pos_end - pos_begin;
@@ -76,16 +76,35 @@ Block RangesFilterBlockInputStream::readImpl()
             throw Exception("RangesFilterBlockInputStream: block without _tidb_rowid.", ErrorCodes::LOGICAL_ERROR);
 
         const ColumnWithTypeAndName & handle_column = block.getByName(handle_col_name);
-        std::string handle_column_type_name = std::string(handle_column.type->getFamilyName());
+        std::string handle_column_type_name(handle_column.type->getFamilyName());
         if (handle_column_type_name == "Int64")
         {
-            block = readProcess(block, typeid_cast<const ColumnInt64 *>(handle_column.column.get()));
+            block = readProcess(block, typeid_cast<const ColumnInt64 *>(handle_column.column.get()), (ColumnInt64::value_type)0);
         } else if (handle_column_type_name == "Int32")
         {
-            block = readProcess(block, typeid_cast<const ColumnInt32 *>(handle_column.column.get()));
-        } else
+            block = readProcess(block, typeid_cast<const ColumnInt32 *>(handle_column.column.get()), (ColumnInt32::value_type)0);
+        } else if (handle_column_type_name == "Int16")
         {
-            throw Exception("RangesFilterBlockInputStream: handle column should be type ColumnInt64 or ColumnInt32.");
+            block = readProcess(block, typeid_cast<const ColumnInt16 *>(handle_column.column.get()), (ColumnInt16::value_type)0);
+        } else if (handle_column_type_name == "Int8")
+        {
+            block = readProcess(block, typeid_cast<const ColumnInt8 *>(handle_column.column.get()), (ColumnInt8::value_type)0);
+        } else if (handle_column_type_name == "UInt64")
+        {
+            block = readProcess(block, typeid_cast<const ColumnUInt64 *>(handle_column.column.get()), (ColumnUInt64::value_type)0);
+        } else if (handle_column_type_name == "UInt32")
+        {
+            block = readProcess(block, typeid_cast<const ColumnUInt32 *>(handle_column.column.get()), (ColumnUInt32::value_type)0);
+        } else if (handle_column_type_name == "UInt16")
+        {
+            block = readProcess(block, typeid_cast<const ColumnUInt16 *>(handle_column.column.get()), (ColumnUInt16::value_type)0);
+        } else if (handle_column_type_name == "UInt8")
+        {
+            block = readProcess(block, typeid_cast<const ColumnUInt8 *>(handle_column.column.get()), (ColumnUInt8::value_type)0);
+        }
+        else
+        {
+            throw Exception("RangesFilterBlockInputStream: handle column should be type ColumnInt64, ColumnInt32, ColumnInt16 or ColumnInt8.");
         }
         if (block.rows() == 0)
         {

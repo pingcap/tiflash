@@ -67,7 +67,7 @@ void MockTiDB::dropTable(const String & database_name, const String & table_name
     tables_by_name.erase(it_by_name);
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, const String & primary_key, bool pk_is_handle)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, const String & primary_key)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -78,6 +78,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     }
 
     TableInfo table_info;
+    bool pk_is_handle = false;
 
     if (databases.find(database_name) != databases.end())
     {
@@ -97,7 +98,23 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         const IDataType *nested_type = column.type.get();
         if (column.name == primary_key)
         {
+            if (pk_is_handle)
+            {
+                throw Exception("primary key can only be one column");
+            }
             column_info.setPriKeyFlag();
+            std::string handle_column_type_name = std::string(column.type->getFamilyName());
+            if ((handle_column_type_name == "Int64")
+                || (handle_column_type_name == "Int32")
+                || (handle_column_type_name == "Int16")
+                || (handle_column_type_name == "Int8")
+                || (handle_column_type_name == "UInt64")
+                || (handle_column_type_name == "UInt32")
+                || (handle_column_type_name == "UInt16")
+                || (handle_column_type_name == "UInt8"))
+            {
+                pk_is_handle = true;
+            }
         }
         if (!column.type->isNullable())
         {
@@ -131,7 +148,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         table_info.columns.emplace_back(column_info);
     }
 
-    table_info.pk_is_handle = !(primary_key.empty()) && pk_is_handle;
+    table_info.pk_is_handle = pk_is_handle;
 
     table_info.comment = "Mocked.";
 
