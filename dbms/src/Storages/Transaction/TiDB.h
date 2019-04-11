@@ -263,11 +263,11 @@ struct TableInfo
         throw Exception("unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
     }
 
-    void manglePartitionTableIfNeeded(TableID table_or_partition_id)
+    bool manglePartitionTableIfNeeded(TableID table_or_partition_id)
     {
         if (id == table_or_partition_id)
             // Non-partition table.
-            return;
+            return false;
 
         // Some sanity checks for partition table.
         if (unlikely(!(is_partition_table && partition.enable)))
@@ -282,6 +282,8 @@ struct TableInfo
 
         // Mangle the table name by appending partition name.
         name += "_" + std::to_string(table_or_partition_id);
+
+        return true;
     }
 };
 
