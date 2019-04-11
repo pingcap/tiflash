@@ -207,21 +207,6 @@ void RegionMeta::reset(RegionMeta && rhs)
     pending_remove = rhs.pending_remove;
 }
 
-void RegionMeta::doRemovePeer(UInt64 store_id)
-{
-    auto mutable_peers = region.mutable_peers();
-
-    for (auto it = mutable_peers->begin(); it != mutable_peers->end(); ++it)
-    {
-        if (it->store_id() == store_id)
-        {
-            mutable_peers->erase(it);
-            return;
-        }
-    }
-    throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-}
-
 void RegionMeta::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
@@ -243,14 +228,14 @@ void RegionMeta::execChangePeer(
         case eraftpb::ConfChangeType::RemoveNode:
         {
             const auto & peer = change_peer_request.peer();
-            auto store_id = peer.store_id();
 
             std::lock_guard<std::mutex> lock(mutex);
 
-            doRemovePeer(store_id);
+            doSetRegion(new_region);
 
             if (this->peer.id() == peer.id())
                 doSetPendingRemove();
+
             doSetApplied(index, term);
             return;
         }
