@@ -15,6 +15,7 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 const UInt32 Region::CURRENT_VERSION = 0;
 
+// REVIEW: this names are part of the protocol, we can move these to lower module, such as RegionMeta
 const String Region::lock_cf_name = "lock";
 const String Region::default_cf_name = "default";
 const String Region::write_cf_name = "write";
@@ -128,6 +129,7 @@ void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft
     meta.execChangePeer(request, response, index, term);
 }
 
+// REVIEW: Find => find
 const metapb::Peer & FindPeer(const metapb::Region & region, UInt64 store_id)
 {
     for (const auto & peer : region.peers())
@@ -343,6 +345,7 @@ bool Region::checkIndex(UInt64 index)
         return false;
     }
     auto expected = applied_index + 1;
+    // REVIEW: if this region receive a snapshot, the expected index will be not applied_index + 1
     if (index != expected)
     {
         LOG_WARNING(log, toString() << " expected index: " << DB::toString(expected) << ", got: " << DB::toString(index));

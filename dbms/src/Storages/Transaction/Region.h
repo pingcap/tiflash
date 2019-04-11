@@ -50,6 +50,7 @@ public:
             : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
         {
             const auto & data = store->data.writeCF().getData();
+            // REVIEW: is the table_id definate in writeCF, seems not?
             if (auto it = data.find(expected_table_id); it != data.end())
             {
                 found = true;
@@ -62,6 +63,7 @@ public:
 
         bool hasNext() const { return found && write_map_it != write_map_it_end; }
 
+        // REVIEW: the arg `keys`, it's meaning is a little vague
         auto next(RegionWriteCFDataTrait::Keys * keys = nullptr)
         {
             if (!found)
@@ -81,6 +83,9 @@ public:
         RegionData::ConstWriteCFIter write_map_it_end;
     };
 
+    // REVIEW: this Remover seems stateless except the mutext lock.
+    //   In a low contention situation (indeed it is), we can just lock-unlock in every key removing.
+    //   In that case, we can discard this Remover class.
     class CommittedRemover : private boost::noncopyable
     {
     public:
