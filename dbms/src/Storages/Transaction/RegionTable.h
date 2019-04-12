@@ -96,8 +96,10 @@ public:
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionMap = std::unordered_map<RegionID, RegionInfo>;
 
+    // REVIEW: this class seems not response for anything
     struct FlushThresholds
     {
+        // REVIEW: seems two vectors are better, or just use two int64s for now
         using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
 
         FlushThresholdsData data;
@@ -112,12 +114,15 @@ public:
             data = flush_thresholds_;
         }
 
+        // REVIEW: big leaking, return an object (event it's const) could lead to access race.
+        //   And can't find codes in anywhere using this method
         const FlushThresholdsData & getData()
         {
             std::lock_guard<std::mutex> lock(mutex);
             return data;
         }
 
+        // REVIEW: `shouldFlush(...)` would be better
         template <typename T>
         T traverse(std::function<T(const FlushThresholdsData & data)> && f)
         {
