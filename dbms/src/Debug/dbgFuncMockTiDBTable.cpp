@@ -70,6 +70,22 @@ void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     output(ss.str());
 }
 
+void dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    const String & partition_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+
+    TableID partition_id = MockTiDB::instance().newPartition(database_name, table_name, partition_name);
+
+    std::stringstream ss;
+    ss << "mock partition #" << partition_id;
+    output(ss.str());
+}
+
 void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 2)

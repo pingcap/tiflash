@@ -128,12 +128,15 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     if (fields.size() != table_info.columns.size())
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
 
-    TiKVKey key = RecordKVFormat::genKey(table_info.id, handle_id);
-    TiKVValue value = RecordKVFormat::EncodeRow(table_info, fields);
-
     TMTContext & tmt = context.getTMTContext();
     pingcap::pd::ClientPtr pd_client = tmt.getPDClient();
     RegionPtr region = tmt.kvstore->getRegion(region_id);
+
+    // Using the region meta's table ID rather than table_info's, as this could be a partition table so that the table ID should be partition ID.
+    TableID table_id = RecordKVFormat::getTableId(region->getRange().first);
+
+    TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
+    TiKVValue value = RecordKVFormat::EncodeRow(table_info, fields);
 
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();

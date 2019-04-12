@@ -20,6 +20,11 @@ void dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::P
 //   ./storages-client.sh "DBGInvoke mock_tidb_table(database_name, table_name, 'col1 type1, col2 type2, ...')"
 void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+// Inject mocked TiDB table.
+// Usage:
+//   ./storages-client.sh "DBGInvoke mock_tidb_partition(database_name, table_name, partition_name)"
+void dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 // Drop a mocked TiDB table.
 // Usage:
 //   ./storages-client.sh "DBGInvoke drop_tidb_table(database_name, table_name)"

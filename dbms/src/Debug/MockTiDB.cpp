@@ -21,15 +21,10 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-    extern const int LOGICAL_ERROR;
-    extern const int TABLE_ALREADY_EXISTS;
-    extern const int UNKNOWN_TABLE;
-}
-
 using ColumnInfo = TiDB::ColumnInfo;
 using TableInfo = TiDB::TableInfo;
+using PartitionInfo = TiDB::PartitionInfo;
+using PartitionDefinition = TiDB::PartitionDefinition;
 using Table = MockTiDB::Table;
 using TablePtr = MockTiDB::TablePtr;
 
@@ -137,10 +132,44 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     return table->table_info.id;
 }
 
+TableID MockTiDB::newPartition(const String & database_name, const String & table_name, const String & partition_name)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    TableInfo & table_info = table->table_info;
+
+    const auto & part_def = find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [& partition_name](PartitionDefinition & part_def) {
+        return part_def.name == partition_name;
+    });
+    if (part_def != table_info.partition.definitions.end())
+        throw Exception("Mock TiDB table " + database_name + "." + table_name + " already has partition " + partition_name, ErrorCodes::LOGICAL_ERROR);
+
+    table_info.is_partition_table = true;
+    table_info.partition.enable = true;
+    table_info.partition.num++;
+    TableID partition_id = table_info.id + table_info.partition.num;
+    PartitionDefinition partition_def;
+    partition_def.id = partition_id;
+    partition_def.name = partition_name;
+    table_info.partition.definitions.emplace_back(partition_def);
+
+    // Map the same table object with partition ID as key, so mock schema syncer behaves the same as TiDB,
+    // i.e. gives the table info even by by partition ID.
+    tables_by_id.emplace(partition_id, table);
+
+    return partition_id;
+}
+
 TablePtr MockTiDB::getTableByName(const String & database_name, const String & table_name)
 {
     std::lock_guard lock(tables_mutex);
 
+    return getTableByNameInternal(database_name, table_name);
+}
+
+TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const String & table_name)
+{
     String qualified_name = database_name + "." + table_name;
     auto it = tables_by_name.find(qualified_name);
     if (it == tables_by_name.end())

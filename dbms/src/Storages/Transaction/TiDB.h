@@ -209,12 +209,12 @@ struct PartitionInfo
 
     void deserialize(const JSON & json);
 
-    PartitionType type;
+    PartitionType type = PartitionTypeRange;
     String expr;
     // Columns []CIStr       `json:"columns"`
-    bool enable;
+    bool enable = false;
     std::vector<PartitionDefinition> definitions;
-    UInt64 num;
+    UInt64 num = 0;
 };
 
 struct TableInfo

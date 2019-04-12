@@ -11,6 +11,13 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+    extern const int TABLE_ALREADY_EXISTS;
+    extern const int UNKNOWN_TABLE;
+}
+
 class MockTiDB : public ext::singleton<MockTiDB>
 {
     friend class ext::singleton<MockTiDB>;
@@ -25,7 +32,21 @@ public:
 
         TableID id() { return table_info.id; }
 
-        const TiDB::TableInfo table_info;
+        bool isPartitionTable() { return table_info.partition.enable; }
+
+        TableID getPartitionIDByName(const String & partition_name)
+        {
+            const auto & partition_def = std::find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&partition_name](TiDB::PartitionDefinition & part_def) {
+                return part_def.name == partition_name;
+            });
+
+            if (partition_def == table_info.partition.definitions.end())
+                throw Exception("Mock TiDB table " + database_name + "." + table_name + " does not have partition " + partition_name, ErrorCodes::LOGICAL_ERROR);
+
+            return partition_def->id;
+        }
+
+        TiDB::TableInfo table_info;
 
     private:
         const String          database_name;
@@ -47,9 +68,14 @@ public:
 
     TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns);
 
+    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name);
+
     void dropTable(const String & database_name, const String & table_name);
 
     TablePtr getTableByName(const String & database_name, const String & table_name);
+
+private:
+    TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
 
 private:
     std::mutex tables_mutex;
