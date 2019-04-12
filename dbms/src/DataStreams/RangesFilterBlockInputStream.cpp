@@ -17,20 +17,32 @@ Block RangesFilterBlockInputStream::readProcess(Block & block, T column, ELEM_T)
 
     auto handle_begin = column->getElement(0);
     auto handle_end = column->getElement(rows - 1);
+    constexpr HandleID min = std::numeric_limits<HandleID>::min();
+    constexpr HandleID max = std::numeric_limits<HandleID>::max();
+    HandleID range_start = ranges.first;
+    HandleID range_end = ranges.second;
+    if (range_start == min)
+    {
+        range_start = std::numeric_limits<ELEM_T>::min();
+    }
+    if (range_end == max)
+    {
+        range_end = std::numeric_limits<ELEM_T>::max();
+    }
 
-    if (handle_begin >= (ELEM_T)ranges.second || (ELEM_T)ranges.first > handle_end)
+    if (handle_begin >= static_cast<ELEM_T>(range_end) || static_cast<ELEM_T>(range_start) > handle_end)
         return block.cloneEmpty();
 
-    if (handle_begin >= (ELEM_T)ranges.first)
+    if (handle_begin >= static_cast<ELEM_T>(range_start))
     {
-        if (handle_end < (ELEM_T)ranges.second)
+        if (handle_end < static_cast<ELEM_T>(range_end))
         {
             return block;
         }
         else
         {
             size_t pos
-                = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
+                = std::lower_bound(column->getData().cbegin(), column->getData().cend(), range_end) - column->getData().cbegin();
             size_t pop_num = rows - pos;
             for (size_t i = 0; i < block.columns(); i++)
             {
@@ -44,10 +56,10 @@ Block RangesFilterBlockInputStream::readProcess(Block & block, T column, ELEM_T)
     else
     {
         size_t pos_begin
-            = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.first) - column->getData().cbegin();
+            = std::lower_bound(column->getData().cbegin(), column->getData().cend(), range_start) - column->getData().cbegin();
         size_t pos_end = rows;
-        if (handle_end >= (ELEM_T)ranges.second)
-            pos_end = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
+        if (handle_end >= static_cast<ELEM_T>(range_end))
+            pos_end = std::lower_bound(column->getData().cbegin(), column->getData().cend(), range_end) - column->getData().cbegin();
 
         size_t len = pos_end - pos_begin;
         if (!len)
