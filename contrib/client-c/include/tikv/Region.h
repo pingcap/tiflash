@@ -16,14 +16,16 @@ namespace kv {
 struct Store {
     uint64_t    id;
     std::string addr;
+    std::map<std::string, std::string> labels;
 
     Store(){}
-    Store(uint64_t id_, const std::string & addr_): id(id_), addr(addr_) {}
+    Store(uint64_t id_, const std::string & addr_, const std::map<std::string, std::string> & labels_): id(id_), addr(addr_), labels(labels_) {}
     Store(Store && ) = default;
     Store(const Store & ) = default;
     Store& operator=(const Store& rhs) {
         id = rhs.id;
         addr = rhs.addr;
+        labels = rhs.labels;
         return *this;
     }
 };
@@ -146,13 +148,16 @@ private:
 
     RegionPtr loadRegion(Backoffer & bo, std::string key);
 
+    metapb::Peer selectLearner(Backoffer & bo, const std::vector<metapb::Peer> & slaves);
+
     RegionPtr loadRegionByID(Backoffer & bo, uint64_t region_id);
 
-    std::string loadStoreAddr(Backoffer & bo, uint64_t id);
+    metapb::Store loadStore(Backoffer & bo, uint64_t id);
 
-    std::string reloadStoreAddr(Backoffer & bo, uint64_t id);
+    Store reloadStore(Backoffer & bo, uint64_t id);
 
     std::string getStoreAddr(Backoffer & bo, uint64_t id);
+    Store getStore(Backoffer & bo, uint64_t id);
 
     //RegionPtr searchCachedRegion(std::string key);
 
