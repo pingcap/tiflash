@@ -355,6 +355,14 @@ public:
         pd_addrs = std::move(addrs_);
     }
 
+    void setLearnerKey(std::string key_) {
+        learner_key = key_;
+    }
+
+    void setLearnerValue(std::string value_) {
+        learner_value = value_;
+    }
+
     BackgroundProcessingPool & getBackgroundPool();
 
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
@@ -447,6 +455,10 @@ private:
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 
     std::vector<String> pd_addrs;
+
+    std::string learner_key;
+
+    std::string learner_value;
 };
 
 
