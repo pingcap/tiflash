@@ -38,6 +38,7 @@ DBGInvoker::DBGInvoker()
     regFunc("mock_schema_syncer", dbgFuncMockSchemaSyncer);
     regFunc("mock_tidb_table", dbgFuncMockTiDBTable);
     regFunc("mock_tidb_partition", dbgFuncMockTiDBPartition);
+    regFunc("rename_table_for_partition", dbgFuncRenameTableForPartition);
     regFunc("drop_tidb_table", dbgFuncDropTiDBTable);
 
     regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);

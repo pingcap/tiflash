@@ -55,9 +55,16 @@ void MockTiDB::dropTable(const String & database_name, const String & table_name
     if (it_by_name == tables_by_name.end())
         return;
 
-    for (auto it = tables_by_id.begin(); it != tables_by_id.begin(); ++it)
-        if (it->second.get() == it_by_name->second.get())
-            it = tables_by_id.erase(it);
+    const auto & table = it_by_name->second;
+    if (table->isPartitionTable())
+    {
+        for (const auto & partition : table->table_info.partition.definitions)
+        {
+            tables_by_id.erase(partition.id);
+        }
+    }
+    tables_by_id.erase(table->id());
+
 
     tables_by_name.erase(it_by_name);
 }

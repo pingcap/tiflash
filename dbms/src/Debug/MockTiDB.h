@@ -32,7 +32,7 @@ public:
 
         TableID id() { return table_info.id; }
 
-        bool isPartitionTable() { return table_info.partition.enable; }
+        bool isPartitionTable() { return table_info.is_partition_table; }
 
         TableID getPartitionIDByName(const String & partition_name)
         {
