@@ -334,7 +334,18 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
         unescaped_json_str = json_str;
     }
 
-    JSON json(unescaped_json_str);
+    /// The JSON library does not support whitespace. We delete them. Inefficient.
+    ReadBufferFromString in(unescaped_json_str);
+    WriteBufferFromOwnString out;
+    while (!in.eof())
+    {
+        char c;
+        readChar(c, in);
+        if (!isspace(c))
+            writeChar(c, out);
+    }
+
+    JSON json(out.str());
 
     JSON db_json = json["db_info"];
     db_id = db_json["id"].getInt();
