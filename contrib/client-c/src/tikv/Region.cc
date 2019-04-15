@@ -78,7 +78,7 @@ metapb::Peer RegionCache::selectLearner(Backoffer & bo, const std::vector<metapb
     for (auto slave : slaves) {
         auto store_id = slave.store_id();
         auto labels = getStore(bo, store_id).labels;
-        if (labels["zone"] == "engine") {
+        if (labels[learner_key] == learner_value) {
             return slave;
         }
     }

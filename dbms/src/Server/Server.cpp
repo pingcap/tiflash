@@ -324,6 +324,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
         } else {
             LOG_INFO(log, "Not found pd addrs.");
         }
+
+        if (config().has("raft.learner_key"))
+        {
+            String learner_key = config().getString("raft.learner_key");
+            global_context->setLearnerKey(learner_key);
+        } else {
+            global_context->setLearnerKey("zone");
+        }
+        if (config().has("raft.learner_value"))
+        {
+            String learner_value = config().getString("raft.learner_value");
+            global_context->setLearnerValue(learner_value);
+        } else {
+            global_context->setLearnerKey("engine");
+        }
         global_context->initializeRaftService(raft_service_addr);
     }
     if (config().has("tidb"))
