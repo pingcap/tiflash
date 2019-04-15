@@ -2,7 +2,7 @@ version: '2.3'
 
 services:
   tics0:
-    image: hub.pingcap.net/tiflash/tics:${TAG:-raft}
+    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     ports:
       - "3930:3930"
       - "9000:9000"
