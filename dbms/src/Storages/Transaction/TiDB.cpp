@@ -335,6 +335,7 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
     }
 
     /// The JSON library does not support whitespace. We delete them. Inefficient.
+    // TODO: This may mis-delete innocent spaces/newlines enclosed by quotes, consider using some lexical way.
     ReadBufferFromString in(unescaped_json_str);
     WriteBufferFromOwnString out;
     while (!in.eof())
