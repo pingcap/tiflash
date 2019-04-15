@@ -29,7 +29,7 @@ bool testReadIndex () {
     ::sleep(1);
 
     pd::ClientPtr clt = std::make_shared<pd::Client>(addrs);
-    kv::RegionCachePtr cache = std::make_shared<kv::RegionCache>(clt);
+    kv::RegionCachePtr cache = std::make_shared<kv::RegionCache>(clt, "zone", "engine");
     kv::RpcClientPtr rpc = std::make_shared<kv::RpcClient>();
     kv::RegionClient client(cache, rpc, verID);
     int idx = client.getReadIndex();

@@ -22,7 +22,7 @@ public:
 
 public:
     // TODO: get flusher args from config file
-    explicit TMTContext(Context & context_, std::vector<String> addrs);
+    explicit TMTContext(Context & context_, std::vector<String> addrs, std::string learner_key_, std::string learner_value_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
