@@ -158,6 +158,7 @@ inline UInt32 readWord(int binIdx, const String & dec, int size) {
     return v;
 }
 
+// REVIEW: `String & raw_value` => `const char *`
 inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
 {
     PrecType prec = raw_value[cursor++];
@@ -242,6 +243,7 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
     }
 }
 
+// REVIEW: stringstream => std::ostream
 template <typename T>
 inline void writeIntBinary(const T & x, std::stringstream & ss)
 {
