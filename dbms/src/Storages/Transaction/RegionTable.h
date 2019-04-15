@@ -11,6 +11,8 @@
 #include <Common/PersistedContainer.h>
 #include <Common/randomSeed.h>
 
+// REVIEW: we need a crush-restore doc, to descript the data consistence in the situation of service crush-restore
+
 namespace DB
 {
 
@@ -30,6 +32,8 @@ public:
         bool pause_flush = false;
         bool must_flush = false;
         bool updated = false;
+        // REVIEW: log some metrics to detect if flush is too low that some data are persisted one more time
+        // REVIEW: here we mark the cached-bytes, we can also mark the unpersisted-bytes, it means `cached-bytes - last-time-persisted-bytes`
         Int64 cache_bytes = 0;
         Timepoint last_flush_time = Clock::now();
     };
