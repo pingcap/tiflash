@@ -19,6 +19,7 @@ extern const int CANNOT_SEEK_THROUGH_FILE;
 
 namespace FileHashCheck
 {
+// REVIEW: use pread?
 void readFileFully(const std::string & path, int fd, off_t file_offset, size_t read_size, char * data)
 {
 
