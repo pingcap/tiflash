@@ -6,13 +6,13 @@
 namespace DB
 {
 
-TMTContext::TMTContext(Context & context, std::vector<String> addrs)
+TMTContext::TMTContext(Context & context, std::vector<String> addrs, std::string learner_key_, std::string learner_value_)
     : kvstore(std::make_shared<KVStore>(context.getPath() + "kvstore/")),
       region_table(context, context.getPath() + "regmap/"),
       schema_syncer(std::make_shared<HttpJsonSchemaSyncer>()),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
-      region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client)),
+      region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key_, learner_value_)),
       rpc_client(std::make_shared<pingcap::kv::RpcClient>())
 {
     kvstore->restore(
