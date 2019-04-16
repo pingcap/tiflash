@@ -72,6 +72,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     const auto & date_lut = DateLUT::instance();
 
+    // REVIEW: one more call of scanner.hasNext wouldn't hurt
     // Because the first check of scanner.hasNext() already been done outside of this function.
     do
     {
@@ -92,8 +93,10 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
             version_data.resize(version_data.size() + 1);
             version_data[version_data.size() - 1] = commit_ts;
 
+            // REVIEW: use two rows, one is values, another one is mock values
             std::vector<Field> row;
 
+            // REVIEW: `filed` is slow, any optimization?
             if (write_type == Region::DelFlag)
             {
                 row.reserve(table_info.columns.size() * 2);
@@ -106,6 +109,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
             else
                 row = RecordKVFormat::DecodeRow(value);
 
+            // REVIEW: not sure about this
             if (row.size() % 2 != 0)
                 throw Exception("The number of columns is not right!", ErrorCodes::LOGICAL_ERROR);
 
@@ -116,6 +120,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 if (it == column_map.end())
                     continue;
                 const auto & tp = it->second.second.type->getName();
+                // REVIEW: a new function about date/time handling
                 if (tp == "Nullable(DateTime)" || tp == "Nullable(Date)" || tp == "DateTime" || tp == "Date")
                 {
                     Field & field = row[i + 1];
