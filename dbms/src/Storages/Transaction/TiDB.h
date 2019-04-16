@@ -229,10 +229,10 @@ struct TableInfo
 
     DatabaseID db_id = -1;
     String db_name;
-    // The meaning of this ID changed after we support TiDB partition ID.
+    // The meaning of this ID changed after we support TiDB partition table.
     // It is the physical table ID, i.e. table ID for non-partition table,
-    // and partition ID for partition table
-    // whereas field `belonging_table_id` actual means the table ID this partition belongs to.
+    // and partition ID for partition table,
+    // whereas field `belonging_table_id` below actually means the table ID this partition belongs to.
     TableID id = -1;
     String name;
     // Columns are listed in the order in which they appear in the schema.
