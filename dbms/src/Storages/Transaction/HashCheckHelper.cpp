@@ -57,6 +57,7 @@ void checkObjectHashInFile(const std::string & path, const std::vector<size_t> &
         throw Exception("File size not match! Expected: " + DB::toString(total_size) + ", got: " + DB::toString(file_size),
             ErrorCodes::FILE_SIZE_NOT_MATCH);
 
+    // REVIEW: need to check max_size is too big?
     char * object_data_buf = (char *)malloc(max_size);
     SCOPE_EXIT({ free(object_data_buf); });
 
