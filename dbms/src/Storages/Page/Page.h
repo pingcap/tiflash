@@ -26,6 +26,7 @@ struct Page
 using Pages   = std::vector<Page>;
 using PageMap = std::unordered_map<PageId, Page>;
 
+// REVIEW: this class has `cache` in its name but it don't hold any memory, whith is weird
 struct PageCache
 {
     PageFileId file_id;

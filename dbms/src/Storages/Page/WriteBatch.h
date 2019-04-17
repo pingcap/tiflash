@@ -13,6 +13,7 @@ class WriteBatch
 public:
     struct Write
     {
+        // REVIEW: is_del may be better
         bool          is_put;
         PageId        page_id;
         UInt64        version;

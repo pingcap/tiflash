@@ -38,6 +38,7 @@ public:
     PageCache getCache(PageId page_id);
 
     void    write(const WriteBatch & write_batch);
+    // REVIEW: i don't see a strong reason to use batch-get over single-get
     PageMap read(std::vector<PageId> page_ids);
     void    traverse(std::function<void(const Page & page)> acceptor);
     bool    gc();
