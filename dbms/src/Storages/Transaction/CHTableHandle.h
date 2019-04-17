@@ -34,8 +34,7 @@ inline std::tuple<int, std::array<UInt64TableHandleRange, 2>> splitForUInt64Tabl
     if constexpr (ToInt64)
         return {0, {}};
 
-    constexpr auto max_positive = std::numeric_limits<UInt64>::max(); // 111111...
-    static const UInt64 unsigned_2_power_max = UInt64(1) << 63;       // 100000...
+    static const UInt64 unsigned_2_power_max = UInt64(1) << 63; // 100000...
 
     const UInt64TableHandle & begin = {ori_range.first.type, static_cast<UInt64>(ori_range.first.handle_id)};
     const UInt64TableHandle & end = {ori_range.second.type, static_cast<UInt64>(ori_range.second.handle_id)};
