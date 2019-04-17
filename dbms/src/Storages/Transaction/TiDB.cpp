@@ -296,8 +296,8 @@ String TableInfo::serialize(bool escaped) const
                     JsonSer::Field("pk_is_handle", pk_is_handle),
                     JsonSer::Field("comment", comment),
                     JsonSer::Field("belonging_table_id", belonging_table_id, !is_partition_table),
-                    // Hack to tell Spark this table is a physical/sub table of a partition.
-                    JsonSer::Field("is_partition_sub_table", "true", !(is_partition_table && id != belonging_table_id)),
+                    // TODO: Hack to tell Spark this table is a physical/sub table of a partition.
+                    JsonSer::Field("is_partition_sub_table", "true", !(is_partition_table && belonging_table_id != -1)),
                     JsonSer::Field("partition",
                         // lazy serializing partition as it could be null.
                         JsonSer::Nullable(std::function<void(WriteBuffer &)>([this](WriteBuffer & buf) {
