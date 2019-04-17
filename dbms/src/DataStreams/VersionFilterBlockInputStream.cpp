@@ -25,12 +25,7 @@ Block VersionFilterBlockInputStream::readImpl()
         }
 
         const ColumnWithTypeAndName & version_column = block.getByName(version_column_name);
-        const ColumnUInt64 * column = typeid_cast<const ColumnUInt64 *>(version_column.column.get());
-        if (!column)
-        {
-            throw Exception("VersionFilterBlockInputStream: Version column should be type ColumnUInt64.",
-                    ErrorCodes::LOGICAL_ERROR);
-        }
+        const ColumnUInt64 * column = static_cast<const ColumnUInt64 *>(version_column.column.get());
 
         size_t rows = block.rows();
         IColumn::Filter filter(rows, 1);

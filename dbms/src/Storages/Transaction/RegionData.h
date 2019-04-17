@@ -25,7 +25,6 @@ struct RegionWriteCFDataTrait
     using Key = std::tuple<HandleID, Timestamp>;
     using Value = std::tuple<TiKVKey, TiKVValue, DecodedWriteCFValue>;
     using Map = std::map<Key, Value>;
-    using Keys = std::list<Key>;
 
     static std::pair<Key, Value> genKVPair(const TiKVKey & key, const String & raw_key, const TiKVValue & value)
     {
@@ -335,7 +334,7 @@ public:
         UInt64 lock_ttl;
     };
 
-    using ReadInfo = std::tuple<UInt64, UInt8, UInt64, TiKVValue>;
+    using ReadInfo = std::tuple<Int64, UInt8, UInt64, TiKVValue>;
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 
@@ -425,15 +424,12 @@ public:
         return write_cf.getDataMut()[table_id].erase(write_it);
     }
 
-    ReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys) const
+    ReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const
     {
         const auto & [key, value, decoded_val] = write_it->second;
         const auto & [handle, ts] = write_it->first;
 
         std::ignore = value;
-
-        if (keys)
-            keys->push_back(write_it->first);
 
         const auto & [write_type, prewrite_ts, short_value] = decoded_val;
 

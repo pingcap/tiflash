@@ -24,10 +24,9 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, co
     return data.removeDataByWriteIt(table_id, write_it);
 }
 
-RegionData::ReadInfo Region::readDataByWriteIt(
-    const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys) const
+RegionData::ReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const
 {
-    return data.readDataByWriteIt(table_id, write_it, keys);
+    return data.readDataByWriteIt(table_id, write_it);
 }
 
 Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const
@@ -415,23 +414,17 @@ UInt64 Region::version() const { return meta.version(); }
 
 UInt64 Region::confVer() const { return meta.confVer(); }
 
-std::pair<HandleID, HandleID> Region::getHandleRangeByTable(TableID table_id) const
-{
-    return ::DB::getHandleRangeByTable(getRange(), table_id);
-}
+HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const { return ::DB::getHandleRangeByTable(getRange(), table_id); }
 
-std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
+HandleRange<HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
 {
     return getHandleRangeByTable(range.first, range.second, table_id);
 }
 
-std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
+HandleRange<HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
 {
-    // Example:
-    // Range: [100_10, 200_5), table_id: 100, then start_handle: 10, end_handle: MAX_HANDLE_ID
-
-    HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-    HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
+    auto start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
+    auto end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
 
     return {start_handle, end_handle};
 }

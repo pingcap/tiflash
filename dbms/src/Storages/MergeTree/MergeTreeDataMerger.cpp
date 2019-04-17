@@ -32,13 +32,13 @@
 
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/CHTableHandle.h>
 
 #include <Poco/File.h>
 
 #include <cmath>
 #include <numeric>
 #include <iomanip>
-
 
 namespace ProfileEvents
 {
@@ -654,30 +654,49 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
         {
             auto &tmt = data.context.getTMTContext();
 
-            std::vector<HandleRange> ranges;
+            bool pk_is_uint64 = false;
+
+            const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
+
+            {
+                const auto pk_type = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
+
+                if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
+                    pk_is_uint64 = true;
+            }
+
+            std::vector<HandleRange<HandleID>> ranges;
             tmt.region_table.traverseInternalRegionsByTable(
                 data.table_info.id,
                 [&](const RegionTable::InternalRegion & region) {
                     ranges.push_back(region.range_in_table);
                 });
 
-            // ranged may overlap, should merge them
-            std::sort(ranges.begin(), ranges.end());
-            size_t size = 0;
-            for (size_t i = 1; i < ranges.size(); ++i)
+            if (pk_is_uint64)
             {
-                if (ranges[i].first <= ranges[size].second)
-                    ranges[size].second = std::max(ranges[i].second, ranges[size].second);
-                else
-                    ranges[++size] = ranges[i];
-            }
-            size = std::min(size + 1, ranges.size());
-            ranges.resize(size);
+                std::vector<HandleRange<UInt64>> new_ranges;
 
-            merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
-                ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
-                data.getPrimarySortDescription()[0].column_name, DEFAULT_MERGE_BLOCK_SIZE,
-                tmt.getPDClient()->getGCSafePoint());
+                for (const auto & range : ranges)
+                {
+                    auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
+
+                    for (auto i = 0; i < n; ++i)
+                        new_ranges.push_back(new_range[i]);
+                }
+
+                CHTableHandle::merge_ranges(new_ranges);
+                merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<UInt64>>(
+                    new_ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
+                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint());
+            }
+            else
+            {
+                CHTableHandle::merge_ranges(ranges);
+                merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<Int64>>(
+                    ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
+                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint());
+            }
+
             break;
         }
         case MergeTreeData::MergingParams::Graphite:

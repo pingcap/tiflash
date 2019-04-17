@@ -1,16 +1,20 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/TiKVHandle.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
 
+template <typename HandleType>
 class RangesFilterBlockInputStream : public IProfilingBlockInputStream
 {
+    using Handle = TiKVHandle::Handle<HandleType>;
+
 public:
-    RangesFilterBlockInputStream(const BlockInputStreamPtr & input_, const HandleRange & ranges_, const String & handle_col_name_)
+    RangesFilterBlockInputStream(
+        const BlockInputStreamPtr & input_, const HandleRange<HandleType> & ranges_, const String & handle_col_name_)
         : input(input_), ranges(ranges_), handle_col_name(handle_col_name_)
     {}
 
@@ -29,7 +33,7 @@ protected:
 
 private:
     BlockInputStreamPtr input;
-    const HandleRange ranges;
+    const HandleRange<HandleType> ranges;
     const String handle_col_name;
     Logger * log = &Logger::get("RangesFilterBlockInputStream");
 };
