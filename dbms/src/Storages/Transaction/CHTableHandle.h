@@ -25,8 +25,8 @@ using HandleIDType = TiKVHandle::HandleIDType;
 
 inline bool withSignMark(const HandleID & handle_id) { return (handle_id & SIGN_MARK) != 0; }
 
-// there is one very important role: the user handle order is not equal with the handle order in tikv.
-// for example: user insert row with only pk (1<<63), and 1, but we get the tikv handle -1, 1.
+// It's a very important role: the user's pk order is not equal with the handle order in tikv.
+// for example: user insert row with only pk (1<<64)-1, and 1, but we get the tikv handle -1, 1.
 // so, for any range presented by Int64, if the type of pk is UInt64, we should transform it into to several ranges to get the real order.
 template <bool ToInt64 = false>
 inline std::tuple<int, std::array<UInt64TableHandleRange, 2>> splitForUInt64TableHandle(const HandleRange<Int64> & ori_range)

@@ -1,13 +1,13 @@
 #include <Columns/ColumnsNumber.h>
-#include <DataStreams/dedupUtils.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
+#include <DataStreams/dedupUtils.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 Block VersionFilterBlockInputStream::readImpl()
@@ -20,23 +20,39 @@ Block VersionFilterBlockInputStream::readImpl()
 
         if (!block.has(MutableSupport::version_column_name))
         {
-            throw Exception("VersionFilterBlockInputStream: block without version_column_name.",
-                    ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "VersionFilterBlockInputStream: block without " + MutableSupport::version_column_name, ErrorCodes::LOGICAL_ERROR);
         }
 
         const ColumnWithTypeAndName & version_column = block.getByName(version_column_name);
         const ColumnUInt64 * column = static_cast<const ColumnUInt64 *>(version_column.column.get());
 
         size_t rows = block.rows();
+
+        size_t pos = 0;
+        bool need_filter = false;
+
+        for (; pos < rows; ++pos)
+        {
+            if (column->getElement(pos) > filter_greater_version)
+            {
+                need_filter = true;
+                break;
+            }
+        }
+
+        if (!need_filter)
+            return block;
+
         IColumn::Filter filter(rows, 1);
 
         size_t deleted = 0;
-        for (size_t i = 0; i < rows; i++)
+        for (; pos < rows; ++pos)
         {
-            if (column->getElement(i) > filter_greater_version)
+            if (column->getElement(pos) > filter_greater_version)
             {
                 deleted++;
-                filter[i] = 0;
+                filter[pos] = 0;
             }
         }
 
@@ -48,4 +64,4 @@ Block VersionFilterBlockInputStream::readImpl()
     }
 }
 
-}
+} // namespace DB
