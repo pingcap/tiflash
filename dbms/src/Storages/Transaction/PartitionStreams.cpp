@@ -92,8 +92,6 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         if (data_list_for_remove)
             *data_list_for_remove = std::move(data_list);
 
-        assert(data_list.size() == 0);
-
         size_t tol = block.rows();
 
         BlocksList blocks;
