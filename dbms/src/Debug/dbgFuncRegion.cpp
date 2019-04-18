@@ -124,11 +124,11 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     output(ss.str());
 }
 
-std::string getRegionKeyString(const HandleID s, const TiKVKey & k)
+std::string getRegionKeyString(const TiKVRange::Handle s, const TiKVKey & k)
 {
     try
     {
-        if (s == std::numeric_limits<HandleID>::min() || s == std::numeric_limits<HandleID>::max())
+        if (s.type != TiKVHandle::HandleIDType::NORMAL)
         {
             String raw_key = k.empty() ? "" : RecordKVFormat::decodeTiKVKey(k);
             bool is_record = RecordKVFormat::isRecord(raw_key);
@@ -144,7 +144,7 @@ std::string getRegionKeyString(const HandleID s, const TiKVKey & k)
             }
             return ss.str();
         }
-        return toString(s);
+        return toString(s.handle_id);
     }
     catch (...)
     {
@@ -156,7 +156,7 @@ std::string getStartKeyString(TableID table_id, const TiKVKey & start_key)
 {
     try
     {
-        HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
+        auto start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
         return getRegionKeyString(start_handle, start_key);
     }
     catch (...)
@@ -169,7 +169,7 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
 {
     try
     {
-        HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
+        auto end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
         return getRegionKeyString(end_handle, end_key);
     }
     catch (...)
@@ -188,7 +188,8 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         auto range = region->getHandleRangeByTable(table_id);
         size += 1;
         std::stringstream ss;
-        ss << "table #" << table_id << " " << region->toString() << " ranges: " << range.first << ", " << range.second;
+        ss << "table #" << table_id << " " << region->toString() << " ranges: " << range.first.toString() << ", "
+           << range.second.toString();
         output(ss.str());
     });
     output("total size: " + toString(size));

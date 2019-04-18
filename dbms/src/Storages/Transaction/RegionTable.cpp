@@ -145,7 +145,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     TMTContext & tmt = context.getTMTContext();
 
-    RegionWriteCFDataTrait::Keys keys_to_remove;
+    Region::DataList data_list;
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
 
@@ -155,7 +155,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         const auto & columns = merge_tree->getColumns();
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
-        auto [input, status, tol] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, &keys_to_remove);
+        auto [input, status, tol] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, &data_list);
         if (input == nullptr)
             return;
 
@@ -182,8 +182,13 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         if (!region)
             return;
         auto remover = region->createCommittedRemover(table_id);
-        for (const auto & key : keys_to_remove)
-            remover->remove(key);
+        for (const auto & [handle, write_type, commit_ts, value] : data_list)
+        {
+            std::ignore = write_type;
+            std::ignore = value;
+
+            remover->remove({handle, commit_ts});
+        }
         cache_size = region->dataSize();
 
         if (cache_size == 0)

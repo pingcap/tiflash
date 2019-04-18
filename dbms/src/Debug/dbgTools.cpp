@@ -1,5 +1,5 @@
-#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 
 #include <Storages/Transaction/Codec.h>
 
@@ -11,7 +11,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 namespace RegionBench
@@ -34,8 +34,7 @@ RegionPtr createRegion(TableID table_id, RegionID region_id, const RegionKey & s
     return region;
 }
 
-Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region,
-    HandleID handle_begin, RegionID new_region_id_begin)
+Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region, HandleID handle_begin, RegionID new_region_id_begin)
 {
     Regions regions;
     for (RegionID region_id = new_region_id_begin; region_id < static_cast<RegionID>(new_region_id_begin + region_num);
@@ -64,8 +63,8 @@ void setupDelRequest(raft_cmdpb::Request * req, const std::string & cf, const Ti
     del->set_key(key.getStr());
 }
 
-void addRequestsToRaftCmd(enginepb::CommandRequest* cmd, RegionID region_id, const TiKVKey& key,
-    const TiKVValue& value, UInt64 prewrite_ts, UInt64 commit_ts, bool del, const String pk = "pk")
+void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, const TiKVKey & key, const TiKVValue & value,
+    UInt64 prewrite_ts, UInt64 commit_ts, bool del, const String pk = "pk")
 {
     {
         enginepb::CommandRequestHeader * header = cmd->mutable_header();
@@ -115,8 +114,8 @@ void addRequestsToRaftCmd(enginepb::CommandRequest* cmd, RegionID region_id, con
     }
 }
 
-void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id,
-    ASTs::const_iterator begin, ASTs::const_iterator end, Context & context)
+void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
+    ASTs::const_iterator end, Context & context)
 {
     std::vector<Field> fields;
     ASTs::const_iterator it;
@@ -172,22 +171,28 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
 struct BatchCtrl
 {
-    String    default_str;
-    Int64     concurrent_id;
-    Int64     flush_num;
-    Int64     batch_num;
-    UInt64    min_strlen;
-    UInt64    max_strlen;
+    String default_str;
+    Int64 concurrent_id;
+    Int64 flush_num;
+    Int64 batch_num;
+    UInt64 min_strlen;
+    UInt64 max_strlen;
     Context * context;
     RegionPtr region;
-    HandleID  handle_begin;
-    bool      del;
+    HandleID handle_begin;
+    bool del;
 
-    BatchCtrl(Int64 concurrent_id_, Int64 flush_num_, Int64 batch_num_, UInt64 min_strlen_, UInt64 max_strlen_,
-            Context * context_, RegionPtr region_, HandleID handle_begin_, bool del_):
-        concurrent_id(concurrent_id_), flush_num(flush_num_), batch_num(batch_num_),
-        min_strlen(min_strlen_), max_strlen(max_strlen_), context(context_), region(region_), handle_begin(handle_begin_),
-        del(del_)
+    BatchCtrl(Int64 concurrent_id_, Int64 flush_num_, Int64 batch_num_, UInt64 min_strlen_, UInt64 max_strlen_, Context * context_,
+        RegionPtr region_, HandleID handle_begin_, bool del_)
+        : concurrent_id(concurrent_id_),
+          flush_num(flush_num_),
+          batch_num(batch_num_),
+          min_strlen(min_strlen_),
+          max_strlen(max_strlen_),
+          context(context_),
+          region(region_),
+          handle_begin(handle_begin_),
+          del(del_)
     {
         assert(max_strlen >= min_strlen);
         assert(min_strlen >= 1);
@@ -198,7 +203,7 @@ struct BatchCtrl
     void EncodeDatum(std::stringstream & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
-        switch(flag)
+        switch (flag)
         {
             case TiDB::CodecFlagJson:
                 throw Exception("Not implented yet: BatchCtrl::EncodeDatum, TiDB::CodecFlagJson", ErrorCodes::LOGICAL_ERROR);
@@ -244,8 +249,7 @@ struct BatchCtrl
     }
 };
 
-void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> batch_ctrl,
-    std::function<Int64(Int64)> fn_gen_magic_num)
+void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> batch_ctrl, std::function<Int64(Int64)> fn_gen_magic_num)
 {
     RegionPtr & region = batch_ctrl->region;
 
@@ -261,7 +265,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
 
         RaftContext raft_ctx(batch_ctrl->context, nullptr, nullptr);
         enginepb::CommandRequestBatch cmds;
-        enginepb::CommandRequest* cmd = cmds.add_requests();
+        enginepb::CommandRequest * cmd = cmds.add_requests();
 
         for (Int64 cnt = 0; cnt < batch_ctrl->batch_num; ++index, ++cnt)
         {
@@ -275,45 +279,41 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
     }
 }
 
-void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_num, Int64 flush_num, Int64 batch_num,
-                           UInt64 min_strlen, UInt64 max_strlen, Context& context)
+void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_num, Int64 flush_num, Int64 batch_num, UInt64 min_strlen,
+    UInt64 max_strlen, Context & context)
 {
     TMTContext & tmt = context.getTMTContext();
 
     RegionID curr_max_region_id(InvalidRegionID);
     HandleID curr_max_handle_id = 0;
-    tmt.kvstore->traverseRegions(
-        [&](const RegionID region_id, const RegionPtr & region) {
-            curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id :
-                                 std::max<RegionID>(curr_max_region_id, region_id);
-            auto range = region->getRange();
-            curr_max_handle_id = std::max(RecordKVFormat::getHandle(range.second), curr_max_handle_id);
-        });
+    tmt.kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+        curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
+        auto range = region->getRange();
+        curr_max_handle_id = std::max(RecordKVFormat::getHandle(range.second), curr_max_handle_id);
+    });
 
     Int64 key_num_each_region = flush_num * batch_num;
     HandleID handle_begin = curr_max_handle_id;
 
-    Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin,
-                                    curr_max_region_id + 1);
+    Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
         tmt.kvstore->onSnapshot(region, &context);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
     {
-        auto batch_ptr = std::make_unique<BatchCtrl>(i, flush_num, batch_num, min_strlen, max_strlen,
-                                                     &context, regions[i], handle_begin, false);
-        threads.push_back(std::thread(&batchInsert, table_info, std::move(batch_ptr),
-            [](Int64 index) -> Int64 { return index;}));
+        auto batch_ptr
+            = std::make_unique<BatchCtrl>(i, flush_num, batch_num, min_strlen, max_strlen, &context, regions[i], handle_begin, false);
+        threads.push_back(std::thread(&batchInsert, table_info, std::move(batch_ptr), [](Int64 index) -> Int64 { return index; }));
     }
-    for (auto & thread: threads)
+    for (auto & thread : threads)
     {
         thread.join();
     }
 }
 
-Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_handle, HandleID end_handle, Context & context,
-    Int64 magic_num, bool del)
+Int64 concurrentRangeOperate(
+    const TiDB::TableInfo & table_info, HandleID start_handle, HandleID end_handle, Context & context, Int64 magic_num, bool del)
 {
     Regions regions;
 
@@ -337,22 +337,21 @@ Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_
     for (auto region : regions)
     {
         auto [start_key, end_key] = region->getRange();
-        HandleID ss = TiKVRange::getRangeHandle<true>(start_key, table_info.id);
-        HandleID ee = TiKVRange::getRangeHandle<false>(end_key, table_info.id);
-        auto handle_begin = std::max(ss, start_handle);
-        auto handle_end = std::min(ee, end_handle);
+        auto ss = TiKVRange::getRangeHandle<true>(start_key, table_info.id);
+        auto ee = TiKVRange::getRangeHandle<false>(end_key, table_info.id);
+        TiKVRange::Handle handle_begin = std::max<TiKVRange::Handle>(ss, start_handle);
+        TiKVRange::Handle handle_end = std::min<TiKVRange::Handle>(ee, end_handle);
         if (handle_end <= handle_begin)
             continue;
         Int64 batch_num = handle_end - handle_begin;
         tol += batch_num;
-        auto batch_ptr = std::make_unique<BatchCtrl>(-1, 1, batch_num, 1, 1, &context, region, handle_begin, del);
-        threads.push_back(std::thread(&batchInsert, table_info, std::move(batch_ptr),
-            [=](Int64 index) -> Int64 {
+        auto batch_ptr = std::make_unique<BatchCtrl>(-1, 1, batch_num, 1, 1, &context, region, handle_begin.handle_id, del);
+        threads.push_back(std::thread(&batchInsert, table_info, std::move(batch_ptr), [=](Int64 index) -> Int64 {
             std::ignore = index;
             return magic_num;
         }));
     }
-    for (auto & thread: threads)
+    for (auto & thread : threads)
     {
         thread.join();
     }
@@ -360,6 +359,6 @@ Int64 concurrentRangeOperate(const TiDB::TableInfo & table_info, HandleID start_
 }
 
 
-} // namspace RegionBench
+} // namespace RegionBench
 
-} // namspace DB
+} // namespace DB
