@@ -126,10 +126,11 @@ void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
 
+    MockTiDB::TablePtr table = nullptr;
     TableID table_id = InvalidTableID;
     try
     {
-        auto table = MockTiDB::instance().getTableByName(database_name, table_name);
+        table = MockTiDB::instance().getTableByName(database_name, table_name);
         table_id = table->id();
     }
     catch (Exception e)
@@ -141,7 +142,15 @@ void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     }
 
     TMTContext & tmt = context.getTMTContext();
+    if (table->isPartitionTable())
+    {
+        auto partition_ids = table->getPartitionIDs();
+        std::for_each(partition_ids.begin(), partition_ids.end(), [&](TableID partition_id) {
+            tmt.region_table.dropRegionsInTable(partition_id);
+        });
+    }
     tmt.region_table.dropRegionsInTable(table_id);
+
 
     MockTiDB::instance().dropTable(database_name, table_name);
 

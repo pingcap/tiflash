@@ -36,7 +36,7 @@ public:
 
         TableID getPartitionIDByName(const String & partition_name)
         {
-            const auto & partition_def = std::find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&partition_name](TiDB::PartitionDefinition & part_def) {
+            const auto & partition_def = std::find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&partition_name](const TiDB::PartitionDefinition & part_def) {
                 return part_def.name == partition_name;
             });
 
@@ -44,6 +44,15 @@ public:
                 throw Exception("Mock TiDB table " + database_name + "." + table_name + " does not have partition " + partition_name, ErrorCodes::LOGICAL_ERROR);
 
             return partition_def->id;
+        }
+
+        std::vector<TableID> getPartitionIDs()
+        {
+            std::vector<TableID> partition_ids;
+            std::for_each(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&](const TiDB::PartitionDefinition & part_def) {
+                partition_ids.emplace_back(part_def.id);
+            });
+            return partition_ids;
         }
 
         TiDB::TableInfo table_info;

@@ -162,7 +162,7 @@ TableID MockTiDB::newPartition(const String & database_name, const String & tabl
     table_info.partition.definitions.emplace_back(partition_def);
 
     // Map the same table object with partition ID as key, so mock schema syncer behaves the same as TiDB,
-    // i.e. gives the table info even by by partition ID.
+    // i.e. gives the table info by partition ID.
     tables_by_id.emplace(partition_id, table);
 
     return partition_id;
