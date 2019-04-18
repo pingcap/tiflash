@@ -3,15 +3,19 @@
 #include <common/logger_useful.h>
 
 #include <DataStreams/MergingSortedBlockInputStream.h>
-#include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/TiKVHandle.h>
 
 namespace DB
 {
 
+// operation merge is optimized because pk is definite integer
+template <typename HandleType>
 class ReplacingTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
+    using Handle = TiKVHandle::Handle<HandleType>;
+
 public:
-    ReplacingTMTSortedBlockInputStream(const std::vector<std::pair<HandleID, HandleID>> & ranges_,
+    ReplacingTMTSortedBlockInputStream(const std::vector<HandleRange<HandleType>> & ranges_,
         const BlockInputStreams & inputs_,
         const SortDescription & description_,
         const String & version_column,
@@ -52,8 +56,8 @@ private:
     void logRowGoing(const std::string & reason, bool is_output);
 
 private:
-    std::vector<HandleID> begin_handle_ranges;
-    std::vector<HandleID> end_handle_ranges;
+    std::vector<Handle> begin_handle_ranges;
+    std::vector<Handle> end_handle_ranges;
 
     size_t version_column_number;
     size_t del_column_number;

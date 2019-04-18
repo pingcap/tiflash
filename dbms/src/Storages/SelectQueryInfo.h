@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Storages/Transaction/TiKVHandle.h>
 #include <memory>
 #include <unordered_map>
-#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -14,14 +14,14 @@ class Set;
 using SetPtr = std::shared_ptr<Set>;
 
 /// Information about calculated sets in right hand side of IN.
-using PreparedSets = std::unordered_map<IAST*, SetPtr>;
+using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
 struct RegionQueryInfo
 {
     RegionID region_id;
     UInt64 version;
     UInt64 conf_version;
-    HandleRange range_in_table;
+    HandleRange<HandleID> range_in_table;
 
     bool operator<(const RegionQueryInfo & o) const { return range_in_table < o.range_in_table; }
 };
@@ -45,4 +45,4 @@ struct SelectQueryInfo
     std::vector<RegionQueryInfo> regions_query_info;
 };
 
-}
+} // namespace DB
