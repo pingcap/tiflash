@@ -21,12 +21,12 @@ public:
     {
         InternalRegion() {}
         InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
-        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_ = {0, 0})
+        InternalRegion(const RegionID region_id_, const HandleRange<HandleID> & range_in_table_ = {0, 0})
             : region_id(region_id_), range_in_table(range_in_table_)
         {}
 
         RegionID region_id;
-        HandleRange range_in_table;
+        HandleRange<HandleID> range_in_table;
         bool pause_flush = false;
         bool must_flush = false;
         bool updated = false;
@@ -188,7 +188,7 @@ public:
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
-        RegionWriteCFDataTrait::Keys * keys);
+        Region::DataList * data_list_for_remove);
 
     static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
@@ -200,7 +200,7 @@ public:
         bool learner_read,
         bool resolve_locks,
         UInt64 start_ts,
-        RegionWriteCFDataTrait::Keys * keys = nullptr);
+        Region::DataList * data_list_for_remove = nullptr);
 
     // For debug
     void dumpRegionMap(RegionTable::RegionMap & res);

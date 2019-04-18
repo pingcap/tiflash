@@ -20,9 +20,9 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
-std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
+HandleRange<HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
 
-std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
+HandleRange<HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -41,6 +41,8 @@ public:
     using LockInfo = RegionData::LockInfo;
     using LockInfoPtr = RegionData::LockInfoPtr;
     using LockInfos = std::vector<LockInfoPtr>;
+
+    using DataList = std::list<RegionData::ReadInfo>;
 
     class CommittedScanner : private boost::noncopyable
     {
@@ -61,11 +63,11 @@ public:
 
         bool hasNext() const { return found && write_map_it != write_map_it_end; }
 
-        auto next(RegionWriteCFDataTrait::Keys * keys = nullptr)
+        auto next()
         {
             if (!found)
                 throw Exception("CommittedScanner table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
-            return store->readDataByWriteIt(expected_table_id, write_map_it++, keys);
+            return store->readDataByWriteIt(expected_table_id, write_map_it++);
         }
 
         LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
@@ -171,7 +173,7 @@ public:
     RegionVersion version() const;
     RegionVersion confVer() const;
 
-    std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
+    HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
 
     void reset(Region && new_region);
 
@@ -186,8 +188,7 @@ private:
     bool checkIndex(UInt64 index);
     static ColumnFamilyType getCf(const String & cf);
 
-    RegionData::ReadInfo readDataByWriteIt(
-        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys = nullptr) const;
+    RegionData::ReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
