@@ -451,9 +451,18 @@ void RegionTable::dumpRegionMap(RegionTable::RegionMap & res)
     res = regions;
 }
 
-void RegionTable::dropRegionsInTable(TableID /*table_id*/)
+void RegionTable::dropRegionsInTable(TableID table_id)
 {
-    // TODO: impl
+    auto & kvstore = context.getTMTContext().kvstore;
+    traverseRegionsByTable(table_id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+        for (auto && [region_id, _] : regions)
+        {
+            kvstore->removeRegion(region_id, &context);
+        }
+    });
+
+    std::lock_guard<std::mutex> lock(mutex);
+    tables.erase(table_id);
 }
 
 void RegionTable::setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_)
