@@ -462,6 +462,7 @@ void RegionTable::dropRegionsInTable(TableID table_id)
     traverseRegionsByTable(table_id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
         for (auto && [region_id, _] : regions)
         {
+            std::ignore = _;
             kvstore->removeRegion(region_id, &context);
         }
     });
