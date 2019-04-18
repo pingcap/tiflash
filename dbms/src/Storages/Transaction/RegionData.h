@@ -365,36 +365,11 @@ public:
         }
     }
 
-    TableID remove(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key)
+    TableID removeLockCF(const TableID & table_id, const String & raw_key)
     {
-        switch(cf)
-        {
-            case Write:
-            {
-                TableID table_id = RecordKVFormat::getTableId(raw_key);
-                HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-                Timestamp ts = RecordKVFormat::getTs(key);
-                cf_data_size -= write_cf.remove(table_id, RegionWriteCFData::Key{handle_id, ts});
-                return table_id;
-            }
-            case Default:
-            {
-                TableID table_id = RecordKVFormat::getTableId(raw_key);
-                HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-                Timestamp ts = RecordKVFormat::getTs(key);
-                cf_data_size -= default_cf.remove(table_id, RegionDefaultCFData::Key{handle_id, ts});
-                return table_id;
-            }
-            case Lock:
-            {
-                TableID table_id = RecordKVFormat::getTableId(raw_key);
-                HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-                lock_cf.remove(table_id, handle_id);
-                return table_id;
-            }
-            default:
-                throw Exception(" should not happen", ErrorCodes::LOGICAL_ERROR);
-        }
+        HandleID handle_id = RecordKVFormat::getHandle(raw_key);
+        lock_cf.remove(table_id, handle_id);
+        return table_id;
     }
 
     WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it)

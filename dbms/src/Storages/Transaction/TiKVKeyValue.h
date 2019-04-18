@@ -212,7 +212,7 @@ inline std::tuple<String, size_t> decodeTiKVKeyFull(const TiKVKey & key)
         for (const char * p = ptr + ENC_GROUP_SIZE - pad_size; p < ptr + ENC_GROUP_SIZE; ++p)
         {
             if (*p != 0)
-                throw Exception("Key padding", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Key padding, wrong end", ErrorCodes::LOGICAL_ERROR);
         }
         // raw string and the offset of remaining string such as timestamp
         return std::make_tuple(res.str(), ptr - key.data() + chunk_len);

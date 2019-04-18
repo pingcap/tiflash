@@ -88,7 +88,12 @@ TableID Region::doRemove(const String & cf, const TiKVKey & key)
         return InvalidTableID;
 
     auto type = getCf(cf);
-    data.remove(type, key, raw_key);
+    if (type == Lock)
+        data.removeLockCF(table_id, raw_key);
+    else
+    {
+        // removed by gc, just ignore.
+    }
     return table_id;
 }
 
