@@ -83,10 +83,12 @@ int openFile(const std::string & path)
         flags = O_WRONLY | O_CREAT;
     }
 
+    // REVIEW: 0664?
     fd = ::open(path.c_str(), flags, 0666);
     if (-1 == fd)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
+        // REVIEW: this seems not right
         if constexpr (must_exist)
         {
             if (errno == ENOENT)
@@ -191,6 +193,7 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
     return v;
 }
 
+// REVIEW: no callers found
 template <typename C, typename T = typename C::value_type>
 std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false> & allocator)
 {
@@ -220,6 +223,7 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
     return values;
 }
 
+// REVIEW: no callers found
 template <typename C, typename T = typename C::value_type>
 void writeValuesIntoFile(C values, const std::string & path, Allocator<false> & allocator)
 {

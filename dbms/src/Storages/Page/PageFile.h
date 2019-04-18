@@ -23,6 +23,7 @@ namespace DB
 
 /// A light-weight object which can be created and copied cheaply.
 /// Use createWriter()/createReader() to open write/read system file.
+// REVIEW: is it better to let Allocator be a member?
 class PageFile : public Allocator<false>
 {
 public:
