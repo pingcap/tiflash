@@ -10,6 +10,7 @@
 
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/SerializationHelper.h>
+#include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
 
@@ -40,6 +41,9 @@ public:
     StringObject(const StringObject & obj) : str(obj.str) {}
     StringObject & operator=(const StringObject & a)
     {
+        if (this == &a)
+            return *this;
+
         str = a.str;
         return *this;
     }
@@ -75,6 +79,7 @@ public:
     bool operator<=(const T & rhs) const { return str <= rhs.str; }
     bool operator>(const T & rhs) const { return str > rhs.str; }
     bool operator>=(const T & rhs) const { return str >= rhs.str; }
+    void operator+=(const String & s) { str += s; }
 
     size_t serialize(WriteBuffer & buf) const { return writeBinary2(str, buf); }
 
@@ -98,7 +103,7 @@ static const char SHORT_VALUE_PREFIX = 'v';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
-static const UInt64 SIGN_MARK = 0x8000000000000000;
+static const UInt64 SIGN_MARK = UInt64(1) << 63;
 
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
@@ -119,6 +124,10 @@ inline std::vector<Field> DecodeRow(const TiKVValue & value)
     {
         vec.push_back(DecodeDatum(cursor, raw_value));
     }
+
+    if (cursor != raw_value.size())
+        throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
+
     return vec;
 }
 
@@ -168,14 +177,14 @@ inline T read(const char * s)
 
 inline String genRawKey(const TableID tableId, const HandleID handleId)
 {
-    std::stringstream key;
-    key.put(RecordKVFormat::TABLE_PREFIX);
+    String key(RecordKVFormat::RAW_KEY_SIZE, 0);
+    memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
     auto big_endian_table_id = encodeInt64(tableId);
-    key.write(reinterpret_cast<const char *>(&big_endian_table_id), sizeof(big_endian_table_id));
-    key.write(RecordKVFormat::RECORD_PREFIX_SEP, 2);
+    memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
+    memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
     auto big_endian_handle_id = encodeInt64(handleId);
-    key.write(reinterpret_cast<const char *>(&big_endian_handle_id), sizeof(big_endian_handle_id));
-    return key.str();
+    memcpy(key.data() + RAW_KEY_NO_HANDLE_SIZE, reinterpret_cast<const char *>(&big_endian_handle_id), 8);
+    return key;
 }
 
 inline TiKVKey genKey(const TableID tableId, const HandleID handleId) { return encodeAsTiKVKey(genRawKey(tableId, handleId)); }
@@ -203,7 +212,7 @@ inline std::tuple<String, size_t> decodeTiKVKeyFull(const TiKVKey & key)
         for (const char * p = ptr + ENC_GROUP_SIZE - pad_size; p < ptr + ENC_GROUP_SIZE; ++p)
         {
             if (*p != 0)
-                throw Exception("Key padding", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Key padding, wrong end", ErrorCodes::LOGICAL_ERROR);
         }
         // raw string and the offset of remaining string such as timestamp
         return std::make_tuple(res.str(), ptr - key.data() + chunk_len);
@@ -369,8 +378,10 @@ inline TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts) { return int
 namespace TiKVRange
 {
 
+using Handle = TiKVHandle::Handle<HandleID>;
+
 template <bool start, bool decoded = false>
-inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
+inline Handle getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
 {
     constexpr HandleID min = std::numeric_limits<HandleID>::min();
     constexpr HandleID max = std::numeric_limits<HandleID>::max();
@@ -378,9 +389,9 @@ inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
     if (tikv_key.empty())
     {
         if constexpr (start)
-            return min;
+            return Handle::normal_min;
         else
-            return max;
+            return Handle::max;
     }
 
     String key;
@@ -390,34 +401,32 @@ inline HandleID getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
         key = RecordKVFormat::decodeTiKVKey(tikv_key);
 
     if (key <= RecordKVFormat::genRawKey(table_id, min))
-        return min;
-    if (key >= RecordKVFormat::genRawKey(table_id, max))
-        return max;
+        return Handle::normal_min;
+    if (key > RecordKVFormat::genRawKey(table_id, max))
+        return Handle::max;
 
-    if (key.size() < RecordKVFormat::RAW_KEY_SIZE)
+    if (likely(key.size() == RecordKVFormat::RAW_KEY_SIZE))
+        return RecordKVFormat::getHandle(key);
+    else if (key.size() < RecordKVFormat::RAW_KEY_SIZE)
     {
         UInt64 tmp = 0;
         memcpy(&tmp, key.data() + RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, key.size() - RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE);
         HandleID res = RecordKVFormat::decodeInt64(tmp);
+        // the actual res is like `res - 0.x`
         return res;
     }
-
-    if (key.size() > RecordKVFormat::RAW_KEY_SIZE)
+    else
     {
         HandleID res = RecordKVFormat::getHandle(key);
+        // the actual res is like `res + 0.x`
+
+        // this won't happen
+        /*
+        if (unlikely(res == max))
+            return Handle::max;
+        */
         return res + 1;
     }
-
-    return RecordKVFormat::getHandle(key);
-}
-
-inline bool checkTableInvolveRange(const TableID table_id, const std::pair<TiKVKey, TiKVKey> & range)
-{
-    const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
-    const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
-    if (end_key < range.first || (!range.second.empty() && start_key >= range.second))
-        return false;
-    return true;
 }
 
 } // namespace TiKVRange
