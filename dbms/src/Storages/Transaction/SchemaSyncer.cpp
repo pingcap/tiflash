@@ -206,6 +206,14 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
         context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
     }
 
+    /// Mangle for partition table.
+    bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
+    if (is_partition_table && !context.isTableExist(table_info.db_name, table_info.name))
+    {
+        createTable(table_info, context);
+        context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
+    }
+
     // TODO: detect schema change and apply to storage.
 }
 

@@ -24,12 +24,16 @@ extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name)
+TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_name)
 {
     try
     {
         using TablePtr = MockTiDB::TablePtr;
         TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+        if (table->isPartitionTable())
+            return table->getPartitionIDByName(partition_name);
+
         return table->id();
     }
     catch (Exception & e)
@@ -46,9 +50,9 @@ TableID getTableID(Context & context, const std::string & database_name, const s
 
 void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 5)
+    if (args.size() < 5 || args.size() > 6)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]", ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -56,8 +60,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     RegionKey end = (RegionKey)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
+    const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
 
-    TableID table_id = getTableID(context, database_name, table_name);
+    TableID table_id = getTableID(context, database_name, table_name, partition_name);
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
@@ -71,9 +76,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
 void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() < 5)
+    if (args.size() < 5 || args.size() > 6)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]", ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -81,8 +86,9 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     RegionKey end = (RegionKey)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
+    const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
 
-    TableID table_id = getTableID(context, database_name, table_name);
+    TableID table_id = getTableID(context, database_name, table_name, partition_name);
 
     TMTContext & tmt = context.getTMTContext();
 
