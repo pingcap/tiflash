@@ -17,6 +17,7 @@ std::set<PageFile, PageFile::Comparator> listAllPageFiles(std::string storage_pa
     if (!folder.exists())
         folder.createDirectories();
     std::vector<std::string> file_names;
+    // REVIEW: is it listing recursive?
     folder.list(file_names);
 
     if (file_names.empty())
@@ -41,6 +42,7 @@ std::set<PageFile, PageFile::Comparator> listAllPageFiles(std::string storage_pa
     return page_files;
 }
 
+// REVIEW: need a doc of dir structure
 PageStorage::PageStorage(const std::string & storage_path_, const Config & config_)
     : storage_path(storage_path_), config(config_), page_file_log(&Logger::get("PageFile")), log(&Logger::get("PageStorage"))
 {
@@ -84,7 +86,6 @@ PageFile::Writer & PageStorage::getWriter()
 
 PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id_level)
 {
-    // REVIEW: lock?
     auto & cached_reader = open_read_files[file_id_level];
     if (!cached_reader)
     {
@@ -151,10 +152,12 @@ void PageStorage::traverse(std::function<void(const Page & page)> acceptor)
     {
         std::lock_guard<std::mutex> lock(mutex);
 
+        // REVIEW: memory usage or fd usage maybe too much
         for (const auto & [page_id, page_cache] : page_cache_map)
             file_and_pages[page_cache.fileIdLevel()].emplace_back(page_id);
     }
 
+    // REVIEW: any chance the file we attenpt to read could be gc?
     for (const auto & p : file_and_pages)
     {
         auto pages = read(p.second);
@@ -187,6 +190,7 @@ bool PageStorage::gc()
     for (auto & page_file : page_files)
     {
         auto   file_size = page_file.getDataFileSize();
+        // REVIEW: aways init vars
         UInt64 valid_size;
         float  valid_rate;
         size_t valid_page_count;
@@ -271,6 +275,7 @@ bool PageStorage::gc()
                 {
                     PageMap    pages = to_merge_file_reader->read(page_id_and_caches);
                     WriteBatch wb;
+                    // REVIEW: extra memory copy here
                     for (const auto & [page_id, page_cache] : page_id_and_caches)
                     {
                         auto & page = pages.find(page_id)->second;
@@ -301,6 +306,7 @@ bool PageStorage::gc()
                     if (it == page_cache_map.end())
                         continue;
                     auto & old_page_cache = it->second;
+                    // REVIEW: we can't make sure the file-id of new written page is greater than the gc-writting-file-id
                     // In case of page being updated during GC process.
                     if (old_page_cache.fileIdLevel() < page_cache.fileIdLevel())
                         old_page_cache = page_cache;
@@ -312,6 +318,7 @@ bool PageStorage::gc()
     // TODO: potential bug: A read thread may just select a file F, while F is being GCed. And after GC, we remove F from
     // reader cache. But after that, A could come in and re-add F reader cache. It is not a very big issue, because
     // it only cause a hanging opened fd, which no one will use anymore.
+    // REVIEW: it is a big issue, if we got lots of opened fds online, we are screwed
 
     {
         std::lock_guard<std::mutex> lock(mutex);

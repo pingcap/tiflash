@@ -37,10 +37,13 @@ public:
 
     PageCache getCache(PageId page_id);
 
+    // REVIEW: why not use streaming model in `write` and `read`
+
     void    write(const WriteBatch & write_batch);
     // REVIEW: i don't see a strong reason to use batch-get over single-get
     PageMap read(std::vector<PageId> page_ids);
     void    traverse(std::function<void(const Page & page)> acceptor);
+    // REVIEW: use LRU page-cache maybe more strong, cause we don't know how offen `gc` would be called
     bool    gc();
 
 private:
@@ -53,6 +56,7 @@ private:
 
     PageCacheMap page_cache_map;
 
+    // REVIEW: one thread writing is slow
     PageFile  write_file;
     WriterPtr write_file_writer;
 

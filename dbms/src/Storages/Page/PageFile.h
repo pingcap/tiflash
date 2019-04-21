@@ -82,6 +82,7 @@ public:
 public:
     /// Create an empty page file.
     PageFile() = default;
+    // REVIEW: recover means recover from some damaged things, restore may be better
     /// Recover a page file from disk.
     static std::pair<PageFile, bool> recover(const std::string & parent_path, const std::string & page_file_name, Logger * log);
     /// Create a new page file.
