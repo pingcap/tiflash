@@ -84,6 +84,7 @@ PageFile::Writer & PageStorage::getWriter()
 
 PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id_level)
 {
+    // REVIEW: lock?
     auto & cached_reader = open_read_files[file_id_level];
     if (!cached_reader)
     {
