@@ -262,6 +262,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
     }
     else if ((insert_query && insert_query->is_import) || delete_query)
     {
+        // REVIEW: add TxnMergeTree to the error message
         throw Exception("Only " + MutableSupport::storage_name + " support IMPORT or DELETE.", ErrorCodes::BAD_ARGUMENTS);
     }
 

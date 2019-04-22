@@ -278,6 +278,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
     if (is_txn_engine)
     {
+        // REVIEW: move all `get handle name` to one place
         handle_col_name = data.getPrimarySortDescription()[0].column_name;
         ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
 
@@ -290,6 +291,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             for (const auto & query_info : regions_query_info)
                 kvstore_region.emplace(query_info.region_id, tmt.kvstore->getRegion(query_info.region_id));
 
+            // REVIEW: this may lift up to Executor's caller
             if (regions_query_info.empty())
             {
                 tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
@@ -340,6 +342,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
                     regions_query_res[region_index] = status;
 
+                    // REVIEW: remove empty streams
                     if (status != RegionTable::OK)
                     {
                         LOG_WARNING(log, "Region " << region_query_info.region_id << ", version "
@@ -357,6 +360,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 }
             });
         }
+        // REVIEW: log the elapsed time
         pool.wait();
 
         if (need_retry)
@@ -742,6 +746,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         TMTContext & tmt = context.getTMTContext();
 
         auto safe_point = tmt.getPDClient()->getGCSafePoint();
+        // REVIEW: throw a different exception?
         if (query_info.read_tso < safe_point)
             func_throw_retry_region();
 
@@ -752,6 +757,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             if (select.no_kvstore)
                 continue;
 
+            // REVIEW: should not meet `!= RegionTable::OK`
             if (regions_query_res[region_index] != RegionTable::OK)
                 continue;
 
@@ -814,12 +820,14 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     if (parts_with_ranges.empty() && !is_txn_engine)
         return {};
 
+    // REVIEW: more events, eg: need_retry, regions
     ProfileEvents::increment(ProfileEvents::SelectedParts, parts_with_ranges.size());
     ProfileEvents::increment(ProfileEvents::SelectedRanges, sum_ranges);
     ProfileEvents::increment(ProfileEvents::SelectedMarks, sum_marks);
 
     BlockInputStreams res;
 
+    // REVIEW: may split to some small methods
     if (is_txn_engine)
     {
         bool use_uncompressed_cache = settings.use_uncompressed_cache;
@@ -850,6 +858,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                     if (regions_query_res[region_index] != RegionTable::OK)
                         continue;
                     auto region_input_stream = region_block_data[region_index];
+                    // REVIEW: too much streams
                     if (region_input_stream)
                         res.emplace_back(region_input_stream);
                 }
@@ -862,11 +871,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 BlockInputStreams union_regions_stream;
                 for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
+                    // REVIEW: in what case this will happen?
                     if (regions_query_res[region_index] != RegionTable::OK)
                         continue;
 
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
+                    // REVIEW: if two regions are one next to another, this will read some duplicated data, and can be optimized
                     BlockInputStreams merging;
                     for (const RangesInDataPart & part : region_range_parts[region_index])
                     {
@@ -881,6 +892,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                         source_stream = std::make_shared<VersionFilterBlockInputStream>(
                             source_stream, MutableSupport::version_column_name, query_info.read_tso);
 
+                        // REVIEW: it seems this can lift up to merged stream
                         source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream,
                                                                                      data.getPrimaryExpression());
 
@@ -889,6 +901,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                     auto region_input_stream = region_block_data[region_index];
                     if (region_input_stream)
                     {
+                        // REVIEW: we already passed the read_tso to RegionTable::getBlockInputStreamByRegion, so we don't need VersionFilterBlockInputStream here
                         region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
                             region_input_stream, MutableSupport::version_column_name, query_info.read_tso);
 
@@ -896,6 +909,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                                                                                            data.getPrimaryExpression());
                         merging.emplace_back(region_input_stream);
                     }
+                    // REVIEW: optimize `merging == 1`
                     if (!merging.empty())
                         union_regions_stream.emplace_back(
                             std::make_shared<MvccTMTSortedBlockInputStream>(

@@ -5,6 +5,7 @@
 namespace DB
 {
 
+// REVIEW: no use for now
 class DeletingDeletedBlockInputStream : public IProfilingBlockInputStream
 {
 private:

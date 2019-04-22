@@ -22,6 +22,7 @@ Block RangesFilterBlockInputStream::readImpl()
             throw Exception("RangesFilterBlockInputStream: block without _tidb_rowid.", ErrorCodes::LOGICAL_ERROR);
 
         const ColumnWithTypeAndName & handle_column = block.getByName(handle_col_name);
+        // REVIEW: may not be ColumnInt64
         const ColumnInt64 * column = typeid_cast<const ColumnInt64 *>(handle_column.column.get());
         if (!column)
         {

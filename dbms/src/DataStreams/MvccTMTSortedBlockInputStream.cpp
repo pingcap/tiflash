@@ -29,6 +29,7 @@ Block MvccTMTSortedBlockInputStream::readImpl()
     return header.cloneWithColumns(std::move(merged_columns));
 }
 
+// REVIEW: this will be very slow, see ReplacingDeletingSortedBlockInputStream::merge_optimized, it's a good optimizing example
 void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue)
 {
     size_t merged_rows = 0;
