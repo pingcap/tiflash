@@ -1,5 +1,6 @@
 #pragma once
 #include <Storages/Transaction/RegionPersister.h>
+#include <Storages/Transaction/RegionMeta.h>
 
 using namespace DB;
 

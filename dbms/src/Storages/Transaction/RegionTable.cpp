@@ -1,10 +1,14 @@
 #include <Raft/RaftService.h>
 
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRange.h>
 
 namespace DB
 {
@@ -87,7 +91,7 @@ void RegionTable::updateRegionRange(const RegionPtr & region, TableIDSet & table
     {
         auto table_id = *t_it;
 
-        const auto handle_range = getHandleRangeByTable(range, table_id);
+        const auto handle_range = TiKVRange::getHandleRangeByTable(range, table_id);
 
         auto table_it = tables.find(table_id);
         if (table_it == tables.end())
@@ -145,7 +149,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     TMTContext & tmt = context.getTMTContext();
 
-    Region::DataList data_list;
+    RegionDataReadInfoList data_list;
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
 
@@ -288,7 +292,7 @@ void RegionTable::applySnapshotRegion(const RegionPtr & region)
     updateRegion(region, table_ids);
 }
 
-void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
+void RegionTable::applySnapshotRegions(const RegionMap & region_map)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -450,20 +454,20 @@ void RegionTable::traverseRegionsByTable(
     callback(regions);
 }
 
-void RegionTable::dumpRegionMap(RegionTable::RegionMap & res)
+void RegionTable::dumpRegionInfoMap(RegionTable::RegionInfoMap & res) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     res = regions;
 }
 
-void RegionTable::dropRegionsInTable(TableID table_id)
+void RegionTable::mockDropRegionsInTable(TableID table_id)
 {
     auto & kvstore = context.getTMTContext().kvstore;
     traverseRegionsByTable(table_id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
         for (auto && [region_id, _] : regions)
         {
             std::ignore = _;
-            kvstore->removeRegion(region_id, &context);
+            kvstore->removeRegion(region_id, this);
         }
     });
 

@@ -1,18 +1,34 @@
 #pragma once
 
 #include <functional>
-#include <map>
-#include <random>
 #include <vector>
 
-#include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/Region.h>
-
 #include <Common/PersistedContainer.h>
-#include <Common/randomSeed.h>
+#include <Core/Names.h>
+#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/TiKVHandle.h>
+#include <common/logger_useful.h>
+
+namespace TiDB
+{
+struct TableInfo;
+};
 
 namespace DB
 {
+
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
+struct ColumnsDescription;
+class Context;
+class IStorage;
+using StoragePtr = std::shared_ptr<IStorage>;
+class TMTContext;
+class IBlockInputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
+
+// for debug
+struct MockTiDBTable;
 
 class RegionTable : private boost::noncopyable
 {
@@ -94,7 +110,7 @@ public:
     };
 
     using TableMap = std::unordered_map<TableID, Table>;
-    using RegionMap = std::unordered_map<RegionID, RegionInfo>;
+    using RegionInfoMap = std::unordered_map<RegionID, RegionInfo>;
 
     struct FlushThresholds
     {
@@ -130,7 +146,7 @@ private:
     const std::string parent_path;
 
     TableMap tables;
-    RegionMap regions;
+    RegionInfoMap regions;
 
     FlushThresholds flush_thresholds;
 
@@ -154,6 +170,11 @@ private:
 
     void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
 
+    // For debug
+    friend struct MockTiDBTable;
+
+    void mockDropRegionsInTable(TableID table_id);
+
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
     void restore(std::function<RegionPtr(RegionID)> region_fetcher);
@@ -164,7 +185,7 @@ public:
     void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const RegionPtr & region);
-    void applySnapshotRegions(const ::DB::RegionMap & regions);
+    void applySnapshotRegions(const std::unordered_map<RegionID, RegionPtr> & regions);
 
     /// Manage data after region split into split_regions.
     /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
@@ -188,7 +209,7 @@ public:
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
-        Region::DataList * data_list_for_remove);
+        RegionDataReadInfoList * data_list_for_remove);
 
     static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
@@ -199,12 +220,10 @@ public:
         const Names & ordered_columns,
         bool learner_read,
         bool resolve_locks,
-        UInt64 start_ts,
-        Region::DataList * data_list_for_remove = nullptr);
+        Timestamp start_ts,
+        RegionDataReadInfoList * data_list_for_remove = nullptr);
 
-    // For debug
-    void dumpRegionMap(RegionTable::RegionMap & res);
-    void dropRegionsInTable(TableID table_id);
+    void dumpRegionInfoMap(RegionTable::RegionInfoMap & res) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

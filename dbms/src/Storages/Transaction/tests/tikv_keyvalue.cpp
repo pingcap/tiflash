@@ -2,8 +2,8 @@
 
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/TiKVHelper.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <limits>
+#include <Storages/Transaction/TiKVRange.h>
+#include <Storages/Transaction/Region.h>
 
 using namespace DB;
 

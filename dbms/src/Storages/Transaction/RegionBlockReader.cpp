@@ -1,4 +1,10 @@
+#include <Columns/ColumnsNumber.h>
+#include <Storages/ColumnsDescription.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -35,8 +41,8 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
     }
 }
 
-Block RegionBlockRead(
-    const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_, Region::DataList & data_list)
+Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_,
+    RegionDataReadInfoList & data_list)
 {
     // Note: this code below is mostly ported from RegionBlockInputStream.
     Names ordered_columns = ordered_columns_;

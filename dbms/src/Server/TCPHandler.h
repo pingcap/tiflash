@@ -13,7 +13,7 @@
 #include <IO/WriteHelpers.h>
 #include <Client/TimeoutSetter.h>
 
-#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionLockInfo.h>
 
 #include "IServer.h"
 
@@ -143,7 +143,7 @@ private:
     void sendData(const Block & block);    /// Write a block to the network.
     void sendException(const Exception & e);
     void sendRegionException(const std::vector<UInt64> & region_ids);
-    void sendLockInfos(const Region::LockInfos & lock_infos);
+    void sendLockInfos(const LockInfos & lock_infos);
     void sendProgress();
     void sendEndOfStream();
     void sendProfileInfo();

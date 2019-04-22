@@ -1,14 +1,18 @@
-#include <Storages/Transaction/applySnapshot.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/applySnapshot.h>
 
 #include <Raft/RaftService.h>
 
 namespace DB
 {
 
-RaftService::RaftService(const std::string & address_, DB::Context & db_context_) : address(address_),
-    db_context(db_context_), kvstore(db_context.getTMTContext().kvstore),
-    background_pool(db_context.getBackgroundPool()), log(&Logger::get("RaftService"))
+RaftService::RaftService(const std::string & address_, DB::Context & db_context_)
+    : address(address_),
+      db_context(db_context_),
+      kvstore(db_context.getTMTContext().kvstore),
+      background_pool(db_context.getBackgroundPool()),
+      log(&Logger::get("RaftService"))
 {
     grpc::ServerBuilder builder;
     builder.AddListeningPort(address, grpc::InsecureServerCredentials());

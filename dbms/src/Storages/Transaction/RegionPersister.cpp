@@ -1,4 +1,5 @@
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionPersister.h>
 
 namespace DB
@@ -50,7 +51,7 @@ void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandRespo
     page_storage.write(wb);
 }
 
-void RegionPersister::restore(RegionMap & regions, Region::RegionClientCreateFunc * func)
+void RegionPersister::restore(RegionMap & regions, RegionClientCreateFunc * func)
 {
     auto acceptor = [&](const Page & page) {
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
