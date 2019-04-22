@@ -241,7 +241,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     std::vector<std::pair<RangesInDataParts, std::vector<int>>> region_range_parts;
     std::vector<size_t> rows_in_mem;
 
-    static const auto func_throw_retry_region = [&]() {
+    const auto func_throw_retry_region = [&]() {
         std::vector<RegionID> region_ids;
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
             region_ids.push_back(regions_query_info[region_index].region_id);
