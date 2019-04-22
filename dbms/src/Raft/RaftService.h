@@ -1,21 +1,12 @@
 #pragma once
 
-#include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 
+#include <common/logger_useful.h>
 #include <boost/noncopyable.hpp>
 
-#include <Poco/Util/LayeredConfiguration.h>
-
-#include <Common/Exception.h>
-#include <Interpreters/Context.h>
-#include <common/logger_useful.h>
-
 #include <Raft/RaftContext.h>
-
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
 
 namespace DB
 {
@@ -23,10 +14,12 @@ namespace DB
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
+class BackgroundProcessingPool;
+
 class RaftService final : public enginepb::Engine::Service, public std::enable_shared_from_this<RaftService>, private boost::noncopyable
 {
 public:
-    RaftService(const std::string & address_, DB::Context & db_context);
+    RaftService(const std::string & address_, Context & db_context);
 
     ~RaftService() final;
 

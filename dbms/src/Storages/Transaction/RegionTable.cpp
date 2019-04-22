@@ -1,5 +1,3 @@
-#include <Raft/RaftService.h>
-
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>

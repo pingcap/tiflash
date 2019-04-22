@@ -1,8 +1,8 @@
+#include <Interpreters/Context.h>
+#include <Raft/RaftService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
-
-#include <Raft/RaftService.h>
 
 namespace DB
 {
