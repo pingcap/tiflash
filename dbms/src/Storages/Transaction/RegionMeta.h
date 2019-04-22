@@ -1,5 +1,7 @@
 #pragma once
 
+#include <condition_variable>
+
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 #pragma GCC diagnostic push
