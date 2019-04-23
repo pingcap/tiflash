@@ -1,16 +1,18 @@
 #pragma once
 
-#include <iostream>
 #include <map>
 #include <list>
 
-#include <Storages/Transaction/TiKVKeyValue.h>
-#include <Storages/Transaction/RegionMeta.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Storages/Transaction/RegionLockInfo.h>
+#include <Storages/Transaction/RegionDataRead.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
 namespace DB
 {
+
+using RegionRange = std::pair<TiKVKey, TiKVKey>;
 
 enum ColumnFamilyType
 {
@@ -324,21 +326,8 @@ public:
         */
     };
 
-    /// A quick-and-dirty copy of LockInfo structure in kvproto.
-    /// Used to transmit to client using non-ProtoBuf protocol.
-    struct LockInfo
-    {
-        std::string primary_lock;
-        UInt64 lock_version;
-        std::string key;
-        UInt64 lock_ttl;
-    };
-
-    using ReadInfo = std::tuple<Int64, UInt8, UInt64, TiKVValue>;
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
-
-    using LockInfoPtr = std::unique_ptr<LockInfo>;
 
     TableID insert(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key, const TiKVValue & value)
     {
@@ -399,7 +388,7 @@ public:
         return write_cf.getDataMut()[table_id].erase(write_it);
     }
 
-    ReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const
+    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const
     {
         const auto & [key, value, decoded_val] = write_it->second;
         const auto & [handle, ts] = write_it->first;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionLockInfo.h>
 
 namespace DB
 {
@@ -9,9 +9,9 @@ namespace DB
 class LockException : public Exception
 {
 public:
-    explicit LockException(Region::LockInfos && lock_infos_) : lock_infos(std::move(lock_infos_)) {}
+    explicit LockException(LockInfos && lock_infos_) : lock_infos(std::move(lock_infos_)) {}
 
-    Region::LockInfos lock_infos;
+    LockInfos lock_infos;
 };
 
 } // namespace DB

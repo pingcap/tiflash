@@ -1,10 +1,17 @@
-#include <Parsers/ASTIdentifier.h>
+#include <random>
+
 #include <Parsers/ASTLiteral.h>
 
 #include <Storages/Transaction/Codec.h>
 
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgTools.h>
+#include <Raft/RaftContext.h>
+
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRange.h>
 
 namespace DB
 {
@@ -297,7 +304,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.kvstore->onSnapshot(region, &context);
+        tmt.kvstore->onSnapshot(region, &tmt.region_table);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)

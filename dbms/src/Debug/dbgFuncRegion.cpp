@@ -4,9 +4,12 @@
 #include <Parsers/ASTLiteral.h>
 
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
 
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/tests/region_helper.h>
 
 #include <Debug/MockTiDB.h>
@@ -52,7 +55,8 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 {
     if (args.size() < 5 || args.size() > 6)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
+            ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -66,7 +70,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.kvstore->onSnapshot(region, &context);
+    tmt.kvstore->onSnapshot(region, &tmt.region_table);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -78,7 +82,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 {
     if (args.size() < 5 || args.size() > 6)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
+            ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -208,8 +213,8 @@ void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer
 
     auto & tmt = context.getTMTContext();
 
-    RegionTable::RegionMap regions;
-    tmt.region_table.dumpRegionMap(regions);
+    RegionTable::RegionInfoMap regions;
+    tmt.region_table.dumpRegionInfoMap(regions);
 
     for (const auto & it : regions)
     {

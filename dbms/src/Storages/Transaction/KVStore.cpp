@@ -1,6 +1,8 @@
+#include <Raft/RaftContext.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
-
 
 namespace DB
 {
@@ -12,11 +14,11 @@ extern const int LOGICAL_ERROR;
 
 KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore")) {}
 
-void KVStore::restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
+void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
 {
     std::lock_guard<std::mutex> lock(mutex);
     LOG_INFO(log, "start to restore regions");
-    region_persister.restore(regions, const_cast<Region::RegionClientCreateFunc *>(&region_client_create));
+    region_persister.restore(regions, const_cast<RegionClientCreateFunc *>(&region_client_create));
     LOG_INFO(log, "restore regions done");
 
     // Remove regions which pending_remove = true, those regions still exist because progress crash after persisted and before removal.
@@ -51,10 +53,8 @@ void KVStore::traverseRegions(std::function<void(RegionID region_id, const Regio
         callback(it->first, it->second);
 }
 
-void KVStore::onSnapshot(RegionPtr new_region, Context * context)
+void KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
 {
-    TMTContext * tmt_ctx = context ? &(context->getTMTContext()) : nullptr;
-
     {
         std::lock_guard<std::mutex> lock(task_mutex);
 
@@ -80,7 +80,7 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
 
         if (new_region->isPendingRemove())
         {
-            removeRegion(region_id, context);
+            removeRegion(region_id, region_table);
             return;
         }
     }
@@ -88,14 +88,13 @@ void KVStore::onSnapshot(RegionPtr new_region, Context * context)
     region_persister.persist(new_region);
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
-    if (tmt_ctx)
-        tmt_ctx->region_table.applySnapshotRegion(new_region);
+    if (region_table)
+        region_table->applySnapshotRegion(new_region);
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
 {
-    Context * context = raft_ctx.context;
-    TMTContext * tmt_ctx = (bool)(context) ? &(context->getTMTContext()) : nullptr;
+    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().region_table) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
     for (const auto & cmd : cmds.requests())
@@ -121,7 +120,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
         {
             LOG_INFO(log, curr_region->toString() << " is removed by tombstone.");
             curr_region->setPendingRemove();
-            removeRegion(curr_region_id, context);
+            removeRegion(curr_region_id, region_table);
 
             LOG_INFO(log, "Sync status because of removal by tombstone: " << curr_region->toString(true));
             auto & resp = *(responseBatch.mutable_responses()->Add());
@@ -136,7 +135,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
         if (curr_region->isPendingRemove())
         {
             LOG_DEBUG(log, curr_region->toString() << " (after cmd) is in pending remove status, remove it now.");
-            removeRegion(curr_region_id, context);
+            removeRegion(curr_region_id, region_table);
 
             LOG_INFO(log, "Sync status because of removal: " << curr_region->toString(true));
             *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse();
@@ -171,18 +170,18 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             }
 
             {
-                region_persister.persist(curr_region);
                 for (const auto & region : split_regions)
                     region_persister.persist(region);
+                region_persister.persist(curr_region);
             }
 
-            if (tmt_ctx)
-                tmt_ctx->region_table.splitRegion(curr_region, split_regions);
+            if (region_table)
+                region_table->splitRegion(curr_region, split_regions);
         }
         else
         {
-            if (tmt_ctx)
-                tmt_ctx->region_table.updateRegion(curr_region, table_ids);
+            if (region_table)
+                region_table->updateRegion(curr_region, table_ids);
 
             if (sync)
                 region_persister.persist(curr_region);
@@ -260,7 +259,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_t
     return persist_job || gc_job;
 }
 
-void KVStore::removeRegion(RegionID region_id, Context * context)
+void KVStore::removeRegion(RegionID region_id, RegionTable * region_table)
 {
     RegionPtr region;
     {
@@ -271,8 +270,9 @@ void KVStore::removeRegion(RegionID region_id, Context * context)
     }
 
     region_persister.drop(region_id);
-    if (context)
-        context->getTMTContext().region_table.removeRegion(region);
+
+    if (region_table)
+        region_table->removeRegion(region);
 }
 
 void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)

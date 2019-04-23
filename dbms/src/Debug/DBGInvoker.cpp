@@ -1,10 +1,8 @@
 #include <DataStreams/StringStreamBlockInputStream.h>
 
-#include <Debug/dbgTools.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncRegion.h>
-#include <Debug/dbgFuncMisc.h>
 
 #include <Debug/DBGInvoker.h>
 #include <cstring>
@@ -35,11 +33,11 @@ DBGInvoker::DBGInvoker()
     // TODO: remove this, use sleep in bash script
     regFunc("sleep", dbgFuncSleep);
 
-    regFunc("mock_schema_syncer", dbgFuncMockSchemaSyncer);
-    regFunc("mock_tidb_table", dbgFuncMockTiDBTable);
-    regFunc("mock_tidb_partition", dbgFuncMockTiDBPartition);
-    regFunc("rename_table_for_partition", dbgFuncRenameTableForPartition);
-    regFunc("drop_tidb_table", dbgFuncDropTiDBTable);
+    regFunc("mock_schema_syncer", MockTiDBTable::dbgFuncMockSchemaSyncer);
+    regFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
+    regFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
+    regFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
+    regFunc("drop_tidb_table", MockTiDBTable::dbgFuncDropTiDBTable);
 
     regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 

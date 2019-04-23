@@ -9,14 +9,8 @@
 #include <DataTypes/DataTypeString.h>
 
 #include <Functions/FunctionHelpers.h>
-#include <Parsers/ASTLiteral.h>
-
-#include <Storages/Transaction/Codec.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
 
 #include <Debug/MockTiDB.h>
-#include <Debug/dbgTools.h>
 
 namespace DB
 {

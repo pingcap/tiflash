@@ -27,9 +27,7 @@ namespace std
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
 #include <Storages/MergeTree/KeyCondition.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Storages/Transaction/RegionException.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSampleRatio.h>
 
@@ -60,8 +58,11 @@ namespace std
 #include <Storages/VirtualColumnUtils.h>
 #include <DataStreams/MvccTMTSortedBlockInputStream.h>
 
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/CHTableHandle.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/RegionException.h>
 
 namespace ProfileEvents
 {
