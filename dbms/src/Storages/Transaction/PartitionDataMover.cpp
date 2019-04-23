@@ -1,10 +1,11 @@
+/*
+#include <Interpreters/executeQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Interpreters/executeQuery.h>
 
-#include <Storages/StorageMergeTree.h>
-#include <Storages/MutableSupport.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/PartitionDataMover.h>
 
@@ -18,7 +19,7 @@ namespace ErrorCodes
 
 namespace PartitionDataMover
 {
-/*
+
 BlockInputStreamPtr createBlockInputStreamFromRange(const Context& context, StorageMergeTree* storage,
                                                     const HandleID begin, const HandleID excluded_end)
 {
@@ -106,9 +107,9 @@ void increaseVersionInBlock(Block & block, size_t increasement = 1)
     block.insert(version_col_pos, ColumnWithTypeAndName{std::move(version_new_col),
         version_type, MutableSupport::version_column_name});
 }
-*/
+
 } // namespace PartitionDataMover
-/*
+
 void deleteRange(const Context& context, StorageMergeTree* storage,
                  const HandleID begin, const HandleID excluded_end)
 {
@@ -174,6 +175,6 @@ void moveRangeBetweenPartitions(const Context & context, StorageMergeTree * stor
         dest_partition_id << ", range: [" << applyVisitor(FieldVisitorToString(), begin) <<
         ", " << applyVisitor(FieldVisitorToString(), excluded_end) << ")");
 }
-*/
 
 }
+*/

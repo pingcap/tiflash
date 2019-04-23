@@ -2,12 +2,10 @@
 
 #include <iostream>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include <Common/Exception.h>
-
-#include <Interpreters/Context.h>
 #include <Parsers/IAST.h>
 
 namespace DB
@@ -15,8 +13,13 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int BAD_ARGUMENTS;
+extern const int BAD_ARGUMENTS;
 }
+
+class Context;
+class IBlockInputStream;
+
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 
 class DBGInvoker
 {
@@ -26,10 +29,7 @@ public:
 
     DBGInvoker();
 
-    void regFunc(const std::string & name, DBGFunc func)
-    {
-        funcs[name] = func;
-    }
+    void regFunc(const std::string & name, DBGFunc func) { funcs[name] = func; }
 
     BlockInputStreamPtr invoke(Context & context, const std::string & ori_name, const ASTs & args);
 
@@ -37,4 +37,4 @@ private:
     std::unordered_map<std::string, DBGFunc> funcs;
 };
 
-}
+} // namespace DB

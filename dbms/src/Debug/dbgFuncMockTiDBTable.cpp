@@ -21,12 +21,12 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int UNKNOWN_TABLE;
-    extern const int BAD_ARGUMENTS;
-    extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_TABLE;
+extern const int BAD_ARGUMENTS;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
-void dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 1)
         throw Exception("Args not matched, should be: enable (true/false)", ErrorCodes::BAD_ARGUMENTS);
@@ -48,7 +48,7 @@ void dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::P
     output(ss.str());
 }
 
-void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3)
         throw Exception("Args not matched, should be: database-name, table-name, schema-string", ErrorCodes::BAD_ARGUMENTS);
@@ -64,7 +64,8 @@ void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     Expected expected;
     if (!schema_parser.parse(pos, columns_ast, expected))
         throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
-    ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+    ColumnsDescription columns
+        = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
 
     TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns);
 
@@ -73,7 +74,7 @@ void dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     output(ss.str());
 }
 
-void dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3)
         throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
@@ -89,7 +90,7 @@ void dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer 
     output(ss.str());
 }
 
-void dbgFuncRenameTableForPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncRenameTableForPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 4)
         throw Exception("Args not matched, should be: database-name, table-name, partition-name, view-name", ErrorCodes::BAD_ARGUMENTS);
@@ -108,7 +109,8 @@ void dbgFuncRenameTableForPartition(Context & context, const ASTs & args, DBGInv
     String rename_stmt = "RENAME TABLE " + database_name + "." + physical_name + " TO " + database_name + "." + new_name;
 
     ParserRenameQuery parser;
-    ASTPtr ast = parseQuery(parser, rename_stmt.data(), rename_stmt.data() + rename_stmt.size(), "from rename table for partition " + database_name + "." + table_name + "." + partition_name, 0);
+    ASTPtr ast = parseQuery(parser, rename_stmt.data(), rename_stmt.data() + rename_stmt.size(),
+        "from rename table for partition " + database_name + "." + table_name + "." + partition_name, 0);
 
     InterpreterRenameQuery interpreter(ast, context);
     interpreter.execute();
@@ -118,7 +120,7 @@ void dbgFuncRenameTableForPartition(Context & context, const ASTs & args, DBGInv
     output(ss.str());
 }
 
-void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 2)
         throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
@@ -145,11 +147,10 @@ void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     if (table->isPartitionTable())
     {
         auto partition_ids = table->getPartitionIDs();
-        std::for_each(partition_ids.begin(), partition_ids.end(), [&](TableID partition_id) {
-            tmt.region_table.dropRegionsInTable(partition_id);
-        });
+        std::for_each(partition_ids.begin(), partition_ids.end(),
+            [&](TableID partition_id) { tmt.region_table.mockDropRegionsInTable(partition_id); });
     }
-    tmt.region_table.dropRegionsInTable(table_id);
+    tmt.region_table.mockDropRegionsInTable(table_id);
 
 
     MockTiDB::instance().dropTable(database_name, table_name);
@@ -159,4 +160,4 @@ void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Prin
     output(ss.str());
 }
 
-}
+} // namespace DB
