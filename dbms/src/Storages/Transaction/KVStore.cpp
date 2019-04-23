@@ -1,3 +1,4 @@
+#include <Interpreters/Context.h>
 #include <Raft/RaftContext.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>

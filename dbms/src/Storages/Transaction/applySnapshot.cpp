@@ -1,3 +1,4 @@
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>

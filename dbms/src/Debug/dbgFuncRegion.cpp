@@ -4,12 +4,12 @@
 #include <Parsers/ASTLiteral.h>
 
 #include <Storages/MutableSupport.h>
+#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/applySnapshot.h>
-
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <Storages/Transaction/applySnapshot.h>
 #include <Storages/Transaction/tests/region_helper.h>
 
 #include <Debug/MockTiDB.h>

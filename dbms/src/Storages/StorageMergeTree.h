@@ -2,16 +2,19 @@
 
 #include <ext/shared_ptr_helper.h>
 
+#include <Common/SimpleIncrement.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeDataMerger.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
-#include <Storages/MergeTree/MergeTreeDataMerger.h>
-#include <Storages/MergeTree/DiskSpaceMonitor.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Common/SimpleIncrement.h>
 
+namespace TiDB
+{
+struct TableInfo;
+}
 
 namespace DB
 {
@@ -20,8 +23,8 @@ namespace DB
   */
 class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>, public IStorage
 {
-friend class MergeTreeBlockOutputStream;
-friend class TxnMergeTreeBlockOutputStream;
+    friend class MergeTreeBlockOutputStream;
+    friend class TxnMergeTreeBlockOutputStream;
 
     using TableInfo = TiDB::TableInfo;
 
@@ -30,10 +33,7 @@ public:
     void shutdown() override;
     ~StorageMergeTree() override;
 
-    std::string getName() const override
-    {
-        return data.merging_params.getModeName() + "MergeTree";
-    }
+    std::string getName() const override { return data.merging_params.getModeName() + "MergeTree"; }
 
     std::string getTableName() const override { return table_name; }
     std::string getDatabaseName() const { return database_name; }
@@ -47,18 +47,11 @@ public:
     const ColumnsDescription & getColumns() const override { return data.getColumns(); }
     void setColumns(ColumnsDescription columns_) override { return data.setColumns(std::move(columns_)); }
 
-    NameAndTypePair getColumn(const String & column_name) const override
-    {
-        return data.getColumn(column_name);
-    }
+    NameAndTypePair getColumn(const String & column_name) const override { return data.getColumn(column_name); }
 
-    bool hasColumn(const String & column_name) const override
-    {
-        return data.hasColumn(column_name);
-    }
+    bool hasColumn(const String & column_name) const override { return data.hasColumn(column_name); }
 
-    BlockInputStreams read(
-        const Names & column_names,
+    BlockInputStreams read(const Names & column_names,
         const SelectQueryInfo & query_info,
         const Context & context,
         QueryProcessingStage::Enum & processed_stage,
@@ -121,7 +114,7 @@ private:
 
     Logger * log;
 
-    std::atomic<bool> shutdown_called {false};
+    std::atomic<bool> shutdown_called{false};
 
     BackgroundProcessingPool::TaskHandle merge_task_handle;
 
@@ -134,7 +127,7 @@ private:
       * Returns true if merge is finished successfully.
       */
     bool merge(size_t aio_threshold, bool aggressive, const String & partition_id, bool final, bool deduplicate,
-               String * out_disable_reason = nullptr);
+        String * out_disable_reason = nullptr);
 
     bool mergeTask();
 
@@ -148,8 +141,7 @@ protected:
       * date_column_name      - if not empty, the name of the column with the date used for partitioning by month;
           otherwise, partition_expr_ast is used as the partitioning expression;
       */
-    StorageMergeTree(
-        const String & path_,
+    StorageMergeTree(const String & path_,
         const String & database_name_,
         const String & table_name_,
         const ColumnsDescription & columns_,
@@ -166,4 +158,4 @@ protected:
         bool has_force_restore_data_flag);
 };
 
-}
+} // namespace DB

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 #pragma GCC diagnostic push
@@ -16,6 +15,9 @@ class Context;
 
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
+
+class SchemaSyncer;
+using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
 class TMTContext
 {
@@ -41,8 +43,6 @@ public:
     pingcap::kv::RpcClientPtr getRpcClient();
 
 private:
-    std::vector<RegionID> regions_to_remove = {};
-
     SchemaSyncerPtr schema_syncer;
     pingcap::pd::ClientPtr pd_client;
     pingcap::kv::RegionCachePtr region_cache;

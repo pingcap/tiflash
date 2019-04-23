@@ -8,6 +8,8 @@
 #include <Debug/dbgTools.h>
 #include <Raft/RaftContext.h>
 
+#include <Common/typeid_cast.h>
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
