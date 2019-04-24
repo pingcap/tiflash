@@ -128,7 +128,7 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
 
 size_t RegionData::dataSize() const { return cf_data_size; }
 
-void RegionData::reset(RegionData && new_region_data)
+void RegionData::assignRegionData(RegionData && new_region_data)
 {
     default_cf = std::move(new_region_data.default_cf);
     write_cf = std::move(new_region_data.write_cf);

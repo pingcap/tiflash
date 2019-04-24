@@ -38,12 +38,12 @@ TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVVa
     return doInsert(cf, key, value);
 }
 
-void Region::batchInsert(std::function<bool(BatchInsertNode &)> && f)
+void Region::batchInsert(std::function<bool(BatchInsertElement &)> && f)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     for (;;)
     {
-        if (BatchInsertNode p; f(p))
+        if (BatchInsertElement p; f(p))
         {
             auto && [k, v, cf] = p;
             doInsert(*cf, *k, *v);
@@ -154,7 +154,7 @@ Regions Region::execBatchSplit(
     {
         std::unique_lock<std::shared_mutex> lock(mutex);
 
-        int new_region_index = 0;
+        int new_region_index = -1;
         for (int i = 0; i < new_region_infos.size(); ++i)
         {
             const auto & region_info = new_region_infos[i];
@@ -166,12 +166,20 @@ Regions Region::execBatchSplit(
                 split_regions.emplace_back(split_region);
             }
             else
-                new_region_index = i;
+            {
+                if (new_region_index == -1)
+                    new_region_index = i;
+                else
+                    throw Exception("Region::execBatchSplit duplicate region index", ErrorCodes::LOGICAL_ERROR);
+            }
         }
 
+        if (new_region_index == -1)
+            throw Exception("Region::execBatchSplit region index not found", ErrorCodes::LOGICAL_ERROR);
+
         RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
-        meta.reset(std::move(new_meta));
-        meta.setApplied(index, term);
+        new_meta.setApplied(index, term);
+        meta.assignRegionMeta(std::move(new_meta));
     }
 
     std::stringstream ids;
@@ -289,7 +297,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     meta.notifyAll();
 
     if (need_persist)
-        incPersistParm();
+        incDirtyFlag();
 
     for (auto & region : split_regions)
         region->last_persist_time.store(last_persist_time);
@@ -325,7 +333,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * r
 
     RegionData::deserialize(buf, region->data);
 
-    region->persist_parm = 0;
+    region->dirty_flag = 0;
 
     return region;
 }
@@ -374,11 +382,11 @@ void Region::markPersisted() { last_persist_time = Clock::now(); }
 
 Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
-size_t Region::persistParm() const { return persist_parm; }
+size_t Region::dirtyFlag() const { return dirty_flag; }
 
-void Region::decPersistParm(size_t x) { persist_parm -= x; }
+void Region::decDirtyFlag(size_t x) { dirty_flag -= x; }
 
-void Region::incPersistParm() { persist_parm++; }
+void Region::incDirtyFlag() { dirty_flag++; }
 
 std::unique_ptr<Region::CommittedScanner> Region::createCommittedScanner(TableID expected_table_id)
 {
@@ -422,15 +430,15 @@ HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const
     return TiKVRange::getHandleRangeByTable(getRange(), table_id);
 }
 
-void Region::reset(Region && new_region)
+void Region::assignRegion(Region && new_region)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
 
-    data.reset(std::move(new_region.data));
+    data.assignRegionData(std::move(new_region.data));
 
-    incPersistParm();
+    incDirtyFlag();
 
-    meta.reset(std::move(new_region.meta));
+    meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
 }
 

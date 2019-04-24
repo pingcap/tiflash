@@ -52,7 +52,7 @@ public:
 
     size_t dataSize() const;
 
-    void reset(RegionData && new_region_data);
+    void assignRegionData(RegionData && new_region_data);
 
     size_t serialize(WriteBuffer & buf) const;
 

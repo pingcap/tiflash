@@ -110,8 +110,8 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const std::string *>;
-    void batchInsert(std::function<bool(BatchInsertNode &)> && f);
+    using BatchInsertElement = std::tuple<const TiKVKey *, const TiKVValue *, const std::string *>;
+    void batchInsert(std::function<bool(BatchInsertElement &)> && f);
 
     std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd);
 
@@ -135,9 +135,9 @@ public:
 
     void markPersisted();
     Timepoint lastPersistTime() const;
-    size_t persistParm() const;
-    void decPersistParm(size_t x);
-    void incPersistParm();
+    size_t dirtyFlag() const;
+    void decDirtyFlag(size_t x);
+    void incDirtyFlag();
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -159,7 +159,7 @@ public:
 
     HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
 
-    void reset(Region && new_region);
+    void assignRegion(Region && new_region);
 
     TableIDSet getCommittedRecordTableID() const;
 
@@ -191,7 +191,8 @@ private:
 
     std::atomic<Timepoint> last_persist_time = Clock::now();
 
-    std::atomic<size_t> persist_parm = 1;
+    // dirty_flag is used to present whether this region need to be persisted.
+    std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
 };

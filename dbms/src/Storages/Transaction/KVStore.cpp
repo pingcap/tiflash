@@ -70,7 +70,7 @@ void KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
                 LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
                 return;
             }
-            old_region->reset(std::move(*new_region));
+            old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
         }
         else
@@ -230,7 +230,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_t
     traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         if (now < (region->lastPersistTime() + region_persist_period))
             return;
-        if (region->persistParm() == 0)
+        if (region->dirtyFlag() == 0)
             return;
         all_region_copy[region_id] = region;
     });
@@ -245,7 +245,7 @@ bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_t
 
         region_persister.persist(region, response);
 
-        ss << "(" << region_id << "," << region->persistParm() << ") ";
+        ss << "(" << region_id << "," << region->dirtyFlag() << ") ";
     }
 
     if (persist_job)

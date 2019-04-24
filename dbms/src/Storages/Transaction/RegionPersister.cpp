@@ -22,10 +22,10 @@ void RegionPersister::persist(const RegionPtr & region, enginepb::CommandRespons
     // Support only on thread persist.
     std::lock_guard<std::mutex> lock(mutex);
 
-    size_t persist_parm = region->persistParm();
+    size_t dirty_flag = region->dirtyFlag();
     doPersist(region, response);
     region->markPersisted();
-    region->decPersistParm(persist_parm);
+    region->decDirtyFlag(dirty_flag);
 }
 
 void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandResponse * response)
