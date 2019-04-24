@@ -113,6 +113,26 @@ public:
         delete head;
     }
 
+    /// Get peice of memory with alignment
+    char * alignedAlloc(size_t size, size_t alignment)
+    {
+        do
+        {
+            void * head_pos = head->pos;
+            size_t space = head->end - head->pos;
+
+            auto res = static_cast<char *>(std::align(alignment, size, head_pos, space));
+            if (res)
+            {
+                head->pos = static_cast<char *>(head_pos);
+                head->pos += size;
+                return res;
+            }
+
+            addChunk(size + alignment);
+        } while (true);
+    }
+
     /// Get piece of memory, without alignment.
     char * alloc(size_t size)
     {

@@ -1166,6 +1166,9 @@ protected:
 
     Sizes offsets_of_aggregate_states;    /// The offset to the n-th aggregate function in a row of aggregate functions.
     size_t total_size_of_aggregate_states = 0;    /// The total size of the row from the aggregate functions.
+
+    size_t align_aggregate_states = 1;
+
     bool all_aggregates_has_trivial_destructor = false;
 
     /// How many RAM were used to process the query before processing the first block.
