@@ -1,5 +1,12 @@
 #pragma once
 
+#include <Parsers/IAST.h>
+
+namespace TiDB
+{
+struct TableInfo;
+}
+
 namespace DB
 {
 class Context;

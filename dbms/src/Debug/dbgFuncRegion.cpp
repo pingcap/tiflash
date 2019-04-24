@@ -1,8 +1,10 @@
 #include <Common/typeid_cast.h>
-
+#include <Debug/MockTiDB.h>
+#include <Debug/dbgFuncRegion.h>
+#include <Debug/dbgTools.h>
+#include <Interpreters/executeQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
@@ -11,12 +13,6 @@
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/applySnapshot.h>
 #include <Storages/Transaction/tests/region_helper.h>
-
-#include <Debug/MockTiDB.h>
-#include <Debug/dbgFuncRegion.h>
-#include <Debug/dbgTools.h>
-
-#include <Interpreters/executeQuery.h>
 
 namespace DB
 {

@@ -346,7 +346,7 @@ bool Region::checkIndex(UInt64 index)
     return true;
 }
 
-ColumnFamilyType Region::getCf(const std::string & cf)
+ColumnFamilyType Region::getCf(const String & cf)
 {
     if (cf.empty() || cf == default_cf_name)
         return ColumnFamilyType::Default;

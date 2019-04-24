@@ -1,13 +1,10 @@
 #pragma once
 
 #include <map>
-#include <list>
 
 #include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/RegionLockInfo.h>
 #include <Storages/Transaction/RegionDataRead.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -329,179 +326,38 @@ public:
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 
-    TableID insert(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key, const TiKVValue & value)
-    {
-        switch(cf)
-        {
-            case Write:
-            {
-                auto table_id = write_cf.insert(key, value, raw_key);
-                cf_data_size += key.dataSize() + value.dataSize();
-                return table_id;
-            }
-            case Default:
-            {
-                auto table_id = default_cf.insert(key, value, raw_key);
-                cf_data_size += key.dataSize() + value.dataSize();
-                return table_id;
-            }
-            case Lock:
-            {
-                return lock_cf.insert(key, value, raw_key);
-            }
-            default:
-                throw Exception(" should not happen", ErrorCodes::LOGICAL_ERROR);
-        }
-    }
+    TableID insert(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key, const TiKVValue & value);
 
-    TableID removeLockCF(const TableID & table_id, const String & raw_key)
-    {
-        HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-        lock_cf.remove(table_id, handle_id);
-        return table_id;
-    }
+    TableID removeLockCF(const TableID & table_id, const String & raw_key);
 
-    WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it)
-    {
-        const auto & [key, value, decoded_val] = write_it->second;
-        const auto & [handle, ts] = write_it->first;
-        const auto & [write_type, prewrite_ts, short_str] = decoded_val;
+    WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it);
 
-        std::ignore = ts;
-        std::ignore = value;
+    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const;
 
-        if (write_type == PutFlag && !short_str)
-        {
-            auto & map = default_cf.getDataMut()[table_id];
+    LockInfoPtr getLockInfo(TableID expected_table_id, Timestamp start_ts) const;
 
-            if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
-            {
-                cf_data_size -= RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
-                map.erase(data_it);
-            }
-            else
-                throw Exception(" key [" + key.toString() + "] not found in data cf when removing", ErrorCodes::LOGICAL_ERROR);
-        }
+    void splitInto(const RegionRange & range, RegionData & new_region_data);
 
-        cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
+    size_t dataSize() const;
 
-        return write_cf.getDataMut()[table_id].erase(write_it);
-    }
+    void reset(RegionData && new_region_data);
 
-    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const
-    {
-        const auto & [key, value, decoded_val] = write_it->second;
-        const auto & [handle, ts] = write_it->first;
+    size_t serialize(WriteBuffer & buf) const;
 
-        std::ignore = value;
-
-        const auto & [write_type, prewrite_ts, short_value] = decoded_val;
-
-        if (write_type != PutFlag)
-            return std::make_tuple(handle, write_type, ts, TiKVValue());
-
-        if (short_value)
-            return std::make_tuple(handle, write_type, ts, TiKVValue(*short_value));
-
-        if (auto map_it = default_cf.getData().find(table_id); map_it != default_cf.getData().end())
-        {
-            const auto & map = map_it->second;
-            if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
-                return std::make_tuple(handle, write_type, ts, RegionDefaultCFData::getTiKVValue(data_it->second));
-            else
-                throw Exception(" key [" + key.toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
-        }
-        else
-            throw Exception(" table [" + toString(table_id) + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    LockInfoPtr getLockInfo(TableID expected_table_id, Timestamp start_ts) const
-    {
-        if (auto it = lock_cf.getData().find(expected_table_id); it != lock_cf.getData().end())
-        {
-            for (const auto & [handle, value] : it->second)
-            {
-                std::ignore = handle;
-
-                const auto & [tikv_key, tikv_val, decoded_val] = value;
-                const auto & [lock_type, primary, ts, ttl, data] = decoded_val;
-                std::ignore = tikv_val;
-                std::ignore = data;
-
-                if (lock_type == DelFlag || ts > start_ts)
-                    continue;
-
-                return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(tikv_key), ttl});
-            }
-
-            return nullptr;
-        }
-        else
-            return nullptr;
-    }
-
-    void splitInto(const RegionRange & range, RegionData & new_region_data)
-    {
-        size_t size_changed = 0;
-        size_changed += default_cf.splitInto(range, new_region_data.default_cf);
-        size_changed += write_cf.splitInto(range, new_region_data.write_cf);
-        size_changed += lock_cf.splitInto(range, new_region_data.lock_cf);
-        cf_data_size -= size_changed;
-        new_region_data.cf_data_size += size_changed;
-    }
-
-    size_t dataSize() const { return cf_data_size; }
-
-    void reset(RegionData && new_region_data)
-    {
-        default_cf = std::move(new_region_data.default_cf);
-        write_cf = std::move(new_region_data.write_cf);
-        lock_cf = std::move(new_region_data.lock_cf);
-
-        cf_data_size = new_region_data.cf_data_size.load();
-    }
-
-    size_t serialize(WriteBuffer & buf) const
-    {
-        size_t total_size = 0;
-
-        total_size += default_cf.serialize(buf);
-        total_size += write_cf.serialize(buf);
-        total_size += lock_cf.serialize(buf);
-
-        return total_size;
-    }
-
-    static void deserialize(ReadBuffer & buf, RegionData & region_data)
-    {
-        size_t total_size = 0;
-        total_size += RegionDefaultCFData::deserialize(buf, region_data.default_cf);
-        total_size += RegionWriteCFData::deserialize(buf, region_data.write_cf);
-        total_size += RegionLockCFData::deserialize(buf, region_data.lock_cf);
-
-        region_data.cf_data_size += total_size;
-    }
+    static void deserialize(ReadBuffer & buf, RegionData & region_data);
 
     friend bool operator==(const RegionData & r1, const RegionData & r2)
     {
-        return r1.default_cf == r2.default_cf && r1.write_cf == r2.write_cf
-            && r1.lock_cf == r2.lock_cf && r1.cf_data_size == r2.cf_data_size;
+        return r1.isEqual(r2);
     }
 
-    RegionWriteCFData & writeCFMute()
-    {
-        return write_cf;
-    }
+    bool isEqual(const RegionData & r2) const;
 
-    const RegionWriteCFData & writeCF() const
-    {
-        return write_cf;
-    }
+    RegionWriteCFData & writeCFMute();
 
-    TableIDSet getCommittedRecordTableID() const
-    {
-        return writeCF().getAllRecordTableID();
-    }
+    const RegionWriteCFData & writeCF() const;
+
+    TableIDSet getCommittedRecordTableID() const;
 
     RegionData() {}
 
