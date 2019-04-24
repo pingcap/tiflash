@@ -88,7 +88,7 @@ public:
 
     bool checkTableCanBeDropped() const override;
 
-    // REVIEW: get/set TableInfo => data
+    // TODO REVIEW: get/set TableInfo => data
     const TableInfo & getTableInfo() const { return data.table_info; }
     void setTableInfo(const TableInfo & table_info_) { data.table_info = table_info_; }
 

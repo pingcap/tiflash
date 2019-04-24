@@ -10,7 +10,7 @@ namespace DB
 class Block;
 class StorageMergeTree;
 
-// REVIEW: this stream op seems too empty, we may move more txn-related handling from writer to this op
+// TODO REVIEW: this stream op seems too empty, we may move more txn-related handling from writer to this op
 class TxnMergeTreeBlockOutputStream : public IBlockOutputStream
 {
 public:

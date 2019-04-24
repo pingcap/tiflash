@@ -20,7 +20,7 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
-// REVIEW: this two function can be move out from Region.h/cpp
+// - REVIEW: this two function can be move out from Region.h/cpp
 std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
 
 std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
@@ -50,7 +50,7 @@ public:
             : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
         {
             const auto & data = store->data.writeCF().getData();
-            // REVIEW: is the table_id definate in writeCF, seems not?
+            // - REVIEW: is the table_id definate in writeCF, seems not?
             if (auto it = data.find(expected_table_id); it != data.end())
             {
                 found = true;
@@ -63,7 +63,7 @@ public:
 
         bool hasNext() const { return found && write_map_it != write_map_it_end; }
 
-        // REVIEW: the arg `keys`, it's meaning is a little vague
+        // TODO REVIEW: the arg `keys`, it's meaning is a little vague
         auto next(RegionWriteCFDataTrait::Keys * keys = nullptr)
         {
             if (!found)
@@ -83,7 +83,7 @@ public:
         RegionData::ConstWriteCFIter write_map_it_end;
     };
 
-    // REVIEW: this Remover seems stateless except the mutext lock.
+    // - REVIEW: this Remover seems stateless except the mutext lock.
     //   In a low contention situation (indeed it is), we can just lock-unlock in every key removing.
     //   In that case, we can discard this Remover class.
     class CommittedRemover : private boost::noncopyable
@@ -130,7 +130,7 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    // REVIEW: 'node' seems not a good name here
+    // TODO REVIEW: 'node' seems not a good name here
     using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
     void batchInsert(std::function<bool(BatchInsertNode &)> && f);
 
@@ -157,12 +157,12 @@ public:
     void markPersisted();
     Timepoint lastPersistTime() const;
 
-    // REVIEW: use a dirty flag instead?
+    // TODO REVIEW: use a dirty flag instead?
     size_t persistParm() const;
     void decPersistParm(size_t x);
     void incPersistParm();
 
-    // REVIEW: this is a slow op, for testcases only?
+    // - REVIEW: this is a slow op, for testcases only?
     friend bool operator==(const Region & region1, const Region & region2)
     {
         std::shared_lock<std::shared_mutex> lock1(region1.mutex);
@@ -171,7 +171,7 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
-    // REVIEW: this name is confusing
+    // TODO REVIEW: this name is confusing
     UInt64 learnerRead();
 
     void waitIndex(UInt64 index);
@@ -184,7 +184,7 @@ public:
 
     std::pair<HandleID, HandleID> getHandleRangeByTable(TableID table_id) const;
 
-    // REVIEW: better name, eg: assign
+    // TODO REVIEW: better name, eg: assign
     void reset(Region && new_region);
 
     TableIDSet getCommittedRecordTableID() const;
@@ -210,10 +210,10 @@ private:
 
 private:
     RegionData data;
-    // REVIEW: we should define what this mutex should protect, if it just protect data, then we should move this lock into data.
+    // - REVIEW: we should define what this mutex should protect, if it just protect data, then we should move this lock into data.
     mutable std::shared_mutex mutex;
 
-    // REVIEW: in the last time we clearing all the mutex, we decided that meta don't need to be protect by the mutex above.
+    // TODO REVIEW: in the last time we clearing all the mutex, we decided that meta don't need to be protect by the mutex above.
     //   Now we should re-think it. NOTE: deadlock alert! if we do use the mutex above to protect all.
     RegionMeta meta;
 
@@ -221,7 +221,7 @@ private:
 
     std::atomic<Timepoint> last_persist_time = Clock::now();
 
-    // REVIEW: use a better name, eg: is_dirty, or dirty_counter
+    // TODO REVIEW: use a better name, eg: is_dirty, or dirty_counter
     std::atomic<size_t> persist_parm = 1;
 
     Logger * log;

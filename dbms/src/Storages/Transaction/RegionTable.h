@@ -11,7 +11,7 @@
 #include <Common/PersistedContainer.h>
 #include <Common/randomSeed.h>
 
-// REVIEW: we need a crush-restore doc, to descript the data consistence in the situation of service crush-restore
+// TODO REVIEW: we need a crush-restore doc, to descript the data consistence in the situation of service crush-restore
 
 namespace DB
 {
@@ -32,8 +32,8 @@ public:
         bool pause_flush = false;
         bool must_flush = false;
         bool updated = false;
-        // REVIEW: log some metrics to detect if flush is too low that some data are persisted one more time
-        // REVIEW: here we mark the cached-bytes, we can also mark the unpersisted-bytes, it means `cached-bytes - last-time-persisted-bytes`
+        // TODO REVIEW: log some metrics to detect if flush is too low that some data are persisted one more time
+        // TODO REVIEW: here we mark the cached-bytes, we can also mark the unpersisted-bytes, it means `cached-bytes - last-time-persisted-bytes`
         Int64 cache_bytes = 0;
         Timepoint last_flush_time = Clock::now();
     };
@@ -100,10 +100,10 @@ public:
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionMap = std::unordered_map<RegionID, RegionInfo>;
 
-    // REVIEW: this class seems not response for anything
+    // TODO REVIEW: this class seems not response for anything
     struct FlushThresholds
     {
-        // REVIEW: seems two vectors are better, or just use two int64s for now
+        // - REVIEW: seems two vectors are better, or just use two int64s for now
         using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
 
         FlushThresholdsData data;
@@ -118,7 +118,7 @@ public:
             data = flush_thresholds_;
         }
 
-        // REVIEW: big leaking, return an object (event it's const) could lead to access race.
+        // - REVIEW: big leaking, return an object (event it's const) could lead to access race.
         //   And can't find codes in anywhere using this method
         const FlushThresholdsData & getData()
         {
@@ -126,7 +126,7 @@ public:
             return data;
         }
 
-        // REVIEW: `shouldFlush(...)` would be better
+        // - REVIEW: `shouldFlush(...)` would be better
         template <typename T>
         T traverse(std::function<T(const FlushThresholdsData & data)> && f)
         {

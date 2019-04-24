@@ -158,7 +158,7 @@ inline UInt32 readWord(int binIdx, const String & dec, int size) {
     return v;
 }
 
-// REVIEW: `String & raw_value` => `const char *`
+// TODO REVIEW: `String & raw_value` => `const char *`
 inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
 {
     PrecType prec = raw_value[cursor++];
@@ -195,7 +195,7 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     {
         UInt32 v = readWord(binIdx, dec, 4) ^ mask;
         if (v >= wordMax) {
-            // REVIEW: exception code
+            // TODO REVIEW: exception code
             throw Exception("bad number: " + std::to_string(v));
         }
         value *= wordMax;
@@ -243,7 +243,7 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
     }
 }
 
-// REVIEW: stringstream => std::ostream
+// TODO REVIEW: stringstream => std::ostream
 template <typename T>
 inline void writeIntBinary(const T & x, std::stringstream & ss)
 {

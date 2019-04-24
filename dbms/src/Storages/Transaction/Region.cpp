@@ -15,7 +15,7 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 const UInt32 Region::CURRENT_VERSION = 0;
 
-// REVIEW: this names are part of the protocol, we can move these to lower module, such as RegionMeta
+// TODO REVIEW: this names are part of the protocol, we can move these to lower module, such as RegionMeta
 const String Region::lock_cf_name = "lock";
 const String Region::default_cf_name = "default";
 const String Region::write_cf_name = "write";
@@ -100,10 +100,10 @@ UInt64 Region::getIndex() const
     return meta.appliedIndex();
 }
 
-// REVIEW: should lock for meta? what difference between getIndex and getProbableIndex?
+// - REVIEW: should lock for meta? what difference between getIndex and getProbableIndex?
 UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
 
-// REVIEW: should lock for meta? or remove lock in getIndex
+// - REVIEW: should lock for meta? or remove lock in getIndex
 RegionPtr Region::splitInto(const RegionMeta & meta)
 {
     RegionPtr new_region;
@@ -119,7 +119,7 @@ RegionPtr Region::splitInto(const RegionMeta & meta)
     return new_region;
 }
 
-// REVIEW: should lock for meta? or remove lock in getIndex
+// - REVIEW: should lock for meta? or remove lock in getIndex
 void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
@@ -129,7 +129,7 @@ void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft
     meta.execChangePeer(request, response, index, term);
 }
 
-// REVIEW: Find => find
+// TODO REVIEW: Find => find
 const metapb::Peer & FindPeer(const metapb::Region & region, UInt64 store_id)
 {
     for (const auto & peer : region.peers())
@@ -238,7 +238,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
                 LOG_ERROR(log, "Unsupported admin command type " << raft_cmdpb::AdminCmdType_Name(type));
                 break;
         }
-        // REVIEW: lock?
+        // - REVIEW: lock?
         meta.setApplied(index, term);
     }
     else
@@ -290,10 +290,10 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
         meta.setApplied(index, term);
     }
 
-    // REVIEW: notify when setApplied?
+    // - REVIEW: notify when setApplied?
     meta.notifyAll();
 
-    // REVIEW: inc without checking need_persist, and then check this flag when we going to persist
+    // - REVIEW: inc without checking need_persist, and then check this flag when we going to persist
     if (need_persist)
         incPersistParm();
 
@@ -345,7 +345,7 @@ bool Region::checkIndex(UInt64 index)
         return false;
     }
     auto expected = applied_index + 1;
-    // REVIEW: if this region receive a snapshot, the expected index will be not applied_index + 1
+    // TODO REVIEW: if this region receive a snapshot, the expected index will be not applied_index + 1
     if (index != expected)
     {
         LOG_WARNING(log, toString() << " expected index: " << DB::toString(expected) << ", got: " << DB::toString(index));
@@ -377,7 +377,7 @@ void Region::setPendingRemove()
 
 size_t Region::dataSize() const { return data.dataSize(); }
 
-// REVIEW: reset persist_parm here?
+// - REVIEW: reset persist_parm here?
 void Region::markPersisted() { last_persist_time = Clock::now(); }
 
 Timepoint Region::lastPersistTime() const { return last_persist_time; }
@@ -446,7 +446,7 @@ std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, c
     return {start_handle, end_handle};
 }
 
-// REVIEW: better method name, eg: assign
+// - REVIEW: better method name, eg: assign
 void Region::reset(Region && new_region)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);

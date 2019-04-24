@@ -45,7 +45,7 @@ Block VersionFilterBlockInputStream::readImpl()
             }
         }
 
-        // REVIEW: optimize `deleted == 0`
+        // TODO REVIEW: optimize `deleted == 0`
         if (deleted == rows)
             continue;
 

@@ -32,7 +32,7 @@ DataTypePtr getDataTypeByColumnInfoBase<DataTypeEnum16>(const ColumnInfo & colum
 }
 
 
-// REVIEW: abandon singleton and put this into TMTContext?
+// - REVIEW: abandon singleton and put this into TMTContext?
 class TypeMapping : public ext::singleton<TypeMapping>
 {
 public:

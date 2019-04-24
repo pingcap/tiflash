@@ -67,7 +67,7 @@ void serValue(WriteBuffer & buf, const std::vector<T> & v)
 template<typename T>
 struct Field
 {
-    // REVIEW: `std::string name` -> `std::string && name`
+    // TODO REVIEW: `std::string name` -> `std::string && name`
     Field(std::string name_, T value_) : name(std::move(name_)), value(std::move(value_)) {}
     std::string name;
     T value;

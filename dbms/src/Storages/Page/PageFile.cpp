@@ -83,12 +83,12 @@ int openFile(const std::string & path)
         flags = O_WRONLY | O_CREAT;
     }
 
-    // REVIEW: 0664?
+    // TODO REVIEW: 0664?
     fd = ::open(path.c_str(), flags, 0666);
     if (-1 == fd)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        // REVIEW: this seems not right
+        // TODO REVIEW: this seems not right
         if constexpr (must_exist)
         {
             if (errno == ENOENT)
@@ -193,7 +193,7 @@ inline T get(std::conditional_t<advance, char *&, const char *> pos)
     return v;
 }
 
-// REVIEW: no callers found
+// - REVIEW: no callers found
 template <typename C, typename T = typename C::value_type>
 std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false> & allocator)
 {
@@ -223,7 +223,7 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
     return values;
 }
 
-// REVIEW: no callers found
+// - REVIEW: no callers found
 template <typename C, typename T = typename C::value_type>
 void writeValuesIntoFile(C values, const std::string & path, Allocator<false> & allocator)
 {
@@ -297,7 +297,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     char * meta_pos = meta_buffer;
     char * data_pos = data_buffer;
 
-    // REVIEW: what if we don't organize data with `WriteBatch(s)`, just `write(s)`?
+    // - REVIEW: what if we don't organize data with `WriteBatch(s)`, just `write(s)`?
     put(meta_pos, meta_write_bytes);
     put(meta_pos, PageFile::CURRENT_VERSION);
 
@@ -307,7 +307,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         put(meta_pos, (IsPut)(write.is_put ? 1 : 0));
         if (write.is_put)
         {
-            // REVIEW: extra mem copy here
+            // TODO REVIEW: extra mem copy here
             write.read_buffer->readStrict(data_pos, write.size);
             Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
             data_pos += write.size;
@@ -447,7 +447,7 @@ void PageFile::Writer::write(const WriteBatch & wb, PageCacheMap & page_cache_ma
     ByteBuffer meta_buf, data_buf;
     std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, page_cache_map);
 
-    // REVIEW: self-release is better
+    // - REVIEW: self-release is better
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
@@ -542,7 +542,7 @@ PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & paren
 
 std::pair<PageFile, bool> PageFile::recover(const std::string & parent_path, const std::string & page_file_name, Logger * log)
 {
-    // REVIEW: the path name rules can be put into a new class
+    // TODO REVIEW: the path name rules can be put into a new class
     if (!startsWith(page_file_name, ".tmp.page_") && !startsWith(page_file_name, "page_"))
     {
         LOG_INFO(log, "Not page file, ignored " + page_file_name);
@@ -561,7 +561,7 @@ std::pair<PageFile, bool> PageFile::recover(const std::string & parent_path, con
         return {{}, false};
     }
 
-    // REVIEW: handle the converting errors
+    // TODO REVIEW: handle the converting errors
     PageFileId file_id = std::stoull(ss[1]);
     UInt32     level   = std::stoi(ss[2]);
     return {PageFile(file_id, level, parent_path, false, false, log), true};

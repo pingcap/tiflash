@@ -15,7 +15,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
 
     enginepb::SnapshotRequest request;
     auto ok = read(&request);
-    // REVIEW: use two 'throw' here, 'not ok' and 'no state'
+    // TODO REVIEW: use two 'throw' here, 'not ok' and 'no state'
     if (!ok || !request.has_state())
         throw Exception("Failed to read snapshot state", ErrorCodes::LOGICAL_ERROR);
 
@@ -36,7 +36,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot " << region->toString(true));
 
-    // REVIEW: this snapshot may be a big one, in that case, we should not hold all data of this region in memory
+    // TODO REVIEW: this snapshot may be a big one, in that case, we should not hold all data of this region in memory
     while (read(&request))
     {
         if (!request.has_data())
@@ -49,7 +49,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
             auto cf_name = data.cf();
             auto key = TiKVKey();
             auto value = TiKVValue();
-            // REVIEW: the batch inserting logic is OK, but the calling stack is weird.
+            // - REVIEW: the batch inserting logic is OK, but the calling stack is weird.
             //   May be we should just do lock action on each node-inserting, it's also fast when lock contention is low.
             region->batchInsert([&](Region::BatchInsertNode & node) -> bool {
                 if (it == cf_data.end())

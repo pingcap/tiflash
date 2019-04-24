@@ -80,7 +80,7 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(const Block & block
     data.check(block, true);
     block.checkNumberOfRows();
 
-    // REVIEW: we should move all engine-type-spicific-processing to one place (eg: in planning)
+    // TODO REVIEW: we should move all engine-type-spicific-processing to one place (eg: in planning)
     if (!data.partition_expr && data.merging_params.mode != MergeTreeData::MergingParams::Mutable && data.merging_params.mode != MergeTreeData::MergingParams::Txn) /// Table is not partitioned.
     {
         result.emplace_back(Block(block), Row());

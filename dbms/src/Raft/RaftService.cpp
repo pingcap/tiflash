@@ -25,7 +25,7 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
 
 RaftService::~RaftService()
 {
-    // REVIEW: can we remove this mutex?
+    // TODO REVIEW: can we remove this mutex?
     std::lock_guard<std::mutex> lock{mutex};
     grpc_server->Shutdown();
     grpc_server->Wait();
@@ -43,12 +43,12 @@ grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, 
     {
         kvstore->report(rctx);
 
-        // REVIEW: persisting interval is?
+        // - REVIEW: persisting interval is?
         persist_handle = background_pool.addTask([&, this] { return kvstore->tryPersistAndReport(rctx); });
         flush_handle = background_pool.addTask([&] { return region_table.tryFlushRegions(); });
 
         enginepb::CommandRequestBatch request;
-        // REVIEW: should we use EOS flag?
+        // - REVIEW: should we use EOS flag?
         while (stream->Read(&request))
         {
             applyCommand(rctx, request);
@@ -59,13 +59,13 @@ grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, 
         tryLogCurrentException(log, "gRPC ApplyCommandBatch on " + address + " error");
     }
 
-    // REVIEW: is this removing will cause persisting missing? For example, call write some data, and then this conn broke before flushing
+    // - REVIEW: is this removing will cause persisting missing? For example, call write some data, and then this conn broke before flushing
     if (persist_handle)
         background_pool.removeTask(persist_handle);
     if (flush_handle)
         background_pool.removeTask(flush_handle);
 
-    // REVIEW: should we use OK?
+    // - REVIEW: should we use OK?
     return grpc::Status::CANCELLED;
 }
 

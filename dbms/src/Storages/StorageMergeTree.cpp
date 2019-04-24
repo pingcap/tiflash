@@ -134,7 +134,7 @@ BlockInputStreams StorageMergeTree::read(
     auto res = reader.read(column_names, query_info, context, processed_stage, max_block_size, num_streams, 0);
     const ASTSelectQuery * select_query = typeid_cast<const ASTSelectQuery *>(query_info.query.get());
 
-    // REVIEW: move engine specified processing to SelectExecutor may be better
+    // TODO REVIEW: move engine specified processing to SelectExecutor may be better
     if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable ||
         data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
@@ -181,7 +181,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
     const ASTInsertQuery * insert_query = typeid_cast<const ASTInsertQuery *>(&*query);
     const ASTDeleteQuery * delete_query = typeid_cast<const ASTDeleteQuery *>(&*query);
 
-    // REVIEW: move engine specified processing to lower layer may be better:
+    // TODO REVIEW: move engine specified processing to lower layer may be better:
     //   switch (engine type) -> MergeTreeBlockOutputStream
     //                        -> TxnMergeTreeBlockOutputStream
     //                        -> MutableMergeTreeBlockOutputStream
@@ -262,7 +262,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
     }
     else if ((insert_query && insert_query->is_import) || delete_query)
     {
-        // REVIEW: add TxnMergeTree to the error message
+        // TODO REVIEW: add TxnMergeTree to the error message
         throw Exception("Only " + MutableSupport::storage_name + " support IMPORT or DELETE.", ErrorCodes::BAD_ARGUMENTS);
     }
 

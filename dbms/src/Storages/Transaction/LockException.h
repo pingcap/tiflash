@@ -6,7 +6,7 @@
 namespace DB
 {
 
-// REVIEW: exception code? although nowhere should use the code
+// TODO REVIEW: exception code?
 class LockException : public Exception
 {
 public:

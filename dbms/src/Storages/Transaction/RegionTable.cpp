@@ -26,7 +26,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
         std::tie(it, std::ignore) = tables.try_emplace(table_id, parent_path + "tables/", table_id);
 
         auto & table = it->second;
-        // REVIEW: only persist when table_id and storage are new
+        // - REVIEW: only persist when table_id and storage are new
         table.persist();
     }
     return it->second;
@@ -127,7 +127,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region)
     return flush_thresholds.traverse<bool>([&](const FlushThresholds::FlushThresholdsData & data) -> bool {
         for (const auto & [th_bytes, th_duration] : data)
         {
-            // REVIEW: should be `or`, not `and`
+            // TODO REVIEW: should be `or`, not `and`
             if (region.cache_bytes >= th_bytes && period_time >= th_duration)
                 return true;
         }
@@ -147,7 +147,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     TMTContext & tmt = context.getTMTContext();
 
-    // REVIEW: if cache is big, keys_to_remove maybe too big to
+    // - REVIEW: if cache is big, keys_to_remove maybe too big to
     RegionWriteCFDataTrait::Keys keys_to_remove;
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -189,7 +189,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
             remover->remove(key);
         cache_size = region->dataSize();
 
-        // REVIEW: why `cache_size == 0`, why not `keys_to_remove != 0`?
+        // TODO REVIEW: why `cache_size == 0`, why not `keys_to_remove != 0`?
         if (cache_size == 0)
             region->incPersistParm();
 
@@ -198,6 +198,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
     }
 }
 
+// TODO REVIEW: add an entry: `bytes = 0/1`
 static const Int64 FTH_BYTES_1 = 1024;             // 1 KB
 static const Int64 FTH_BYTES_2 = 1024 * 1024;      // 1 MB
 static const Int64 FTH_BYTES_3 = 1024 * 1024 * 10; // 10 MBs
@@ -258,7 +259,7 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
             }
         }
 
-        // REVIEW: if no error found, should be no need to persit
+        // TODO REVIEW: if no error found, should be no need to persit
         table.persist();
     }
 }
@@ -277,7 +278,7 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
         internal_region.cache_bytes = cache_bytes;
     }
 
-    // REVIEW: we don't need to persist every time, can delay to the time `before report to rngine`
+    // - REVIEW: we don't need to persist every time, can delay to the time `before report to rngine`
     for (auto table_id : table_to_persist)
         tables.find(table_id)->second.persist();
 }
@@ -308,7 +309,7 @@ void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
         }
         updateRegionRange(region, table_to_persist);
     }
-    // REVIEW: we don't need to persist every time, can delay to the time `before report to rngine`
+    // - REVIEW: we don't need to persist every time, can delay to the time `before report to rngine`
     for (auto table_id : table_to_persist)
         tables.find(table_id)->second.persist();
 }

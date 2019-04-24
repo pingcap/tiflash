@@ -37,7 +37,7 @@ public:
     pingcap::kv::RpcClientPtr getRpcClient();
 
 private:
-    // REVIEW: this member seems is it a local and temp variant
+    // TODO REVIEW: this member seems is it a local and temp variant
     std::vector<RegionID> regions_to_remove = {};
 
     SchemaSyncerPtr schema_syncer;

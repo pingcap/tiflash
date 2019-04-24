@@ -29,7 +29,7 @@ namespace DB
 //        *crc = table[(uint8_t)*crc ^ ((uint8_t *)data)[i]] ^ *crc >> 8;
 //}
 
-// REVIEW: do we need the sse version of crc calculating?
+// - REVIEW: do we need the sse version of crc calculating?
 class Crc32
 {
 public:

@@ -13,7 +13,7 @@ const int UpdatePDLeaderFailed = 4;
 const int TimeoutError = 5;
 const int RegionUnavailable = 6;
 
-// REVIEW: any exception being throwed in this client module should have a error code,
+// TODO REVIEW: any exception being throwed in this client module should have a error code,
 //   the code will be the exiting code if no one catch the exception
 class Exception : public Poco::Exception
 {

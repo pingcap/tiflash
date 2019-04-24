@@ -23,7 +23,7 @@ namespace DB
 
 /// A light-weight object which can be created and copied cheaply.
 /// Use createWriter()/createReader() to open write/read system file.
-// REVIEW: is it better to let Allocator be a member?
+// - REVIEW: is it better to let Allocator be a member?
 class PageFile : public Allocator<false>
 {
 public:
@@ -82,7 +82,7 @@ public:
 public:
     /// Create an empty page file.
     PageFile() = default;
-    // REVIEW: recover means recover from some damaged things, restore may be better
+    // TODO REVIEW: recover means recover from some damaged things, restore may be better
     /// Recover a page file from disk.
     static std::pair<PageFile, bool> recover(const std::string & parent_path, const std::string & page_file_name, Logger * log);
     /// Create a new page file.

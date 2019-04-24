@@ -48,7 +48,7 @@ enum : RegionVersion
     InvalidRegionVersion = std::numeric_limits<RegionVersion>::max()
 };
 
-// REVIEW: this types can be defined inside classes which use them
+// TODO REVIEW: this types can be defined inside classes which use them
 using Clock = std::chrono::system_clock;
 using Timepoint = Clock::time_point;
 using Duration = Clock::duration;

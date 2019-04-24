@@ -11,7 +11,7 @@ extern const int LOGICAL_ERROR;
 
 void RegionPersister::drop(RegionID region_id)
 {
-    // REVIEW: need mutex?
+    // - REVIEW: need mutex?
 
     WriteBatch wb;
     wb.delPage(region_id);
@@ -23,7 +23,7 @@ void RegionPersister::persist(const RegionPtr & region, enginepb::CommandRespons
     // Support only on thread persist.
     std::lock_guard<std::mutex> lock(mutex);
 
-    // REVIEW: can we just region->resetPersistParm(void)?
+    // TODO REVIEW: can we just region->resetPersistParm(void)?
     size_t persist_parm = region->persistParm();
     doPersist(region, response);
     region->markPersisted();
@@ -36,6 +36,7 @@ void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandRespo
     UInt64 applied_index = region->getIndex();
 
     auto cache = page_storage.getCache(region_id);
+    // TODO REVIEW: ??
     if (cache.isValid() && cache.version > applied_index)
     {
         LOG_INFO(log, region->toString() << " have already persisted index: " << cache.version);
@@ -43,7 +44,7 @@ void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandRespo
     }
 
     MemoryWriteBuffer buffer;
-    // REVIEW: add some warning log here if region is too large
+    // TODO REVIEW: add some warning log here if region is too large
     size_t region_size = region->serialize(buffer, response);
     if (unlikely(region_size > std::numeric_limits<UInt32>::max()))
         throw Exception("Region is too big to persist", ErrorCodes::LOGICAL_ERROR);

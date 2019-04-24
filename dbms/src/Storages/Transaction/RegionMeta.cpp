@@ -43,7 +43,7 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
 }
 
 <<<<<<< HEAD
-// REVIEW: lock? be carefull, can be easily deadlock.
+// - REVIEW: lock? be carefull, can be easily deadlock.
 //  or use member `const RegionID region_id`
 RegionID RegionMeta::regionId() const { return region.id(); }
 =======
@@ -107,7 +107,7 @@ void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
     applied_term = term;
 }
 
-// REVIEW: should move this notification to doSetApplied?
+// - REVIEW: should move this notification to doSetApplied?
 void RegionMeta::notifyAll() { cv.notify_all(); }
 
 UInt64 RegionMeta::appliedIndex() const
@@ -135,7 +135,7 @@ enginepb::CommandResponse RegionMeta::toCommandResponse() const
 RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
 <<<<<<< HEAD
-    // REVIEW: lock rhs
+    // - REVIEW: lock rhs
 =======
     std::lock_guard<std::mutex> lock(rhs.mutex);
 
@@ -143,7 +143,7 @@ RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
     apply_state = std::move(rhs.apply_state);
-    // REVIEW: set rhs.* to init state
+    // TODO REVIEW: set rhs.* to init state
     applied_term = rhs.applied_term;
     pending_remove = rhs.pending_remove;
 }
@@ -190,7 +190,7 @@ void RegionMeta::doSetPendingRemove() { pending_remove = true; }
 void RegionMeta::waitIndex(UInt64 index)
 {
     std::unique_lock<std::mutex> lock(mutex);
-    // REVIEW: should we lock inside the closure function?
+    // TODO REVIEW: should we lock inside the closure function?
     cv.wait(lock, [this, index] { return pending_remove || apply_state.applied_index() >= index; });
 }
 
@@ -208,7 +208,7 @@ UInt64 RegionMeta::confVer() const
 
 void RegionMeta::reset(RegionMeta && rhs)
 {
-    // REVIEW: lock rhs
+    // - REVIEW: lock rhs
     std::lock_guard<std::mutex> lock(mutex);
 
     if (regionId() != rhs.regionId())
@@ -229,7 +229,7 @@ void RegionMeta::execChangePeer(
 
     switch (change_peer_request.change_type())
     {
-        // REVIEW: throws when meet `AddNode`?
+        // - REVIEW: throws when meet `AddNode`?
         case eraftpb::ConfChangeType::AddNode:
         case eraftpb::ConfChangeType::AddLearnerNode:
         {

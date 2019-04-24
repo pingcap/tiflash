@@ -19,7 +19,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-// REVIEW: TIKV_ENCODE/DECODE_ERROR ?
+// TODO REVIEW: TIKV_ENCODE/DECODE_ERROR ?
 extern const int LOGICAL_ERROR;
 }
 
