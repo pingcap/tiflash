@@ -1,9 +1,9 @@
 #pragma once
 
+#include <chrono>
+#include <ctime>
 #include <set>
 #include <unordered_set>
-#include <ctime>
-#include <chrono>
 
 #include <Core/Types.h>
 
@@ -19,10 +19,7 @@ enum : TableID
     MaxSystemTableID = 29
 };
 
-inline bool isTiDBSystemTable(TableID table_id)
-{
-    return table_id <= MaxSystemTableID;
-}
+inline bool isTiDBSystemTable(TableID table_id) { return table_id <= MaxSystemTableID; }
 
 using DatabaseID = Int64;
 
@@ -34,7 +31,6 @@ using PartitionID = UInt64;
 using RegionKey = Int64;
 
 using RegionID = UInt64;
-using HandleRange = std::pair<HandleID, HandleID>;
 
 enum : RegionID
 {

@@ -4,9 +4,12 @@
 #include <Parsers/ASTLiteral.h>
 
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
 
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/tests/region_helper.h>
 
 #include <Debug/MockTiDB.h>
@@ -24,12 +27,16 @@ extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name)
+TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_name)
 {
     try
     {
         using TablePtr = MockTiDB::TablePtr;
         TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+        if (table->isPartitionTable())
+            return table->getPartitionIDByName(partition_name);
+
         return table->id();
     }
     catch (Exception & e)
@@ -46,9 +53,10 @@ TableID getTableID(Context & context, const std::string & database_name, const s
 
 void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 5)
+    if (args.size() < 5 || args.size() > 6)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
+            ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -56,12 +64,13 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     RegionKey end = (RegionKey)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
+    const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
 
-    TableID table_id = getTableID(context, database_name, table_name);
+    TableID table_id = getTableID(context, database_name, table_name, partition_name);
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.kvstore->onSnapshot(region, &context);
+    tmt.kvstore->onSnapshot(region, &tmt.region_table);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -71,9 +80,10 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
 void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() < 5)
+    if (args.size() < 5 || args.size() > 6)
     {
-        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Args not matched, should be: region-id, start-key, end-key, database-name, table-name[, partition-name]",
+            ErrorCodes::BAD_ARGUMENTS);
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
@@ -81,8 +91,9 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     RegionKey end = (RegionKey)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
+    const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
 
-    TableID table_id = getTableID(context, database_name, table_name);
+    TableID table_id = getTableID(context, database_name, table_name, partition_name);
 
     TMTContext & tmt = context.getTMTContext();
 
@@ -118,11 +129,11 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     output(ss.str());
 }
 
-std::string getRegionKeyString(const HandleID s, const TiKVKey & k)
+std::string getRegionKeyString(const TiKVRange::Handle s, const TiKVKey & k)
 {
     try
     {
-        if (s == std::numeric_limits<HandleID>::min() || s == std::numeric_limits<HandleID>::max())
+        if (s.type != TiKVHandle::HandleIDType::NORMAL)
         {
             String raw_key = k.empty() ? "" : RecordKVFormat::decodeTiKVKey(k);
             bool is_record = RecordKVFormat::isRecord(raw_key);
@@ -138,7 +149,7 @@ std::string getRegionKeyString(const HandleID s, const TiKVKey & k)
             }
             return ss.str();
         }
-        return toString(s);
+        return toString(s.handle_id);
     }
     catch (...)
     {
@@ -150,7 +161,7 @@ std::string getStartKeyString(TableID table_id, const TiKVKey & start_key)
 {
     try
     {
-        HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
+        auto start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
         return getRegionKeyString(start_handle, start_key);
     }
     catch (...)
@@ -163,7 +174,7 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
 {
     try
     {
-        HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
+        auto end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
         return getRegionKeyString(end_handle, end_key);
     }
     catch (...)
@@ -182,7 +193,8 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         auto range = region->getHandleRangeByTable(table_id);
         size += 1;
         std::stringstream ss;
-        ss << "table #" << table_id << " " << region->toString() << " ranges: " << range.first << ", " << range.second;
+        ss << "table #" << table_id << " " << region->toString() << " ranges: " << range.first.toString() << ", "
+           << range.second.toString();
         output(ss.str());
     });
     output("total size: " + toString(size));
@@ -201,8 +213,8 @@ void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer
 
     auto & tmt = context.getTMTContext();
 
-    RegionTable::RegionMap regions;
-    tmt.region_table.dumpRegionMap(regions);
+    RegionTable::RegionInfoMap regions;
+    tmt.region_table.dumpRegionInfoMap(regions);
 
     for (const auto & it : regions)
     {

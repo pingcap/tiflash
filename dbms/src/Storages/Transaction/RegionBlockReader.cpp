@@ -1,4 +1,10 @@
+#include <Columns/ColumnsNumber.h>
+#include <Storages/ColumnsDescription.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -8,7 +14,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-static const Field MockDecodeRow(TiDB::CodecFlag flag)
+static const Field GenDecodeRow(TiDB::CodecFlag flag)
 {
     switch (flag)
     {
@@ -36,7 +42,7 @@ static const Field MockDecodeRow(TiDB::CodecFlag flag)
 }
 
 Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_,
-    ScannerPtr & scanner, RegionWriteCFDataTrait::Keys * keys)
+    RegionDataReadInfoList & data_list)
 {
     // Note: this code below is mostly ported from RegionBlockInputStream.
     Names ordered_columns = ordered_columns_;
@@ -48,50 +54,78 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
-    // TODO: use HandleType and InvalidHandleID
-    Int64 handle_id = -1;
 
-    std::map<UInt64, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
+    // TODO: move this value to setting.
+    ColumnID handle_col_id = -1;
+
+    std::map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
     for (const auto & column_info : table_info.columns)
     {
-        Int64 col_id = column_info.id;
+        ColumnID col_id = column_info.id;
         String col_name = column_info.name;
         auto ch_col = columns.getPhysical(col_name);
         column_map[col_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
+        column_map[col_id].first->reserve(data_list.size());
         if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
-        {
-            handle_id = col_id;
-        }
+            handle_col_id = col_id;
     }
 
     if (!table_info.pk_is_handle)
     {
         auto ch_col = columns.getPhysical(MutableSupport::tidb_pk_column_name);
-        column_map[handle_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
+        column_map[handle_col_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
+        column_map[handle_col_id].first->reserve(data_list.size());
+    }
+
+    bool pk_is_uint64 = false;
+
+    const auto pk_type = column_map[handle_col_id].second.type->getFamilyName();
+
+    if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
+        pk_is_uint64 = true;
+
+    if (pk_is_uint64)
+    {
+        size_t ori_size = data_list.size();
+        std::ignore = ori_size;
+
+        // resort the data_list;
+        auto it = data_list.begin();
+        for (; it != data_list.end();)
+        {
+            const auto handle = std::get<0>(*it);
+
+            if (handle & RecordKVFormat::SIGN_MARK)
+                ++it;
+            else
+                break;
+        }
+        data_list.splice(data_list.end(), data_list, data_list.begin(), it);
+
+        assert(ori_size == data_list.size());
     }
 
     const auto & date_lut = DateLUT::instance();
 
-    // - REVIEW: one more call of scanner.hasNext wouldn't hurt
-    // Because the first check of scanner.hasNext() already been done outside of this function.
-    do
+    ColumnUInt8::Container & delmark_data = delmark_col->getData();
+    ColumnUInt64::Container & version_data = version_col->getData();
+
+    delmark_data.reserve(data_list.size());
+    version_data.reserve(data_list.size());
+
+    std::unordered_set<ColumnID> col_id_included;
+
+    const size_t target_row_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
+
+    for (const auto & [handle, write_type, commit_ts, value] : data_list)
     {
-        // TODO: confirm all this mess
-        auto [handle, write_type, commit_ts, value] = scanner->next(keys);
         if (write_type == Region::PutFlag || write_type == Region::DelFlag)
         {
 
-            // TODO: optimize columns' insertion
+            // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
-            ColumnUInt8::Container & delmark_data = delmark_col->getData();
-            ColumnUInt64::Container & version_data = version_col->getData();
-
-            // `write_type` does not equal `Op` in proto
-            delmark_data.resize(delmark_data.size() + 1);
-            delmark_data[delmark_data.size() - 1] = write_type == Region::DelFlag;
-
-            version_data.resize(version_data.size() + 1);
-            version_data[version_data.size() - 1] = commit_ts;
+            delmark_data.emplace_back(write_type == Region::DelFlag);
+            version_data.emplace_back(commit_ts);
 
             // TODO REVIEW: use two rows, one is values, another one is mock values
             std::vector<Field> row;
@@ -102,23 +136,54 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 row.reserve(table_info.columns.size() * 2);
                 for (const TiDB::ColumnInfo & column : table_info.columns)
                 {
+                    if (handle_col_id == column.id)
+                        continue;
+
                     row.push_back(Field(column.id));
-                    row.push_back(MockDecodeRow(column.getCodecFlag()));
+                    row.push_back(GenDecodeRow(column.getCodecFlag()));
                 }
             }
             else
                 row = RecordKVFormat::DecodeRow(value);
 
-            // - REVIEW: not sure about this
-            if (row.size() % 2 != 0)
-                throw Exception("The number of columns is not right!", ErrorCodes::LOGICAL_ERROR);
+            if (row.size() == 1 && row[0].isNull())
+            {
+                // all field is null
+                row.clear();
+            }
+
+            if (row.size() & 1)
+                throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
+
+            if (row.size() != target_row_size)
+            {
+                col_id_included.clear();
+
+                for (size_t i = 0; i < row.size(); i += 2)
+                    col_id_included.emplace(row[i].get<ColumnID>());
+
+                for (const TiDB::ColumnInfo & column : table_info.columns)
+                {
+                    if (handle_col_id == column.id)
+                        continue;
+                    if (col_id_included.count(column.id))
+                        continue;
+
+                    row.push_back(Field(column.id));
+                    row.push_back(Field());
+                }
+
+                if (row.size() != target_row_size)
+                    throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
+            }
 
             for (size_t i = 0; i < row.size(); i += 2)
             {
                 Field & col_id = row[i];
-                auto it = column_map.find(col_id.get<Int64>());
+                auto it = column_map.find(col_id.get<ColumnID>());
                 if (it == column_map.end())
-                    continue;
+                    throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
+
                 const auto & tp = it->second.second.type->getName();
                 // TODO REVIEW: a new function about date/time handling
                 if (tp == "Nullable(DateTime)" || tp == "Nullable(Date)" || tp == "DateTime" || tp == "Date")
@@ -158,9 +223,13 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     it->second.first->insert(row[i + 1]);
                 }
             }
-            column_map[handle_id].first->insert(Field(handle));
+
+            if (pk_is_uint64)
+                column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
+            else
+                column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
         }
-    } while (scanner->hasNext());
+    }
 
     Block block;
     for (const auto & name : ordered_columns)

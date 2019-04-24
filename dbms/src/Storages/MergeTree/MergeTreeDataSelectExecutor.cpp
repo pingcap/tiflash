@@ -27,9 +27,7 @@ namespace std
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
 #include <Storages/MergeTree/KeyCondition.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Storages/Transaction/RegionException.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSampleRatio.h>
 
@@ -60,7 +58,11 @@ namespace std
 #include <Storages/VirtualColumnUtils.h>
 #include <DataStreams/MvccTMTSortedBlockInputStream.h>
 
+#include <Storages/Transaction/CHTableHandle.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/RegionException.h>
 
 namespace ProfileEvents
 {
@@ -160,9 +162,19 @@ void extend_mutable_engine_column_names(Names& column_names_to_read, const Merge
     column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
 }
 
-MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & index, const Int64 handle_begin,
-    const Int64 handle_end, MarkRanges mark_ranges, size_t min_marks_for_seek, const Settings & settings)
+static inline size_t gen_min_marks_for_seek(const Settings & settings, const MergeTreeData & data)
 {
+    size_t min_marks_for_seek = (settings.merge_tree_min_rows_for_seek + data.index_granularity - 1) / data.index_granularity;
+    return min_marks_for_seek;
+}
+
+template <typename TargetType>
+static MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & index, const TiKVHandle::Handle<TargetType> & handle_begin,
+    const TiKVHandle::Handle<TargetType> & handle_end, MarkRanges mark_ranges, size_t min_marks_for_seek, const Settings & settings)
+{
+    if (handle_end <= handle_begin)
+        return {};
+
     MarkRanges res;
 
     size_t marks_count = index.at(0)->size();
@@ -172,23 +184,16 @@ MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & inde
     reverse(mark_ranges.begin(), mark_ranges.end());
     MarkRanges ranges_stack = std::move(mark_ranges);
 
-    Field index_left;
-    Field index_right;
-
     while (!ranges_stack.empty())
     {
         MarkRange range = ranges_stack.back();
         ranges_stack.pop_back();
 
-        index[0]->get(range.begin, index_left);
+        TiKVHandle::Handle<TargetType> index_left_handle = static_cast<TargetType>(index[0]->getUInt(range.begin));
+        TiKVHandle::Handle<TargetType> index_right_handle = TiKVHandle::Handle<TargetType>::max;
 
         if (range.end != marks_count)
-            index[0]->get(range.end, index_right);
-        else
-            index_right = Field(std::numeric_limits<Int64>::max());
-
-        Int64 index_left_handle = index_left.get<Int64>();
-        Int64 index_right_handle = index_right.get<Int64>();
+            index_right_handle = static_cast<TargetType>(index[0]->getUInt(range.end));
 
         if (handle_begin >= index_right_handle || index_left_handle >= handle_end)
             continue;
@@ -234,10 +239,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
     BlockInputStreams region_block_data;
     String handle_col_name;
     size_t region_cnt = 0;
-    std::vector<RangesInDataParts> region_range_parts;
+    std::vector<std::pair<RangesInDataParts, std::vector<int>>> region_range_parts;
     std::vector<size_t> rows_in_mem;
 
-    static const auto func_throw_retry_region = [&]() {
+    const auto func_throw_retry_region = [&]() {
         std::vector<RegionID> region_ids;
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
             region_ids.push_back(regions_query_info[region_index].region_id);
@@ -276,10 +281,18 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         }
     }
 
+    bool pk_is_uint64 = false;
+
     if (is_txn_engine)
     {
-        // - REVIEW: move all `get handle name` to one place
+        // TODO REVIEW: move all `get handle name` to one place
         handle_col_name = data.getPrimarySortDescription()[0].column_name;
+
+        const auto pk_type = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
+
+        if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
+            pk_is_uint64 = true;
+
         ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
 
         TMTContext & tmt = context.getTMTContext();
@@ -347,8 +360,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                     {
                         LOG_WARNING(log, "Region " << region_query_info.region_id << ", version "
                                                    << region_query_info.version
-                                                   << ", handle range [" << region_query_info.range_in_table.first
-                                                   << ", " << region_query_info.range_in_table.second << ") , status "
+                                                   << ", handle range [" << region_query_info.range_in_table.first.toString()
+                                                   << ", " << region_query_info.range_in_table.second.toString() << ") , status "
                                                    << RegionTable::RegionReadStatusString(status));
                         need_retry = true;
                     }
@@ -750,6 +763,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
         if (query_info.read_tso < safe_point)
             func_throw_retry_region();
 
+        const size_t min_marks_for_seek = gen_min_marks_for_seek(settings, data);
+
         bool need_retry = false;
 
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
@@ -757,7 +772,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
             if (select.no_kvstore)
                 continue;
 
-            // - REVIEW: should not meet `!= RegionTable::OK`
             if (regions_query_res[region_index] != RegionTable::OK)
                 continue;
 
@@ -777,8 +791,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                     // ABA problem may cause because one region is removed and inserted back.
                     // if the version of region is changed, the part may has less data because of compaction.
                     LOG_WARNING(log, "Region " << region_query_info.region_id << ", version " << region_query_info.version
-                                               <<  ", handle range [" << region_query_info.range_in_table.first
-                                               << ", " << region_query_info.range_in_table.second << ") , status "
+                                               <<  ", handle range [" << region_query_info.range_in_table.first.toString()
+                                               << ", " << region_query_info.range_in_table.second.toString() << ") , status "
                                                << RegionTable::RegionReadStatusString(status));
                     need_retry = true;
                     break;
@@ -787,29 +801,74 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
             size_t sum_marks = 0;
             size_t sum_ranges = 0;
-            for (const RangesInDataPart & ranges : parts_with_ranges)
+
+            if (pk_is_uint64)
             {
-                MarkRanges mark_ranges = MarkRangesFromRegionRange(ranges.data_part->index,
-                                                                   region_query_info.range_in_table.first,
-                                                                   region_query_info.range_in_table.second,
-                                                                   ranges.ranges,
-                                                                   (settings.merge_tree_min_rows_for_seek
-                                                                       + data.index_granularity - 1)
-                                                                       / data.index_granularity,
-                                                                   settings);
-                if (mark_ranges.empty())
-                    continue;
-                region_range_parts[region_index].push_back({ranges.data_part, ranges.part_index_in_query, mark_ranges});
-                sum_ranges += mark_ranges.size();
-                for (const auto & range : mark_ranges)
-                    sum_marks += range.end - range.begin;
+                const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(region_query_info.range_in_table);
+
+                if (log->trace())
+                {
+                    std::stringstream ss;
+                    for (auto i = 0; i < n; ++i)
+                    {
+                        ss << "[";
+                        new_range[i].first.toString(ss);
+                        ss << ",";
+                        new_range[i].second.toString(ss);
+                        ss << ") ";
+                    }
+                    LOG_TRACE(log, "[PK_IS_UINT64] Region " << region_query_info.region_id << ", split range into " << n << ": " << ss.str());
+                }
+
+                for (const RangesInDataPart & ranges : parts_with_ranges)
+                {
+                    for (auto i = 0; i < n; ++i)
+                    {
+                        const auto & range_in_table = new_range[i];
+                        MarkRanges mark_ranges = MarkRangesFromRegionRange<UInt64>(ranges.data_part->index,
+                                                                                   range_in_table.first,
+                                                                                   range_in_table.second,
+                                                                                   ranges.ranges,
+                                                                                   min_marks_for_seek,
+                                                                                   settings);
+
+                        if (mark_ranges.empty())
+                            continue;
+
+                        region_range_parts[region_index].first.push_back({ranges.data_part, ranges.part_index_in_query, mark_ranges});
+                        region_range_parts[region_index].second.push_back(i);
+
+                        sum_ranges += mark_ranges.size();
+                        for (const auto & range : mark_ranges)
+                            sum_marks += range.end - range.begin;
+                    }
+                }
+            }
+            else
+            {
+                for (const RangesInDataPart & ranges : parts_with_ranges)
+                {
+                    MarkRanges mark_ranges = MarkRangesFromRegionRange<Int64>(ranges.data_part->index,
+                                                                              region_query_info.range_in_table.first,
+                                                                              region_query_info.range_in_table.second,
+                                                                              ranges.ranges,
+                                                                              min_marks_for_seek,
+                                                                              settings);
+
+                    if (mark_ranges.empty())
+                        continue;
+                    region_range_parts[region_index].first.push_back({ranges.data_part, ranges.part_index_in_query, mark_ranges});
+                    sum_ranges += mark_ranges.size();
+                    for (const auto & range : mark_ranges)
+                        sum_marks += range.end - range.begin;
+                }
             }
 
             LOG_TRACE(log, "Region " << region_query_info.region_id << ", version "
                 << region_query_info.version
-                <<  ", handle range [" << region_query_info.range_in_table.first
-                << ", " << region_query_info.range_in_table.second << "), selected "
-                << region_range_parts[region_index].size() << " parts, " << sum_marks << " marks to read from "
+                <<  ", handle range [" << region_query_info.range_in_table.first.toString()
+                << ", " << region_query_info.range_in_table.second.toString() << "), selected "
+                << region_range_parts[region_index].first.size() << " parts, " << sum_marks << " marks to read from "
                 << sum_ranges << " ranges, read " << rows_in_mem[region_index] << " rows from memory");
         }
 
@@ -871,28 +930,44 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
                 BlockInputStreams union_regions_stream;
                 for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
                 {
-                    // - REVIEW: in what case this will happen?
                     if (regions_query_res[region_index] != RegionTable::OK)
                         continue;
 
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                    // TODO REVIEW: if two regions are one next to another, this will read some duplicated data, and can be optimized
+                    const auto [n, new_range] = pk_is_uint64 ? CHTableHandle::splitForUInt64TableHandle(region_query_info.range_in_table)
+                                                             : CHTableHandle::splitForUInt64TableHandle<true>(region_query_info.range_in_table);
+                    std::ignore = n;
+
                     BlockInputStreams merging;
-                    for (const RangesInDataPart & part : region_range_parts[region_index])
+
+                    // TODO REVIEW: if two regions are one next to another, this will read some duplicated data, and can be optimized
+                    for (size_t part_pos = 0; part_pos < region_range_parts[region_index].first.size(); ++part_pos)
                     {
+                        const RangesInDataPart & part = region_range_parts[region_index].first[part_pos];
+
                         BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(
                             data, part.data_part, max_block_size, settings.preferred_block_size_bytes,
                             settings.preferred_max_column_in_block_size_bytes, column_names_to_read, part.ranges,
                             use_uncompressed_cache, prewhere_actions, prewhere_column, true,
                             settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size,
                             true, true, virt_column_names, part.part_index_in_query);
-                        source_stream = std::make_shared<RangesFilterBlockInputStream>(source_stream, region_query_info.range_in_table, handle_col_name);
 
+                        if (pk_is_uint64)
+                        {
+                            auto uint64_pos = region_range_parts[region_index].second[part_pos];
+                            source_stream = std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, new_range[uint64_pos], handle_col_name);
+                        }
+                        else
+                        {
+                            source_stream = std::make_shared<RangesFilterBlockInputStream<Int64>>(source_stream, region_query_info.range_in_table, handle_col_name);
+                        }
+
+                        // TODO: implement VersionFilterBlockInputStream in RangesFilterBlockInputStream
                         source_stream = std::make_shared<VersionFilterBlockInputStream>(
                             source_stream, MutableSupport::version_column_name, query_info.read_tso);
 
-                        // - REVIEW: it seems this can lift up to merged stream
+                        // TODO REVIEW: it seems this can lift up to merged stream
                         source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream,
                                                                                      data.getPrimaryExpression());
 
@@ -1253,7 +1328,8 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     else
     {
         size_t used_key_size = key_condition.getMaxKeyColumn() + 1;
-        size_t min_marks_for_seek = (settings.merge_tree_min_rows_for_seek + data.index_granularity - 1) / data.index_granularity;
+        size_t min_marks_for_seek = gen_min_marks_for_seek(settings, data);
+        // size_t min_marks_for_seek = (settings.merge_tree_min_rows_for_seek + data.index_granularity - 1) / data.index_granularity;
         /** There will always be disjoint suspicious segments on the stack, the leftmost one at the top (back).
             * At each step, take the left segment and check if it fits.
             * If fits, split it into smaller ones and put them on the stack. If not, discard it.

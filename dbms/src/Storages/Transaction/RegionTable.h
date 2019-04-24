@@ -1,20 +1,36 @@
 #pragma once
 
 #include <functional>
-#include <map>
-#include <random>
 #include <vector>
 
-#include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/Region.h>
-
 #include <Common/PersistedContainer.h>
-#include <Common/randomSeed.h>
+#include <Core/Names.h>
+#include <Storages/Transaction/RegionDataRead.h>
+#include <Storages/Transaction/TiKVHandle.h>
+#include <common/logger_useful.h>
+
+namespace TiDB
+{
+struct TableInfo;
+};
 
 // TODO REVIEW: we need a crush-restore doc, to descript the data consistence in the situation of service crush-restore
 
 namespace DB
 {
+
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
+struct ColumnsDescription;
+class Context;
+class IStorage;
+using StoragePtr = std::shared_ptr<IStorage>;
+class TMTContext;
+class IBlockInputStream;
+using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
+
+// for debug
+struct MockTiDBTable;
 
 class RegionTable : private boost::noncopyable
 {
@@ -23,12 +39,12 @@ public:
     {
         InternalRegion() {}
         InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
-        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_ = {0, 0})
+        InternalRegion(const RegionID region_id_, const HandleRange<HandleID> & range_in_table_ = {0, 0})
             : region_id(region_id_), range_in_table(range_in_table_)
         {}
 
         RegionID region_id;
-        HandleRange range_in_table;
+        HandleRange<HandleID> range_in_table;
         bool pause_flush = false;
         bool must_flush = false;
         bool updated = false;
@@ -98,12 +114,12 @@ public:
     };
 
     using TableMap = std::unordered_map<TableID, Table>;
-    using RegionMap = std::unordered_map<RegionID, RegionInfo>;
+    using RegionInfoMap = std::unordered_map<RegionID, RegionInfo>;
 
     // TODO REVIEW: this class seems not response for anything
     struct FlushThresholds
     {
-        // - REVIEW: seems two vectors are better, or just use two int64s for now
+        // - REVIEW: seems two vectors are better
         using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
 
         FlushThresholdsData data;
@@ -139,7 +155,7 @@ private:
     const std::string parent_path;
 
     TableMap tables;
-    RegionMap regions;
+    RegionInfoMap regions;
 
     FlushThresholds flush_thresholds;
 
@@ -163,6 +179,11 @@ private:
 
     void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
 
+    // For debug
+    friend struct MockTiDBTable;
+
+    void mockDropRegionsInTable(TableID table_id);
+
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
     void restore(std::function<RegionPtr(RegionID)> region_fetcher);
@@ -173,7 +194,7 @@ public:
     void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const RegionPtr & region);
-    void applySnapshotRegions(const ::DB::RegionMap & regions);
+    void applySnapshotRegions(const std::unordered_map<RegionID, RegionPtr> & regions);
 
     /// Manage data after region split into split_regions.
     /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
@@ -197,7 +218,7 @@ public:
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
-        RegionWriteCFDataTrait::Keys * keys);
+        RegionDataReadInfoList * data_list_for_remove);
 
     static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
@@ -208,12 +229,10 @@ public:
         const Names & ordered_columns,
         bool learner_read,
         bool resolve_locks,
-        UInt64 start_ts,
-        RegionWriteCFDataTrait::Keys * keys = nullptr);
+        Timestamp start_ts,
+        RegionDataReadInfoList * data_list_for_remove = nullptr);
 
-    // For debug
-    void dumpRegionMap(RegionTable::RegionMap & res);
-    void dropRegionsInTable(TableID table_id);
+    void dumpRegionInfoMap(RegionTable::RegionInfoMap & res) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

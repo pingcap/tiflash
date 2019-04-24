@@ -10,8 +10,41 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-Block RangesFilterBlockInputStream::readImpl()
+template class RangesFilterBlockInputStream<Int64>;
+template class RangesFilterBlockInputStream<UInt64>;
+
+struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, UInt64, size_t>
 {
+    PKColumnIterator & operator++()
+    {
+        ++pos;
+        return *this;
+    }
+
+    PKColumnIterator operator=(const PKColumnIterator & itr)
+    {
+        pos = itr.pos;
+        column = itr.column;
+        return *this;
+    }
+
+    UInt64 operator*() const { return column->getUInt(pos); }
+
+    size_t operator-(const PKColumnIterator & itr) const { return pos - itr.pos; }
+
+    PKColumnIterator(const int pos_, const IColumn * column_) : pos(pos_), column(column_) {}
+
+    void operator+=(size_t n) { pos += n; }
+
+    size_t pos;
+    const IColumn * column;
+};
+
+template <typename HandleType>
+Block RangesFilterBlockInputStream<HandleType>::readImpl()
+{
+    static const auto func_cmp = [](const UInt64 & a, const Handle & b) -> bool { return static_cast<HandleType>(a) < b; };
+
     while (true)
     {
         Block block = input->read();
@@ -19,20 +52,20 @@ Block RangesFilterBlockInputStream::readImpl()
             return block;
 
         if (!block.has(handle_col_name))
-            throw Exception("RangesFilterBlockInputStream: block without _tidb_rowid.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("RangesFilterBlockInputStream: block without " + handle_col_name, ErrorCodes::LOGICAL_ERROR);
 
         const ColumnWithTypeAndName & handle_column = block.getByName(handle_col_name);
-        // - REVIEW: may not be ColumnInt64
-        const ColumnInt64 * column = typeid_cast<const ColumnInt64 *>(handle_column.column.get());
+        const auto * column = handle_column.column.get();
         if (!column)
         {
-            throw Exception("RangesFilterBlockInputStream: _tidb_rowid column should be type ColumnInt64.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "RangesFilterBlockInputStream: " + handle_col_name + " column should be type numeric", ErrorCodes::LOGICAL_ERROR);
         }
 
         size_t rows = block.rows();
 
-        auto handle_begin = column->getElement(0);
-        auto handle_end = column->getElement(rows - 1);
+        auto handle_begin = static_cast<HandleType>(column->getUInt(0));
+        auto handle_end = static_cast<HandleType>(column->getUInt(rows - 1));
 
         if (handle_begin >= ranges.second || ranges.first > handle_end)
             continue;
@@ -45,8 +78,7 @@ Block RangesFilterBlockInputStream::readImpl()
             }
             else
             {
-                size_t pos
-                    = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
+                size_t pos = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column), ranges.second, func_cmp).pos;
                 size_t pop_num = rows - pos;
                 for (size_t i = 0; i < block.columns(); i++)
                 {
@@ -59,11 +91,10 @@ Block RangesFilterBlockInputStream::readImpl()
         }
         else
         {
-            size_t pos_begin
-                = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.first) - column->getData().cbegin();
+            size_t pos_begin = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column), ranges.first, func_cmp).pos;
             size_t pos_end = rows;
             if (handle_end >= ranges.second)
-                pos_end = std::lower_bound(column->getData().cbegin(), column->getData().cend(), ranges.second) - column->getData().cbegin();
+                pos_end = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column), ranges.second, func_cmp).pos;
 
             size_t len = pos_end - pos_begin;
             if (!len)

@@ -17,7 +17,6 @@ std::set<PageFile, PageFile::Comparator> listAllPageFiles(std::string storage_pa
     if (!folder.exists())
         folder.createDirectories();
     std::vector<std::string> file_names;
-    // - REVIEW: is it listing recursive?
     folder.list(file_names);
 
     if (file_names.empty())
@@ -157,7 +156,6 @@ void PageStorage::traverse(std::function<void(const Page & page)> acceptor)
             file_and_pages[page_cache.fileIdLevel()].emplace_back(page_id);
     }
 
-    // - REVIEW: any chance the file we attenpt to read could be gc?
     for (const auto & p : file_and_pages)
     {
         auto pages = read(p.second);

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Storages/StorageMergeTree.h>
+
 namespace DB
 {
 

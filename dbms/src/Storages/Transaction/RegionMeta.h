@@ -1,10 +1,19 @@
 #pragma once
 
+#include <condition_variable>
+
 #include <Storages/Transaction/TiKVKeyValue.h>
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <tikv/Region.h>
+#include <kvproto/metapb.pb.h>
+#include <kvproto/raft_serverpb.pb.h>
 #pragma GCC diagnostic pop
+
+namespace pingcap::kv
+{
+struct RegionVerID;
+}
 
 namespace DB
 {
@@ -92,7 +101,6 @@ private:
     void doSetApplied(UInt64 index, UInt64 term);
 
 private:
-    // - REVIEW: we should make sure all these member are deepcopy, (eg: region.peers())
     metapb::Peer peer;
     metapb::Region region;
     raft_serverpb::RaftApplyState apply_state;

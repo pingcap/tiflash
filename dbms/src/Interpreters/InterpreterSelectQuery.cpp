@@ -33,7 +33,7 @@
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/TiKVRange.h>
 
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
@@ -694,9 +694,9 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 info.conf_version = epoch.conf_ver();
 
                 auto table_id = static_cast<StorageMergeTree*>(storage.get()) -> getTableInfo().id;
-                Int64 start_key = TiKVRange::getRangeHandle<true, true>(TiKVKey(region.start_key()), table_id);
-                Int64 end_key = TiKVRange::getRangeHandle<false, true>(TiKVKey(region.end_key()), table_id);
-                info.range_in_table = HandleRange(start_key, end_key);
+                auto start_key = TiKVRange::getRangeHandle<true, true>(TiKVKey(region.start_key()), table_id);
+                auto end_key = TiKVRange::getRangeHandle<false, true>(TiKVKey(region.end_key()), table_id);
+                info.range_in_table = HandleRange<HandleID>(start_key, end_key);
                 query_info.regions_query_info.push_back(info);
             }
         }

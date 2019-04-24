@@ -1,18 +1,7 @@
 #pragma once
 
-#include <functional>
-#include <unordered_map>
-#include <vector>
-
-#include <IO/WriteHelpers.h>
-#include <Raft/RaftContext.h>
-
-#include <Interpreters/Context.h>
-#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionClientCreate.h>
 #include <Storages/Transaction/RegionPersister.h>
-#include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/TiKVKeyValue.h>
-
 
 namespace DB
 {
@@ -21,18 +10,24 @@ namespace DB
 static const Seconds REGION_PERSIST_PERIOD(300);      // 5 minutes
 static const Seconds KVSTORE_TRY_PERSIST_PERIOD(180); // 3 minutes
 
+class RegionTable;
+struct RaftContext;
+
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
+
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(const std::string & data_dir);
-    void restore(const Region::RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove = nullptr);
+    void restore(const RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove = nullptr);
 
     RegionPtr getRegion(RegionID region_id);
 
     void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback);
 
-    void onSnapshot(RegionPtr region, Context * context);
+    void onSnapshot(RegionPtr region, RegionTable * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & context);
 
@@ -46,7 +41,7 @@ public:
 
     size_t regionSize() const;
 
-    void removeRegion(RegionID region_id, Context * context);
+    void removeRegion(RegionID region_id, RegionTable * context);
 
     void updateRegionTableBySnapshot(RegionTable & region_table);
 

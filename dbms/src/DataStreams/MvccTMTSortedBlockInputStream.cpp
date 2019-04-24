@@ -1,5 +1,6 @@
 #include <DataStreams/MvccTMTSortedBlockInputStream.h>
 #include <Storages/MutableSupport.h>
+#include <Columns/ColumnsNumber.h>
 
 namespace DB
 {
@@ -60,14 +61,10 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
             current_key.swap(next_key);
         }
 
-        if ((*(current->all_columns[version_column_number]))[current->pos].template get<UInt64>() <= read_tso && 
-            (selected_row.empty() 
-            || current->all_columns[version_column_number]->compareAt(
-                current->pos, selected_row.row_num, 
-                *(*selected_row.columns)[version_column_number],
-                1 ) > 0))
+        if (auto cur_tso = static_cast<const ColumnUInt64 *>(current->all_columns[version_column_number])->getElement(current->pos); cur_tso <= read_tso)
         {
-            setRowRef(selected_row, current);
+            if (selected_row.empty() || cur_tso > static_cast<const ColumnUInt64 *>((*selected_row.columns)[version_column_number])->getElement(selected_row.row_num))
+                setRowRef(selected_row, current);
         }
 
         if (!current->isLast()) {
@@ -89,8 +86,8 @@ void MvccTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::
 
 bool MvccTMTSortedBlockInputStream::hasDeleteFlag()
 {
-    UInt8 val = (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
-    return MutableSupport::DelMark::isDel(val);
+    const ColumnUInt8 * column = static_cast<const ColumnUInt8 *>((*selected_row.columns)[del_column_number]);
+    return MutableSupport::DelMark::isDel(column->getElement(selected_row.row_num));
 }
 
 }

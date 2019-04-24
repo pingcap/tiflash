@@ -1,12 +1,12 @@
 #include <common/logger_useful.h>
-#include <functional>
 
+#include <DataStreams/BlocksListBlockInputStream.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include <DataStreams/BlocksListBlockInputStream.h>
 
 namespace DB
 {
@@ -17,7 +17,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & ordered_columns,
-    RegionWriteCFDataTrait::Keys * keys)
+    RegionDataReadInfoList * data_list_for_remove)
 {
     return getBlockInputStreamByRegion(table_id,
         tmt.kvstore->getRegion(region_id),
@@ -29,7 +29,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         false,
         false,
         0,
-        keys);
+        data_list_for_remove);
 }
 
 std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TableID table_id,
@@ -42,7 +42,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     bool learner_read,
     bool resolve_locks,
     UInt64 start_ts,
-    RegionWriteCFDataTrait::Keys * keys)
+    RegionDataReadInfoList * data_list_for_remove)
 {
     if (!region)
         return {nullptr, NOT_FOUND, 0};
@@ -55,31 +55,42 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     };
 
     {
-        auto scanner = region->createCommittedScanner(table_id);
-
-        if (region->isPendingRemove())
-            return {nullptr, PENDING_REMOVE, 0};
-
-        if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
-            return {nullptr, VERSION_ERROR, 0};
+        RegionDataReadInfoList data_list;
 
         {
-            Region::LockInfoPtr lock_info = nullptr;
+            auto scanner = region->createCommittedScanner(table_id);
+
+            if (region->isPendingRemove())
+                return {nullptr, PENDING_REMOVE, 0};
+
+            if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
+                return {nullptr, VERSION_ERROR, 0};
+
             if (resolve_locks)
-                lock_info = scanner->getLockInfo(start_ts);
-            if (lock_info)
             {
-                Region::LockInfos lock_infos;
-                lock_infos.emplace_back(std::move(lock_info));
-                throw LockException(std::move(lock_infos));
+                LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
+                if (lock_info)
+                {
+                    LockInfos lock_infos;
+                    lock_infos.emplace_back(std::move(lock_info));
+                    throw LockException(std::move(lock_infos));
+                }
             }
+
+            if (!scanner->hasNext())
+                return {nullptr, OK, 0};
+
+            do
+            {
+                data_list.emplace_back(scanner->next());
+            } while (scanner->hasNext());
         }
 
-        if (!scanner->hasNext())
-            return {nullptr, OK, 0};
-
         const auto [table_info, columns, ordered_columns] = schema_fetcher(table_id);
-        auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, scanner, keys);
+        auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, data_list);
+
+        if (data_list_for_remove)
+            *data_list_for_remove = std::move(data_list);
 
         size_t tol = block.rows();
 

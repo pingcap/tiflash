@@ -1,7 +1,7 @@
 #include <memory>
 
 #include <Storages/Transaction/Region.h>
-
+#include <Storages/Transaction/TiKVRange.h>
 #include <tikv/RegionClient.h>
 
 namespace DB
@@ -19,22 +19,19 @@ const UInt32 Region::CURRENT_VERSION = 0;
 const String Region::lock_cf_name = "lock";
 const String Region::default_cf_name = "default";
 const String Region::write_cf_name = "write";
+const String Region::log_name = "Region";
 
 RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it)
 {
     return data.removeDataByWriteIt(table_id, write_it);
 }
 
-RegionData::ReadInfo Region::readDataByWriteIt(
-    const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, RegionWriteCFDataTrait::Keys * keys) const
+RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const
 {
-    return data.readDataByWriteIt(table_id, write_it, keys);
+    return data.readDataByWriteIt(table_id, write_it);
 }
 
-Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const
-{
-    return data.getLockInfo(expected_table_id, start_ts);
-}
+LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
 
 TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
@@ -90,7 +87,12 @@ TableID Region::doRemove(const String & cf, const TiKVKey & key)
         return InvalidTableID;
 
     auto type = getCf(cf);
-    data.remove(type, key, raw_key);
+    if (type == Lock)
+        data.removeLockCF(table_id, raw_key);
+    else
+    {
+        // removed by gc, just ignore.
+    }
     return table_id;
 }
 
@@ -215,7 +217,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
         const auto & response = cmd.admin_response();
         auto type = request.cmd_type();
 
-        LOG_TRACE(log,
+        LOG_INFO(log,
             "Region [" << region_id << "] execute admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term
                        << ", index: " << index << "]");
 
@@ -425,25 +427,9 @@ UInt64 Region::version() const { return meta.version(); }
 
 UInt64 Region::confVer() const { return meta.confVer(); }
 
-std::pair<HandleID, HandleID> Region::getHandleRangeByTable(TableID table_id) const
+HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const
 {
-    return ::DB::getHandleRangeByTable(getRange(), table_id);
-}
-
-std::pair<HandleID, HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
-{
-    return getHandleRangeByTable(range.first, range.second, table_id);
-}
-
-std::pair<HandleID, HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
-{
-    // Example:
-    // Range: [100_10, 200_5), table_id: 100, then start_handle: 10, end_handle: MAX_HANDLE_ID
-
-    HandleID start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-    HandleID end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
-
-    return {start_handle, end_handle};
+    return TiKVRange::getHandleRangeByTable(getRange(), table_id);
 }
 
 // - REVIEW: better method name, eg: assign

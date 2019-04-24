@@ -1,24 +1,14 @@
 #include <Storages/Transaction/RegionMeta.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <tikv/Region.h>
+#pragma GCC diagnostic pop
+
 namespace DB
 {
 
 // TODO We need encoding version here, otherwise it is impossible to handle structure update.
-// Maybe use protobuf directly.
-
-size_t RegionMeta::serializeSize() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-
-    auto peer_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(bool);
-    // TODO: this region_size not right, 4 bytes missed
-    auto region_size
-        = sizeof(UInt64) + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt64) + sizeof(UInt64);
-    region_size += peer_size * region.peers_size();
-    auto apply_state_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(UInt64);
-    return peer_size + region_size + apply_state_size + sizeof(UInt64) + sizeof(bool);
-}
-
 size_t RegionMeta::serialize(WriteBuffer & buf) const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -42,13 +32,7 @@ RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
     return RegionMeta(peer, region, apply_state, applied_term, pending_remove);
 }
 
-<<<<<<< HEAD
-// - REVIEW: lock? be carefull, can be easily deadlock.
-//  or use member `const RegionID region_id`
-RegionID RegionMeta::regionId() const { return region.id(); }
-=======
 RegionID RegionMeta::regionId() const { return region_id; }
->>>>>>> 89c71d48c315d2cc7d9924f3bca0ffb4d245e1b0
 
 UInt64 RegionMeta::peerId() const
 {
@@ -134,12 +118,8 @@ enginepb::CommandResponse RegionMeta::toCommandResponse() const
 
 RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 {
-<<<<<<< HEAD
-    // - REVIEW: lock rhs
-=======
     std::lock_guard<std::mutex> lock(rhs.mutex);
 
->>>>>>> 89c71d48c315d2cc7d9924f3bca0ffb4d245e1b0
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
     apply_state = std::move(rhs.apply_state);

@@ -1,3 +1,5 @@
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
 
@@ -22,9 +24,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     const auto & state = request.state();
     pingcap::kv::RegionClientPtr region_client = nullptr;
     auto meta = RegionMeta(state.peer(), state.region(), state.apply_state());
-
-    Region::RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
-        // context may be null in test cases.
+    RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
         if (context)
         {
             auto & tmt_ctx = context->getTMTContext();
@@ -69,7 +69,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     }
 
     // context may be null in test cases.
-    kvstore->onSnapshot(region, context);
+    kvstore->onSnapshot(region, context ? &context->getTMTContext().region_table : nullptr);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot done.");
 }

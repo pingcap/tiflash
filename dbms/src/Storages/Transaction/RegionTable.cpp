@@ -1,10 +1,12 @@
-#include <Raft/RaftService.h>
-
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRange.h>
 
 namespace DB
 {
@@ -88,7 +90,7 @@ void RegionTable::updateRegionRange(const RegionPtr & region, TableIDSet & table
     {
         auto table_id = *t_it;
 
-        const auto handle_range = getHandleRangeByTable(range, table_id);
+        const auto handle_range = TiKVRange::getHandleRangeByTable(range, table_id);
 
         auto table_it = tables.find(table_id);
         if (table_it == tables.end())
@@ -147,8 +149,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     TMTContext & tmt = context.getTMTContext();
 
-    // - REVIEW: if cache is big, keys_to_remove maybe too big to
-    RegionWriteCFDataTrait::Keys keys_to_remove;
+    RegionDataReadInfoList data_list;
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
 
@@ -158,7 +159,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         const auto & columns = merge_tree->getColumns();
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
-        auto [input, status, tol] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, &keys_to_remove);
+        auto [input, status, tol] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, &data_list);
         if (input == nullptr)
             return;
 
@@ -185,8 +186,13 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         if (!region)
             return;
         auto remover = region->createCommittedRemover(table_id);
-        for (const auto & key : keys_to_remove)
-            remover->remove(key);
+        for (const auto & [handle, write_type, commit_ts, value] : data_list)
+        {
+            std::ignore = write_type;
+            std::ignore = value;
+
+            remover->remove({handle, commit_ts});
+        }
         cache_size = region->dataSize();
 
         // TODO REVIEW: why `cache_size == 0`, why not `keys_to_remove != 0`?
@@ -290,7 +296,7 @@ void RegionTable::applySnapshotRegion(const RegionPtr & region)
     updateRegion(region, table_ids);
 }
 
-void RegionTable::applySnapshotRegions(const ::DB::RegionMap & region_map)
+void RegionTable::applySnapshotRegions(const RegionMap & region_map)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -453,15 +459,25 @@ void RegionTable::traverseRegionsByTable(
     callback(regions);
 }
 
-void RegionTable::dumpRegionMap(RegionTable::RegionMap & res)
+void RegionTable::dumpRegionInfoMap(RegionTable::RegionInfoMap & res) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     res = regions;
 }
 
-void RegionTable::dropRegionsInTable(TableID /*table_id*/)
+void RegionTable::mockDropRegionsInTable(TableID table_id)
 {
-    // TODO: impl
+    auto & kvstore = context.getTMTContext().kvstore;
+    traverseRegionsByTable(table_id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+        for (auto && [region_id, _] : regions)
+        {
+            std::ignore = _;
+            kvstore->removeRegion(region_id, this);
+        }
+    });
+
+    std::lock_guard<std::mutex> lock(mutex);
+    tables.erase(table_id);
 }
 
 void RegionTable::setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_)

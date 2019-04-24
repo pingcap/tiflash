@@ -1,12 +1,12 @@
 #pragma once
 
-#include <Parsers/IAST.h>
-#include <Interpreters/Context.h>
-
 #include <Debug/DBGInvoker.h>
+#include <Parsers/IAST.h>
 
 namespace DB
 {
+
+class Context;
 
 // Region manipulation tools
 
@@ -23,13 +23,13 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 // Dump region-partition relationship
 // Usage:
 //   ./storage-client.sh "DBGInvoke dump_region()"
-void dbgFuncDumpRegion(Context& context, const ASTs& args, DBGInvoker::Printer output);
+void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Remove region's data from partition
 // Usage:
 //   ./storage-client.sh "DBGInvoke rm_region_data(region_id)"
 void dbgFuncRegionRmData(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-void dbgFuncDumpAllRegion(Context& context, const ASTs& args, DBGInvoker::Printer output);
+void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-}
+} // namespace DB

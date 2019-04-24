@@ -3,15 +3,19 @@
 
 namespace DB
 {
+template class ReplacingTMTSortedBlockInputStream<Int64>;
+template class ReplacingTMTSortedBlockInputStream<UInt64>;
 
-void ReplacingTMTSortedBlockInputStream::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
+template <typename HandleType>
+void ReplacingTMTSortedBlockInputStream<HandleType>::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
 {
     ++merged_rows;
     for (size_t i = 0; i < num_columns; ++i)
         merged_columns[i]->insertFrom(*(*selected_row.columns)[i], selected_row.row_num);
 }
 
-Block ReplacingTMTSortedBlockInputStream::readImpl()
+template <typename HandleType>
+Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
 {
     if (finished)
         return Block();
@@ -29,17 +33,25 @@ Block ReplacingTMTSortedBlockInputStream::readImpl()
 
     if (deleted_by_range)
     {
-        std::ostringstream ss;
+        std::stringstream ss;
         for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
-            ss << "(" << begin_handle_ranges[i] << "," << end_handle_ranges[i] << ") ";
-        LOG_TRACE(log, "deleted by handle range: " << deleted_by_range << " rows, handle ranges: " << ss.str());
+        {
+            ss << "[";
+            begin_handle_ranges[i].toString(ss);
+            ss << ",";
+            end_handle_ranges[i].toString(ss);
+            ss << ") ";
+        }
+        LOG_TRACE(log,
+            "deleted by handle range: " << deleted_by_range << " rows, " << begin_handle_ranges.size() << " handle ranges: " << ss.str());
     }
 
     return header.cloneWithColumns(std::move(merged_columns));
 }
 
 // TODO REVIEW: this will be very slow, see ReplacingDeletingSortedBlockInputStream::merge_optimized, it's a good optimizing example
-void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue)
+template <typename HandleType>
+void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue)
 {
     size_t merged_rows = 0;
 
@@ -96,7 +108,8 @@ void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns, 
     finished = true;
 }
 
-bool ReplacingTMTSortedBlockInputStream::shouldOutput()
+template <typename HandleType>
+bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput()
 {
     if (isDefiniteDeleted())
     {
@@ -121,33 +134,38 @@ bool ReplacingTMTSortedBlockInputStream::shouldOutput()
     return false;
 }
 
-bool ReplacingTMTSortedBlockInputStream::behindGcTso()
+template <typename HandleType>
+bool ReplacingTMTSortedBlockInputStream<HandleType>::behindGcTso()
 {
-    return (*(*selected_row.columns)[version_column_number])[selected_row.row_num].template get<UInt64>() < gc_tso;
+    return (*(*selected_row.columns)[version_column_number]).getUInt(selected_row.row_num) < gc_tso;
 }
 
-bool ReplacingTMTSortedBlockInputStream::nextHasDiffPk()
+template <typename HandleType>
+bool ReplacingTMTSortedBlockInputStream<HandleType>::nextHasDiffPk()
 {
-    return (*(*selected_row.columns)[pk_column_number])[selected_row.row_num] != (*(*next_key.columns)[0])[next_key.row_num];
+    return (*(*selected_row.columns)[pk_column_number]).getUInt(selected_row.row_num)
+        != (*(*next_key.columns)[0]).getUInt(next_key.row_num);
 }
 
-bool ReplacingTMTSortedBlockInputStream::isDefiniteDeleted()
+template <typename HandleType>
+bool ReplacingTMTSortedBlockInputStream<HandleType>::isDefiniteDeleted()
 {
     if (begin_handle_ranges.empty())
         return true;
-    HandleID handle_id = (*(*selected_row.columns)[pk_column_number])[selected_row.row_num].template get<HandleID>();
-    int pa = std::upper_bound(begin_handle_ranges.begin(), begin_handle_ranges.end(), handle_id) - begin_handle_ranges.begin();
+    Handle pk_handle = static_cast<HandleType>((*(*selected_row.columns)[pk_column_number]).getUInt(selected_row.row_num));
+    int pa = std::upper_bound(begin_handle_ranges.begin(), begin_handle_ranges.end(), pk_handle) - begin_handle_ranges.begin();
     if (pa == 0)
         return true;
     else
     {
-        if (handle_id < end_handle_ranges[pa - 1])
+        if (pk_handle < end_handle_ranges[pa - 1])
             return false;
         return true;
     }
 }
 
-void ReplacingTMTSortedBlockInputStream::logRowGoing(const std::string & msg, bool is_output)
+template <typename HandleType>
+void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const std::string & msg, bool is_output)
 {
     // Disable debug log
     return;

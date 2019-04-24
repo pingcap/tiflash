@@ -33,18 +33,6 @@ void serValue(WriteBuffer & buf, const JsonString & qs)
     writeString(qs, buf);
 }
 
-// String that might be null.
-struct NullableString : public std::string
-{
-    bool is_null;
-};
-
-template<typename T = NullableString>
-void serValue(WriteBuffer & buf, const NullableString & ns)
-{
-    ns.is_null ? writeString("null", buf) : writeJSONString(ns, buf);
-}
-
 template<typename T = std::string>
 void serValue(WriteBuffer & buf, const std::string & s)
 {
@@ -64,20 +52,30 @@ void serValue(WriteBuffer & buf, const std::vector<T> & v)
     writeString("]", buf);
 }
 
-template<typename T>
-struct Field
-{
-    // TODO REVIEW: `std::string name` -> `std::string && name`
-    Field(std::string name_, T value_) : name(std::move(name_)), value(std::move(value_)) {}
-    std::string name;
-    T value;
-};
-
 template<typename T = std::function<void(WriteBuffer &)>>
 void serValue(WriteBuffer & buf, const std::function<void(WriteBuffer &)> & s)
 {
     s(buf);
 }
+
+template<typename T>
+std::function<void(WriteBuffer &)> Nullable(const T & value, bool is_null)
+{
+    return [value, is_null](WriteBuffer & buf) {
+        is_null ? writeString("null", buf) : serValue(buf, value);
+    };
+}
+
+template<typename T>
+struct Field
+{
+    // TODO REVIEW: `std::string name` -> `std::string && name`
+    Field(std::string name_, T value_, bool skip_ = false)
+        : name(std::move(name_)), value(std::move(value_)), skip(skip_) {}
+    std::string name;
+    T value;
+    bool skip;
+};
 
 template<typename T>
 void serField(WriteBuffer & buf, const Field<T> & field)
@@ -90,19 +88,23 @@ void serField(WriteBuffer & buf, const Field<T> & field)
 template<typename T>
 void serFields(WriteBuffer & buf, const T & last)
 {
-    serField(buf, last);
+    if (!last.skip)
+        serField(buf, last);
 }
 
 template<typename T, typename... Rest>
 void serFields(WriteBuffer & buf, const T & first, const Rest & ... rest)
 {
-    serField(buf, first);
-    writeString(",", buf);
+    if (!first.skip)
+    {
+        serField(buf, first);
+        writeString(",", buf);
+    }
     serFields(buf, rest...);
 }
 
 template<typename... T>
-void serValue(WriteBuffer & buf, T... fields)
+void serValue(WriteBuffer & buf, const T & ... fields)
 {
     writeString("{", buf);
     serFields(buf, fields...);
@@ -110,7 +112,7 @@ void serValue(WriteBuffer & buf, T... fields)
 }
 
 template<typename... T>
-std::function<void(WriteBuffer &)> Struct(T... fields)
+std::function<void(WriteBuffer &)> Struct(const T & ... fields)
 {
     return [fields...](WriteBuffer & buf) {
         serValue(buf, fields...);
@@ -143,8 +145,8 @@ String ColumnInfo::serialize() const
                     JsonSer::Field("O", name),
                     JsonSer::Field("L", name))),
             JsonSer::Field("offset", offset),
-            JsonSer::Field("origin_default", JsonSer::NullableString{origin_default_value, has_origin_default_value}),
-            JsonSer::Field("default", JsonSer::NullableString{default_value, has_default_value}),
+            JsonSer::Field("origin_default", JsonSer::Nullable(origin_default_value, has_origin_default_value)),
+            JsonSer::Field("default", JsonSer::Nullable(default_value, has_default_value)),
             JsonSer::Field("type",
                 JsonSer::Struct(
                     // TODO: serialize elems.
@@ -178,6 +180,85 @@ void ColumnInfo::deserialize(const JSON & json) try
 catch (const JSONException & e)
 {
     throw DB::Exception("Parse TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
+}
+
+PartitionDefinition::PartitionDefinition(const JSON & json)
+{
+    deserialize(json);
+}
+
+String PartitionDefinition::serialize() const
+{
+    WriteBufferFromOwnString buf;
+
+    JsonSer::serValue(buf,
+        JsonSer::Struct(
+            JsonSer::Field("id", id),
+            JsonSer::Field("name",
+                JsonSer::Struct(
+                    JsonSer::Field("O", name),
+                    JsonSer::Field("L", name))),
+            JsonSer::Field("comment", comment)));
+
+    return buf.str();
+}
+
+void PartitionDefinition::deserialize(const JSON & json) try
+{
+    id = json["id"].getInt();
+    name = json["name"]["L"].getString();
+    comment = json.getWithDefault<String>("comment", "");
+}
+catch (const JSONException & e)
+{
+    throw DB::Exception("Parse TiDB schema JSON failed (PartitionDefinition): " + e.displayText(), DB::Exception(e));
+}
+
+PartitionInfo::PartitionInfo(const JSON & json)
+{
+    deserialize(json);
+}
+
+String PartitionInfo::serialize() const
+{
+    WriteBufferFromOwnString buf;
+
+    JsonSer::serValue(buf,
+        JsonSer::Struct(
+            JsonSer::Field("type", type),
+            JsonSer::Field("expr", expr),
+            JsonSer::Field("enable", enable),
+            JsonSer::Field("definitions", [this]() {
+                std::vector<JsonSer::JsonString> v(definitions.size());
+                std::transform(definitions.begin(), definitions.end(), v.begin(), [](const PartitionDefinition & definition) {
+                    return JsonSer::JsonString{definition.serialize()};
+                });
+                return v;
+            }()),
+            JsonSer::Field("num", num)));
+
+    return buf.str();
+}
+
+void PartitionInfo::deserialize(const JSON & json) try
+{
+    type = static_cast<PartitionType>(json["type"].getInt());
+    expr = json["expr"].getString();
+    enable = json["enable"].getBool();
+
+    JSON defs_json = json["definitions"];
+    definitions.clear();
+    for (const auto & def_json : defs_json)
+    {
+        PartitionDefinition definition(def_json);
+        definitions.emplace_back(definition);
+    }
+
+    num = static_cast<UInt64>(json["num"].getInt());
+}
+catch (const JSONException & e)
+{
+    throw DB::Exception("Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
 TableInfo::TableInfo(const String & table_info_json, bool escaped)
@@ -214,7 +295,15 @@ String TableInfo::serialize(bool escaped) const
                     }()),
                     JsonSer::Field("state", state),
                     JsonSer::Field("pk_is_handle", pk_is_handle),
-                    JsonSer::Field("comment", comment))),
+                    JsonSer::Field("comment", comment),
+                    JsonSer::Field("belonging_table_id", belonging_table_id, !is_partition_table),
+                    // TODO: Hack to tell Spark this table is a physical/sub table of a partition.
+                    JsonSer::Field("is_partition_sub_table", "true", !(is_partition_table && belonging_table_id != -1)),
+                    JsonSer::Field("partition",
+                        // lazy serializing partition as it could be null.
+                        JsonSer::Nullable(std::function<void(WriteBuffer &)>([this](WriteBuffer & buf) {
+                            JsonSer::serValue(buf, JsonSer::JsonString{partition.serialize()});
+                        }), !is_partition_table)))),
             JsonSer::Field("schema_version", schema_version)));
 
     if (!escaped)
@@ -231,7 +320,6 @@ String TableInfo::serialize(bool escaped) const
 
 void TableInfo::deserialize(const String & json_str, bool escaped) try
 {
-
     if (json_str.empty())
     {
         id = DB::InvalidTableID;
@@ -249,7 +337,19 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
         unescaped_json_str = json_str;
     }
 
-    JSON json(unescaped_json_str);
+    /// The JSON library does not support whitespace. We delete them. Inefficient.
+    // TODO: This may mis-delete innocent spaces/newlines enclosed by quotes, consider using some lexical way.
+    ReadBufferFromString in(unescaped_json_str);
+    WriteBufferFromOwnString out;
+    while (!in.eof())
+    {
+        char c;
+        readChar(c, in);
+        if (!isspace(c))
+            writeChar(c, out);
+    }
+
+    JSON json(out.str());
 
     JSON db_json = json["db_info"];
     db_id = db_json["id"].getInt();
@@ -268,6 +368,13 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
     state = static_cast<UInt8>(table_json["state"].getInt());
     pk_is_handle = table_json["pk_is_handle"].getBool();
     comment = table_json["comment"].getString();
+    is_partition_table = !table_json["partition"].isNull();
+    if (is_partition_table)
+    {
+        if (table_json.has("belonging_table_id"))
+            belonging_table_id = table_json["belonging_table_id"].getInt();
+        partition.deserialize(table_json["partition"]);
+    }
 
     JSON schema_json = json["schema_version"];
     schema_version = schema_json.getInt();

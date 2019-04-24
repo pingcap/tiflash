@@ -1,4 +1,5 @@
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionPersister.h>
 
 namespace DB
@@ -11,8 +12,6 @@ extern const int LOGICAL_ERROR;
 
 void RegionPersister::drop(RegionID region_id)
 {
-    // - REVIEW: need mutex?
-
     WriteBatch wb;
     wb.delPage(region_id);
     page_storage.write(wb);
@@ -55,7 +54,7 @@ void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandRespo
     page_storage.write(wb);
 }
 
-void RegionPersister::restore(RegionMap & regions, Region::RegionClientCreateFunc * func)
+void RegionPersister::restore(RegionMap & regions, RegionClientCreateFunc * func)
 {
     auto acceptor = [&](const Page & page) {
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
