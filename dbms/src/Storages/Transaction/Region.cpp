@@ -15,10 +15,10 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 const UInt32 Region::CURRENT_VERSION = 0;
 
-const String Region::lock_cf_name = "lock";
-const String Region::default_cf_name = "default";
-const String Region::write_cf_name = "write";
-const String Region::log_name = "Region";
+const std::string Region::lock_cf_name = "lock";
+const std::string Region::default_cf_name = "default";
+const std::string Region::write_cf_name = "write";
+const std::string Region::log_name = "Region";
 
 RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it)
 {
@@ -53,10 +53,10 @@ void Region::batchInsert(std::function<bool(BatchInsertNode &)> && f)
     }
 }
 
-TableID Region::doInsert(const String & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
     // Ignoring all keys other than records.
-    String raw_key = RecordKVFormat::decodeTiKVKey(key);
+    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
     if (!RecordKVFormat::isRecord(raw_key))
         return InvalidTableID;
 
@@ -68,16 +68,16 @@ TableID Region::doInsert(const String & cf, const TiKVKey & key, const TiKVValue
     return data.insert(type, key, raw_key, value);
 }
 
-TableID Region::remove(const String & cf, const TiKVKey & key)
+TableID Region::remove(const std::string & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     return doRemove(cf, key);
 }
 
-TableID Region::doRemove(const String & cf, const TiKVKey & key)
+TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
     // Ignoring all keys other than records.
-    String raw_key = RecordKVFormat::decodeTiKVKey(key);
+    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
     if (!RecordKVFormat::isRecord(raw_key))
         return InvalidTableID;
 
@@ -346,7 +346,7 @@ bool Region::checkIndex(UInt64 index)
     return true;
 }
 
-ColumnFamilyType Region::getCf(const String & cf)
+ColumnFamilyType Region::getCf(const std::string & cf)
 {
     if (cf.empty() || cf == default_cf_name)
         return ColumnFamilyType::Default;

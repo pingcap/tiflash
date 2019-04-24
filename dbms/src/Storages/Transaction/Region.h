@@ -22,10 +22,10 @@ class Region : public std::enable_shared_from_this<Region>
 public:
     const static UInt32 CURRENT_VERSION;
 
-    const static String lock_cf_name;
-    const static String default_cf_name;
-    const static String write_cf_name;
-    const static String log_name;
+    const static std::string lock_cf_name;
+    const static std::string default_cf_name;
+    const static std::string write_cf_name;
+    const static std::string log_name;
 
     static const auto PutFlag = RegionData::CFModifyFlag::PutFlag;
     static const auto DelFlag = RegionData::CFModifyFlag::DelFlag;
@@ -110,7 +110,7 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
+    using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const std::string *>;
     void batchInsert(std::function<bool(BatchInsertNode &)> && f);
 
     std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd);
@@ -166,11 +166,11 @@ public:
 private:
     // Private methods no need to lock mutex, normally
 
-    TableID doInsert(const String & cf, const TiKVKey & key, const TiKVValue & value);
-    TableID doRemove(const String & cf, const TiKVKey & key);
+    TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
+    TableID doRemove(const std::string & cf, const TiKVKey & key);
 
     bool checkIndex(UInt64 index);
-    static ColumnFamilyType getCf(const String & cf);
+    static ColumnFamilyType getCf(const std::string & cf);
 
     RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
