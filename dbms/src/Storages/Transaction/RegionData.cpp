@@ -1,8 +1,6 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/RegionData.h>
-#include <Storages/Transaction/RegionDataRead.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 
 namespace DB
 {
@@ -170,5 +168,9 @@ bool RegionData::isEqual(const RegionData & r2) const
 {
     return default_cf == r2.default_cf && write_cf == r2.write_cf && lock_cf == r2.lock_cf && cf_data_size == r2.cf_data_size;
 }
+
+RegionData::RegionData(RegionData && data)
+    : write_cf(std::move(data.write_cf)), default_cf(std::move(data.default_cf)), lock_cf(std::move(data.lock_cf))
+{}
 
 } // namespace DB
