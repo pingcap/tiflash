@@ -153,7 +153,7 @@ Aggregator::Aggregator(const Params & params_)
 
     // aggreate_states will be aligned as below:
     // |<-- state_1 -->|<-- pad_1 -->|<-- state_2 -->|<-- pad_2 -->| .....
-    //   
+    //
     // pad_N will be used to match alignment requirement for each next state.
     // The address of state_1 is aligned based on maximum alignment requirements in states
     for (size_t i = 0; i < params.aggregates_size; ++i)
