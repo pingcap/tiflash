@@ -1,6 +1,7 @@
 #include <Interpreters/Context.h>
 #include <Raft/RaftContext.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -111,7 +112,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             auto it = regions.find(curr_region_id);
             if (unlikely(it == regions.end()))
             {
-                LOG_WARNING(log, "Region[" << curr_region_id << " not found, maybe removed already?");
+                LOG_WARNING(log, "Region " << curr_region_id << " not found, maybe removed already?");
                 continue;
             }
             curr_region = it->second;
@@ -131,71 +132,82 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        auto [split_regions, table_ids, sync] = curr_region->onCommand(cmd);
+        RaftCommandResult result = curr_region->onCommand(cmd);
 
-        if (curr_region->isPendingRemove())
-        {
-            LOG_DEBUG(log, curr_region->toString() << " (after cmd) is in pending remove status, remove it now.");
-            removeRegion(curr_region_id, region_table);
+        const auto region_report = [&]() { *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse(); };
 
-            LOG_INFO(log, "Sync status because of removal: " << curr_region->toString(true));
-            *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse();
-
-            continue;
-        }
-
-        // TODO: split update kvstore first then region_table, merge should reverse.
-        if (!split_regions.empty())
-        {
+        const auto report_sync_log = [&]() {
+            if (result.sync_log)
             {
-                std::vector<RegionPtr> tmp_split_regions;
-                tmp_split_regions.reserve(split_regions.size());
-                tmp_split_regions.swap(split_regions);
+                LOG_INFO(log, "Sync status: " << curr_region->toString(true));
+                region_report();
+            }
+        };
 
+        const auto persist_and_sync = [&]() {
+            if (result.sync_log)
+                region_persister.persist(curr_region);
+            report_sync_log();
+        };
+
+        const auto handle_batch_split = [&](Regions & split_regions) {
+            // TODO: split update kvstore first then region_table, merge should reverse.
+            {
                 std::lock_guard<std::mutex> lock(mutex);
 
-                for (const auto & new_region : tmp_split_regions)
+                for (auto & new_region : split_regions)
                 {
                     auto [it, ok] = regions.emplace(new_region->id(), new_region);
                     if (!ok)
                     {
-                        // definitely, any region's index is greater or equal than the initial one, discard it.
-                        continue;
-                    }
-                    else
-                    {
-                        // add new region
-                        split_regions.push_back(it->second);
+                        // definitely, any region's index is greater or equal than the initial one.
+
+                        // if there is already a region with same id, it means program crashed while persisting.
+                        // just use the previous one.
+                        new_region = it->second;
                     }
                 }
             }
 
             {
-                for (const auto & region : split_regions)
-                    region_persister.persist(region);
+                // persist curr_region at last. if program crashed after split_region is persisted, curr_region can
+                // continue to complete split operation.
+                for (const auto & new_region : split_regions)
+                    region_persister.persist(new_region);
                 region_persister.persist(curr_region);
             }
 
             if (region_table)
                 region_table->splitRegion(curr_region, split_regions);
-        }
-        else
-        {
+
+            report_sync_log();
+        };
+
+        const auto handle_update_table_ids = [&](const TableIDSet & table_ids) {
             if (region_table)
                 region_table->updateRegion(curr_region, table_ids);
 
-            if (sync)
-                region_persister.persist(curr_region);
-        }
+            persist_and_sync();
+        };
 
-        if (sync)
-        {
-            LOG_INFO(log, "Sync status: " << curr_region->toString(true));
+        const auto handle_change_peer = [&]() {
+            if (curr_region->isPendingRemove())
+            {
+                LOG_INFO(log, curr_region->toString() << " (after cmd) is in pending remove status, remove it now.");
+                removeRegion(curr_region_id, region_table);
 
-            *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse();
-            for (const auto & region : split_regions)
-                *(responseBatch.mutable_responses()->Add()) = region->toCommandResponse();
-        }
+                LOG_INFO(log, "Sync status because of removal: " << curr_region->toString(true));
+                region_report();
+            }
+            else
+                persist_and_sync();
+        };
+
+        std::visit(overload{[&](IndexError) { report_sync_log(); }, [&](BatchSplit & split) { handle_batch_split(split.split_regions); },
+                       [&](UpdateTableID & tables) { handle_update_table_ids(tables.table_ids); },
+                       [&](DefaultResult) { persist_and_sync(); }, [&](ChangePeer) { handle_change_peer(); },
+                       [](auto) { throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR); }},
+            result.inner);
     }
 
     if (responseBatch.responses_size())
