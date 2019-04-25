@@ -10,9 +10,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-template class RangesFilterBlockInputStream<Int64>;
-template class RangesFilterBlockInputStream<UInt64>;
-
 struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, UInt64, size_t>
 {
     PKColumnIterator & operator++()
@@ -111,5 +108,8 @@ Block RangesFilterBlockInputStream<HandleType>::readImpl()
         return block;
     }
 }
+
+template class RangesFilterBlockInputStream<Int64>;
+template class RangesFilterBlockInputStream<UInt64>;
 
 } // namespace DB

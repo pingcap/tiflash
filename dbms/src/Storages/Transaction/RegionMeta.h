@@ -78,7 +78,7 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
 
-    void reset(RegionMeta && other);
+    void assignRegionMeta(RegionMeta && other);
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
     {

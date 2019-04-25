@@ -41,7 +41,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     const Names & ordered_columns,
     bool learner_read,
     bool resolve_locks,
-    UInt64 start_ts,
+    Timestamp start_ts,
     RegionDataReadInfoList * data_list_for_remove)
 {
     if (!region)
