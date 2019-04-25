@@ -93,7 +93,7 @@ public:
         PENDING_REMOVE,
     };
 
-    static const String RegionReadStatusString(RegionReadStatus s)
+    static const char * RegionReadStatusString(RegionReadStatus s)
     {
         switch (s)
         {

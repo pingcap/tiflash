@@ -69,7 +69,7 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(TableID table_id, c
     if (auto it = table_regions.find(region->id()); it != table_regions.end())
         return it->second;
 
-    table_to_persist.insert(table_id);
+    table_to_persist.emplace(table_id);
     return insertRegion(table, region);
 }
 
@@ -95,7 +95,7 @@ void RegionTable::updateRegionRange(const RegionPtr & region, TableIDSet & table
         if (table_it == tables.end())
             throw Exception("Table " + DB::toString(table_id) + " not found in table map", ErrorCodes::LOGICAL_ERROR);
 
-        table_to_persist.insert(table_id);
+        table_to_persist.emplace(table_id);
 
         Table & table = table_it->second;
         if (handle_range.first < handle_range.second)
@@ -339,7 +339,7 @@ void RegionTable::splitRegion(const RegionPtr & kvstore_region, const std::vecto
             if (handle_range.first >= handle_range.second)
                 continue;
 
-            table_to_persist.insert(table_id);
+            table_to_persist.emplace(table_id);
             auto & region = insertRegion(table, split_region);
             region.must_flush = true;
             region.cache_bytes = split_region->dataSize();
