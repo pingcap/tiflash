@@ -1,5 +1,6 @@
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
 #include <optional>
+#include <random>
 
 /// Allow to use __uint128_t as a template parameter for boost::rational.
 // https://stackoverflow.com/questions/41198673/uint128-t-not-working-with-clang-and-libstdc
@@ -332,17 +333,25 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         // get data block from region first.
 
+        auto start_time = Clock::now();
+
         ThreadPool pool(std::min(region_cnt, num_streams));
         std::atomic_bool need_retry = false;
 
+        std::vector<size_t> index_for_multi_thread(region_cnt);
+        for (size_t index = 0; index < region_cnt; ++index)
+            index_for_multi_thread[index] = index;
+        std::shuffle(index_for_multi_thread.begin(), index_for_multi_thread.end(), std::default_random_engine(start_time.time_since_epoch().count()));
         for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
         {
             pool.schedule([&, region_begin, size] {
 
-                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end; ++region_index)
+                for (size_t index = region_begin, region_end = std::min(region_begin + size, region_cnt); index < region_end; ++index)
                 {
                     if (need_retry)
                         return;
+
+                    size_t region_index = index_for_multi_thread[index];
 
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
@@ -374,6 +383,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(
 
         if (need_retry)
             func_throw_retry_region();
+
+        auto end_time = Clock::now();
+        LOG_DEBUG(log, "[Learner Read] wait and get data from memory cost " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
     }
 
     size_t part_index = 0;
