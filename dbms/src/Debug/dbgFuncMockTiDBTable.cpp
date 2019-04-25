@@ -1,20 +1,15 @@
+#include <Debug/MockTiDB.h>
+#include <Debug/dbgFuncMockTiDBTable.h>
+#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterRenameQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserRenameQuery.h>
 #include <Parsers/parseQuery.h>
-
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/InterpreterRenameQuery.h>
-
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
-
-#include <Raft/RaftContext.h>
-
-#include <Debug/MockTiDB.h>
-#include <Debug/dbgFuncMockTiDBTable.h>
 
 namespace DB
 {

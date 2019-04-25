@@ -1,5 +1,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <pd/MockPDClient.h>
 
@@ -15,12 +16,14 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs, std::string
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key_, learner_value_)),
       rpc_client(std::make_shared<pingcap::kv::RpcClient>())
 {
+    std::vector<RegionID> regions_to_remove;
+
     kvstore->restore(
         [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); }, &regions_to_remove);
     region_table.restore(std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1));
     for (RegionID id : regions_to_remove)
         kvstore->removeRegion(id, &region_table);
-    regions_to_remove.clear();
+
     kvstore->updateRegionTableBySnapshot(region_table);
 }
 

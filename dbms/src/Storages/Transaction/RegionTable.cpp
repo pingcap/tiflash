@@ -194,7 +194,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         cache_size = region->dataSize();
 
         if (cache_size == 0)
-            region->incPersistParm();
+            region->incDirtyFlag();
 
         LOG_DEBUG(
             log, "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");

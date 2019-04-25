@@ -183,12 +183,12 @@ UInt64 RegionMeta::confVer() const
     return region.region_epoch().conf_ver();
 }
 
-void RegionMeta::reset(RegionMeta && rhs)
+void RegionMeta::assignRegionMeta(RegionMeta && rhs)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
     if (regionId() != rhs.regionId())
-        throw Exception("RegionMeta::reset region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("RegionMeta::assignRegionMeta region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);
