@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 
 #include <common/logger_useful.h>
 #include <boost/noncopyable.hpp>
