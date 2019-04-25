@@ -34,8 +34,8 @@ struct ChangePeer
 
 struct RaftCommandResult
 {
-    UInt64 term;
-    UInt64 index;
+    // UInt64 term;
+    // UInt64 index;
     bool sync_log;
     std::variant<DefaultResult, IndexError, BatchSplit, UpdateTableID, ChangePeer> inner;
 };

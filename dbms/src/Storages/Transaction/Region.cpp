@@ -200,7 +200,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
 
-    RaftCommandResult result{term, index, sync_log, DefaultResult{}};
+    RaftCommandResult result{sync_log, DefaultResult{}};
 
     {
         auto applied_index = meta.appliedIndex();
@@ -212,7 +212,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 // special cmd, used to heart beat and sync log, just ignore
             }
             else
-                LOG_TRACE(log, toString() + " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+                LOG_WARNING(log, toString() + " ignore outdated raft log [term: " << term << ", index: " << index << "]");
             return result;
         }
     }
