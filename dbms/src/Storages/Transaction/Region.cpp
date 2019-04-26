@@ -217,7 +217,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
         }
     }
 
-    bool need_persist = false;
+    bool is_dirty = false;
 
     if (cmd.has_admin_request())
     {
@@ -236,7 +236,6 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 execChangePeer(request, response, index, term);
                 result.inner = ChangePeer{};
 
-                need_persist = true;
                 break;
             }
             case raft_cmdpb::AdminCmdType::BatchSplit:
@@ -247,7 +246,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 
                 result.inner = BatchSplit{split_regions};
 
-                need_persist = true;
+                is_dirty = true;
                 break;
             }
             case raft_cmdpb::AdminCmdType::CompactLog:
@@ -281,7 +280,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
-                        need_persist = true;
+                        is_dirty = true;
                     }
                     break;
                 }
@@ -292,7 +291,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
-                        need_persist = true;
+                        is_dirty = true;
                     }
                     break;
                 }
@@ -314,7 +313,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 
     meta.notifyAll();
 
-    if (need_persist)
+    if (is_dirty)
         incDirtyFlag();
 
     return result;

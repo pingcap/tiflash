@@ -145,10 +145,13 @@ RegionRange RegionMeta::getRange() const
 
 std::string RegionMeta::toString(bool dump_status) const
 {
+    std::stringstream ss;
     std::lock_guard<std::mutex> lock(mutex);
-    std::string status_str
-        = !dump_status ? "" : ", term: " + DB::toString(applied_term) + ", applied_index: " + DB::toString(apply_state.applied_index());
-    return "region[id: " + DB::toString(regionId()) + status_str + "]";
+    ss << "region[id: " << regionId();
+    if (dump_status)
+        ss << ", term: " << applied_term << ", applied_index: " << apply_state.applied_index();
+    ss << "]";
+    return ss.str();
 }
 
 bool RegionMeta::isPendingRemove() const
