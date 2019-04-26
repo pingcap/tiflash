@@ -171,8 +171,16 @@ void RegionMeta::doSetPendingRemove() { pending_remove = true; }
 void RegionMeta::waitIndex(UInt64 index)
 {
     std::unique_lock<std::mutex> lock(mutex);
-    cv.wait(lock, [this, index] { return pending_remove || apply_state.applied_index() >= index; });
+    cv.wait(lock, [this, index] { return doCheckIndex(index); });
 }
+
+bool RegionMeta::checkIndex(UInt64 index)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return doCheckIndex(index);
+}
+
+bool RegionMeta::doCheckIndex(UInt64 index) { return pending_remove || apply_state.applied_index() >= index; }
 
 UInt64 RegionMeta::version() const
 {

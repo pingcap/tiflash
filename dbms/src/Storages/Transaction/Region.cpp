@@ -413,9 +413,12 @@ void Region::waitIndex(UInt64 index)
 {
     if (client != nullptr)
     {
-        LOG_TRACE(log, "Region " << id() << " begin to wait learner index: " << index);
-        meta.waitIndex(index);
-        LOG_TRACE(log, "Region " << id() << " wait learner index done");
+        if (!meta.checkIndex(index))
+        {
+            LOG_DEBUG(log, "Region " << id() << " need to wait learner index: " << index);
+            meta.waitIndex(index);
+            LOG_DEBUG(log, "Region " << id() << " wait learner index " << index << " done");
+        }
     }
 }
 
