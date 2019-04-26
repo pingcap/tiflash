@@ -270,13 +270,13 @@ bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_t
 
         region_persister.persist(region, response);
 
-        ss << "(" << region_id << "," << region->dirtyFlag() << ") ";
+        ss << region_id << ",";
     }
 
     if (persist_job)
     {
-        LOG_TRACE(log, "Regions " << ss.str() << "report status");
-        LOG_TRACE(log, "Batch report regions status");
+        LOG_DEBUG(log, "Regions ( " << ss.str() << ") report status");
+        LOG_DEBUG(log, "Batch report regions status");
         context.send(responseBatch);
     }
 
