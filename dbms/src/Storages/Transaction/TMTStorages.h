@@ -1,48 +1,29 @@
 #pragma once
 
+#include <memory>
+#include <mutex>
+#include <unordered_map>
+
+#include <Storages/Transaction/Types.h>
+
 namespace DB
 {
+
+class IStorage;
+using StoragePtr = std::shared_ptr<IStorage>;
 
 class TMTStorages
 {
 public:
-    void put(StoragePtr storage)
-    {
-        std::lock_guard lock(mutex);
+    void put(StoragePtr storage);
 
-        const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-        if (!merge_tree)
-            throw Exception{storage->getName() + " is not in MergeTree family", ErrorCodes::LOGICAL_ERROR};
+    StoragePtr get(TableID table_id);
 
-        TableID table_id = merge_tree->getTableInfo().id;
-        if (storages.find(table_id) != storages.end())
-            return;
-        storages.emplace(table_id, storage);
-    }
-
-    StoragePtr get(TableID table_id)
-    {
-        std::lock_guard lock(mutex);
-
-        auto it = storages.find(table_id);
-        if (it == storages.end())
-            return nullptr;
-        return it->second;
-    }
-
-    void remove(TableID table_id)
-    {
-        std::lock_guard lock(mutex);
-
-        auto it = storages.find(table_id);
-        if (it == storages.end())
-            return;
-        storages.erase(it);
-    }
+    void remove(TableID table_id);
 
 private:
     std::unordered_map<TableID, StoragePtr> storages;
     std::mutex mutex;
 };
 
-}
+} // namespace DB

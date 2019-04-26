@@ -1,17 +1,23 @@
 #pragma once
 
-#include <pd/IClient.h>
-#include <atomic>
-
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RegionTable.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTStorages.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <tikv/RegionClient.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {
 
 class Context;
+
+class KVStore;
+using KVStorePtr = std::shared_ptr<KVStore>;
+
+class SchemaSyncer;
+using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
 class TMTContext
 {
@@ -37,8 +43,6 @@ public:
     pingcap::kv::RpcClientPtr getRpcClient();
 
 private:
-    std::vector<RegionID> regions_to_remove = {};
-
     SchemaSyncerPtr schema_syncer;
     pingcap::pd::ClientPtr pd_client;
     pingcap::kv::RegionCachePtr region_cache;

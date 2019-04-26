@@ -1,11 +1,12 @@
 #pragma once
 
-#include <Interpreters/Context.h>
-#include <Parsers/IAST.h>
 #include <Debug/DBGInvoker.h>
+#include <Parsers/IAST.h>
 
 namespace DB
 {
+
+class Context;
 
 // TiDB table data writing test tools
 
@@ -45,4 +46,4 @@ void dbgFuncRaftUpdateRows(Context & context, const ASTs & args, DBGInvoker::Pri
 //   ./storages-client.sh "DBGInvoke raft_delete_rows(database_name, table_name, start_handle, end_handle)"
 void dbgFuncRaftDelRows(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-}
+} // namespace DB

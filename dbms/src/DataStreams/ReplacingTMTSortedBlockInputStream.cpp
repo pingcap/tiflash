@@ -3,8 +3,6 @@
 
 namespace DB
 {
-template class ReplacingTMTSortedBlockInputStream<Int64>;
-template class ReplacingTMTSortedBlockInputStream<UInt64>;
 
 template <typename HandleType>
 void ReplacingTMTSortedBlockInputStream<HandleType>::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
@@ -180,5 +178,8 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const std::stri
                    << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del)
                    << ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") << ". why{" << msg << "}, output: " << is_output);
 }
+
+template class ReplacingTMTSortedBlockInputStream<Int64>;
+template class ReplacingTMTSortedBlockInputStream<UInt64>;
 
 } // namespace DB

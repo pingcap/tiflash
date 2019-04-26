@@ -1,4 +1,7 @@
 #include <ext/scope_guard.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
+
 #include "region_helper.h"
 
 using namespace DB;

@@ -1,8 +1,10 @@
 #include <ext/scope_guard.h>
 
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/applySnapshot.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Raft/RaftContext.h>
 
 #include "region_helper.h"
 
@@ -203,7 +205,7 @@ int main(int, char **)
             region_meta.setApplied(index + 10, term);
             RegionPtr region = std::make_shared<Region>(std::move(region_meta));
 
-            kvstore->onSnapshot(region, context.context);
+            kvstore->onSnapshot(region, nullptr);
         }
 
         {
@@ -369,6 +371,8 @@ int main(int, char **)
 
         req.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeer);
         resp.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeer);
+
+        resp.mutable_change_peer()->mutable_region()->set_id(region_id);
 
         auto & change_peer = *(req.mutable_change_peer());
         change_peer.set_change_type(eraftpb::ConfChangeType::RemoveNode);

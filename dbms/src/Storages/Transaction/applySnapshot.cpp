@@ -1,3 +1,6 @@
+#include <Interpreters/Context.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
 
@@ -15,12 +18,16 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
 
     enginepb::SnapshotRequest request;
     auto ok = read(&request);
-    if (!ok || !request.has_state())
+    if (!ok)
+        throw Exception("Read snapshot fail", ErrorCodes::LOGICAL_ERROR);
+
+    if (!request.has_state())
         throw Exception("Failed to read snapshot state", ErrorCodes::LOGICAL_ERROR);
+
     const auto & state = request.state();
     pingcap::kv::RegionClientPtr region_client = nullptr;
     auto meta = RegionMeta(state.peer(), state.region(), state.apply_state());
-    Region::RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
+    RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
         if (context)
         {
             auto & tmt_ctx = context->getTMTContext();
@@ -44,12 +51,12 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
             auto cf_name = data.cf();
             auto key = TiKVKey();
             auto value = TiKVValue();
-            region->batchInsert([&](Region::BatchInsertNode & node) -> bool {
+            region->batchInsert([&](Region::BatchInsertElement & node) -> bool {
                 if (it == cf_data.end())
                     return false;
                 key = TiKVKey(it->key());
                 value = TiKVValue(it->value());
-                node = Region::BatchInsertNode(&key, &value, &cf_name);
+                node = Region::BatchInsertElement(&key, &value, &cf_name);
                 ++it;
                 return true;
             });
@@ -62,7 +69,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     }
 
     // context may be null in test cases.
-    kvstore->onSnapshot(region, context);
+    kvstore->onSnapshot(region, context ? &context->getTMTContext().region_table : nullptr);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot done.");
 }

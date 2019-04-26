@@ -1,24 +1,14 @@
 #include <Storages/Transaction/RegionMeta.h>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <tikv/Region.h>
+#pragma GCC diagnostic pop
+
 namespace DB
 {
 
 // TODO We need encoding version here, otherwise it is impossible to handle structure update.
-// Maybe use protobuf directly.
-
-size_t RegionMeta::serializeSize() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-
-    auto peer_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(bool);
-    // TODO: this region_size not right, 4 bytes missed
-    auto region_size
-        = sizeof(UInt64) + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt32) + KEY_SIZE_WITHOUT_TS + sizeof(UInt64) + sizeof(UInt64);
-    region_size += peer_size * region.peers_size();
-    auto apply_state_size = sizeof(UInt64) + sizeof(UInt64) + sizeof(UInt64);
-    return peer_size + region_size + apply_state_size + sizeof(UInt64) + sizeof(bool);
-}
-
 size_t RegionMeta::serialize(WriteBuffer & buf) const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -193,12 +183,12 @@ UInt64 RegionMeta::confVer() const
     return region.region_epoch().conf_ver();
 }
 
-void RegionMeta::reset(RegionMeta && rhs)
+void RegionMeta::assignRegionMeta(RegionMeta && rhs)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
     if (regionId() != rhs.regionId())
-        throw Exception("RegionMeta::reset region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("RegionMeta::assignRegionMeta region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     peer = std::move(rhs.peer);
     region = std::move(rhs.region);

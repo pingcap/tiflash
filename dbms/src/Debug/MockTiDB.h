@@ -3,7 +3,6 @@
 #include <atomic>
 
 #include <Storages/ColumnsDescription.h>
-#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>

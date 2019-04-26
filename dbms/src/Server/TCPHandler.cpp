@@ -154,7 +154,7 @@ void TCPHandler::runImpl()
          *  The client will be able to accept it, if it did not happen while sending another packet and the client has not disconnected yet.
          */
         std::unique_ptr<Exception> exception;
-        Region::LockInfos lock_infos;
+        LockInfos lock_infos;
         std::vector<UInt64> region_ids;
         bool network_error = false;
 
@@ -860,7 +860,7 @@ void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
     out->next();
 }
 
-void TCPHandler::sendLockInfos(const Region::LockInfos & lock_infos)
+void TCPHandler::sendLockInfos(const LockInfos & lock_infos)
 {
     writeVarUInt(Protocol::Server::LockInfos, *out);
     writeVarUInt(lock_infos.size(), *out);

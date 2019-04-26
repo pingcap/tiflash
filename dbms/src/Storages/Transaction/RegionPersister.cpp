@@ -1,4 +1,5 @@
 #include <IO/MemoryReadWriteBuffer.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionPersister.h>
 
 namespace DB
@@ -21,10 +22,10 @@ void RegionPersister::persist(const RegionPtr & region, enginepb::CommandRespons
     // Support only on thread persist.
     std::lock_guard<std::mutex> lock(mutex);
 
-    size_t persist_parm = region->persistParm();
+    size_t dirty_flag = region->dirtyFlag();
     doPersist(region, response);
     region->markPersisted();
-    region->decPersistParm(persist_parm);
+    region->decDirtyFlag(dirty_flag);
 }
 
 void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandResponse * response)
@@ -50,7 +51,7 @@ void RegionPersister::doPersist(const RegionPtr & region, enginepb::CommandRespo
     page_storage.write(wb);
 }
 
-void RegionPersister::restore(RegionMap & regions, Region::RegionClientCreateFunc * func)
+void RegionPersister::restore(RegionMap & regions, RegionClientCreateFunc * func)
 {
     auto acceptor = [&](const Page & page) {
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());

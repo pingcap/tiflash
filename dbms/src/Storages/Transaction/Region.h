@@ -1,17 +1,12 @@
 #pragma once
 
-#include <functional>
 #include <shared_mutex>
 
+#include <Storages/Transaction/RegionClientCreate.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <common/logger_useful.h>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <tikv/RegionClient.h>
-#pragma GCC diagnostic pop
 
 namespace DB
 {
@@ -20,10 +15,6 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
-HandleRange<HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id);
-
-HandleRange<HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id);
-
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
 class Region : public std::enable_shared_from_this<Region>
@@ -31,18 +22,13 @@ class Region : public std::enable_shared_from_this<Region>
 public:
     const static UInt32 CURRENT_VERSION;
 
-    const static String lock_cf_name;
-    const static String default_cf_name;
-    const static String write_cf_name;
+    const static std::string lock_cf_name;
+    const static std::string default_cf_name;
+    const static std::string write_cf_name;
+    const static std::string log_name;
 
     static const auto PutFlag = RegionData::CFModifyFlag::PutFlag;
     static const auto DelFlag = RegionData::CFModifyFlag::DelFlag;
-
-    using LockInfo = RegionData::LockInfo;
-    using LockInfoPtr = RegionData::LockInfoPtr;
-    using LockInfos = std::vector<LockInfoPtr>;
-
-    using DataList = std::list<RegionData::ReadInfo>;
 
     class CommittedScanner : private boost::noncopyable
     {
@@ -109,25 +95,23 @@ public:
     };
 
 public:
-    explicit Region(RegionMeta && meta_) : meta(std::move(meta_)), client(nullptr), log(&Logger::get("Region")) {}
+    explicit Region(RegionMeta && meta_) : meta(std::move(meta_)), client(nullptr), log(&Logger::get(log_name)) {}
 
-    explicit Region(const RegionMeta & meta_) : meta(meta_), client(nullptr), log(&Logger::get("Region")) {}
-
-    using RegionClientCreateFunc = std::function<pingcap::kv::RegionClientPtr(pingcap::kv::RegionVerID)>;
+    explicit Region(const RegionMeta & meta_) : meta(meta_), client(nullptr), log(&Logger::get(log_name)) {}
 
     explicit Region(RegionMeta && meta_, const RegionClientCreateFunc & region_client_create)
-        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get("Region"))
+        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
     explicit Region(const RegionMeta & meta_, const RegionClientCreateFunc & region_client_create)
-        : meta(meta_), client(region_client_create(meta.getRegionVerID())), log(&Logger::get("Region"))
+        : meta(meta_), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    using BatchInsertNode = std::tuple<const TiKVKey *, const TiKVValue *, const String *>;
-    void batchInsert(std::function<bool(BatchInsertNode &)> && f);
+    using BatchInsertElement = std::tuple<const TiKVKey *, const TiKVValue *, const std::string *>;
+    void batchInsert(std::function<bool(BatchInsertElement &)> && f);
 
     std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd);
 
@@ -151,9 +135,9 @@ public:
 
     void markPersisted();
     Timepoint lastPersistTime() const;
-    size_t persistParm() const;
-    void decPersistParm(size_t x);
-    void incPersistParm();
+    size_t dirtyFlag() const;
+    void decDirtyFlag(size_t x);
+    void incDirtyFlag();
 
     friend bool operator==(const Region & region1, const Region & region2)
     {
@@ -175,20 +159,20 @@ public:
 
     HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
 
-    void reset(Region && new_region);
+    void assignRegion(Region && new_region);
 
     TableIDSet getCommittedRecordTableID() const;
 
 private:
     // Private methods no need to lock mutex, normally
 
-    TableID doInsert(const String & cf, const TiKVKey & key, const TiKVValue & value);
-    TableID doRemove(const String & cf, const TiKVKey & key);
+    TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
+    TableID doRemove(const std::string & cf, const TiKVKey & key);
 
     bool checkIndex(UInt64 index);
-    static ColumnFamilyType getCf(const String & cf);
+    static ColumnFamilyType getCf(const std::string & cf);
 
-    RegionData::ReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
+    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
@@ -207,7 +191,8 @@ private:
 
     std::atomic<Timepoint> last_persist_time = Clock::now();
 
-    std::atomic<size_t> persist_parm = 1;
+    // dirty_flag is used to present whether this region need to be persisted.
+    std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
 };

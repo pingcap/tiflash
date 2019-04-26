@@ -1,7 +1,7 @@
 #include <memory>
 
 #include <Storages/Transaction/Region.h>
-
+#include <Storages/Transaction/TiKVRange.h>
 #include <tikv/RegionClient.h>
 
 namespace DB
@@ -15,24 +15,22 @@ extern const int UNKNOWN_FORMAT_VERSION;
 
 const UInt32 Region::CURRENT_VERSION = 0;
 
-const String Region::lock_cf_name = "lock";
-const String Region::default_cf_name = "default";
-const String Region::write_cf_name = "write";
+const std::string Region::lock_cf_name = "lock";
+const std::string Region::default_cf_name = "default";
+const std::string Region::write_cf_name = "write";
+const std::string Region::log_name = "Region";
 
 RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it)
 {
     return data.removeDataByWriteIt(table_id, write_it);
 }
 
-RegionData::ReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const
+RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const
 {
     return data.readDataByWriteIt(table_id, write_it);
 }
 
-Region::LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const
-{
-    return data.getLockInfo(expected_table_id, start_ts);
-}
+LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
 
 TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
@@ -40,12 +38,12 @@ TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVVa
     return doInsert(cf, key, value);
 }
 
-void Region::batchInsert(std::function<bool(BatchInsertNode &)> && f)
+void Region::batchInsert(std::function<bool(BatchInsertElement &)> && f)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     for (;;)
     {
-        if (BatchInsertNode p; f(p))
+        if (BatchInsertElement p; f(p))
         {
             auto && [k, v, cf] = p;
             doInsert(*cf, *k, *v);
@@ -55,10 +53,10 @@ void Region::batchInsert(std::function<bool(BatchInsertNode &)> && f)
     }
 }
 
-TableID Region::doInsert(const String & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
     // Ignoring all keys other than records.
-    String raw_key = RecordKVFormat::decodeTiKVKey(key);
+    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
     if (!RecordKVFormat::isRecord(raw_key))
         return InvalidTableID;
 
@@ -70,16 +68,16 @@ TableID Region::doInsert(const String & cf, const TiKVKey & key, const TiKVValue
     return data.insert(type, key, raw_key, value);
 }
 
-TableID Region::remove(const String & cf, const TiKVKey & key)
+TableID Region::remove(const std::string & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     return doRemove(cf, key);
 }
 
-TableID Region::doRemove(const String & cf, const TiKVKey & key)
+TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
     // Ignoring all keys other than records.
-    String raw_key = RecordKVFormat::decodeTiKVKey(key);
+    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
     if (!RecordKVFormat::isRecord(raw_key))
         return InvalidTableID;
 
@@ -156,7 +154,7 @@ Regions Region::execBatchSplit(
     {
         std::unique_lock<std::shared_mutex> lock(mutex);
 
-        int new_region_index = 0;
+        int new_region_index = -1;
         for (int i = 0; i < new_region_infos.size(); ++i)
         {
             const auto & region_info = new_region_infos[i];
@@ -168,12 +166,20 @@ Regions Region::execBatchSplit(
                 split_regions.emplace_back(split_region);
             }
             else
-                new_region_index = i;
+            {
+                if (new_region_index == -1)
+                    new_region_index = i;
+                else
+                    throw Exception("Region::execBatchSplit duplicate region index", ErrorCodes::LOGICAL_ERROR);
+            }
         }
 
+        if (new_region_index == -1)
+            throw Exception("Region::execBatchSplit region index not found", ErrorCodes::LOGICAL_ERROR);
+
         RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
-        meta.reset(std::move(new_meta));
-        meta.setApplied(index, term);
+        new_meta.setApplied(index, term);
+        meta.assignRegionMeta(std::move(new_meta));
     }
 
     std::stringstream ids;
@@ -214,7 +220,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
         const auto & response = cmd.admin_response();
         auto type = request.cmd_type();
 
-        LOG_TRACE(log,
+        LOG_INFO(log,
             "Region [" << region_id << "] execute admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term
                        << ", index: " << index << "]");
 
@@ -291,7 +297,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     meta.notifyAll();
 
     if (need_persist)
-        incPersistParm();
+        incDirtyFlag();
 
     for (auto & region : split_regions)
         region->last_persist_time.store(last_persist_time);
@@ -327,7 +333,7 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * r
 
     RegionData::deserialize(buf, region->data);
 
-    region->persist_parm = 0;
+    region->dirty_flag = 0;
 
     return region;
 }
@@ -376,11 +382,11 @@ void Region::markPersisted() { last_persist_time = Clock::now(); }
 
 Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
-size_t Region::persistParm() const { return persist_parm; }
+size_t Region::dirtyFlag() const { return dirty_flag; }
 
-void Region::decPersistParm(size_t x) { persist_parm -= x; }
+void Region::decDirtyFlag(size_t x) { dirty_flag -= x; }
 
-void Region::incPersistParm() { persist_parm++; }
+void Region::incDirtyFlag() { dirty_flag++; }
 
 std::unique_ptr<Region::CommittedScanner> Region::createCommittedScanner(TableID expected_table_id)
 {
@@ -419,30 +425,20 @@ UInt64 Region::version() const { return meta.version(); }
 
 UInt64 Region::confVer() const { return meta.confVer(); }
 
-HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const { return ::DB::getHandleRangeByTable(getRange(), table_id); }
-
-HandleRange<HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
+HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const
 {
-    return getHandleRangeByTable(range.first, range.second, table_id);
+    return TiKVRange::getHandleRangeByTable(getRange(), table_id);
 }
 
-HandleRange<HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
-{
-    auto start_handle = TiKVRange::getRangeHandle<true>(start_key, table_id);
-    auto end_handle = TiKVRange::getRangeHandle<false>(end_key, table_id);
-
-    return {start_handle, end_handle};
-}
-
-void Region::reset(Region && new_region)
+void Region::assignRegion(Region && new_region)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
 
-    data.reset(std::move(new_region.data));
+    data.assignRegionData(std::move(new_region.data));
 
-    incPersistParm();
+    incDirtyFlag();
 
-    meta.reset(std::move(new_region.meta));
+    meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();
 }
 

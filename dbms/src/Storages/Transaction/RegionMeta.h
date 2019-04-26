@@ -1,10 +1,19 @@
 #pragma once
 
+#include <condition_variable>
+
 #include <Storages/Transaction/TiKVKeyValue.h>
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <tikv/Region.h>
+#include <kvproto/metapb.pb.h>
+#include <kvproto/raft_serverpb.pb.h>
 #pragma GCC diagnostic pop
+
+namespace pingcap::kv
+{
+struct RegionVerID;
+}
 
 namespace DB
 {
@@ -69,7 +78,7 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
 
-    void reset(RegionMeta && other);
+    void assignRegionMeta(RegionMeta && other);
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
     {
