@@ -99,6 +99,13 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
     RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().region_table) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
+
+    const auto report_region_destroy = [&](RegionID region_id) {
+        auto & resp = *(responseBatch.mutable_responses()->Add());
+        resp.mutable_header()->set_region_id(region_id);
+        resp.mutable_header()->set_destroyed(true);
+    };
+
     for (const auto & cmd : cmds.requests())
     {
         auto & header = cmd.header();
@@ -112,7 +119,9 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             auto it = regions.find(curr_region_id);
             if (unlikely(it == regions.end()))
             {
-                LOG_WARNING(log, "Region " << curr_region_id << " not found, maybe removed already?");
+                LOG_WARNING(log, "Region " << curr_region_id << " not found, maybe removed already");
+                report_region_destroy(curr_region_id);
+
                 continue;
             }
             curr_region = it->second;
@@ -125,9 +134,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             removeRegion(curr_region_id, region_table);
 
             LOG_INFO(log, "Sync status because of removal by tombstone: " << curr_region->toString(true));
-            auto & resp = *(responseBatch.mutable_responses()->Add());
-            resp.mutable_header()->set_region_id(curr_region_id);
-            resp.mutable_header()->set_destroyed(true);
+            report_region_destroy(curr_region_id);
 
             continue;
         }
@@ -144,13 +151,15 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             }
         };
 
+        const auto persist_region = [&](const RegionPtr & region) {
+            LOG_INFO(log, "Start to persist " << region->toString(true));
+            region_persister.persist(region);
+            LOG_INFO(log, "Persist region " << region->id() << " done");
+        };
+
         const auto persist_and_sync = [&]() {
             if (result.sync_log)
-            {
-                LOG_INFO(log, "Start to persist " << curr_region->toString(true));
-                region_persister.persist(curr_region);
-                LOG_INFO(log, "Persist region " << curr_region->id() << " done");
-            }
+                persist_region(curr_region);
             report_sync_log();
         };
 
@@ -177,8 +186,8 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                 // persist curr_region at last. if program crashed after split_region is persisted, curr_region can
                 // continue to complete split operation.
                 for (const auto & new_region : split_regions)
-                    region_persister.persist(new_region);
-                region_persister.persist(curr_region);
+                    persist_region(new_region);
+                persist_region(curr_region);
             }
 
             if (region_table)
