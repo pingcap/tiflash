@@ -923,11 +923,14 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
         else
         {
-            for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
+            size_t batch_size = region_cnt / num_streams;
+            size_t rest = region_cnt % num_streams;
+            for (size_t thread_idx = 0, region_begin = 0, size = 0; thread_idx < num_streams; ++thread_idx, region_begin += size)
             {
                 BlockInputStreams union_regions_stream;
-                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, region_cnt); region_index < region_end;
-                     ++region_index)
+
+                size = thread_idx < rest ? batch_size + 1 : batch_size;
+                for (size_t region_index = region_begin, region_end = region_begin + size; region_index < region_end; ++region_index)
                 {
                     if (regions_query_res[region_index] != RegionTable::OK)
                         continue;
@@ -967,8 +970,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         source_stream = std::make_shared<VersionFilterBlockInputStream>(
                             source_stream, MutableSupport::version_column_name, query_info.read_tso);
 
-                        source_stream = std::make_shared<ExpressionBlockInputStream>(source_stream, data.getPrimaryExpression());
-
                         merging.emplace_back(source_stream);
                     }
                     auto region_input_stream = region_block_data[region_index];
@@ -977,8 +978,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
                             region_input_stream, MutableSupport::version_column_name, query_info.read_tso);
 
-                        region_input_stream
-                            = std::make_shared<ExpressionBlockInputStream>(region_input_stream, data.getPrimaryExpression());
                         merging.emplace_back(region_input_stream);
                     }
                     if (!merging.empty())
