@@ -87,6 +87,7 @@ public:
     }
 
     void waitIndex(UInt64 index);
+    bool checkIndex(UInt64 index);
 
     bool isPeerRemoved() const;
 
@@ -98,6 +99,8 @@ private:
     void doSetRegion(const metapb::Region & region);
 
     void doSetApplied(UInt64 index, UInt64 term);
+
+    bool doCheckIndex(UInt64 index);
 
 private:
     metapb::Peer peer;

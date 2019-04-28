@@ -145,10 +145,13 @@ RegionRange RegionMeta::getRange() const
 
 std::string RegionMeta::toString(bool dump_status) const
 {
+    std::stringstream ss;
     std::lock_guard<std::mutex> lock(mutex);
-    std::string status_str
-        = !dump_status ? "" : ", term: " + DB::toString(applied_term) + ", applied_index: " + DB::toString(apply_state.applied_index());
-    return "region[id: " + DB::toString(regionId()) + status_str + "]";
+    ss << "region[id: " << regionId();
+    if (dump_status)
+        ss << ", term: " << applied_term << ", applied_index: " << apply_state.applied_index();
+    ss << "]";
+    return ss.str();
 }
 
 bool RegionMeta::isPendingRemove() const
@@ -168,8 +171,16 @@ void RegionMeta::doSetPendingRemove() { pending_remove = true; }
 void RegionMeta::waitIndex(UInt64 index)
 {
     std::unique_lock<std::mutex> lock(mutex);
-    cv.wait(lock, [this, index] { return pending_remove || apply_state.applied_index() >= index; });
+    cv.wait(lock, [this, index] { return doCheckIndex(index); });
 }
+
+bool RegionMeta::checkIndex(UInt64 index)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return doCheckIndex(index);
+}
+
+bool RegionMeta::doCheckIndex(UInt64 index) { return pending_remove || apply_state.applied_index() >= index; }
 
 UInt64 RegionMeta::version() const
 {
