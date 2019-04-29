@@ -1,5 +1,6 @@
 #include <memory>
 
+#include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <tikv/RegionClient.h>
@@ -191,7 +192,7 @@ Regions Region::execBatchSplit(
     return split_regions;
 }
 
-std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const enginepb::CommandRequest & cmd)
+RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 {
     auto & header = cmd.header();
     RegionID region_id = id();
@@ -199,20 +200,24 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
 
-    std::vector<RegionPtr> split_regions;
+    RaftCommandResult result{sync_log, DefaultResult{}};
 
-    if (term == 0 && index == 0)
     {
-        if (!sync_log)
-            throw Exception("sync_log should be true", ErrorCodes::LOGICAL_ERROR);
-        return {{}, {}, sync_log};
+        auto applied_index = meta.appliedIndex();
+        if (index <= applied_index)
+        {
+            result.inner = IndexError{};
+            if (term == 0 && index == 0)
+            {
+                // special cmd, used to heart beat and sync log, just ignore
+            }
+            else
+                LOG_WARNING(log, toString() + " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+            return result;
+        }
     }
 
-    if (!checkIndex(index))
-        return {{}, {}, false};
-
-    TableIDSet table_ids;
-    bool need_persist = false;
+    bool is_dirty = false;
 
     if (cmd.has_admin_request())
     {
@@ -227,26 +232,38 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
         switch (type)
         {
             case raft_cmdpb::AdminCmdType::ChangePeer:
+            {
                 execChangePeer(request, response, index, term);
-                need_persist = true;
+                result.inner = ChangePeer{};
+
                 break;
+            }
             case raft_cmdpb::AdminCmdType::BatchSplit:
-                split_regions = execBatchSplit(request, response, index, term);
-                need_persist = true;
+            {
+                Regions split_regions = execBatchSplit(request, response, index, term);
+                for (auto & region : split_regions)
+                    region->last_persist_time.store(last_persist_time);
+
+                result.inner = BatchSplit{split_regions};
+
+                is_dirty = true;
                 break;
+            }
             case raft_cmdpb::AdminCmdType::CompactLog:
             case raft_cmdpb::AdminCmdType::ComputeHash:
             case raft_cmdpb::AdminCmdType::VerifyHash:
                 // Ignore
+                meta.setApplied(index, term);
                 break;
             default:
-                LOG_ERROR(log, "Unsupported admin command type " << raft_cmdpb::AdminCmdType_Name(type));
+                throw Exception("Unsupported admin command type " + raft_cmdpb::AdminCmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
                 break;
         }
-        meta.setApplied(index, term);
     }
     else
     {
+        TableIDSet table_ids;
+
         std::unique_lock<std::shared_mutex> lock(mutex);
 
         for (const auto & req : cmd.requests())
@@ -263,7 +280,7 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
-                        need_persist = true;
+                        is_dirty = true;
                     }
                     break;
                 }
@@ -274,35 +291,32 @@ std::tuple<std::vector<RegionPtr>, TableIDSet, bool> Region::onCommand(const eng
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
-                        need_persist = true;
+                        is_dirty = true;
                     }
                     break;
                 }
-                case raft_cmdpb::CmdType::DeleteRange:
-                case raft_cmdpb::CmdType::IngestSST:
                 case raft_cmdpb::CmdType::Snap:
                 case raft_cmdpb::CmdType::Get:
+                case raft_cmdpb::CmdType::ReadIndex:
                     LOG_WARNING(log, "Region [" << region_id << "] skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
                     break;
-                case raft_cmdpb::CmdType::Prewrite:
-                case raft_cmdpb::CmdType::Invalid:
                 default:
-                    LOG_ERROR(log, "Unsupported command type " << raft_cmdpb::CmdType_Name(type));
+                {
+                    throw Exception("Unsupported command type " + raft_cmdpb::CmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
                     break;
+                }
             }
         }
         meta.setApplied(index, term);
+        result.inner = UpdateTableID{table_ids};
     }
 
     meta.notifyAll();
 
-    if (need_persist)
+    if (is_dirty)
         incDirtyFlag();
 
-    for (auto & region : split_regions)
-        region->last_persist_time.store(last_persist_time);
-
-    return {split_regions, table_ids, sync_log};
+    return result;
 }
 
 size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response) const
@@ -336,22 +350,6 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * r
     region->dirty_flag = 0;
 
     return region;
-}
-
-bool Region::checkIndex(UInt64 index)
-{
-    auto applied_index = meta.appliedIndex();
-    if (index <= applied_index)
-    {
-        LOG_TRACE(log, toString() + " ignore outdated log [" << index << "]");
-        return false;
-    }
-    auto expected = applied_index + 1;
-    if (index != expected)
-    {
-        LOG_WARNING(log, toString() << " expected index: " << DB::toString(expected) << ", got: " << DB::toString(index));
-    }
-    return true;
 }
 
 ColumnFamilyType Region::getCf(const std::string & cf)
@@ -415,9 +413,12 @@ void Region::waitIndex(UInt64 index)
 {
     if (client != nullptr)
     {
-        LOG_TRACE(log, "Region " << id() << " begin to wait learner index: " << index);
-        meta.waitIndex(index);
-        LOG_TRACE(log, "Region " << id() << " wait learner index done");
+        if (!meta.checkIndex(index))
+        {
+            LOG_DEBUG(log, "Region " << id() << " need to wait learner index: " << index);
+            meta.waitIndex(index);
+            LOG_DEBUG(log, "Region " << id() << " wait learner index " << index << " done");
+        }
     }
 }
 

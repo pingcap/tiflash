@@ -15,6 +15,8 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
+struct RaftCommandResult;
+
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
 class Region : public std::enable_shared_from_this<Region>
@@ -113,7 +115,7 @@ public:
     using BatchInsertElement = std::tuple<const TiKVKey *, const TiKVValue *, const std::string *>;
     void batchInsert(std::function<bool(BatchInsertElement &)> && f);
 
-    std::tuple<std::vector<RegionPtr>, TableIDSet, bool> onCommand(const enginepb::CommandRequest & cmd);
+    RaftCommandResult onCommand(const enginepb::CommandRequest & cmd);
 
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
     std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
@@ -169,7 +171,6 @@ private:
     TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
 
-    bool checkIndex(UInt64 index);
     static ColumnFamilyType getCf(const std::string & cf);
 
     RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
