@@ -33,6 +33,7 @@
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
+#include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/TiKVRange.h>
 
 #include <Storages/IStorage.h>

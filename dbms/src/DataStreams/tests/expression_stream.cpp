@@ -4,6 +4,7 @@
 #include <IO/WriteBufferFromOStream.h>
 
 #include <Storages/System/StorageSystemNumbers.h>
+#include <Storages/RegionQueryInfo.h>
 
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>

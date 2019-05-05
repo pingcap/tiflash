@@ -1,12 +1,11 @@
-#include <DataStreams/StringStreamBlockInputStream.h>
-
-#include <Debug/dbgFuncMockTiDBTable.h>
-#include <Debug/dbgFuncMockTiDBData.h>
-#include <Debug/dbgFuncRegion.h>
-
-#include <Debug/DBGInvoker.h>
 #include <cstring>
 #include <thread>
+
+#include <DataStreams/StringStreamBlockInputStream.h>
+#include <Debug/DBGInvoker.h>
+#include <Debug/dbgFuncMockTiDBData.h>
+#include <Debug/dbgFuncMockTiDBTable.h>
+#include <Debug/dbgFuncRegion.h>
 #include <Parsers/ASTLiteral.h>
 
 namespace DB
@@ -49,7 +48,7 @@ DBGInvoker::DBGInvoker()
 
     regFunc("put_region", dbgFuncPutRegion);
     regFunc("region_snapshot", dbgFuncRegionSnapshot);
-    regFunc("rm_region_data", dbgFuncRegionRmData);
+    regFunc("try_flush", dbgFuncTryFlush);
 
     regFunc("dump_region", dbgFuncDumpRegion);
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
@@ -77,10 +76,11 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
     static const std::string prefix_not_print_res = "__";
     bool print_res = true;
     std::string name = ori_name;
-    if (ori_name.size() > prefix_not_print_res.size() && std::memcmp(ori_name.data(), prefix_not_print_res.data(), prefix_not_print_res.size()) == 0)
+    if (ori_name.size() > prefix_not_print_res.size()
+        && std::memcmp(ori_name.data(), prefix_not_print_res.data(), prefix_not_print_res.size()) == 0)
     {
         print_res = false;
-        name = ori_name.substr(prefix_not_print_res.size() , ori_name.size() - prefix_not_print_res.size());
+        name = ori_name.substr(prefix_not_print_res.size(), ori_name.size() - prefix_not_print_res.size());
     }
 
     auto it = funcs.find(name);
@@ -97,14 +97,11 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
     col_name << ")";
 
     std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(col_name.str());
-    Printer printer = [&] (const std::string & s)
-    {
-        res->append(s);
-    };
+    Printer printer = [&](const std::string & s) { res->append(s); };
 
     (it->second)(context, args, printer);
 
     return print_res ? res : std::shared_ptr<StringStreamBlockInputStream>();
 }
 
-}
+} // namespace DB

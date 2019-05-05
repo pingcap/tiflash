@@ -55,6 +55,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -302,7 +303,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             if (regions_query_info.empty())
             {
-                tmt.region_table.traverseRegionsByTable(data.table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+                tmt.region_table.traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
                     for (const auto & [id, region] : regions)
                     {
                         kvstore_region.emplace(id, region);
@@ -311,7 +312,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
                         else
                             regions_query_info.push_back(
-                                {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info.id)});
+                                {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
                     }
                 });
             }
@@ -352,9 +353,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                    auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(data.table_info.id,
+                    auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(data.table_info->id,
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
-                        data.table_info, data.getColumns(), column_names_to_read, true, query_info.resolve_locks, query_info.read_tso);
+                        *data.table_info, data.getColumns(), column_names_to_read, true, query_info.resolve_locks, query_info.read_tso);
 
                     regions_query_res[region_index] = status;
 

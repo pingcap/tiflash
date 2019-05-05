@@ -56,8 +56,8 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RegionKey start = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
-    RegionKey end = (RegionKey)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    HandleID start = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
     const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
@@ -74,6 +74,16 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     output(ss.str());
 }
 
+void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
+{
+    TMTContext & tmt = context.getTMTContext();
+    tmt.region_table.tryFlushRegions();
+
+    std::stringstream ss;
+    ss << "region_table try flush regions";
+    output(ss.str());
+}
+
 void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 5 || args.size() > 6)
@@ -83,8 +93,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RegionKey start = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
-    RegionKey end = (RegionKey)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    HandleID start = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
     const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
@@ -181,6 +191,9 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
 
 void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
+    if (args.size() != 1)
+        throw Exception("Args not matched, should be: table_id", ErrorCodes::BAD_ARGUMENTS);
+
     auto & tmt = context.getTMTContext();
     TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     size_t size = 0;
@@ -189,8 +202,12 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         auto range = region->getHandleRangeByTable(table_id);
         size += 1;
         std::stringstream ss;
-        ss << "table #" << table_id << " " << region->toString() << " ranges: " << range.first.toString() << ", "
-           << range.second.toString();
+        ss << "table #" << table_id << " " << region->toString();
+        if (range.first >= range.second)
+            ss << " [none], ";
+        else
+            ss << " ranges: [" << range.first.toString() << ", " << range.second.toString() << "), ";
+        ss << region->dataInfo();
         output(ss.str());
     });
     output("total size: " + toString(size));
@@ -242,53 +259,6 @@ void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer
             output(ss.str());
         }
     }
-}
-
-void dbgFuncRegionRmData(Context & /*context*/, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)
-{
-    // TODO: port from RegionPartitionMgr to RegionTable
-    /*
-    if (args.size() != 1)
-        throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);
-
-    TMTContext & tmt = context.getTMTContext();
-
-    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RegionPtr region = tmt.kvstore.get(region_id);
-
-    TiKVKey start_key(region->getMeta().region.start_key());
-    TiKVKey end_key(region->getMeta().region.end_key());
-    RegionKey start = RecordKVFormat::getHandle(start_key);
-    RegionKey end = RecordKVFormat::getHandle(end_key);
-
-    TableID table_id = RecordKVFormat::getTableId(start_key);
-
-    // TODO: lock structure?
-    RegionPartitionMgrPtr partitions = tmt.partition_mgrs.tryGet(table_id);
-    partitions->removeRegion(region_id);
-
-    std::stringstream ss;
-    ss << "delete data of region #" << region_id << ", range[" << start << ", " << end << ")" << " in table #" << table_id;
-    output(ss.str());
-    */
-}
-
-size_t executeQueryAndCountRows(Context & context, const std::string & query)
-{
-    size_t count = 0;
-    Context query_context = context;
-    query_context.setSessionContext(query_context);
-    BlockInputStreamPtr input = executeQuery(query, query_context, true, QueryProcessingStage::Complete).in;
-    input->readPrefix();
-    while (true)
-    {
-        Block block = input->read();
-        if (!block)
-            break;
-        count += block.rows();
-    }
-    input->readSuffix();
-    return count;
 }
 
 } // namespace DB
