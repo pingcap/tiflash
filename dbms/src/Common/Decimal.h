@@ -187,7 +187,7 @@ struct Decimal {
         for (ScaleType i = 0; i < scale; i++) {
             v = v / 10 + (i + 1 == scale && v % 10 >= 5);
         }
-        if (value > std::numeric_limits<T>::max() || value < std::numeric_limits<T>::min()) {
+        if (v > std::numeric_limits<T>::max() || v < std::numeric_limits<T>::min()) {
             throw Exception("Decimal value overflow", ErrorCodes::DECIMAL_OVERFLOW_ERROR);
         }
         T result = static_cast<T>(v);
