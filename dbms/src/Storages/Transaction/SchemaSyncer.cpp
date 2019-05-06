@@ -193,15 +193,19 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
     /// Get table schema json from TiDB/TiKV.
     String table_info_json = getSchemaJson(table_id, context);
 
+    LOG_DEBUG(log, __FUNCTION__ <<  ": Table " << table_id << " info json: " << table_info_json);
+
     TableInfo table_info(table_info_json, false);
 
     if (!context.isDatabaseExist(table_info.db_name))
     {
+        LOG_DEBUG(log, __FUNCTION__ <<  ": Creating database " << table_info.db_name);
         createDatabase(table_info, context);
     }
 
     if (!context.isTableExist(table_info.db_name, table_info.name))
     {
+        LOG_DEBUG(log, __FUNCTION__ <<  ": Creating table " << table_info.name);
         createTable(table_info, context);
         context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
     }
@@ -210,6 +214,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
     bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
     if (is_partition_table && !context.isTableExist(table_info.db_name, table_info.name))
     {
+        LOG_DEBUG(log, __FUNCTION__ <<  ": Re-creating table after mangling partition table " << table_info.name);
         createTable(table_info, context);
         context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
     }

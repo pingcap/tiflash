@@ -1,5 +1,7 @@
 #pragma once
 
+#include <common/logger_useful.h>
+
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Types.h>
 
@@ -32,6 +34,9 @@ public:
 
 protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;
+
+protected:
+    Logger * log;
 };
 
 /// Json-based schema syncer implementation fetching schema Json from TiDB via HTTP.
