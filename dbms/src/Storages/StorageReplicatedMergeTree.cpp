@@ -11,6 +11,8 @@
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
 
+#include <Storages/Transaction/TiDB.h>
+
 #include <Databases/IDatabase.h>
 
 #include <Parsers/formatAST.h>

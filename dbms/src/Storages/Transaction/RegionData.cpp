@@ -30,11 +30,24 @@ TableID RegionData::insert(ColumnFamilyType cf, const TiKVKey & key, const Strin
     }
 }
 
-TableID RegionData::removeLockCF(const TableID & table_id, const String & raw_key)
+void RegionData::removeLockCF(const TableID & table_id, const String & raw_key)
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
     lock_cf.remove(table_id, handle_id);
-    return table_id;
+}
+
+void RegionData::removeDefaultCF(const TableID & table_id, const TiKVKey & key, const String & raw_key)
+{
+    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
+    Timestamp ts = RecordKVFormat::getTs(key);
+    cf_data_size -= default_cf.remove(table_id, RegionDefaultCFData::Key{handle_id, ts}, true);
+}
+
+void RegionData::removeWriteCF(const TableID & table_id, const TiKVKey & key, const String & raw_key)
+{
+    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
+    Timestamp ts = RecordKVFormat::getTs(key);
+    cf_data_size -= write_cf.remove(table_id, RegionWriteCFData::Key{handle_id, ts}, true);
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it)
@@ -161,6 +174,8 @@ void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
 RegionWriteCFData & RegionData::writeCFMute() { return write_cf; }
 
 const RegionWriteCFData & RegionData::writeCF() const { return write_cf; }
+const RegionDefaultCFData & RegionData::defaultCF() const { return default_cf; }
+const RegionLockCFData & RegionData::lockCF() const { return lock_cf; }
 
 TableIDSet RegionData::getCommittedRecordTableID() const { return writeCF().getAllRecordTableID(); }
 

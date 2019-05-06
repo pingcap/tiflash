@@ -33,6 +33,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/CHTableHandle.h>
+#include <Storages/Transaction/TiDB.h>
 
 #include <Poco/File.h>
 
@@ -667,7 +668,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
 
             std::vector<HandleRange<HandleID>> ranges;
             tmt.region_table.traverseInternalRegionsByTable(
-                data.table_info.id,
+                data.table_info->id,
                 [&](const RegionTable::InternalRegion & region) {
                     ranges.push_back(region.range_in_table);
                 });

@@ -29,6 +29,7 @@
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDB.h>
 
 
 namespace DB
@@ -70,7 +71,7 @@ StorageMergeTree::StorageMergeTree(
     reader(data), writer(data), merger(data, context.getBackgroundPool()),
     log(&Logger::get(database_name_ + "." + table_name + " (StorageMergeTree)"))
 {
-    data.table_info = table_info_;
+    *data.table_info = table_info_;
     if (path_.empty())
         throw Exception("MergeTree storages require data path", ErrorCodes::INCORRECT_FILE_NAME);
 
@@ -113,7 +114,7 @@ void StorageMergeTree::shutdown()
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext &tmt_context = context.getTMTContext();
-        tmt_context.storages.remove(data.table_info.id);
+        tmt_context.storages.remove(data.table_info->id);
     }
 }
 
@@ -172,6 +173,10 @@ UInt64 StorageMergeTree::getVersionSeed(const Settings & /* settings */) const
     // We use '* 1000000' for readable results, just for now
     return (increment.value + 1) * 1000000;
 }
+
+const StorageMergeTree::TableInfo & StorageMergeTree::getTableInfo() const { return *data.table_info; }
+
+void StorageMergeTree::setTableInfo(const TableInfo & table_info_) { *data.table_info = table_info_; }
 
 BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Settings & settings)
 {
@@ -354,7 +359,7 @@ void StorageMergeTree::alter(
             typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(1) = tuple;
         }
 
-        auto literal = std::make_shared<ASTLiteral>(Field(data.table_info.serialize(true)));
+        auto literal = std::make_shared<ASTLiteral>(Field(data.table_info->serialize(true)));
         typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
     };
 

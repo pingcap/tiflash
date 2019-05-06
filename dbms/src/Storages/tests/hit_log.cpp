@@ -17,6 +17,7 @@
 #include <DataStreams/copyData.h>
 
 #include <Storages/StorageLog.h>
+#include <Storages/RegionQueryInfo.h>
 
 #include <Interpreters/Context.h>
 

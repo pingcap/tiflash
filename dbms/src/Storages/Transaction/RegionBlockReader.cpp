@@ -55,8 +55,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 
-    // TODO: move this value to setting.
-    ColumnID handle_col_id = -1;
+    ColumnID handle_col_id = InvalidColumnID;
 
     std::map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
     for (const auto & column_info : table_info.columns)

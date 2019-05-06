@@ -87,11 +87,23 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
         return InvalidTableID;
 
     auto type = getCf(cf);
-    if (type == Lock)
-        data.removeLockCF(table_id, raw_key);
-    else
+    switch (type)
     {
-        // removed by gc, just ignore.
+        case Lock:
+            data.removeLockCF(table_id, raw_key);
+            break;
+        case Default:
+        {
+            // there may be some prewrite data, may not exist, don't throw exception.
+            data.removeDefaultCF(table_id, key, raw_key);
+            break;
+        }
+        case Write:
+        {
+            // removed by gc, may not exist.
+            data.removeWriteCF(table_id, key, raw_key);
+            break;
+        }
     }
     return table_id;
 }
@@ -375,6 +387,19 @@ void Region::setPendingRemove()
 }
 
 size_t Region::dataSize() const { return data.dataSize(); }
+
+std::string Region::dataInfo() const
+{
+    std::stringstream ss;
+    auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
+    if (write_size)
+        ss << "write cf: " << write_size << ", ";
+    if (lock_size)
+        ss << "lock cf: " << lock_size << ", ";
+    if (default_size)
+        ss << "default cf: " << default_size << ", ";
+    return ss.str();
+}
 
 void Region::markPersisted() { last_persist_time = Clock::now(); }
 

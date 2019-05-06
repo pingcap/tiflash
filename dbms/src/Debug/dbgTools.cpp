@@ -23,7 +23,7 @@ extern const int LOGICAL_ERROR;
 namespace RegionBench
 {
 
-RegionPtr createRegion(TableID table_id, RegionID region_id, const RegionKey & start, const RegionKey & end)
+RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end)
 {
     enginepb::SnapshotRequest request;
     enginepb::SnapshotState * state = request.mutable_state();

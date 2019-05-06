@@ -1,4 +1,5 @@
 #include <IO/ReadBufferFromString.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace JsonSer
@@ -381,6 +382,22 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
 catch (const JSONException & e)
 {
     throw DB::Exception("Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + json_str, DB::Exception(e));
+}
+
+ColumnID TableInfo::getColumnID(const String & name) const
+{
+    for (auto col : columns)
+    {
+        if (name == col.name)
+        {
+            return col.id;
+        }
+    }
+
+    if (name == DB::MutableSupport::tidb_pk_column_name)
+        return DB::InvalidColumnID;
+
+    throw Exception("unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 }

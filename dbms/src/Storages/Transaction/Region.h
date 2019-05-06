@@ -134,6 +134,7 @@ public:
     bool isPeerRemoved() const;
 
     size_t dataSize() const;
+    std::string dataInfo() const;
 
     void markPersisted();
     Timepoint lastPersistTime() const;
