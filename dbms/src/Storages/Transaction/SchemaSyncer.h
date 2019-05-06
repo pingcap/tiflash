@@ -48,4 +48,4 @@ protected:
     String getSchemaJson(TableID table_id, Context & context) override;
 };
 
-}
+} // namespace DB
