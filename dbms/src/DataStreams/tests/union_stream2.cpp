@@ -4,6 +4,7 @@
 #include <IO/WriteBufferFromFileDescriptor.h>
 
 #include <Storages/System/StorageSystemNumbers.h>
+#include <Storages/RegionQueryInfo.h>
 
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>

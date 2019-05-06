@@ -81,8 +81,8 @@ public:
 
     bool checkTableCanBeDropped() const override;
 
-    const TableInfo & getTableInfo() const { return data.table_info; }
-    void setTableInfo(const TableInfo & table_info_) { data.table_info = table_info_; }
+    const TableInfo & getTableInfo() const;
+    void setTableInfo(const TableInfo & table_info_);
 
     MergeTreeData & getData() { return data; }
     const MergeTreeData & getData() const { return data; }

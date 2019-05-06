@@ -40,7 +40,9 @@ public:
 
     TableID insert(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key, const TiKVValue & value);
 
-    TableID removeLockCF(const TableID & table_id, const String & raw_key);
+    void removeLockCF(const TableID & table_id, const String & raw_key);
+    void removeDefaultCF(const TableID & table_id, const TiKVKey & key, const String & raw_key);
+    void removeWriteCF(const TableID & table_id, const TiKVKey & key, const String & raw_key);
 
     WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it);
 
@@ -65,6 +67,8 @@ public:
     RegionWriteCFData & writeCFMute();
 
     const RegionWriteCFData & writeCF() const;
+    const RegionDefaultCFData & defaultCF() const;
+    const RegionLockCFData & lockCF() const;
 
     TableIDSet getCommittedRecordTableID() const;
 

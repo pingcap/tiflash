@@ -18,7 +18,7 @@ using Regions = std::vector<RegionPtr>;
 namespace DB::RegionBench
 {
 
-RegionPtr createRegion(TableID table_id, RegionID region_id, const RegionKey & start, const RegionKey & end);
+RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end);
 
 Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region, HandleID handle_begin, RegionID new_region_id_begin);
 

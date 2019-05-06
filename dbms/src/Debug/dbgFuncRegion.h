@@ -25,11 +25,14 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 //   ./storage-client.sh "DBGInvoke dump_region()"
 void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-// Remove region's data from partition
+// Dump all region ranges for specific table
 // Usage:
-//   ./storage-client.sh "DBGInvoke rm_region_data(region_id)"
-void dbgFuncRegionRmData(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
+//   ./storage-client.sh "DBGInvoke dump_all_region(table_id)"
 void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+// Try flush regions
+// Usage:
+//   ./storage-client.sh "DBGInvoke try_flush()"
+void dbgFuncTryFlush(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 } // namespace DB

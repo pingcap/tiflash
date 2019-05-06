@@ -4,7 +4,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/castColumn.h>
 #include <Storages/IStorage.h>
-
+#include <Storages/RegionQueryInfo.h>
 
 namespace DB
 {

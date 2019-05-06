@@ -48,6 +48,7 @@
 #include <typeindex>
 #include <optional>
 #include <Interpreters/PartLog.h>
+#include <Storages/Transaction/TiDB.h>
 
 
 namespace ProfileEvents
@@ -101,6 +102,7 @@ MergeTreeData::MergeTreeData(
     primary_expr_ast(primary_expr_ast_),
     secondary_sort_expr_ast(secondary_sort_expr_ast_),
     partition_expr_ast(partition_expr_ast_),
+    table_info(std::make_unique<TiDB::TableInfo>()),
     require_part_metadata(require_part_metadata_),
     database_name(database_), table_name(table_),
     full_path(full_path_),

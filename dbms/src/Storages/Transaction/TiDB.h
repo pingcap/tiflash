@@ -245,23 +245,7 @@ struct TableInfo
     PartitionInfo partition;
     Int64 schema_version = -1;
 
-    ColumnID getColumnID(const String & name) const
-    {
-        for (auto col : columns)
-        {
-            if (name == col.name)
-            {
-                return col.id;
-            }
-        }
-        // TODO: use DB::MutableSupport::tidb_pk_column_name instead
-        if (name == "_tidb_rowid")
-        {
-            // TODO: use XXXColumnID
-            return -1;
-        }
-        throw Exception("unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
-    }
+    ColumnID getColumnID(const String & name) const;
 
     bool manglePartitionTableIfNeeded(TableID table_or_partition_id)
     {

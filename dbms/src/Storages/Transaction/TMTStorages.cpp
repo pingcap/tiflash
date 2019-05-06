@@ -1,5 +1,6 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/TMTStorages.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {

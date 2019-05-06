@@ -51,7 +51,7 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const 
 }
 
 template <typename Trait>
-size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key)
+size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool quiet)
 {
     auto & map = data[table_id];
 
@@ -62,13 +62,14 @@ size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key)
         map.erase(it);
         return size;
     }
-    else
+    else if (!quiet)
     {
         auto tikv_key = Trait::genTiKVKey(table_id, key);
         throw Exception(" key not found [" + tikv_key.toString() + "]", ErrorCodes::LOGICAL_ERROR);
 
         return 0;
     }
+    return 0;
 }
 
 template <typename Trait>

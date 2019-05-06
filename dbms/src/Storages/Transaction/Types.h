@@ -1,8 +1,6 @@
 #pragma once
 
 #include <chrono>
-#include <ctime>
-#include <set>
 #include <unordered_set>
 
 #include <Core/Types.h>
@@ -24,11 +22,14 @@ inline bool isTiDBSystemTable(TableID table_id) { return table_id <= MaxSystemTa
 using DatabaseID = Int64;
 
 using ColumnID = Int64;
+
+enum : ColumnID
+{
+    InvalidColumnID = -1
+};
+
 using HandleID = Int64;
 using Timestamp = UInt64;
-
-using PartitionID = UInt64;
-using RegionKey = Int64;
 
 using RegionID = UInt64;
 

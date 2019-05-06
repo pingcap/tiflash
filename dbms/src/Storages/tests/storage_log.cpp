@@ -2,6 +2,7 @@
 
 #include <IO/WriteBufferFromOStream.h>
 #include <Storages/StorageLog.h>
+#include <Storages/RegionQueryInfo.h>
 #include <DataStreams/TabSeparatedRowOutputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/BlockOutputStreamFromRowOutputStream.h>

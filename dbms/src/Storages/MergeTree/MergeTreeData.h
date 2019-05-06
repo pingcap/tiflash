@@ -8,7 +8,6 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
-#include <Storages/Transaction/TiDB.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/ReadBufferFromFile.h>
@@ -21,6 +20,11 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/global_fun.hpp>
 #include <boost/range/iterator_range_core.hpp>
+
+namespace TiDB
+{
+struct TableInfo;
+}
 
 namespace DB
 {
@@ -522,7 +526,7 @@ public:
     /// For generating names of temporary parts during insertion.
     SimpleIncrement insert_increment;
 
-    TiDB::TableInfo table_info;
+    std::unique_ptr<TiDB::TableInfo> table_info;
 
 private:
     friend struct MergeTreeDataPart;
