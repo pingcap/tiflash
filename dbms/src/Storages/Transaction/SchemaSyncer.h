@@ -30,6 +30,8 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class JsonSchemaSyncer : public SchemaSyncer
 {
 public:
+    JsonSchemaSyncer();
+
     void syncSchema(TableID table_id, Context & context) override;
 
 protected:

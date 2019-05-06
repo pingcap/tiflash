@@ -182,6 +182,8 @@ void createTable(const TableInfo & table_info, Context & context)
     interpreter.execute();
 }
 
+JsonSchemaSyncer::JsonSchemaSyncer() : log(&Logger::get("SchemaSyncer")) {}
+
 void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
 {
     // TODO: Only guarantee table's existence (thus no ALTER support). Do nothing if table already exists,
