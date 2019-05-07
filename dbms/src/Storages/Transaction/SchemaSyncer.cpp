@@ -7,11 +7,11 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <Storages/Transaction/TMTContext.h>
-#include <Storages/MutableSupport.h>
 #include <TiDB/TiDBService.h>
 #include <common/JSON.h>
 
@@ -21,7 +21,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 class Curl final : public ext::singleton<Curl>
@@ -43,10 +43,7 @@ Curl::Curl()
         throw DB::Exception("CURL global init failed.", code);
 }
 
-Curl::~Curl()
-{
-    curl_global_cleanup();
-}
+Curl::~Curl() { curl_global_cleanup(); }
 
 String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
 {
@@ -54,10 +51,11 @@ String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
 
     CURL * curl = curl_easy_init();
 
-    curl_easy_setopt(curl, CURLOPT_URL, std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/db-table/" + toString(table_id)).c_str());
+    curl_easy_setopt(curl,
+        CURLOPT_URL,
+        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/db-table/" + toString(table_id)).c_str());
 
-    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result)
-    {
+    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
         auto str = reinterpret_cast<String *>(result);
         size_t real_size = size * nmemb;
         str->append((const char *)buffer, real_size);
@@ -78,24 +76,17 @@ String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
 
     if (result.empty() || result[0] == '[')
     {
-        throw DB::Exception("Table with ID = " + toString(table_id) + " does not exist in TiDB",
-            ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception("Table with ID = " + toString(table_id) + " does not exist in TiDB", ErrorCodes::LOGICAL_ERROR);
     }
 
     return result;
 }
 
-String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context)
-{
-    return Curl::instance().getTiDBTableInfoJson(table_id, context);
-}
+String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context) { return Curl::instance().getTiDBTableInfoJson(table_id, context); }
 
 using TableInfo = TiDB::TableInfo;
 
-String createDatabaseStmt(const TableInfo & table_info)
-{
-    return "CREATE DATABASE " + table_info.db_name;
-}
+String createDatabaseStmt(const TableInfo & table_info) { return "CREATE DATABASE " + table_info.db_name; }
 
 void createDatabase(const TableInfo & table_info, Context & context)
 {
@@ -182,6 +173,8 @@ void createTable(const TableInfo & table_info, Context & context)
     interpreter.execute();
 }
 
+JsonSchemaSyncer::JsonSchemaSyncer() : log(&Logger::get("SchemaSyncer")) {}
+
 void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
 {
     // TODO: Only guarantee table's existence (thus no ALTER support). Do nothing if table already exists,
@@ -193,15 +186,19 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
     /// Get table schema json from TiDB/TiKV.
     String table_info_json = getSchemaJson(table_id, context);
 
+    LOG_DEBUG(log, __FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
+
     TableInfo table_info(table_info_json, false);
 
     if (!context.isDatabaseExist(table_info.db_name))
     {
+        LOG_DEBUG(log, __FUNCTION__ << ": Creating database " << table_info.db_name);
         createDatabase(table_info, context);
     }
 
     if (!context.isTableExist(table_info.db_name, table_info.name))
     {
+        LOG_DEBUG(log, __FUNCTION__ << ": Creating table " << table_info.name);
         createTable(table_info, context);
         context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
     }
@@ -210,6 +207,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
     bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
     if (is_partition_table && !context.isTableExist(table_info.db_name, table_info.name))
     {
+        LOG_DEBUG(log, __FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
         createTable(table_info, context);
         context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
     }
@@ -217,9 +215,6 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
     // TODO: detect schema change and apply to storage.
 }
 
-String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context)
-{
-    return getTiDBTableInfoJsonByCurl(table_id, context);
-}
+String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }
 
-}
+} // namespace DB

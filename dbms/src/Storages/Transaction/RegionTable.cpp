@@ -42,6 +42,10 @@ StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
         tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context);
         storage = tmt_ctx.storages.get(table_id);
     }
+    if (storage == nullptr)
+    {
+        throw Exception("Storage " + DB::toString(table_id) + " not found in TMT context", ErrorCodes::LOGICAL_ERROR);
+    }
     return storage;
 }
 
