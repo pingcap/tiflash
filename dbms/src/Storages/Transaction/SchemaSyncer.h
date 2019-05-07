@@ -1,5 +1,7 @@
 #pragma once
 
+#include <common/logger_useful.h>
+
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Types.h>
 
@@ -28,10 +30,15 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 class JsonSchemaSyncer : public SchemaSyncer
 {
 public:
+    JsonSchemaSyncer();
+
     void syncSchema(TableID table_id, Context & context) override;
 
 protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;
+
+protected:
+    Logger * log;
 };
 
 /// Json-based schema syncer implementation fetching schema Json from TiDB via HTTP.
@@ -41,4 +48,4 @@ protected:
     String getSchemaJson(TableID table_id, Context & context) override;
 };
 
-}
+} // namespace DB
