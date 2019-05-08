@@ -10,7 +10,9 @@
 namespace DB
 {
 
-std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
+using BlockOption = std::optional<Block>;
+
+std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
     TableID table_id,
     const RegionID region_id,
     const TiDB::TableInfo & table_info,
@@ -31,7 +33,7 @@ std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::get
         &data_list_for_remove);
 }
 
-std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
+std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
     RegionPtr region,
     const RegionVersion region_version,
     const RegionVersion conf_version,
@@ -44,7 +46,7 @@ std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::get
     RegionDataReadInfoList * data_list_for_remove)
 {
     if (!region)
-        return {{}, NOT_FOUND};
+        return {BlockOption{}, NOT_FOUND};
 
     if (learner_read)
         region->waitIndex(region->learnerRead());
@@ -60,10 +62,10 @@ std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::get
             auto scanner = region->createCommittedScanner(table_id);
 
             if (region->isPendingRemove())
-                return {{}, PENDING_REMOVE};
+                return {BlockOption{}, PENDING_REMOVE};
 
             if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
-                return {{}, VERSION_ERROR};
+                return {BlockOption{}, VERSION_ERROR};
 
             if (resolve_locks)
             {
@@ -77,7 +79,7 @@ std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::get
             }
 
             if (!scanner->hasNext())
-                return {{}, OK};
+                return {BlockOption{}, OK};
 
             do
             {
