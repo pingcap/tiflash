@@ -26,7 +26,7 @@ using StoragePtr = std::shared_ptr<IStorage>;
 class TMTContext;
 class IBlockInputStream;
 using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
-
+class Block;
 // for debug
 struct MockTiDBTable;
 
@@ -203,15 +203,15 @@ public:
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback);
 
-    static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TMTContext & tmt,
+    static std::tuple<Block, RegionReadStatus, size_t> getBlockInputStreamByRegion(TMTContext & tmt,
         TableID table_id,
         const RegionID region_id,
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
-        RegionDataReadInfoList * data_list_for_remove);
+        RegionDataReadInfoList & data_list_for_remove);
 
-    static std::tuple<BlockInputStreamPtr, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
+    static std::tuple<Block, RegionReadStatus, size_t> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
         const RegionVersion region_version,
         const RegionVersion conf_version,

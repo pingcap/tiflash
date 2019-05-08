@@ -28,12 +28,8 @@ inline bool withSignMark(const HandleID & handle_id) { return (handle_id & SIGN_
 // It's a very important role: the user's pk order is not equal with the handle order in tikv.
 // for example: user insert row with only pk (1<<64)-1, and 1, but we get the tikv handle -1, 1.
 // so, for any range presented by Int64, if the type of pk is UInt64, we should transform it into to several ranges to get the real order.
-template <bool ToInt64 = false>
 inline std::tuple<int, std::array<UInt64TableHandleRange, 2>> splitForUInt64TableHandle(const HandleRange<Int64> & ori_range)
 {
-    if constexpr (ToInt64)
-        return {0, {}};
-
     static const UInt64 unsigned_2_power_max = UInt64(1) << 63; // 100000...
 
     const UInt64TableHandle & begin = {ori_range.first.type, static_cast<UInt64>(ori_range.first.handle_id)};
@@ -112,6 +108,9 @@ inline std::tuple<int, std::array<UInt64TableHandleRange, 2>> splitForUInt64Tabl
 template <typename HandleType>
 inline void merge_ranges(std::vector<HandleRange<HandleType>> & ranges)
 {
+    if (ranges.empty())
+        return;
+
     // ranged may overlap, should merge them
     std::sort(ranges.begin(), ranges.end());
     size_t size = 0;
@@ -122,8 +121,13 @@ inline void merge_ranges(std::vector<HandleRange<HandleType>> & ranges)
         else
             ranges[++size] = ranges[i];
     }
-    size = std::min(size + 1, ranges.size());
+    size = size + 1;
     ranges.resize(size);
+}
+
+inline bool needSplit(const HandleRange<Int64> & ori_range)
+{
+    return (ori_range.first.handle_id & SIGN_MARK) != (ori_range.second.handle_id & SIGN_MARK);
 }
 
 } // namespace CHTableHandle

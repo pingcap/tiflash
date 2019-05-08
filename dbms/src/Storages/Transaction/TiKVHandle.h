@@ -2,6 +2,7 @@
 
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
+#include <common/likely.h>
 
 namespace DB
 {
@@ -91,7 +92,7 @@ struct Handle
     // we can not transfer it into HandleType directly
     operator const HandleType &() = delete;
 
-    Handle() {}
+    Handle() = default;
     Handle(const HandleIDType type_, const HandleType handle_id_) : type(type_), handle_id(handle_id_) {}
     // not explicit, can be transferred from HandleType
     Handle(const HandleType handle_id_) : type(HandleIDType::NORMAL), handle_id(handle_id_) {}

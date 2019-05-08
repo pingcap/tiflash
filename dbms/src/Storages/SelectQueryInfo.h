@@ -15,7 +15,7 @@ using SetPtr = std::shared_ptr<Set>;
 /// Information about calculated sets in right hand side of IN.
 using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
-struct RegionQueryInfo;
+struct MvccQueryInfo;
 
 /** Query along with some additional data,
   *  that can be used during query processing
@@ -29,11 +29,13 @@ struct SelectQueryInfo
     /// Example: x IN (1, 2, 3)
     PreparedSets sets;
 
-    bool resolve_locks = false;
+    std::unique_ptr<MvccQueryInfo> mvcc_query_info;
 
-    UInt64 read_tso;
+    SelectQueryInfo() = default;
 
-    std::vector<RegionQueryInfo> regions_query_info;
+    SelectQueryInfo(const SelectQueryInfo & query_info_);
+
+    SelectQueryInfo(SelectQueryInfo && query_info_);
 };
 
 } // namespace DB
