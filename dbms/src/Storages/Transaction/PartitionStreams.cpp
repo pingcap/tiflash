@@ -10,7 +10,7 @@
 namespace DB
 {
 
-std::tuple<Block, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
+std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
     TableID table_id,
     const RegionID region_id,
     const TiDB::TableInfo & table_info,
@@ -31,7 +31,7 @@ std::tuple<Block, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockIn
         &data_list_for_remove);
 }
 
-std::tuple<Block, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TableID table_id,
+std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
     RegionPtr region,
     const RegionVersion region_version,
     const RegionVersion conf_version,
@@ -44,7 +44,7 @@ std::tuple<Block, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockIn
     RegionDataReadInfoList * data_list_for_remove)
 {
     if (!region)
-        return {{}, NOT_FOUND, 0};
+        return {{}, NOT_FOUND};
 
     if (learner_read)
         region->waitIndex(region->learnerRead());
@@ -60,10 +60,10 @@ std::tuple<Block, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockIn
             auto scanner = region->createCommittedScanner(table_id);
 
             if (region->isPendingRemove())
-                return {{}, PENDING_REMOVE, 0};
+                return {{}, PENDING_REMOVE};
 
             if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
-                return {{}, VERSION_ERROR, 0};
+                return {{}, VERSION_ERROR};
 
             if (resolve_locks)
             {
@@ -77,7 +77,7 @@ std::tuple<Block, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockIn
             }
 
             if (!scanner->hasNext())
-                return {{}, OK, 0};
+                return {{}, OK};
 
             do
             {
@@ -91,9 +91,7 @@ std::tuple<Block, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockIn
         if (data_list_for_remove)
             *data_list_for_remove = std::move(data_list);
 
-        size_t tol = block.rows();
-
-        return {block, OK, tol};
+        return {block, OK};
     }
 }
 

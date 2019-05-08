@@ -251,8 +251,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
     std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
 
-    std::vector<size_t> rows_in_mem;
-
     const auto func_throw_retry_region = [&]() {
         std::vector<RegionID> region_ids;
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
@@ -403,7 +401,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         // for special region.
         region_block_data.resize(regions_query_info.size());
-        rows_in_mem.assign(regions_query_info.size(), 0);
 
         Names column_names_to_read = real_column_names;
 
@@ -429,7 +426,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                    auto [block, status, tol]
+                    auto [block, status]
                         = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
                             region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
                             column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
@@ -443,11 +440,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                                           << RegionTable::RegionReadStatusString(status));
                         need_retry = true;
                     }
-                    else
-                    {
-                        region_block_data[region_index] = std::move(block);
-                        rows_in_mem[region_index] = tol;
-                    }
+                    else if (block)
+                        region_block_data[region_index] = std::move(*block);
                 }
             });
         }
@@ -900,7 +894,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         throw Exception("split for uint64 handle should be only 1 ranges", ErrorCodes::LOGICAL_ERROR);
 
                     handle_ranges.emplace_back(new_range[0], region_index);
-                    mem_rows += rows_in_mem[region_index];
+                    mem_rows += region_block_data[region_index].rows();
                 }
 
                 // the order of uint64 is different with int64.
@@ -959,7 +953,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                      ++region_index)
                 {
                     handle_ranges.emplace_back(regions_query_info[region_index].range_in_table, region_index);
-                    mem_rows += rows_in_mem[region_index];
+                    mem_rows += region_block_data[region_index].rows();
                 }
 
                 // handle_ranges is sorted.
@@ -1187,8 +1181,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         LOG_DEBUG(log,
                             "[PK_IS_UINT64] special region " << special_region_info.region_id << ", split range into " << n << ": "
                                                              << ss.str() << ", " << region_sum_marks << " marks to read from "
-                                                             << region_sum_ranges << " ranges, read " << rows_in_mem[special_region_index]
-                                                             << " rows from memory");
+                                                             << region_sum_ranges << " ranges, read "
+                                                             << region_block_data[special_region_index].rows() << " rows from memory");
                     }
 
                     if (!merging.empty())

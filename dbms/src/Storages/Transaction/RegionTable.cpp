@@ -161,15 +161,14 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         const auto & columns = merge_tree->getColumns();
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
-        auto [block, status, tol] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, data_list);
+        auto [block, status] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, data_list);
         if (!block)
             return;
 
         std::ignore = status;
-        std::ignore = tol;
 
         TxnMergeTreeBlockOutputStream output(*merge_tree);
-        output.write(block);
+        output.write(*block);
     }
 
     // remove data in region
