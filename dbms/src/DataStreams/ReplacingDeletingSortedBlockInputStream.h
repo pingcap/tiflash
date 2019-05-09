@@ -19,7 +19,7 @@ public:
     ReplacingDeletingSortedBlockInputStream(BlockInputStreams inputs_, const SortDescription & description_,
         const String & version_column_, const String & delmark_column_, size_t max_block_size_,
         WriteBuffer * out_row_sources_buf_, bool is_optimized_ = true)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, out_row_sources_buf_), version_column(version_column_),
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, out_row_sources_buf_, true), version_column(version_column_),
             delmark_column(delmark_column_), is_optimized(is_optimized_)
     {
     }

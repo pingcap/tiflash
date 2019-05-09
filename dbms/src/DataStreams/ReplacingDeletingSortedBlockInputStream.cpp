@@ -36,7 +36,7 @@ Block ReplacingDeletingSortedBlockInputStream::readImpl()
     if (finished)
     {
         if (is_optimized)
-            LOG_DEBUG(log, "read by_row:" + toString(by_row) + ", by_column: " + toString(by_column) + ", "
+            LOG_TRACE(log, "read by_row:" + toString(by_row) + ", by_column: " + toString(by_column) + ", "
                       + toString(((Float64)by_column) / (by_row + by_column) * 100, 2) + "%");
         return Block();
     }
