@@ -6,6 +6,9 @@
 namespace pingcap {
 namespace pd {
 
+using Clock = std::chrono::system_clock;
+using Seconds = std::chrono::seconds;
+
 class MockPDClient : public IClient {
 public:
     MockPDClient() = default;
@@ -14,15 +17,12 @@ public:
 
     uint64_t getGCSafePoint() override
     {
-        std::time_t t = std::time(nullptr);
-        std::tm & tm = *std::localtime(&t);
-        tm.tm_sec -= 2;
-        return static_cast<uint64_t>(std::mktime(&tm));
+        return (Clock::now() - Seconds(60 * 60)).time_since_epoch().count();
     }
 
     uint64_t getTS() override
     {
-        return static_cast<uint64_t>(std::time(NULL));
+        return Clock::now().time_since_epoch().count();
     }
 
     std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> getRegion(std::string) override {
