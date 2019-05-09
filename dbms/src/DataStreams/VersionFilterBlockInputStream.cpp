@@ -63,9 +63,7 @@ Block VersionFilterBlockInputStream::readImpl()
 
         const UInt64 * data_start = column->getData().data();
         const UInt64 * data_end = data_start + rows;
-
-        constexpr size_t FILTER_START_NONE = std::numeric_limits<size_t>::max();
-        size_t filter_start = FILTER_START_NONE;
+        const UInt64 * filter_start = nullptr;
 
         {
             std::array<UInt8, STEP> step_data{};
@@ -80,37 +78,38 @@ Block VersionFilterBlockInputStream::readImpl()
                 int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(step_data.data())), zero16));
                 if (mask)
                 {
-                    filter_start = data_pos - data_start;
+                    filter_start = data_pos;
                     break;
                 }
             }
 #endif
 
-            if (filter_start == FILTER_START_NONE)
+            if (filter_start == nullptr)
             {
                 for (; data_pos != data_end; ++data_pos)
                 {
                     if (data_pos[0] > filter_greater_version)
                     {
-                        filter_start = data_pos - data_start;
+                        filter_start = data_pos;
                         break;
                     }
                 }
             }
         }
 
-        if (filter_start == FILTER_START_NONE)
+        if (filter_start == nullptr)
             return block;
 
         IColumn::Filter col_filter(rows, 1);
 
         {
-            UInt8 * filter_ptr = col_filter.data();
-            for (size_t pos = filter_start; pos < rows; ++pos)
-                filter_ptr[pos] = !(data_start[pos] > filter_greater_version);
+            UInt8 * filter_pos = col_filter.data() + (filter_start - data_start);
+            const UInt64 * data_pos = filter_start;
+            for (; data_pos != data_end; ++data_pos, ++filter_pos)
+                filter_pos[0] = !(data_pos[0] > filter_greater_version);
         }
 
-        if (filter_start == 0 && isAllZero(col_filter.data(), rows))
+        if (filter_start == data_start && isAllZero(col_filter.data(), rows))
             continue;
 
         deleteRows(block, col_filter);
