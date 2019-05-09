@@ -139,10 +139,13 @@ inline UInt32 readWord(int binIdx, const String & dec, int size) {
     UInt32 v = 0;
     switch (size) {
         case 1:
-            v = dec[binIdx];
+            v = Int32(Int8(dec[binIdx]));
             break;
         case 2:
-            v = (UInt8(dec[binIdx] << 8)) + UInt8(dec[binIdx+1]);
+            if ((dec[binIdx] & 128) > 0)
+                v = (255 << 24) | (255 << 16) | (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx+1]);
+            else
+                v = (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx+1]);
             break;
         case 3 :
             if ((dec[binIdx] & 128) > 0) {
