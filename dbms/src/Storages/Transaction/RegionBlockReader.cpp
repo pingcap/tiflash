@@ -170,6 +170,13 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     row.push_back(Field());
                 }
 
+                for (int i = int(row.size()) - 2; i >= 0; i -= 2) {
+                    Field & col_id = row[i];
+                    if (column_map.find(col_id.get<ColumnID>()) == column_map.end()) {
+                        row.erase(row.begin() + i, row.begin() + i + 2);
+                    }
+                }
+
                 if (row.size() != target_row_size)
                     throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
             }
