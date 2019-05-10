@@ -671,8 +671,9 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
         query_info.sets = query_analyzer->getPreparedSets();
-        query_info.resolve_locks = settings.resolve_locks;
-        query_info.read_tso = settings.read_tso;
+        query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
+        query_info.mvcc_query_info->resolve_locks = settings.resolve_locks;
+        query_info.mvcc_query_info->read_tso = settings.read_tso;
 
         String request_str = settings.regions;
 
@@ -698,7 +699,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 auto start_key = TiKVRange::getRangeHandle<true, true>(TiKVKey(region.start_key()), table_id);
                 auto end_key = TiKVRange::getRangeHandle<false, true>(TiKVKey(region.end_key()), table_id);
                 info.range_in_table = HandleRange<HandleID>(start_key, end_key);
-                query_info.regions_query_info.push_back(info);
+                query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
         }
 

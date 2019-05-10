@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Core/QueryProcessingStage.h>
-#include <Storages/SelectQueryInfo.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 
@@ -10,7 +9,7 @@ namespace DB
 {
 
 class KeyCondition;
-
+struct SelectQueryInfo;
 
 /** Executes SELECT queries on data from the merge tree.
   */

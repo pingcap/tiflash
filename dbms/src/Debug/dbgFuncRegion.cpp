@@ -191,17 +191,26 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
 
 void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 1)
+    if (args.size() < 1)
         throw Exception("Args not matched, should be: table_id", ErrorCodes::BAD_ARGUMENTS);
 
     auto & tmt = context.getTMTContext();
     TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+
+    bool ignore_none = false;
+    if (args.size() > 1)
+        ignore_none = (std::string(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
+
     size_t size = 0;
     tmt.kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
         auto range = region->getHandleRangeByTable(table_id);
         size += 1;
         std::stringstream ss;
+
+        if (range.first >= range.second && ignore_none)
+            return;
+
         ss << "table #" << table_id << " " << region->toString();
         if (range.first >= range.second)
             ss << " [none], ";
