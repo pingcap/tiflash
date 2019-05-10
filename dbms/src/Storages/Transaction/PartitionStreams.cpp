@@ -1,23 +1,24 @@
-#include <common/logger_useful.h>
-
-#include <DataStreams/BlocksListBlockInputStream.h>
+#include <Core/Block.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
 
-std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
+using BlockOption = std::optional<Block>;
+
+std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
     TableID table_id,
     const RegionID region_id,
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & ordered_columns,
-    RegionDataReadInfoList * data_list_for_remove)
+    RegionDataReadInfoList & data_list_for_remove)
 {
     return getBlockInputStreamByRegion(table_id,
         tmt.kvstore->getRegion(region_id),
@@ -29,10 +30,10 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         false,
         false,
         0,
-        data_list_for_remove);
+        &data_list_for_remove);
 }
 
-std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTable::getBlockInputStreamByRegion(TableID table_id,
+std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
     RegionPtr region,
     const RegionVersion region_version,
     const RegionVersion conf_version,
@@ -45,7 +46,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
     RegionDataReadInfoList * data_list_for_remove)
 {
     if (!region)
-        return {nullptr, NOT_FOUND, 0};
+        return {BlockOption{}, NOT_FOUND};
 
     if (learner_read)
         region->waitIndex(region->learnerRead());
@@ -61,10 +62,10 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
             auto scanner = region->createCommittedScanner(table_id);
 
             if (region->isPendingRemove())
-                return {nullptr, PENDING_REMOVE, 0};
+                return {BlockOption{}, PENDING_REMOVE};
 
             if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
-                return {nullptr, VERSION_ERROR, 0};
+                return {BlockOption{}, VERSION_ERROR};
 
             if (resolve_locks)
             {
@@ -78,7 +79,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
             }
 
             if (!scanner->hasNext())
-                return {nullptr, OK, 0};
+                return {BlockOption{}, OK};
 
             do
             {
@@ -92,12 +93,7 @@ std::tuple<BlockInputStreamPtr, RegionTable::RegionReadStatus, size_t> RegionTab
         if (data_list_for_remove)
             *data_list_for_remove = std::move(data_list);
 
-        size_t tol = block.rows();
-
-        BlocksList blocks;
-        blocks.emplace_back(std::move(block));
-
-        return {std::make_shared<BlocksListBlockInputStream>(std::move(blocks)), OK, tol};
+        return {block, OK};
     }
 }
 

@@ -3,7 +3,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 
 
-
 namespace DB
 {
 
@@ -12,10 +11,7 @@ namespace DB
 class RemoveColumnsBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    RemoveColumnsBlockInputStream(
-        BlockInputStreamPtr input_,
-        const Names & columns_to_remove_)
-    : columns_to_remove(columns_to_remove_)
+    RemoveColumnsBlockInputStream(BlockInputStreamPtr input_, const Names & columns_to_remove_) : columns_to_remove(columns_to_remove_)
     {
         children.push_back(input_);
     }
@@ -29,9 +25,9 @@ protected:
         if (!res)
             return res;
 
-        for (const auto & it : columns_to_remove)
-            if (res.has(it))
-                res.erase(it);
+        for (const auto & name : columns_to_remove)
+            if (res.has(name))
+                res.erase(name);
 
         return res;
     }
@@ -42,9 +38,9 @@ protected:
         if (!res)
             return res;
 
-        for (const auto & it : columns_to_remove)
-            if (res.has(it))
-                res.erase(it);
+        for (const auto & name : columns_to_remove)
+            if (res.has(name))
+                res.erase(name);
 
         return res;
     }
@@ -53,4 +49,4 @@ private:
     Names columns_to_remove;
 };
 
-}
+} // namespace DB
