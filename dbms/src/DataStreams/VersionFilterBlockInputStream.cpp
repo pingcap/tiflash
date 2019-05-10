@@ -1,3 +1,4 @@
+#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/dedupUtils.h>
@@ -15,32 +16,6 @@ static constexpr Int32 STEP = SIMD_BYTES;
 #if __SSE2__
 static const __m128i zero16 = _mm_setzero_si128();
 #endif
-
-static inline bool isAllZero(const UInt8 * data, const size_t size)
-{
-    const UInt8 * data_pos = data;
-    const UInt8 * data_end = data_pos + size;
-
-#if __SSE2__
-    const UInt8 * data_end_sse = data_pos + size / SIMD_BYTES * SIMD_BYTES;
-
-    for (; data_pos != data_end_sse; data_pos += SIMD_BYTES)
-    {
-        int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(data_pos)), zero16));
-
-        if (mask)
-            return false;
-    }
-#endif
-
-    for (; data_pos != data_end; ++data_pos)
-    {
-        if (data_pos[0])
-            return false;
-    }
-
-    return true;
-}
 
 Block VersionFilterBlockInputStream::readImpl()
 {
@@ -109,7 +84,7 @@ Block VersionFilterBlockInputStream::readImpl()
                 filter_pos[0] = !(data_pos[0] > filter_greater_version);
         }
 
-        if (filter_start == data_start && isAllZero(col_filter.data(), rows))
+        if (filter_start == data_start && memoryIsZero(col_filter.data(), rows))
             continue;
 
         deleteRows(block, col_filter);
