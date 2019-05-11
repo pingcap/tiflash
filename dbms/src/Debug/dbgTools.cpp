@@ -281,7 +281,6 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         }
 
         tmt.kvstore->onServiceCommand(cmds, raft_ctx);
-        tmt.region_table.tryFlushRegions();
     }
 }
 
