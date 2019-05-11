@@ -52,13 +52,13 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const 
 
 
 template <typename Trait>
-bool RegionCFDataBase<Trait>::shouldIgnoreRecord(const RegionCFDataBase::Value &) const
+bool RegionCFDataBase<Trait>::shouldIgnoreRemove(const RegionCFDataBase::Value &) const
 {
     return false;
 }
 
 template <>
-bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRecord(const RegionCFDataBase::Value & value) const
+bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRemove(const RegionCFDataBase::Value & value) const
 {
     // if this record has DelFlag, keep it.
     const RegionWriteCFDataTrait::DecodedWriteCFValue & decoded_val = std::get<2>(value);
@@ -74,7 +74,7 @@ size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool q
     {
         const Value & value = it->second;
 
-        if (shouldIgnoreRecord(value))
+        if (shouldIgnoreRemove(value))
             return 0;
 
         size_t size = calcTiKVKeyValueSize(value);

@@ -67,7 +67,7 @@ struct RegionCFDataBase
     TableIDSet getAllRecordTableID() const;
 
 private:
-    bool shouldIgnoreRecord(const Value & value) const;
+    bool shouldIgnoreRemove(const Value & value) const;
 
 private:
     Data data;
