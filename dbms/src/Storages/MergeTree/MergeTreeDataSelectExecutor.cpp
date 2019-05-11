@@ -1085,10 +1085,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                 source_stream, region_group_handle_ranges[thread_idx][range_idx], handle_col_name);
                         }
 
-                        /*
                         source_stream = std::make_shared<VersionFilterBlockInputStream>(
-                            source_stream, MutableSupport::version_column_name, query_info.read_tso);
-                        */
+                            source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
 
                         merging.emplace_back(source_stream);
                     }
@@ -1104,18 +1102,23 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         if (!blocks.empty())
                         {
                             BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
-                            /*
+
                             region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
-                                region_input_stream, MutableSupport::version_column_name, query_info.read_tso);
-                            */
+                                region_input_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+
                             merging.emplace_back(region_input_stream);
                         }
                     }
 
                     if (!merging.empty())
-                        union_regions_stream.emplace_back(std::make_shared<MvccTMTSortedBlockInputStream>(merging,
-                            data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
-                            DEFAULT_MERGE_BLOCK_SIZE, mvcc_query_info.read_tso));
+                    {
+                        union_regions_stream.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging,
+                            data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name,
+                            MutableSupport::delmark_column_name,
+                            DEFAULT_MERGE_BLOCK_SIZE,
+                            nullptr));
+                    }
                 }
 
                 if (pk_is_uint64 && thread_idx == 0 && special_region_index != -1)
@@ -1150,6 +1153,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             source_stream
                                 = std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_range, handle_col_name);
 
+                            source_stream = std::make_shared<VersionFilterBlockInputStream>(
+                                source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+
                             merging.emplace_back(source_stream);
                         }
                     }
@@ -1162,6 +1168,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         if (!blocks.empty())
                         {
                             BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
+
+                            region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
+                                region_input_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+
                             merging.emplace_back(region_input_stream);
                         }
                     }
@@ -1186,9 +1196,14 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
 
                     if (!merging.empty())
-                        union_regions_stream.emplace_back(std::make_shared<MvccTMTSortedBlockInputStream>(merging,
-                            data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
-                            DEFAULT_MERGE_BLOCK_SIZE, mvcc_query_info.read_tso));
+                    {
+                        union_regions_stream.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging,
+                            data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name,
+                            MutableSupport::delmark_column_name,
+                            DEFAULT_MERGE_BLOCK_SIZE,
+                            nullptr));
+                    }
                 }
 
                 if (!union_regions_stream.empty())
