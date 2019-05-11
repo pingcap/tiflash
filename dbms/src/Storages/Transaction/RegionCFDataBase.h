@@ -7,6 +7,19 @@
 namespace DB
 {
 
+// In both lock_cf and write_cf.
+enum CFModifyFlag : UInt8
+{
+    PutFlag = 'P',
+    DelFlag = 'D',
+    // useless for TiFLASH
+    /*
+    LockFlag = 'L',
+    // In write_cf, only raft leader will use RollbackFlag in txn mode. Learner should ignore it.
+    RollbackFlag = 'R',
+    */
+};
+
 using RegionRange = std::pair<TiKVKey, TiKVKey>;
 
 template <typename Trait>
@@ -52,6 +65,9 @@ struct RegionCFDataBase
     Data & getDataMut();
 
     TableIDSet getAllRecordTableID() const;
+
+private:
+    bool shouldIgnoreRecord(const Value & value) const;
 
 private:
     Data data;

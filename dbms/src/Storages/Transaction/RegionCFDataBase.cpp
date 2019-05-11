@@ -50,6 +50,31 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const 
         return key.dataSize() + value.dataSize();
 }
 
+
+template <typename Trait>
+bool RegionCFDataBase<Trait>::shouldIgnoreRecord(const RegionCFDataBase::Value &) const
+{
+    return false;
+}
+
+template <>
+bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRecord(const RegionCFDataBase::Value & value) const
+{
+    // if this record has DelFlag, keep it.
+    const RegionWriteCFDataTrait::DecodedWriteCFValue & decoded_val = std::get<2>(value);
+    const auto write_type = std::get<0>(decoded_val);
+    switch (write_type)
+    {
+        case CFModifyFlag::DelFlag:
+            return true;
+        case CFModifyFlag::PutFlag:
+            return false;
+        default:
+            throw Exception("Invalid write type", ErrorCodes::LOGICAL_ERROR);
+    }
+    return false;
+}
+
 template <typename Trait>
 size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool quiet)
 {
@@ -58,6 +83,10 @@ size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool q
     if (auto it = map.find(key); it != map.end())
     {
         const Value & value = it->second;
+
+        if (shouldIgnoreRecord(value))
+            return 0;
+
         size_t size = calcTiKVKeyValueSize(value);
         map.erase(it);
         return size;
