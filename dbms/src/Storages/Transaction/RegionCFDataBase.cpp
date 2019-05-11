@@ -62,17 +62,7 @@ bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRecord(const RegionCF
 {
     // if this record has DelFlag, keep it.
     const RegionWriteCFDataTrait::DecodedWriteCFValue & decoded_val = std::get<2>(value);
-    const auto write_type = std::get<0>(decoded_val);
-    switch (write_type)
-    {
-        case CFModifyFlag::DelFlag:
-            return true;
-        case CFModifyFlag::PutFlag:
-            return false;
-        default:
-            throw Exception("Invalid write type", ErrorCodes::LOGICAL_ERROR);
-    }
-    return false;
+    return std::get<0>(decoded_val) == CFModifyFlag::DelFlag;
 }
 
 template <typename Trait>
