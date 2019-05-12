@@ -1,3 +1,4 @@
+#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/dedupUtils.h>
@@ -9,6 +10,12 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
+
+static constexpr size_t SIMD_BYTES = 16;
+static constexpr Int32 STEP = SIMD_BYTES;
+#if __SSE2__
+static const __m128i zero16 = _mm_setzero_si128();
+#endif
 
 Block VersionFilterBlockInputStream::readImpl()
 {
@@ -29,37 +36,58 @@ Block VersionFilterBlockInputStream::readImpl()
 
         size_t rows = block.rows();
 
-        size_t pos = 0;
-        bool need_filter = false;
+        const UInt64 * data_start = column->getData().data();
+        const UInt64 * data_end = data_start + rows;
+        const UInt64 * filter_start = nullptr;
 
-        for (; pos < rows; ++pos)
         {
-            if (column->getElement(pos) > filter_greater_version)
+            std::array<UInt8, STEP> step_data{};
+            const UInt64 * data_pos = data_start;
+
+#if __SSE2__
+            const UInt64 * data_end_sse = data_start + rows / STEP * STEP;
+            for (; data_pos != data_end_sse; data_pos += STEP)
             {
-                need_filter = true;
-                break;
+                for (int i = 0; i < STEP; ++i)
+                    step_data[i] = data_pos[i] > filter_greater_version;
+                int mask = _mm_movemask_epi8(_mm_cmpgt_epi8(_mm_loadu_si128(reinterpret_cast<const __m128i *>(step_data.data())), zero16));
+                if (mask)
+                {
+                    filter_start = data_pos;
+                    break;
+                }
+            }
+#endif
+
+            if (filter_start == nullptr)
+            {
+                for (; data_pos != data_end; ++data_pos)
+                {
+                    if (data_pos[0] > filter_greater_version)
+                    {
+                        filter_start = data_pos;
+                        break;
+                    }
+                }
             }
         }
 
-        if (!need_filter)
+        if (filter_start == nullptr)
             return block;
 
-        IColumn::Filter filter(rows, 1);
+        IColumn::Filter col_filter(rows, 1);
 
-        size_t deleted = 0;
-        for (; pos < rows; ++pos)
         {
-            if (column->getElement(pos) > filter_greater_version)
-            {
-                deleted++;
-                filter[pos] = 0;
-            }
+            UInt8 * filter_pos = col_filter.data() + (filter_start - data_start);
+            const UInt64 * data_pos = filter_start;
+            for (; data_pos != data_end; ++data_pos, ++filter_pos)
+                filter_pos[0] = !(data_pos[0] > filter_greater_version);
         }
 
-        if (deleted == rows)
+        if (filter_start == data_start && memoryIsZero(col_filter.data(), rows))
             continue;
 
-        deleteRows(block, filter);
+        deleteRows(block, col_filter);
         return block;
     }
 }

@@ -22,19 +22,6 @@ using RegionLockCFData = RegionCFDataBase<RegionLockCFDataTrait>;
 class RegionData
 {
 public:
-    // In both lock_cf and write_cf.
-    enum CFModifyFlag : UInt8
-    {
-        PutFlag = 'P',
-        DelFlag = 'D',
-        // useless for TiFLASH
-        /*
-        LockFlag = 'L',
-        // In write_cf, only raft leader will use RollbackFlag in txn mode. Learner should ignore it.
-        RollbackFlag = 'R',
-        */
-    };
-
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 

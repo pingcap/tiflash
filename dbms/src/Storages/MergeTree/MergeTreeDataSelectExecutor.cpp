@@ -26,6 +26,7 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/AddingConstColumnBlockInputStream.h>
 #include <DataStreams/AggregatingSortedBlockInputStream.h>
 #include <DataStreams/AsynchronousBlockInputStream.h>
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/CollapsingFinalBlockInputStream.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
@@ -229,16 +230,26 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 {
     RangesInDataParts parts_with_ranges;
 
-    bool is_txn_engine = data.merging_params.mode == MergeTreeData::MergingParams::Txn;
+    const bool is_txn_engine = data.merging_params.mode == MergeTreeData::MergingParams::Txn;
 
-    std::vector<RegionQueryInfo> regions_query_info = query_info.regions_query_info;
+    if (query_info.mvcc_query_info == nullptr)
+        throw Exception("mvcc query info is null", ErrorCodes::LOGICAL_ERROR);
+
+    const auto & mvcc_query_info = *query_info.mvcc_query_info;
+
+    size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
+
+    std::vector<RegionQueryInfo> regions_query_info = mvcc_query_info.regions_query_info;
+    Int32 special_region_index = -1;
     RegionMap kvstore_region;
-    std::vector<RegionTable::RegionReadStatus> regions_query_res;
-    BlockInputStreams region_block_data;
+    Blocks region_block_data;
     String handle_col_name;
     size_t region_cnt = 0;
-    std::vector<std::pair<RangesInDataParts, std::vector<int>>> region_range_parts;
-    std::vector<size_t> rows_in_mem;
+    std::vector<std::vector<RangesInDataParts>> region_group_range_parts;
+    std::vector<std::vector<std::deque<size_t>>> region_group_mem_block;
+
+    std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
+    std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
 
     const auto func_throw_retry_region = [&]() {
         std::vector<RegionID> region_ids;
@@ -316,14 +327,80 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                 });
             }
+
+            if (kvstore_region.size() != regions_query_info.size())
+                throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
         }
 
         std::sort(regions_query_info.begin(), regions_query_info.end());
-        region_cnt = regions_query_info.size();
-        region_range_parts.assign(region_cnt, {});
-        regions_query_res.assign(region_cnt, RegionTable::OK);
-        region_block_data.assign(region_cnt, nullptr);
-        rows_in_mem.assign(region_cnt, 0);
+
+        { // check all regions
+
+            region_cnt = regions_query_info.size();
+
+            // test in case query_info has wrong meta info.
+            bool need_throw_error = false;
+            for (size_t i = 1; i < region_cnt; ++i)
+                need_throw_error |= regions_query_info[i].range_in_table.first < regions_query_info[i - 1].range_in_table.second;
+
+            if (need_throw_error)
+                throw Exception("Regions in query overlap, should not happen", ErrorCodes::LOGICAL_ERROR);
+
+            // remove empty ranges
+            bool need_resize = false;
+            for (const auto & query_info : regions_query_info)
+                need_resize |= query_info.range_in_table.first == query_info.range_in_table.second;
+
+            if (need_resize)
+            {
+                size_t new_size = 0;
+                for (size_t i = 0; i < region_cnt; ++i)
+                {
+                    if (regions_query_info[i].range_in_table.first == regions_query_info[i].range_in_table.second)
+                        continue;
+                    regions_query_info[new_size++] = regions_query_info[i];
+                }
+                regions_query_info.resize(new_size);
+
+                LOG_DEBUG(log, "After filtering empty ranges, resize regions_query_info from " << region_cnt << " to " << new_size);
+            }
+
+            region_cnt = regions_query_info.size();
+
+            if (pk_is_uint64)
+            {
+                for (size_t i = 0; i < regions_query_info.size(); ++i)
+                {
+                    // seek special region with handle range [-xxx, +yyy)
+                    if (CHTableHandle::needSplit(regions_query_info[i].range_in_table))
+                    {
+                        // move this region to end.
+                        LOG_DEBUG(log,
+                            "Store special region " << regions_query_info[i].region_id << " first"
+                                                    << ", handle range [" << regions_query_info[i].range_in_table.first.toString() << ", "
+                                                    << regions_query_info[i].range_in_table.second.toString() << ")");
+                        regions_query_info.push_back(regions_query_info[i]);
+                        regions_query_info.erase(regions_query_info.begin() + i);
+
+                        // important step, we need to get all data from memory
+                        region_cnt = regions_query_info.size() - 1;
+                        special_region_index = region_cnt;
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        region_group_range_parts.assign(concurrent_num, {});
+        region_group_mem_block.assign(concurrent_num, {});
+        if (pk_is_uint64)
+            region_group_u64_handle_ranges.assign(concurrent_num, {});
+        else
+            region_group_handle_ranges.assign(concurrent_num, {});
+
+        // for special region.
+        region_block_data.resize(regions_query_info.size());
 
         Names column_names_to_read = real_column_names;
 
@@ -333,46 +410,38 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         auto start_time = Clock::now();
 
-        ThreadPool pool(std::min(region_cnt, num_streams));
+        size_t mem_region_num = regions_query_info.size();
+        ThreadPool pool(std::min(mem_region_num, concurrent_num));
         std::atomic_bool need_retry = false;
 
-        std::vector<size_t> index_for_multi_thread(region_cnt);
-        for (size_t index = 0; index < region_cnt; ++index)
-            index_for_multi_thread[index] = index;
-        std::shuffle(index_for_multi_thread.begin(), index_for_multi_thread.end(),
-            std::default_random_engine(start_time.time_since_epoch().count()));
-        for (size_t region_begin = 0, size = std::max(region_cnt / num_streams, 1); region_begin < region_cnt; region_begin += size)
+        for (size_t region_begin = 0, size = std::max(mem_region_num / concurrent_num, 1); region_begin < mem_region_num;
+             region_begin += size)
         {
             pool.schedule([&, region_begin, size] {
-                for (size_t index = region_begin, region_end = std::min(region_begin + size, region_cnt); index < region_end; ++index)
+                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, mem_region_num);
+                     region_index < region_end; ++region_index)
                 {
                     if (need_retry)
                         return;
 
-                    size_t region_index = index_for_multi_thread[index];
-
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                    auto [region_input_stream, status, tol] = RegionTable::getBlockInputStreamByRegion(data.table_info->id,
-                        kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
-                        *data.table_info, data.getColumns(), column_names_to_read, true, query_info.resolve_locks, query_info.read_tso);
-
-                    regions_query_res[region_index] = status;
+                    auto [block, status]
+                        = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
+                            region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
+                            column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
 
                     if (status != RegionTable::OK)
                     {
                         LOG_WARNING(log,
-                            "Region " << region_query_info.region_id << ", version " << region_query_info.version << ", handle range ["
-                                      << region_query_info.range_in_table.first.toString() << ", "
-                                      << region_query_info.range_in_table.second.toString() << ") , status "
-                                      << RegionTable::RegionReadStatusString(status));
+                            "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
+                                                          << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
+                                                          << region_query_info.range_in_table.second.toString() << ") , status "
+                                                          << RegionTable::RegionReadStatusString(status));
                         need_retry = true;
                     }
-                    else
-                    {
-                        region_block_data[region_index] = region_input_stream;
-                        rows_in_mem[region_index] = tol;
-                    }
+                    else if (block)
+                        region_block_data[region_index] = std::move(*block);
                 }
             });
         }
@@ -753,32 +822,25 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
     }
 
+    BlockInputStreams res;
+
     if (!is_txn_engine)
         LOG_DEBUG(log,
             "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, " << sum_marks
                         << " marks to read from " << sum_ranges << " ranges");
-    else
+    else if (!select.raw_for_mutable)
     {
         TMTContext & tmt = context.getTMTContext();
 
         auto safe_point = tmt.getPDClient()->getGCSafePoint();
-        if (query_info.read_tso < safe_point)
+        if (mvcc_query_info.read_tso < safe_point)
             func_throw_retry_region();
 
         const size_t min_marks_for_seek = gen_min_marks_for_seek(settings, data);
 
-        bool need_retry = false;
-
-        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+        for (const auto & region_query_info : regions_query_info)
         {
-            if (select.no_kvstore)
-                continue;
-
-            if (regions_query_res[region_index] != RegionTable::OK)
-                continue;
-
-            const RegionQueryInfo & region_query_info = regions_query_info[region_index];
-
+            // check all data, include special region.
             {
                 auto region = tmt.kvstore->getRegion(region_query_info.region_id);
                 RegionTable::RegionReadStatus status = RegionTable::OK;
@@ -789,94 +851,162 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 if (status != RegionTable::OK)
                 {
-                    regions_query_res[region_index] = status;
                     // ABA problem may cause because one region is removed and inserted back.
                     // if the version of region is changed, the part may has less data because of compaction.
                     LOG_WARNING(log,
-                        "Region " << region_query_info.region_id << ", version " << region_query_info.version << ", handle range ["
-                                  << region_query_info.range_in_table.first.toString() << ", "
-                                  << region_query_info.range_in_table.second.toString() << ") , status "
-                                  << RegionTable::RegionReadStatusString(status));
-                    need_retry = true;
-                    break;
+                        "Check after getDataPartsVector, region " << region_query_info.region_id << ", version "
+                                                                  << region_query_info.version << ", handle range ["
+                                                                  << region_query_info.range_in_table.first.toString() << ", "
+                                                                  << region_query_info.range_in_table.second.toString() << ") , status "
+                                                                  << RegionTable::RegionReadStatusString(status));
+                    // throw exception and exit.
+                    func_throw_retry_region();
                 }
             }
+        }
 
-            size_t sum_marks = 0;
-            size_t sum_ranges = 0;
+        for (size_t batch_size = region_cnt / concurrent_num, rest = region_cnt % concurrent_num, thread_idx = 0, region_begin = 0,
+                    thread_region_size;
+             thread_idx < concurrent_num; ++thread_idx, region_begin += thread_region_size)
+        {
+
+            size_t region_sum_marks = 0;
+            size_t region_sum_ranges = 0;
+
+            thread_region_size = thread_idx < rest ? batch_size + 1 : batch_size;
+            if (0 == thread_region_size)
+                continue;
+
+            size_t mem_rows = 0;
 
             if (pk_is_uint64)
             {
-                const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(region_query_info.range_in_table);
+                using UInt64RangeElement = std::pair<HandleRange<UInt64>, size_t>;
+                std::vector<UInt64RangeElement> handle_ranges;
+                handle_ranges.reserve(thread_region_size);
 
-                if (log->trace())
+                for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
+                     ++region_index)
                 {
-                    std::stringstream ss;
-                    for (auto i = 0; i < n; ++i)
-                    {
-                        ss << "[";
-                        new_range[i].first.toString(ss);
-                        ss << ",";
-                        new_range[i].second.toString(ss);
-                        ss << ") ";
-                    }
-                    LOG_TRACE(
-                        log, "[PK_IS_UINT64] Region " << region_query_info.region_id << ", split range into " << n << ": " << ss.str());
+                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(regions_query_info[region_index].range_in_table);
+
+                    if (n != 1)
+                        throw Exception("split for uint64 handle should be only 1 ranges", ErrorCodes::LOGICAL_ERROR);
+
+                    handle_ranges.emplace_back(new_range[0], region_index);
+                    mem_rows += region_block_data[region_index].rows();
                 }
 
-                for (const RangesInDataPart & ranges : parts_with_ranges)
+                // the order of uint64 is different with int64.
+                std::sort(handle_ranges.begin(), handle_ranges.end(),
+                    [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
+
+                auto & block_data = region_group_mem_block[thread_idx];
+                block_data.resize(handle_ranges.size());
                 {
-                    for (auto i = 0; i < n; ++i)
+                    size_t size = 0;
+
+                    block_data[0].emplace_back(handle_ranges[0].second);
+
+                    for (size_t i = 1; i < handle_ranges.size(); ++i)
                     {
-                        const auto & range_in_table = new_range[i];
-                        MarkRanges mark_ranges = MarkRangesFromRegionRange<UInt64>(ranges.data_part->index,
-                            range_in_table.first,
-                            range_in_table.second,
-                            ranges.ranges,
-                            min_marks_for_seek,
-                            settings);
+                        if (handle_ranges[i].first.first == handle_ranges[size].first.second)
+                            handle_ranges[size].first.second = handle_ranges[i].first.second;
+                        else
+                            handle_ranges[++size] = handle_ranges[i];
+
+                        block_data[size].emplace_back(handle_ranges[i].second);
+                    }
+                    size = size + 1;
+                    handle_ranges.resize(size);
+                    block_data.resize(size);
+                }
+
+                region_group_range_parts[thread_idx].assign(handle_ranges.size(), {});
+                region_group_u64_handle_ranges[thread_idx].reserve(handle_ranges.size());
+
+                for (size_t idx = 0; idx < handle_ranges.size(); ++idx)
+                {
+                    const auto & handle_range = handle_ranges[idx];
+                    for (const RangesInDataPart & ranges : parts_with_ranges)
+                    {
+                        MarkRanges mark_ranges = MarkRangesFromRegionRange<UInt64>(ranges.data_part->index, handle_range.first.first,
+                            handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
 
                         if (mark_ranges.empty())
                             continue;
 
-                        region_range_parts[region_index].first.push_back({ranges.data_part, ranges.part_index_in_query, mark_ranges});
-                        region_range_parts[region_index].second.push_back(i);
-
-                        sum_ranges += mark_ranges.size();
+                        region_group_range_parts[thread_idx][idx].emplace_back(ranges.data_part, ranges.part_index_in_query, mark_ranges);
+                        region_sum_ranges += mark_ranges.size();
                         for (const auto & range : mark_ranges)
-                            sum_marks += range.end - range.begin;
+                            region_sum_marks += range.end - range.begin;
                     }
+                    region_group_u64_handle_ranges[thread_idx].emplace_back(handle_range.first);
                 }
             }
             else
             {
-                for (const RangesInDataPart & ranges : parts_with_ranges)
-                {
-                    MarkRanges mark_ranges = MarkRangesFromRegionRange<Int64>(ranges.data_part->index,
-                        region_query_info.range_in_table.first,
-                        region_query_info.range_in_table.second,
-                        ranges.ranges,
-                        min_marks_for_seek,
-                        settings);
+                std::vector<std::pair<HandleRange<HandleID>, size_t>> handle_ranges;
+                handle_ranges.reserve(thread_region_size);
 
-                    if (mark_ranges.empty())
-                        continue;
-                    region_range_parts[region_index].first.push_back({ranges.data_part, ranges.part_index_in_query, mark_ranges});
-                    sum_ranges += mark_ranges.size();
-                    for (const auto & range : mark_ranges)
-                        sum_marks += range.end - range.begin;
+                for (size_t region_index = region_begin, region_end = region_begin + thread_region_size; region_index < region_end;
+                     ++region_index)
+                {
+                    handle_ranges.emplace_back(regions_query_info[region_index].range_in_table, region_index);
+                    mem_rows += region_block_data[region_index].rows();
+                }
+
+                // handle_ranges is sorted.
+
+                auto & block_data = region_group_mem_block[thread_idx];
+                block_data.resize(handle_ranges.size());
+                {
+                    size_t size = 0;
+
+                    block_data[0].emplace_back(handle_ranges[0].second);
+
+                    for (size_t i = 1; i < handle_ranges.size(); ++i)
+                    {
+                        if (handle_ranges[i].first.first == handle_ranges[size].first.second)
+                            handle_ranges[size].first.second = handle_ranges[i].first.second;
+                        else
+                            handle_ranges[++size] = handle_ranges[i];
+
+                        block_data[size].emplace_back(handle_ranges[i].second);
+                    }
+                    size = size + 1;
+                    handle_ranges.resize(size);
+                    block_data.resize(size);
+                }
+
+                region_group_range_parts[thread_idx].assign(handle_ranges.size(), {});
+                region_group_handle_ranges[thread_idx].reserve(handle_ranges.size());
+
+                for (size_t idx = 0; idx < handle_ranges.size(); ++idx)
+                {
+                    const auto & handle_range = handle_ranges[idx];
+                    for (const RangesInDataPart & ranges : parts_with_ranges)
+                    {
+                        MarkRanges mark_ranges = MarkRangesFromRegionRange<Int64>(ranges.data_part->index, handle_range.first.first,
+                            handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
+
+                        if (mark_ranges.empty())
+                            continue;
+
+                        region_group_range_parts[thread_idx][idx].emplace_back(ranges.data_part, ranges.part_index_in_query, mark_ranges);
+                        region_sum_ranges += mark_ranges.size();
+                        for (const auto & range : mark_ranges)
+                            region_sum_marks += range.end - range.begin;
+                    }
+                    region_group_handle_ranges[thread_idx].emplace_back(handle_range.first);
                 }
             }
 
-            LOG_TRACE(log,
-                "Region " << region_query_info.region_id << ", version " << region_query_info.version << ", handle range ["
-                          << region_query_info.range_in_table.first.toString() << ", " << region_query_info.range_in_table.second.toString()
-                          << "), selected " << region_range_parts[region_index].first.size() << " parts, " << sum_marks
-                          << " marks to read from " << sum_ranges << " ranges, read " << rows_in_mem[region_index] << " rows from memory");
+            LOG_DEBUG(log,
+                "Stream " << thread_idx << ", read " << thread_region_size << " regions, selected "
+                          << region_group_range_parts[thread_idx].size() << " handle ranges, " << region_sum_marks << " marks to read from "
+                          << region_sum_ranges << " ranges, read " << mem_rows << " rows from memory");
         }
-
-        if (need_retry)
-            func_throw_retry_region();
     }
 
     if (parts_with_ranges.empty() && !is_txn_engine)
@@ -886,8 +1016,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     ProfileEvents::increment(ProfileEvents::SelectedRanges, sum_ranges);
     ProfileEvents::increment(ProfileEvents::SelectedMarks, sum_marks);
 
-    BlockInputStreams res;
-
     if (is_txn_engine)
     {
         bool use_uncompressed_cache = settings.use_uncompressed_cache;
@@ -896,6 +1024,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (sum_marks > max_marks_to_use_cache)
             use_uncompressed_cache = false;
 
+        // must extend mutable engine column.
         extend_mutable_engine_column_names(column_names_to_read, data);
 
         if (select.raw_for_mutable)
@@ -910,45 +1039,35 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 virt_column_names,
                 settings);
 
-            if (!select.no_kvstore)
-            {
-                for (size_t region_index = 0; region_index < region_cnt; ++region_index)
+            { // read all data from memory
+                BlocksList blocks;
+                for (auto & block : region_block_data)
                 {
-                    if (regions_query_res[region_index] != RegionTable::OK)
-                        continue;
-                    auto region_input_stream = region_block_data[region_index];
-                    if (region_input_stream)
-                        res.emplace_back(region_input_stream);
+                    if (block)
+                        blocks.emplace_back(std::move(block));
                 }
+                if (!blocks.empty())
+                    res.emplace_back(std::make_shared<BlocksListBlockInputStream>(std::move(blocks)));
             }
         }
         else
         {
-            size_t batch_size = region_cnt / num_streams;
-            size_t rest = region_cnt % num_streams;
-            for (size_t thread_idx = 0, region_begin = 0, size = 0; thread_idx < num_streams; ++thread_idx, region_begin += size)
+            for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)
             {
                 BlockInputStreams union_regions_stream;
 
-                size = thread_idx < rest ? batch_size + 1 : batch_size;
-                for (size_t region_index = region_begin, region_end = region_begin + size; region_index < region_end; ++region_index)
+                auto & range_parts = region_group_range_parts[thread_idx];
+                auto & mem_blocks = region_group_mem_block[thread_idx];
+                for (size_t range_idx = 0; range_idx < range_parts.size(); ++range_idx)
                 {
-                    if (regions_query_res[region_index] != RegionTable::OK)
-                        continue;
-
-                    const RegionQueryInfo & region_query_info = regions_query_info[region_index];
-
-                    const auto [n, new_range] = pk_is_uint64
-                        ? CHTableHandle::splitForUInt64TableHandle(region_query_info.range_in_table)
-                        : CHTableHandle::splitForUInt64TableHandle<true>(region_query_info.range_in_table);
-                    std::ignore = n;
+                    auto & data_parts = range_parts[range_idx];
+                    auto & block_indexes = mem_blocks[range_idx];
 
                     BlockInputStreams merging;
 
-                    for (size_t part_pos = 0; part_pos < region_range_parts[region_index].first.size(); ++part_pos)
+                    for (size_t part_idx = 0; part_idx < data_parts.size(); ++part_idx)
                     {
-                        const RangesInDataPart & part = region_range_parts[region_index].first[part_pos];
-
+                        const auto & part = data_parts[part_idx];
                         BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part,
                             max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes,
                             column_names_to_read, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true,
@@ -957,35 +1076,136 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                         if (pk_is_uint64)
                         {
-                            auto uint64_pos = region_range_parts[region_index].second[part_pos];
                             source_stream = std::make_shared<RangesFilterBlockInputStream<UInt64>>(
-                                source_stream, new_range[uint64_pos], handle_col_name);
+                                source_stream, region_group_u64_handle_ranges[thread_idx][range_idx], handle_col_name);
                         }
                         else
                         {
                             source_stream = std::make_shared<RangesFilterBlockInputStream<Int64>>(
-                                source_stream, region_query_info.range_in_table, handle_col_name);
+                                source_stream, region_group_handle_ranges[thread_idx][range_idx], handle_col_name);
                         }
 
-                        // TODO: implement VersionFilterBlockInputStream in RangesFilterBlockInputStream
                         source_stream = std::make_shared<VersionFilterBlockInputStream>(
-                            source_stream, MutableSupport::version_column_name, query_info.read_tso);
+                            source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
 
                         merging.emplace_back(source_stream);
                     }
-                    auto region_input_stream = region_block_data[region_index];
-                    if (region_input_stream)
-                    {
-                        region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
-                            region_input_stream, MutableSupport::version_column_name, query_info.read_tso);
 
-                        merging.emplace_back(region_input_stream);
+                    {
+                        BlocksList blocks;
+                        for (size_t idx : block_indexes)
+                        {
+                            if (region_block_data[idx])
+                                blocks.emplace_back(std::move(region_block_data[idx]));
+                        }
+
+                        if (!blocks.empty())
+                        {
+                            BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
+
+                            region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
+                                region_input_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+
+                            merging.emplace_back(region_input_stream);
+                        }
                     }
+
                     if (!merging.empty())
-                        union_regions_stream.emplace_back(std::make_shared<MvccTMTSortedBlockInputStream>(merging,
-                            data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
-                            DEFAULT_MERGE_BLOCK_SIZE, query_info.read_tso));
+                    {
+                        union_regions_stream.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging,
+                            data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name,
+                            MutableSupport::delmark_column_name,
+                            DEFAULT_MERGE_BLOCK_SIZE,
+                            nullptr));
+                    }
                 }
+
+                if (pk_is_uint64 && thread_idx == 0 && special_region_index != -1)
+                {
+                    size_t region_sum_ranges = 0, region_sum_marks = 0;
+                    BlockInputStreams merging;
+
+                    const auto & special_region_info = regions_query_info[special_region_index];
+                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(special_region_info.range_in_table);
+
+                    for (int i = 0; i < n; ++i)
+                    {
+                        const auto & handle_range = new_range[i];
+
+                        for (const RangesInDataPart & part : parts_with_ranges)
+                        {
+                            MarkRanges mark_ranges = MarkRangesFromRegionRange<UInt64>(part.data_part->index, handle_range.first,
+                                handle_range.second, part.ranges, gen_min_marks_for_seek(settings, data), settings);
+
+                            if (mark_ranges.empty())
+                                continue;
+
+                            region_sum_ranges += mark_ranges.size();
+                            for (const auto & range : mark_ranges)
+                                region_sum_marks += range.end - range.begin;
+
+                            BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part,
+                                max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes,
+                                column_names_to_read, mark_ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true,
+                                settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_column_names,
+                                part.part_index_in_query);
+                            source_stream
+                                = std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_range, handle_col_name);
+
+                            source_stream = std::make_shared<VersionFilterBlockInputStream>(
+                                source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+
+                            merging.emplace_back(source_stream);
+                        }
+                    }
+
+                    {
+                        BlocksList blocks;
+                        if (region_block_data[special_region_index])
+                            blocks.emplace_back(std::move(region_block_data[special_region_index]));
+
+                        if (!blocks.empty())
+                        {
+                            BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
+
+                            region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
+                                region_input_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+
+                            merging.emplace_back(region_input_stream);
+                        }
+                    }
+
+                    if (log->debug())
+                    {
+                        std::stringstream ss;
+
+                        for (auto i = 0; i < n; ++i)
+                        {
+                            ss << "[";
+                            new_range[i].first.toString(ss);
+                            ss << ",";
+                            new_range[i].second.toString(ss);
+                            ss << ") ";
+                        }
+                        LOG_DEBUG(log,
+                            "[PK_IS_UINT64] special region " << special_region_info.region_id << ", split range into " << n << ": "
+                                                             << ss.str() << ", " << region_sum_marks << " marks to read from "
+                                                             << region_sum_ranges << " ranges, read "
+                                                             << region_block_data[special_region_index].rows() << " rows from memory");
+                    }
+
+                    if (!merging.empty())
+                    {
+                        union_regions_stream.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging,
+                            data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name,
+                            MutableSupport::delmark_column_name,
+                            DEFAULT_MERGE_BLOCK_SIZE,
+                            nullptr));
+                    }
+                }
+
                 if (!union_regions_stream.empty())
                     res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
             }
