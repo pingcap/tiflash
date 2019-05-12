@@ -11,8 +11,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int UNKNOWN_TABLE;
-extern const int BAD_ARGUMENTS;
-extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Printer output)
