@@ -29,8 +29,8 @@ public:
     const static std::string write_cf_name;
     const static std::string log_name;
 
-    static const auto PutFlag = RegionData::CFModifyFlag::PutFlag;
-    static const auto DelFlag = RegionData::CFModifyFlag::DelFlag;
+    static const auto PutFlag = CFModifyFlag::PutFlag;
+    static const auto DelFlag = CFModifyFlag::DelFlag;
 
     class CommittedScanner : private boost::noncopyable
     {
