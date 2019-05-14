@@ -345,13 +345,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         String service_ip = config().getString("tidb.service_ip");
         String status_port = config().getString("tidb.status_port");
-        std::vector<std::string> ignore_databases;
+        std::unordered_set<std::string> ignore_databases;
         if (config().has("tidb.ignore_databases"))
         {
             String ignore_dbs = config().getString("tidb.ignore_databases");
             Poco::StringTokenizer string_tokens(ignore_dbs, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
-                ignore_databases.push_back(*it);
+                ignore_databases.emplace(*it);
             }
         }
         LOG_INFO(log, "Found pd addrs.");

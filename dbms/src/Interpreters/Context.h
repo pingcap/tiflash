@@ -371,7 +371,7 @@ public:
     void initializeRaftService(const std::string & service_addr);
     RaftService & getRaftService();
 
-    void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unorderd_set<std::string> & ignore_databases);
+    void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
     TiDBService & getTiDBService();
 
     Clusters & getClusters() const;
