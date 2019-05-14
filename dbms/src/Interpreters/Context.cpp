@@ -1413,12 +1413,12 @@ RaftService & Context::getRaftService()
     return *shared->raft_service;
 }
 
-void Context::initializeTiDBService(const std::string & service_ip, const std::string & status_port)
+void Context::initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases)
 {
     auto lock = getLock();
     if (shared->tidb_service)
         throw Exception("TiDB Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->tidb_service = std::make_shared<TiDBService>(service_ip, status_port);
+    shared->tidb_service = std::make_shared<TiDBService>(service_ip, status_port, ignore_databases);
 }
 
 TiDBService & Context::getTiDBService()

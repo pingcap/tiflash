@@ -38,6 +38,8 @@ protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;
 
 protected:
+    std::unordered_set<TableID> ignored_tables;
+
     Logger * log;
 };
 
