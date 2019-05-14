@@ -198,13 +198,23 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     int minute = int((hms >> 6) & ((1 << 6) - 1));
                     int hour = int(hms >> 12);
 
-                    if (tp == "Nullable(DateTime)" || tp == "DataTime")
+                    if (tp == "Nullable(DateTime)" || tp == "DateTime")
                     {
                         time_t datetime;
                         if (unlikely(year == 0))
                             datetime = 0;
-                        else
-                            datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+                        else {
+                            if (unlikely(month == 0 || day == 0)) {
+                                throw Exception("wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " " + std::to_string(day) + ".", ErrorCodes::LOGICAL_ERROR);
+                            }
+                            try {
+                                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+                            } catch (std::exception & e) {
+                                std::cerr << "Wrong datetime format "<< year <<" "<< month <<" "<< day<<" "<<hour<<" "<<minute<<" "<<second<<std::endl;
+                                std::cerr << "packed number: "<<packed<<std::endl;
+                                throw e;
+                            }
+                        }
                         it->second.first->insert(static_cast<Int64>(datetime));
                     }
                     else
