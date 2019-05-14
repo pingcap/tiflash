@@ -1324,7 +1324,10 @@ TMTContext & Context::getTMTContext()
 {
     auto lock = getLock();
     if (!shared->tmt_context)
+    {
         shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
+        shared->tmt_context->restore();
+    }
     return *(shared->tmt_context);
 }
 

@@ -15,6 +15,9 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs, std::string
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key_, learner_value_)),
       rpc_client(std::make_shared<pingcap::kv::RpcClient>())
+{}
+
+void TMTContext::restore()
 {
     std::vector<RegionID> regions_to_remove;
 
