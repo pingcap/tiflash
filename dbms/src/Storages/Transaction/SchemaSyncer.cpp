@@ -328,10 +328,10 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
 
     // TODO: Check database name change?
     // TODO: Partition table?
-    if (storage->getName() != table_info.name)
+    if (storage->getTableName() != table_info.name)
     {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Renaming table " << table_info.db_name << "." << storage->getName() << " TO " << table_info.db_name << "." << table_info.name);
-        renameTable(table_info.db_name, storage->getName(), table_info, context);
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Renaming table " << table_info.db_name << "." << storage->getTableName() << " TO " << table_info.db_name << "." << table_info.name);
+        renameTable(table_info.db_name, storage->getTableName(), table_info, context);
     }
 
     /// Table existing, detect schema changes and apply.
