@@ -1,6 +1,4 @@
 #include <boost/rational.hpp> /// For calculations related to sampling coefficients.
-#include <optional>
-#include <random>
 
 /// Allow to use __uint128_t as a template parameter for boost::rational.
 // https://stackoverflow.com/questions/41198673/uint128-t-not-working-with-clang-and-libstdc
@@ -35,7 +33,6 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/DeletingDeletedBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
-#include <DataStreams/MvccTMTSortedBlockInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/RangesFilterBlockInputStream.h>
 #include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
@@ -63,6 +60,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/VirtualColumnUtils.h>
+#include <Storages/MergeTree/MergeTreeDataSelectExecutorCommon.hpp>
 
 namespace ProfileEvents
 {
@@ -149,77 +147,6 @@ static RelativeSize convertAbsoluteSampleSizeToRelative(const ASTPtr & node, siz
     return std::min(RelativeSize(1), RelativeSize(absolute_sample_size) / RelativeSize(approx_total_rows));
 }
 
-void extend_mutable_engine_column_names(Names & column_names_to_read, const MergeTreeData & data)
-{
-    column_names_to_read.insert(column_names_to_read.end(), MutableSupport::version_column_name);
-    column_names_to_read.insert(column_names_to_read.end(), MutableSupport::delmark_column_name);
-
-    std::vector<String> add_columns = data.getPrimaryExpression()->getRequiredColumns();
-    column_names_to_read.insert(column_names_to_read.end(), add_columns.begin(), add_columns.end());
-
-    std::sort(column_names_to_read.begin(), column_names_to_read.end());
-    column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
-}
-
-static inline size_t gen_min_marks_for_seek(const Settings & settings, const MergeTreeData & data)
-{
-    size_t min_marks_for_seek = (settings.merge_tree_min_rows_for_seek + data.index_granularity - 1) / data.index_granularity;
-    return min_marks_for_seek;
-}
-
-template <typename TargetType>
-static MarkRanges MarkRangesFromRegionRange(const MergeTreeData::DataPart::Index & index,
-    const TiKVHandle::Handle<TargetType> & handle_begin, const TiKVHandle::Handle<TargetType> & handle_end, MarkRanges mark_ranges,
-    size_t min_marks_for_seek, const Settings & settings)
-{
-    if (handle_end <= handle_begin)
-        return {};
-
-    MarkRanges res;
-
-    size_t marks_count = index.at(0)->size();
-    if (marks_count == 0)
-        return res;
-
-    reverse(mark_ranges.begin(), mark_ranges.end());
-    MarkRanges ranges_stack = std::move(mark_ranges);
-
-    while (!ranges_stack.empty())
-    {
-        MarkRange range = ranges_stack.back();
-        ranges_stack.pop_back();
-
-        TiKVHandle::Handle<TargetType> index_left_handle = static_cast<TargetType>(index[0]->getUInt(range.begin));
-        TiKVHandle::Handle<TargetType> index_right_handle = TiKVHandle::Handle<TargetType>::max;
-
-        if (range.end != marks_count)
-            index_right_handle = static_cast<TargetType>(index[0]->getUInt(range.end));
-
-        if (handle_begin >= index_right_handle || index_left_handle >= handle_end)
-            continue;
-
-        if (range.end == range.begin + 1)
-        {
-            if (res.empty() || range.begin - res.back().end > min_marks_for_seek)
-                res.push_back(range);
-            else
-                res.back().end = range.end;
-        }
-        else
-        {
-            size_t step = (range.end - range.begin - 1) / settings.merge_tree_coarse_index_granularity + 1;
-            size_t end;
-
-            for (end = range.end; end > range.begin + step; end -= step)
-                ranges_stack.push_back(MarkRange(end - step, end));
-
-            ranges_stack.push_back(MarkRange(range.begin, end));
-        }
-    }
-
-    return res;
-}
-
 BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_to_return,
     const SelectQueryInfo & query_info,
     const Context & context,
@@ -240,7 +167,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 
     std::vector<RegionQueryInfo> regions_query_info = mvcc_query_info.regions_query_info;
-    Int32 special_region_index = -1;
+    Int64 special_region_index = -1;
     RegionMap kvstore_region;
     Blocks region_block_data;
     String handle_col_name;
@@ -404,7 +331,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         Names column_names_to_read = real_column_names;
 
-        extend_mutable_engine_column_names(column_names_to_read, data);
+        extendMutableEngineColumnNames(column_names_to_read, data);
 
         // get data block from region first.
 
@@ -836,7 +763,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (mvcc_query_info.read_tso < safe_point)
             func_throw_retry_region();
 
-        const size_t min_marks_for_seek = gen_min_marks_for_seek(settings, data);
+        const size_t min_marks_for_seek = computeMinMarksForSeek(settings, data);
 
         for (const auto & region_query_info : regions_query_info)
         {
@@ -901,48 +828,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 std::sort(handle_ranges.begin(), handle_ranges.end(),
                     [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
 
-                auto & block_data = region_group_mem_block[thread_idx];
-                block_data.resize(handle_ranges.size());
-                {
-                    size_t size = 0;
-
-                    block_data[0].emplace_back(handle_ranges[0].second);
-
-                    for (size_t i = 1; i < handle_ranges.size(); ++i)
-                    {
-                        if (handle_ranges[i].first.first == handle_ranges[size].first.second)
-                            handle_ranges[size].first.second = handle_ranges[i].first.second;
-                        else
-                            handle_ranges[++size] = handle_ranges[i];
-
-                        block_data[size].emplace_back(handle_ranges[i].second);
-                    }
-                    size = size + 1;
-                    handle_ranges.resize(size);
-                    block_data.resize(size);
-                }
-
-                region_group_range_parts[thread_idx].assign(handle_ranges.size(), {});
-                region_group_u64_handle_ranges[thread_idx].reserve(handle_ranges.size());
-
-                for (size_t idx = 0; idx < handle_ranges.size(); ++idx)
-                {
-                    const auto & handle_range = handle_ranges[idx];
-                    for (const RangesInDataPart & ranges : parts_with_ranges)
-                    {
-                        MarkRanges mark_ranges = MarkRangesFromRegionRange<UInt64>(ranges.data_part->index, handle_range.first.first,
-                            handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
-
-                        if (mark_ranges.empty())
-                            continue;
-
-                        region_group_range_parts[thread_idx][idx].emplace_back(ranges.data_part, ranges.part_index_in_query, mark_ranges);
-                        region_sum_ranges += mark_ranges.size();
-                        for (const auto & range : mark_ranges)
-                            region_sum_marks += range.end - range.begin;
-                    }
-                    region_group_u64_handle_ranges[thread_idx].emplace_back(handle_range.first);
-                }
+                computeHandleRenges<UInt64>(region_group_mem_block[thread_idx],
+                    handle_ranges,
+                    region_group_range_parts[thread_idx],
+                    region_group_u64_handle_ranges[thread_idx],
+                    parts_with_ranges,
+                    region_sum_marks,
+                    region_sum_ranges,
+                    settings,
+                    min_marks_for_seek);
             }
             else
             {
@@ -958,48 +852,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 // handle_ranges is sorted.
 
-                auto & block_data = region_group_mem_block[thread_idx];
-                block_data.resize(handle_ranges.size());
-                {
-                    size_t size = 0;
-
-                    block_data[0].emplace_back(handle_ranges[0].second);
-
-                    for (size_t i = 1; i < handle_ranges.size(); ++i)
-                    {
-                        if (handle_ranges[i].first.first == handle_ranges[size].first.second)
-                            handle_ranges[size].first.second = handle_ranges[i].first.second;
-                        else
-                            handle_ranges[++size] = handle_ranges[i];
-
-                        block_data[size].emplace_back(handle_ranges[i].second);
-                    }
-                    size = size + 1;
-                    handle_ranges.resize(size);
-                    block_data.resize(size);
-                }
-
-                region_group_range_parts[thread_idx].assign(handle_ranges.size(), {});
-                region_group_handle_ranges[thread_idx].reserve(handle_ranges.size());
-
-                for (size_t idx = 0; idx < handle_ranges.size(); ++idx)
-                {
-                    const auto & handle_range = handle_ranges[idx];
-                    for (const RangesInDataPart & ranges : parts_with_ranges)
-                    {
-                        MarkRanges mark_ranges = MarkRangesFromRegionRange<Int64>(ranges.data_part->index, handle_range.first.first,
-                            handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
-
-                        if (mark_ranges.empty())
-                            continue;
-
-                        region_group_range_parts[thread_idx][idx].emplace_back(ranges.data_part, ranges.part_index_in_query, mark_ranges);
-                        region_sum_ranges += mark_ranges.size();
-                        for (const auto & range : mark_ranges)
-                            region_sum_marks += range.end - range.begin;
-                    }
-                    region_group_handle_ranges[thread_idx].emplace_back(handle_range.first);
-                }
+                computeHandleRenges<Int64>(region_group_mem_block[thread_idx],
+                    handle_ranges,
+                    region_group_range_parts[thread_idx],
+                    region_group_handle_ranges[thread_idx],
+                    parts_with_ranges,
+                    region_sum_marks,
+                    region_sum_ranges,
+                    settings,
+                    min_marks_for_seek);
             }
 
             LOG_DEBUG(log,
@@ -1025,7 +886,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             use_uncompressed_cache = false;
 
         // must extend mutable engine column.
-        extend_mutable_engine_column_names(column_names_to_read, data);
+        extendMutableEngineColumnNames(column_names_to_read, data);
 
         if (select.raw_for_mutable)
         {
@@ -1052,6 +913,33 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
         else
         {
+            const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
+                return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
+                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names_to_read,
+                    mark_ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
+                    settings.max_read_buffer_size, true, true, virt_column_names, part.part_index_in_query);
+            };
+
+            const auto func_make_version_filter_input = [&](const BlockInputStreamPtr & source_stream) {
+                return std::make_shared<VersionFilterBlockInputStream>(
+                    source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+            };
+
+            const auto func_make_range_filter_input
+                = [&](const BlockInputStreamPtr & source_stream, const HandleRange<Int64> & handle_ranges) {
+                      return std::make_shared<RangesFilterBlockInputStream<Int64>>(source_stream, handle_ranges, handle_col_name);
+                  };
+
+            const auto func_make_uint64_range_filter_input
+                = [&](const BlockInputStreamPtr & source_stream, const HandleRange<UInt64> & handle_ranges) {
+                      return std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_ranges, handle_col_name);
+                  };
+
+            const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) {
+                return std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getPrimarySortDescription(),
+                    MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr);
+            };
+
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)
             {
                 BlockInputStreams union_regions_stream;
@@ -1068,25 +956,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     for (size_t part_idx = 0; part_idx < data_parts.size(); ++part_idx)
                     {
                         const auto & part = data_parts[part_idx];
-                        BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part,
-                            max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes,
-                            column_names_to_read, part.ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true,
-                            settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_column_names,
-                            part.part_index_in_query);
+                        BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, part.ranges);
 
                         if (pk_is_uint64)
-                        {
-                            source_stream = std::make_shared<RangesFilterBlockInputStream<UInt64>>(
-                                source_stream, region_group_u64_handle_ranges[thread_idx][range_idx], handle_col_name);
-                        }
+                            source_stream
+                                = func_make_uint64_range_filter_input(source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
                         else
-                        {
-                            source_stream = std::make_shared<RangesFilterBlockInputStream<Int64>>(
-                                source_stream, region_group_handle_ranges[thread_idx][range_idx], handle_col_name);
-                        }
+                            source_stream = func_make_range_filter_input(source_stream, region_group_handle_ranges[thread_idx][range_idx]);
 
-                        source_stream = std::make_shared<VersionFilterBlockInputStream>(
-                            source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+                        source_stream = func_make_version_filter_input(source_stream);
 
                         merging.emplace_back(source_stream);
                     }
@@ -1103,8 +981,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         {
                             BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 
-                            region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
-                                region_input_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+                            region_input_stream = func_make_version_filter_input(region_input_stream);
 
                             merging.emplace_back(region_input_stream);
                         }
@@ -1112,12 +989,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     if (!merging.empty())
                     {
-                        union_regions_stream.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging,
-                            data.getPrimarySortDescription(),
-                            MutableSupport::version_column_name,
-                            MutableSupport::delmark_column_name,
-                            DEFAULT_MERGE_BLOCK_SIZE,
-                            nullptr));
+                        union_regions_stream.emplace_back(func_make_multi_way_merge_sort_input(merging));
                     }
                 }
 
@@ -1135,8 +1007,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                         for (const RangesInDataPart & part : parts_with_ranges)
                         {
-                            MarkRanges mark_ranges = MarkRangesFromRegionRange<UInt64>(part.data_part->index, handle_range.first,
-                                handle_range.second, part.ranges, gen_min_marks_for_seek(settings, data), settings);
+                            MarkRanges mark_ranges = markRangesFromRegionRange<UInt64>(part.data_part->index, handle_range.first,
+                                handle_range.second, part.ranges, computeMinMarksForSeek(settings, data), settings);
 
                             if (mark_ranges.empty())
                                 continue;
@@ -1145,16 +1017,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             for (const auto & range : mark_ranges)
                                 region_sum_marks += range.end - range.begin;
 
-                            BlockInputStreamPtr source_stream = std::make_shared<MergeTreeBlockInputStream>(data, part.data_part,
-                                max_block_size, settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes,
-                                column_names_to_read, mark_ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true,
-                                settings.min_bytes_to_use_direct_io, settings.max_read_buffer_size, true, true, virt_column_names,
-                                part.part_index_in_query);
-                            source_stream
-                                = std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_range, handle_col_name);
+                            BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, mark_ranges);
 
-                            source_stream = std::make_shared<VersionFilterBlockInputStream>(
-                                source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+                            source_stream = func_make_uint64_range_filter_input(source_stream, handle_range);
+
+                            source_stream = func_make_version_filter_input(source_stream);
 
                             merging.emplace_back(source_stream);
                         }
@@ -1169,8 +1036,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         {
                             BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 
-                            region_input_stream = std::make_shared<VersionFilterBlockInputStream>(
-                                region_input_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+                            region_input_stream = func_make_version_filter_input(region_input_stream);
 
                             merging.emplace_back(region_input_stream);
                         }
@@ -1197,12 +1063,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     if (!merging.empty())
                     {
-                        union_regions_stream.emplace_back(std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging,
-                            data.getPrimarySortDescription(),
-                            MutableSupport::version_column_name,
-                            MutableSupport::delmark_column_name,
-                            DEFAULT_MERGE_BLOCK_SIZE,
-                            nullptr));
+                        union_regions_stream.emplace_back(func_make_multi_way_merge_sort_input(merging));
                     }
                 }
 
@@ -1213,7 +1074,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     }
     else if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable && !select.raw_for_mutable)
     {
-        extend_mutable_engine_column_names(column_names_to_read, data);
+        extendMutableEngineColumnNames(column_names_to_read, data);
 
         res = spreadMarkRangesAmongStreamsOnMutableEngine(parts_with_ranges,
             column_names_to_read,
@@ -1529,7 +1390,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     else
     {
         size_t used_key_size = key_condition.getMaxKeyColumn() + 1;
-        size_t min_marks_for_seek = gen_min_marks_for_seek(settings, data);
+        size_t min_marks_for_seek = computeMinMarksForSeek(settings, data);
         // size_t min_marks_for_seek = (settings.merge_tree_min_rows_for_seek + data.index_granularity - 1) / data.index_granularity;
         /** There will always be disjoint suspicious segments on the stack, the leftmost one at the top (back).
             * At each step, take the left segment and check if it fits.

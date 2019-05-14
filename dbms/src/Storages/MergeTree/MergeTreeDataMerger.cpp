@@ -688,14 +688,14 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 CHTableHandle::merge_ranges(new_ranges);
                 merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<UInt64>>(
                     new_ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
-                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint());
+                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id);
             }
             else
             {
                 CHTableHandle::merge_ranges(ranges);
                 merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<Int64>>(
                     ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
-                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint());
+                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id);
             }
 
             break;
