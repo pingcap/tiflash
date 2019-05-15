@@ -1400,7 +1400,7 @@ void Context::createTMTContext()
 {
     auto lock = getLock();
     if (shared->tmt_context)
-        throw Exception("TMTContext has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
 }
 
