@@ -1319,15 +1319,6 @@ DBGInvoker & Context::getDBGInvoker() const
     return shared->dbg_invoker;
 }
 
-
-TMTContext & Context::getTMTContext()
-{
-    auto lock = getLock();
-    if (!shared->tmt_context)
-        shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
-    return *(shared->tmt_context);
-}
-
 TMTContext & Context::getTMTContext() const
 {
     auto lock = getLock();
@@ -1403,6 +1394,14 @@ void Context::initializeRaftService(const std::string & service_addr)
     if (shared->raft_service)
         throw Exception("Raft Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
     shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
+}
+
+void Context::createTMTContext()
+{
+    auto lock = getLock();
+    if (shared->tmt_context)
+        throw Exception("TMTContext has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
 }
 
 RaftService & Context::getRaftService()
