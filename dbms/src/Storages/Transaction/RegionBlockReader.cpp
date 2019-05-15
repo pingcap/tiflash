@@ -114,6 +114,8 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     const size_t target_row_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
 
+    std::unordered_set<ColumnID> col_id_included;
+
     for (const auto & [handle, write_type, commit_ts, value] : data_list)
     {
         if (write_type == Region::PutFlag || write_type == Region::DelFlag)
@@ -154,8 +156,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
             /// Modify `row` by adding missing column values or removing useless column values.
 
-            std::unordered_set<ColumnID> col_id_included;
-
+            col_id_included.clear();
             for (size_t i = 0; i < row.size(); i += 2)
                 col_id_included.emplace(row[i].get<ColumnID>());
 
