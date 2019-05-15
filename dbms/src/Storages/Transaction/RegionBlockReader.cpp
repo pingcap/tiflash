@@ -112,9 +112,9 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     delmark_data.reserve(data_list.size());
     version_data.reserve(data_list.size());
 
-    const size_t target_row_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
-
     std::unordered_set<ColumnID> col_id_included;
+
+    const size_t target_row_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
 
     for (const auto & [handle, write_type, commit_ts, value] : data_list)
     {
