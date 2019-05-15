@@ -15,6 +15,27 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::insertRow(MutableColumns & 
 template <typename HandleType>
 Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
 {
+    if (finished && deleted_by_range && log->debug())
+    {
+        std::stringstream ss;
+
+        if (log->trace())
+        {
+            for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
+            {
+                ss << "[";
+                begin_handle_ranges[i].toString(ss);
+                ss << ",";
+                end_handle_ranges[i].toString(ss);
+                ss << ") ";
+            }
+        }
+
+        LOG_DEBUG(log,
+            "Deleted by handle range: " << deleted_by_range << " rows, " << begin_handle_ranges.size() << " handle ranges " << ss.str()
+                                        << ", in table " << table_id);
+    }
+
     if (finished)
         return Block();
 
@@ -28,21 +49,6 @@ Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
         return Block();
 
     merge(merged_columns, queue);
-
-    if (deleted_by_range)
-    {
-        std::stringstream ss;
-        for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
-        {
-            ss << "[";
-            begin_handle_ranges[i].toString(ss);
-            ss << ",";
-            end_handle_ranges[i].toString(ss);
-            ss << ") ";
-        }
-        LOG_TRACE(log,
-            "deleted by handle range: " << deleted_by_range << " rows, " << begin_handle_ranges.size() << " handle ranges: " << ss.str());
-    }
 
     return header.cloneWithColumns(std::move(merged_columns));
 }

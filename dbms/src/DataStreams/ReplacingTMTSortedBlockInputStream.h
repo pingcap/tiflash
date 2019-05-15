@@ -21,9 +21,10 @@ public:
         const String & version_column,
         const String & del_column,
         const String & pk_column,
-        size_t max_block_size_,
-        UInt64 gc_tso_)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL), gc_tso(gc_tso_)
+        const size_t max_block_size_,
+        const UInt64 gc_tso_,
+        const TableID table_id_)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL), gc_tso(gc_tso_), table_id(table_id_)
     {
         {
             begin_handle_ranges.resize(ranges_.size());
@@ -72,8 +73,8 @@ private:
     RowRef selected_row;
 
     size_t deleted_by_range;
-
     UInt64 gc_tso;
+    TableID table_id;
 };
 
 } // namespace DB

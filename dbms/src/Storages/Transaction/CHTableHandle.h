@@ -106,7 +106,7 @@ inline std::tuple<int, std::array<UInt64TableHandleRange, 2>> splitForUInt64Tabl
 }
 
 template <typename HandleType>
-inline void merge_ranges(std::vector<HandleRange<HandleType>> & ranges)
+inline void merge_ranges(std::vector<DB::HandleRange<HandleType>> & ranges)
 {
     if (ranges.empty())
         return;
