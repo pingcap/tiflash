@@ -155,7 +155,9 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
     RegionDataReadInfoList data_list;
     if (storage == nullptr)
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Not flushing table_id: " << table_id << ", region_id: " << region_id << " as storage doesn't not exist.");
+        LOG_WARNING(log,
+            __PRETTY_FUNCTION__ << ": Not flushing table_id: " << table_id << ", region_id: " << region_id
+                                << " as storage doesn't not exist.");
     }
     else
     {
