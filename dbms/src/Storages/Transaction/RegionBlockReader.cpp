@@ -190,7 +190,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                         it->second.first->insert(row[i + 1]);
                         continue;
                     }
-                    UInt64 packed = field.safeGet<UInt64>();
+                    UInt64 packed = field.get<UInt64>();
                     UInt64 ymdhms = packed >> 24;
                     UInt64 ymd = ymdhms >> 17;
                     int day = int(ymd & ((1 << 5) - 1));
