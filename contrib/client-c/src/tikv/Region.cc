@@ -15,7 +15,7 @@ RPCContextPtr RegionCache::getRPCContext(Backoffer & bo, const RegionVerID & id,
     if (is_learner) {
         peer = region -> learner;
         if (peer.store_id() == 0) {
-            throw Exception("no learner");
+            throw Exception("no learner! the request region id is: " + std::to_string(id.id));
         }
     }
 
@@ -82,7 +82,7 @@ metapb::Peer RegionCache::selectLearner(Backoffer & bo, const std::vector<metapb
             return slave;
         }
     }
-    log->error("there is no valid slave.");
+    log->error("there is no valid slave. slave length is " + std::to_string(slaves.size()));
     return metapb::Peer();
 }
 
