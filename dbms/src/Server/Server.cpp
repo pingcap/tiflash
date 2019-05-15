@@ -310,10 +310,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
     /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
     bool need_raft_service = false;
-    String raft_service_addr;
     if (config().has("raft"))
     {
-        raft_service_addr = config().getString("raft.service_addr");
         need_raft_service = true;
 
         if (config().has("raft.pd_addr"))
@@ -388,6 +386,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (need_raft_service)
     {
+        String raft_service_addr = config().getString("raft.service_addr");
         global_context->initializeRaftService(raft_service_addr);
     }
 
