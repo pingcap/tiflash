@@ -42,7 +42,7 @@ public:
 
     pingcap::kv::RpcClientPtr getRpcClient();
 
-    void init();
+    void restore();
 
 private:
     SchemaSyncerPtr schema_syncer;

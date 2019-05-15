@@ -383,7 +383,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// initialize TMTContext
-        global_context->getTMTContext().init();
+        global_context->getTMTContext().restore();
     }
 
     if (need_raft_service)

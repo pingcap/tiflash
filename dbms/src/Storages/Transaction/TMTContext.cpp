@@ -17,7 +17,7 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs, std::string
       rpc_client(std::make_shared<pingcap::kv::RpcClient>())
 {}
 
-void TMTContext::init()
+void TMTContext::restore()
 {
     std::vector<RegionID> regions_to_remove;
 
