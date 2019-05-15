@@ -185,7 +185,8 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 if (tp == "Nullable(DateTime)" || tp == "Nullable(Date)" || tp == "DateTime" || tp == "Date")
                 {
                     Field & field = row[i + 1];
-                    if (field.isNull()) {
+                    if (field.isNull())
+                    {
                         it->second.first->insert(row[i + 1]);
                         continue;
                     }
@@ -207,15 +208,23 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                         time_t datetime;
                         if (unlikely(year == 0))
                             datetime = 0;
-                        else {
-                            if (unlikely(month == 0 || day == 0)) {
-                                throw Exception("wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " " + std::to_string(day) + ".", ErrorCodes::LOGICAL_ERROR);
+                        else
+                        {
+                            if (unlikely(month == 0 || day == 0))
+                            {
+                                throw Exception("wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " "
+                                        + std::to_string(day) + ".",
+                                    ErrorCodes::LOGICAL_ERROR);
                             }
-                            try {
+                            try
+                            {
                                 datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-                            } catch (std::exception & e) {
-                                std::cerr << "Wrong datetime format "<< year <<" "<< month <<" "<< day<<" "<<hour<<" "<<minute<<" "<<second<<std::endl;
-                                std::cerr << "packed number: "<<packed<<std::endl;
+                            }
+                            catch (std::exception & e)
+                            {
+                                std::cerr << "Wrong datetime format " << year << " " << month << " " << day << " " << hour << " " << minute
+                                          << " " << second << std::endl;
+                                std::cerr << "packed number: " << packed << std::endl;
                                 throw e;
                             }
                         }
