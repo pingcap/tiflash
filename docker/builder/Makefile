@@ -1,14 +1,17 @@
 build:
-	docker run --rm --workdir /server -v $(realpath ../..):/server hub.pingcap.net/tiflash/tics-builder
+	docker run --rm -v $(realpath ../..):/tics hub.pingcap.net/tiflash/tics-builder-base /tics/docker/builder/build.sh
 
 pull:
-	docker pull hub.pingcap.net/tiflash/tics-builder
+	docker pull hub.pingcap.net/tiflash/tics-builder-base
+
+push:
+	docker push hub.pingcap.net/tiflash/tics-builder-base
 
 image:
-	docker build -t hub.pingcap.net/tiflash/tics-builder .
+	docker build -f Dockerfile-base -t hub.pingcap.net/tiflash/tics-builder-base .
 
-image_push:
-	docker push hub.pingcap.net/tiflash/tics-builder
+tics_base_image:
+	docker build -f Dockerfile-tics-base -t hub.pingcap.net/tiflash/tics-base .
 
 tics_image:
 	docker build -f Dockerfile-tics -t hub.pingcap.net/tiflash/tics .
