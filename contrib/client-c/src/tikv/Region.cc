@@ -7,7 +7,7 @@ namespace kv {
 RPCContextPtr RegionCache::getRPCContext(Backoffer & bo, const RegionVerID & id, bool is_learner) {
     RegionPtr region = getCachedRegion(bo, id);
     if (region == nullptr) {
-        throw Exception("not found region!");
+        throw Exception("not found region, region id is: " + std::to_string(id.id));
     }
     const auto & meta = region -> meta;
     auto  peer = region -> peer;
@@ -23,7 +23,7 @@ RPCContextPtr RegionCache::getRPCContext(Backoffer & bo, const RegionVerID & id,
     std::string addr = getStoreAddr(bo, peer.store_id());
     if (addr == "") {
         dropRegion(id);
-        throw Exception("miss store");;
+        throw Exception("miss store, region id is: " + std::to_string(id.id) + " store id is: " + std::to_string(peer.store_id()));
     }
     return std::make_shared<RPCContext>(id, meta, peer, addr);
 }
