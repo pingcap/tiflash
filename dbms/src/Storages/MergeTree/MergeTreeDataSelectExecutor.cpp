@@ -232,6 +232,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         TMTContext & tmt = context.getTMTContext();
 
+        if (!tmt.isInitialized())
+            throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+
         if (select.no_kvstore)
             regions_query_info.clear();
         else
