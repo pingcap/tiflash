@@ -655,6 +655,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
         {
             auto &tmt = data.context.getTMTContext();
 
+            while (!tmt.isInitialized())
+            {
+                LOG_WARNING(log, "TMTContext is not initialized, wait and retry");
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+
             bool pk_is_uint64 = false;
 
             const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
