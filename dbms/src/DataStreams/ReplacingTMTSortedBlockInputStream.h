@@ -53,6 +53,7 @@ private:
     bool behindGcTso();
     bool nextHasDiffPk();
     bool isDefiniteDeleted();
+    bool hasDeleteFlag();
 
     void logRowGoing(const std::string & reason, bool is_output);
 

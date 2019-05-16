@@ -1,3 +1,4 @@
+#include <Columns/ColumnsNumber.h>
 #include <DataStreams/ReplacingTMTSortedBlockInputStream.h>
 #include <Storages/MutableSupport.h>
 
@@ -106,7 +107,8 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
         }
     }
 
-    insertRow(merged_columns, merged_rows);
+    if (!(hasDeleteFlag() && behindGcTso()))
+        insertRow(merged_columns, merged_rows);
 
     finished = true;
 }
@@ -123,6 +125,9 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput()
 
     if (nextHasDiffPk())
     {
+        if (hasDeleteFlag() && behindGcTso())
+            return false;
+
         logRowGoing("PkLastRow", true);
         return true;
     }
@@ -165,6 +170,13 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::isDefiniteDeleted()
             return false;
         return true;
     }
+}
+
+template <typename HandleType>
+bool ReplacingTMTSortedBlockInputStream<HandleType>::hasDeleteFlag()
+{
+    const ColumnUInt8 * column = static_cast<const ColumnUInt8 *>((*selected_row.columns)[del_column_number]);
+    return MutableSupport::DelMark::isDel(column->getElement(selected_row.row_num));
 }
 
 template <typename HandleType>
