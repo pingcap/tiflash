@@ -216,7 +216,7 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
     AlterCommands alter_commands;
 
     /// Detect new columns.
-    // TODO: Detect type-changed columns.
+    // TODO: Detect rename or type-changed columns.
     for (const auto & column_info : table_info.columns)
     {
         const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
