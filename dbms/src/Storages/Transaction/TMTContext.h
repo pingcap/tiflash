@@ -43,6 +43,7 @@ public:
     pingcap::kv::RpcClientPtr getRpcClient();
 
     void restore();
+    bool isInitialized() const;
 
 private:
     SchemaSyncerPtr schema_syncer;
@@ -51,6 +52,7 @@ private:
     pingcap::kv::RpcClientPtr rpc_client;
 
     mutable std::mutex mutex;
+    std::atomic_bool initialized = false;
 };
 
 } // namespace DB

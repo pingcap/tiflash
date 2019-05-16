@@ -28,7 +28,10 @@ void TMTContext::restore()
         kvstore->removeRegion(id, &region_table);
 
     kvstore->updateRegionTableBySnapshot(region_table);
+    initialized = true;
 }
+
+bool TMTContext::isInitialized() const { return initialized; }
 
 SchemaSyncerPtr TMTContext::getSchemaSyncer() const
 {
