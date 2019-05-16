@@ -123,6 +123,8 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
+            /// Fill in `row` with decoded column values.
+
             delmark_data.emplace_back(write_type == Region::DelFlag);
             version_data.emplace_back(commit_ts);
 
@@ -152,27 +154,40 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
             if (row.size() & 1)
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
-            if (row.size() != target_row_size)
+            /// Modify `row` by adding missing column values or removing useless column values.
+
+            col_id_included.clear();
+            for (size_t i = 0; i < row.size(); i += 2)
+                col_id_included.emplace(row[i].get<ColumnID>());
+
+            // Fill in missing column values.
+            for (const TiDB::ColumnInfo & column : table_info.columns)
             {
-                col_id_included.clear();
+                if (handle_col_id == column.id)
+                    continue;
+                if (col_id_included.count(column.id))
+                    continue;
 
-                for (size_t i = 0; i < row.size(); i += 2)
-                    col_id_included.emplace(row[i].get<ColumnID>());
-
-                for (const TiDB::ColumnInfo & column : table_info.columns)
-                {
-                    if (handle_col_id == column.id)
-                        continue;
-                    if (col_id_included.count(column.id))
-                        continue;
-
-                    row.push_back(Field(column.id));
-                    row.push_back(Field());
-                }
-
-                if (row.size() != target_row_size)
-                    throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
+                row.push_back(Field(column.id));
+                // TODO: Fill `zero` value if NOT NULL specified or else NULL. Need checking DEFAULT VALUE too.
+                row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
             }
+
+            // Remove values of non-existing columns, which could be data inserted (but not flushed) before DDLs that drop some columns.
+            // TODO: May need to log this.
+            for (int i = int(row.size()) - 2; i >= 0; i -= 2)
+            {
+                Field & col_id = row[i];
+                if (column_map.find(col_id.get<ColumnID>()) == column_map.end())
+                {
+                    row.erase(row.begin() + i, row.begin() + i + 2);
+                }
+            }
+
+            if (row.size() != target_row_size)
+                throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
+
+            /// Transform `row` to columnar format.
 
             for (size_t i = 0; i < row.size(); i += 2)
             {

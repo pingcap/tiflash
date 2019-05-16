@@ -27,6 +27,7 @@
 #include <Interpreters/loadMetadata.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -308,9 +309,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
     /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
+    bool need_raft_service = false;
     if (config().has("raft"))
     {
-        String raft_service_addr = config().getString("raft.service_addr");
+        need_raft_service = true;
+
         if (config().has("raft.pd_addr"))
         {
             String pd_service_addrs = config().getString("raft.pd_addr");
@@ -339,7 +342,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         } else {
             global_context->setLearnerKey("engine");
         }
-        global_context->initializeRaftService(raft_service_addr);
     }
     if (config().has("tidb"))
     {
@@ -347,6 +349,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         String status_port = config().getString("tidb.status_port");
         global_context->initializeTiDBService(service_ip, status_port);
     }
+
+    {
+        /// create TMTContext
+        global_context->createTMTContext();
+    }
+
     /// Then, load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Loaded metadata.");
@@ -371,6 +379,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setDDLWorker(std::make_shared<DDLWorker>(ddl_zookeeper_path, *global_context, &config(), "distributed_ddl"));
     }
 
+    {
+        /// initialize TMTContext
+        global_context->getTMTContext().restore();
+    }
+
+    if (need_raft_service)
+    {
+        String raft_service_addr = config().getString("raft.service_addr");
+        global_context->initializeRaftService(raft_service_addr);
+    }
 
     {
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
