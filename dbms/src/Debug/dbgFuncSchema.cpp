@@ -27,7 +27,7 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     auto storage = tmt.storages.getByName(database_name, table_name);
     if (storage == nullptr)
     {
-        throw Exception("Table " + database_name + " doesn't not exist", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception("Table " + database_name + "." + table_name + " doesn't not exist", ErrorCodes::UNKNOWN_TABLE);
     }
     auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
     auto schema_syncer = tmt.getSchemaSyncer();
