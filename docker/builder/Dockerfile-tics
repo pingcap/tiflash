@@ -1,15 +1,5 @@
-FROM ubuntu:18.04
-
-RUN apt update && \
-    apt install -y tzdata python
+FROM hub.pingcap.net/tiflash/tics-base
 
 COPY tics /tics
-
-ENV TZ Asia/Shanghai
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-WORKDIR /
-
-ENV LD_LIBRARY_PATH /tics
 
 ENTRYPOINT ["/tics/theflash", "server"]
