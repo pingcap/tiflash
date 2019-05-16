@@ -331,8 +331,6 @@ public:
     /// Execute inner functions, debug only.
     DBGInvoker & getDBGInvoker() const;
 
-    TMTContext & getTMTContext();
-
     TMTContext & getTMTContext() const ;
 
     /// Create a cache of marks of specified size. This can be done only once.
@@ -369,6 +367,7 @@ public:
     DDLWorker & getDDLWorker() const;
 
     void initializeRaftService(const std::string & service_addr);
+    void createTMTContext();
     RaftService & getRaftService();
 
     void initializeTiDBService(const std::string & service_ip, const std::string & status_port);
