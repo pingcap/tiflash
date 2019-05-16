@@ -7,40 +7,42 @@ namespace JsonSer
 
 using DB::WriteBuffer;
 
-template<typename T = bool>
+template <typename T = bool>
 void serValue(WriteBuffer & buf, const bool & b)
 {
     writeString(b ? "true" : "false", buf);
 }
 
-template<typename T>
+template <typename T>
 typename std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value> serValue(WriteBuffer & buf, T i)
 {
     writeIntText(static_cast<Int64>(i), buf);
 }
 
-template<typename T>
+template <typename T>
 typename std::enable_if_t<std::is_floating_point<T>::value> serValue(WriteBuffer & buf, T f)
 {
     writeFloadText(f, buf);
 }
 
 // String that has been already encoded as JSON.
-struct JsonString : public std::string {};
+struct JsonString : public std::string
+{
+};
 
-template<typename T = JsonString>
+template <typename T = JsonString>
 void serValue(WriteBuffer & buf, const JsonString & qs)
 {
     writeString(qs, buf);
 }
 
-template<typename T = std::string>
+template <typename T = std::string>
 void serValue(WriteBuffer & buf, const std::string & s)
 {
     writeJSONString(s, buf);
 }
 
-template<typename T>
+template <typename T>
 void serValue(WriteBuffer & buf, const std::vector<T> & v)
 {
     writeString("[", buf);
@@ -53,31 +55,28 @@ void serValue(WriteBuffer & buf, const std::vector<T> & v)
     writeString("]", buf);
 }
 
-template<typename T = std::function<void(WriteBuffer &)>>
+template <typename T = std::function<void(WriteBuffer &)>>
 void serValue(WriteBuffer & buf, const std::function<void(WriteBuffer &)> & s)
 {
     s(buf);
 }
 
-template<typename T>
+template <typename T>
 std::function<void(WriteBuffer &)> Nullable(const T & value, bool is_null)
 {
-    return [value, is_null](WriteBuffer & buf) {
-        is_null ? writeString("null", buf) : serValue(buf, value);
-    };
+    return [value, is_null](WriteBuffer & buf) { is_null ? writeString("null", buf) : serValue(buf, value); };
 }
 
-template<typename T>
+template <typename T>
 struct Field
 {
-    Field(std::string name_, T value_, bool skip_ = false)
-        : name(std::move(name_)), value(std::move(value_)), skip(skip_) {}
+    Field(std::string name_, T value_, bool skip_ = false) : name(std::move(name_)), value(std::move(value_)), skip(skip_) {}
     std::string name;
     T value;
     bool skip;
 };
 
-template<typename T>
+template <typename T>
 void serField(WriteBuffer & buf, const Field<T> & field)
 {
     writeJSONString(field.name, buf);
@@ -85,15 +84,15 @@ void serField(WriteBuffer & buf, const Field<T> & field)
     serValue(buf, field.value);
 }
 
-template<typename T>
+template <typename T>
 void serFields(WriteBuffer & buf, const T & last)
 {
     if (!last.skip)
         serField(buf, last);
 }
 
-template<typename T, typename... Rest>
-void serFields(WriteBuffer & buf, const T & first, const Rest & ... rest)
+template <typename T, typename... Rest>
+void serFields(WriteBuffer & buf, const T & first, const Rest &... rest)
 {
     if (!first.skip)
     {
@@ -103,23 +102,21 @@ void serFields(WriteBuffer & buf, const T & first, const Rest & ... rest)
     serFields(buf, rest...);
 }
 
-template<typename... T>
-void serValue(WriteBuffer & buf, const T & ... fields)
+template <typename... T>
+void serValue(WriteBuffer & buf, const T &... fields)
 {
     writeString("{", buf);
     serFields(buf, fields...);
     writeString("}", buf);
 }
 
-template<typename... T>
-std::function<void(WriteBuffer &)> Struct(const T & ... fields)
+template <typename... T>
+std::function<void(WriteBuffer &)> Struct(const T &... fields)
 {
-    return [fields...](WriteBuffer & buf) {
-        serValue(buf, fields...);
-    };
+    return [fields...](WriteBuffer & buf) { serValue(buf, fields...); };
 }
 
-}
+} // namespace JsonSer
 
 namespace TiDB
 {
@@ -128,22 +125,15 @@ using DB::ReadBufferFromString;
 using DB::WriteBuffer;
 using DB::WriteBufferFromOwnString;
 
-ColumnInfo::ColumnInfo(const JSON & json)
-{
-    deserialize(json);
-}
+ColumnInfo::ColumnInfo(const JSON & json) { deserialize(json); }
 
 String ColumnInfo::serialize() const
 {
     WriteBufferFromOwnString buf;
 
     JsonSer::serValue(buf,
-        JsonSer::Struct(
-            JsonSer::Field("id", id),
-            JsonSer::Field("name",
-                JsonSer::Struct(
-                    JsonSer::Field("O", name),
-                    JsonSer::Field("L", name))),
+        JsonSer::Struct(JsonSer::Field("id", id),
+            JsonSer::Field("name", JsonSer::Struct(JsonSer::Field("O", name), JsonSer::Field("L", name))),
             JsonSer::Field("offset", offset),
             JsonSer::Field("origin_default", JsonSer::Nullable(origin_default_value, has_origin_default_value)),
             JsonSer::Field("default", JsonSer::Nullable(default_value, has_default_value)),
@@ -179,25 +169,19 @@ void ColumnInfo::deserialize(const JSON & json) try
 }
 catch (const JSONException & e)
 {
-    throw DB::Exception("Parse TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
-PartitionDefinition::PartitionDefinition(const JSON & json)
-{
-    deserialize(json);
-}
+PartitionDefinition::PartitionDefinition(const JSON & json) { deserialize(json); }
 
 String PartitionDefinition::serialize() const
 {
     WriteBufferFromOwnString buf;
 
     JsonSer::serValue(buf,
-        JsonSer::Struct(
-            JsonSer::Field("id", id),
-            JsonSer::Field("name",
-                JsonSer::Struct(
-                    JsonSer::Field("O", name),
-                    JsonSer::Field("L", name))),
+        JsonSer::Struct(JsonSer::Field("id", id),
+            JsonSer::Field("name", JsonSer::Struct(JsonSer::Field("O", name), JsonSer::Field("L", name))),
             JsonSer::Field("comment", comment)));
 
     return buf.str();
@@ -211,30 +195,28 @@ void PartitionDefinition::deserialize(const JSON & json) try
 }
 catch (const JSONException & e)
 {
-    throw DB::Exception("Parse TiDB schema JSON failed (PartitionDefinition): " + e.displayText(), DB::Exception(e));
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionDefinition): " + e.displayText(), DB::Exception(e));
 }
 
-PartitionInfo::PartitionInfo(const JSON & json)
-{
-    deserialize(json);
-}
+PartitionInfo::PartitionInfo(const JSON & json) { deserialize(json); }
 
 String PartitionInfo::serialize() const
 {
     WriteBufferFromOwnString buf;
 
     JsonSer::serValue(buf,
-        JsonSer::Struct(
-            JsonSer::Field("type", type),
+        JsonSer::Struct(JsonSer::Field("type", type),
             JsonSer::Field("expr", expr),
             JsonSer::Field("enable", enable),
-            JsonSer::Field("definitions", [this]() {
-                std::vector<JsonSer::JsonString> v(definitions.size());
-                std::transform(definitions.begin(), definitions.end(), v.begin(), [](const PartitionDefinition & definition) {
-                    return JsonSer::JsonString{definition.serialize()};
-                });
-                return v;
-            }()),
+            JsonSer::Field("definitions",
+                [this]() {
+                    std::vector<JsonSer::JsonString> v(definitions.size());
+                    std::transform(definitions.begin(), definitions.end(), v.begin(), [](const PartitionDefinition & definition) {
+                        return JsonSer::JsonString{definition.serialize()};
+                    });
+                    return v;
+                }()),
             JsonSer::Field("num", num)));
 
     return buf.str();
@@ -258,41 +240,31 @@ void PartitionInfo::deserialize(const JSON & json) try
 }
 catch (const JSONException & e)
 {
-    throw DB::Exception("Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
-TableInfo::TableInfo(const String & table_info_json, bool escaped)
-{
-    deserialize(table_info_json, escaped);
-}
+TableInfo::TableInfo(const String & table_info_json, bool escaped) { deserialize(table_info_json, escaped); }
 
 String TableInfo::serialize(bool escaped) const
 {
     WriteBufferFromOwnString buf;
 
     JsonSer::serValue(buf,
-        JsonSer::Struct(
-            JsonSer::Field("db_info",
-                JsonSer::Struct(
-                    JsonSer::Field("id", db_id),
-                    JsonSer::Field("db_name",
-                        JsonSer::Struct(
-                            JsonSer::Field("O", db_name),
-                            JsonSer::Field("L", db_name))))),
+        JsonSer::Struct(JsonSer::Field("db_info",
+                            JsonSer::Struct(JsonSer::Field("id", db_id),
+                                JsonSer::Field("db_name", JsonSer::Struct(JsonSer::Field("O", db_name), JsonSer::Field("L", db_name))))),
             JsonSer::Field("table_info",
-                JsonSer::Struct(
-                    JsonSer::Field("id", id),
-                    JsonSer::Field("name",
-                        JsonSer::Struct(
-                            JsonSer::Field("O", name),
-                            JsonSer::Field("L", name))),
-                    JsonSer::Field("cols", [this]() {
-                        std::vector<JsonSer::JsonString> v(columns.size());
-                        std::transform(columns.begin(), columns.end(), v.begin(), [](const ColumnInfo & column) {
-                            return JsonSer::JsonString{column.serialize()};
-                        });
-                        return v;
-                    }()),
+                JsonSer::Struct(JsonSer::Field("id", id),
+                    JsonSer::Field("name", JsonSer::Struct(JsonSer::Field("O", name), JsonSer::Field("L", name))),
+                    JsonSer::Field("cols",
+                        [this]() {
+                            std::vector<JsonSer::JsonString> v(columns.size());
+                            std::transform(columns.begin(), columns.end(), v.begin(), [](const ColumnInfo & column) {
+                                return JsonSer::JsonString{column.serialize()};
+                            });
+                            return v;
+                        }()),
                     JsonSer::Field("state", state),
                     JsonSer::Field("pk_is_handle", pk_is_handle),
                     JsonSer::Field("comment", comment),
@@ -303,7 +275,8 @@ String TableInfo::serialize(bool escaped) const
                         // lazy serializing partition as it could be null.
                         JsonSer::Nullable(std::function<void(WriteBuffer &)>([this](WriteBuffer & buf) {
                             JsonSer::serValue(buf, JsonSer::JsonString{partition.serialize()});
-                        }), !is_partition_table)))),
+                        }),
+                            !is_partition_table)))),
             JsonSer::Field("schema_version", schema_version)));
 
     if (!escaped)
@@ -381,7 +354,9 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
 }
 catch (const JSONException & e)
 {
-    throw DB::Exception("Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + json_str, DB::Exception(e));
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + json_str,
+        DB::Exception(e));
 }
 
 ColumnID TableInfo::getColumnID(const String & name) const
@@ -397,7 +372,7 @@ ColumnID TableInfo::getColumnID(const String & name) const
     if (name == DB::MutableSupport::tidb_pk_column_name)
         return DB::InvalidColumnID;
 
-    throw Exception("unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
+    throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-}
+} // namespace TiDB

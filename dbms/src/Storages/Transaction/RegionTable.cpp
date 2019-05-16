@@ -39,7 +39,7 @@ StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
     auto storage = tmt_ctx.storages.get(table_id);
     if (storage == nullptr)
     {
-        tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context);
+        tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context, false);
         storage = tmt_ctx.storages.get(table_id);
     }
     if (storage == nullptr)
