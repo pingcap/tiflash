@@ -350,13 +350,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         std::unordered_set<std::string> ignore_databases;
         if (config().has("tidb.ignore_databases"))
         {
+            LOG_INFO(log, "Found ignore databases.");
             String ignore_dbs = config().getString("tidb.ignore_databases");
             Poco::StringTokenizer string_tokens(ignore_dbs, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
                 ignore_databases.emplace(*it);
             }
         }
-        LOG_INFO(log, "Found pd addrs.");
         global_context->initializeTiDBService(service_ip, status_port, ignore_databases);
     }
 

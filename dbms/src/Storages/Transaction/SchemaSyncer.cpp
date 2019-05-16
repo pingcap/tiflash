@@ -353,6 +353,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     // TODO: Partition table?
     if (storage->getTableName() != table_info.name)
     {
+        /// Rename table if needed.
         LOG_DEBUG(log,
             __PRETTY_FUNCTION__ << ": Renaming table " << table_info.db_name << "." << storage->getTableName() << " TO "
                                 << table_info.db_name << "." << table_info.name);
