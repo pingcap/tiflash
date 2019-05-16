@@ -8,6 +8,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
@@ -85,6 +86,7 @@ String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
 String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context) { return Curl::instance().getTiDBTableInfoJson(table_id, context); }
 
 using TableInfo = TiDB::TableInfo;
+using ColumnInfo = TiDB::ColumnInfo;
 
 String createDatabaseStmt(const TableInfo & table_info) { return "CREATE DATABASE " + table_info.db_name; }
 
@@ -173,46 +175,140 @@ void createTable(const TableInfo & table_info, Context & context)
     interpreter.execute();
 }
 
+AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo & orig_table_info)
+{
+    AlterCommands alter_commands;
+
+    /// Detect new columns.
+    // TODO: Detect rename or type-changed columns.
+    for (const auto & column_info : table_info.columns)
+    {
+        const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
+            orig_table_info.columns.end(),
+            [&](const ColumnInfo & orig_column_info_) { return orig_column_info_.id == column_info.id; });
+
+        AlterCommand command;
+        if (orig_column_info == orig_table_info.columns.end())
+        {
+            // New column.
+            command.type = AlterCommand::ADD_COLUMN;
+            command.column_name = column_info.name;
+            command.data_type = getDataTypeByColumnInfo(column_info);
+            // TODO: support default value.
+            // TODO: support after column.
+        }
+        else
+        {
+            // Column unchanged.
+            continue;
+        }
+
+        alter_commands.emplace_back(std::move(command));
+    }
+
+    /// Detect dropped columns.
+    for (const auto & orig_column_info : orig_table_info.columns)
+    {
+        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+            return column_info_.id == orig_column_info.id;
+        });
+
+        AlterCommand command;
+        if (column_info == table_info.columns.end())
+        {
+            // Dropped column.
+            command.type = AlterCommand::DROP_COLUMN;
+            command.column_name = orig_column_info.name;
+        }
+        else
+        {
+            // Column unchanged.
+            continue;
+        }
+
+        alter_commands.emplace_back(std::move(command));
+    }
+
+    return alter_commands;
+}
+
 JsonSchemaSyncer::JsonSchemaSyncer() : log(&Logger::get("SchemaSyncer")) {}
 
-void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context)
+void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool force)
 {
-    // TODO: Only guarantee table's existence (thus no ALTER support). Do nothing if table already exists,
+    // Do nothing if table already exists unless forced,
     // so that we don't grab schema from TiDB, which is costly, on every syncSchema call.
     auto & tmt_context = context.getTMTContext();
-    if (tmt_context.storages.get(table_id))
+    if (!force && tmt_context.storages.get(table_id))
         return;
 
     /// Get table schema json from TiDB/TiKV.
     String table_info_json = getSchemaJson(table_id, context);
 
-    LOG_DEBUG(log, __FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
 
     TableInfo table_info(table_info_json, false);
 
-    if (!context.isDatabaseExist(table_info.db_name))
+    auto storage = tmt_context.storages.get(table_id);
+
+    if (storage == nullptr)
     {
-        LOG_DEBUG(log, __FUNCTION__ << ": Creating database " << table_info.db_name);
-        createDatabase(table_info, context);
+        /// Table not existing, create it.
+        if (!context.isDatabaseExist(table_info.db_name))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Creating database " << table_info.db_name);
+            createDatabase(table_info, context);
+        }
+
+        if (!context.isTableExist(table_info.db_name, table_info.name))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Creating table " << table_info.name);
+            createTable(table_info, context);
+            context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
+        }
+
+        /// Mangle for partition table.
+        bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
+        if (is_partition_table && !context.isTableExist(table_info.db_name, table_info.name))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
+            createTable(table_info, context);
+            context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
+        }
+        return;
     }
 
-    if (!context.isTableExist(table_info.db_name, table_info.name))
+    /// Table existing, detect schema changes and apply.
+    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+    const TableInfo & orig_table_info = merge_tree->getTableInfo();
+    AlterCommands alter_commands = detectSchemaChanges(table_info, orig_table_info);
+
+    std::stringstream ss;
+    ss << "Detected schema changes: ";
+    for (const auto & command : alter_commands)
     {
-        LOG_DEBUG(log, __FUNCTION__ << ": Creating table " << table_info.name);
-        createTable(table_info, context);
-        context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
+        // TODO: Other command types.
+        if (command.type == AlterCommand::ADD_COLUMN)
+            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+        else if (command.type == AlterCommand::DROP_COLUMN)
+            ss << "DROP COLUMN " << command.column_name << ", ";
     }
 
-    /// Mangle for partition table.
-    bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
-    if (is_partition_table && !context.isTableExist(table_info.db_name, table_info.name))
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
+
     {
-        LOG_DEBUG(log, __FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
-        createTable(table_info, context);
-        context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
+        // Change internal TableInfo in TMT first.
+        // TODO: Ideally this should be done within alter function, however we are limited by the narrow alter interface, thus not truly atomic.
+        auto table_hard_lock = storage->lockStructureForAlter(__PRETTY_FUNCTION__);
+        merge_tree->setTableInfo(table_info);
     }
 
-    // TODO: detect schema change and apply to storage.
+    // Call storage alter to apply schema changes.
+    storage->alter(alter_commands, table_info.db_name, table_info.name, context);
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
+
+    // TODO: Apply schema changes to partition tables.
 }
 
 String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }

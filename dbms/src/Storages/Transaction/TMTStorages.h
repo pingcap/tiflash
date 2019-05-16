@@ -19,6 +19,8 @@ public:
 
     StoragePtr get(TableID table_id);
 
+    StoragePtr getByName(const std::string & db, const std::string & table);
+
     void remove(TableID table_id);
 
 private:
