@@ -44,7 +44,7 @@ StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
     }
     if (storage == nullptr)
     {
-        throw Exception("Storage " + DB::toString(table_id) + " not found in TMT context", ErrorCodes::LOGICAL_ERROR);
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " not found in TMT context.");
     }
     return storage;
 }
@@ -152,6 +152,14 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
     TMTContext & tmt = context.getTMTContext();
 
     RegionDataReadInfoList data_list;
+    if (storage == nullptr)
+    {
+        // If storage still not existing after syncing schema, meaning this table is dropped and the data is to be GC-ed.
+        // Ignore such data.
+        LOG_WARNING(log,
+            __PRETTY_FUNCTION__ << ": Not flushing table_id: " << table_id << ", region_id: " << region_id << " as storage doesn't exist.");
+    }
+    else
     {
         auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
 
