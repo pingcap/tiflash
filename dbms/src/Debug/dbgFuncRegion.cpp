@@ -66,7 +66,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.kvstore->onSnapshot(region, &tmt.region_table);
+    tmt.getKVStoreMut()->onSnapshot(region, &tmt.getRegionTableMut());
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -77,7 +77,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    tmt.region_table.tryFlushRegions();
+    tmt.getRegionTableMut().tryFlushRegions();
 
     std::stringstream ss;
     ss << "region_table try flush regions";
@@ -127,7 +127,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
         is_readed = true;
         return true;
     };
-    applySnapshot(tmt.kvstore, reader, &context);
+    applySnapshot(tmt.getKVStore(), reader, &context);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -202,7 +202,7 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         ignore_none = (std::string(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
 
     size_t size = 0;
-    tmt.kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+    tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
         auto range = region->getHandleRangeByTable(table_id);
         size += 1;
@@ -220,54 +220,6 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         output(ss.str());
     });
     output("total size: " + toString(size));
-}
-
-void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() > 1)
-    {
-        throw Exception("Args not matched, should be: [show-region-range=false]", ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    bool show_region = false;
-    if (args.size() > 0)
-        show_region = (std::string(typeid_cast<const ASTIdentifier &>(*args[0]).name) == "true");
-
-    auto & tmt = context.getTMTContext();
-
-    RegionTable::RegionInfoMap regions;
-    tmt.region_table.dumpRegionInfoMap(regions);
-
-    for (const auto & it : regions)
-    {
-        auto region_id = it.first;
-        const auto & table_ids = it.second.tables;
-        for (const auto table_id : table_ids)
-        {
-            std::stringstream region_range_info;
-            if (show_region)
-            {
-                region_range_info << " (";
-                RegionPtr region = tmt.kvstore->getRegion(region_id);
-                if (!region)
-                {
-                    region_range_info << "not in kvstore";
-                }
-                else
-                {
-                    auto [start_key, end_key] = region->getRange();
-                    region_range_info << getStartKeyString(table_id, start_key);
-                    region_range_info << ", ";
-                    region_range_info << getEndKeyString(table_id, end_key);
-                    region_range_info << ")";
-                }
-            }
-
-            std::stringstream ss;
-            ss << "table #" << table_id << " region #" << region_id << region_range_info.str();
-            output(ss.str());
-        }
-    }
 }
 
 } // namespace DB

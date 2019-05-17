@@ -35,7 +35,7 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::
     }
 }
 
-RegionPtr KVStore::getRegion(RegionID region_id)
+RegionPtr KVStore::getRegion(RegionID region_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto it = regions.find(region_id);
@@ -48,7 +48,7 @@ size_t KVStore::regionSize() const
     return regions.size();
 }
 
-void KVStore::traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback)
+void KVStore::traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = regions.begin(); it != regions.end(); ++it)
@@ -96,7 +96,7 @@ void KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
 {
-    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().region_table) : nullptr;
+    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().getRegionTableMut()) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
 
