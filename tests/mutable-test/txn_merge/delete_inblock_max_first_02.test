@@ -8,7 +8,7 @@
 >> import into test partition ('0') values (2, 1, 102, 2), (0, 1, 100, 0), (1, 1, 101, 0)
 >> import into test partition ('0') values (0, 2, 100, 0)
 
->> optimize table test partition id '0' final
+>> optimize table test partition id '0'
 
 >> select _part, * from test
 ┌─_part───┬─v─┬─k─┐

@@ -92,7 +92,8 @@ public:
     MergeTreeData::MutableDataPartPtr mergePartsToTemporaryPart(
         const FuturePart & future_part,
         MergeListEntry & merge_entry,
-        size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplication);
+        size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplication,
+        bool final);
 
     MergeTreeData::DataPartPtr renameMergedTemporaryPart(
         MergeTreeData::MutableDataPartPtr & new_data_part,

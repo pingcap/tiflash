@@ -523,7 +523,7 @@ bool StorageMergeTree::merge(
     try
     {
         new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr),
-                                                    merging_tagger->reserved_space.get(), deduplicate);
+                                                    merging_tagger->reserved_space.get(), deduplicate, final);
         merger.renameMergedTemporaryPart(new_part, future_part.parts, nullptr);
 
         write_part_log({});
