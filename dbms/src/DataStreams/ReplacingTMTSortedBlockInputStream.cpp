@@ -107,7 +107,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
         }
     }
 
-    if (!(hasDeleteFlag() && behindGcTso()))
+    if (!(final && hasDeleteFlag() && behindGcTso()))
         insertRow(merged_columns, merged_rows);
 
     finished = true;
@@ -125,7 +125,7 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput()
 
     if (nextHasDiffPk())
     {
-        if (hasDeleteFlag() && behindGcTso())
+        if (final && hasDeleteFlag() && behindGcTso())
             return false;
 
         logRowGoing("PkLastRow", true);
