@@ -1222,7 +1222,7 @@ void StorageReplicatedMergeTree::tryExecuteMerge(const StorageReplicatedMergeTre
     try
     {
         part = merger.mergePartsToTemporaryPart(
-            future_merged_part, *merge_entry, aio_threshold, entry.create_time, reserved_space.get(), entry.deduplicate);
+            future_merged_part, *merge_entry, aio_threshold, entry.create_time, reserved_space.get(), entry.deduplicate, false);
 
         merger.renameMergedTemporaryPart(part, parts, &transaction);
 
