@@ -12,7 +12,8 @@ TableID RegionData::insert(ColumnFamilyType cf, const TiKVKey & key, const Strin
         case Write:
         {
             auto table_id = write_cf.insert(key, value, raw_key);
-            cf_data_size += key.dataSize() + value.dataSize();
+            if (table_id != InvalidTableID)
+                cf_data_size += key.dataSize() + value.dataSize();
             return table_id;
         }
         case Default:
@@ -26,7 +27,7 @@ TableID RegionData::insert(ColumnFamilyType cf, const TiKVKey & key, const Strin
             return lock_cf.insert(key, value, raw_key);
         }
         default:
-            throw Exception(" should not happen", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("RegionData::insert with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -41,13 +42,6 @@ void RegionData::removeDefaultCF(const TableID & table_id, const TiKVKey & key, 
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
     Timestamp ts = RecordKVFormat::getTs(key);
     cf_data_size -= default_cf.remove(table_id, RegionDefaultCFData::Key{handle_id, ts}, true);
-}
-
-void RegionData::removeWriteCF(const TableID & table_id, const TiKVKey & key, const String & raw_key)
-{
-    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-    Timestamp ts = RecordKVFormat::getTs(key);
-    cf_data_size -= write_cf.remove(table_id, RegionWriteCFData::Key{handle_id, ts}, true);
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it)

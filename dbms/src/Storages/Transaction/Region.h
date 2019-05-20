@@ -166,6 +166,14 @@ public:
 
     TableIDSet getCommittedRecordTableID() const;
 
+    using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
+
+    /// only can be used for applying snapshot. unsafe operation. only can be called by single thread.
+    void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
+
+    using TableHandleMap = std::unordered_map<TableID, std::set<std::tuple<HandleID, Timestamp, UInt8>>>;
+    TableHandleMap dumpWriteCFTableHandleVersion() const;
+
 private:
     // Private methods no need to lock mutex, normally
 
