@@ -18,6 +18,7 @@ public:
     void put(StoragePtr storage);
 
     StoragePtr get(TableID table_id);
+    std::unordered_map<TableID, StoragePtr> getAllStorage() const;
 
     StoragePtr getByName(const std::string & db, const std::string & table);
 

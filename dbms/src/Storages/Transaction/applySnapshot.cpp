@@ -87,18 +87,16 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     {
         auto & tmt = context->getTMTContext();
         Timestamp safe_point = tmt.getPDClient()->getGCSafePoint();
-        auto table_id_set = new_region->getCommittedRecordTableID();
 
         auto old_region_cache_data = old_region->dumpWriteCFTableHandleVersion();
 
-        for (const auto table_id : table_id_set)
+        for (auto [table_id, storage] : tmt.storages.getAllStorage())
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
             if (handle_range.first >= handle_range.second)
                 continue;
             HandleMap handle_map;
 
-            if (auto storage = tmt.storages.get(table_id); storage)
             {
                 auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                 auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
@@ -132,6 +130,9 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
             {
                 for (const auto & [handle, ts, del] : it->second)
                 {
+                    if (handle < handle_range.first || handle >= handle_range.second)
+                        continue;
+
                     const HandleMap::mapped_type cur_ele = {ts, del};
                     auto [it, ok] = handle_map.emplace(handle, cur_ele);
                     if (!ok)
