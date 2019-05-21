@@ -23,9 +23,9 @@ public:
     KVStore(const std::string & data_dir);
     void restore(const RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove = nullptr);
 
-    RegionPtr getRegion(RegionID region_id);
+    RegionPtr getRegion(RegionID region_id) const;
 
-    void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback);
+    void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
 
     bool onSnapshot(RegionPtr new_region, RegionTable * region_table, const std::optional<UInt64> expect_old_index = {});
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter

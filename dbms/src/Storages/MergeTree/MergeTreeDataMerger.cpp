@@ -673,7 +673,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             }
 
             std::vector<HandleRange<HandleID>> ranges;
-            tmt.region_table.traverseInternalRegionsByTable(
+            tmt.getRegionTableMut().traverseInternalRegionsByTable(
                 data.table_info->id,
                 [&](const RegionTable::InternalRegion & region) {
                     ranges.push_back(region.range_in_table);

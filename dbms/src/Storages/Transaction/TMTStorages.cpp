@@ -19,7 +19,7 @@ void TMTStorages::put(StoragePtr storage)
     storages.emplace(table_id, storage);
 }
 
-StoragePtr TMTStorages::get(TableID table_id)
+StoragePtr TMTStorages::get(TableID table_id) const
 {
     std::lock_guard lock(mutex);
 
@@ -31,7 +31,7 @@ StoragePtr TMTStorages::get(TableID table_id)
 
 std::unordered_map<TableID, StoragePtr> TMTStorages::getAllStorage() const { return storages; }
 
-StoragePtr TMTStorages::getByName(const std::string & db, const std::string & table)
+StoragePtr TMTStorages::getByName(const std::string & db, const std::string & table) const
 {
     std::lock_guard lock(mutex);
 

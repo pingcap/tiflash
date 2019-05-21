@@ -90,7 +90,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
 
         auto old_region_cache_data = old_region->dumpWriteCFTableHandleVersion();
 
-        for (auto [table_id, storage] : tmt.storages.getAllStorage())
+        for (auto [table_id, storage] : tmt.getStorages().getAllStorage())
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
             if (handle_range.first >= handle_range.second)
@@ -148,7 +148,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     }
 
     // context may be null in test cases.
-    if (kvstore->onSnapshot(new_region, context ? &context->getTMTContext().region_table : nullptr, expect_old_index))
+    if (kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTableMut() : nullptr, expect_old_index))
         LOG_INFO(log, "Region " << new_region->id() << " apply snapshot success");
 }
 

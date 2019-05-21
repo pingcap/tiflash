@@ -21,7 +21,7 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
     RegionDataReadInfoList & data_list_for_remove)
 {
     return getBlockInputStreamByRegion(table_id,
-        tmt.kvstore->getRegion(region_id),
+        tmt.getKVStore()->getRegion(region_id),
         InvalidRegionVersion,
         InvalidRegionVersion,
         table_info,
