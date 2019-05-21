@@ -84,30 +84,6 @@ void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output
     output(ss.str());
 }
 
-raft_serverpb::KeyValue lock_kv(TableID table_id, HandleID handle_id, Timestamp ts)
-{
-    raft_serverpb::KeyValue r;
-    *(r.mutable_key()) = RecordKVFormat::genKey(table_id, handle_id).getStr();
-    *(r.mutable_value()) = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "", ts, 0).getStr();
-    return r;
-}
-
-raft_serverpb::KeyValue default_kv(TableID table_id, HandleID handle_id, Timestamp ts, const String v)
-{
-    raft_serverpb::KeyValue r;
-    *(r.mutable_key()) = RecordKVFormat::genKey(table_id, handle_id, ts).getStr();
-    *(r.mutable_value()) = v;
-    return r;
-}
-
-raft_serverpb::KeyValue write_kv(TableID table_id, HandleID handle_id, Timestamp ts, Timestamp pre_ts)
-{
-    raft_serverpb::KeyValue r;
-    *(r.mutable_key()) = RecordKVFormat::genKey(table_id, handle_id, ts).getStr();
-    *(r.mutable_value()) = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, pre_ts).getStr();
-    return r;
-}
-
 void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 5 || args.size() > 6)
@@ -127,64 +103,31 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 
     TMTContext & tmt = context.getTMTContext();
 
-    std::vector<enginepb::SnapshotRequest> reqs;
+    enginepb::SnapshotRequest req;
+    bool is_readed = false;
 
-    {
-        enginepb::SnapshotRequest r;
-        *(r.mutable_state()->mutable_peer()) = createPeer(1, true);
-        *(r.mutable_state()->mutable_region())
-            = createRegionInfo(region_id, RecordKVFormat::genKey(table_id, start).getStr(), RecordKVFormat::genKey(table_id, end).getStr());
-        *(r.mutable_state()->mutable_apply_state()) = initialApplyState();
+    *(req.mutable_state()->mutable_peer()) = createPeer(1, true);
 
-        reqs.push_back(r);
-    }
+    metapb::Region region_info;
+    region_info.set_id(region_id);
+    region_info.set_start_key(RecordKVFormat::genKey(table_id, start).getStr());
+    region_info.set_end_key(RecordKVFormat::genKey(table_id, end).getStr());
+    *(region_info.mutable_peers()->Add()) = createPeer(1, true);
+    *(region_info.mutable_peers()->Add()) = createPeer(2, false);
+    *(req.mutable_state()->mutable_region()) = region_info;
 
-    /*
-    {
-        enginepb::SnapshotRequest r;
-        *(r.mutable_data()->mutable_cf()) = "default";
-        auto * kvs = r.mutable_data()->mutable_data();
-        *(kvs->Add()) = default_kv(table_id, 1, 1, "v1");
-        *(kvs->Add()) = default_kv(table_id, 2, 2, "v3");
-        *(kvs->Add()) = default_kv(table_id, 3, 3, "v3");
+    *(req.mutable_state()->mutable_apply_state()) = initialApplyState();
 
-        reqs.push_back(r);
-    }
+    // TODO: Put data into snapshot cmd
 
-    {
-        enginepb::SnapshotRequest r;
-        *(r.mutable_data()->mutable_cf()) = "lock";
-        auto * kvs = r.mutable_data()->mutable_data();
-        *(kvs->Add()) = lock_kv(table_id, 111);
-        *(kvs->Add()) = lock_kv(table_id, 222);
-        *(kvs->Add()) = lock_kv(table_id, 333);
-
-        reqs.push_back(r);
-    }
-
-    {
-        enginepb::SnapshotRequest r;
-        *(r.mutable_data()->mutable_cf()) = "write";
-        auto * kvs = r.mutable_data()->mutable_data();
-        *(kvs->Add()) = write_kv(table_id, 1, 1, 1);
-        *(kvs->Add()) = write_kv(table_id, 2, 2, 2);
-        *(kvs->Add()) = write_kv(table_id, 3, 3, 3);
-
-        reqs.push_back(r);
-    }
-    */
-
-    size_t index = 0;
-    auto read_snapshot = [&](enginepb::SnapshotRequest * req) {
-        if (index < reqs.size())
-        {
-            *req = reqs.at(index++);
-            return true;
-        }
-        else
+    auto reader = [&](enginepb::SnapshotRequest * out) {
+        if (is_readed)
             return false;
+        *out = req;
+        is_readed = true;
+        return true;
     };
-    applySnapshot(tmt.getKVStore(), read_snapshot, &context);
+    applySnapshot(tmt.getKVStore(), reader, &context);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
