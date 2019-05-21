@@ -275,7 +275,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     // Do nothing if table already exists unless forced,
     // so that we don't grab schema from TiDB, which is costly, on every syncSchema call.
     auto & tmt_context = context.getTMTContext();
-    if (!force && tmt_context.storages.get(table_id))
+    if (!force && tmt_context.getStorages().get(table_id))
         return;
 
     if (ignored_tables.count(table_id))
@@ -302,7 +302,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
         return;
     }
 
-    auto storage = tmt_context.storages.get(table_id);
+    auto storage = tmt_context.getStorages().get(table_id);
 
     if (storage == nullptr)
     {
@@ -316,7 +316,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
         auto create_table_internal = [&]() {
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Creating table " << table_info.name);
             createTable(table_info, context);
-            context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
+            context.getTMTContext().getStoragesMut().put(context.getTable(table_info.db_name, table_info.name));
 
             /// Mangle for partition table.
             bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
@@ -324,7 +324,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
             {
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
                 createTable(table_info, context);
-                context.getTMTContext().storages.put(context.getTable(table_info.db_name, table_info.name));
+                context.getTMTContext().getStoragesMut().put(context.getTable(table_info.db_name, table_info.name));
             }
         };
 

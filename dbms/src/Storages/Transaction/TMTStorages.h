@@ -17,15 +17,15 @@ class TMTStorages
 public:
     void put(StoragePtr storage);
 
-    StoragePtr get(TableID table_id);
+    StoragePtr get(TableID table_id) const;
 
-    StoragePtr getByName(const std::string & db, const std::string & table);
+    StoragePtr getByName(const std::string & db, const std::string & table) const;
 
     void remove(TableID table_id);
 
 private:
     std::unordered_map<TableID, StoragePtr> storages;
-    std::mutex mutex;
+    mutable std::mutex mutex;
 };
 
 } // namespace DB
