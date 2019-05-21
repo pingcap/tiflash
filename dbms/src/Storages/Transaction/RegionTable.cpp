@@ -36,11 +36,11 @@ RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
 StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
 {
     auto & tmt_ctx = context.getTMTContext();
-    auto storage = tmt_ctx.storages.get(table_id);
+    auto storage = tmt_ctx.getStorages().get(table_id);
     if (storage == nullptr)
     {
         tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context, false);
-        storage = tmt_ctx.storages.get(table_id);
+        storage = tmt_ctx.getStorages().get(table_id);
     }
     if (storage == nullptr)
     {
@@ -120,7 +120,7 @@ void RegionTable::updateRegionRange(const RegionPtr & region, TableIDSet & table
     }
 }
 
-bool RegionTable::shouldFlush(const InternalRegion & region)
+bool RegionTable::shouldFlush(const InternalRegion & region) const
 {
     if (region.pause_flush)
         return false;
@@ -181,7 +181,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     // remove data in region
     {
-        auto region = tmt.kvstore->getRegion(region_id);
+        auto region = tmt.getKVStore()->getRegion(region_id);
         if (!region)
             return;
         auto remover = region->createCommittedRemover(table_id);
@@ -438,7 +438,7 @@ void RegionTable::traverseInternalRegionsByTable(const TableID table_id, std::fu
 void RegionTable::traverseRegionsByTable(
     const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback)
 {
-    auto & kvstore = context.getTMTContext().kvstore;
+    auto & kvstore = context.getTMTContext().getKVStore();
     std::vector<std::pair<RegionID, RegionPtr>> regions;
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -453,15 +453,9 @@ void RegionTable::traverseRegionsByTable(
     callback(regions);
 }
 
-void RegionTable::dumpRegionInfoMap(RegionTable::RegionInfoMap & res) const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    res = regions;
-}
-
 void RegionTable::mockDropRegionsInTable(TableID table_id)
 {
-    auto & kvstore = context.getTMTContext().kvstore;
+    auto & kvstore = context.getTMTContext().getKVStoreMut();
     traverseRegionsByTable(table_id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
         for (auto && [region_id, _] : regions)
         {

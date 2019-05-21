@@ -39,6 +39,7 @@ public:
     explicit PersistedContainer(const std::string & path_) : path(path_) {}
 
     auto & get() { return container; }
+    const auto & get() const { return container; }
 
     void persist()
     {

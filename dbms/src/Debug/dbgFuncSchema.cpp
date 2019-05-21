@@ -24,7 +24,7 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     std::transform(table_name.begin(), table_name.end(), table_name.begin(), ::tolower);
 
     TMTContext & tmt = context.getTMTContext();
-    auto storage = tmt.storages.getByName(database_name, table_name);
+    auto storage = tmt.getStorages().getByName(database_name, table_name);
     if (storage == nullptr)
     {
         throw Exception("Table " + database_name + "." + table_name + " doesn't not exist", ErrorCodes::UNKNOWN_TABLE);
