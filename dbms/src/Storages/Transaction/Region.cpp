@@ -380,8 +380,16 @@ void Region::setPendingRemove()
 
 size_t Region::dataSize() const { return data.dataSize(); }
 
+size_t Region::writeCFCount() const
+{
+    std::shared_lock<std::shared_mutex> lock(mutex);
+    return data.writeCF().getSize();
+}
+
 std::string Region::dataInfo() const
 {
+    std::shared_lock<std::shared_mutex> lock(mutex);
+
     std::stringstream ss;
     auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
     if (write_size)
@@ -470,14 +478,15 @@ TableIDSet Region::getCommittedRecordTableID() const
 
 void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const TableID table_id, const Timestamp safe_point)
 {
+    std::unique_lock<std::shared_mutex> lock(mutex);
+
     if (handle_map.empty())
         return;
 
     auto & region_data = data.writeCFMute().getDataMut();
-    auto it = region_data.find(table_id);
-    if (it == region_data.end())
-        return;
-    auto & write_map = it->second;
+    auto & write_map = region_data[table_id];
+
+    size_t duplicate_cnt = 0, deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
 
     // first check, remove duplicate data in current region.
     for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
@@ -487,15 +496,25 @@ void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const Ta
         if (auto it = handle_map.find(handle); it != handle_map.end())
         {
             const auto & [ori_ts, ori_del] = it->second;
-            std::ignore = ori_del;
 
+            // for any handle, if a record with tso_a has been flushed, then any record with tso < tso_a must have been.
             if (ori_ts > ts)
             {
                 write_map_it = removeDataByWriteIt(table_id, write_map_it);
+                ++duplicate_cnt;
                 continue;
             }
             else if (ori_ts == ts) // keep the same one and remove later.
-                ;
+            {
+                UInt8 is_deleted = RegionData::getWriteType(write_map_it) == DelFlag;
+                if (is_deleted != ori_del)
+                {
+                    LOG_ERROR(log,
+                        "WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: " << ori_del
+                                                           << " , current: " << is_deleted);
+                    throw Exception("Region::compareAndCompleteSnapshot original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+                }
+            }
             else
                 handle_map.erase(it);
         }
@@ -508,46 +527,38 @@ void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const Ta
     {
         const auto & handle = it->first;
         const auto & [ori_ts, ori_del] = it->second;
-        std::ignore = ori_del;
 
         if (auto write_map_it = write_map.find({handle, ori_ts}); write_map_it != write_map.end())
         {
             removeDataByWriteIt(table_id, write_map_it);
+            ++duplicate_cnt;
         }
         else
         {
             if (ori_ts >= safe_point)
                 throw Exception("Region::compareAndCompleteSnapshot original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
-            if (ori_del != DelFlag)
+            if (ori_del == 0) // if not deleted
             {
                 std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
                 TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
-                TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, ori_ts);
+                TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
+                TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
 
-                data.insert(Write, key, raw_key, value);
+                data.insert(Write, commit_key, raw_key, value);
+                ++deleted_gc_cnt;
+            }
+            else
+            {
+                // if deleted, keep it.
             }
         }
     }
-}
 
-Region::TableHandleMap Region::dumpWriteCFTableHandleVersion() const
-{
-    std::shared_lock<std::shared_mutex> lock(mutex);
-
-    TableHandleMap res;
-    for (const auto & [table_id, data_map] : data.writeCF().getData())
-    {
-        auto & table = res[table_id];
-        for (const auto & write : data_map)
-        {
-            const auto & decoded_val = std::get<2>(write.second);
-            const auto & [handle, ts] = write.first;
-            const auto & write_type = std::get<0>(decoded_val);
-            table.emplace(handle, ts, write_type == DelFlag ? 1 : 0);
-        }
-    }
-    return res;
+    LOG_INFO(log,
+        "compareAndCompleteSnapshot: table " << table_id << ", gc safe point " << safe_point << ", original write map size "
+                                             << ori_write_map_size << ", duplicate " << duplicate_cnt << ", deleted gc " << deleted_gc_cnt
+                                             << ", remain size " << write_map.size());
 }
 
 } // namespace DB

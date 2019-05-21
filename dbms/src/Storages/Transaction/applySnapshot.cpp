@@ -40,17 +40,38 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     };
     auto new_region = std::make_shared<Region>(meta, region_client_create);
 
-    LOG_INFO(log, "Region " << new_region->id() << " try to apply snapshot: " << new_region->toString(true));
+    LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
     auto old_region = kvstore->getRegion(new_region->id());
 
     std::optional<UInt64> expect_old_index;
+    if (old_region)
     {
         expect_old_index = old_region->getIndex();
-        if (expect_old_index >= new_region->getIndex())
+        if (*expect_old_index >= new_region->getIndex())
         {
             LOG_INFO(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
             return;
+        }
+
+        // make sure all data in old region is flushed.
+        if (context)
+        {
+            for (size_t write_cnt = old_region->writeCFCount(); write_cnt; write_cnt = old_region->writeCFCount())
+            {
+                LOG_INFO(log, "Region has " << write_cnt << " records in write cf, try to flush");
+                bool status = true;
+                for (const auto table_id : old_region->getCommittedRecordTableID())
+                {
+                    status &= context->getTMTContext().getRegionTableMut().tryFlushRegion(table_id, old_region->id());
+                }
+                if (!status)
+                {
+                    constexpr size_t backoff = 500;
+                    LOG_DEBUG(log, "sleep " << backoff << " ms and retry");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
+                }
+            }
         }
     }
 
@@ -88,8 +109,6 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
         auto & tmt = context->getTMTContext();
         Timestamp safe_point = tmt.getPDClient()->getGCSafePoint();
 
-        auto old_region_cache_data = old_region->dumpWriteCFTableHandleVersion();
-
         for (auto [table_id, storage] : tmt.getStorages().getAllStorage())
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
@@ -124,23 +143,6 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
                 }
                 else
                     handle_map = getHandleMapByRange<Int64>(*context, *merge_tree, handle_range);
-            }
-
-            if (auto it = old_region_cache_data.find(table_id); it != old_region_cache_data.end())
-            {
-                for (const auto & [handle, ts, del] : it->second)
-                {
-                    if (handle < handle_range.first || handle >= handle_range.second)
-                        continue;
-
-                    const HandleMap::mapped_type cur_ele = {ts, del};
-                    auto [it, ok] = handle_map.emplace(handle, cur_ele);
-                    if (!ok)
-                    {
-                        auto & ele = it->second;
-                        ele = std::max(ele, cur_ele);
-                    }
-                }
             }
 
             new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);

@@ -62,6 +62,9 @@ public:
 
     RegionData(RegionData && data);
 
+public:
+    static UInt8 getWriteType(const WriteCFIter & write_it);
+
 private:
     RegionWriteCFData write_cf;
     RegionDefaultCFData default_cf;
