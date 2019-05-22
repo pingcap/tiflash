@@ -172,13 +172,13 @@ public:
     /// only can be used for applying snapshot. only can be called by single thread.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
 
+    static ColumnFamilyType getCf(const std::string & cf);
+
 private:
     // Private methods no need to lock mutex, normally
 
     TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
-
-    static ColumnFamilyType getCf(const std::string & cf);
 
     RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);

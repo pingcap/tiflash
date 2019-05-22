@@ -26,7 +26,7 @@ TableID RegionCFDataBase<Trait>::insert(const TiKVKey & key, const TiKVValue & v
 template <typename Trait>
 TableID RegionCFDataBase<Trait>::insert(const TiKVKey & key, const TiKVValue & value, const String & raw_key)
 {
-    auto kv_pair = Trait::genKVPair(key, raw_key, value);
+    Pair kv_pair = Trait::genKVPair(key, raw_key, value);
     if (shouldIgnoreInsert(kv_pair.second))
         return InvalidTableID;
 

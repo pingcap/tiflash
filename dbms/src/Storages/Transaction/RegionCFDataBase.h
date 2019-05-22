@@ -29,6 +29,7 @@ struct RegionCFDataBase
     using Value = typename Trait::Value;
     using Map = typename Trait::Map;
     using Data = std::unordered_map<TableID, Map>;
+    using Pair = std::pair<Key, Value>;
 
     static const TiKVKey & getTiKVKey(const Value & val);
 
