@@ -217,9 +217,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
     }
 
+    ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
+
     bool pk_is_uint64 = false;
 
-    if (is_txn_engine)
+    if (!is_txn_engine)
+        ;
+    else if (!select.no_kvstore)
     {
         handle_col_name = data.getPrimarySortDescription()[0].column_name;
 
@@ -228,39 +232,32 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
             pk_is_uint64 = true;
 
-        ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
-
         TMTContext & tmt = context.getTMTContext();
 
         if (!tmt.isInitialized())
             throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-        if (select.no_kvstore)
-            regions_query_info.clear();
-        else
+        for (const auto & query_info : regions_query_info)
+            kvstore_region.emplace(query_info.region_id, tmt.getKVStore()->getRegion(query_info.region_id));
+
+        if (regions_query_info.empty())
         {
-            for (const auto & query_info : regions_query_info)
-                kvstore_region.emplace(query_info.region_id, tmt.getKVStore()->getRegion(query_info.region_id));
-
-            if (regions_query_info.empty())
-            {
-                tmt.getRegionTableMut().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
-                    for (const auto & [id, region] : regions)
-                    {
-                        kvstore_region.emplace(id, region);
-                        if (region == nullptr)
-                            // maybe region is removed.
-                            regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
-                        else
-                            regions_query_info.push_back(
-                                {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
-                    }
-                });
-            }
-
-            if (kvstore_region.size() != regions_query_info.size())
-                throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
+            tmt.getRegionTableMut().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+                for (const auto & [id, region] : regions)
+                {
+                    kvstore_region.emplace(id, region);
+                    if (region == nullptr)
+                        // maybe region is removed.
+                        regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
+                    else
+                        regions_query_info.push_back(
+                            {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
+                }
+            });
         }
+
+        if (kvstore_region.size() != regions_query_info.size())
+            throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
 
         std::sort(regions_query_info.begin(), regions_query_info.end());
 
@@ -482,8 +479,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     RelativeSize relative_sample_size = 0;
     RelativeSize relative_sample_offset = 0;
-
-    ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
 
     auto select_sample_size = select.sample_size();
     auto select_sample_offset = select.sample_offset();
@@ -914,7 +909,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     res.emplace_back(std::make_shared<BlocksListBlockInputStream>(std::move(blocks)));
             }
         }
-        else
+        else if (!select.no_kvstore)
         {
             const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
                 return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
@@ -1073,6 +1068,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 if (!union_regions_stream.empty())
                     res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
             }
+        }
+        else
+        {
+            // no use for select nokvstore ...
         }
     }
     else if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable && !select.raw_for_mutable)
