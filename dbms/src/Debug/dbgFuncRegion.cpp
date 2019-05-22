@@ -1,5 +1,6 @@
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/executeQuery.h>
@@ -117,6 +118,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     *(req.mutable_state()->mutable_region()) = region_info;
 
     *(req.mutable_state()->mutable_apply_state()) = initialApplyState();
+
+    (req.mutable_state()->mutable_apply_state())->set_applied_index(MockTiKV::instance().getRaftTerm(region_id));
 
     // TODO: Put data into snapshot cmd
 

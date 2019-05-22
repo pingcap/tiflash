@@ -121,7 +121,7 @@ void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, co
 }
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
-    ASTs::const_iterator end, Context & context)
+    ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
 {
     std::vector<Field> fields;
     ASTs::const_iterator it;
@@ -145,13 +145,20 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();
+    bool is_del = false;
 
+    if (tso_del.has_value())
     {
-        RaftContext raft_ctx(&context, nullptr, nullptr);
-        enginepb::CommandRequestBatch cmds;
-        addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, false);
-        tmt.getKVStoreMut()->onServiceCommand(cmds, raft_ctx);
+        auto [tso, del] = *tso_del;
+        prewrite_ts = tso;
+        commit_ts = tso;
+        is_del = del;
     }
+
+    RaftContext raft_ctx(&context, nullptr, nullptr);
+    enginepb::CommandRequestBatch cmds;
+    addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, is_del);
+    tmt.getKVStoreMut()->onServiceCommand(cmds, raft_ctx);
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)

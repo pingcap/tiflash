@@ -50,16 +50,24 @@ protected:
     Block readImpl() override;
 
 private:
+    union CmpOptimizedRes
+    {
+        Int32 all;
+        std::array<Int8, 4> diffs;
+    };
+
     void merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue);
     void insertRow(MutableColumns &, size_t &);
 
-    bool shouldOutput();
+    bool shouldOutput(const CmpOptimizedRes res);
     bool behindGcTso();
-    bool nextHasDiffPk();
     bool isDefiniteDeleted();
     bool hasDeleteFlag();
 
-    void logRowGoing(const std::string & reason, bool is_output);
+    void logRowGoing(const char * reason, bool is_output);
+
+    static CmpOptimizedRes cmpOptimizedForTMT(
+        const MergingSortedBlockInputStream::RowRef & row_a, const MergingSortedBlockInputStream::RowRef & row_b);
 
 private:
     std::vector<Handle> begin_handle_ranges;

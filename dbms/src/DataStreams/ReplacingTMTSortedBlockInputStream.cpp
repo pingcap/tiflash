@@ -55,6 +55,30 @@ Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
 }
 
 template <typename HandleType>
+typename ReplacingTMTSortedBlockInputStream<HandleType>::CmpOptimizedRes ReplacingTMTSortedBlockInputStream<HandleType>::cmpOptimizedForTMT(
+    const MergingSortedBlockInputStream::RowRef & row_a, const MergingSortedBlockInputStream::RowRef & row_b)
+{
+    CmpOptimizedRes res{.all = 0};
+    {
+        HandleType h1 = static_cast<HandleType>(row_a.columns[0][0]->getUInt(row_a.row_num));
+        HandleType h2 = static_cast<HandleType>(row_b.columns[0][0]->getUInt(row_b.row_num));
+        res.diffs[0] = h1 != h2;
+    }
+    {
+        Timestamp t1 = static_cast<const ColumnUInt64 *>(row_a.columns[0][1])->getData()[row_a.row_num];
+        Timestamp t2 = static_cast<const ColumnUInt64 *>(row_b.columns[0][1])->getData()[row_b.row_num];
+        res.diffs[1] = t1 != t2;
+    }
+    {
+        UInt8 d1 = static_cast<const ColumnUInt8 *>(row_a.columns[0][2])->getData()[row_a.row_num];
+        UInt8 d2 = static_cast<const ColumnUInt8 *>(row_b.columns[0][2])->getData()[row_b.row_num];
+        res.diffs[2] = d1 != d2;
+    }
+
+    return res;
+}
+
+template <typename HandleType>
 void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue)
 {
     size_t merged_rows = 0;
@@ -63,7 +87,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
     {
         SortCursor current = queue.top();
 
-        if (current_key.empty())
+        if (selected_row.empty())
         {
             setRowRef(selected_row, current);
             setPrimaryKeyRef(current_key, current);
@@ -71,29 +95,41 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 
         setPrimaryKeyRef(next_key, current);
 
-        bool key_differs = (next_key != current_key);
+        const auto key_differs = cmpOptimizedForTMT(current_key, next_key);
 
-        if (key_differs && merged_rows >= max_block_size)
+        if ((key_differs.diffs[0] | key_differs.diffs[1]) == 0) // handle and tso are equal.
         {
-            logRowGoing("merged_rows >= max_block_size", false);
-            return;
-        }
+            queue.pop();
 
-        queue.pop();
+            if (key_differs.diffs[2] == 0) // del is equal
+            {
+                logRowGoing("key are totally equal", false);
+            }
+            else
+            {
+                logRowGoing("handle and tso are equal, del not", false);
 
-        if (key_differs)
-        {
-            if (shouldOutput())
-                insertRow(merged_columns, merged_rows);
-
-            selected_row.reset();
-            setRowRef(selected_row, current);
-
-            current_key.swap(next_key);
+                setRowRef(selected_row, current);
+                current_key.swap(next_key);
+            }
         }
         else
         {
-            logRowGoing("!key_differs", false);
+            if (merged_rows >= max_block_size)
+            {
+                logRowGoing("merged_rows >= max_block_size", false);
+                return;
+            }
+            else
+            {
+                queue.pop();
+
+                if (shouldOutput(key_differs))
+                    insertRow(merged_columns, merged_rows);
+
+                setRowRef(selected_row, current);
+                current_key.swap(next_key);
+            }
         }
 
         if (!current->isLast())
@@ -114,7 +150,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 }
 
 template <typename HandleType>
-bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput()
+bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const CmpOptimizedRes res)
 {
     if (isDefiniteDeleted())
     {
@@ -123,7 +159,8 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput()
         return false;
     }
 
-    if (nextHasDiffPk())
+    // next has diff pk
+    if (res.diffs[0])
     {
         if (final && hasDeleteFlag() && behindGcTso())
             return false;
@@ -146,13 +183,6 @@ template <typename HandleType>
 bool ReplacingTMTSortedBlockInputStream<HandleType>::behindGcTso()
 {
     return (*(*selected_row.columns)[version_column_number]).getUInt(selected_row.row_num) < gc_tso;
-}
-
-template <typename HandleType>
-bool ReplacingTMTSortedBlockInputStream<HandleType>::nextHasDiffPk()
-{
-    return (*(*selected_row.columns)[pk_column_number]).getUInt(selected_row.row_num)
-        != (*(*next_key.columns)[0]).getUInt(next_key.row_num);
 }
 
 template <typename HandleType>
@@ -180,7 +210,7 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::hasDeleteFlag()
 }
 
 template <typename HandleType>
-void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const std::string & msg, bool is_output)
+void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const char * msg, bool is_output)
 {
     // Disable debug log
     return;

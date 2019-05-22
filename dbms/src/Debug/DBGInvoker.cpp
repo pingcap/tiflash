@@ -42,6 +42,7 @@ DBGInvoker::DBGInvoker()
     regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 
     regFunc("raft_insert_row", dbgFuncRaftInsertRow);
+    regFunc("raft_insert_row_full", dbgFuncRaftInsertRowFull);
     regFunc("raft_insert_rows", dbgFuncRaftInsertRows);
     regFunc("raft_update_rows", dbgFuncRaftUpdateRows);
     regFunc("raft_delete_rows", dbgFuncRaftDelRows);
