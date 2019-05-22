@@ -69,6 +69,7 @@ struct RegionCFDataBase
 
 private:
     static bool shouldIgnoreInsert(const Value & value);
+    static bool shouldIgnoreRemove(const Value & value);
 
 private:
     Data data;

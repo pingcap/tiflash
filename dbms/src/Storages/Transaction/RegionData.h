@@ -29,6 +29,7 @@ public:
 
     void removeLockCF(const TableID & table_id, const String & raw_key);
     void removeDefaultCF(const TableID & table_id, const TiKVKey & key, const String & raw_key);
+    void removeWriteCF(const TableID & table_id, const TiKVKey & key, const String & raw_key);
 
     WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it);
 

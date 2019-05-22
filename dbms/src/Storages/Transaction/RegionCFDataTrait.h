@@ -27,6 +27,8 @@ struct RegionWriteCFDataTrait
         auto tikv_key = RecordKVFormat::appendTs(RecordKVFormat::genKey(table_id, handle_id), ts);
         return tikv_key;
     }
+
+    static UInt8 getWriteType(const Value & value) { return std::get<0>(std::get<2>(value)); }
 };
 
 

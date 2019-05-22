@@ -61,6 +61,18 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const 
 
 
 template <typename Trait>
+bool RegionCFDataBase<Trait>::shouldIgnoreRemove(const RegionCFDataBase::Value &)
+{
+    return false;
+}
+
+template <>
+bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRemove(const RegionCFDataBase::Value & value)
+{
+    return RegionWriteCFDataTrait::getWriteType(value) == CFModifyFlag::DelFlag;
+}
+
+template <typename Trait>
 bool RegionCFDataBase<Trait>::shouldIgnoreInsert(const RegionCFDataBase::Value &)
 {
     return false;
@@ -70,8 +82,7 @@ template <>
 bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreInsert(const RegionCFDataBase::Value & value)
 {
     // only keep records with DelFlag or PutFlag.
-    const RegionWriteCFDataTrait::DecodedWriteCFValue & decoded_val = std::get<2>(value);
-    const auto & flag = std::get<0>(decoded_val);
+    const auto flag = RegionWriteCFDataTrait::getWriteType(value);
     return flag != CFModifyFlag::DelFlag && flag != CFModifyFlag::PutFlag;
 }
 
@@ -83,6 +94,10 @@ size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool q
     if (auto it = map.find(key); it != map.end())
     {
         const Value & value = it->second;
+
+        if (shouldIgnoreRemove(value))
+            return 0;
+
         size_t size = calcTiKVKeyValueSize(value);
         map.erase(it);
         return size;

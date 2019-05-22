@@ -93,7 +93,8 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
         }
         case Write:
         {
-            // ignore.
+            // removed by gc, may not exist.
+            data.removeWriteCF(table_id, key, raw_key);
             break;
         }
     }

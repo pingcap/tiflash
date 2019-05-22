@@ -44,6 +44,14 @@ void RegionData::removeDefaultCF(const TableID & table_id, const TiKVKey & key, 
     cf_data_size -= default_cf.remove(table_id, RegionDefaultCFData::Key{handle_id, ts}, true);
 }
 
+void RegionData::removeWriteCF(const TableID & table_id, const TiKVKey & key, const String & raw_key)
+{
+    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
+    Timestamp ts = RecordKVFormat::getTs(key);
+
+    cf_data_size -= write_cf.remove(table_id, RegionWriteCFData::Key{handle_id, ts}, true);
+}
+
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it)
 {
     const auto & [key, value, decoded_val] = write_it->second;
@@ -182,6 +190,6 @@ RegionData::RegionData(RegionData && data)
     : write_cf(std::move(data.write_cf)), default_cf(std::move(data.default_cf)), lock_cf(std::move(data.lock_cf))
 {}
 
-UInt8 RegionData::getWriteType(const WriteCFIter & write_it) { return std::get<0>(std::get<2>(write_it->second)); }
+UInt8 RegionData::getWriteType(const WriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
 
 } // namespace DB
