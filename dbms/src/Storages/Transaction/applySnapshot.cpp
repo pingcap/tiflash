@@ -139,7 +139,6 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
                         for (auto & [handle, data] : new_handle_map)
                             handle_map[handle] = std::move(data);
                     }
-                    new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);
                 }
                 else
                     handle_map = getHandleMapByRange<Int64>(*context, *merge_tree, handle_range);
