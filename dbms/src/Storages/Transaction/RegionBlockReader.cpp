@@ -128,6 +128,8 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     {
         for (const auto & [handle, write_type, commit_ts, value] : data_list)
         {
+            std::ignore = commit_ts;
+            
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
             /// Fill in `row` with decoded column values.
