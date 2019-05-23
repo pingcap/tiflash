@@ -61,7 +61,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 
     while (!tmt_queue.empty())
     {
-        TMTSortCursor current = tmt_queue.top();
+        TMTSortCursorFull current = tmt_queue.top();
 
         if (selected_row.empty())
         {
@@ -71,7 +71,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 
         setPrimaryKeyRef(next_key, current);
 
-        const auto key_differs = TMTSortCursor::cmp(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
+        const auto key_differs = TMTSortCursorFull::cmp(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
 
         if ((key_differs.diffs[0] | key_differs.diffs[1]) == 0) // handle and tso are equal.
         {
@@ -208,7 +208,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::initQueue()
 {
     for (size_t i = 0; i < cursors.size(); ++i)
         if (!cursors[i].empty())
-            tmt_queue.push(TMTSortCursor(&cursors[i]));
+            tmt_queue.push(TMTSortCursorFull(&cursors[i]));
 }
 
 template class ReplacingTMTSortedBlockInputStream<Int64>;

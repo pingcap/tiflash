@@ -83,8 +83,8 @@ private:
 
     bool final;
 
-    using TMTSortCursor = TMTSortCursor<false>;
-    using TMTQueue = std::priority_queue<TMTSortCursor>;
+    using TMTSortCursorFull = TMTSortCursor<false>;
+    using TMTQueue = std::priority_queue<TMTSortCursorFull>;
     TMTQueue tmt_queue;
 };
 

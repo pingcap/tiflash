@@ -25,8 +25,8 @@ protected:
     void initQueue() override;
 
 private:
-    using TMTSortCursor = TMTSortCursor<true>;
-    using TMTPKQueue = std::priority_queue<TMTSortCursor>;
+    using TMTSortCursorPK = TMTSortCursor<true>;
+    using TMTPKQueue = std::priority_queue<TMTSortCursorPK>;
     TMTPKQueue tmt_queue;
 
     ssize_t version_column_number = -1;
@@ -54,11 +54,11 @@ private:
     size_t by_column = 0;
     size_t by_row = 0;
 
-    TMTSortCursor cur_block_cursor;
+    TMTSortCursorPK cur_block_cursor;
     SortCursorImpl cur_block_cursor_impl;
     SharedBlockPtr cur_block;
 
-    void setRowRefOptimized(RowRef & row_ref, TMTSortCursor & cursor)
+    void setRowRefOptimized(RowRef & row_ref, TMTSortCursorPK & cursor)
     {
         if (cursor.isSame(cur_block_cursor))
             row_ref.shared_block = cur_block;
@@ -69,7 +69,7 @@ private:
         row_ref.columns = &row_ref.shared_block->all_columns;
     }
 
-    void setPrimaryKeyRefOptimized(RowRef & row_ref, TMTSortCursor & cursor)
+    void setPrimaryKeyRefOptimized(RowRef & row_ref, TMTSortCursorPK & cursor)
     {
         if (cursor.isSame(cur_block_cursor))
             row_ref.shared_block = cur_block;
@@ -80,9 +80,9 @@ private:
         row_ref.columns = &row_ref.shared_block->sort_columns;
     }
 
-    void merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursor> & queue);
+    void merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue);
 
-    bool insertByColumn(TMTSortCursor current, size_t & merged_rows, MutableColumns & merged_columns);
+    bool insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns);
 
     /// Output into result the rows for current primary key.
     void insertRow(MutableColumns & merged_columns, size_t & merged_rows);

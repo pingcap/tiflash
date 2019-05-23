@@ -55,19 +55,19 @@ Block TMTSortedBlockInputStream::readImpl()
     return res;
 }
 
-void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursor> & queue)
+void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue)
 {
     size_t merged_rows = 0;
 
     /// Take the rows in needed order and put them into `merged_columns` until rows no more than `max_block_size`
     while (!cur_block_cursor.none() || !queue.empty())
     {
-        TMTSortCursor current;
+        TMTSortCursorPK current;
         bool is_complete_top;
 
         if (cur_block_cursor.none())
         {
-            const TMTSortCursor top = queue.top();
+            const TMTSortCursorPK top = queue.top();
             queue.pop();
 
             if (top->empty())
@@ -88,7 +88,7 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
 
                 fetchNextBlock(top, queue);
 
-                current = TMTSortCursor(&cur_block_cursor_impl);
+                current = TMTSortCursorPK(&cur_block_cursor_impl);
                 cur_block_cursor = current;
             }
             else
@@ -108,7 +108,7 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
             bool by_column_ok = insertByColumn(current, merged_rows, merged_columns);
             if (by_column_ok)
             {
-                cur_block_cursor = TMTSortCursor();
+                cur_block_cursor = TMTSortCursorPK();
                 cur_block_cursor_impl = SortCursorImpl();
                 cur_block.reset();
                 continue;
@@ -183,7 +183,7 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
                 }
                 else
                 {
-                    cur_block_cursor = TMTSortCursor();
+                    cur_block_cursor = TMTSortCursorPK();
                     // cur_block_cursor_impl = SortCursorImpl();
                     // cur_block.reset();
 
@@ -225,7 +225,7 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
 }
 
 // TODO: use MutableSupport::DelMark here to check and generate del-mark
-bool TMTSortedBlockInputStream::insertByColumn(TMTSortCursor current, size_t & merged_rows, MutableColumns & merged_columns)
+bool TMTSortedBlockInputStream::insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns)
 {
     if (current.notSame(cur_block_cursor))
         throw Exception("Logical error!");
@@ -329,7 +329,7 @@ void TMTSortedBlockInputStream::initQueue()
 {
     for (size_t i = 0; i < cursors.size(); ++i)
         if (!cursors[i].empty())
-            tmt_queue.push(TMTSortCursor(&cursors[i]));
+            tmt_queue.push(TMTSortCursorPK(&cursors[i]));
 }
 
 } // namespace DB
