@@ -38,6 +38,7 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
 #include <DataStreams/ReplacingSortedBlockInputStream.h>
 #include <DataStreams/SummingSortedBlockInputStream.h>
+#include <DataStreams/TMTSortedBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/VersionedCollapsingSortedBlockInputStream.h>
@@ -934,8 +935,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                   };
 
             const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) {
-                return std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getPrimarySortDescription(),
-                    MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr);
+                return std::make_shared<TMTSortedBlockInputStream>(merging, data.getPrimarySortDescription(),
+                    MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
             };
 
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)

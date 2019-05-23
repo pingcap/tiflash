@@ -13,6 +13,7 @@ union TMTCmpOptimizedRes
 };
 
 /// optimize SortCursor for TMT engine which must have 3 column: PK, VERSION, DELMARK.
+template <bool only_pk = false>
 struct TMTSortCursor
 {
     SortCursorImpl * impl = nullptr;
@@ -23,8 +24,9 @@ struct TMTSortCursor
     const SortCursorImpl * operator->() const { return impl; }
 
     bool none() { return !impl; }
-    bool operator==(const SortCursor & other) const { return impl == other.impl; }
-    bool operator!=(const SortCursor & other) const { return impl != other.impl; }
+
+    bool isSame(const TMTSortCursor & other) const { return impl == other.impl; }
+    bool notSame(const TMTSortCursor & other) const { return impl != other.impl; }
 
     static inline TMTCmpOptimizedRes cmp(
         const ColumnRawPtrs & lsort_columns, const size_t lhs_pos, const ColumnRawPtrs & rsort_columns, const size_t rhs_pos)
@@ -33,6 +35,12 @@ struct TMTSortCursor
         {
             res.diffs[0] = lsort_columns[0]->compareAt(lhs_pos, rhs_pos, *(rsort_columns[0]), 0);
         }
+
+        if constexpr (only_pk)
+        {
+            return res;
+        }
+
         {
             UInt64 t1 = static_cast<const ColumnUInt64 *>(lsort_columns[1])->getElement(lhs_pos);
             UInt64 t2 = static_cast<const ColumnUInt64 *>(rsort_columns[1])->getElement(rhs_pos);
@@ -55,7 +63,27 @@ struct TMTSortCursor
     bool greaterAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
     {
         auto res = cmp(rhs, lhs_pos, rhs_pos);
+
+        if constexpr (only_pk)
+            return res.diffs[0] > 0;
+
         return greaterAt(res);
+    }
+
+    bool equalAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
+    {
+        auto res = cmp(rhs, lhs_pos, rhs_pos);
+        return res.all == 0;
+    }
+
+    bool lessAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
+    {
+        auto res = cmp(rhs, lhs_pos, rhs_pos);
+
+        if constexpr (only_pk)
+            return res.diffs[0] < 0;
+
+        return lessAt(res);
     }
 
     static inline bool greaterAt(const TMTCmpOptimizedRes res)
@@ -63,6 +91,13 @@ struct TMTSortCursor
         return res.diffs[0] > 0
             ? true
             : (res.diffs[0] < 0 ? false : (res.diffs[1] > 0 ? true : (res.diffs[1] < 0 ? false : (res.diffs[2] > 0 ? true : false))));
+    }
+
+    static inline bool lessAt(const TMTCmpOptimizedRes res)
+    {
+        return res.diffs[0] < 0
+            ? true
+            : (res.diffs[0] > 0 ? false : (res.diffs[1] < 0 ? true : (res.diffs[1] > 0 ? false : (res.diffs[2] < 0 ? true : false))));
     }
 
     bool totallyLessOrEquals(const TMTSortCursor & rhs) const
@@ -75,6 +110,15 @@ struct TMTSortCursor
     }
 
     bool greater(const TMTSortCursor & rhs) const { return greaterAt(rhs, impl->pos, rhs.impl->pos); }
+
+    bool equal(const TMTSortCursor & rhs) const { return equalAt(rhs, impl->pos, rhs.impl->pos); }
+
+    bool totallyLess(const TMTSortCursor & rhs) const
+    {
+        if (impl->rows == 0 || rhs.impl->rows == 0)
+            return false;
+        return lessAt(rhs, impl->rows - 1, 0);
+    }
 
     bool operator<(const TMTSortCursor & rhs) const { return greater(rhs); }
 };
