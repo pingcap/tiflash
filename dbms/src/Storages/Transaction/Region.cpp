@@ -27,9 +27,9 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, co
     return data.removeDataByWriteIt(table_id, write_it);
 }
 
-RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const
+RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value) const
 {
-    return data.readDataByWriteIt(table_id, write_it);
+    return data.readDataByWriteIt(table_id, write_it, need_value);
 }
 
 LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }

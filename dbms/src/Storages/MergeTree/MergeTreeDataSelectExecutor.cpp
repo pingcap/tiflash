@@ -334,6 +334,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         extendMutableEngineColumnNames(column_names_to_read, data);
 
+        if (column_names_to_read.size() < 3)
+            throw Exception("size of column_names_to_read < 3", ErrorCodes::LOGICAL_ERROR);
+
         // get data block from region first.
 
         auto start_time = Clock::now();

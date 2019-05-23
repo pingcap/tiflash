@@ -79,7 +79,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id
     return write_cf.getDataMut()[table_id].erase(write_it);
 }
 
-RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const
+RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it, bool need_value) const
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [handle, ts] = write_it->first;
@@ -87,6 +87,9 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const
     std::ignore = value;
 
     const auto & [write_type, prewrite_ts, short_value] = decoded_val;
+
+    if (!need_value)
+        return std::make_tuple(handle, write_type, ts, TiKVValue());
 
     if (write_type != PutFlag)
         return std::make_tuple(handle, write_type, ts, TiKVValue());

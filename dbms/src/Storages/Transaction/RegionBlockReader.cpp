@@ -44,9 +44,6 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
 Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns,
     RegionDataReadInfoList & data_list)
 {
-    if (ordered_columns.size() < 3)
-        throw Exception("RegionBlockRead ordered_columns.size() < 3", ErrorCodes::LOGICAL_ERROR);
-
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 

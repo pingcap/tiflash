@@ -51,11 +51,11 @@ public:
 
         bool hasNext() const { return found && write_map_it != write_map_it_end; }
 
-        auto next()
+        auto next(bool need_value = true)
         {
             if (!found)
                 throw Exception("CommittedScanner table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
-            return store->readDataByWriteIt(expected_table_id, write_map_it++);
+            return store->readDataByWriteIt(expected_table_id, write_map_it++, need_value);
         }
 
         LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
@@ -180,7 +180,8 @@ private:
     TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
 
-    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
+    RegionDataReadInfo readDataByWriteIt(
+        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
