@@ -257,20 +257,20 @@ std::enable_if_t<IsDecimal<T>, U> ToDecimal(T value, ScaleType scale) {
 }
 
 template<typename T, typename U>
-std::enable_if_t<IsDecimal<T>, U> ToDecimal(T v, ScaleType v_scale, ScaleType scale) {
+std::enable_if_t<IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, ScaleType scale) {
     auto value = v.value;
     if (v_scale <= scale) {
-        for (ScaleType i = scale; i < v_scale; i++)
+        for (ScaleType i = v_scale; i < scale; i++)
             value *= 10;
     } else {
-        for (ScaleType i = v_scale; i < scale; i++)
+        for (ScaleType i = scale; i < v_scale; i++)
             value /= 10;
     }
     return static_cast<typename U::NativeType>(value);
 }
 
 template<typename T, typename U>
-std::enable_if_t<!IsDecimal<T>, U> ToDecimal(T v, ScaleType v_scale, ScaleType scale) {
+std::enable_if_t<!IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, ScaleType scale) {
     throw Exception("Should not call here", ErrorCodes::LOGICAL_ERROR);
 }
 
