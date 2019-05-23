@@ -501,13 +501,7 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     res = float_value;
 
-    Decimal dec;
-    if (parseDecimal(buf, pos->size(), dec)) {
-        if (negative) {
-            dec.value = -dec.value;
-        }
-        res = dec;
-    }
+    parseDecimal(buf, pos->size(), negative, res);
 
     /// try to use more exact type: UInt64
 

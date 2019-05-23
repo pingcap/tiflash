@@ -61,6 +61,8 @@ public:
     bool isParametric() const override { return true; }
     bool cannotBeStoredInTables() const override { return true; }
     bool isCategorial() const override { return false; }
+    TypeIndex getTypeId() const override { return TypeIndex::Interval; }
+
 };
 
 }

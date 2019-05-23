@@ -222,8 +222,8 @@ struct BatchCtrl
             case TiDB::CodecFlagBytes:
                 memset(default_str.data(), target, default_str.size());
                 return EncodeBytes(default_str, ss);
-            case TiDB::CodecFlagDecimal:
-                return EncodeDecimal(Decimal(magic_num), ss);
+            //case TiDB::CodecFlagDecimal:
+            //    return EncodeDecimal(Decimal(magic_num), ss);
             case TiDB::CodecFlagCompactBytes:
                 memset(default_str.data(), target, default_str.size());
                 return EncodeCompactBytes(default_str, ss);

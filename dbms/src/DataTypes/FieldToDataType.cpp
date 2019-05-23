@@ -52,12 +52,6 @@ DataTypePtr FieldToDataType::operator() (const String &) const
     return std::make_shared<DataTypeString>();
 }
 
-DataTypePtr FieldToDataType::operator() (const Decimal & x) const
-{
-    return std::make_shared<DataTypeDecimal>(x.precision, x.scale);
-}
-
-
 DataTypePtr FieldToDataType::operator() (const Array & x) const
 {
     DataTypes element_types;
@@ -84,6 +78,5 @@ DataTypePtr FieldToDataType::operator() (const Tuple & x) const
 
     return std::make_shared<DataTypeTuple>(element_types);
 }
-
 
 }

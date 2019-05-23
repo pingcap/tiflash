@@ -19,9 +19,9 @@ DataTypePtr getDataTypeByColumnInfoBase(const ColumnInfo & /*column_info*/)
 
 
 template <>
-DataTypePtr getDataTypeByColumnInfoBase<DataTypeDecimal>(const ColumnInfo & column_info)
+DataTypePtr getDataTypeByColumnInfoBase<DataTypeDecimal32>(const ColumnInfo & column_info)
 {
-    return std::make_shared<DataTypeDecimal>(column_info.flen, column_info.decimal);
+    return createDecimal(column_info.flen, column_info.decimal);
 }
 
 

@@ -20,7 +20,8 @@
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
 
-#include <Core/AccurateComparison.h>
+#include <Core/DecimalComparison.h>
+#include <Core/callOnTypeIndex.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
 
@@ -46,49 +47,6 @@ namespace DB
   *
   * TODO Arrays.
   */
-
-template <typename A, typename B> struct EqualsOp
-{
-    /// An operation that gives the same result, if arguments are passed in reverse order.
-    using SymmetricOp = EqualsOp<B, A>;
-
-    static UInt8 apply(A a, B b) { return accurate::equalsOp(a, b); }
-};
-
-template <typename A, typename B> struct NotEqualsOp
-{
-    using SymmetricOp = NotEqualsOp<B, A>;
-    static UInt8 apply(A a, B b) { return accurate::notEqualsOp(a, b); }
-};
-
-template <typename A, typename B> struct GreaterOp;
-
-template <typename A, typename B> struct LessOp
-{
-    using SymmetricOp = GreaterOp<B, A>;
-    static UInt8 apply(A a, B b) { return accurate::lessOp(a, b); }
-};
-
-template <typename A, typename B> struct GreaterOp
-{
-    using SymmetricOp = LessOp<B, A>;
-    static UInt8 apply(A a, B b) { return accurate::greaterOp(a, b); }
-};
-
-template <typename A, typename B> struct GreaterOrEqualsOp;
-
-template <typename A, typename B> struct LessOrEqualsOp
-{
-    using SymmetricOp = GreaterOrEqualsOp<B, A>;
-    static UInt8 apply(A a, B b) { return accurate::lessOrEqualsOp(a, b); }
-};
-
-template <typename A, typename B> struct GreaterOrEqualsOp
-{
-    using SymmetricOp = LessOrEqualsOp<B, A>;
-    static UInt8 apply(A a, B b) { return accurate::greaterOrEqualsOp(a, b); }
-};
-
 
 template <typename A, typename B, typename Op>
 struct NumComparisonImpl
@@ -648,8 +606,7 @@ private:
                 || executeNumRightType<T0, Int32>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, Int64>(block, result, col_left, col_right_untyped)
                 || executeNumRightType<T0, Float32>(block, result, col_left, col_right_untyped)
-                || executeNumRightType<T0, Float64>(block, result, col_left, col_right_untyped)
-                || executeNumRightType<T0, Decimal>(block, result, col_left, col_right_untyped))
+                || executeNumRightType<T0, Float64>(block, result, col_left, col_right_untyped))
                 return true;
             else
                 throw Exception("Illegal column " + col_right_untyped->getName()
@@ -1095,6 +1052,26 @@ public:
         return std::make_shared<DataTypeUInt8>();
     }
 
+    void executeDecimal(Block & block, size_t result, const ColumnWithTypeAndName & col_left, const ColumnWithTypeAndName & col_right)
+    {
+        TypeIndex left_number = col_left.type->getTypeId();
+        TypeIndex right_number = col_right.type->getTypeId();
+
+        auto call = [&](const auto & types) -> bool
+        {
+            using Types = std::decay_t<decltype(types)>;
+            using LeftDataType = typename Types::LeftType;
+            using RightDataType = typename Types::RightType;
+
+            DecimalComparison<LeftDataType, RightDataType, Op, true>(block, result, col_left, col_right);
+            return true;
+        };
+
+        if (!callOnBasicTypes<true, false, true, false>(left_number, right_number, call))
+            throw Exception("Wrong call for " + getName() + " with " + col_left.type->getName() + " and " + col_right.type->getName(),
+                            ErrorCodes::LOGICAL_ERROR);
+    }
+
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
         const auto & col_with_type_and_name_left = block.getByPosition(arguments[0]);
@@ -1117,12 +1094,13 @@ public:
                 || executeNumLeftType<Int32>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<Int64>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<Float32>(block, result, col_left_untyped, col_right_untyped)
-                || executeNumLeftType<Float64>(block, result, col_left_untyped, col_right_untyped)
-                || executeNumLeftType<Decimal>(block, result, col_left_untyped, col_right_untyped)))
+                || executeNumLeftType<Float64>(block, result, col_left_untyped, col_right_untyped)))
                 throw Exception("Illegal column " + col_left_untyped->getName()
                     + " of first argument of function " + getName(),
                     ErrorCodes::ILLEGAL_COLUMN);
         }
+        else if (IsDecimalDataType(col_with_type_and_name_left.type) || IsDecimalDataType(col_with_type_and_name_right.type))
+            executeDecimal(block, result, col_with_type_and_name_left, col_with_type_and_name_right);
         else if (checkAndGetDataType<DataTypeTuple>(col_with_type_and_name_left.type.get()))
             executeTuple(block, result, col_with_type_and_name_left, col_with_type_and_name_right);
         else if (!left_is_num && !right_is_num && executeString(block, result, col_left_untyped, col_right_untyped))

@@ -5,6 +5,7 @@
 
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnDecimal.h>
 #include <DataTypes/IDataType.h>
 #include <Common/typeid_cast.h>
 #include <common/StringRef.h>
@@ -30,6 +31,8 @@ private:
     bool has_value = false; /// We need to remember if at least one value has been passed. This is necessary for AggregateFunctionIf.
     T value;
 
+    using ColumnType = std::conditional_t<IsDecimal<T> , ColumnDecimal<T>, ColumnVector<T>>;
+
 public:
     bool has() const
     {
@@ -39,9 +42,9 @@ public:
     void insertResultInto(IColumn & to) const
     {
         if (has())
-            static_cast<ColumnVector<T> &>(to).getData().push_back(value);
+            static_cast<ColumnType &>(to).getData().push_back(value);
         else
-            static_cast<ColumnVector<T> &>(to).insertDefault();
+            static_cast<ColumnType &>(to).insertDefault();
     }
 
     void write(WriteBuffer & buf, const IDataType & /*data_type*/) const
@@ -62,7 +65,7 @@ public:
     void change(const IColumn & column, size_t row_num, Arena *)
     {
         has_value = true;
-        value = static_cast<const ColumnVector<T> &>(column).getData()[row_num];
+        value = static_cast<const ColumnType &>(column).getData()[row_num];
     }
 
     /// Assuming to.has()
@@ -113,7 +116,7 @@ public:
 
     bool changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || static_cast<const ColumnVector<T> &>(column).getData()[row_num] < value)
+        if (!has() || static_cast<const ColumnType &>(column).getData()[row_num] < value)
         {
             change(column, row_num, arena);
             return true;
@@ -135,7 +138,7 @@ public:
 
     bool changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
     {
-        if (!has() || static_cast<const ColumnVector<T> &>(column).getData()[row_num] > value)
+        if (!has() || static_cast<const ColumnType &>(column).getData()[row_num] > value)
         {
             change(column, row_num, arena);
             return true;
@@ -162,7 +165,7 @@ public:
 
     bool isEqualTo(const IColumn & column, size_t row_num) const
     {
-        return has() && static_cast<const ColumnVector<T> &>(column).getData()[row_num] == value;
+        return has() && static_cast<const ColumnType &>(column).getData()[row_num] == value;
     }
 };
 

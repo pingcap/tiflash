@@ -4,7 +4,7 @@
 //#include <city.h>
 #include <functional>
 #include <citycrc.h>
-#include <Core/Types.h>
+#include <Common/Decimal.h>
 #include <Common/UInt128.h>
 #include <boost/functional/hash/hash.hpp>
 
@@ -92,16 +92,6 @@ DEFINE_HASH(DB::Float64)
 
 #undef DEFINE_HASH
 
-template <> struct DefaultHash<DB::Decimal>
-{
-    size_t operator() (DB::Decimal v) const {
-        //return CityHash_v1_0_2::CityHash64(reinterpret_cast<char*>(&v), sizeof(v));
-        //return std::hash<std::string>{}(v.toString());
-        return boost::multiprecision::hash_value(v.value);
-    }
-};
-
-
 template <typename T> struct HashCRC32;
 
 template <typename T>
@@ -126,13 +116,11 @@ template <> struct HashCRC32<T>\
     }\
 };
 
-template <> struct HashCRC32<DB::Decimal>
+template <> struct HashCRC32<DB::Int256>
 {
-    size_t operator() (DB::Decimal v) const
+    size_t operator() (DB::Int256 v) const
     {
-        //return CityHash_v1_0_2::Hash128to64(CityHash_v1_0_2::CityHashCrc128(reinterpret_cast<char*>(&v), sizeof(DB::Decimal)));
-        //return std::hash<std::string>{}(v.toString());
-        return boost::multiprecision::hash_value(v.value);
+        return boost::multiprecision::hash_value(v);
     }
 };
 
@@ -141,6 +129,7 @@ DEFINE_HASH(DB::UInt16)
 DEFINE_HASH(DB::UInt32)
 DEFINE_HASH(DB::UInt64)
 DEFINE_HASH(DB::UInt128)
+DEFINE_HASH(DB::Int128)
 DEFINE_HASH(DB::Int8)
 DEFINE_HASH(DB::Int16)
 DEFINE_HASH(DB::Int32)

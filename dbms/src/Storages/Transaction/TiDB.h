@@ -28,7 +28,7 @@ using DB::Exception;
 #error "Please undefine macro M first."
 #endif
 #define COLUMN_TYPES(M)                                             \
-    M(Decimal, 0, Decimal, Decimal, Decimal, Decimal)               \
+    M(Decimal, 0, Decimal, Decimal, Decimal32, Decimal32)               \
     M(Tiny, 1, VarInt, VarUInt, Int8, UInt8)                        \
     M(Short, 2, VarInt, VarUInt, Int16, UInt16)                     \
     M(Long, 3, VarInt, VarUInt, Int32, UInt32)                      \
@@ -46,7 +46,7 @@ using DB::Exception;
     M(Varchar, 15, CompactBytes, CompactBytes, String, String)      \
     M(Bit, 16, CompactBytes, CompactBytes, UInt64, UInt64)          \
     M(JSON, 0xf5, Json, Json, String, String)                       \
-    M(NewDecimal, 0xf6, Decimal, Decimal, Decimal, Decimal)         \
+    M(NewDecimal, 0xf6, Decimal, Decimal, Decimal32, Decimal32)         \
     M(Enum, 0xf7, CompactBytes, CompactBytes, Enum16, Enum16)       \
     M(Set, 0xf8, CompactBytes, CompactBytes, String, String)        \
     M(TinyBlob, 0xf9, CompactBytes, CompactBytes, String, String)   \

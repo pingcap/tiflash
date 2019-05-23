@@ -18,6 +18,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/UInt128.h>
 #include <common/StringRef.h>
+#include <Common/Decimal.h>
 
 #include <IO/WriteBuffer.h>
 #include <IO/WriteIntText.h>
@@ -550,9 +551,10 @@ inline void writeDateText(DayNum_t date, WriteBuffer & buf)
 }
 
 
-inline void writeDecimalText(const Decimal& v, WriteBuffer & buf) {
-    const std::string& str = v.toString();
-    buf.write(str.c_str(), str.length());
+template<typename T>
+void writeText(const Decimal<T> & v, ScaleType scale, WriteBuffer & ostr) {
+    const std::string& str = v.toString(scale);
+    ostr.write(str.c_str(), str.length());
 }
 
 /// In the format YYYY-MM-DD HH:MM:SS
@@ -649,7 +651,8 @@ inline void writeBinary(const UInt128 & x, WriteBuffer & buf) { writePODBinary(x
 inline void writeBinary(const UInt256 & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const LocalDate & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const LocalDateTime & x, WriteBuffer & buf) { writePODBinary(x, buf); }
-inline void writeBinary(const Decimal & x, WriteBuffer & buf) { writePODBinary(x, buf); }
+template<typename T>
+inline void writeBinary(const Decimal<T> & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 
 
 /// Methods for outputting the value in text form for a tab-separated format.
@@ -673,7 +676,6 @@ inline void writeText(const char * x, size_t size, WriteBuffer & buf) { writeEsc
 
 inline void writeText(const LocalDate & x, WriteBuffer & buf) { writeDateText(x, buf); }
 inline void writeText(const LocalDateTime & x, WriteBuffer & buf) { writeDateTimeText(x, buf); }
-inline void writeText(const Decimal & x, WriteBuffer & buf) { writeDecimalText(x, buf); }
 inline void writeText(const UUID & x, WriteBuffer & buf) { writeUUIDText(x, buf); }
 inline void writeText(const UInt128 &, WriteBuffer &)
 {

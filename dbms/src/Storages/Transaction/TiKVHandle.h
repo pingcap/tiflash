@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>
+#include <Common/Exception.h>
 
 namespace DB
 {

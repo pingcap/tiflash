@@ -1,10 +1,10 @@
 #pragma once
 
-#include <Common/Decimal.h>
 #include <Core/Field.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <IO/Endian.h>
+#include <DataTypes/DataTypeDecimal.h>
 
 namespace DB
 {
@@ -160,11 +160,10 @@ inline UInt32 readWord(int binIdx, const String & dec, int size) {
     }
     return v;
 }
-
-inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
+template<typename T>
+inline T DecodeDecimalImpl(size_t & cursor, const String & raw_value, PrecType prec, ScaleType frac)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType frac = raw_value[cursor++];
+    static_assert(IsDecimal<T>);
 
     int digitsInt = prec - frac;
     int wordsInt = digitsInt / digitsPerWord;
@@ -184,7 +183,7 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     }
     dec[0] ^= 0x80;
 
-    int256_t value = 0;
+    typename T::NativeType value = 0;
 
     if (leadingDigits) {
         int i = dig2Bytes[leadingDigits];
@@ -212,7 +211,26 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     }
     if (mask)
         value = -value;
-    return Decimal(value, prec, frac);
+    return value;
+}
+
+inline Field DecodeDecimal(size_t & cursor, const String & raw_value) {
+    PrecType prec = raw_value[cursor++];
+    ScaleType scale = raw_value[cursor++];
+    auto type = createDecimal(prec, scale);
+    if (checkDecimal<Decimal32>(*type)) {
+        auto res = DecodeDecimalImpl<Decimal32>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal32>(res, scale);
+    } else if (checkDecimal<Decimal64>(*type)) {
+        auto res = DecodeDecimalImpl<Decimal64>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal64>(res, scale);
+    } else if (checkDecimal<Decimal128>(*type)) {
+        auto res = DecodeDecimalImpl<Decimal128>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal128>(res, scale);
+    } else {
+        auto res = DecodeDecimalImpl<Decimal256>(cursor, raw_value, prec, scale);
+        return DecimalField<Decimal256>(res, scale);
+    }
 }
 
 inline Field DecodeDatum(size_t & cursor, const String & raw_value)
@@ -310,55 +328,55 @@ inline void EncodeVarUInt(UInt64 num, std::stringstream & ss)
     TiKV::writeVarUInt(num, ss);
 }
 
-inline void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
-{
-    writeIntBinary(UInt8(TiDB::CodecFlagDecimal), ss);
-
-    constexpr Int32 decimal_mod = static_cast<const Int32>(1e9);
-    PrecType prec = dec.precision;
-    ScaleType scale = dec.scale;
-    writeIntBinary(UInt8(prec), ss);
-    writeIntBinary(UInt8(scale), ss);
-    int256_t value = dec.value;
-    bool neg = false;
-    if (value < 0)
-    {
-        neg = true;
-        value = -value;
-    }
-    if (scale % 9 != 0)
-    {
-        ScaleType padding = static_cast<ScaleType>(9 - scale % 9);
-        while(padding > 0)
-        {
-            padding--;
-            value *= 10;
-        }
-    }
-    std::vector<Int32> v;
-    Int8 words = getWords(prec, scale);
-
-    for (Int8 i = 0; i < words; i ++)
-    {
-        v.push_back(static_cast<Int32>(value % decimal_mod));
-        value /= decimal_mod;
-    }
-    reverse(v.begin(), v.end());
-
-    if (value > 0)
-        throw Exception("Value is overflow! (EncodeDecimal)", ErrorCodes::LOGICAL_ERROR);
-
-    v[0] |= signMask32;
-    if (neg)
-    {
-        for (size_t i =0; i < v.size(); i++)
-            v[i] = ~v[i];
-    }
-    for (size_t i =0; i < v.size(); i++)
-    {
-        writeIntBinary(v[i], ss);
-    }
-}
+//inline void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
+//{
+//    writeIntBinary(UInt8(TiDB::CodecFlagDecimal), ss);
+//
+//    constexpr Int32 decimal_mod = static_cast<const Int32>(1e9);
+//    PrecType prec = dec.precision;
+//    ScaleType scale = dec.scale;
+//    writeIntBinary(UInt8(prec), ss);
+//    writeIntBinary(UInt8(scale), ss);
+//    int256_t value = dec.value;
+//    bool neg = false;
+//    if (value < 0)
+//    {
+//        neg = true;
+//        value = -value;
+//    }
+//    if (scale % 9 != 0)
+//    {
+//        ScaleType padding = static_cast<ScaleType>(9 - scale % 9);
+//        while(padding > 0)
+//        {
+//            padding--;
+//            value *= 10;
+//        }
+//    }
+//    std::vector<Int32> v;
+//    Int8 words = getWords(prec, scale);
+//
+//    for (Int8 i = 0; i < words; i ++)
+//    {
+//        v.push_back(static_cast<Int32>(value % decimal_mod));
+//        value /= decimal_mod;
+//    }
+//    reverse(v.begin(), v.end());
+//
+//    if (value > 0)
+//        throw Exception("Value is overflow! (EncodeDecimal)", ErrorCodes::LOGICAL_ERROR);
+//
+//    v[0] |= signMask32;
+//    if (neg)
+//    {
+//        for (size_t i =0; i < v.size(); i++)
+//            v[i] = ~v[i];
+//    }
+//    for (size_t i =0; i < v.size(); i++)
+//    {
+//        writeIntBinary(v[i], ss);
+//    }
+//}
 
 template<typename T>
 T getFieldValue(const Field & field)
@@ -371,8 +389,8 @@ T getFieldValue(const Field & field)
             return static_cast<T>(field.get<Int64>());
         case Field::Types::Float64:
             return static_cast<T>(field.get<Float64>());
-        case Field::Types::Decimal:
-            return static_cast<T>(field.get<Decimal>());
+        //case Field::Types::Decimal:
+        //    return static_cast<T>(field.get<Decimal>());
         default:
             throw Exception("Unsupport (getFieldValue): " + std::string(field.getTypeName()), ErrorCodes::LOGICAL_ERROR);
     }
@@ -382,8 +400,8 @@ inline void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringst
 {
     switch (flag)
     {
-        case TiDB::CodecFlagDecimal:
-            return EncodeDecimal(getFieldValue<Decimal>(field), ss);
+        //case TiDB::CodecFlagDecimal:
+        //    return EncodeDecimal(getFieldValue<Decimal>(field), ss);
         case TiDB::CodecFlagCompactBytes:
             return EncodeCompactBytes(field.get<String>(), ss);
         case TiDB::CodecFlagFloat:

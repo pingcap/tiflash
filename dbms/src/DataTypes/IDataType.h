@@ -42,6 +42,8 @@ public:
     /// Name of data type (examples: UInt64, Array(String)).
     virtual String getName() const { return getFamilyName(); };
 
+    virtual TypeIndex getTypeId() const = 0;
+
     /// Name of data type family (example: FixedString, Array).
     virtual const char * getFamilyName() const = 0;
 

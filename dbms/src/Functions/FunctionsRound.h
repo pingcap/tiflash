@@ -74,9 +74,10 @@ roundDownToPowerOfTwo(T x)
 }
 
 template <typename T>
-inline std::enable_if_t<std::is_same_v<Decimal, T>, T> roundDownToPowerOfTwo(T)
+inline T roundDownToPowerOfTwo(Decimal<T>)
 {
-    return {};
+    // FIXME: implement it
+    throw Exception("have not implement it.");
 }
 
 /** For integer data types:
@@ -128,9 +129,9 @@ struct RoundDurationImpl
     }
 };
 
-template <> struct RoundDurationImpl<Decimal>{
+template <typename T> struct RoundDurationImpl<Decimal<T>>{
     using ResultType = UInt16;
-    static inline ResultType apply(Decimal) { throw Exception("RoundDuration of decimal is not implemented yet."); }
+    static inline ResultType apply(Decimal<T>) { throw Exception("RoundDuration of decimal is not implemented yet."); }
 };
 
 template <typename A>
@@ -150,9 +151,9 @@ struct RoundAgeImpl
     }
 };
 
-template <> struct RoundAgeImpl<Decimal>{
+template <typename T> struct RoundAgeImpl<Decimal<T>>{
     using ResultType = UInt8;
-    static inline ResultType apply(Decimal) { throw Exception("RoundAge of decimal is not implemented yet."); }
+    static inline ResultType apply(Decimal<T>) { throw Exception("RoundAge of decimal is not implemented yet."); }
 };
 
 /** This parameter controls the behavior of the rounding functions.

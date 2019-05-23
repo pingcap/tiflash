@@ -17,8 +17,15 @@ AggregateFunctionPtr createAggregateFunctionAvg(const std::string & name, const 
     AggregateFunctionPtr res;
 
     const IDataType *p = argument_types[0].get();
-    if (auto dec_type = typeid_cast<const DataTypeDecimal * >(p)) {
-        res = AggregateFunctionPtr(createWithNumericType<AggregateFunctionAvg>(*dec_type, dec_type->getPrec(), dec_type->getScale()));
+    // TODO:: more precise.
+    if (auto dec_type = typeid_cast<const DataTypeDecimal32* >(p)) {
+        res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal64>(*dec_type, dec_type->getPrec(), dec_type->getScale()));
+    } else if (auto dec_type = typeid_cast<const DataTypeDecimal64* >(p)) {
+        res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal128>(*dec_type, dec_type->getPrec(), dec_type->getScale()));
+    } else if (auto dec_type = typeid_cast<const DataTypeDecimal128* >(p)) {
+        res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal256>(*dec_type, dec_type->getPrec(), dec_type->getScale()));
+    } else if (auto dec_type = typeid_cast<const DataTypeDecimal256* >(p)) {
+        res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal256>(*dec_type, dec_type->getPrec(), dec_type->getScale()));
     } else {
         res = AggregateFunctionPtr(createWithNumericType<AggregateFunctionAvg>(*argument_types[0]));
     }

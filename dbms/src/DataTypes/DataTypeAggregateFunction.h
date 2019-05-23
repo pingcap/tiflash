@@ -29,6 +29,8 @@ public:
     std::string getFunctionName() const { return function->getName(); }
     AggregateFunctionPtr getFunction() const { return function; }
 
+    TypeIndex getTypeId() const override {return TypeIndex::AggregateFunction;};
+
     std::string getName() const override;
 
     const char * getFamilyName() const override { return "AggregateFunction"; }

@@ -104,12 +104,12 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         {
             column_info.setUnsignedFlag();
         }
-        if (checkDataType<DataTypeDecimal>(nested_type))
-        {
-            auto decimal_type = checkAndGetDataType<DataTypeDecimal>(nested_type);
-            column_info.flen = decimal_type->getPrec();
-            column_info.decimal = decimal_type->getScale();
-        }
+        //if (checkDataType<DataTypeDecimal>(nested_type))
+        //{
+        //    auto decimal_type = checkAndGetDataType<DataTypeDecimal>(nested_type);
+        //    column_info.flen = decimal_type->getPrec();
+        //    column_info.decimal = decimal_type->getScale();
+        //}
 
 #ifdef M
 #error "Please undefine macro M first."

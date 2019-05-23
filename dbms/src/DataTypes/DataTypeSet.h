@@ -16,6 +16,7 @@ public:
     const char * getFamilyName() const override { return "Set"; }
     bool equals(const IDataType & rhs) const override { return typeid(rhs) == typeid(*this); }
     bool isParametric() const override { return true; }
+    TypeIndex getTypeId() const override { return TypeIndex::Set; }
 };
 
 }

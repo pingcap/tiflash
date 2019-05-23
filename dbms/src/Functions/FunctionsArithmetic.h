@@ -19,6 +19,7 @@
 #include <ext/range.h>
 #include <common/intExp.h>
 #include <boost/math/common_factor.hpp>
+#include <Functions/castTypeToEither.h>
 
 
 namespace DB
@@ -30,6 +31,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
     extern const int LOGICAL_ERROR;
     extern const int TOO_LESS_ARGUMENTS_FOR_FUNCTION;
+    extern const int DECIMAL_OVERFLOW;
 }
 
 //
@@ -46,31 +48,49 @@ template <typename A, typename B, typename Op, typename ResultType_ = typename O
 struct BinaryOperationImplBase
 {
     using ResultType = ResultType_;
+    using ColVecA = std::conditional_t<IsDecimal<A>, ColumnDecimal<A>, ColumnVector<A>>;
+    using ColVecB = std::conditional_t<IsDecimal<B>, ColumnDecimal<B>, ColumnVector<B>>;
+    using ArrayA = typename ColVecA::Container;
+    using ArrayB = typename ColVecB::Container;
 
-    static void NO_INLINE vector_vector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<ResultType> & c)
+    static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, PaddedPODArray<ResultType> & c)
     {
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
-            c[i] = Op::template apply<ResultType>(a[i], b[i]);
+            if constexpr (IsDecimal<A> && IsDecimal<B>)
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), DecimalField<B>(b[i], b.getScale()));
+            else if constexpr (IsDecimal<A>)
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b[i]);
+            else if constexpr (IsDecimal<B>)
+                c[i] = Op::template apply<ResultType>(a[i], DecimalField<B>(b[i], b.getScale()));
+            else
+                c[i] = Op::template apply<ResultType>(a[i], b[i]);
     }
 
-    static void NO_INLINE vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<ResultType> & c)
+    static void NO_INLINE vector_constant(const ArrayA & a, typename NearestFieldType<B>::Type b, PaddedPODArray<ResultType> & c)
     {
         size_t size = a.size();
         for (size_t i = 0; i < size; ++i)
-            c[i] = Op::template apply<ResultType>(a[i], b);
+            if constexpr(IsDecimal<A>)
+                c[i] = Op::template apply<ResultType>(DecimalField<A>(a[i], a.getScale()), b);
+            else
+                c[i] = Op::template apply<ResultType>(a[i], b);
     }
 
-    static void NO_INLINE constant_vector(A a, const PaddedPODArray<B> & b, PaddedPODArray<ResultType> & c)
+    static void NO_INLINE constant_vector(typename NearestFieldType<A>::Type a, const ArrayB & b, PaddedPODArray<ResultType> & c)
     {
         size_t size = b.size();
-        for (size_t i = 0; i < size; ++i)
-            c[i] = Op::template apply<ResultType>(a, b[i]);
+        for (size_t i = 0; i < size; ++i) {
+            if constexpr(IsDecimal<B>)
+                c[i] = Op::template apply<ResultType>(a, DecimalField<B>(b[i], b.getScale()));
+            else
+                c[i] = Op::template apply<ResultType>(a, b[i]);
+        }
     }
 
-    static void constant_constant(A a, B b, ResultType & c)
+    static ResultType constant_constant(typename NearestFieldType<A>::Type a, typename NearestFieldType<B>::Type b)
     {
-        c = Op::template apply<ResultType>(a, b);
+        return Op::template apply<ResultType>(a, b);
     }
 };
 
@@ -78,7 +98,6 @@ template <typename A, typename B, typename Op, typename ResultType = typename Op
 struct BinaryOperationImpl : BinaryOperationImplBase<A, B, Op, ResultType>
 {
 };
-
 
 template <typename A, typename Op>
 struct UnaryOperationImpl
@@ -115,7 +134,7 @@ struct PlusImpl<A,B,false>
 template <typename A, typename B>
 struct PlusImpl<A,B,true>
 {
-    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal>;
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
 
     template <typename Result = ResultType>
@@ -142,7 +161,7 @@ struct MultiplyImpl<A,B,false>
 template <typename A, typename B>
 struct MultiplyImpl<A,B,true>
 {
-    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal>;
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
 
     using ResultPrecInferer = MulDecimalInferer;
     template <typename Result = ResultType>
@@ -158,7 +177,7 @@ template <typename A, typename B>
 struct MinusImpl<A,B,false>
 {
     using ResultType = typename NumberTraits::ResultOfSubtraction<A, B>::Type;
-    
+
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
@@ -169,7 +188,7 @@ struct MinusImpl<A,B,false>
 template <typename A, typename B>
 struct MinusImpl<A,B,true>
 {
-    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal>;
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
 
     template <typename Result = ResultType>
@@ -196,7 +215,7 @@ template <typename A, typename B>
 struct DivideFloatingImpl<A,B,true>
 {
     using ResultPrecInferer = DivDecimalInferer;
-    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal>;
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
 
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
@@ -247,7 +266,7 @@ struct DivideIntegralImpl<A, B, false>
     static inline Result apply(A a, B b)
     {
         throwIfDivisionLeadsToFPE(a, b);
-        return a / b;
+        return static_cast<Result>(a) / static_cast<Result>(b);
     }
 };
 
@@ -259,8 +278,17 @@ struct DivideIntegralImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        ResultType x = static_cast<ResultType>(a);
-        ResultType y = static_cast<ResultType>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         throwIfDivisionLeadsToFPE(x, y);
         return x / y;
     }
@@ -275,7 +303,7 @@ struct DivideIntegralOrZeroImpl<A,B,false>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        return unlikely(divisionLeadsToFPE(a, b)) ? 0 : a / b;
+        return static_cast<Result>(unlikely(divisionLeadsToFPE(a, b)) ? 0 : static_cast<Result>(a) / static_cast<Result>(b));
     }
 };
 
@@ -287,8 +315,17 @@ struct DivideIntegralOrZeroImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        ResultType x = static_cast<ResultType>(a);
-        ResultType y = static_cast<ResultType>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         throwIfDivisionLeadsToFPE(x, y);
         return unlikely(divisionLeadsToFPE(x, y)) ? 0 : x / y;
     }
@@ -304,8 +341,8 @@ struct ModuloImpl<A,B,false>
     static inline Result apply(A a, B b)
     {
         throwIfDivisionLeadsToFPE(typename NumberTraits::ToInteger<A>::Type(a), typename NumberTraits::ToInteger<B>::Type(b));
-        return typename NumberTraits::ToInteger<A>::Type(a)
-            % typename NumberTraits::ToInteger<B>::Type(b);
+        return static_cast<Result>( typename NumberTraits::ToInteger<A>::Type(a)
+            % typename NumberTraits::ToInteger<B>::Type(b));
     }
 };
 
@@ -317,8 +354,17 @@ struct ModuloImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        ResultType x = static_cast<Result>(a);
-        ResultType y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return ModuloImpl<Result, Result>::apply(x, y);
     }
 };
@@ -345,8 +391,17 @@ struct BitAndImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x = static_cast<Result>(a);
-        Result y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return BitAndImpl<Result, Result>::apply(x, y);
     }
 };
@@ -373,8 +428,17 @@ struct BitOrImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x = static_cast<Result>(a);
-        Result y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return BitOrImpl<Result, Result>::apply(x, y);
     }
 };
@@ -401,8 +465,17 @@ struct BitXorImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x = static_cast<Result>(a);
-        Result y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return BitXorImpl<Result, Result>::apply(x, y);
     }
 };
@@ -429,8 +502,17 @@ struct BitShiftLeftImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x = static_cast<Result>(a);
-        Result y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return BitShiftLeftImpl<Result, Result>::apply(x, y);
     }
 };
@@ -457,8 +539,17 @@ struct BitShiftRightImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x = static_cast<Result>(a);
-        Result y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return BitShiftRightImpl<Result, Result>::apply(x, y);
     }
 };
@@ -485,8 +576,17 @@ struct BitRotateLeftImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x = static_cast<Result>(a);
-        Result y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return BitRotateLeftImpl<Result, Result>::apply(x, y);
     }
 };
@@ -513,14 +613,23 @@ struct BitRotateRightImpl<A,B,true>
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
     {
-        Result x = static_cast<Result>(a);
-        Result y = static_cast<Result>(b);
+        Result x, y;
+        if constexpr (IsDecimal<A>) {
+            x = static_cast<Result>(a.value);
+        } else {
+            x = static_cast<Result>(a);
+        }
+        if constexpr (IsDecimal<B>) {
+            y = static_cast<Result>(b.value);
+        } else {
+            y = static_cast<Result>(b);
+        }
         return BitRotateRightImpl<Result, Result>::apply(x, y);
     }
 };
 
 template <typename T>
-std::enable_if_t<std::is_integral_v<T>, T> toInteger(T x) { return x; }
+std::enable_if_t<std::is_integral_v<T> || std::is_same_v<T, Int128> || std::is_same_v<T, Int256>, T> toInteger(T x) { return x; }
 
 template <typename T>
 std::enable_if_t<std::is_floating_point_v<T>, Int64> toInteger(T x) { return Int64(x); }
@@ -532,7 +641,7 @@ struct BitTestImpl<A,B,false>
     using ResultType = UInt8;
 
     template <typename Result = ResultType>
-    static inline Result apply(A a, B b) { return (toInteger(a) >> toInteger(b)) & 1; };
+    static inline Result apply(A a, B b) { return static_cast<Result>( (toInteger(a) >> static_cast<int64_t>(toInteger(b))) & 1 ); };
 };
 
 template <typename A, typename B>
@@ -544,13 +653,13 @@ struct BitTestImpl<A,B,true>
     static inline Result apply(A a, B b)
     {
         if constexpr(!IsDecimal<B>) {
-            BitTestImpl<Result, Result>::apply(static_cast<int64_t>(a), b);
+            return BitTestImpl<Result, Result>::apply(static_cast<int64_t>(a.value), b);
         }
         else if constexpr(!IsDecimal<A>) {
-            BitTestImpl<Result, Result>::apply(a, static_cast<int64_t>(b));
+            return BitTestImpl<Result, Result>::apply(a, static_cast<int64_t>(b.value));
         }
         else
-            BitTestImpl<Result, Result>::apply(static_cast<int64_t>(a), static_cast<int64_t>(b));
+            return BitTestImpl<Result, Result>::apply(static_cast<int64_t>(a.value), static_cast<int64_t>(b.value));
         return {};
     }
 };
@@ -572,7 +681,7 @@ struct LeastBaseImpl<A,B,false>
 template<typename A, typename B>
 struct LeastBaseImpl<A,B,true>
 {
-    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal>;
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
 
     template <typename Result = ResultType>
@@ -615,7 +724,7 @@ struct GreatestBaseImpl<A,B,false>
 template<typename A, typename B>
 struct GreatestBaseImpl<A,B,true>
 {
-    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal>;
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
     using ResultPrecInferer = PlusDecimalInferer;
 
     template <typename Result = ResultType>
@@ -649,7 +758,11 @@ struct NegateImpl
 
     static inline ResultType apply(A a)
     {
-        return -static_cast<ResultType>(a);
+        if constexpr (IsDecimal<A>) {
+            return static_cast<ResultType>(-a.value);
+        } else {
+            return -static_cast<ResultType>(a);
+        }
     }
 };
 
@@ -658,9 +771,12 @@ struct BitNotImpl
 {
     using ResultType = typename NumberTraits::ResultOfBitNot<A>::Type;
 
-    static inline ResultType apply(A a)
+    static inline ResultType apply(A a [[maybe_unused]])
     {
-        return ~static_cast<ResultType>(a);
+        if constexpr (IsDecimal<A>)
+            throw Exception("unimplement");
+        else
+            return ~static_cast<ResultType>(a);
     }
 };
 
@@ -678,7 +794,7 @@ struct AbsImpl
         else if constexpr (std::is_floating_point_v<A>)
             return static_cast<ResultType>(std::abs(a));
         else if constexpr (IsDecimal<A>)
-            return a < Decimal(0) ? -a : a;
+            return a.value < 0 ? -a.value : a.value;
     }
 };
 
@@ -751,12 +867,12 @@ struct IntExp2Impl
     }
 };
 
-template <>
-struct IntExp2Impl<Decimal>
+template <typename A>
+struct IntExp2Impl<Decimal<A>>
 {
     using ResultType = UInt64;
 
-    static inline ResultType apply(Decimal)
+    static inline ResultType apply(Decimal<A>)
     {
         return 0;
     }
@@ -773,12 +889,12 @@ struct IntExp10Impl
     }
 };
 
-template <>
-struct IntExp10Impl<Decimal>
+template <typename A>
+struct IntExp10Impl<Decimal<A>>
 {
     using ResultType = UInt64;
 
-    static inline ResultType apply(Decimal a)
+    static inline ResultType apply(Decimal<A> a)
     {
         return intExp10(a);
     }
@@ -803,10 +919,238 @@ struct DataTypeFromFieldType<NumberTraits::Error>
     using Type = InvalidType;
 };
 
-template<>
-struct DataTypeFromFieldType<Decimal>
+template<typename T>
+struct DataTypeFromFieldType<Decimal<T>>
 {
-    using Type = DataTypeDecimal;
+    using Type = DataTypeDecimal<T>;
+};
+
+/// Binary operations for Decimals need scale args
+/// +|- scale one of args (which scale factor is not 1). ScaleR = oneof(Scale1, Scale2);
+/// *   no agrs scale. ScaleR = Scale1 + Scale2;
+/// /   first arg scale. ScaleR = Scale1 (scale_a = DecimalType<B>::getScale()).
+template <typename A, typename B, template <typename, typename> typename Operation, typename ResultType_>
+struct DecimalBinaryOperation
+{
+    //static_assert((IsDecimal<A> || IsDecimal<B>) && IsDecimal<ResultType_>);
+    //static_assert(IsDecimal<A> || std::is_integral_v<A>);
+    //static_assert(IsDecimal<B> || std::is_integral_v<B>);
+
+    static constexpr bool is_plus_minus =   std::is_same_v<Operation<Int32, Int32>, PlusImpl<Int32, Int32>> ||
+                                            std::is_same_v<Operation<Int32, Int32>, MinusImpl<Int32, Int32>>;
+    static constexpr bool is_multiply =     std::is_same_v<Operation<Int32, Int32>, MultiplyImpl<Int32, Int32>>;
+    static constexpr bool is_float_division = std::is_same_v<Operation<Int32, Int32>, DivideFloatingImpl<Int32, Int32>>;
+    static constexpr bool is_int_division = std::is_same_v<Operation<Int32, Int32>, DivideIntegralImpl<Int32, Int32>> ||
+                                            std::is_same_v<Operation<Int32, Int32>, DivideIntegralOrZeroImpl<Int32, Int32>>;
+    static constexpr bool is_division = is_float_division || is_int_division;
+    static constexpr bool is_compare =      std::is_same_v<Operation<Int32, Int32>, LeastBaseImpl<Int32, Int32>> ||
+                                            std::is_same_v<Operation<Int32, Int32>, GreatestBaseImpl<Int32, Int32>>;
+    static constexpr bool is_plus_minus_compare = is_plus_minus || is_compare;
+    static constexpr bool can_overflow = is_plus_minus || is_multiply;
+
+    static constexpr bool need_promote_type = (std::is_same_v<ResultType_, A> || std::is_same_v<ResultType_, B>) && (is_plus_minus_compare || is_division || is_multiply) ; // And is multiple / division
+    static constexpr bool check_overflow = need_promote_type && std::is_same_v<ResultType_, Decimal256>; // Check if exceeds 10 * 66;
+
+    using ResultType = ResultType_;
+    using NativeResultType = typename ResultType::NativeType;
+    using ColVecA = std::conditional_t<IsDecimal<A>, ColumnDecimal<A>, ColumnVector<A>>;
+    using ColVecB = std::conditional_t<IsDecimal<B>, ColumnDecimal<B>, ColumnVector<B>>;
+    using ArrayA = typename ColVecA::Container;
+    using ArrayB = typename ColVecB::Container;
+    using ArrayC = typename ColumnDecimal<ResultType>::Container;
+    using PromoteResultType = typename PromoteType<NativeResultType>::Type;
+    using InputType = std::conditional_t<need_promote_type, PromoteResultType, NativeResultType>;
+    using Op = Operation<InputType, InputType>;
+
+    static void NO_INLINE vector_vector(const ArrayA & a, const ArrayB & b, ArrayC & c,
+                                        NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    {
+        size_t size = a.size();
+        if constexpr (is_plus_minus_compare)
+        {
+            if (scale_a != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<true>(a[i], b[i], scale_a);
+                return;
+            }
+            else if (scale_b != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<false>(a[i], b[i], scale_b);
+                return;
+            }
+        }
+        else if constexpr (is_multiply)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaledMul(a[i], b[i], scale_result);
+            return;
+        }
+        else if constexpr (is_division)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a[i], b[i], scale_a);
+            return;
+        }
+
+        /// default: use it if no return before
+        for (size_t i = 0; i < size; ++i)
+            c[i] = apply(a[i], b[i]);
+    }
+
+    static void NO_INLINE vector_constant(const ArrayA & a, B b, ArrayC & c,
+                                        NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    {
+        size_t size = a.size();
+        if constexpr (is_plus_minus_compare)
+        {
+            if (scale_a != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<true>(a[i], b, scale_a);
+                return;
+            }
+            else if (scale_b != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<false>(a[i], b, scale_b);
+                return;
+            }
+        }
+        else if constexpr (is_multiply)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaledMul(a[i], b, scale_result);
+            return;
+        }
+        else if constexpr (is_division)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a[i], b, scale_a);
+            return;
+        }
+
+        /// default: use it if no return before
+        for (size_t i = 0; i < size; ++i)
+            c[i] = apply(a[i], b);
+    }
+
+    static void NO_INLINE constant_vector(A a, const ArrayB & b, ArrayC & c,
+                                        NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    {
+        size_t size = b.size();
+        if constexpr (is_plus_minus_compare)
+        {
+            if (scale_a != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<true>(a, b[i], scale_a);
+                return;
+            }
+            else if (scale_b != 1)
+            {
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = applyScaled<false>(a, b[i], scale_b);
+                return;
+            }
+        }
+        else if constexpr (is_multiply) {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaledMul(a, b[i], scale_result);
+            return;
+        }
+        else if constexpr (is_division)
+        {
+            for (size_t i = 0; i < size; ++i)
+                c[i] = applyScaled<true>(a, b[i], scale_a);
+            return;
+        }
+
+        /// default: use it if no return before
+        for (size_t i = 0; i < size; ++i)
+            c[i] = apply(a, b[i]);
+    }
+
+    static ResultType constant_constant(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
+    {
+        if constexpr (is_plus_minus_compare)
+        {
+            if (scale_a != 1)
+                return applyScaled<true>(a, b, scale_a);
+            else if (scale_b != 1)
+                return applyScaled<false>(a, b, scale_b);
+        }
+        else if constexpr (is_multiply) {
+            return applyScaledMul(a, b, scale_result);
+        }
+        else if constexpr (is_division)
+            return applyScaled<true>(a, b, scale_a);
+        return apply(a, b);
+    }
+
+private:
+    static NativeResultType applyScaledMul(NativeResultType a, NativeResultType b, NativeResultType scale) {
+        if constexpr (is_multiply) {
+            if constexpr (need_promote_type) {
+                PromoteResultType res = Op::template apply<PromoteResultType>(a, b);
+                res = res / scale;
+                if constexpr (check_overflow){
+                    if (res > DecimalMaxValue::MaxValue()) {
+                        throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                    }
+                }
+                return static_cast<NativeResultType>(res);
+            } else {
+                NativeResultType res = Op::template apply<NativeResultType>(a, b);
+                res = res / scale;
+                return res;
+            }
+        }
+    }
+
+    /// there's implicit type convertion here
+    static NativeResultType apply(NativeResultType a, NativeResultType b)
+    {
+        if constexpr (need_promote_type)
+        {
+            auto res = Op::template apply<PromoteResultType>(a, b);
+            if constexpr (check_overflow){
+                if (res > DecimalMaxValue::MaxValue()) {
+                    throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                }
+            }
+            return static_cast<NativeResultType>(res);
+        }
+        else
+        {
+            return Op::template apply<NativeResultType>(a, b);
+        }
+    }
+
+    template <bool scale_left>
+    static NativeResultType applyScaled(InputType a, InputType b, InputType scale)
+    {
+        if constexpr (is_plus_minus_compare || is_division)
+        {
+            InputType res;
+
+            if constexpr (scale_left)
+                a = a * scale;
+            else
+                b = b * scale;
+
+            res = Op::template apply<InputType>(a, b);
+
+            if constexpr (check_overflow) {
+                if (res > DecimalMaxValue::MaxValue()) {
+                    throw Exception("Decimal math overflow", ErrorCodes::DECIMAL_OVERFLOW);
+                }
+            }
+
+            return static_cast<NativeResultType>(res);
+        }
+    }
 };
 
 template <typename DataType> constexpr bool IsIntegral = false;
@@ -911,6 +1255,20 @@ private:
         }
     }
 
+    std::pair<PrecType, ScaleType> getPrecAndScale(const IDataType* type) const {
+        if (auto ptr = typeid_cast<const DataTypeDecimal32 *>(type)) {
+            return std::make_pair(ptr->getPrec(), ptr->getScale());
+        }
+        if (auto ptr = typeid_cast<const DataTypeDecimal64 *>(type)) {
+            return std::make_pair(ptr->getPrec(), ptr->getScale());
+        }
+        if (auto ptr = typeid_cast<const DataTypeDecimal128 *>(type)) {
+            return std::make_pair(ptr->getPrec(), ptr->getScale());
+        }
+        auto ptr = typeid_cast<const DataTypeDecimal256 *>(type);
+        return std::make_pair(ptr->getPrec(), ptr->getScale());
+    }
+
     template <typename LeftDataType, typename RightDataType>
     DataTypePtr getDecimalReturnType(const DataTypes & arguments) const {
         using LeftFieldType = typename LeftDataType::FieldType;
@@ -918,34 +1276,35 @@ private:
         if constexpr (!IsDecimal<typename Op<LeftFieldType, RightFieldType>::ResultType>)
         {
             return std::make_shared<typename DataTypeFromFieldType<typename Op<LeftFieldType, RightFieldType>::ResultType>::Type>();
-        } 
-        else 
+        }
+        else
         {
             PrecType result_prec;
             ScaleType result_scale;
+            // Treat integer as a kind of decimal;
             if constexpr (std::is_integral_v<LeftFieldType>) {
                 PrecType leftPrec = IntPrec<LeftFieldType>::prec;
-                auto rightType = static_cast<const DataTypeDecimal *>(arguments[1].get());
-                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, 0, rightType->getPrec(), rightType->getScale(), result_prec, result_scale);
-                return std::make_shared<DataTypeDecimal>(result_prec, result_scale);
+                auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
+                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, 0, rightPrec, rightScale, result_prec, result_scale);
+                return createDecimal(result_prec, result_scale);
             } else if constexpr (std::is_integral_v<RightFieldType>) {
                 ScaleType rightPrec = IntPrec<RightFieldType>::prec;
-                auto leftType = static_cast<const DataTypeDecimal *>(arguments[0].get());
-                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftType->getPrec(), leftType->getScale(), rightPrec, 0, result_prec, result_scale);
-                return std::make_shared<DataTypeDecimal>(result_prec, result_scale);
+                auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
+                Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, 0, result_prec, result_scale);
+                return createDecimal(result_prec, result_scale);
             }
-            auto leftType = static_cast<const DataTypeDecimal *>(arguments[0].get());
-            auto rightType = static_cast<const DataTypeDecimal *>(arguments[1].get());
-            Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftType->getPrec(), leftType->getScale(), rightType->getPrec(), rightType->getScale(), result_prec, result_scale);
+            auto [leftPrec, leftScale] = getPrecAndScale(arguments[0].get());
+            auto [rightPrec, rightScale] = getPrecAndScale(arguments[1].get());
+            Op<LeftFieldType, RightFieldType>::ResultPrecInferer::infer(leftPrec, leftScale, rightPrec, rightScale, result_prec, result_scale);
 
-            return std::make_shared<DataTypeDecimal>(result_prec, result_scale);
+            return createDecimal(result_prec, result_scale);
         }
     }
 
     template <typename LeftDataType, typename RightDataType>
     bool checkRightType(const DataTypes & arguments, DataTypePtr & type_res) const
     {
-        if constexpr (std::is_same_v<LeftDataType, DataTypeDecimal> || std::is_same_v<RightDataType, DataTypeDecimal>) {
+        if constexpr (IsDecimal<typename LeftDataType::FieldType> || IsDecimal<typename RightDataType::FieldType>) {
             if (typeid_cast<const RightDataType *>(arguments[1].get())){
                 type_res = getDecimalReturnType<LeftDataType, RightDataType>(arguments);
                 return true;
@@ -977,157 +1336,13 @@ private:
                 || checkRightType<T0, DataTypeInt32>(arguments, type_res)
                 || checkRightType<T0, DataTypeInt64>(arguments, type_res)
                 || checkRightType<T0, DataTypeFloat32>(arguments, type_res)
-                || checkRightType<T0, DataTypeDecimal>(arguments, type_res)
+                || checkRightType<T0, DataTypeDecimal32>(arguments, type_res)
+                || checkRightType<T0, DataTypeDecimal64>(arguments, type_res)
+                || checkRightType<T0, DataTypeDecimal128>(arguments, type_res)
+                || checkRightType<T0, DataTypeDecimal256>(arguments, type_res)
                 || checkRightType<T0, DataTypeFloat64>(arguments, type_res))
                 return true;
         }
-        return false;
-    }
-
-    /// Overload for date operations
-    template <typename LeftDataType, typename RightDataType, typename ColumnType>
-    bool executeRightType(Block & block, const ColumnNumbers & arguments, const size_t result, const ColumnType * col_left)
-    {
-        if (!typeid_cast<const RightDataType *>(block.getByPosition(arguments[1]).type.get()))
-            return false;
-
-        using ResultDataType = typename BinaryOperationTraits<Op, LeftDataType, RightDataType>::ResultDataType;
-
-        return executeRightTypeDispatch<LeftDataType, RightDataType, ResultDataType>(
-            block, arguments, result, col_left);
-    }
-
-    /// Overload for InvalidType
-    template <typename LeftDataType, typename RightDataType, typename ResultDataType, typename ColumnType>
-    bool executeRightTypeDispatch(Block & block, const ColumnNumbers & arguments,
-        [[maybe_unused]] const size_t result, [[maybe_unused]] const ColumnType * col_left)
-    {
-        if constexpr (std::is_same_v<ResultDataType, InvalidType>)
-            throw Exception("Types " + String(TypeName<typename LeftDataType::FieldType>::get())
-                + " and " + String(TypeName<typename LeftDataType::FieldType>::get())
-                + " are incompatible for function " + getName() + " or not upscaleable to common type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        else
-        {
-            using T0 = typename LeftDataType::FieldType;
-            using T1 = typename RightDataType::FieldType;
-            using ResultType = typename ResultDataType::FieldType;
-
-            return executeRightTypeImpl<T0, T1, ResultType>(block, arguments, result, col_left);
-        }
-    }
-
-    /// ColumnVector overload
-    template <typename T0, typename T1, typename ResultType = typename Op<T0, T1>::ResultType>
-    bool executeRightTypeImpl(Block & block, const ColumnNumbers & arguments, size_t result, const ColumnVector<T0> * col_left)
-    {
-        if (auto col_right = checkAndGetColumn<ColumnVector<T1>>(block.getByPosition(arguments[1]).column.get()))
-        {
-            auto col_res = ColumnVector<ResultType>::create();
-
-            auto & vec_res = col_res->getData();
-            vec_res.resize(col_left->getData().size());
-            BinaryOperationImpl<T0, T1, Op<T0, T1>, ResultType>::vector_vector(col_left->getData(), col_right->getData(), vec_res);
-
-            block.getByPosition(result).column = std::move(col_res);
-            return true;
-        }
-        else if (auto col_right = checkAndGetColumnConst<ColumnVector<T1>>(block.getByPosition(arguments[1]).column.get()))
-        {
-            auto col_res = ColumnVector<ResultType>::create();
-
-            auto & vec_res = col_res->getData();
-            vec_res.resize(col_left->getData().size());
-            BinaryOperationImpl<T0, T1, Op<T0, T1>, ResultType>::vector_constant(col_left->getData(), col_right->template getValue<T1>(), vec_res);
-
-            block.getByPosition(result).column = std::move(col_res);
-            return true;
-        }
-
-        throw Exception("Logical error: unexpected type of column", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    /// ColumnConst overload
-    template <typename T0, typename T1, typename ResultType = typename Op<T0, T1>::ResultType>
-    bool executeRightTypeImpl(Block & block, const ColumnNumbers & arguments, size_t result, const ColumnConst * col_left)
-    {
-        if (auto col_right = checkAndGetColumn<ColumnVector<T1>>(block.getByPosition(arguments[1]).column.get()))
-        {
-            auto col_res = ColumnVector<ResultType>::create();
-
-            auto & vec_res = col_res->getData();
-            vec_res.resize(col_left->size());
-            BinaryOperationImpl<T0, T1, Op<T0, T1>, ResultType>::constant_vector(col_left->template getValue<T0>(), col_right->getData(), vec_res);
-
-            block.getByPosition(result).column = std::move(col_res);
-            return true;
-        }
-        else if (auto col_right = checkAndGetColumnConst<ColumnVector<T1>>(block.getByPosition(arguments[1]).column.get()))
-        {
-            ResultType res;
-            BinaryOperationImpl<T0, T1, Op<T0, T1>, ResultType>::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(), res);
-            block.getByPosition(result).column = typename DataTypeFromFieldType<ResultType>::Type().createColumnConst(col_left->size(), toField(res));
-
-            return true;
-        }
-
-        return false;
-    }
-
-    template <typename LeftDataType>
-    bool executeLeftType(Block & block, const ColumnNumbers & arguments, const size_t result)
-    {
-        if (!typeid_cast<const LeftDataType *>(block.getByPosition(arguments[0]).type.get()))
-            return false;
-
-        return executeLeftTypeImpl<LeftDataType>(block, arguments, result);
-    }
-
-    template <typename LeftDataType>
-    bool executeLeftTypeImpl(Block & block, const ColumnNumbers & arguments, const size_t result)
-    {
-        if (auto col_left = checkAndGetColumn<ColumnVector<typename LeftDataType::FieldType>>(block.getByPosition(arguments[0]).column.get()))
-        {
-            if (   executeRightType<LeftDataType, DataTypeDate>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeDateTime>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeDecimal>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt8>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt16>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt32>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt64>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt8>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt16>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt32>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt64>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeFloat32>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeFloat64>(block, arguments, result, col_left))
-                return true;
-            else
-                throw Exception("Illegal column " + block.getByPosition(arguments[1]).column->getName()
-                    + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
-        }
-        else if (auto col_left = checkAndGetColumnConst<ColumnVector<typename LeftDataType::FieldType>>(block.getByPosition(arguments[0]).column.get()))
-        {
-            if (   executeRightType<LeftDataType, DataTypeDate>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeDateTime>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeDecimal>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt8>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt16>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt32>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeUInt64>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt8>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt16>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt32>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeInt64>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeFloat32>(block, arguments, result, col_left)
-                || executeRightType<LeftDataType, DataTypeFloat64>(block, arguments, result, col_left))
-                return true;
-            else
-                throw Exception("Illegal column " + block.getByPosition(arguments[1]).column->getName()
-                    + " of second argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
-        }
-
         return false;
     }
 
@@ -1213,7 +1428,10 @@ public:
             || checkLeftType<DataTypeInt16>(arguments, type_res)
             || checkLeftType<DataTypeInt32>(arguments, type_res)
             || checkLeftType<DataTypeInt64>(arguments, type_res)
-            || checkLeftType<DataTypeDecimal>(arguments, type_res)
+            || checkLeftType<DataTypeDecimal<Decimal32>>(arguments, type_res)
+            || checkLeftType<DataTypeDecimal<Decimal64>>(arguments, type_res)
+            || checkLeftType<DataTypeDecimal<Decimal128>>(arguments, type_res)
+            || checkLeftType<DataTypeDecimal<Decimal256>>(arguments, type_res)
             || checkLeftType<DataTypeFloat32>(arguments, type_res)
             || checkLeftType<DataTypeFloat64>(arguments, type_res)))
             throw Exception("Illegal types " + arguments[0]->getName() + " and " + arguments[1]->getName() + " of arguments of function " + getName(),
@@ -1221,6 +1439,60 @@ public:
 
         return type_res;
     }
+
+    template <typename F>
+    bool castType(const IDataType * type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeUInt8,
+            DataTypeUInt16,
+            DataTypeUInt32,
+            DataTypeUInt64,
+            DataTypeInt8,
+            DataTypeInt16,
+            DataTypeInt32,
+            DataTypeInt64,
+            DataTypeFloat32,
+            DataTypeFloat64,
+            DataTypeDate,
+            DataTypeDateTime,
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256
+        >(type, std::forward<F>(f));
+    }
+
+    template <typename F>
+    bool castBothTypes(DataTypePtr left, DataTypePtr right, F && f)
+    {
+        DataTypes types;
+        types.push_back(left);
+        types.push_back(right);
+        DataTypePtr result = getReturnTypeImpl(types);
+        return castType(left.get(), [&](const auto & left_) {
+            return castType(right.get(), [&](const auto & right_) {
+                return castType(result.get(), [&](const auto & result_){
+                    return f(left_, right_, result_);
+                });
+            });
+        });
+    }
+
+    template <typename A, typename B, bool check = IsDecimal<A>> class RefineCls;
+
+    template<typename T, typename ResultType>
+    struct RefineCls <T, ResultType, true> {
+        using Type = If<std::is_floating_point_v<ResultType>, ResultType, typename T::NativeType>;
+    };
+
+    template<typename T, typename ResultType>
+    struct RefineCls <T, ResultType, false> {
+        using Type = T;
+    };
+
+    template<typename A, typename B>
+    using Refine = typename RefineCls<A,B>::Type;
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
@@ -1247,22 +1519,134 @@ public:
             return;
         }
 
-        if (!( executeLeftType<DataTypeDate>(block, arguments, result)
-            || executeLeftType<DataTypeDateTime>(block, arguments, result)
-            || executeLeftType<DataTypeDecimal>(block, arguments, result)
-            || executeLeftType<DataTypeUInt8>(block, arguments, result)
-            || executeLeftType<DataTypeUInt16>(block, arguments, result)
-            || executeLeftType<DataTypeUInt32>(block, arguments, result)
-            || executeLeftType<DataTypeUInt64>(block, arguments, result)
-            || executeLeftType<DataTypeInt8>(block, arguments, result)
-            || executeLeftType<DataTypeInt16>(block, arguments, result)
-            || executeLeftType<DataTypeInt32>(block, arguments, result)
-            || executeLeftType<DataTypeInt64>(block, arguments, result)
-            || executeLeftType<DataTypeFloat32>(block, arguments, result)
-            || executeLeftType<DataTypeFloat64>(block, arguments, result)))
-           throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                + " of first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
+        auto left_generic = block.getByPosition(arguments[0]).type;
+        auto right_generic = block.getByPosition(arguments[1]).type;
+        bool valid = castBothTypes(left_generic, right_generic, [&](const auto & left, const auto & right, const auto & result_type)
+        {
+            using LeftDataType = std::decay_t<decltype(left)>;
+            using RightDataType = std::decay_t<decltype(right)>;
+            using ResultDataType = std::decay_t<decltype(result_type)>;
+            constexpr bool result_is_decimal = IsDecimal<typename ResultDataType::FieldType>;
+            constexpr bool is_multiply [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, MultiplyImpl<UInt8, UInt8>>;
+            constexpr bool is_division [[maybe_unused]] = std::is_same_v<Op<UInt8, UInt8>, DivideFloatingImpl<UInt8, UInt8>> ||
+                                            std::is_same_v<Op<UInt8, UInt8>, DivideIntegralImpl<UInt8, UInt8>> ||
+                                            std::is_same_v<Op<UInt8, UInt8>, DivideIntegralOrZeroImpl<UInt8, UInt8>>;
+
+            using T0 = typename LeftDataType::FieldType;
+            using T1 = typename RightDataType::FieldType;
+            using ResultType = typename ResultDataType::FieldType;
+            using ExpectedResultType = typename Op<T0, T1>::ResultType;
+            if constexpr ((!IsDecimal<ResultType> || !IsDecimal<ExpectedResultType>) && !std::is_same_v<ResultType, ExpectedResultType>) {
+                return false;
+            }
+            else if constexpr (!std::is_same_v<ResultDataType, InvalidType>)
+            {
+                using ColVecT0 = std::conditional_t<IsDecimal<T0>, ColumnDecimal<T0>, ColumnVector<T0>>;
+                using ColVecT1 = std::conditional_t<IsDecimal<T1>, ColumnDecimal<T1>, ColumnVector<T1>>;
+                using ColVecResult = std::conditional_t<IsDecimal<ResultType>, ColumnDecimal<ResultType>, ColumnVector<typename Op<T0, T1>::ResultType>>;
+
+
+                /// Only for arithmatic operator
+                using T0_ = Refine<T0, ResultType>;
+                using T1_ = Refine<T1, ResultType>;
+                using FieldT0 = typename NearestFieldType<T0>::Type;
+                using FieldT1 = typename NearestFieldType<T1>::Type;
+                /// Decimal operations need scale. Operations are on result type.
+                using OpImpl = std::conditional_t<result_is_decimal,
+                    DecimalBinaryOperation<T0, T1, Op, ResultType>,
+                    BinaryOperationImpl<T0, T1, Op<T0_, T1_>, typename Op<T0,T1>::ResultType> >; // Use template to resolve !!!!!
+
+                auto col_left_raw = block.getByPosition(arguments[0]).column.get();
+                auto col_right_raw = block.getByPosition(arguments[1]).column.get();
+                if (auto col_left = checkAndGetColumnConst<ColVecT0>(col_left_raw))
+                {
+                    if (auto col_right = checkAndGetColumnConst<ColVecT1>(col_right_raw))
+                    {
+                        /// the only case with a non-vector result
+                        if constexpr (result_is_decimal)
+                        {
+                            auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
+
+                            auto res = OpImpl::constant_constant(col_left->template getValue<T0>(), col_right->template getValue<T1>(),
+                                                                    scale_a, scale_b, scale_result);
+                            block.getByPosition(result).column =
+                                ResultDataType(result_type.getPrec(), result_type.getScale()).createColumnConst(
+                                    col_left->size(), toField(res, result_type.getScale()));
+                        }
+                        else
+                        {
+                            auto res = OpImpl::constant_constant(col_left->getField().template safeGet<FieldT0>(), col_right->getField().template safeGet<FieldT1>());
+                            block.getByPosition(result).column = ResultDataType().createColumnConst(col_left->size(), toField(res));
+                        }
+                        return true;
+                    }
+                }
+
+                typename ColVecResult::MutablePtr col_res = nullptr;
+                if constexpr (result_is_decimal)
+                {
+                    col_res = ColVecResult::create(0, result_type.getScale());
+                }
+                else
+                    col_res = ColVecResult::create();
+
+                auto & vec_res = col_res->getData();
+                vec_res.resize(block.rows());
+
+                if (auto col_left_const = checkAndGetColumnConst<ColVecT0>(col_left_raw))
+                {
+                    if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
+                    {
+                        if constexpr (result_is_decimal)
+                        {
+                            auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
+                            OpImpl::constant_vector(col_left_const->template getValue<T0>(), col_right->getData(), vec_res,
+                                                    scale_a, scale_b, scale_result);
+                        }
+                        else
+                            OpImpl::constant_vector(col_left_const->getField().template safeGet<FieldT0>(), col_right->getData(), vec_res);
+                    }
+                    else
+                        return false;
+                }
+                else if (auto col_left = checkAndGetColumn<ColVecT0>(col_left_raw))
+                {
+                    if constexpr (result_is_decimal)
+                    {
+                        auto [scale_a, scale_b, scale_result] = result_type.getScales(left, right, is_multiply, is_division);
+                        if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
+                        {
+                            OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b,
+                                                  scale_result);
+                        }
+                        else if (auto col_right_const = checkAndGetColumnConst<ColVecT1>(col_right_raw))
+                        {
+                            OpImpl::vector_constant(col_left->getData(), col_right_const->template getValue<T1>(), vec_res,
+                                                    scale_a, scale_b, scale_result);
+                        }
+                        else
+                            return false;
+                    }
+                    else
+                    {
+                        if (auto col_right = checkAndGetColumn<ColVecT1>(col_right_raw))
+                            OpImpl::vector_vector(col_left->getData(), col_right->getData(), vec_res);
+                        else if (auto col_right_const = checkAndGetColumnConst<ColVecT1>(col_right_raw))
+                            OpImpl::vector_constant(col_left->getData(), col_right_const->getField().template safeGet<FieldT1>(), vec_res);
+                        else
+                            return false;
+                    }
+                }
+                else
+                    return false;
+
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            }
+            return false;
+        });
+        if (!valid)
+            throw Exception(getName() + "'s arguments do not match the expected data types", ErrorCodes::LOGICAL_ERROR);
     }
 };
 
@@ -1284,9 +1668,9 @@ private:
     {
         if (typeid_cast<const T0 *>(arguments[0].get()))
         {
-            if constexpr (std::is_same_v<T0, DataTypeDecimal>) {
-                auto t = static_cast<const DataTypeDecimal*> (arguments[0].get());
-                result = std::make_shared<DataTypeDecimal>(t->getPrec(), t->getScale());
+            if constexpr (IsDecimal<typename T0::FieldType>) {
+                auto t = static_cast<const T0 *> (arguments[0].get());
+                result = std::make_shared<T0>(t->getPrec(), t->getScale());
             } else {
                 result = std::make_shared<typename DataTypeFromFieldType<typename Op<typename T0::FieldType>::ResultType>::Type>();
             }
@@ -1310,6 +1694,36 @@ private:
 
             block.getByPosition(result).column = std::move(col_res);
             return true;
+        }
+
+        return false;
+    }
+
+    template <typename T0>
+    bool executeDecimalType(Block & block, const ColumnNumbers & arguments, size_t result) {
+        if (const ColumnDecimal<T0> * col = checkAndGetColumn<ColumnDecimal<T0>>(block.getByPosition(arguments[0]).column.get()))
+        {
+            using ResultType = typename Op<T0>::ResultType;
+
+            if constexpr (IsDecimal<ResultType>) {
+                auto col_res = ColumnDecimal<ResultType>::create(0, col->getData().getScale());
+
+                typename ColumnDecimal<ResultType>::Container & vec_res = col_res->getData();
+                vec_res.resize(col->getData().size());
+                UnaryOperationImpl<T0, Op<T0>>::vector(col->getData(), vec_res);
+
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            } else {
+                auto col_res = ColumnVector<ResultType>::create();
+
+                typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
+                vec_res.resize(col->getData().size());
+                UnaryOperationImpl<T0, Op<T0>>::vector(col->getData(), vec_res);
+
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            }
         }
 
         return false;
@@ -1339,7 +1753,10 @@ public:
             || checkType<DataTypeInt32>(arguments, result)
             || checkType<DataTypeInt64>(arguments, result)
             || checkType<DataTypeFloat32>(arguments, result)
-            || checkType<DataTypeDecimal>(arguments, result)
+            || checkType<DataTypeDecimal32>(arguments, result)
+            || checkType<DataTypeDecimal64>(arguments, result)
+            || checkType<DataTypeDecimal128>(arguments, result)
+            || checkType<DataTypeDecimal256>(arguments, result)
             || checkType<DataTypeFloat64>(arguments, result)))
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1357,7 +1774,10 @@ public:
             || executeType<Int16>(block, arguments, result)
             || executeType<Int32>(block, arguments, result)
             || executeType<Int64>(block, arguments, result)
-            || executeType<Decimal>(block, arguments, result)
+            || executeDecimalType<Decimal32>(block, arguments, result)
+            || executeDecimalType<Decimal64>(block, arguments, result)
+            || executeDecimalType<Decimal128>(block, arguments, result)
+            || executeDecimalType<Decimal256>(block, arguments, result)
             || executeType<Float32>(block, arguments, result)
             || executeType<Float64>(block, arguments, result)))
            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()

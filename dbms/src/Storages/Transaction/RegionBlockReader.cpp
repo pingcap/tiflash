@@ -5,6 +5,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
+#include <DataTypes/DataTypeDecimal.h>
 
 namespace DB
 {
@@ -14,16 +15,27 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-static const Field GenDecodeRow(TiDB::CodecFlag flag)
+static const Field GenDecodeRow(const TiDB::ColumnInfo & col_info)
 {
-    switch (flag)
+    switch (col_info.flag)
     {
         case TiDB::CodecFlagNil:
             return Field();
         case TiDB::CodecFlagBytes:
             return Field(String());
         case TiDB::CodecFlagDecimal:
-            return Field(Decimal(0));
+            {
+                auto type = createDecimal(col_info.flen, col_info.decimal);
+                if (checkDecimal<Decimal32>(*type))
+                    return Field(DecimalField<Decimal32>(Decimal32(), col_info.decimal));
+                else if (checkDecimal<Decimal64>(*type))
+                    return Field(DecimalField<Decimal64>(Decimal64(), col_info.decimal));
+                else if (checkDecimal<Decimal128>(*type))
+                    return Field(DecimalField<Decimal128>(Decimal128(), col_info.decimal));
+                else
+                    return Field(DecimalField<Decimal256>(Decimal256(), col_info.decimal));
+            }
+            break;
         case TiDB::CodecFlagCompactBytes:
             return Field(String());
         case TiDB::CodecFlagFloat:
@@ -37,7 +49,7 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
         case TiDB::CodecFlagVarUInt:
             return Field(UInt64(0));
         default:
-            throw Exception("Not implented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implented codec flag: " + std::to_string(col_info.flag), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -137,7 +149,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                         continue;
 
                     row.push_back(Field(column.id));
-                    row.push_back(GenDecodeRow(column.getCodecFlag()));
+                    row.push_back(GenDecodeRow(column));
                 }
             }
             else

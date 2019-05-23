@@ -4,28 +4,23 @@
 #ifdef thread_local
 #   undef thread_local
 #endif
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-    #include <boost/multiprecision/cpp_int.hpp>
-#pragma GCC diagnostic pop
 #include <ext/singleton.h>
 #include <Common/Exception.h>
+#include <Core/Types.h>
 
 namespace DB {
 
 namespace ErrorCodes
 {
     extern const int DECIMAL_OVERFLOW_ERROR;
+    extern const int LOGICAL_ERROR;
 }
 
-using int256_t = boost::multiprecision::int256_t;
-using int512_t = boost::multiprecision::int512_t;
+using PrecType = UInt32;
+using ScaleType = UInt32;
 
-constexpr int decimal_max_prec = 65;
-constexpr int decimal_max_scale = 30;
-
-using PrecType = uint16_t;
-using ScaleType = uint8_t;
+constexpr PrecType decimal_max_prec = 65;
+constexpr ScaleType decimal_max_scale = 30;
 
 template<typename T> struct IntPrec{};
 template<> struct IntPrec<int8_t>{
@@ -62,54 +57,42 @@ template<> struct IntPrec<uint64_t>{
 //    c) The precision of the result of multiplication is implementation-defined, and the scale is S1 + S2.
 //    d) The precision and scale of the result of division are implementation-defined.
 
-struct InfererHelper {
-    template<typename T>
-    static T min(T A, T B) {
-        return A < B ? A: B;
-    }
-
-    template<typename T>
-    static T max(T A, T B) {
-        return A > B ? A: B;
-    }
-};
-
-struct PlusDecimalInferer : public InfererHelper {
+struct PlusDecimalInferer {
     static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType& result_prec, ScaleType& result_scale) {
-        result_scale = max(left_scale, right_scale);
-        PrecType result_int = max(left_prec - left_scale, right_prec - right_scale);
-        result_prec = min(result_scale + result_int + 1, decimal_max_prec);
+        result_scale = std::max(left_scale, right_scale);
+        PrecType result_int = std::max(left_prec - left_scale, right_prec - right_scale);
+        result_prec = std::min(result_scale + result_int + 1, decimal_max_prec);
     }
 };
 
-struct MulDecimalInferer : public InfererHelper {
+struct MulDecimalInferer {
     static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType& result_prec, ScaleType& result_scale) {
-        result_scale = min(left_scale + right_scale, decimal_max_scale);
-        result_prec = min(left_prec + right_prec, decimal_max_prec);
+        result_scale = std::min(left_scale + right_scale, decimal_max_scale);
+        result_prec = std::min(left_prec + right_prec, decimal_max_prec);
     }
 };
 
-struct DivDecimalInferer : public InfererHelper {
-    static const uint8_t div_precincrement = 4;
+struct DivDecimalInferer {
+    static const ScaleType div_precincrement = 4;
     static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType /* right_prec is not used */ , ScaleType right_scale, PrecType& result_prec, ScaleType& result_scale) {
-        result_prec = min(left_prec + right_scale + div_precincrement, decimal_max_prec);
-        result_scale = min(left_scale + div_precincrement, decimal_max_scale);
+        result_prec = std::min(left_prec + right_scale + div_precincrement, decimal_max_prec);
+        result_scale = std::min(left_scale + div_precincrement, decimal_max_scale);
     }
 };
 
-struct SumDecimalInferer : public InfererHelper {
-    static constexpr uint8_t decimal_longlong_digits = 22;
+struct SumDecimalInferer {
+    static constexpr PrecType decimal_longlong_digits = 22;
     static inline void infer(PrecType prec, ScaleType scale, PrecType &result_prec, ScaleType &result_scale) {
-        result_prec = min(prec + decimal_longlong_digits, decimal_max_prec);
+        result_prec = std::min(prec + decimal_longlong_digits, decimal_max_prec);
         result_scale = scale;
     }
 };
 
-struct AvgDecimalInferer : public InfererHelper {
-    static const uint8_t div_precincrement = 4;
+struct AvgDecimalInferer {
+    static const ScaleType div_precincrement = 4;
     static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType& result_prec, ScaleType& result_scale) {
-        result_prec = min(left_prec + div_precincrement, decimal_max_prec);
-        result_scale = min(left_scale + div_precincrement, decimal_max_scale);
+        result_prec = std::min(left_prec + div_precincrement, decimal_max_prec);
+        result_scale = std::min(left_scale + div_precincrement, decimal_max_scale);
     }
 };
 
@@ -117,176 +100,130 @@ struct OtherInferer {
     static inline void infer(PrecType, ScaleType , PrecType , ScaleType, PrecType&, ScaleType&) {}
 };
 
-// TODO use template to make type of value arguable.
+template<typename T>
 struct Decimal {
-    int256_t value;
-    PrecType precision;
-    ScaleType scale;
+    T value;
 
-    Decimal(const Decimal& d): value(d.value), precision(d.precision), scale(d.scale) {}
-    Decimal():value(0), precision(0), scale(0) {}
-    Decimal(int256_t v_, PrecType prec_, ScaleType scale_): value(v_), precision(prec_), scale(scale_){}
+    using NativeType = T;
 
-    template<typename T, std::enable_if_t<std::is_integral<T>{}>* = nullptr >
-    Decimal(T v): value(v), precision(IntPrec<T>::prec), scale(0) {}
+    Decimal(const Decimal<T>& d) = default;
+    Decimal() = default;
+    Decimal(T v_): value(v_) {}
 
-    template<typename T, std::enable_if_t<std::is_floating_point<T>{}>* = nullptr >
-    Decimal(T) {
-        throw Exception("please use cast function to convert float to decimal");
+    String toString(ScaleType) const;
+
+    template <typename U, std::enable_if_t<std::is_same_v<U, Int256> || std::is_same_v<U, Int512> || std::is_integral_v<U> || std::is_same_v<U, Int128>>* = nullptr>
+    operator U () const {
+        return static_cast<U>(value);
     }
 
-    // check if Decimal is inited without any change.
-    bool isZero() const {
-        return precision == 0 && scale == 0;
+    template <typename U, std::enable_if_t<sizeof(U) >= sizeof(T)>* = nullptr>
+    operator Decimal<U> () const {
+        return static_cast<U>(value);
     }
 
-    Decimal operator + (const Decimal& v) const ;
-
-    void operator += (const Decimal& v) ;
-
-    void operator = (const Decimal& v) {
-        value = v.value;
-        precision = v.precision;
-        scale = v.scale;
+    operator T() const {
+        return value;
     }
 
-    Decimal operator - (const Decimal& v) const ;
+    template <typename U>
+    const Decimal<T> & operator += (const Decimal<U> & x) { value += static_cast<NativeType>(x.value); return *this; }
+    const Decimal<T> & operator -= (const T & x) { value -= x; return *this; }
+    const Decimal<T> & operator *= (const T & x) { value *= x; return *this; }
+    const Decimal<T> & operator /= (const T & x) { value /= x; return *this; }
+    const Decimal<T> & operator %= (const T & x) { value %= x; return *this; }
 
-    Decimal operator - () const ;
-
-    Decimal operator ~ () const ;
-
-    Decimal operator * (const Decimal& v) const ;
-
-    template<typename T, std::enable_if_t<std::is_floating_point<T>{}>* = nullptr>
-    T operator*(const T& v) const
-    {
-        return static_cast<T>(*this) * (v);
-    }
-
-    template<typename T, std::enable_if_t<std::is_integral<T>{}>* = nullptr>
-    Decimal operator*(const T& v) const
-    {
-        return (*this) * static_cast<Decimal>(v);
-    }
-
-    Decimal operator / (const Decimal& v) const ;
-
-    template <typename T, std::enable_if_t<std::is_floating_point<T>{}>* = nullptr>
-    operator T () const {
-        T result = static_cast<T> (value);
-        for (ScaleType i = 0; i < scale; i++) {
-            result /= 10;
-        }
-        return result;
-    }
-
-    template <typename T, std::enable_if_t<std::is_integral<T>{}>* = nullptr>
-    operator T () const {
-        int256_t v = value;
-        for (ScaleType i = 0; i < scale; i++) {
-            v = v / 10 + (i + 1 == scale && v % 10 >= 5);
-        }
-        if (v > std::numeric_limits<T>::max() || v < std::numeric_limits<T>::min()) {
-            throw Exception("Decimal value overflow", ErrorCodes::DECIMAL_OVERFLOW_ERROR);
-        }
-        T result = static_cast<T>(v);
-        return result;
-    }
-
-    bool operator < (const Decimal& v) const;
-
-    bool operator <= (const Decimal& v) const;
-
-    bool operator == (const Decimal& v) const;
-
-    bool operator >= (const Decimal& v) const;
-
-    bool operator > (const Decimal& v) const;
-
-    bool operator != (const Decimal& v) const;
-
-    void checkOverflow() const;
-
-    std::string toString() const;
-
-    PrecType getRealPrec() const;
-
-    void ScaleTo(PrecType prec_, ScaleType scale_) {
-        if (scale_ > scale) {
-            for(ScaleType i = 0 ; i < scale_ - scale; i++) {
-                value *= 10;
-            }
-        } else {
-            bool need2Round = false;
-            for(ScaleType i = 0 ; i < scale - scale_; i++) {
-                need2Round = (value < 0 ? - value : value) % 10 >= 5;
-                value /= 10;
-            }
-            if (need2Round) {
-                if (value < 0)
-                    value --;
-                else 
-                    value ++;
-            }
-        }
-        if (getRealPrec() > prec_) {
-            throw Exception("Decimal value overflow", ErrorCodes::DECIMAL_OVERFLOW_ERROR);
-        }
-        precision = prec_;
-        scale = scale_;
-    }
-
-    Decimal getAvg(uint64_t cnt, PrecType result_prec, ScaleType result_scale) const {
-        auto tmpValue = value;
-        if (result_scale > scale) {
-            for (ScaleType i = 0; i < result_scale - scale; i++) {
-                tmpValue *= 10;
-            }
-        }
-        tmpValue /= cnt;
-        Decimal dec(tmpValue, result_prec, result_scale);
-        dec.checkOverflow();
-        return dec;
-    }
 };
 
-template <typename DataType> constexpr bool IsDecimal = false;
-template <> constexpr bool IsDecimal<Decimal> = true;
+using Decimal32 = Decimal<Int32>;
+using Decimal64 = Decimal<Int64>;
+using Decimal128 = Decimal<Int128>;
+using Decimal256 = Decimal<Int256>;
 
-bool parseDecimal(const char *str, size_t len, Decimal& dec);
+static constexpr PrecType minDecimalPrecision() { return 1; }
+template <typename T> static constexpr PrecType maxDecimalPrecision() { return 0; }
+template <> constexpr PrecType maxDecimalPrecision<Decimal32>() { return 9; }
+template <> constexpr PrecType maxDecimalPrecision<Decimal64>() { return 18; }
+template <> constexpr PrecType maxDecimalPrecision<Decimal128>() { return 38; }
+template <> constexpr PrecType maxDecimalPrecision<Decimal256>() { return 65; }
+
+template<typename T>
+struct PromoteType {};
+
+template<> struct PromoteType<Int32>  {using Type = Int64; };
+template<> struct PromoteType<Int64>  {using Type = Int128;};
+template<> struct PromoteType<Int128> {using Type = Int256;};
+template<> struct PromoteType<Int256> {using Type = Int512;};
+
+template <typename DataType> constexpr bool IsDecimal = false;
+template <> constexpr bool IsDecimal<Decimal32>  = true;
+template <> constexpr bool IsDecimal<Decimal64>  = true;
+template <> constexpr bool IsDecimal<Decimal128> = true;
+template <> constexpr bool IsDecimal<Decimal256> = true;
+
+class Field;
+
+bool parseDecimal(const char *str, size_t len, bool negative, Field& field);
 
 class DecimalMaxValue final : public ext::singleton<DecimalMaxValue> {
     friend class ext::singleton<DecimalMaxValue>;
 
-    int256_t number[decimal_max_prec+1];
+    Int256 number[decimal_max_prec+1];
 
 public:
     DecimalMaxValue() {
-        for (int i = 1; i <= decimal_max_prec; i++) {
+        for (PrecType i = 1; i <= decimal_max_prec; i++) {
             number[i] = number[i-1] * 10 + 9;
         }
     }
 
-    int256_t get(PrecType idx) const {
+    Int256 get(PrecType idx) const {
         return number[idx];
     }
-    
-    static int256_t Get(PrecType idx) {
+
+    static Int256 Get(PrecType idx) {
         return instance().get(idx);
     }
-} ;
+
+    static Int256 MaxValue() {
+        return Get(65);
+    }
+};
 
 template<typename T>
-std::enable_if_t<std::is_integral_v<T>, Decimal> ToDecimal(T value, PrecType prec, ScaleType scale)
-{
-    Decimal dec(value);
-    dec.ScaleTo(prec, scale);
-    return dec;
+inline typename T::NativeType getScaleMultiplier(ScaleType scale) {
+    return static_cast<typename T::NativeType>(DecimalMaxValue::Get(scale) + 1);
 }
 
 template<typename T>
-std::enable_if_t<std::is_floating_point_v<T>, Decimal> ToDecimal(T value, PrecType prec, ScaleType scale)
+inline void checkDecimalOverflow(Decimal<T> v, PrecType prec) {
+    auto maxValue = DecimalMaxValue::Get(prec);
+    if (v.value > maxValue || v.value < -maxValue) {
+        throw Exception("Decimal value overflow", ErrorCodes::DECIMAL_OVERFLOW_ERROR);
+    }
+}
+
+template <> struct TypeName<Decimal32>   { static const char * get() { return "Decimal32";   } };
+template <> struct TypeName<Decimal64>   { static const char * get() { return "Decimal64";   } };
+template <> struct TypeName<Decimal128>  { static const char * get() { return "Decimal128";  } };
+template <> struct TypeName<Decimal256>  { static const char * get() { return "Decimal256";  } };
+
+template <> struct TypeId<Decimal32>    { static constexpr const TypeIndex value = TypeIndex::Decimal32; };
+template <> struct TypeId<Decimal64>    { static constexpr const TypeIndex value = TypeIndex::Decimal64; };
+template <> struct TypeId<Decimal128>   { static constexpr const TypeIndex value = TypeIndex::Decimal128; };
+template <> struct TypeId<Decimal256>   { static constexpr const TypeIndex value = TypeIndex::Decimal256; };
+
+template<typename T, typename U>
+std::enable_if_t<std::is_integral_v<T>, U> ToDecimal(T value, ScaleType scale)
+{
+    using UType = typename U::NativeType;
+    UType scale_mul = getScaleMultiplier<U>(scale);
+    U result = static_cast<UType>(value) * scale_mul;
+    return result;
+}
+
+template<typename T, typename U>
+std::enable_if_t<std::is_floating_point_v<T>, U> ToDecimal(T value, ScaleType scale)
 {
     bool neg = false;
     if (value < 0) {
@@ -303,18 +240,38 @@ std::enable_if_t<std::is_floating_point_v<T>, Decimal> ToDecimal(T value, PrecTy
     }
     // rounding
     T tenTimesValue = value * 10;
-    int256_t v(value);
-    if (int256_t(tenTimesValue) % 10 >= 5) {
+    using UType = typename U::NativeType;
+    UType v(value);
+    if (Int256(tenTimesValue) % 10 >= 5) {
         v++;
     }
     if (neg) {
         v = -v;
     }
-    Decimal dec(v, prec, scale);
-    dec.checkOverflow();
-    return dec;
+    return v;
 }
 
-Decimal ToDecimal(Decimal dec, PrecType prec, ScaleType scale);
+template<typename T, typename U>
+std::enable_if_t<IsDecimal<T>, U> ToDecimal(T value, ScaleType scale) {
+    throw Exception("Should not call here", ErrorCodes::LOGICAL_ERROR);
+}
+
+template<typename T, typename U>
+std::enable_if_t<IsDecimal<T>, U> ToDecimal(T v, ScaleType v_scale, ScaleType scale) {
+    auto value = v.value;
+    if (v_scale <= scale) {
+        for (ScaleType i = scale; i < v_scale; i++)
+            value *= 10;
+    } else {
+        for (ScaleType i = v_scale; i < scale; i++)
+            value /= 10;
+    }
+    return static_cast<typename U::NativeType>(value);
+}
+
+template<typename T, typename U>
+std::enable_if_t<!IsDecimal<T>, U> ToDecimal(T v, ScaleType v_scale, ScaleType scale) {
+    throw Exception("Should not call here", ErrorCodes::LOGICAL_ERROR);
+}
 
 }

@@ -4,6 +4,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <Core/Field.h>
+#include <Core/DecimalComparison.h>
 #include <Common/FieldVisitors.h>
 
 
@@ -270,4 +271,41 @@ namespace DB
         DB::String res = applyVisitor(DB::FieldVisitorToString(), DB::Field(x));
         buf.write(res.data(), res.size());
     }
+
+    template <typename T>
+    static bool decEqual(T x, T y, UInt32 x_scale, UInt32 y_scale)
+    {
+        using Comparator = DecimalComparison<T, T, EqualsOp>;
+        return Comparator::compare(x, y, x_scale, y_scale);
+    }
+
+    template <typename T>
+    static bool decLess(T x, T y, UInt32 x_scale, UInt32 y_scale)
+    {
+        using Comparator = DecimalComparison<T, T, LessOp>;
+        return Comparator::compare(x, y, x_scale, y_scale);
+    }
+
+    template <typename T>
+    static bool decLessOrEqual(T x, T y, UInt32 x_scale, UInt32 y_scale)
+    {
+        using Comparator = DecimalComparison<T, T, LessOrEqualsOp>;
+        return Comparator::compare(x, y, x_scale, y_scale);
+    }
+
+    template <> bool decimalEqual(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+    template <> bool decimalLess(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+    template <> bool decimalLessOrEqual(Decimal32 x, Decimal32 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
+
+    template <> bool decimalEqual(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+    template <> bool decimalLess(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+    template <> bool decimalLessOrEqual(Decimal64 x, Decimal64 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
+
+    template <> bool decimalEqual(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+    template <> bool decimalLess(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+    template <> bool decimalLessOrEqual(Decimal128 x, Decimal128 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
+
+    template <> bool decimalEqual(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decEqual(x, y, xs, ys); }
+    template <> bool decimalLess(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decLess(x, y, xs, ys); }
+    template <> bool decimalLessOrEqual(Decimal256 x, Decimal256 y, UInt32 xs, UInt32 ys) { return decLessOrEqual(x, y, xs, ys); }
 }

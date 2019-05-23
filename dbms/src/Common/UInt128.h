@@ -56,6 +56,8 @@ struct UInt128
     UInt128 & operator= (const UInt64 rhs) { low = rhs; high = 0; return *this; }
 };
 
+template <> struct TypeId<UInt128>   { static constexpr const TypeIndex value = TypeIndex::UInt128;  };
+
 template <typename T> bool inline operator== (T a, const UInt128 b) { return UInt128(a) == b; }
 template <typename T> bool inline operator!= (T a, const UInt128 b) { return UInt128(a) != b; }
 template <typename T> bool inline operator>= (T a, const UInt128 b) { return UInt128(a) >= b; }
@@ -206,4 +208,5 @@ template <> struct is_arithmetic<DB::UInt128>
 {
     static constexpr bool value = false;
 };
+
 }

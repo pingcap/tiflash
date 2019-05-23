@@ -21,13 +21,15 @@ struct AggregateFunctionSumData
 
     AggregateFunctionSumData(){}
 
-    AggregateFunctionSumData(PrecType prec, ScaleType scale){
-        sum = Decimal(0, prec, scale);
-    }
-
     void add(T value)
     {
         sum += value;
+    }
+
+    template <typename U>
+    void add(Decimal<U> v [[maybe_unused]]) {
+        if constexpr(IsDecimal<T>)
+            sum.value += static_cast<typename T::NativeType>(v.value);
     }
 
     void merge(const AggregateFunctionSumData & rhs)
@@ -107,29 +109,29 @@ public:
     PrecType result_prec;
 
     AggregateFunctionSum(){}
-    
+
     AggregateFunctionSum(PrecType prec, ScaleType scale) {
         SumDecimalInferer::infer(prec, scale, result_prec, result_scale);
     };
 
     DataTypePtr getReturnType() const override {
-        if constexpr (IsDecimal<T> && IsDecimal<TResult>) {
-            return std::make_shared<DataTypeDecimal>(result_prec, result_scale);
+        if constexpr (IsDecimal<TResult>) {
+            return std::make_shared<DataTypeDecimal<TResult>>(result_prec, result_scale);
         } else {
             return std::make_shared<DataTypeNumber<TResult>>();
         }
     }
 
     void create(AggregateDataPtr place) const override {
-        if constexpr (IsDecimal<T> && IsDecimal<TResult>)
-            new (place) Data(result_prec, result_scale);
-        else
-            new (place) Data;
+        new (place) Data;
     }
 
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        this->data(place).add(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
+        if constexpr (IsDecimal<T>)
+            this->data(place).template add<T>(static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num]);
+        else
+            this->data(place).add(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
@@ -149,7 +151,10 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr place, IColumn & to) const override
     {
-        static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
+        if constexpr (IsDecimal<TResult>) {
+            static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);
+        } else
+            static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
