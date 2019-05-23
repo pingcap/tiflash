@@ -1,9 +1,9 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <Storages/Transaction/TiKVHandle.h>
+#include <common/logger_useful.h>
+#include <Core/TMTSortCursor.hpp>
 
 namespace DB
 {
@@ -48,26 +48,18 @@ public:
 
 protected:
     Block readImpl() override;
+    void initQueue() override;
 
 private:
-    union CmpOptimizedRes
-    {
-        Int32 all;
-        std::array<Int8, 4> diffs;
-    };
-
-    void merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue);
+    void merge(MutableColumns & merged_columns);
     void insertRow(MutableColumns &, size_t &);
 
-    bool shouldOutput(const CmpOptimizedRes res);
+    bool shouldOutput(const TMTCmpOptimizedRes res);
     bool behindGcTso();
     bool isDefiniteDeleted();
     bool hasDeleteFlag();
 
     void logRowGoing(const char * reason, bool is_output);
-
-    static CmpOptimizedRes cmpOptimizedForTMT(
-        const MergingSortedBlockInputStream::RowRef & row_a, const MergingSortedBlockInputStream::RowRef & row_b);
 
 private:
     std::vector<Handle> begin_handle_ranges;
@@ -90,6 +82,9 @@ private:
     TableID table_id;
 
     bool final;
+
+    using TMTQueue = std::priority_queue<TMTSortCursor>;
+    TMTQueue tmt_queue;
 };
 
 } // namespace DB

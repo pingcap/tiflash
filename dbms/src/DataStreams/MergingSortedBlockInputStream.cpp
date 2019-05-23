@@ -2,7 +2,7 @@
 #include <iomanip>
 
 #include <DataStreams/MergingSortedBlockInputStream.h>
-
+#include <Core/TMTSortCursor.hpp>
 
 namespace DB
 {
@@ -55,10 +55,7 @@ void MergingSortedBlockInputStream::init(MutableColumns & merged_columns)
             has_collation |= cursors[i].has_collation;
         }
 
-        if (has_collation)
-            initQueue(queue_with_collation);
-        else
-            initQueue(queue);
+        initQueue();
     }
 
     /// Let's check that all source blocks have the same structure.
@@ -78,6 +75,13 @@ void MergingSortedBlockInputStream::init(MutableColumns & merged_columns)
     }
 }
 
+void MergingSortedBlockInputStream::initQueue()
+{
+    if (has_collation)
+        initQueue(queue_with_collation);
+    else
+        initQueue(queue);
+}
 
 template <typename TSortCursor>
 void MergingSortedBlockInputStream::initQueue(std::priority_queue<TSortCursor> & queue)
@@ -136,6 +140,8 @@ void MergingSortedBlockInputStream::fetchNextBlock<SortCursor>(const SortCursor 
 template
 void MergingSortedBlockInputStream::fetchNextBlock<SortCursorWithCollation>(const SortCursorWithCollation & current, std::priority_queue<SortCursorWithCollation> & queue);
 
+template
+void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursor>(const TMTSortCursor & current, std::priority_queue<TMTSortCursor> & queue);
 
 template <typename TSortCursor>
 void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::priority_queue<TSortCursor> & queue)

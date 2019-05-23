@@ -49,43 +49,19 @@ Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
     if (merged_columns.empty())
         return Block();
 
-    merge(merged_columns, queue);
+    merge(merged_columns);
 
     return header.cloneWithColumns(std::move(merged_columns));
 }
 
 template <typename HandleType>
-typename ReplacingTMTSortedBlockInputStream<HandleType>::CmpOptimizedRes ReplacingTMTSortedBlockInputStream<HandleType>::cmpOptimizedForTMT(
-    const MergingSortedBlockInputStream::RowRef & row_a, const MergingSortedBlockInputStream::RowRef & row_b)
-{
-    CmpOptimizedRes res{.all = 0};
-    {
-        HandleType h1 = static_cast<HandleType>(row_a.columns[0][0]->getUInt(row_a.row_num));
-        HandleType h2 = static_cast<HandleType>(row_b.columns[0][0]->getUInt(row_b.row_num));
-        res.diffs[0] = h1 != h2;
-    }
-    {
-        Timestamp t1 = static_cast<const ColumnUInt64 *>(row_a.columns[0][1])->getData()[row_a.row_num];
-        Timestamp t2 = static_cast<const ColumnUInt64 *>(row_b.columns[0][1])->getData()[row_b.row_num];
-        res.diffs[1] = t1 != t2;
-    }
-    {
-        UInt8 d1 = static_cast<const ColumnUInt8 *>(row_a.columns[0][2])->getData()[row_a.row_num];
-        UInt8 d2 = static_cast<const ColumnUInt8 *>(row_b.columns[0][2])->getData()[row_b.row_num];
-        res.diffs[2] = d1 != d2;
-    }
-
-    return res;
-}
-
-template <typename HandleType>
-void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue)
+void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merged_columns)
 {
     size_t merged_rows = 0;
 
-    while (!queue.empty())
+    while (!tmt_queue.empty())
     {
-        SortCursor current = queue.top();
+        TMTSortCursor current = tmt_queue.top();
 
         if (selected_row.empty())
         {
@@ -95,11 +71,11 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 
         setPrimaryKeyRef(next_key, current);
 
-        const auto key_differs = cmpOptimizedForTMT(current_key, next_key);
+        const auto key_differs = TMTSortCursor::cmp(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
 
         if ((key_differs.diffs[0] | key_differs.diffs[1]) == 0) // handle and tso are equal.
         {
-            queue.pop();
+            tmt_queue.pop();
 
             if (key_differs.diffs[2] == 0) // del is equal
             {
@@ -122,7 +98,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
             }
             else
             {
-                queue.pop();
+                tmt_queue.pop();
 
                 if (shouldOutput(key_differs))
                     insertRow(merged_columns, merged_rows);
@@ -135,11 +111,11 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
         if (!current->isLast())
         {
             current->next();
-            queue.push(current);
+            tmt_queue.push(current);
         }
         else
         {
-            fetchNextBlock(current, queue);
+            fetchNextBlock(current, tmt_queue);
         }
     }
 
@@ -150,7 +126,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 }
 
 template <typename HandleType>
-bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const CmpOptimizedRes res)
+bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOptimizedRes res)
 {
     if (isDefiniteDeleted())
     {
@@ -225,6 +201,14 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const char * ms
         "gc tso: " << gc_tso << ". "
                    << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del)
                    << ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") << ". why{" << msg << "}, output: " << is_output);
+}
+
+template <typename HandleType>
+void ReplacingTMTSortedBlockInputStream<HandleType>::initQueue()
+{
+    for (size_t i = 0; i < cursors.size(); ++i)
+        if (!cursors[i].empty())
+            tmt_queue.push(TMTSortCursor(&cursors[i]));
 }
 
 template class ReplacingTMTSortedBlockInputStream<Int64>;
