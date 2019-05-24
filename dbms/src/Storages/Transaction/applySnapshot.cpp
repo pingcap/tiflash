@@ -129,8 +129,9 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     }
 
     // context may be null in test cases.
-    if (kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTableMut() : nullptr, expect_old_index))
-        LOG_INFO(log, "Region " << new_region->id() << " apply snapshot success");
+    bool status = kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTableMut() : nullptr, expect_old_index);
+
+    LOG_INFO(log, "Region " << new_region->id() << " apply snapshot " << (status ? "success" : "fail"));
 }
 
 } // namespace DB
