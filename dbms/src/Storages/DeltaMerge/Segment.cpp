@@ -160,8 +160,11 @@ void Segment::deleteRange(DMContext & dm_context, const HandleRange & delete_ran
     delta.tryFlushCache(opc);
 }
 
-BlockInputStreamPtr
-Segment::getInputStream(DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version)
+BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context, //
+                                            const ColumnDefines & columns_to_read,
+                                            size_t                expected_block_size,
+                                            UInt64                max_version,
+                                            bool                  is_raw)
 {
     std::shared_lock lock(mutex);
 
@@ -170,7 +173,8 @@ Segment::getInputStream(DMContext & dm_context, const ColumnDefines & columns_to
     ensurePlace(handle, storage);
 
     auto stream = getPlacedStream(handle, columns_to_read, storage, expected_block_size, std::move(lock));
-    stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_MVCC>>(stream, handle, max_version);
+    if (!is_raw)
+        stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_MVCC>>(stream, handle, max_version);
     return stream;
 }
 
@@ -209,7 +213,8 @@ Segment::Segment(UInt64 epoch_, const HandleRange & range_, PageId segment_id_, 
       segment_id(segment_id_),
       next_segment_id(next_segment_id_),
       delta(true, delta_id),
-      stable(false, stable_id)
+      stable(false, stable_id),
+      delta_tree(std::make_shared<DefaultDeltaTree>())
 {
 }
 
@@ -226,7 +231,8 @@ Segment::Segment(UInt64              epoch_,
       segment_id(segment_id_),
       next_segment_id(next_segment_id_),
       delta(true, delta_id, delta_chunks_),
-      stable(false, stable_id, stable_chunks_)
+      stable(false, stable_id, stable_chunks_),
+      delta_tree(std::make_shared<DefaultDeltaTree>())
 {
 }
 
@@ -245,16 +251,16 @@ void Segment::swap(Segment & other)
     std::swap(placed_delta_deletes, other.placed_delta_deletes);
 }
 
-size_t Segment::getRawRows()
+size_t Segment::getEstimatedRows()
 {
     std::shared_lock lock(mutex);
-    return rawRows();
+    return estimatedRows();
 }
 
-size_t Segment::getDiskBytes()
+size_t Segment::getEstimatedBytes()
 {
     std::shared_lock lock(mutex);
-    return diskBytes();
+    return estimatedBytes();
 }
 
 //==========================================================================================
@@ -293,10 +299,10 @@ BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
     delta_block.insert(0, delta_pk_columns_block.getByPosition(0));
     delta_block.insert(1, delta_pk_columns_block.getByPosition(1));
 
-    auto delta_value_space = std::make_shared<DeltaValueSpace>(columns_to_read, delta_block);
+    auto delta_value_space = std::make_shared<DeltaValueSpace>(new_columns_to_read, delta_block);
 
     return std::make_shared<MyDeltaMergeBlockInputStream>(
-        stable_input_stream, delta_tree, delta_value_space, expected_block_size, std::move(lock));
+        stable_input_stream, *delta_tree, delta_value_space, expected_block_size, std::move(lock));
 }
 
 
@@ -408,22 +414,24 @@ void Segment::doMerge(DMContext & dm_context, const SegmentPtr & other)
         new_stable_chunks.swap(tmp);
     }
 
+    HandleRange my_new_range = {range.start, other->getRange().end};
+
     Segment new_me(epoch + 1, //
-                   range,
+                   my_new_range,
                    segment_id,
                    other->next_segment_id,
                    delta.pageId(),
                    delta.getChunks(),
                    stable.pageId(),
                    stable.getChunks());
-    Segment new_other(other->epoch, //
-                      other->range,
-                      other->segment_id,
-                      other->next_segment_id,
-                      other->delta.pageId(),
-                      other->delta.getChunks(),
-                      other->stable.pageId(),
-                      other->stable.getChunks());
+    Segment other_copy(other->epoch, //
+                       other->range,
+                       other->segment_id,
+                       other->next_segment_id,
+                       other->delta.pageId(),
+                       other->delta.getChunks(),
+                       other->stable.pageId(),
+                       other->stable.getChunks());
 
     WriteBatch meta_wb;
     WriteBatch log_wb;
@@ -433,8 +441,8 @@ void Segment::doMerge(DMContext & dm_context, const SegmentPtr & other)
     new_me.delta.setChunks({}, meta_wb, log_wb);
     new_me.stable.setChunks(std::move(new_stable_chunks), meta_wb, data_wb);
 
-    new_other.delta.setChunks({}, meta_wb, log_wb);
-    new_other.stable.setChunks({}, meta_wb, data_wb);
+    other_copy.delta.setChunks({}, meta_wb, log_wb);
+    other_copy.stable.setChunks({}, meta_wb, data_wb);
 
     // Remove other's meta data.
     meta_wb.delPage(other->segment_id);
@@ -449,7 +457,7 @@ void Segment::doMerge(DMContext & dm_context, const SegmentPtr & other)
     // they are considered safe and won't fail.
 
     this->swap(new_me);
-    other->swap(new_other);
+    // Don't free the content of other segment here, especially the mutex!
 
     // ============================================================
 
@@ -500,8 +508,7 @@ void Segment::reset(DMContext & dm_context, BlockInputStreamPtr & input_stream)
 
 bool Segment::tryFlush(DMContext & dm_context, bool force)
 {
-    if (force || (delta_tree.numInserts() + delta_tree.numDeletes()) >= dm_context.delta_limit_rows
-        || delta.num_bytes() >= dm_context.delta_limit_bytes)
+    if (force || delta.num_rows() >= dm_context.delta_limit_rows || delta.num_bytes() >= dm_context.delta_limit_bytes)
     {
         flush(dm_context);
         return true;
@@ -552,7 +559,7 @@ void Segment::placeUpsert(const ColumnDefine & handle, StoragePool & storage, Bl
     BlockInputStreamPtr merged_stream = getPlacedStream(handle, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
 
     auto perm = sortBlockByPk(handle, block);
-    DB::placeInsert(merged_stream, block, delta_tree, placed_delta_rows, perm, getPkSort(handle));
+    DB::placeInsert(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
     placed_delta_rows += block.rows();
 }
 
@@ -578,7 +585,7 @@ void Segment::placeDelete(const ColumnDefine & handle, StoragePool & storage, co
     for (const auto & block : delete_data)
     {
         BlockInputStreamPtr merged_stream = getPlacedStream(handle, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
-        DB::placeDelete(merged_stream, block, delta_tree, getPkSort(handle));
+        DB::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle));
     }
     ++placed_delta_deletes;
 }
@@ -593,7 +600,7 @@ Handle Segment::getSplitPoint(DMContext & dm_context)
     auto stream = getPlacedStream(handle, {dm_context.table_handle_define}, storage, DEFAULT_BLOCK_SIZE, {});
 
     stream->readPrefix();
-    size_t split_row_index = rawRows() / 2;
+    size_t split_row_index = estimatedRows() / 2;
     Handle split_handle    = 0;
     size_t count           = 0;
     while (true)
@@ -613,15 +620,16 @@ Handle Segment::getSplitPoint(DMContext & dm_context)
     return split_handle;
 }
 
-size_t Segment::rawRows()
+size_t Segment::estimatedRows()
 {
-    return stable.num_rows() + delta_tree.numInserts() - delta_tree.numDeletes();
+    // Not 100% accurate.
+    return stable.num_rows() + delta_tree->numInserts() - delta_tree->numDeletes() + (delta.num_rows() - placed_delta_rows);
 }
 
-size_t Segment::diskBytes()
+size_t Segment::estimatedBytes()
 {
     size_t stable_bytes = stable.num_bytes();
-    return stable_bytes + delta.num_bytes() - (stable_bytes / delta_tree.numDeletes());
+    return stable_bytes + delta.num_bytes() - (stable_bytes / stable.num_rows()) * delta_tree->numDeletes();
 }
 
 } // namespace DB

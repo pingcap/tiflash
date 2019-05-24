@@ -47,7 +47,8 @@ public:
                            const ColumnDefines & column_defines,
                            size_t                expected_block_size,
                            size_t                num_streams,
-                           UInt64                max_version);
+                           UInt64                max_version,
+                           bool                  is_raw);
 
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
@@ -73,8 +74,8 @@ private:
 
     bool checkAll(const Context & db_context, const DB::Settings & db_settings);
     bool checkSplitOrMerge(const SegmentPtr & segment, DMContext dm_context, size_t segment_rows_setting);
-    void split(DMContext & dm_context, const SegmentPtr & segment);
-    void merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
+    void split(DMContext & dm_context, SegmentPtr segment);
+    void merge(DMContext & dm_context, SegmentPtr left, SegmentPtr right);
 
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
