@@ -119,7 +119,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 
     *(req.mutable_state()->mutable_apply_state()) = initialApplyState();
 
-    (req.mutable_state()->mutable_apply_state())->set_applied_index(MockTiKV::instance().getRaftTerm(region_id));
+    (req.mutable_state()->mutable_apply_state())->set_applied_index(MockTiKV::instance().getRaftIndex(region_id));
 
     // TODO: Put data into snapshot cmd
 

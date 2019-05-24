@@ -53,26 +53,6 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
             LOG_INFO(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
             return;
         }
-
-        // make sure all data in old region is flushed.
-        if (context)
-        {
-            for (size_t write_cnt = old_region->writeCFCount(); write_cnt; write_cnt = old_region->writeCFCount())
-            {
-                LOG_INFO(log, "Region has " << write_cnt << " records in write cf, try to flush");
-                bool status = true;
-                for (const auto table_id : old_region->getCommittedRecordTableID())
-                {
-                    status &= context->getTMTContext().getRegionTableMut().tryFlushRegion(table_id, old_region->id());
-                }
-                if (!status)
-                {
-                    constexpr size_t backoff = 500;
-                    LOG_DEBUG(log, "sleep " << backoff << " ms and retry");
-                    std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
-                }
-            }
-        }
     }
 
     while (read(&request))

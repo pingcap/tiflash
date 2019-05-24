@@ -394,15 +394,14 @@ bool RegionTable::tryFlushRegion(TableID table_id, RegionID region_id)
             }
             else
             {
-                LOG_ERROR(log,
-                    "RegionTable::tryFlushRegion table " << region_id << ", region " << region_id << " fail, internal region not exist");
-                throw Exception("RegionTable::tryFlushRegion internal region not exist", ErrorCodes::LOGICAL_ERROR);
+                LOG_WARNING(log, "tryFlushRegion: table " << region_id << ", region " << region_id << " fail, internal region not exist");
+                return false;
             }
         }
         else
         {
-            LOG_ERROR(log, "RegionTable::tryFlushRegion table " << region_id << ", region " << region_id << " fail, table not exist");
-            throw Exception("RegionTable::tryFlushRegion table not exist", ErrorCodes::LOGICAL_ERROR);
+            LOG_WARNING(log, "tryFlushRegion: table " << region_id << ", region " << region_id << " fail, table not exist");
+            return false;
         }
     };
 
@@ -410,7 +409,7 @@ bool RegionTable::tryFlushRegion(TableID table_id, RegionID region_id)
     bool status = func_update_region([&](InternalRegion & region) -> bool {
         if (region.pause_flush)
         {
-            LOG_INFO(log, "Internal region pause flush, try again later");
+            LOG_INFO(log, "tryFlushRegion: internal region " << region_id << " pause flush, try again later");
             return false;
         }
         region.pause_flush = true;

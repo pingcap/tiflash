@@ -477,7 +477,7 @@ TableIDSet Region::getCommittedRecordTableID() const
     return data.getCommittedRecordTableID();
 }
 
-void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const TableID table_id, const Timestamp safe_point)
+void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
 
@@ -487,10 +487,10 @@ void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const Ta
     auto & region_data = data.writeCFMute().getDataMut();
     auto & write_map = region_data[table_id];
 
-    size_t duplicate_cnt = 0, deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
+    size_t deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
 
     // first check, remove duplicate data in current region.
-    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
+    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
     {
         const auto & [handle, ts] = write_map_it->first;
 
@@ -498,14 +498,9 @@ void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const Ta
         {
             const auto & [ori_ts, ori_del] = it->second;
 
-            // for any handle, if a record with tso_a has been flushed, then any record with tso < tso_a must have been.
             if (ori_ts > ts)
-            {
-                write_map_it = removeDataByWriteIt(table_id, write_map_it);
-                ++duplicate_cnt;
                 continue;
-            }
-            else if (ori_ts == ts) // keep the same one and remove later.
+            else if (ori_ts == ts)
             {
                 UInt8 is_deleted = RegionData::getWriteType(write_map_it) == DelFlag;
                 if (is_deleted != ori_del)
@@ -519,8 +514,6 @@ void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const Ta
             else
                 handle_map.erase(it);
         }
-
-        ++write_map_it;
     }
 
     // second check, remove same data in current region and handle map. remove deleted data by add a record with DelFlag.
@@ -529,12 +522,7 @@ void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const Ta
         const auto & handle = it->first;
         const auto & [ori_ts, ori_del] = it->second;
 
-        if (auto write_map_it = write_map.find({handle, ori_ts}); write_map_it != write_map.end())
-        {
-            removeDataByWriteIt(table_id, write_map_it);
-            ++duplicate_cnt;
-        }
-        else
+        if (auto write_map_it = write_map.find({handle, ori_ts}); write_map_it == write_map.end())
         {
             if (ori_ts >= safe_point)
                 throw Exception("Region::compareAndCompleteSnapshot original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
@@ -556,10 +544,11 @@ void Region::compareAndCompleteSnapshot(Region::HandleMap & handle_map, const Ta
         }
     }
 
-    LOG_INFO(log,
-        "compareAndCompleteSnapshot: table " << table_id << ", gc safe point " << safe_point << ", original write map size "
-                                             << ori_write_map_size << ", duplicate " << duplicate_cnt << ", deleted gc " << deleted_gc_cnt
-                                             << ", remain size " << write_map.size());
+    LOG_DEBUG(log,
+        "[compareAndCompleteSnapshot] table " << table_id << ", gc safe point " << safe_point << ", original write map size "
+                                              << ori_write_map_size << ", remain size " << write_map.size());
+    if (deleted_gc_cnt)
+        LOG_INFO(log, "[compareAndCompleteSnapshot] add deleted gc: " << deleted_gc_cnt);
 }
 
 } // namespace DB
