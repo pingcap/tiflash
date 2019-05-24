@@ -31,6 +31,8 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
+
 protected:
     StorageDeltaMerge(const std::string & path_,
         const std::string & name_,
@@ -38,7 +40,7 @@ protected:
         const ASTPtr & primary_expr_ast_,
         Context & global_context_);
 
-    Block buildInsertBlock(const Block & block);
+    Block buildInsertBlock(bool is_import, const Block & block);
 
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
@@ -51,6 +53,8 @@ private:
     ColumnDefines table_column_defines;
     ColumnDefine handle_column_define;
     Strings pk_column_names;
+
+    OrderedNameSet hidden_columns;
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 

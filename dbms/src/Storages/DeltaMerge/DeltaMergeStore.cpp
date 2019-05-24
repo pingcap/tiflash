@@ -4,7 +4,7 @@
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/DMDecoratorBlockInputStream.h>
+#include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -156,6 +156,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                 cur_seg_end = cur_segment_it->first;
             }
         }
+        if (cur_segment_it == segments.end())
+            throw Exception("No more sutable segment");
         write(cur_segment_it->second, from, row_id - from);
     }
 
@@ -169,7 +171,8 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         const ColumnDefines & columns_to_read,
                                         size_t                expected_block_size,
                                         size_t                num_streams,
-                                        UInt64                max_version)
+                                        UInt64                max_version,
+                                        bool                  is_raw)
 {
     std::shared_lock lock(mutex);
 
@@ -189,20 +192,27 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             new_columns_to_read.push_back(c);
     }
 
-    BlockInputStreams inputs;
+    auto stream_creator = [=](const SegmentPtr & segment) {
+        return segment->getInputStream(dm_context, new_columns_to_read, expected_block_size, max_version, is_raw);
+    };
+
+    Segments to_read_segments;
     for (const auto & [handle, segment] : segments)
     {
         (void)handle;
-        inputs.push_back(segment->getInputStream(dm_context, new_columns_to_read, expected_block_size, max_version));
+        to_read_segments.emplace_back(segment);
     }
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(inputs);
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(createHeader(new_columns_to_read), to_read_segments, stream_creator);
 
     BlockInputStreams res;
     for (size_t i = 0; i < num_streams && i < segments.size(); ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(read_task_pool);
-        res.push_back(std::make_shared<DMDecoratorBlockInputStream>(
-            stream, columns_to_read, handle_define.name, table_handle_original_type, db_context));
+        if (!is_raw)
+            stream = std::make_shared<DMHandleConvertBlockInputStream>(stream, handle_define.name, table_handle_original_type, db_context);
+        stream = std::make_shared<DMColumnFilterBlockInputStream>(stream, columns_to_read);
+
+        res.push_back(stream);
     }
     return res;
 }
@@ -225,7 +235,7 @@ bool DeltaMergeStore::checkAll(const Context & db_context, const DB::Settings & 
 bool DeltaMergeStore::checkSplitOrMerge(const SegmentPtr & segment, DMContext dm_context, size_t segment_rows_setting)
 {
     /// TODO: fix this naive algorithm, to reduce merge/split frequency.
-    size_t segment_rows = segment->getRawRows(); // TODO: fix this!!! getRawRows will not update if no select
+    size_t segment_rows = segment->getEstimatedRows();
     if (segment_rows > segment_rows_setting * 2)
     {
         split(dm_context, segment);
@@ -239,7 +249,7 @@ bool DeltaMergeStore::checkSplitOrMerge(const SegmentPtr & segment, DMContext dm
         if (it != segments.end())
         {
             auto   next_segment = it->second;
-            size_t next_rows    = next_segment->getRawRows();
+            size_t next_rows    = next_segment->getEstimatedRows();
             if (segment_rows + next_rows <= segment_rows_setting)
             {
                 merge(dm_context, segment, next_segment);
@@ -250,7 +260,7 @@ bool DeltaMergeStore::checkSplitOrMerge(const SegmentPtr & segment, DMContext dm
     return false;
 }
 
-void DeltaMergeStore::split(DMContext & dm_context, const SegmentPtr & segment)
+void DeltaMergeStore::split(DMContext & dm_context, SegmentPtr segment)
 {
     auto next_segment = segment->split(dm_context);
 
@@ -258,7 +268,7 @@ void DeltaMergeStore::split(DMContext & dm_context, const SegmentPtr & segment)
     segments[next_segment->getRange().end] = next_segment;
 }
 
-void DeltaMergeStore::merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right)
+void DeltaMergeStore::merge(DMContext & dm_context, SegmentPtr left, SegmentPtr right)
 {
     auto left_range  = left->getRange();
     auto right_range = right->getRange();

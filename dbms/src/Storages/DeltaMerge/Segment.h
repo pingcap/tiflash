@@ -13,6 +13,7 @@ namespace DB
 
 class Segment;
 using SegmentPtr = std::shared_ptr<Segment>;
+using Segments   = std::vector<SegmentPtr>;
 
 /// A segment contains many rows of a table. A table is split into segments by succeeding ranges.
 ///
@@ -38,16 +39,19 @@ public:
 
     void deleteRange(DMContext & dm_context, const HandleRange & delete_range);
 
-    BlockInputStreamPtr
-    getInputStream(DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version);
+    BlockInputStreamPtr getInputStream(const DMContext &     dm_context, //
+                                       const ColumnDefines & columns_to_read,
+                                       size_t                expected_block_size,
+                                       UInt64                max_version,
+                                       bool                  is_raw);
 
     SegmentPtr split(DMContext & dm_context);
 
     void merge(DMContext & dm_context, const SegmentPtr & other);
 
-    size_t getRawRows();
+    size_t getEstimatedRows();
 
-    size_t getDiskBytes();
+    size_t getEstimatedBytes();
 
     PageId segmentId() { return segment_id; }
     PageId nextSegmentId() { return next_segment_id; }
@@ -94,8 +98,8 @@ private:
 
     Handle getSplitPoint(DMContext & dm_context);
 
-    size_t rawRows();
-    size_t diskBytes();
+    size_t estimatedRows();
+    size_t estimatedBytes();
 
 private:
     UInt64      epoch; // After split/merge, epoch got increase by 1.
@@ -106,9 +110,9 @@ private:
     DiskValueSpace delta;
     DiskValueSpace stable;
 
-    DefaultDeltaTree delta_tree;
-    size_t           placed_delta_rows    = 0;
-    size_t           placed_delta_deletes = 0;
+    DeltaTreePtr delta_tree;
+    size_t       placed_delta_rows    = 0;
+    size_t       placed_delta_deletes = 0;
 
     std::shared_mutex mutex;
 };
