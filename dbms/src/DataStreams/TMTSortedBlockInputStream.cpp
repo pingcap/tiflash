@@ -1,7 +1,5 @@
 #include <Columns/ColumnsNumber.h>
 #include <DataStreams/TMTSortedBlockInputStream.h>
-#include <Storages/MutableSupport.h>
-
 
 namespace DB
 {
@@ -130,20 +128,22 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
 
             setPrimaryKeyRefOptimized(next_key, current);
 
-            if (next_key != current_key)
+            const auto key_differs = TMTSortCursorPK::cmp(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
+
+            if (key_differs.all)
             {
                 by_row++;
 
                 max_version = 0;
                 /// Write the data for the previous primary key.
-                if (!MutableSupport::DelMark::isDel(UInt8(max_delmark)))
+                if (!max_delmark)
                     insertRow(merged_columns, merged_rows);
 
                 if (is_clean_top)
                 {
                     /// Delete current cache and return.
                     /// We will come back later and use current block's data directly.
-                    max_delmark = MutableSupport::DelMark::genDelMark(true);
+                    max_delmark = (UInt8)1;
                     current_key.reset();
                     selected_row.reset();
                     current_row_sources.resize(0);
@@ -211,7 +211,7 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
     }
 
     /// We will write the data for the last primary key.
-    if (!MutableSupport::DelMark::isDel(UInt8(max_delmark)) && !current_key.empty())
+    if (!max_delmark && !current_key.empty())
         insertRow(merged_columns, merged_rows);
 
     if (cur_block)
@@ -224,7 +224,6 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
     finished = true;
 }
 
-// TODO: use MutableSupport::DelMark here to check and generate del-mark
 bool TMTSortedBlockInputStream::insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns)
 {
     if (current.notSame(cur_block_cursor))
