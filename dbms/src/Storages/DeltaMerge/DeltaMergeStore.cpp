@@ -9,6 +9,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+
 namespace DB
 {
 
@@ -17,13 +18,18 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-DeltaMergeStore::DeltaMergeStore(const Context &       db_context,
+DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
                                  const String &        name,
                                  const ColumnDefines & columns,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
-    : path(path_), storage_pool(path), table_name(name), table_handle_define(handle), settings(settings_)
+    : path(path_),
+      storage_pool(path),
+      table_name(name),
+      table_handle_define(handle),
+      background_pool(db_context.getBackgroundPool()),
+      settings(settings_)
 {
     // We use Int64 to store handle.
     if (!table_handle_define.type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
@@ -62,6 +68,13 @@ DeltaMergeStore::DeltaMergeStore(const Context &       db_context,
             segment_id = segment->nextSegmentId();
         }
     }
+
+    gc_handle = background_pool.addTask([this] { return storage_pool.gc(); });
+}
+
+DeltaMergeStore::~DeltaMergeStore()
+{
+    background_pool.removeTask(gc_handle);
 }
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
