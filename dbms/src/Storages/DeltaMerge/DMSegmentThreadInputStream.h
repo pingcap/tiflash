@@ -7,10 +7,7 @@ namespace DB
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
 public:
-    DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr & task_pool_)
-        : task_pool(task_pool_)
-    {
-    }
+    DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr & task_pool_) : task_pool(task_pool_) {}
 
     String getName() const override { return "DeltaMergeSegmentThread"; }
     Block  getHeader() const override { return task_pool->getHeader(); }
@@ -18,7 +15,7 @@ public:
 protected:
     Block readImpl() override
     {
-        if (!task_pool)
+        if (done)
             return {};
         while (true)
         {
@@ -27,7 +24,7 @@ protected:
                 cur_stream = task_pool->getTask();
                 if (!cur_stream) // we are done.
                 {
-                    task_pool = {};
+                    done = true;
                     return {};
                 }
             }
@@ -49,6 +46,7 @@ protected:
 
 private:
     SegmentReadTaskPoolPtr task_pool;
-    BlockInputStreamPtr cur_stream;
+    bool                   done = false;
+    BlockInputStreamPtr    cur_stream;
 };
 } // namespace DB
