@@ -17,5 +17,21 @@ StoragePool::StoragePool(const String & path)
     max_meta_page_id = get_max_page_id(meta_storage);
 }
 
+bool StoragePool::gc(const Seconds try_gc_period)
+{
+    std::lock_guard<std::mutex> lock(mutex);
 
+    Timepoint now = Clock::now();
+    if (now < (last_try_gc_time.load() + try_gc_period))
+        return false;
+    last_try_gc_time = now;
+
+    bool ok = false;
+
+    ok |= meta_storage.gc();
+    ok |= data_storage.gc();
+    ok |= log_storage.gc();
+
+    return ok;
+}
 } // namespace DB

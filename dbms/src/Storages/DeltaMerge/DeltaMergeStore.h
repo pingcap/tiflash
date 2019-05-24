@@ -5,6 +5,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
 
 namespace DB
@@ -33,12 +34,13 @@ public:
         //        size_t segment_delta_cache_limit_bytes = 16 * MB;
     };
 
-    DeltaMergeStore(const Context &       db_context, //
+    DeltaMergeStore(Context &             db_context, //
                     const String &        path_,
                     const String &        name,
                     const ColumnDefines & columns,
                     const ColumnDefine &  handle,
                     const Settings &      settings_);
+    ~DeltaMergeStore();
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
@@ -86,7 +88,9 @@ private:
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;
 
-    DataTypePtr table_handle_original_type;
+    DataTypePtr                          table_handle_original_type;
+    BackgroundProcessingPool &           background_pool;
+    BackgroundProcessingPool::TaskHandle gc_handle;
 
     Settings settings;
 
