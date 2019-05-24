@@ -13,6 +13,9 @@ struct Range
     T start;
     T end;
 
+    Range(T start_, T end_) : start(start_), end(end_) {}
+    Range() : start(0), end(0) {}
+
     void swap(Range & other)
     {
         std::swap(start, other.start);
@@ -49,6 +52,5 @@ struct Range
     }
 };
 
-using HandleRange  = Range<Handle, true>;
-static_assert(std::is_pod_v<HandleRange>, "HandleRange should be a pod");
+using HandleRange = Range<Handle, true>;
 } // namespace DB
