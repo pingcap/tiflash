@@ -280,8 +280,14 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 case raft_cmdpb::CmdType::Put:
                 {
                     const auto & put = req.put();
-                    auto [key, value] = RecordKVFormat::genKV(put);
-                    auto table_id = doInsert(put.cf(), key, value);
+
+                    auto & key = put.key();
+                    auto & value = put.value();
+
+                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
+                    const auto & tikv_value = static_cast<const TiKVValue &>(value);
+
+                    auto table_id = doInsert(put.cf(), tikv_key, tikv_value);
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
@@ -292,7 +298,11 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 case raft_cmdpb::CmdType::Delete:
                 {
                     const auto & del = req.delete_();
-                    auto table_id = doRemove(del.cf(), RecordKVFormat::genKey(del));
+
+                    auto & key = del.key();
+                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
+
+                    auto table_id = doRemove(del.cf(), tikv_key);
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
