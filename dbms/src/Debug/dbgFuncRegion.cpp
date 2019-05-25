@@ -85,6 +85,27 @@ void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output
     output(ss.str());
 }
 
+void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 3)
+    {
+        throw Exception("Args not matched, should be: database-name, table-name, region-id", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+
+    TableID table_id = getTableID(context, database_name, table_name, "");
+
+    TMTContext & tmt = context.getTMTContext();
+    tmt.getRegionTableMut().tryFlushRegion(table_id, region_id);
+
+    std::stringstream ss;
+    ss << "region_table try flush table " << table_id << " region " << region_id;
+    output(ss.str());
+}
+
 void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 5 || args.size() > 6)

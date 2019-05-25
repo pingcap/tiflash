@@ -51,6 +51,7 @@ DBGInvoker::DBGInvoker()
     regFunc("put_region", dbgFuncPutRegion);
     regFunc("region_snapshot", dbgFuncRegionSnapshot);
     regFunc("try_flush", dbgFuncTryFlush);
+    regFunc("try_flush_region", dbgFuncTryFlushRegion);
 
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
 

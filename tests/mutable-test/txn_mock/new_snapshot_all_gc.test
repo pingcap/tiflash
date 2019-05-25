@@ -1,0 +1,36 @@
+=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test)
+=> DBGInvoke mock_schema_syncer('true')
+┌─mock_schema_syncer("true")─┐
+│ mock schema syncer enabled │
+└────────────────────────────┘
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
+=> DBGInvoke __region_snapshot(4, 0, 1000, default, test)
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 2, 1, 0, 10)
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 1, 2, 0, 2)
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 3, 1, 0, 11)
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 3, 4, 0, 12)
+=> DBGInvoke __try_flush_region(default, test, 4)
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 3, 4, 1, 0)
+=> select (*) from default.test order by _tidb_rowid
+┌─col_1─┬─_tidb_rowid─┐
+│     2 │           1 │
+│    10 │           2 │
+└───────┴─────────────┘
+=> DBGInvoke __region_snapshot(4, 0, 1000, default, test)
+=> selraw (*) from default.test order by _tidb_rowid, _INTERNAL_VERSION, _INTERNAL_DELMARK
+┌─col_1─┬─_tidb_rowid─┬─_INTERNAL_VERSION─┬─_INTERNAL_DELMARK─┐
+│     2 │           1 │                 2 │                 0 │
+│     0 │           1 │                 2 │                 1 │
+│    10 │           2 │                 1 │                 0 │
+│     0 │           2 │                 1 │                 1 │
+│    11 │           3 │                 1 │                 0 │
+│    12 │           3 │                 4 │                 0 │
+│     0 │           3 │                 4 │                 1 │
+└───────┴─────────────┴───────────────────┴───────────────────┘
+=> select count(*) from default.test
+┌─count()─┐
+│       0 │
+└─────────┘
+=> drop table if exists default.test
+=> DBGInvoke __drop_tidb_table(default, test)
