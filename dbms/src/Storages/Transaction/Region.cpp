@@ -324,7 +324,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     return result;
 }
 
-size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response) const
+size_t Region::serialize(WriteBuffer & buf) const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
@@ -333,9 +333,6 @@ size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response
     total_size += meta.serialize(buf);
 
     total_size += data.serialize(buf);
-
-    if (response != nullptr)
-        *response = toCommandResponse();
 
     return total_size;
 }

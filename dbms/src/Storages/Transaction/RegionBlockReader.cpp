@@ -130,8 +130,6 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
-            /// Fill in `row` with decoded column values.
-
             std::vector<Field> row;
 
             if (write_type == Region::DelFlag)
