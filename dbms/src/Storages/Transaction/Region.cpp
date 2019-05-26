@@ -514,6 +514,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
     {
         const auto & handle = it->first;
         const auto & [ori_ts, ori_del] = it->second;
+        std::ignore = ori_del;
 
         if (ori_ts >= safe_point)
             throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
