@@ -40,21 +40,6 @@ TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVVa
     return doInsert(cf, key, value);
 }
 
-void Region::batchInsert(std::function<bool(BatchInsertElement &)> && f)
-{
-    std::unique_lock<std::shared_mutex> lock(mutex);
-    for (;;)
-    {
-        if (BatchInsertElement p; f(p))
-        {
-            auto && [k, v, cf] = p;
-            doInsert(*cf, *k, *v);
-        }
-        else
-            break;
-    }
-}
-
 TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
     std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
@@ -517,6 +502,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
                                                            << " , current: " << is_deleted);
                     throw Exception("Region::compareAndCompleteSnapshot original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
                 }
+                handle_map.erase(it);
             }
             else
                 handle_map.erase(it);
@@ -532,7 +518,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         if (auto write_map_it = write_map.find({handle, ori_ts}); write_map_it == write_map.end())
         {
             if (ori_ts >= safe_point)
-                throw Exception("Region::compareAndCompleteSnapshot original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
             if (ori_del == 0) // if not deleted
             {

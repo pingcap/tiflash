@@ -36,6 +36,7 @@ RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & st
     state->mutable_region()->set_end_key(end_key.getStr());
 
     RegionMeta region_meta(state->peer(), state->region(), initialApplyState());
+    region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
     RegionPtr region = std::make_shared<Region>(std::move(region_meta));
     return region;
 }

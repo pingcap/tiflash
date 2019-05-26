@@ -112,9 +112,6 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    using BatchInsertElement = std::tuple<const TiKVKey *, const TiKVValue *, const std::string *>;
-    void batchInsert(std::function<bool(BatchInsertElement &)> && f);
-
     RaftCommandResult onCommand(const enginepb::CommandRequest & cmd);
 
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
