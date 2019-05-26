@@ -515,26 +515,16 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         const auto & handle = it->first;
         const auto & [ori_ts, ori_del] = it->second;
 
-        if (auto write_map_it = write_map.find({handle, ori_ts}); write_map_it == write_map.end())
-        {
-            if (ori_ts >= safe_point)
-                throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+        if (ori_ts >= safe_point)
+            throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
-            if (ori_del == 0) // if not deleted
-            {
-                std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
-                TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
-                TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
-                TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
+        std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
+        TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
+        TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
+        TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
 
-                data.insert(Write, commit_key, raw_key, value);
-                ++deleted_gc_cnt;
-            }
-            else
-            {
-                // if deleted, keep it.
-            }
-        }
+        data.insert(Write, commit_key, raw_key, value);
+        ++deleted_gc_cnt;
     }
 
     LOG_DEBUG(log,
