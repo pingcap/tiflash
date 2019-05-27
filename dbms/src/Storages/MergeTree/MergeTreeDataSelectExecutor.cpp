@@ -950,7 +950,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         return std::make_shared<TMTSortedBlockInputStream<TMTPKType::INT64>>(merging, data.getPrimarySortDescription(),
                             MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
 
-                    case TMTPKType::UNSPECIFIED:
+                    default:
                         return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UNSPECIFIED>>(merging,
                             data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
                             DEFAULT_MERGE_BLOCK_SIZE);
