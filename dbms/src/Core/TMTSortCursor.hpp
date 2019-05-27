@@ -12,8 +12,15 @@ union TMTCmpOptimizedRes
     std::array<Int8, 4> diffs;
 };
 
+enum TMTPKType
+{
+    INT64,
+    UINT64,
+    UNSPECIFIED,
+};
+
 /// optimize SortCursor for TMT engine which must have 3 column: PK, VERSION, DELMARK.
-template <bool only_pk = false>
+template <bool only_pk = false, TMTPKType pk_type = TMTPKType::UNSPECIFIED>
 struct TMTSortCursor
 {
     SortCursorImpl * impl = nullptr;
@@ -32,6 +39,20 @@ struct TMTSortCursor
         const ColumnRawPtrs & lsort_columns, const size_t lhs_pos, const ColumnRawPtrs & rsort_columns, const size_t rhs_pos)
     {
         TMTCmpOptimizedRes res{.all = 0};
+
+        if constexpr (pk_type == TMTPKType::INT64)
+        {
+            auto h1 = static_cast<const ColumnInt64 *>(lsort_columns[0])->getElement(lhs_pos);
+            auto h2 = static_cast<const ColumnInt64 *>(rsort_columns[0])->getElement(rhs_pos);
+            res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
+        }
+        else if constexpr (pk_type == TMTPKType::UINT64)
+        {
+            auto h1 = static_cast<const ColumnUInt64 *>(lsort_columns[0])->getElement(lhs_pos);
+            auto h2 = static_cast<const ColumnUInt64 *>(rsort_columns[0])->getElement(rhs_pos);
+            res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
+        }
+        else
         {
             res.diffs[0] = lsort_columns[0]->compareAt(lhs_pos, rhs_pos, *(rsort_columns[0]), 0);
         }
@@ -55,45 +76,45 @@ struct TMTSortCursor
         return res;
     }
 
-    TMTCmpOptimizedRes cmp(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
+    TMTCmpOptimizedRes cmpIgnOrder(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
     {
         return cmp(impl->sort_columns, lhs_pos, rhs.impl->sort_columns, rhs_pos);
     }
 
     bool greaterAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
     {
-        auto res = cmp(rhs, lhs_pos, rhs_pos);
+        auto res = cmpIgnOrder(rhs, lhs_pos, rhs_pos);
 
         if constexpr (only_pk)
-            return res.diffs[0] > 0;
+        {
+            return res.diffs[0] > 0 ? true : (res.diffs[0] < 0 ? false : (impl->order > rhs.impl->order));
+        }
 
-        return greaterAt(res);
+        return greaterAt(res, impl->order, rhs.impl->order);
     }
 
-    bool equalAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
+    bool lessAtIgnOrder(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
     {
-        auto res = cmp(rhs, lhs_pos, rhs_pos);
-        return res.all == 0;
-    }
-
-    bool lessAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
-    {
-        auto res = cmp(rhs, lhs_pos, rhs_pos);
+        auto res = cmpIgnOrder(rhs, lhs_pos, rhs_pos);
 
         if constexpr (only_pk)
             return res.diffs[0] < 0;
 
-        return lessAt(res);
+        return lessAtIgnOrder(res);
     }
 
-    static inline bool greaterAt(const TMTCmpOptimizedRes res)
+    static inline bool greaterAt(const TMTCmpOptimizedRes res, size_t lorder, size_t rorder)
     {
         return res.diffs[0] > 0
             ? true
-            : (res.diffs[0] < 0 ? false : (res.diffs[1] > 0 ? true : (res.diffs[1] < 0 ? false : (res.diffs[2] > 0 ? true : false))));
+            : (res.diffs[0] < 0
+                      ? false
+                      : (res.diffs[1] > 0
+                                ? true
+                                : (res.diffs[1] < 0 ? false : (res.diffs[2] > 0 ? true : (res.diffs[2] < 0 ? false : (lorder > rorder))))));
     }
 
-    static inline bool lessAt(const TMTCmpOptimizedRes res)
+    static inline bool lessAtIgnOrder(const TMTCmpOptimizedRes res)
     {
         return res.diffs[0] < 0
             ? true
@@ -111,16 +132,22 @@ struct TMTSortCursor
 
     bool greater(const TMTSortCursor & rhs) const { return greaterAt(rhs, impl->pos, rhs.impl->pos); }
 
-    bool equal(const TMTSortCursor & rhs) const { return equalAt(rhs, impl->pos, rhs.impl->pos); }
-
-    bool totallyLess(const TMTSortCursor & rhs) const
+    bool totallyLessIgnOrder(const TMTSortCursor & rhs) const
     {
         if (impl->rows == 0 || rhs.impl->rows == 0)
             return false;
-        return lessAt(rhs, impl->rows - 1, 0);
+        return lessAtIgnOrder(rhs, impl->rows - 1, 0);
     }
 
     bool operator<(const TMTSortCursor & rhs) const { return greater(rhs); }
 };
+
+using TMTSortCursorInt64PK = TMTSortCursor<true, TMTPKType::INT64>;
+using TMTSortCursorUInt64PK = TMTSortCursor<true, TMTPKType::UINT64>;
+using TMTSortCursorUnspecifiedPK = TMTSortCursor<true, TMTPKType::UNSPECIFIED>;
+
+using TMTSortCursorInt64 = TMTSortCursor<false, TMTPKType::INT64>;
+using TMTSortCursorUInt64 = TMTSortCursor<false, TMTPKType::UINT64>;
+using TMTSortCursorUnspecified = TMTSortCursor<false, TMTPKType::UNSPECIFIED>;
 
 } // namespace DB

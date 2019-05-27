@@ -9,8 +9,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-
-void TMTSortedBlockInputStream::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
+template <TMTPKType pk_type>
+void TMTSortedBlockInputStream<pk_type>::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
 {
     if (out_row_sources_buf)
     {
@@ -27,8 +27,8 @@ void TMTSortedBlockInputStream::insertRow(MutableColumns & merged_columns, size_
         merged_columns[i]->insertFrom(*(*selected_row.columns)[i], selected_row.row_num);
 }
 
-
-Block TMTSortedBlockInputStream::readImpl()
+template <TMTPKType pk_type>
+Block TMTSortedBlockInputStream<pk_type>::readImpl()
 {
     if (finished)
     {
@@ -53,7 +53,8 @@ Block TMTSortedBlockInputStream::readImpl()
     return res;
 }
 
-void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue)
+template <TMTPKType pk_type>
+void TMTSortedBlockInputStream<pk_type>::merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue)
 {
     size_t merged_rows = 0;
 
@@ -100,7 +101,7 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
             is_complete_top = true;
         }
 
-        bool is_clean_top = is_complete_top && current->isFirst() && (queue.empty() || current.totallyLess(queue.top()));
+        bool is_clean_top = is_complete_top && current->isFirst() && (queue.empty() || current.totallyLessIgnOrder(queue.top()));
         if (is_clean_top && merged_rows == 0 && current_key.empty())
         {
             bool by_column_ok = insertByColumn(current, merged_rows, merged_columns);
@@ -224,7 +225,8 @@ void TMTSortedBlockInputStream::merge_optimized(MutableColumns & merged_columns,
     finished = true;
 }
 
-bool TMTSortedBlockInputStream::insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns)
+template <TMTPKType pk_type>
+bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns)
 {
     if (current.notSame(cur_block_cursor))
         throw Exception("Logical error!");
@@ -324,11 +326,16 @@ bool TMTSortedBlockInputStream::insertByColumn(TMTSortCursorPK current, size_t &
     return true;
 }
 
-void TMTSortedBlockInputStream::initQueue()
+template <TMTPKType pk_type>
+void TMTSortedBlockInputStream<pk_type>::initQueue()
 {
     for (size_t i = 0; i < cursors.size(); ++i)
         if (!cursors[i].empty())
             tmt_queue.push(TMTSortCursorPK(&cursors[i]));
 }
+
+template class TMTSortedBlockInputStream<TMTPKType::UNSPECIFIED>;
+template class TMTSortedBlockInputStream<TMTPKType::UINT64>;
+template class TMTSortedBlockInputStream<TMTPKType::INT64>;
 
 } // namespace DB

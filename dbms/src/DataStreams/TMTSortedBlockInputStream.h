@@ -7,6 +7,7 @@
 namespace DB
 {
 
+template <TMTPKType pk_type>
 class TMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
@@ -25,7 +26,7 @@ protected:
     void initQueue() override;
 
 private:
-    using TMTSortCursorPK = TMTSortCursor<true>;
+    using TMTSortCursorPK = TMTSortCursor<true, pk_type>;
     using TMTPKQueue = std::priority_queue<TMTSortCursorPK>;
     TMTPKQueue tmt_queue;
 

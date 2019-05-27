@@ -158,7 +158,8 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOp
 template <typename HandleType>
 bool ReplacingTMTSortedBlockInputStream<HandleType>::behindGcTso()
 {
-    return (*(*selected_row.columns)[version_column_number]).getUInt(selected_row.row_num) < gc_tso;
+    const ColumnUInt64 * column = static_cast<const ColumnUInt64 *>((*selected_row.columns)[version_column_number]);
+    return column->getElement(selected_row.row_num) < gc_tso;
 }
 
 template <typename HandleType>

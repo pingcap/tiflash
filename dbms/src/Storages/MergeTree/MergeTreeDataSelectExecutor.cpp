@@ -220,7 +220,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
 
-    bool pk_is_uint64 = false;
+    TMTPKType pk_type = TMTPKType::UNSPECIFIED;
 
     if (!is_txn_engine)
         ;
@@ -228,10 +228,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     {
         handle_col_name = data.getPrimarySortDescription()[0].column_name;
 
-        const auto pk_type = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
+        const auto pk_family_name = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
 
-        if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-            pk_is_uint64 = true;
+        if (std::strcmp(pk_family_name, TypeName<UInt64>::get()) == 0)
+            pk_type = TMTPKType::UINT64;
+        else if (std::strcmp(pk_family_name, TypeName<Int64>::get()) == 0)
+            pk_type = TMTPKType::INT64;
 
         TMTContext & tmt = context.getTMTContext();
 
@@ -295,7 +297,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             region_cnt = regions_query_info.size();
 
-            if (pk_is_uint64)
+            if (pk_type == TMTPKType::UINT64)
             {
                 for (size_t i = 0; i < regions_query_info.size(); ++i)
                 {
@@ -322,7 +324,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         region_group_range_parts.assign(concurrent_num, {});
         region_group_mem_block.assign(concurrent_num, {});
-        if (pk_is_uint64)
+        if (pk_type == TMTPKType::UINT64)
             region_group_u64_handle_ranges.assign(concurrent_num, {});
         else
             region_group_handle_ranges.assign(concurrent_num, {});
@@ -808,7 +810,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             size_t mem_rows = 0;
 
-            if (pk_is_uint64)
+            if (pk_type == TMTPKType::UINT64)
             {
                 using UInt64RangeElement = std::pair<HandleRange<UInt64>, size_t>;
                 std::vector<UInt64RangeElement> handle_ranges;
@@ -937,9 +939,22 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                       return std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_ranges, handle_col_name);
                   };
 
-            const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) {
-                return std::make_shared<TMTSortedBlockInputStream>(merging, data.getPrimarySortDescription(),
-                    MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
+            const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) -> BlockInputStreamPtr {
+                switch (pk_type)
+                {
+                    case TMTPKType::UINT64:
+                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UINT64>>(merging, data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
+
+                    case TMTPKType::INT64:
+                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::INT64>>(merging, data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
+
+                    case TMTPKType::UNSPECIFIED:
+                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UNSPECIFIED>>(merging,
+                            data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
+                            DEFAULT_MERGE_BLOCK_SIZE);
+                }
             };
 
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)
@@ -960,7 +975,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         const auto & part = data_parts[part_idx];
                         BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, part.ranges);
 
-                        if (pk_is_uint64)
+                        if (pk_type == TMTPKType::UINT64)
                             source_stream
                                 = func_make_uint64_range_filter_input(source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
                         else
@@ -995,7 +1010,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                 }
 
-                if (pk_is_uint64 && thread_idx == 0 && special_region_index != -1)
+                if (pk_type == TMTPKType::UINT64 && thread_idx == 0 && special_region_index != -1)
                 {
                     size_t region_sum_ranges = 0, region_sum_marks = 0;
                     BlockInputStreams merging;

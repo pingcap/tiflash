@@ -8,7 +8,7 @@
 namespace DB
 {
 
-// operation merge is optimized because pk is definite integer
+// bottleneck is about memory copy and io
 template <typename HandleType>
 class ReplacingTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {

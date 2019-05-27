@@ -141,10 +141,22 @@ template
 void MergingSortedBlockInputStream::fetchNextBlock<SortCursorWithCollation>(const SortCursorWithCollation & current, std::priority_queue<SortCursorWithCollation> & queue);
 
 template
-void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursor<false>>(const TMTSortCursor<false> & current, std::priority_queue<TMTSortCursor<false>> & queue);
+void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursorInt64PK>(const TMTSortCursorInt64PK & current, std::priority_queue<TMTSortCursorInt64PK> & queue);
 
 template
-void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursor<true>>(const TMTSortCursor<true> & current, std::priority_queue<TMTSortCursor<true>> & queue);
+void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursorUInt64PK>(const TMTSortCursorUInt64PK & current, std::priority_queue<TMTSortCursorUInt64PK> & queue);
+
+template
+void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursorUnspecifiedPK>(const TMTSortCursorUnspecifiedPK & current, std::priority_queue<TMTSortCursorUnspecifiedPK> & queue);
+
+template
+void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursorInt64>(const TMTSortCursorInt64 & current, std::priority_queue<TMTSortCursorInt64> & queue);
+
+template
+void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursorUInt64>(const TMTSortCursorUInt64 & current, std::priority_queue<TMTSortCursorUInt64> & queue);
+
+template
+void MergingSortedBlockInputStream::fetchNextBlock<TMTSortCursorUnspecified>(const TMTSortCursorUnspecified & current, std::priority_queue<TMTSortCursorUnspecified> & queue);
 
 template <typename TSortCursor>
 void MergingSortedBlockInputStream::merge(MutableColumns & merged_columns, std::priority_queue<TSortCursor> & queue)
