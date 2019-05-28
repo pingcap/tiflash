@@ -454,7 +454,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     String table_name = create.table;
     String table_name_escaped = escapeForFileName(table_name);
 
-    String path = context.getStorageDirectoryMap().getPathForStorage(current_database, table_name_escaped);
+    String path = context.getStorageDirectoryMap().getPathForStorage(database_name, table_name_escaped);
 
     // If this is a stub ATTACH query, read the query definition from the database
     if (create.attach && !create.storage && !create.columns)
@@ -503,7 +503,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
         if (!create.is_temporary)
         {
-            // database = context.getDatabase(database_name);
+            database = context.getDatabase(database_name);
             // data_path = database->getDataPath();
 
             /** If the table already exists, and the request specifies IF NOT EXISTS,

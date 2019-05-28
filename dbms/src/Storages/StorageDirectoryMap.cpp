@@ -2,6 +2,7 @@
 #include <fstream>
 #include <string>
 #include <Poco/StringTokenizer.h>
+#include <Common/escapeForFileName.h>
 
 
 namespace DB {
@@ -38,7 +39,7 @@ std::string StorageDirectoryMap::getPathForStorage(const std::string & database,
     if (path_iter == _all_path.end()) {
         path_iter = _all_path.begin();
     }
-    std::string result = *path_iter + database + "/";
+    std::string result = *path_iter + "data/" + escapeForFileName(database) + "/";
     path_iter++;
     addEntry(database, table, result);
     persist();
@@ -58,7 +59,7 @@ void StorageDirectoryMap::persist()
     if (newFile.is_open()) {
         std::map<std::string, std::string>::iterator curit;
         for (auto it = _storage_to_directory.begin(); it != _storage_to_directory.end(); it++) {
-            newFile << it->first << " " << it->second;
+            newFile << it->first << " " << it->second << std::endl;
         }
     }
     else {
