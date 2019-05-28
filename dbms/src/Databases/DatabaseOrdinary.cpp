@@ -154,7 +154,8 @@ void DatabaseOrdinary::loadTables(
     size_t total_tables = file_names.size();
     LOG_INFO(log, "Total " << total_tables << " tables.");
 
-    String data_path = context.getPath() + "data/" + escapeForFileName(name) + "/";
+    //String data_path = context.getPath() + "data/" + escapeForFileName(name) + "/";
+    String data_path;
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed {0};
@@ -172,6 +173,9 @@ void DatabaseOrdinary::loadTables(
                 LOG_INFO(log, std::fixed << std::setprecision(2) << tables_processed * 100.0 / total_tables << "%");
                 watch.restart();
             }
+
+            data_path = context.getStorageDirectoryMap().getPathForStorage(name, table);
+            LOG_INFO(log, "Database " << name << " Table " << table << " data path: " << data_path);
 
             loadTable(context, metadata_path, *this, name, data_path, table, has_force_restore_data_flag);
         }

@@ -51,6 +51,7 @@
 #include <Parsers/parseQuery.h>
 #include <Raft/RaftService.h>
 #include <TiDB/TiDBService.h>
+#include <Storages/StorageDirectoryMap.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -114,7 +115,8 @@ struct ContextShared
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
 
-    String path;                                            /// Path to the data directory, with a slash at the end.
+    std::vector<String> paths;                              /// Path to all data directory
+    String path;                                            /// Path to the primary data directory, with a slash at the end.
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
     String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
@@ -152,6 +154,7 @@ struct ContextShared
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
     RaftServicePtr raft_service;                            /// Raft service instance.
     TiDBServicePtr tidb_service;                            /// TiDB service instance.
+    StorageDirectoryMapPtr storage_directory_map_ptr;              /// StorageDirectoryMap service instance.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -479,6 +482,11 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
     return it->second;
 }
 
+std::vector<String> Context::getAllPath() const
+{
+    auto lock = getLock();
+    return shared->paths;
+}
 
 String Context::getPath() const
 {
@@ -502,6 +510,10 @@ String Context::getUserFilesPath() const
 {
     auto lock = getLock();
     return shared->user_files_path;
+}
+
+void Context::setAllPath(std::vector<String> paths_) {
+    shared->paths = std::move(paths_);
 }
 
 void Context::setPath(const String & path)
@@ -1402,6 +1414,22 @@ void Context::createTMTContext()
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
+}
+
+void Context::initializeStorageDirectoryMap(std::vector<std::string> & all_path, std::string persist_path)
+{
+    auto lock = getLock();
+    if (shared->storage_directory_map_ptr)
+        throw Exception("StorageDirectoryMap instance has already existed", ErrorCodes::LOGICAL_ERROR);
+    shared->storage_directory_map_ptr = std::make_shared<StorageDirectoryMap>(all_path, persist_path);
+}
+
+StorageDirectoryMap & Context::getStorageDirectoryMap()
+{
+    auto lock = getLock();
+    if (!shared->storage_directory_map_ptr)
+        throw Exception("StorageDirectoryMap is not initialized.", ErrorCodes::LOGICAL_ERROR);
+    return *shared->storage_directory_map_ptr;
 }
 
 RaftService & Context::getRaftService()

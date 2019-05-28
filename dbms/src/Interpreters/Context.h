@@ -13,6 +13,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/ClientInfo.h>
 #include <IO/CompressionSettings.h>
+#include <Storages/StorageDirectoryMap.h>
 
 
 namespace Poco
@@ -140,11 +141,13 @@ public:
 
     ~Context();
 
+    std::vector<String> getAllPath() const;
     String getPath() const;
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
 
+    void setAllPath(std::vector<String> paths);
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
@@ -369,6 +372,9 @@ public:
     void initializeRaftService(const std::string & service_addr);
     void createTMTContext();
     RaftService & getRaftService();
+
+    void initializeStorageDirectoryMap(std::vector<std::string> & all_path, std::string persist_path);
+    StorageDirectoryMap & getStorageDirectoryMap();
 
     void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
     TiDBService & getTiDBService();
