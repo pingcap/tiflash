@@ -64,8 +64,8 @@ inline TMTCmpOptimizedRes cmpTMTCursor(
     }
 
     {
-        UInt64 t1 = static_cast<const ColumnUInt64 *>(lsort_columns[1])->getElement(lhs_pos);
-        UInt64 t2 = static_cast<const ColumnUInt64 *>(rsort_columns[1])->getElement(rhs_pos);
+        auto t1 = static_cast<const ColumnUInt64 *>(lsort_columns[1])->getElement(lhs_pos);
+        auto t2 = static_cast<const ColumnUInt64 *>(rsort_columns[1])->getElement(rhs_pos);
 
         if constexpr (just_diff)
         {
@@ -77,8 +77,8 @@ inline TMTCmpOptimizedRes cmpTMTCursor(
         }
     }
     {
-        UInt8 d1 = static_cast<const ColumnUInt8 *>(lsort_columns[2])->getElement(lhs_pos);
-        UInt8 d2 = static_cast<const ColumnUInt8 *>(rsort_columns[2])->getElement(rhs_pos);
+        auto d1 = static_cast<const ColumnUInt8 *>(lsort_columns[2])->getElement(lhs_pos);
+        auto d2 = static_cast<const ColumnUInt8 *>(rsort_columns[2])->getElement(rhs_pos);
 
         if constexpr (just_diff)
         {
