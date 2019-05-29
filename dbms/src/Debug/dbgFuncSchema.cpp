@@ -32,12 +32,14 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
     auto schema_syncer = tmt.getSchemaSyncer();
     int table_id = schema_syncer->getTableIdByName(database_name, table_name, context);
-    if (table_id != InvalidTableID) {
+    if (table_id != InvalidTableID)
+    {
         schema_syncer->syncSchema(table_id, context, true);
-    } else {
+    }
+    else
+    {
         throw Exception("Table " + database_name + "." + table_name + " doesn't exist in tidb", ErrorCodes::UNKNOWN_TABLE);
     }
-
 
 
     std::stringstream ss;
