@@ -18,12 +18,15 @@ public:
 
     BlockInputStreamPtr getTask()
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        SegmentPtr segment;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
 
-        if (segments.empty())
-            return {};
-        auto segment = segments.back();
-        segments.pop_back();
+            if (segments.empty())
+                return {};
+            segment = segments.back();
+            segments.pop_back();
+        }
         return creator(segment);
     }
 
