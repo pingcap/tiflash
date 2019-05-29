@@ -103,7 +103,7 @@ struct TMTSortCursor
         return lessAtIgnOrder(res);
     }
 
-    static inline bool greaterAt(const TMTCmpOptimizedRes res, size_t lorder, size_t rorder)
+    static inline bool greaterAt(const TMTCmpOptimizedRes res, const size_t lorder, const size_t rorder)
     {
         return res.diffs[0] > 0
             ? true
