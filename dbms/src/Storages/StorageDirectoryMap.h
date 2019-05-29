@@ -1,15 +1,19 @@
 #pragma once
 
+#include <Common/Exception.h>
 #include <map>
 #include <string>
 #include <vector>
-#include <Common/Exception.h>
 
-namespace DB {
-class StorageDirectoryMap {
+namespace DB
+{
+class StorageDirectoryMap
+{
 public:
-    StorageDirectoryMap(std::vector<std::string> & all_path, std::string & persist_path): _all_path(all_path), _persist_path(persist_path) {
-        if (_all_path.empty()) {
+    StorageDirectoryMap(std::vector<std::string> & all_path, std::string & persist_path) : _all_path(all_path), _persist_path(persist_path)
+    {
+        if (_all_path.empty())
+        {
             throw Exception("StorageDirectoryMap need at least one path to give out");
         }
         path_iter = _all_path.begin();
@@ -18,6 +22,7 @@ public:
 
     std::string getPathForStorage(const std::string & database, const std::string & table);
     void removePathForStorage(const std::string & database, const std::string & table);
+
 private:
     std::map<std::string, std::string> _storage_to_directory;
     std::vector<std::string>::iterator path_iter;
@@ -29,4 +34,4 @@ private:
 };
 
 using StorageDirectoryMapPtr = std::shared_ptr<StorageDirectoryMap>;
-}
+} // namespace DB

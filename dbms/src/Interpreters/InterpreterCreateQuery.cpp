@@ -447,7 +447,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return executeDDLQueryOnCluster(query_ptr, context, databases);
     }
 
-    //String path = context.getPath();
     String current_database = context.getCurrentDatabase();
 
     String database_name = create.database.empty() ? current_database : create.database;
@@ -504,7 +503,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         if (!create.is_temporary)
         {
             database = context.getDatabase(database_name);
-            // data_path = database->getDataPath();
 
             /** If the table already exists, and the request specifies IF NOT EXISTS,
               *  then we allow concurrent CREATE queries (which do nothing).

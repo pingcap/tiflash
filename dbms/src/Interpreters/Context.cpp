@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/StorageDirectoryMap.h>
 #include <Storages/CompressionSettingsSelector.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
@@ -51,7 +52,6 @@
 #include <Parsers/parseQuery.h>
 #include <Raft/RaftService.h>
 #include <TiDB/TiDBService.h>
-#include <Storages/StorageDirectoryMap.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -512,7 +512,8 @@ String Context::getUserFilesPath() const
     return shared->user_files_path;
 }
 
-void Context::setAllPath(std::vector<String> paths_) {
+void Context::setAllPath(std::vector<String> paths_)
+{
     shared->paths = std::move(paths_);
 }
 

@@ -124,11 +124,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (paths.empty())
         throw Exception("path configuration parameter is empty");
     Poco::StringTokenizer string_tokens(paths, ";");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
+    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    {
         all_path.push_back(getCanonicalPath(std::string(*it)));
     }
     global_context->setAllPath(all_path);
-
     {
         global_context->initializeStorageDirectoryMap(all_path, all_path[0] + std::string("persist"));
     }
