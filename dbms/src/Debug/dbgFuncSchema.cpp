@@ -35,9 +35,8 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     if (table_id != InvalidTableID) {
         schema_syncer->syncSchema(table_id, context, true);
     } else {
-        throw Exception("Table " + database_name + "." + table_name + " doesn't not exist in tidb", ErrorCodes::UNKNOWN_TABLE);
+        throw Exception("Table " + database_name + "." + table_name + " doesn't exist in tidb", ErrorCodes::UNKNOWN_TABLE);
     }
-    // schema_syncer->syncSchema(merge_tree->getTableInfo().id, context, true);
 
 
 
