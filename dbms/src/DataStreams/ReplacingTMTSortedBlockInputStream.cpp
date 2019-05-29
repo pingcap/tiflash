@@ -71,7 +71,8 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 
         setPrimaryKeyRef(next_key, current);
 
-        const auto key_differs = TMTSortCursorFull::cmp(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
+        const auto key_differs = cmpTMTCursor<true, false, TMTPKType::UNSPECIFIED>(
+            *current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
 
         if ((key_differs.diffs[0] | key_differs.diffs[1]) == 0) // handle and tso are equal.
         {

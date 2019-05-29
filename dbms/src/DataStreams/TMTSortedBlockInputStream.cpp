@@ -47,14 +47,14 @@ Block TMTSortedBlockInputStream<pk_type>::readImpl()
     if (merged_columns.empty())
         return Block();
 
-    merge_optimized(merged_columns, tmt_queue);
+    mergeOptimized(merged_columns, tmt_queue);
 
     auto res = header.cloneWithColumns(std::move(merged_columns));
     return res;
 }
 
 template <TMTPKType pk_type>
-void TMTSortedBlockInputStream<pk_type>::merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue)
+void TMTSortedBlockInputStream<pk_type>::mergeOptimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue)
 {
     size_t merged_rows = 0;
 
@@ -129,7 +129,8 @@ void TMTSortedBlockInputStream<pk_type>::merge_optimized(MutableColumns & merged
 
             setPrimaryKeyRefOptimized(next_key, current);
 
-            const auto key_differs = TMTSortCursorPK::cmp(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
+            const auto key_differs
+                = cmpTMTCursor<true, true, pk_type>(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
 
             if (key_differs.all)
             {
@@ -204,7 +205,8 @@ void TMTSortedBlockInputStream<pk_type>::merge_optimized(MutableColumns & merged
                     if (current.notSame(cur_block_cursor))
                         queue.push(current);
                     else
-                        throw Exception("Impossible!");
+                        throw Exception(
+                            "[TMTSortedBlockInputStream::merge_optimized] current == cur_block_cursor", ErrorCodes::LOGICAL_ERROR);
                     break; /// Break current block loop.
                 }
             }
@@ -229,11 +231,11 @@ template <TMTPKType pk_type>
 bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns)
 {
     if (current.notSame(cur_block_cursor))
-        throw Exception("Logical error!");
+        throw Exception("[TMTSortedBlockInputStream::insertByColumn] current != cur_block_cursor", ErrorCodes::LOGICAL_ERROR);
 
     bool give_up = false;
     RowRef cur_key;
-    for (size_t i = 0; i < current->all_columns[0]->size(); i++)
+    for (size_t i = 0, size = current->all_columns[0]->size(); i < size; i++)
     {
         /// If we find any continually equal keys, give up by_column optimization.
         if (cur_key.empty())
@@ -244,7 +246,10 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
         {
             RowRef key;
             setPrimaryKeyRefOptimized(key, current);
-            if (cur_key == key)
+
+            const auto key_differs = cmpTMTCursor<true, true, pk_type>(*cur_key.columns, cur_key.row_num, *key.columns, key.row_num);
+
+            if (!key_differs.all)
             {
                 give_up = true;
                 break;

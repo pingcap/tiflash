@@ -59,7 +59,7 @@ private:
     SortCursorImpl cur_block_cursor_impl;
     SharedBlockPtr cur_block;
 
-    void setRowRefOptimized(RowRef & row_ref, TMTSortCursorPK & cursor)
+    void setRowRefOptimized(RowRef & row_ref, const TMTSortCursorPK & cursor)
     {
         if (cursor.isSame(cur_block_cursor))
             row_ref.shared_block = cur_block;
@@ -70,7 +70,7 @@ private:
         row_ref.columns = &row_ref.shared_block->all_columns;
     }
 
-    void setPrimaryKeyRefOptimized(RowRef & row_ref, TMTSortCursorPK & cursor)
+    void setPrimaryKeyRefOptimized(RowRef & row_ref, const TMTSortCursorPK & cursor)
     {
         if (cursor.isSame(cur_block_cursor))
             row_ref.shared_block = cur_block;
@@ -81,7 +81,7 @@ private:
         row_ref.columns = &row_ref.shared_block->sort_columns;
     }
 
-    void merge_optimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue);
+    void mergeOptimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue);
 
     bool insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns);
 

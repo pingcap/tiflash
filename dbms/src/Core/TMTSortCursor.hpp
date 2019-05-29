@@ -19,6 +19,81 @@ enum TMTPKType
     UNSPECIFIED,
 };
 
+template <bool just_diff, bool only_pk, TMTPKType pk_type>
+inline TMTCmpOptimizedRes cmpTMTCursor(
+    const ColumnRawPtrs & lsort_columns, const size_t lhs_pos, const ColumnRawPtrs & rsort_columns, const size_t rhs_pos)
+{
+    TMTCmpOptimizedRes res{.all = 0};
+
+    if constexpr (pk_type == TMTPKType::INT64)
+    {
+        auto h1 = static_cast<const ColumnInt64 *>(lsort_columns[0])->getElement(lhs_pos);
+        auto h2 = static_cast<const ColumnInt64 *>(rsort_columns[0])->getElement(rhs_pos);
+
+        if constexpr (just_diff)
+        {
+            res.diffs[0] = h1 != h2;
+        }
+        else
+        {
+            res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
+        }
+    }
+    else if constexpr (pk_type == TMTPKType::UINT64)
+    {
+        auto h1 = static_cast<const ColumnUInt64 *>(lsort_columns[0])->getElement(lhs_pos);
+        auto h2 = static_cast<const ColumnUInt64 *>(rsort_columns[0])->getElement(rhs_pos);
+
+        if constexpr (just_diff)
+        {
+            res.diffs[0] = h1 != h2;
+        }
+        else
+        {
+            res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
+        }
+    }
+    else
+    {
+        res.diffs[0] = lsort_columns[0]->compareAt(lhs_pos, rhs_pos, *(rsort_columns[0]), 0);
+    }
+
+    if constexpr (only_pk)
+    {
+        return res;
+    }
+
+    {
+        UInt64 t1 = static_cast<const ColumnUInt64 *>(lsort_columns[1])->getElement(lhs_pos);
+        UInt64 t2 = static_cast<const ColumnUInt64 *>(rsort_columns[1])->getElement(rhs_pos);
+
+        if constexpr (just_diff)
+        {
+            res.diffs[1] = t1 != t2;
+        }
+        else
+        {
+            res.diffs[1] = t1 == t2 ? 0 : (t1 > t2 ? 1 : -1);
+        }
+    }
+    {
+        UInt8 d1 = static_cast<const ColumnUInt8 *>(lsort_columns[2])->getElement(lhs_pos);
+        UInt8 d2 = static_cast<const ColumnUInt8 *>(rsort_columns[2])->getElement(rhs_pos);
+
+        if constexpr (just_diff)
+        {
+            res.diffs[2] = d1 != d2;
+        }
+        else
+        {
+            res.diffs[2] = d1 == d2 ? 0 : (d1 > d2 ? 1 : -1);
+        }
+    }
+
+    return res;
+}
+
+
 /// optimize SortCursor for TMT engine which must have 3 column: PK, VERSION, DELMARK.
 template <bool only_pk = false, TMTPKType pk_type = TMTPKType::UNSPECIFIED>
 struct TMTSortCursor
@@ -35,50 +110,9 @@ struct TMTSortCursor
     bool isSame(const TMTSortCursor & other) const { return impl == other.impl; }
     bool notSame(const TMTSortCursor & other) const { return impl != other.impl; }
 
-    static inline TMTCmpOptimizedRes cmp(
-        const ColumnRawPtrs & lsort_columns, const size_t lhs_pos, const ColumnRawPtrs & rsort_columns, const size_t rhs_pos)
-    {
-        TMTCmpOptimizedRes res{.all = 0};
-
-        if constexpr (pk_type == TMTPKType::INT64)
-        {
-            auto h1 = static_cast<const ColumnInt64 *>(lsort_columns[0])->getElement(lhs_pos);
-            auto h2 = static_cast<const ColumnInt64 *>(rsort_columns[0])->getElement(rhs_pos);
-            res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
-        }
-        else if constexpr (pk_type == TMTPKType::UINT64)
-        {
-            auto h1 = static_cast<const ColumnUInt64 *>(lsort_columns[0])->getElement(lhs_pos);
-            auto h2 = static_cast<const ColumnUInt64 *>(rsort_columns[0])->getElement(rhs_pos);
-            res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
-        }
-        else
-        {
-            res.diffs[0] = lsort_columns[0]->compareAt(lhs_pos, rhs_pos, *(rsort_columns[0]), 0);
-        }
-
-        if constexpr (only_pk)
-        {
-            return res;
-        }
-
-        {
-            UInt64 t1 = static_cast<const ColumnUInt64 *>(lsort_columns[1])->getElement(lhs_pos);
-            UInt64 t2 = static_cast<const ColumnUInt64 *>(rsort_columns[1])->getElement(rhs_pos);
-            res.diffs[1] = t1 == t2 ? 0 : (t1 > t2 ? 1 : -1);
-        }
-        {
-            UInt8 d1 = static_cast<const ColumnUInt8 *>(lsort_columns[2])->getElement(lhs_pos);
-            UInt8 d2 = static_cast<const ColumnUInt8 *>(rsort_columns[2])->getElement(rhs_pos);
-            res.diffs[2] = d1 == d2 ? 0 : (d1 > d2 ? 1 : -1);
-        }
-
-        return res;
-    }
-
     TMTCmpOptimizedRes cmpIgnOrder(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
     {
-        return cmp(impl->sort_columns, lhs_pos, rhs.impl->sort_columns, rhs_pos);
+        return cmpTMTCursor<false, only_pk, pk_type>(impl->sort_columns, lhs_pos, rhs.impl->sort_columns, rhs_pos);
     }
 
     bool greaterAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
