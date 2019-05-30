@@ -41,17 +41,9 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
     }
 }
 
-Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_,
+Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns,
     RegionDataReadInfoList & data_list)
 {
-    // Note: this code below is mostly ported from RegionBlockInputStream.
-    Names ordered_columns = ordered_columns_;
-    if (ordered_columns_.empty())
-    {
-        for (const auto & col : columns.ordinary)
-            ordered_columns.push_back(col.name);
-    }
-
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 
@@ -118,15 +110,25 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     for (const auto & [handle, write_type, commit_ts, value] : data_list)
     {
-        if (write_type == Region::PutFlag || write_type == Region::DelFlag)
+        std::ignore = value;
+
+        delmark_data.emplace_back(write_type == Region::DelFlag);
+        version_data.emplace_back(commit_ts);
+        if (pk_is_uint64)
+            column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
+        else
+            column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
+    }
+
+    /// optimize for only need handle, tso, delmark.
+    if (ordered_columns.size() > 3)
+    {
+        for (const auto & [handle, write_type, commit_ts, value] : data_list)
         {
+            std::ignore = commit_ts;
+            std::ignore = handle;
 
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
-
-            /// Fill in `row` with decoded column values.
-
-            delmark_data.emplace_back(write_type == Region::DelFlag);
-            version_data.emplace_back(commit_ts);
 
             std::vector<Field> row;
 
@@ -234,11 +236,6 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     it->second.first->insert(row[i + 1]);
                 }
             }
-
-            if (pk_is_uint64)
-                column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
-            else
-                column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
         }
     }
 

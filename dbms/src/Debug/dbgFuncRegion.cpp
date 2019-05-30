@@ -1,5 +1,6 @@
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/executeQuery.h>
@@ -84,6 +85,91 @@ void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output
     output(ss.str());
 }
 
+void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 3)
+    {
+        throw Exception("Args not matched, should be: database-name, table-name, region-id", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+
+    TableID table_id = getTableID(context, database_name, table_name, "");
+
+    TMTContext & tmt = context.getTMTContext();
+    tmt.getRegionTableMut().tryFlushRegion(table_id, region_id);
+
+    std::stringstream ss;
+    ss << "region_table try flush table " << table_id << " region " << region_id;
+    output(ss.str());
+}
+
+void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    HandleID start = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+
+    TableID table_id = getTableID(context, database_name, table_name, "");
+    RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
+
+    auto args_begin = args.begin() + 5;
+    auto args_end = args.end();
+
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+    const size_t len = table->table_info.columns.size() + 3;
+
+    if ((args_end - args_begin) % len)
+        throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
+
+    TMTContext & tmt = context.getTMTContext();
+    size_t cnt = 0;
+
+    for (auto it = args_begin; it != args_end; it += len)
+    {
+        HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value);
+        Timestamp tso = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
+        UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[2]).value);
+        {
+            std::vector<Field> fields;
+
+            for (auto p = it + 3; p != it + len; ++p)
+            {
+                auto field = typeid_cast<const ASTLiteral *>((*p).get())->value;
+                fields.emplace_back(field);
+            }
+
+            TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
+            TiKVValue value = RecordKVFormat::EncodeRow(table->table_info, fields);
+            UInt64 commit_ts = tso;
+            UInt64 prewrite_ts = tso;
+            TiKVValue commit_value;
+
+            if (del)
+                commit_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts);
+            else
+                commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value);
+
+            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+
+            region->insert(Region::write_cf_name, commit_key, commit_value);
+        }
+        ++cnt;
+        MockTiKV::instance().getRaftIndex(region_id);
+    }
+
+    applySnapshot(tmt.getKVStore(), region, &context);
+
+    std::stringstream ss;
+    ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
+       << " to table #" << table_id << " with " << cnt << " records";
+    output(ss.str());
+}
+
 void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() < 5 || args.size() > 6)
@@ -117,6 +203,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     *(req.mutable_state()->mutable_region()) = region_info;
 
     *(req.mutable_state()->mutable_apply_state()) = initialApplyState();
+
+    (req.mutable_state()->mutable_apply_state())->set_applied_index(MockTiKV::instance().getRaftIndex(region_id));
 
     // TODO: Put data into snapshot cmd
 
