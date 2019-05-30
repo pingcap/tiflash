@@ -12,6 +12,8 @@ union TMTCmpOptimizedRes
     std::array<Int8, 4> diffs;
 };
 
+static_assert(sizeof(TMTCmpOptimizedRes) == 4);
+
 enum TMTPKType
 {
     INT64,
@@ -19,12 +21,17 @@ enum TMTPKType
     UNSPECIFIED,
 };
 
+/// type of pk column will be int64, uint64 and others(int32, int8, uint32 ...).
+/// type of version column is uint64.
+/// type of delmark column is uint8.
+/// order of sorting will always be pk -> version -> delmark
 template <bool just_diff, bool only_pk, TMTPKType pk_type>
 inline TMTCmpOptimizedRes cmpTMTCursor(
     const ColumnRawPtrs & lsort_columns, const size_t lhs_pos, const ColumnRawPtrs & rsort_columns, const size_t rhs_pos)
 {
     TMTCmpOptimizedRes res{.all = 0};
 
+    // PK
     if constexpr (pk_type == TMTPKType::INT64)
     {
         auto h1 = static_cast<const ColumnInt64 *>(lsort_columns[0])->getElement(lhs_pos);
@@ -63,6 +70,7 @@ inline TMTCmpOptimizedRes cmpTMTCursor(
         return res;
     }
 
+    // VERSION
     {
         auto t1 = static_cast<const ColumnUInt64 *>(lsort_columns[1])->getElement(lhs_pos);
         auto t2 = static_cast<const ColumnUInt64 *>(rsort_columns[1])->getElement(rhs_pos);
@@ -76,6 +84,8 @@ inline TMTCmpOptimizedRes cmpTMTCursor(
             res.diffs[1] = t1 == t2 ? 0 : (t1 > t2 ? 1 : -1);
         }
     }
+
+    // DELMARK
     {
         auto d1 = static_cast<const ColumnUInt8 *>(lsort_columns[2])->getElement(lhs_pos);
         auto d2 = static_cast<const ColumnUInt8 *>(rsort_columns[2])->getElement(rhs_pos);

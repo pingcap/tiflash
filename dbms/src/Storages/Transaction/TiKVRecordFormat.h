@@ -167,13 +167,6 @@ inline TiKVKey appendTs(const TiKVKey & key, Timestamp ts)
     return TiKVKey(str.append(reinterpret_cast<const char *>(&big_endian_ts), sizeof(big_endian_ts)));
 }
 
-inline void changeTs(TiKVKey & key, Timestamp ts)
-{
-    auto big_endian_ts = encodeUInt64Desc(ts);
-    auto str = key.getStrMut();
-    *(reinterpret_cast<Timestamp *>(str.data() + str.size() - sizeof(Timestamp))) = big_endian_ts;
-}
-
 inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)
 {
     TiKVKey key = genKey(tableId, handleId);

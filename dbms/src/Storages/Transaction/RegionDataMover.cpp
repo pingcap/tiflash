@@ -11,6 +11,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
+static const std::string RegionDataMoverName = "RegionDataMover";
+
 template <typename HandleType>
 BlockInputStreamPtr createBlockInputStreamFromRange(
     Context & context, const StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
@@ -27,7 +29,7 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
 
     std::string query = ss.str();
 
-    LOG_DEBUG(&Logger::get("RegionDataMover"), "createBlockInputStreamFromRange sql: " << query);
+    LOG_DEBUG(&Logger::get(RegionDataMoverName), "[createBlockInputStreamFromRange] sql: " << query);
 
     return executeQuery(query, context, true, QueryProcessingStage::Complete).in;
 }
@@ -40,6 +42,7 @@ HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, con
         throw Exception("RegionDataMover: primary key should be one column", ErrorCodes::LOGICAL_ERROR);
 
     std::string pk_name = pk_columns[0].column_name;
+    auto start_time = Clock::now();
 
     BlockInputStreamPtr input = createBlockInputStreamFromRange(context, storage, handle_range, pk_name);
 
@@ -52,6 +55,7 @@ HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, con
     }
 
     HandleMap output_data;
+    size_t tol_rows = 0;
 
     while (true)
     {
@@ -59,6 +63,7 @@ HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, con
         if (!block)
             break;
         size_t rows = block.rows();
+        tol_rows += rows;
 
         const UInt8 * delmark_col = static_cast<const ColumnUInt8 *>(block.getByPosition(delmark_col_pos).column.get())->getData().data();
         const UInt64 * version_col = static_cast<const ColumnUInt64 *>(block.getByPosition(version_col_pos).column.get())->getData().data();
@@ -77,6 +82,11 @@ HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, con
             }
         }
     }
+
+    auto end_time = Clock::now();
+    LOG_DEBUG(&Logger::get(RegionDataMoverName),
+        "[getHandleMapByRange] execute sql and handle data, cost "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows << " rows");
 
     return output_data;
 }
