@@ -35,8 +35,6 @@ private:
 
     GRPCServerPtr grpc_server;
 
-    std::mutex mutex;
-
     Context & db_context;
     KVStorePtr kvstore;
 

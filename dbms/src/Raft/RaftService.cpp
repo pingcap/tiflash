@@ -11,10 +11,13 @@ namespace DB
 RaftService::RaftService(const std::string & address_, DB::Context & db_context_)
     : address(address_),
       db_context(db_context_),
-      kvstore(db_context.getTMTContext().kvstore),
+      kvstore(db_context.getTMTContext().getKVStore()),
       background_pool(db_context.getBackgroundPool()),
       log(&Logger::get("RaftService"))
 {
+    if (!db_context.getTMTContext().isInitialized())
+        throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+
     grpc::ServerBuilder builder;
     builder.AddListeningPort(address, grpc::InsecureServerCredentials());
     builder.RegisterService(this);
@@ -30,7 +33,6 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
 
 RaftService::~RaftService()
 {
-    std::lock_guard<std::mutex> lock{mutex};
     grpc_server->Shutdown();
     grpc_server->Wait();
 }
@@ -41,7 +43,7 @@ grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, 
     BackgroundProcessingPool::TaskHandle persist_handle;
     BackgroundProcessingPool::TaskHandle flush_handle;
 
-    RegionTable & region_table = db_context.getTMTContext().region_table;
+    RegionTable & region_table = db_context.getTMTContext().getRegionTableMut();
 
     try
     {

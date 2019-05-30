@@ -69,7 +69,7 @@ void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context)
     }
 
     // context may be null in test cases.
-    kvstore->onSnapshot(region, context ? &context->getTMTContext().region_table : nullptr);
+    kvstore->onSnapshot(region, context ? &context->getTMTContext().getRegionTableMut() : nullptr);
 
     LOG_INFO(log, "Region " << region->id() << " apply snapshot done.");
 }
