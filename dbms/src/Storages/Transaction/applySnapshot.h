@@ -18,6 +18,7 @@ using KVStorePtr = std::shared_ptr<KVStore>;
 // Simplify test.
 using RequestReader = std::function<bool(enginepb::SnapshotRequest *)>;
 
-void applySnapshot(KVStorePtr kvstore, RequestReader read, Context * context = nullptr);
+void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context = nullptr);
+bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * context);
 
 } // namespace DB

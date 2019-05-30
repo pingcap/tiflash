@@ -380,6 +380,59 @@ void RegionTable::removeRegion(const RegionPtr & region)
     }
 }
 
+bool RegionTable::tryFlushRegion(TableID table_id, RegionID region_id)
+{
+    const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (auto table_it = tables.find(table_id); table_it != tables.end())
+        {
+            auto & internal_region_map = table_it->second.regions.get();
+            if (auto region_it = internal_region_map.find(region_id); region_it != internal_region_map.end())
+            {
+                InternalRegion & region = region_it->second;
+                return callback(region);
+            }
+            else
+            {
+                LOG_WARNING(log, "tryFlushRegion: table " << region_id << ", region " << region_id << " fail, internal region not exist");
+                return false;
+            }
+        }
+        else
+        {
+            LOG_WARNING(log, "tryFlushRegion: table " << region_id << ", region " << region_id << " fail, table not exist");
+            return false;
+        }
+    };
+
+    size_t cache_bytes;
+    bool status = func_update_region([&](InternalRegion & region) -> bool {
+        if (region.pause_flush)
+        {
+            LOG_INFO(log, "tryFlushRegion: internal region " << region_id << " pause flush, try again later");
+            return false;
+        }
+        region.pause_flush = true;
+        cache_bytes = region.cache_bytes;
+        return true;
+    });
+    if (!status)
+        return false;
+
+    flushRegion(table_id, region_id, cache_bytes);
+
+    status = func_update_region([&](InternalRegion & region) -> bool {
+        region.pause_flush = false;
+        region.must_flush = false;
+        region.updated = false;
+        region.cache_bytes = cache_bytes;
+        region.last_flush_time = Clock::now();
+        return true;
+    });
+
+    return status;
+}
+
 bool RegionTable::tryFlushRegions()
 {
     std::map<std::pair<TableID, RegionID>, size_t> to_flush;

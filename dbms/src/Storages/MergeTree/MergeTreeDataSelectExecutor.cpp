@@ -38,6 +38,7 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
 #include <DataStreams/ReplacingSortedBlockInputStream.h>
 #include <DataStreams/SummingSortedBlockInputStream.h>
+#include <DataStreams/TMTSortedBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/VersionedCollapsingSortedBlockInputStream.h>
@@ -217,50 +218,49 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
     }
 
-    bool pk_is_uint64 = false;
+    ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
 
-    if (is_txn_engine)
+    TMTPKType pk_type = TMTPKType::UNSPECIFIED;
+
+    if (!is_txn_engine)
+        ;
+    else if (!select.no_kvstore)
     {
         handle_col_name = data.getPrimarySortDescription()[0].column_name;
 
-        const auto pk_type = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
+        const auto pk_family_name = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
 
-        if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-            pk_is_uint64 = true;
-
-        ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
+        if (std::strcmp(pk_family_name, TypeName<UInt64>::get()) == 0)
+            pk_type = TMTPKType::UINT64;
+        else if (std::strcmp(pk_family_name, TypeName<Int64>::get()) == 0)
+            pk_type = TMTPKType::INT64;
 
         TMTContext & tmt = context.getTMTContext();
 
         if (!tmt.isInitialized())
             throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-        if (select.no_kvstore)
-            regions_query_info.clear();
-        else
+        for (const auto & query_info : regions_query_info)
+            kvstore_region.emplace(query_info.region_id, tmt.getKVStore()->getRegion(query_info.region_id));
+
+        if (regions_query_info.empty())
         {
-            for (const auto & query_info : regions_query_info)
-                kvstore_region.emplace(query_info.region_id, tmt.getKVStore()->getRegion(query_info.region_id));
-
-            if (regions_query_info.empty())
-            {
-                tmt.getRegionTableMut().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
-                    for (const auto & [id, region] : regions)
-                    {
-                        kvstore_region.emplace(id, region);
-                        if (region == nullptr)
-                            // maybe region is removed.
-                            regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
-                        else
-                            regions_query_info.push_back(
-                                {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
-                    }
-                });
-            }
-
-            if (kvstore_region.size() != regions_query_info.size())
-                throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
+            tmt.getRegionTableMut().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+                for (const auto & [id, region] : regions)
+                {
+                    kvstore_region.emplace(id, region);
+                    if (region == nullptr)
+                        // maybe region is removed.
+                        regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
+                    else
+                        regions_query_info.push_back(
+                            {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
+                }
+            });
         }
+
+        if (kvstore_region.size() != regions_query_info.size())
+            throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
 
         std::sort(regions_query_info.begin(), regions_query_info.end());
 
@@ -297,7 +297,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             region_cnt = regions_query_info.size();
 
-            if (pk_is_uint64)
+            if (pk_type == TMTPKType::UINT64)
             {
                 for (size_t i = 0; i < regions_query_info.size(); ++i)
                 {
@@ -324,7 +324,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         region_group_range_parts.assign(concurrent_num, {});
         region_group_mem_block.assign(concurrent_num, {});
-        if (pk_is_uint64)
+        if (pk_type == TMTPKType::UINT64)
             region_group_u64_handle_ranges.assign(concurrent_num, {});
         else
             region_group_handle_ranges.assign(concurrent_num, {});
@@ -335,6 +335,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         Names column_names_to_read = real_column_names;
 
         extendMutableEngineColumnNames(column_names_to_read, data);
+
+        if (column_names_to_read.size() < 3)
+            throw Exception("size of column_names_to_read < 3", ErrorCodes::LOGICAL_ERROR);
 
         // get data block from region first.
 
@@ -482,8 +485,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     RelativeSize relative_sample_size = 0;
     RelativeSize relative_sample_offset = 0;
-
-    ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
 
     auto select_sample_size = select.sample_size();
     auto select_sample_offset = select.sample_offset();
@@ -809,7 +810,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
             size_t mem_rows = 0;
 
-            if (pk_is_uint64)
+            if (pk_type == TMTPKType::UINT64)
             {
                 using UInt64RangeElement = std::pair<HandleRange<UInt64>, size_t>;
                 std::vector<UInt64RangeElement> handle_ranges;
@@ -914,7 +915,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     res.emplace_back(std::make_shared<BlocksListBlockInputStream>(std::move(blocks)));
             }
         }
-        else
+        else if (!select.no_kvstore)
         {
             const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
                 return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
@@ -938,9 +939,22 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                       return std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_ranges, handle_col_name);
                   };
 
-            const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) {
-                return std::make_shared<ReplacingDeletingSortedBlockInputStream>(merging, data.getPrimarySortDescription(),
-                    MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE, nullptr);
+            const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) -> BlockInputStreamPtr {
+                switch (pk_type)
+                {
+                    case TMTPKType::UINT64:
+                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UINT64>>(merging, data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
+
+                    case TMTPKType::INT64:
+                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::INT64>>(merging, data.getPrimarySortDescription(),
+                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
+
+                    default:
+                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UNSPECIFIED>>(merging,
+                            data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
+                            DEFAULT_MERGE_BLOCK_SIZE);
+                }
             };
 
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)
@@ -961,7 +975,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         const auto & part = data_parts[part_idx];
                         BlockInputStreamPtr source_stream = func_make_merge_tree_input(part, part.ranges);
 
-                        if (pk_is_uint64)
+                        if (pk_type == TMTPKType::UINT64)
                             source_stream
                                 = func_make_uint64_range_filter_input(source_stream, region_group_u64_handle_ranges[thread_idx][range_idx]);
                         else
@@ -996,7 +1010,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                 }
 
-                if (pk_is_uint64 && thread_idx == 0 && special_region_index != -1)
+                if (pk_type == TMTPKType::UINT64 && thread_idx == 0 && special_region_index != -1)
                 {
                     size_t region_sum_ranges = 0, region_sum_marks = 0;
                     BlockInputStreams merging;
@@ -1073,6 +1087,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 if (!union_regions_stream.empty())
                     res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
             }
+        }
+        else
+        {
+            // no use for select nokvstore ...
         }
     }
     else if (data.merging_params.mode == MergeTreeData::MergingParams::Mutable && !select.raw_for_mutable)

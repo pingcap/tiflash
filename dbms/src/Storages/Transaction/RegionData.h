@@ -33,7 +33,7 @@ public:
 
     WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it);
 
-    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const;
+    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it, bool need_value = true) const;
 
     LockInfoPtr getLockInfo(TableID expected_table_id, Timestamp start_ts) const;
 
@@ -62,6 +62,9 @@ public:
     RegionData() {}
 
     RegionData(RegionData && data);
+
+public:
+    static UInt8 getWriteType(const WriteCFIter & write_it);
 
 private:
     RegionWriteCFData write_cf;
