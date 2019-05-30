@@ -518,7 +518,7 @@ public:
 /// parts should be sorted.
 MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart(
     const FuturePart & future_part, MergeList::Entry & merge_entry,
-    size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplicate)
+    size_t aio_threshold, time_t time_of_merge, DiskSpaceMonitor::Reservation * disk_reservation, bool deduplicate, bool final)
 {
     static const String TMP_PREFIX = "tmp_merge_";
 
@@ -655,6 +655,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
         {
             auto &tmt = data.context.getTMTContext();
 
+            while (!tmt.isInitialized())
+            {
+                LOG_WARNING(log, "TMTContext is not initialized, wait and retry");
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+
             bool pk_is_uint64 = false;
 
             const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
@@ -667,7 +673,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             }
 
             std::vector<HandleRange<HandleID>> ranges;
-            tmt.region_table.traverseInternalRegionsByTable(
+            tmt.getRegionTableMut().traverseInternalRegionsByTable(
                 data.table_info->id,
                 [&](const RegionTable::InternalRegion & region) {
                     ranges.push_back(region.range_in_table);
@@ -688,14 +694,14 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 CHTableHandle::merge_ranges(new_ranges);
                 merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<UInt64>>(
                     new_ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
-                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id);
+                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id, final);
             }
             else
             {
                 CHTableHandle::merge_ranges(ranges);
                 merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<Int64>>(
                     ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
-                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id);
+                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id, final);
             }
 
             break;

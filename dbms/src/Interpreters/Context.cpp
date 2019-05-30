@@ -1319,15 +1319,6 @@ DBGInvoker & Context::getDBGInvoker() const
     return shared->dbg_invoker;
 }
 
-
-TMTContext & Context::getTMTContext()
-{
-    auto lock = getLock();
-    if (!shared->tmt_context)
-        shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
-    return *(shared->tmt_context);
-}
-
 TMTContext & Context::getTMTContext() const
 {
     auto lock = getLock();
@@ -1405,6 +1396,14 @@ void Context::initializeRaftService(const std::string & service_addr)
     shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
 }
 
+void Context::createTMTContext()
+{
+    auto lock = getLock();
+    if (shared->tmt_context)
+        throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
+}
+
 RaftService & Context::getRaftService()
 {
     auto lock = getLock();
@@ -1413,12 +1412,12 @@ RaftService & Context::getRaftService()
     return *shared->raft_service;
 }
 
-void Context::initializeTiDBService(const std::string & service_ip, const std::string & status_port)
+void Context::initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases)
 {
     auto lock = getLock();
     if (shared->tidb_service)
         throw Exception("TiDB Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->tidb_service = std::make_shared<TiDBService>(service_ip, status_port);
+    shared->tidb_service = std::make_shared<TiDBService>(service_ip, status_port, ignore_databases);
 }
 
 TiDBService & Context::getTiDBService()

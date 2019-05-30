@@ -232,16 +232,19 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         TMTContext & tmt = context.getTMTContext();
 
+        if (!tmt.isInitialized())
+            throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+
         if (select.no_kvstore)
             regions_query_info.clear();
         else
         {
             for (const auto & query_info : regions_query_info)
-                kvstore_region.emplace(query_info.region_id, tmt.kvstore->getRegion(query_info.region_id));
+                kvstore_region.emplace(query_info.region_id, tmt.getKVStore()->getRegion(query_info.region_id));
 
             if (regions_query_info.empty())
             {
-                tmt.region_table.traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+                tmt.getRegionTableMut().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
                     for (const auto & [id, region] : regions)
                     {
                         kvstore_region.emplace(id, region);
@@ -769,7 +772,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         {
             // check all data, include special region.
             {
-                auto region = tmt.kvstore->getRegion(region_query_info.region_id);
+                auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
                 RegionTable::RegionReadStatus status = RegionTable::OK;
                 if (region != kvstore_region[region_query_info.region_id])
                     status = RegionTable::NOT_FOUND;

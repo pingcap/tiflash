@@ -15,6 +15,9 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs, std::string
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key_, learner_value_)),
       rpc_client(std::make_shared<pingcap::kv::RpcClient>())
+{}
+
+void TMTContext::restore()
 {
     std::vector<RegionID> regions_to_remove;
 
@@ -25,7 +28,22 @@ TMTContext::TMTContext(Context & context, std::vector<String> addrs, std::string
         kvstore->removeRegion(id, &region_table);
 
     kvstore->updateRegionTableBySnapshot(region_table);
+    initialized = true;
 }
+
+KVStorePtr & TMTContext::getKVStoreMut() { return kvstore; }
+
+const KVStorePtr & TMTContext::getKVStore() const { return kvstore; }
+
+TMTStorages & TMTContext::getStoragesMut() { return storages; }
+
+const TMTStorages & TMTContext::getStorages() const { return storages; }
+
+RegionTable & TMTContext::getRegionTableMut() { return region_table; }
+
+const RegionTable & TMTContext::getRegionTable() const { return region_table; }
+
+bool TMTContext::isInitialized() const { return initialized; }
 
 SchemaSyncerPtr TMTContext::getSchemaSyncer() const
 {

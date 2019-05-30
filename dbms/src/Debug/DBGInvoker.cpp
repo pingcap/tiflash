@@ -6,6 +6,7 @@
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
+#include <Debug/dbgFuncSchema.h>
 #include <Parsers/ASTLiteral.h>
 
 namespace DB
@@ -50,8 +51,9 @@ DBGInvoker::DBGInvoker()
     regFunc("region_snapshot", dbgFuncRegionSnapshot);
     regFunc("try_flush", dbgFuncTryFlush);
 
-    regFunc("dump_region", dbgFuncDumpRegion);
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
+
+    regFunc("refresh_schema", dbgFuncRefreshSchema);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

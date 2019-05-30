@@ -21,7 +21,7 @@ public:
      * @param table_id
      * @param context
      */
-    virtual void syncSchema(TableID table_id, Context & context) = 0;
+    virtual void syncSchema(TableID table_id, Context & context, bool force) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
@@ -32,12 +32,14 @@ class JsonSchemaSyncer : public SchemaSyncer
 public:
     JsonSchemaSyncer();
 
-    void syncSchema(TableID table_id, Context & context) override;
+    void syncSchema(TableID table_id, Context & context, bool force) override;
 
 protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;
 
 protected:
+    std::unordered_set<TableID> ignored_tables;
+
     Logger * log;
 };
 

@@ -21,12 +21,23 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
 class TMTContext
 {
-public:
+private:
     KVStorePtr kvstore;
     TMTStorages storages;
     RegionTable region_table;
 
 public:
+    const KVStorePtr & getKVStore() const;
+    KVStorePtr & getKVStoreMut();
+
+    const TMTStorages & getStorages() const;
+    TMTStorages & getStoragesMut();
+
+    const RegionTable & getRegionTable() const;
+    RegionTable & getRegionTableMut();
+
+    bool isInitialized() const;
+
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context_, std::vector<String> addrs, std::string learner_key_, std::string learner_value_);
 
@@ -42,6 +53,8 @@ public:
 
     pingcap::kv::RpcClientPtr getRpcClient();
 
+    void restore();
+
 private:
     SchemaSyncerPtr schema_syncer;
     pingcap::pd::ClientPtr pd_client;
@@ -49,6 +62,7 @@ private:
     pingcap::kv::RpcClientPtr rpc_client;
 
     mutable std::mutex mutex;
+    std::atomic_bool initialized = false;
 };
 
 } // namespace DB
