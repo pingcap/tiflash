@@ -29,13 +29,14 @@ struct RegionCFDataBase
     using Value = typename Trait::Value;
     using Map = typename Trait::Map;
     using Data = std::unordered_map<TableID, Map>;
+    using Pair = std::pair<Key, Value>;
 
     static const TiKVKey & getTiKVKey(const Value & val);
 
     static const TiKVValue & getTiKVValue(const Value & val);
 
     TableID insert(const TiKVKey & key, const TiKVValue & value);
-
+    TableID insert(const TableID table_id, std::pair<Key, Value> && kv_pair);
     TableID insert(const TiKVKey & key, const TiKVValue & value, const String & raw_key);
 
     static size_t calcTiKVKeyValueSize(const Value & value);
@@ -67,7 +68,8 @@ struct RegionCFDataBase
     TableIDSet getAllRecordTableID() const;
 
 private:
-    bool shouldIgnoreRemove(const Value & value) const;
+    static bool shouldIgnoreInsert(const Value & value);
+    static bool shouldIgnoreRemove(const Value & value);
 
 private:
     Data data;

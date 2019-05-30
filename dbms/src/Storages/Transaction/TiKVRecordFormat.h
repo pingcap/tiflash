@@ -37,13 +37,6 @@ static const UInt64 SIGN_MARK = UInt64(1) << 63;
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
-
-inline TiKVKeyValue genKV(const raft_cmdpb::PutRequest & req) { return {TiKVKey(req.key()), TiKVValue(req.value())}; }
-
-inline TiKVKey genKey(const raft_cmdpb::GetRequest & req) { return TiKVKey{req.key()}; }
-
-inline TiKVKey genKey(const raft_cmdpb::DeleteRequest & req) { return TiKVKey{req.key()}; }
-
 inline std::vector<Field> DecodeRow(const TiKVValue & value)
 {
     std::vector<Field> vec;
@@ -172,13 +165,6 @@ inline TiKVKey appendTs(const TiKVKey & key, Timestamp ts)
     auto big_endian_ts = encodeUInt64Desc(ts);
     auto str = key.getStr();
     return TiKVKey(str.append(reinterpret_cast<const char *>(&big_endian_ts), sizeof(big_endian_ts)));
-}
-
-inline void changeTs(TiKVKey & key, Timestamp ts)
-{
-    auto big_endian_ts = encodeUInt64Desc(ts);
-    auto str = key.getStrRef();
-    *(reinterpret_cast<Timestamp *>(str.data() + str.size() - sizeof(Timestamp))) = big_endian_ts;
 }
 
 inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)

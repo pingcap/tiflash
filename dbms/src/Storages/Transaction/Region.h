@@ -51,11 +51,11 @@ public:
 
         bool hasNext() const { return found && write_map_it != write_map_it_end; }
 
-        auto next()
+        auto next(bool need_value = true)
         {
             if (!found)
                 throw Exception("CommittedScanner table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
-            return store->readDataByWriteIt(expected_table_id, write_map_it++);
+            return store->readDataByWriteIt(expected_table_id, write_map_it++, need_value);
         }
 
         LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
@@ -112,15 +112,12 @@ public:
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    using BatchInsertElement = std::tuple<const TiKVKey *, const TiKVValue *, const std::string *>;
-    void batchInsert(std::function<bool(BatchInsertElement &)> && f);
-
     RaftCommandResult onCommand(const enginepb::CommandRequest & cmd);
 
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
     std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
 
-    size_t serialize(WriteBuffer & buf, enginepb::CommandResponse * response = nullptr) const;
+    size_t serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
@@ -134,6 +131,7 @@ public:
     bool isPeerRemoved() const;
 
     size_t dataSize() const;
+    size_t writeCFCount() const;
     std::string dataInfo() const;
 
     void markPersisted();
@@ -166,15 +164,21 @@ public:
 
     TableIDSet getCommittedRecordTableID() const;
 
+    using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
+
+    /// only can be used for applying snapshot. only can be called by single thread.
+    void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
+
+    static ColumnFamilyType getCf(const std::string & cf);
+
 private:
     // Private methods no need to lock mutex, normally
 
     TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
 
-    static ColumnFamilyType getCf(const std::string & cf);
-
-    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const;
+    RegionDataReadInfo readDataByWriteIt(
+        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
     RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
