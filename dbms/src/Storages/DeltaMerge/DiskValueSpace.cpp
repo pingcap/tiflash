@@ -222,6 +222,8 @@ void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, Write
 
 void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block)
 {
+    // should only append to delta
+    assert(should_cache);
     {
         MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
         serializeChunks(buf, chunks.begin(), chunks.end(), chunk);
@@ -323,7 +325,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
     Block res;
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
-        ColumnDefine          define = read_column_defines[index];
+        const ColumnDefine &  define = read_column_defines[index];
         ColumnWithTypeAndName col;
         col.type      = define.type;
         col.name      = define.name;
@@ -366,7 +368,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
 
             for (size_t index = 0; index < read_column_defines.size(); ++index)
             {
-                ColumnDefine define    = read_column_defines[index];
+                const auto & define    = read_column_defines[index];
                 auto &       cache_col = cache.at(define.id);
                 columns[index]->insertRangeFrom(*cache_col, cache_rows_offset, chunk.getRows());
             }
@@ -376,7 +378,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
     Block res;
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
-        ColumnDefine          define = read_column_defines[index];
+        const ColumnDefine &  define = read_column_defines[index];
         ColumnWithTypeAndName col;
         col.type      = define.type;
         col.name      = define.name;

@@ -84,11 +84,13 @@ PageFile::Writer & PageStorage::getWriter()
     bool is_writable = write_file.isValid() && write_file.getDataFileAppendPos() < config.file_roll_size;
     if (!is_writable)
     {
+        // create a new PageFile if old file is full
         write_file        = PageFile::newPageFile(write_file.getFileId() + 1, 0, storage_path, false, page_file_log);
         write_file_writer = write_file.createWriter(config.sync_on_write);
     }
-    else if (!write_file_writer)
+    else if (write_file_writer == nullptr)
     {
+        // create a Writer of current PageFile
         write_file_writer = write_file.createWriter(config.sync_on_write);
     }
     return *write_file_writer;

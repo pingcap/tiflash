@@ -696,7 +696,7 @@ void Segment::placeDelete(const ColumnDefine & handle, StoragePool & storage, co
         BlockInputStreamPtr merged_stream = getPlacedStream(handle, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
         BlockInputStreamPtr delete_stream = std::make_shared<DMHandleFilterBlockInputStream>(merged_stream, handle, delete_range);
         // Try to merge into big block. 128 MB should be enough.
-        SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1 << 20));
+        SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20));
 
         while (true)
         {

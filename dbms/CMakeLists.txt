@@ -29,6 +29,7 @@ endif ()
 
 find_package (Threads)
 
+include_directories (src)
 add_subdirectory (src)
 
 set(dbms_headers)
@@ -269,6 +270,31 @@ if (ENABLE_TESTS)
     # attach all dbms gtest sources
     grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
-    target_link_libraries(unit_tests_dbms gtest_main dbms)
+    target_link_libraries(unit_tests_dbms gtest_main dbms clickhouse_functions)
     add_check(unit_tests_dbms)
 endif ()
+
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(COVERAGE_LCOV_EXCLUDES
+            '/Library/Developer/CommandLineTools/usr/include/*'
+            '/usr/include/*'
+            '/usr/local/*'
+            '/usr/lib/*'
+            '${CMAKE_SOURCE_DIR}/cmake-build-*/*'
+            '${CMAKE_SOURCE_DIR}/contrib/*'
+            )
+    SETUP_TARGET_FOR_COVERAGE_LCOV(
+            NAME tiflash_lcov_coverage
+            DEPENDENCIES unit_tests_dbms
+            EXECUTABLE unit_tests_dbms
+    )
+    set(COVERAGE_GCOVR_EXCLUDES
+            'contrib'
+            'cmake-build-debugwithcov'
+    )
+    SETUP_TARGET_FOR_COVERAGE_GCOVR_HTML(
+            NAME tiflash_gcovr_coverage
+            DEPENDENCIES unit_tests_dbms
+            EXECUTABLE unit_tests_dbms
+    )
+endif()
