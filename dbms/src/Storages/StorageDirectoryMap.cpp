@@ -10,8 +10,8 @@ namespace DB
 {
 void StorageDirectoryMap::tryInitializeFromFile()
 {
-    std::ifstream file(persist_path);
     Poco::File(persist_path).createFile();
+    std::ifstream file(persist_path);
     std::string line;
     while (std::getline(file, line))
     {
