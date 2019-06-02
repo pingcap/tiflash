@@ -130,7 +130,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setAllPath(all_path);
     {
-        global_context->initializeStorageDirectoryMap(all_path, all_path[0] + std::string("persist"));
+        global_context->initializeStorageDirectoryMap(global_context->getAllPath(), global_context->getAllPath()[0] + std::string("table_path_map"));
     }
 
     std::string path = global_context->getAllPath()[0];

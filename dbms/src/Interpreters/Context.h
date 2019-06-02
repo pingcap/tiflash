@@ -141,13 +141,13 @@ public:
 
     ~Context();
 
-    std::vector<String> getAllPath() const;
+    std::vector<String> & getAllPath() const;
     String getPath() const;
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
 
-    void setAllPath(std::vector<String> paths);
+    void setAllPath(const std::vector<String> & paths);
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
@@ -373,7 +373,7 @@ public:
     void createTMTContext();
     RaftService & getRaftService();
 
-    void initializeStorageDirectoryMap(std::vector<std::string> & all_path, std::string persist_path);
+    void initializeStorageDirectoryMap(const std::vector<std::string> & all_path, const std::string & persist_path);
     StorageDirectoryMap & getStorageDirectoryMap();
 
     void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);

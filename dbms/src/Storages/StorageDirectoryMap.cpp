@@ -9,7 +9,7 @@ namespace DB
 {
 void StorageDirectoryMap::tryInitializeFromFile()
 {
-    std::ifstream file(_persist_path);
+    std::ifstream file(persist_path);
     std::string line;
     while (std::getline(file, line))
     {
@@ -23,26 +23,26 @@ void StorageDirectoryMap::tryInitializeFromFile()
         {
             throw Exception("StorageDirectoryMap file wrong format");
         }
-        _storage_to_directory.insert(std::pair<std::string, std::string>(table_and_path[0], table_and_path[1]));
+        table_paths.insert(std::pair<std::string, std::string>(table_and_path[0], table_and_path[1]));
     }
 }
 
 void StorageDirectoryMap::addEntry(const std::string & database, const std::string & table, const std::string & path)
 {
-    _storage_to_directory.erase(database + "@" + table);
-    _storage_to_directory.insert(std::pair<std::string, std::string>(database + "@" + table, path));
+    table_paths.erase(database + "@" + table);
+    table_paths.insert(std::pair<std::string, std::string>(database + "@" + table, path));
 }
 
-std::string StorageDirectoryMap::getPathForStorage(const std::string & database, const std::string & table)
+const std::string StorageDirectoryMap::getPathForStorage(const std::string & database, const std::string & table)
 {
-    auto it = _storage_to_directory.find(database + "@" + table);
-    if (it != _storage_to_directory.end())
+    auto it = table_paths.find(database + "@" + table);
+    if (it != table_paths.end())
     {
         return it->second;
     }
-    if (path_iter == _all_path.end())
+    if (path_iter == all_path.end())
     {
-        path_iter = _all_path.begin();
+        path_iter = all_path.begin();
     }
     std::string result = *path_iter + "data/" + escapeForFileName(database) + "/";
     path_iter++;
@@ -53,18 +53,17 @@ std::string StorageDirectoryMap::getPathForStorage(const std::string & database,
 
 void StorageDirectoryMap::removePathForStorage(const std::string & database, const std::string & table)
 {
-    _storage_to_directory.erase(database + "@" + table);
+    table_paths.erase(database + "@" + table);
     persist();
 }
 
 void StorageDirectoryMap::persist()
 {
-    std::ofstream newFile(_persist_path);
+    std::ofstream newFile(persist_path);
 
     if (newFile.is_open())
     {
-        std::map<std::string, std::string>::iterator curit;
-        for (auto it = _storage_to_directory.begin(); it != _storage_to_directory.end(); it++)
+        for (auto it = table_paths.begin(); it != table_paths.end(); it++)
         {
             newFile << it->first << " " << it->second << std::endl;
         }

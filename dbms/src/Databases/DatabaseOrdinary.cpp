@@ -171,7 +171,8 @@ void DatabaseOrdinary::loadTables(
                 watch.restart();
             }
 
-            String data_path = context.getStorageDirectoryMap().getPathForStorage(name, table);
+            LOG_INFO(log, "Trying to get data path for Database " << name << " Table " << table << " from StorageDirectoryMap");
+            const String data_path = context.getStorageDirectoryMap().getPathForStorage(name, table);
             LOG_INFO(log, "Database " << name << " Table " << table << " data path: " << data_path);
             loadTable(context, metadata_path, *this, name, data_path, table, has_force_restore_data_flag);
         }

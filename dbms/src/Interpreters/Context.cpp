@@ -115,7 +115,7 @@ struct ContextShared
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
 
-    std::vector<String> paths;                              /// Path to all data directory
+    std::shared_ptr<std::vector<String>> paths;                              /// Path to all data directory
     String path;                                            /// Path to the primary data directory, with a slash at the end.
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
@@ -482,10 +482,10 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
     return it->second;
 }
 
-std::vector<String> Context::getAllPath() const
+std::vector<String> & Context::getAllPath() const
 {
     auto lock = getLock();
-    return shared->paths;
+    return *(shared->paths);
 }
 
 String Context::getPath() const
@@ -512,9 +512,10 @@ String Context::getUserFilesPath() const
     return shared->user_files_path;
 }
 
-void Context::setAllPath(std::vector<String> paths_)
+void Context::setAllPath(const std::vector<String> & paths_)
 {
-    shared->paths = std::move(paths_);
+    auto lock = getLock();
+    shared->paths = std::make_shared<std::vector<String>>(paths_);
 }
 
 void Context::setPath(const String & path)
@@ -1417,7 +1418,7 @@ void Context::createTMTContext()
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
 }
 
-void Context::initializeStorageDirectoryMap(std::vector<std::string> & all_path, std::string persist_path)
+void Context::initializeStorageDirectoryMap(const std::vector<std::string> & all_path, const std::string & persist_path)
 {
     auto lock = getLock();
     if (shared->storage_directory_map_ptr)
