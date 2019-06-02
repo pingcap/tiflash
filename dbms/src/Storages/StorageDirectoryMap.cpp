@@ -1,4 +1,5 @@
 #include <Common/escapeForFileName.h>
+#include <Poco/File.h>
 #include <Poco/StringTokenizer.h>
 #include <Storages/StorageDirectoryMap.h>
 #include <fstream>
@@ -10,6 +11,7 @@ namespace DB
 void StorageDirectoryMap::tryInitializeFromFile()
 {
     std::ifstream file(persist_path);
+    Poco::File(persist_path).createFile();
     std::string line;
     while (std::getline(file, line))
     {
