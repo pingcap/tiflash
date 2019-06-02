@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <common/logger_useful.h>
 #include <map>
 #include <string>
 #include <vector>
@@ -11,7 +12,7 @@ class StorageDirectoryMap
 {
 public:
     StorageDirectoryMap(const std::vector<std::string> & all_path, const std::string & persist_path_prefix)
-        : all_path(all_path), persist_path(persist_path_prefix + "table-path-map")
+        : all_path(all_path), persist_path(persist_path_prefix + "table-path-map"), log(&Logger::get("StorageDirectoryMap"))
     {
         if (all_path.empty())
         {
@@ -32,6 +33,8 @@ private:
     void tryInitializeFromFile();
     void addEntry(const std::string & database, const std::string & table, const std::string & path);
     void persist();
+
+    Logger * log;
 };
 
 using StorageDirectoryMapPtr = std::shared_ptr<StorageDirectoryMap>;
