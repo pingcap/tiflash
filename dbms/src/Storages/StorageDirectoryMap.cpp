@@ -37,6 +37,7 @@ void StorageDirectoryMap::addEntry(const std::string & database, const std::stri
 
 const std::string StorageDirectoryMap::getPathForStorage(const std::string & database, const std::string & table)
 {
+    LOG_INFO(log, "Trying to get data path for Database " << database << " Table " << table << " from StorageDirectoryMap");
     auto it = table_paths.find(database + "@" + table);
     if (it != table_paths.end())
     {

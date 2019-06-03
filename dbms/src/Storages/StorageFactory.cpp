@@ -113,13 +113,16 @@ StoragePtr StorageFactory::get(
     if (it == storages.end())
         throw Exception("Unknown table engine " + name, ErrorCodes::UNKNOWN_STORAGE);
 
+    std::ignore = data_path;
+    const String & table_path = context.getStorageDirectoryMap().getPathForStorage(database_name, table_name);
+
     Arguments arguments
     {
         .engine_name = name,
         .engine_args = args,
         .storage_def = storage_def,
         .query = query,
-        .data_path = data_path,
+        .data_path = table_path,
         .table_name = table_name,
         .database_name = database_name,
         .local_context = local_context,
