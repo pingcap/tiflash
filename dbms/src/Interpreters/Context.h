@@ -13,6 +13,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/ClientInfo.h>
 #include <IO/CompressionSettings.h>
+#include <Storages/RegionQueryInfo.h>
 
 
 namespace Poco
@@ -98,6 +99,9 @@ using TableAndCreateASTs = std::map<String, TableAndCreateAST>;
   */
 class Context
 {
+public:
+    Context * query_context = nullptr;
+
 private:
     using Shared = std::shared_ptr<ContextShared>;
     Shared shared;
@@ -117,7 +121,6 @@ private:
                             /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
     TableAndCreateASTs external_tables;     /// Temporary tables.
     Tables table_function_results;          /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
-    Context * query_context = nullptr;
     Context * session_context = nullptr;    /// Session context or nullptr. Could be equal to this.
     Context * global_context = nullptr;     /// Global context or nullptr. Could be equal to this.
     SystemLogsPtr system_logs;              /// Used to log queries and operations on parts
@@ -134,6 +137,8 @@ private:
     Context();
 
 public:
+    std::vector<RegionID> invalid_region_ids;
+
     /// Create initial Context with ContextShared and etc.
     static Context createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
     static Context createGlobal();

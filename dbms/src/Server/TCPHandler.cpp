@@ -205,6 +205,8 @@ void TCPHandler::runImpl()
             else
             {
                 state.io = executeQuery(state.query, query_context, false, state.stage);
+                if (query_context.invalid_region_ids.size() > 0)
+                    sendRegionException(query_context.invalid_region_ids);
             }
 
             if (state.io.out)
@@ -229,10 +231,6 @@ void TCPHandler::runImpl()
         {
             state.io.onException();
             lock_infos = std::move(e.lock_infos);
-        }
-        catch (RegionException & e)
-        {
-            sendRegionException(e.region_ids);
         }
         catch (const Exception & e)
         {
@@ -855,8 +853,10 @@ void TCPHandler::sendException(const Exception & e)
 void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
     writeVarUInt(Protocol::Server::RegionException, *out);
     writeVarUInt(region_ids.size(), *out);
-    for (size_t i = 0; i < region_ids.size(); i++)
+    for (size_t i = 0; i < region_ids.size(); i++) {
+        std::cout<<"write error: "<< region_ids[i]<<std::endl;
         writeVarUInt(region_ids[i], *out);
+    }
     out->next();
 }
 

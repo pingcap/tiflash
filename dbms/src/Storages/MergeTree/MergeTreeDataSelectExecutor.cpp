@@ -179,13 +179,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
     std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
 
-    const auto func_throw_retry_region = [&]() {
-        std::vector<RegionID> region_ids;
-        for (size_t region_index = 0; region_index < region_cnt; ++region_index)
-            region_ids.push_back(regions_query_info[region_index].region_id);
-        throw RegionException(region_ids);
-    };
-
     /// If query contains restrictions on the virtual column `_part` or `_part_index`, select only parts suitable for it.
     /// The virtual column `_sample_factor` (which is equal to 1 / used sample rate) can be requested in the query.
     Names virt_column_names;
@@ -345,7 +338,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         size_t mem_region_num = regions_query_info.size();
         ThreadPool pool(std::min(mem_region_num, concurrent_num));
-        std::atomic_bool need_retry = false;
 
         for (size_t region_begin = 0, size = std::max(mem_region_num / concurrent_num, 1); region_begin < mem_region_num;
              region_begin += size)
@@ -354,9 +346,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 for (size_t region_index = region_begin, region_end = std::min(region_begin + size, mem_region_num);
                      region_index < region_end; ++region_index)
                 {
-                    if (need_retry)
-                        return;
-
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
                     auto [block, status]
@@ -371,7 +360,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                                           << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
                                                           << region_query_info.range_in_table.second.toString() << ") , status "
                                                           << RegionTable::RegionReadStatusString(status));
-                        need_retry = true;
                     }
                     else if (block)
                         region_block_data[region_index] = std::move(*block);
@@ -379,9 +367,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             });
         }
         pool.wait();
-
-        if (need_retry)
-            func_throw_retry_region();
 
         auto end_time = Clock::now();
         LOG_DEBUG(log,
@@ -765,12 +750,14 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         auto safe_point = tmt.getPDClient()->getGCSafePoint();
         if (mvcc_query_info.read_tso < safe_point)
-            func_throw_retry_region();
+            throw Exception("read tso: " + std::to_string(mvcc_query_info.read_tso) + " is smaller than safe point : " + std::to_string(safe_point));
 
         const size_t min_marks_for_seek = computeMinMarksForSeek(settings, data);
 
-        for (const auto & region_query_info : regions_query_info)
+        std::vector<size_t> invalid_regions;
+        for (size_t i = 0; i < regions_query_info.size(); i++)
         {
+            const auto & region_query_info = regions_query_info[i];
             // check all data, include special region.
             {
                 auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
@@ -790,11 +777,24 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                                                   << region_query_info.range_in_table.first.toString() << ", "
                                                                   << region_query_info.range_in_table.second.toString() << ") , status "
                                                                   << RegionTable::RegionReadStatusString(status));
-                    // throw exception and exit.
-                    func_throw_retry_region();
+                    invalid_regions.push_back(i);
+                    if ((Int64)i == special_region_index) {
+                        special_region_index = -1;
+                    } else if ((Int64)i < special_region_index) {
+                        special_region_index --;
+                    }
                 }
             }
         }
+
+        std::sort(invalid_regions.begin(), invalid_regions.end());
+        for (Int64 i = invalid_regions.size() - 1; i >= 0; i--) {
+            auto it = regions_query_info.begin() + invalid_regions[i];
+            std::cout<<"push : " << it->region_id << std::endl;
+            context.query_context->invalid_region_ids.push_back(it->region_id);
+            regions_query_info.erase(it);
+        }
+
 
         for (size_t batch_size = region_cnt / concurrent_num, rest = region_cnt % concurrent_num, thread_idx = 0, region_begin = 0,
                     thread_region_size;
