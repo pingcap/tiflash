@@ -762,7 +762,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             {
                 auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
                 RegionTable::RegionReadStatus status = RegionTable::OK;
-                if (region != kvstore_region[region_query_info.region_id])
+                if (region == nullptr || region != kvstore_region[region_query_info.region_id])
                     status = RegionTable::NOT_FOUND;
                 else if (region->version() != region_query_info.version)
                     status = RegionTable::VERSION_ERROR;
