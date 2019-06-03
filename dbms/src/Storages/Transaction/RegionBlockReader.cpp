@@ -184,7 +184,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
                 row.push_back(Field(column.id));
                 // TODO: Fill `zero` value if NOT NULL specified or else NULL. Need checking DEFAULT VALUE too.
-                row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
+                row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column) : Field());
             }
 
             // Remove values of non-existing columns, which could be data inserted (but not flushed) before DDLs that drop some columns.
