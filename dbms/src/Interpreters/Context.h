@@ -370,7 +370,7 @@ public:
     void createTMTContext();
     RaftService & getRaftService();
 
-    void initializeTiDBService(const std::string & service_ip, const std::string & status_port);
+    void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
     TiDBService & getTiDBService();
 
     Clusters & getClusters() const;

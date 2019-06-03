@@ -25,6 +25,11 @@ void dbgFuncSetDeadlineSeconds(Context & context, const ASTs & args, DBGInvoker:
 //   ./storages-client.sh "DBGInvoke raft_insert_row(database_name, table_name, region_id, handle_id, val1, val2, ...)"
 void dbgFuncRaftInsertRow(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+// Write one row of mocked TiDB data with raft command.
+// Usage:
+//   ./storages-client.sh "DBGInvoke raft_insert_row_full(database_name, table_name, region_id, handle_id, tso, del, val1, val2, ...)"
+void dbgFuncRaftInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 // Write batch of rows into mocked TiDB with raft command.
 // Usage:
 //   ./storages-client.sh "DBGInvoke raft_insert_rows(database_name, table_name, thread_num, flush_num, batch_num, min_strlen, max_strlen)"

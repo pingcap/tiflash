@@ -35,7 +35,7 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::
     }
 }
 
-RegionPtr KVStore::getRegion(RegionID region_id)
+RegionPtr KVStore::getRegion(RegionID region_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto it = regions.find(region_id);
@@ -48,14 +48,14 @@ size_t KVStore::regionSize() const
     return regions.size();
 }
 
-void KVStore::traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback)
+void KVStore::traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     for (auto it = regions.begin(); it != regions.end(); ++it)
         callback(it->first, it->second);
 }
 
-void KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
+bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table, const std::optional<UInt64> expect_old_index)
 {
     {
         std::lock_guard<std::mutex> lock(task_mutex);
@@ -64,12 +64,23 @@ void KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
         RegionPtr old_region = getRegion(region_id);
         if (old_region != nullptr)
         {
-            LOG_DEBUG(log, "KVStore::onSnapshot: previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+            UInt64 old_index = old_region->getProbableIndex();
 
-            if (old_region->getProbableIndex() >= new_region->getProbableIndex())
+            // in test, may not need expect_old_index.
+            if (expect_old_index.has_value())
             {
-                LOG_DEBUG(log, "KVStore::onSnapshot: discard new region because of index is outdated");
-                return;
+                if (old_index != *expect_old_index)
+                {
+                    LOG_WARNING(log, "KVStore::onSnapshot " << old_region->toString(true) << " changed during applying snapshot");
+                    return false;
+                }
+            }
+
+            LOG_DEBUG(log, "KVStore::onSnapshot previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
+            if (old_index >= new_region->getProbableIndex())
+            {
+                LOG_INFO(log, "KVStore::onSnapshot discard new region because of index is outdated");
+                return false;
             }
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
@@ -82,8 +93,9 @@ void KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
 
         if (new_region->isPendingRemove())
         {
+            LOG_INFO(log, "KVStore::onSnapshot region " << region_id << " is pending remove, remove it");
             removeRegion(region_id, region_table);
-            return;
+            return true;
         }
     }
 
@@ -92,27 +104,28 @@ void KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
     if (region_table)
         region_table->applySnapshotRegion(new_region);
+
+    return true;
 }
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
 {
-    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().region_table) : nullptr;
+    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().getRegionTableMut()) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
 
     const auto report_region_destroy = [&](RegionID region_id) {
-        auto & resp = *(responseBatch.mutable_responses()->Add());
+        auto & resp = *(responseBatch.add_responses());
         resp.mutable_header()->set_region_id(region_id);
         resp.mutable_header()->set_destroyed(true);
     };
+
+    std::lock_guard<std::mutex> lock(task_mutex);
 
     for (const auto & cmd : cmds.requests())
     {
         auto & header = cmd.header();
         auto curr_region_id = header.region_id();
-
-        std::lock_guard<std::mutex> lock(task_mutex);
-
         RegionPtr curr_region;
         {
             std::lock_guard<std::mutex> lock(mutex);
@@ -141,7 +154,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
 
         RaftCommandResult result = curr_region->onCommand(cmd);
 
-        const auto region_report = [&]() { *(responseBatch.mutable_responses()->Add()) = curr_region->toCommandResponse(); };
+        const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region->toCommandResponse(); };
 
         const auto report_sync_log = [&]() {
             if (result.sync_log)
@@ -229,27 +242,28 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
 
 void KVStore::report(RaftContext & raft_ctx)
 {
-    std::lock_guard<std::mutex> lock(mutex);
-
-    if (regions.empty())
-        return;
+    std::lock_guard<std::mutex> lock(task_mutex);
 
     enginepb::CommandResponseBatch responseBatch;
-    for (const auto & p : regions)
-        *(responseBatch.mutable_responses()->Add()) = p.second->toCommandResponse();
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        if (regions.empty())
+            return;
+
+        for (const auto & p : regions)
+            *(responseBatch.add_responses()) = p.second->toCommandResponse();
+    }
+
     raft_ctx.send(responseBatch);
 }
 
-bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
+bool KVStore::tryPersistAndReport(RaftContext &, const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
 {
     Timepoint now = Clock::now();
     if (now < (last_try_persist_time.load() + kvstore_try_persist_period))
         return false;
     last_try_persist_time = now;
-
-    bool persist_job = false;
-
-    enginepb::CommandResponseBatch responseBatch;
 
     RegionMap all_region_copy;
     traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
@@ -261,23 +275,20 @@ bool KVStore::tryPersistAndReport(RaftContext & context, const Seconds kvstore_t
     });
 
     std::stringstream ss;
+    bool persist_job = false;
 
     for (auto && [region_id, region] : all_region_copy)
     {
         persist_job = true;
 
-        auto response = responseBatch.mutable_responses()->Add();
-
-        region_persister.persist(region, response);
+        region_persister.persist(region);
 
         ss << region_id << ",";
     }
 
     if (persist_job)
     {
-        LOG_DEBUG(log, "Regions ( " << ss.str() << ") report status");
-        LOG_DEBUG(log, "Batch report regions status");
-        context.send(responseBatch);
+        LOG_DEBUG(log, "Regions ( " << ss.str() << ") are persisted");
     }
 
     bool gc_job = region_persister.gc();

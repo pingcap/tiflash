@@ -30,5 +30,10 @@
 │    1204 │
 └─────────┘
 
+=> selraw nokvstore count(*) from default.test
+┌─count()─┐
+│       0 │
+└─────────┘
+
 => drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)

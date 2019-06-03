@@ -31,6 +31,18 @@ void TMTContext::restore()
     initialized = true;
 }
 
+KVStorePtr & TMTContext::getKVStoreMut() { return kvstore; }
+
+const KVStorePtr & TMTContext::getKVStore() const { return kvstore; }
+
+TMTStorages & TMTContext::getStoragesMut() { return storages; }
+
+const TMTStorages & TMTContext::getStorages() const { return storages; }
+
+RegionTable & TMTContext::getRegionTableMut() { return region_table; }
+
+const RegionTable & TMTContext::getRegionTable() const { return region_table; }
+
 bool TMTContext::isInitialized() const { return initialized; }
 
 SchemaSyncerPtr TMTContext::getSchemaSyncer() const

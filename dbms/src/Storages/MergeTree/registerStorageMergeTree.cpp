@@ -590,6 +590,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         {
             secondary_sorting_expr_list = std::make_shared<ASTExpressionList>();
             secondary_sorting_expr_list->children.push_back(ASTPtr(new ASTIdentifier(MutableSupport::version_column_name)));
+            secondary_sorting_expr_list->children.push_back(ASTPtr(new ASTIdentifier(MutableSupport::delmark_column_name)));
         }
     }
     else if (merging_params.mode == MergeTreeData::MergingParams::Summing)

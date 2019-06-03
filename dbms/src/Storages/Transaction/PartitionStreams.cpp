@@ -21,7 +21,7 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
     RegionDataReadInfoList & data_list_for_remove)
 {
     return getBlockInputStreamByRegion(table_id,
-        tmt.kvstore->getRegion(region_id),
+        tmt.getKVStore()->getRegion(region_id),
         InvalidRegionVersion,
         InvalidRegionVersion,
         table_info,
@@ -57,6 +57,12 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
 
     {
         RegionDataReadInfoList data_list;
+        const auto [table_info, columns, ordered_columns] = schema_fetcher(table_id);
+
+        bool need_value = true;
+
+        if (ordered_columns->size() == 3)
+            need_value = false;
 
         {
             auto scanner = region->createCommittedScanner(table_id);
@@ -83,11 +89,10 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
 
             do
             {
-                data_list.emplace_back(scanner->next());
+                data_list.emplace_back(scanner->next(need_value));
             } while (scanner->hasNext());
         }
 
-        const auto [table_info, columns, ordered_columns] = schema_fetcher(table_id);
         auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, data_list);
 
         if (data_list_for_remove)

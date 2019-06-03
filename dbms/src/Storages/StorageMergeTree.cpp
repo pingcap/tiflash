@@ -89,7 +89,7 @@ void StorageMergeTree::startup()
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.storages.put(shared_from_this());
+        tmt.getStoragesMut().put(shared_from_this());
     }
 
     merge_task_handle = background_pool.addTask([this] { return mergeTask(); });
@@ -114,7 +114,7 @@ void StorageMergeTree::shutdown()
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext &tmt_context = context.getTMTContext();
-        tmt_context.storages.remove(data.table_info->id);
+        tmt_context.getStoragesMut().remove(data.table_info->id);
     }
 }
 
@@ -523,7 +523,7 @@ bool StorageMergeTree::merge(
     try
     {
         new_part = merger.mergePartsToTemporaryPart(future_part, *merge_entry, aio_threshold, time(nullptr),
-                                                    merging_tagger->reserved_space.get(), deduplicate);
+                                                    merging_tagger->reserved_space.get(), deduplicate, final);
         merger.renameMergedTemporaryPart(new_part, future_part.parts, nullptr);
 
         write_part_log({});

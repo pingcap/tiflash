@@ -1,5 +1,6 @@
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/MockTiKV.h>
 #include <Debug/dbgFuncRegion.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/executeQuery.h>
@@ -66,7 +67,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.kvstore->onSnapshot(region, &tmt.region_table);
+    tmt.getKVStoreMut()->onSnapshot(region, &tmt.getRegionTableMut());
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -77,10 +78,95 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    tmt.region_table.tryFlushRegions();
+    tmt.getRegionTableMut().tryFlushRegions();
 
     std::stringstream ss;
     ss << "region_table try flush regions";
+    output(ss.str());
+}
+
+void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 3)
+    {
+        throw Exception("Args not matched, should be: database-name, table-name, region-id", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+
+    TableID table_id = getTableID(context, database_name, table_name, "");
+
+    TMTContext & tmt = context.getTMTContext();
+    tmt.getRegionTableMut().tryFlushRegion(table_id, region_id);
+
+    std::stringstream ss;
+    ss << "region_table try flush table " << table_id << " region " << region_id;
+    output(ss.str());
+}
+
+void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    HandleID start = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+
+    TableID table_id = getTableID(context, database_name, table_name, "");
+    RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
+
+    auto args_begin = args.begin() + 5;
+    auto args_end = args.end();
+
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+    const size_t len = table->table_info.columns.size() + 3;
+
+    if ((args_end - args_begin) % len)
+        throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
+
+    TMTContext & tmt = context.getTMTContext();
+    size_t cnt = 0;
+
+    for (auto it = args_begin; it != args_end; it += len)
+    {
+        HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value);
+        Timestamp tso = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
+        UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[2]).value);
+        {
+            std::vector<Field> fields;
+
+            for (auto p = it + 3; p != it + len; ++p)
+            {
+                auto field = typeid_cast<const ASTLiteral *>((*p).get())->value;
+                fields.emplace_back(field);
+            }
+
+            TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
+            TiKVValue value = RecordKVFormat::EncodeRow(table->table_info, fields);
+            UInt64 commit_ts = tso;
+            UInt64 prewrite_ts = tso;
+            TiKVValue commit_value;
+
+            if (del)
+                commit_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts);
+            else
+                commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value);
+
+            TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
+
+            region->insert(Region::write_cf_name, commit_key, commit_value);
+        }
+        ++cnt;
+        MockTiKV::instance().getRaftIndex(region_id);
+    }
+
+    applySnapshot(tmt.getKVStore(), region, &context);
+
+    std::stringstream ss;
+    ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
+       << " to table #" << table_id << " with " << cnt << " records";
     output(ss.str());
 }
 
@@ -118,6 +204,8 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 
     *(req.mutable_state()->mutable_apply_state()) = initialApplyState();
 
+    (req.mutable_state()->mutable_apply_state())->set_applied_index(MockTiKV::instance().getRaftIndex(region_id));
+
     // TODO: Put data into snapshot cmd
 
     auto reader = [&](enginepb::SnapshotRequest * out) {
@@ -127,7 +215,7 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
         is_readed = true;
         return true;
     };
-    applySnapshot(tmt.kvstore, reader, &context);
+    applySnapshot(tmt.getKVStore(), reader, &context);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -202,7 +290,7 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         ignore_none = (std::string(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
 
     size_t size = 0;
-    tmt.kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+    tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
         auto range = region->getHandleRangeByTable(table_id);
         size += 1;
@@ -220,54 +308,6 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         output(ss.str());
     });
     output("total size: " + toString(size));
-}
-
-void dbgFuncDumpRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() > 1)
-    {
-        throw Exception("Args not matched, should be: [show-region-range=false]", ErrorCodes::BAD_ARGUMENTS);
-    }
-
-    bool show_region = false;
-    if (args.size() > 0)
-        show_region = (std::string(typeid_cast<const ASTIdentifier &>(*args[0]).name) == "true");
-
-    auto & tmt = context.getTMTContext();
-
-    RegionTable::RegionInfoMap regions;
-    tmt.region_table.dumpRegionInfoMap(regions);
-
-    for (const auto & it : regions)
-    {
-        auto region_id = it.first;
-        const auto & table_ids = it.second.tables;
-        for (const auto table_id : table_ids)
-        {
-            std::stringstream region_range_info;
-            if (show_region)
-            {
-                region_range_info << " (";
-                RegionPtr region = tmt.kvstore->getRegion(region_id);
-                if (!region)
-                {
-                    region_range_info << "not in kvstore";
-                }
-                else
-                {
-                    auto [start_key, end_key] = region->getRange();
-                    region_range_info << getStartKeyString(table_id, start_key);
-                    region_range_info << ", ";
-                    region_range_info << getEndKeyString(table_id, end_key);
-                    region_range_info << ")";
-                }
-            }
-
-            std::stringstream ss;
-            ss << "table #" << table_id << " region #" << region_id << region_range_info.str();
-            output(ss.str());
-        }
-    }
 }
 
 } // namespace DB

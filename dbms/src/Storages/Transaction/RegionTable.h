@@ -117,7 +117,7 @@ public:
         using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
 
         FlushThresholdsData data;
-        std::mutex mutex;
+        mutable std::mutex mutex;
 
         FlushThresholds(const FlushThresholdsData & data_) { data = data_; }
         FlushThresholds(FlushThresholdsData && data_) { data = std::move(data_); }
@@ -128,14 +128,14 @@ public:
             data = flush_thresholds_;
         }
 
-        const FlushThresholdsData & getData()
+        const FlushThresholdsData & getData() const
         {
             std::lock_guard<std::mutex> lock(mutex);
             return data;
         }
 
         template <typename T>
-        T traverse(std::function<T(const FlushThresholdsData & data)> && f)
+        T traverse(std::function<T(const FlushThresholdsData & data)> && f) const
         {
             std::lock_guard<std::mutex> lock(mutex);
             return f(data);
@@ -166,7 +166,7 @@ private:
     /// Note that region update range should not affect the data in storage.
     void updateRegionRange(const RegionPtr & region, TableIDSet & table_to_persist);
 
-    bool shouldFlush(const InternalRegion & region);
+    bool shouldFlush(const InternalRegion & region) const;
 
     void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
 
@@ -199,6 +199,8 @@ public:
     /// Returns whether this function has done any meaningful job.
     bool tryFlushRegions();
 
+    bool tryFlushRegion(TableID table_id, RegionID region_id);
+
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback);
@@ -222,8 +224,6 @@ public:
         bool resolve_locks,
         Timestamp start_ts,
         RegionDataReadInfoList * data_list_for_remove = nullptr);
-
-    void dumpRegionInfoMap(RegionTable::RegionInfoMap & res) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

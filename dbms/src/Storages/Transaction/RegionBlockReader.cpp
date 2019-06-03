@@ -53,17 +53,9 @@ static const Field GenDecodeRow(const TiDB::ColumnInfo & col_info)
     }
 }
 
-Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns_,
+Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns,
     RegionDataReadInfoList & data_list)
 {
-    // Note: this code below is mostly ported from RegionBlockInputStream.
-    Names ordered_columns = ordered_columns_;
-    if (ordered_columns_.empty())
-    {
-        for (const auto & col : columns.ordinary)
-            ordered_columns.push_back(col.name);
-    }
-
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 
@@ -130,13 +122,25 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
     for (const auto & [handle, write_type, commit_ts, value] : data_list)
     {
-        if (write_type == Region::PutFlag || write_type == Region::DelFlag)
+        std::ignore = value;
+
+        delmark_data.emplace_back(write_type == Region::DelFlag);
+        version_data.emplace_back(commit_ts);
+        if (pk_is_uint64)
+            column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
+        else
+            column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
+    }
+
+    /// optimize for only need handle, tso, delmark.
+    if (ordered_columns.size() > 3)
+    {
+        for (const auto & [handle, write_type, commit_ts, value] : data_list)
         {
+            std::ignore = commit_ts;
+            std::ignore = handle;
 
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
-
-            delmark_data.emplace_back(write_type == Region::DelFlag);
-            version_data.emplace_back(commit_ts);
 
             std::vector<Field> row;
 
@@ -164,27 +168,40 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
             if (row.size() & 1)
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
-            if (row.size() != target_row_size)
+            /// Modify `row` by adding missing column values or removing useless column values.
+
+            col_id_included.clear();
+            for (size_t i = 0; i < row.size(); i += 2)
+                col_id_included.emplace(row[i].get<ColumnID>());
+
+            // Fill in missing column values.
+            for (const TiDB::ColumnInfo & column : table_info.columns)
             {
-                col_id_included.clear();
+                if (handle_col_id == column.id)
+                    continue;
+                if (col_id_included.count(column.id))
+                    continue;
 
-                for (size_t i = 0; i < row.size(); i += 2)
-                    col_id_included.emplace(row[i].get<ColumnID>());
-
-                for (const TiDB::ColumnInfo & column : table_info.columns)
-                {
-                    if (handle_col_id == column.id)
-                        continue;
-                    if (col_id_included.count(column.id))
-                        continue;
-
-                    row.push_back(Field(column.id));
-                    row.push_back(Field());
-                }
-
-                if (row.size() != target_row_size)
-                    throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
+                row.push_back(Field(column.id));
+                // TODO: Fill `zero` value if NOT NULL specified or else NULL. Need checking DEFAULT VALUE too.
+                row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
             }
+
+            // Remove values of non-existing columns, which could be data inserted (but not flushed) before DDLs that drop some columns.
+            // TODO: May need to log this.
+            for (int i = int(row.size()) - 2; i >= 0; i -= 2)
+            {
+                Field & col_id = row[i];
+                if (column_map.find(col_id.get<ColumnID>()) == column_map.end())
+                {
+                    row.erase(row.begin() + i, row.begin() + i + 2);
+                }
+            }
+
+            if (row.size() != target_row_size)
+                throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
+
+            /// Transform `row` to columnar format.
 
             for (size_t i = 0; i < row.size(); i += 2)
             {
@@ -231,11 +248,6 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     it->second.first->insert(row[i + 1]);
                 }
             }
-
-            if (pk_is_uint64)
-                column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
-            else
-                column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
         }
     }
 

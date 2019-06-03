@@ -1,14 +1,14 @@
 #pragma once
 
-#include <common/logger_useful.h>
-
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <Storages/Transaction/TiKVHandle.h>
+#include <common/logger_useful.h>
+#include <Core/TMTSortCursor.hpp>
 
 namespace DB
 {
 
-// operation merge is optimized because pk is definite integer
+// bottleneck is about memory copy and io
 template <typename HandleType>
 class ReplacingTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
@@ -23,8 +23,12 @@ public:
         const String & pk_column,
         const size_t max_block_size_,
         const UInt64 gc_tso_,
-        const TableID table_id_)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL), gc_tso(gc_tso_), table_id(table_id_)
+        const TableID table_id_,
+        bool final_)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, NULL),
+          gc_tso(gc_tso_),
+          table_id(table_id_),
+          final(final_)
     {
         {
             begin_handle_ranges.resize(ranges_.size());
@@ -44,17 +48,18 @@ public:
 
 protected:
     Block readImpl() override;
+    void initQueue() override;
 
 private:
-    void merge(MutableColumns & merged_columns, std::priority_queue<SortCursor> & queue);
+    void merge(MutableColumns & merged_columns);
     void insertRow(MutableColumns &, size_t &);
 
-    bool shouldOutput();
+    bool shouldOutput(const TMTCmpOptimizedRes res);
     bool behindGcTso();
-    bool nextHasDiffPk();
     bool isDefiniteDeleted();
+    bool hasDeleteFlag();
 
-    void logRowGoing(const std::string & reason, bool is_output);
+    void logRowGoing(const char * reason, bool is_output);
 
 private:
     std::vector<Handle> begin_handle_ranges;
@@ -75,6 +80,12 @@ private:
     size_t deleted_by_range;
     UInt64 gc_tso;
     TableID table_id;
+
+    bool final;
+
+    using TMTSortCursorFull = TMTSortCursor<false>;
+    using TMTQueue = std::priority_queue<TMTSortCursorFull>;
+    TMTQueue tmt_queue;
 };
 
 } // namespace DB

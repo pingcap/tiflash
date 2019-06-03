@@ -17,7 +17,7 @@ public:
 
     uint64_t getGCSafePoint() override
     {
-        return (Clock::now() - Seconds(60 * 60)).time_since_epoch().count();
+        return (Clock::now() - Seconds(2)).time_since_epoch().count();
     }
 
     uint64_t getTS() override

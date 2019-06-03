@@ -347,7 +347,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         String service_ip = config().getString("tidb.service_ip");
         String status_port = config().getString("tidb.status_port");
-        global_context->initializeTiDBService(service_ip, status_port);
+        std::unordered_set<std::string> ignore_databases;
+        if (config().has("tidb.ignore_databases"))
+        {
+            String ignore_dbs = config().getString("tidb.ignore_databases");
+            Poco::StringTokenizer string_tokens(ignore_dbs, ",");
+            std::stringstream ss;
+            for (const auto & string_token : string_tokens) {
+                ignore_databases.emplace(string_token);
+                ss << string_token << std::endl;
+            }
+            LOG_INFO(log, "Found ignore databases:\n" << ss.str());
+        }
+        global_context->initializeTiDBService(service_ip, status_port, ignore_databases);
     }
 
     {
