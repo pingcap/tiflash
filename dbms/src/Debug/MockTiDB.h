@@ -69,7 +69,7 @@ public:
         {
             return MockTiDB::instance().getSchemaJson(table_id);
         }
-        String getSchemaJsonByName(std::string & database_name, std::string & table_name, Context & context) override
+        String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override
         {
             std::ignore = database_name;
             std::ignore = table_name;

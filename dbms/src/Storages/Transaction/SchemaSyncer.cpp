@@ -34,7 +34,7 @@ class Curl final : public ext::singleton<Curl>
 {
 public:
     String getTiDBTableInfoJson(TableID table_id, Context & context);
-    String getTiDBTableInfoJson(std::string & database_name, std::string & table_name, Context & context);
+    String getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context);
 
 private:
     Curl();
@@ -89,7 +89,7 @@ String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
     return result;
 }
 
-String Curl::getTiDBTableInfoJson(std::string & database_name, std::string & table_name, Context & context)
+String Curl::getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context)
 {
     auto & tidb_service = context.getTiDBService();
 
@@ -128,7 +128,7 @@ String Curl::getTiDBTableInfoJson(std::string & database_name, std::string & tab
 
 String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context) { return Curl::instance().getTiDBTableInfoJson(table_id, context); }
 
-String getTiDBTableInfoJsonByCurl(std::string & database_name, std::string & table_name, Context & context) { return Curl::instance().getTiDBTableInfoJson(database_name, table_name, context); }
+String getTiDBTableInfoJsonByCurl(const std::string & database_name, const std::string & table_name, Context & context) { return Curl::instance().getTiDBTableInfoJson(database_name, table_name, context); }
 
 using TableInfo = TiDB::TableInfo;
 using ColumnInfo = TiDB::ColumnInfo;
@@ -433,7 +433,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     // TODO: Apply schema changes to partition tables.
 }
 
-int JsonSchemaSyncer::getTableIdByName(std::string & database_name, std::string & table_name, Context & context)
+int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context)
 {
     String table_info_json = getSchemaJsonByName(database_name, table_name, context);
     if (table_info_json.empty())
@@ -470,6 +470,6 @@ int JsonSchemaSyncer::getTableIdByName(std::string & database_name, std::string 
 
 String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }
 
-String HttpJsonSchemaSyncer::getSchemaJsonByName(std::string & database_name, std::string & table_name, Context & context) { return getTiDBTableInfoJsonByCurl(database_name, table_name, context); }
+String HttpJsonSchemaSyncer::getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) { return getTiDBTableInfoJsonByCurl(database_name, table_name, context); }
 
 } // namespace DB

@@ -24,7 +24,7 @@ public:
      */
     virtual void syncSchema(TableID table_id, Context & context, bool force) = 0;
 
-    virtual int getTableIdByName(std::string & database_name, std::string & table_name, Context & context) = 0;
+    virtual int getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
@@ -37,11 +37,11 @@ public:
 
     void syncSchema(TableID table_id, Context & context, bool force) override;
 
-    int getTableIdByName(std::string & database_name, std::string & table_name, Context & context) override;
+    int getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) override;
 
 protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;
-    virtual String getSchemaJsonByName(std::string & database_name, std::string & table_name, Context & context) = 0;
+    virtual String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) = 0;
 
 protected:
     std::unordered_set<TableID> ignored_tables;
@@ -54,7 +54,7 @@ class HttpJsonSchemaSyncer : public JsonSchemaSyncer
 {
 protected:
     String getSchemaJson(TableID table_id, Context & context) override;
-    String getSchemaJsonByName(std::string & database_name, std::string & table_name, Context & context) override;
+    String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override;
 };
 
 } // namespace DB
