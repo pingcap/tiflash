@@ -16,6 +16,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 using GenPageId = std::function<PageId()>;
 
@@ -210,4 +212,5 @@ private:
     size_t           cache_chunks = 0;
 };
 
+} // namespace DM
 } // namespace DB

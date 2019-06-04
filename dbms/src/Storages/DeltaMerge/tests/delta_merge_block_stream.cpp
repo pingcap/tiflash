@@ -20,6 +20,7 @@
 #include <Storages/StorageMemory.h>
 
 using namespace DB;
+using namespace DB::DM;
 
 //using MyValueSpacePtr = std::shared_ptr<MemoryValueSpace>;
 //using MyDeltaTree     = DeltaTree<MemoryValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
@@ -116,7 +117,7 @@ void deltaTreeInsertTest(Context context)
 
     MyValueSpacePtr insert_value_space = std::make_shared<MemoryValueSpace>("insert_value_space", names_and_types_list, SortDescription{});
     MyValueSpacePtr modify_value_space = std::make_shared<MemoryValueSpace>("modify_value_space", names_and_types_list, SortDescription{});
-    MyDeltaTreePtr  delta_tree         = std::make_shared<DefaultDeltaTree>(insert_value_space, modify_value_space);
+    MyDeltaTreePtr  delta_tree         = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
     Ids id_vec = insert_value_space->addFromInsert(sample2);
     for (unsigned int i = 0; i < id_vec.size(); i++)
@@ -124,7 +125,7 @@ void deltaTreeInsertTest(Context context)
         delta_tree->addInsert(2 * i + 1, id_vec[i]);
     }
 
-    DeltaMergeBlockInputStream dms(in, delta_tree, 8192);
+    DummyDeltaMergeBlockInputStream dms(in, delta_tree, 8192);
 
     dms.readPrefix();
 
@@ -213,7 +214,7 @@ void deltaTreeUpdateTest(Context context)
 
     MyValueSpacePtr insert_value_space = std::make_shared<MemoryValueSpace>("insert_value_space", names_and_types_list, SortDescription{});
     MyValueSpacePtr modify_value_space = std::make_shared<MemoryValueSpace>("modify_value_space", names_and_types_list, SortDescription{});
-    MyDeltaTreePtr  delta_tree         = std::make_shared<DefaultDeltaTree>(insert_value_space, modify_value_space);
+    MyDeltaTreePtr  delta_tree         = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
     RefTuples rts = insert_value_space->addFromModify(sample2);
     for (unsigned int i = 0; i < rts.size(); i++)
@@ -223,7 +224,7 @@ void deltaTreeUpdateTest(Context context)
 
     //std::cout << treeToString(delta_tree) << std::endl;
 
-    DeltaMergeBlockInputStream dms(in, delta_tree, 8192);
+    DummyDeltaMergeBlockInputStream dms(in, delta_tree, 8192);
 
     dms.readPrefix();
 
@@ -291,14 +292,14 @@ void deltaTreeDeleteTest(Context context)
 
     MyValueSpacePtr insert_value_space = std::make_shared<MemoryValueSpace>("insert_value_space", names_and_types_list, SortDescription{});
     MyValueSpacePtr modify_value_space = std::make_shared<MemoryValueSpace>("modify_value_space", names_and_types_list, SortDescription{});
-    MyDeltaTreePtr  delta_tree         = std::make_shared<DefaultDeltaTree>(insert_value_space, modify_value_space);
+    MyDeltaTreePtr  delta_tree         = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
     for (unsigned int i = 0; i < 50; i++)
     {
         delta_tree->addDelete(0);
     }
 
-    DeltaMergeBlockInputStream dms(in, delta_tree, 8192);
+    DummyDeltaMergeBlockInputStream dms(in, delta_tree, 8192);
 
     dms.readPrefix();
 
@@ -372,7 +373,7 @@ void deltaTreeOutputInsertTest(Context context)
     output->write(sample);
     output->writeSuffix();
 
-    DeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
+    DummyDeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
         auto stage = QueryProcessingStage::Enum::FetchColumns;
         return storage->read(column_names, {}, context, stage, 8192, 1)[0];
     };
@@ -382,12 +383,12 @@ void deltaTreeOutputInsertTest(Context context)
 
     MyValueSpacePtr insert_value_space = std::make_shared<MemoryValueSpace>("insert_value_space", names_and_types_list, sd);
     MyValueSpacePtr modify_value_space = std::make_shared<MemoryValueSpace>("modify_value_space", names_and_types_list, sd);
-    MyDeltaTreePtr  delta_tree         = std::make_shared<DefaultDeltaTree>(insert_value_space, modify_value_space);
+    MyDeltaTreePtr  delta_tree         = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
     BlockOutputStreamPtr delta_output_stream
-        = std::make_shared<DeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Insert, sd, []() {}, 10000);
+        = std::make_shared<DummyDeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Insert, sd, []() {}, 10000);
 
-    // data write through DeltaMergeBlockOutputStream
+    // data write through DummyDeltaMergeBlockOutputStream
     Block                 sample_delta;
     ColumnWithTypeAndName col1_delta;
     col1_delta.name                     = "col1";
@@ -418,7 +419,7 @@ void deltaTreeOutputInsertTest(Context context)
 
     QueryProcessingStage::Enum stage2;
     BlockInputStreamPtr        in = storage->read(column_names, {}, context, stage2, 8192, 1)[0];
-    DeltaMergeBlockInputStream dms(in, delta_tree, 8192);
+    DummyDeltaMergeBlockInputStream dms(in, delta_tree, 8192);
 
     dms.readPrefix();
 
@@ -500,7 +501,7 @@ void deltaTreeOutputUpsertTest(Context context)
     output->write(sample);
     output->writeSuffix();
 
-    DeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
+    DummyDeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
         auto stage = QueryProcessingStage::Enum::FetchColumns;
         return storage->read(column_names, {}, context, stage, 8192, 1)[0];
     };
@@ -510,12 +511,12 @@ void deltaTreeOutputUpsertTest(Context context)
 
     MyValueSpacePtr insert_value_space = std::make_shared<MemoryValueSpace>("insert_value_space", names_and_types_list, sd);
     MyValueSpacePtr modify_value_space = std::make_shared<MemoryValueSpace>("modify_value_space", names_and_types_list, sd);
-    MyDeltaTreePtr  delta_tree         = std::make_shared<DefaultDeltaTree>(insert_value_space, modify_value_space);
+    MyDeltaTreePtr  delta_tree         = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
     BlockOutputStreamPtr delta_output_stream
-        = std::make_shared<DeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Upsert, sd, []() {}, 10000);
+        = std::make_shared<DummyDeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Upsert, sd, []() {}, 10000);
 
-    // data write through DeltaMergeBlockOutputStream
+    // data write through DummyDeltaMergeBlockOutputStream
     Block                 sample_delta;
     ColumnWithTypeAndName col1_delta;
     col1_delta.name                     = "col1";
@@ -546,7 +547,7 @@ void deltaTreeOutputUpsertTest(Context context)
 
     QueryProcessingStage::Enum stage2;
     BlockInputStreamPtr        in = storage->read(column_names, {}, context, stage2, 8192, 1)[0];
-    DeltaMergeBlockInputStream dms(in, delta_tree, 8192);
+    DummyDeltaMergeBlockInputStream dms(in, delta_tree, 8192);
 
     dms.readPrefix();
 
@@ -628,7 +629,7 @@ void deltaTreeOutputDeleteTest(Context context)
     output->write(sample);
     output->writeSuffix();
 
-    DeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
+    DummyDeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
         auto stage = QueryProcessingStage::Enum::FetchColumns;
         return storage->read(column_names, {}, context, stage, 8192, 1)[0];
     };
@@ -638,12 +639,12 @@ void deltaTreeOutputDeleteTest(Context context)
 
     MyValueSpacePtr insert_value_space = std::make_shared<MemoryValueSpace>("insert_value_space", names_and_types_list, sd);
     MyValueSpacePtr modify_value_space = std::make_shared<MemoryValueSpace>("modify_value_space", names_and_types_list, sd);
-    MyDeltaTreePtr  delta_tree         = std::make_shared<DefaultDeltaTree>(insert_value_space, modify_value_space);
+    MyDeltaTreePtr  delta_tree         = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
     BlockOutputStreamPtr delta_output_stream
-        = std::make_shared<DeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Delete, sd, []() {}, 10000);
+        = std::make_shared<DummyDeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Delete, sd, []() {}, 10000);
 
-    // data write through DeltaMergeBlockOutputStream
+    // data write through DummyDeltaMergeBlockOutputStream
     Block                 sample_delta;
     ColumnWithTypeAndName col1_delta;
     col1_delta.name                     = "col1";
@@ -674,7 +675,7 @@ void deltaTreeOutputDeleteTest(Context context)
 
     QueryProcessingStage::Enum stage2;
     BlockInputStreamPtr        in = storage->read(column_names, {}, context, stage2, 8192, 1)[0];
-    DeltaMergeBlockInputStream dms(in, delta_tree, 8192);
+    DummyDeltaMergeBlockInputStream dms(in, delta_tree, 8192);
 
     dms.readPrefix();
 
@@ -756,7 +757,7 @@ void deltaTreeOutputUpdateTest(Context context)
     output->write(sample);
     output->writeSuffix();
 
-    DeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
+    DummyDeltaMergeBlockOutputStream::InputStreamCreator input_stream_creator = [storage, column_names, context]() {
         auto stage = QueryProcessingStage::Enum::FetchColumns;
         return storage->read(column_names, {}, context, stage, 8192, 1)[0];
     };
@@ -766,12 +767,12 @@ void deltaTreeOutputUpdateTest(Context context)
 
     MyValueSpacePtr insert_value_space = std::make_shared<MemoryValueSpace>("insert_value_space", names_and_types_list, sd);
     MyValueSpacePtr modify_value_space = std::make_shared<MemoryValueSpace>("modify_value_space", names_and_types_list, sd);
-    MyDeltaTreePtr  delta_tree         = std::make_shared<DefaultDeltaTree>(insert_value_space, modify_value_space);
+    MyDeltaTreePtr  delta_tree         = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
     BlockOutputStreamPtr delta_output_stream
-        = std::make_shared<DeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Update, sd, []() {}, 10000);
+        = std::make_shared<DummyDeltaMergeBlockOutputStream>(input_stream_creator, delta_tree, Action::Update, sd, []() {}, 10000);
 
-    // data write through DeltaMergeBlockOutputStream
+    // data write through DummyDeltaMergeBlockOutputStream
     Block                 sample_delta;
     ColumnWithTypeAndName col1_delta;
     col1_delta.name                     = "col1";
@@ -802,7 +803,7 @@ void deltaTreeOutputUpdateTest(Context context)
 
     QueryProcessingStage::Enum stage2;
     BlockInputStreamPtr        in = storage->read(column_names, {}, context, stage2, 8192, 1)[0];
-    DeltaMergeBlockInputStream dms(in, delta_tree, 8192);
+    DummyDeltaMergeBlockInputStream dms(in, delta_tree, 8192);
 
     dms.readPrefix();
 

@@ -18,6 +18,9 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+namespace DM
+{
+
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
                                  const String &        name,
@@ -292,4 +295,5 @@ void DeltaMergeStore::merge(DMContext & dm_context, SegmentPtr left, SegmentPtr 
     segments[right_range.end] = left;
 }
 
+} // namespace DM
 } // namespace DB
