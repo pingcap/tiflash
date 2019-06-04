@@ -16,6 +16,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 enum class Action : UInt8
 {
@@ -25,9 +27,9 @@ enum class Action : UInt8
     Update = 4
 };
 
-inline int compareTuple(const MyValueSpacePtr &   left,
+inline int compareTuple(const MyValueSpacePtr & left,
                         size_t                  l_pos,
-                        const MyValueSpacePtr &   right,
+                        const MyValueSpacePtr & right,
                         size_t                  r_pos,
                         const SortDescription & sort_desc,
                         const Ids &             vs_column_offsets)
@@ -396,4 +398,6 @@ private:
 
     Logger * log;
 };
+
+} // namespace DM
 } // namespace DB

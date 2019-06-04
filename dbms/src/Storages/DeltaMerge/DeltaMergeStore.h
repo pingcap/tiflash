@@ -11,6 +11,9 @@
 namespace DB
 {
 
+namespace DM
+{
+
 static constexpr size_t DELTA_MERGE_DEFAULT_SEGMENT_ROWS = DEFAULT_BLOCK_SIZE << 6;
 static const PageId     DELTA_MERGE_FIRST_SEGMENT_ID     = 1;
 
@@ -104,4 +107,5 @@ private:
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
+} // namespace DM
 } // namespace DB
