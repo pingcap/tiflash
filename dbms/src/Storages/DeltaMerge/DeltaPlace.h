@@ -15,6 +15,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 inline int compareTuple(const Columns & left, size_t l_pos, const Columns & right, size_t r_pos, const SortDescription & sort_desc)
 {
@@ -237,4 +239,5 @@ void placeDelete(const BlockInputStreamPtr & stable, //
     }
 }
 
+} // namespace DM
 } // namespace DB
