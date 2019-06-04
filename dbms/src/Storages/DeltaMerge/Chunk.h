@@ -3,8 +3,8 @@
 #include <optional>
 
 #include <IO/CompressedStream.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
@@ -14,7 +14,10 @@
 
 namespace DB
 {
+namespace DM
+{
 static constexpr size_t CHUNK_SERIALIZE_BUFFER_SIZE = 65536;
+
 
 // TODO: version des/ser
 struct ColumnMeta
@@ -145,4 +148,6 @@ inline Chunks deserializeChunks(ReadBuffer & buf)
         chunks.push_back(Chunk::deserialize(buf));
     return chunks;
 }
+
+} // namespace DM
 } // namespace DB

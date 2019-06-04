@@ -4,6 +4,9 @@
 
 namespace DB
 {
+namespace DM
+{
+
 template <typename T, bool right_open>
 struct Range
 {
@@ -53,4 +56,6 @@ struct Range
 };
 
 using HandleRange = Range<Handle, true>;
+
+} // namespace DM
 } // namespace DB
