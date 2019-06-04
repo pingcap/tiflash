@@ -15,6 +15,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 // Note that the columns in stable input stream and value space must exactly the same, include the name, type, and id.
 template <class DeltaTree, class DeltaValueSpace>
@@ -205,4 +207,6 @@ private:
         return true;
     }
 };
+
+} // namespace DM
 } // namespace DB

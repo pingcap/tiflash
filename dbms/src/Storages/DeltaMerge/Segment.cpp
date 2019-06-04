@@ -24,6 +24,8 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
 
+namespace DM
+{
 
 const Segment::Version Segment::CURRENT_VERSION = 1;
 const static size_t    SEGMENT_BUFFER_SIZE      = 128; // More than enough.
@@ -543,7 +545,7 @@ void Segment::ensurePlace(const ColumnDefine & handle, StoragePool & storage)
     if (placed_delta_rows == delta_rows && placed_delta_deletes == delta_deletes)
         return;
 
-    auto blocks = delta.getMergeBlocks(handle, storage.log(), placed_delta_rows, delta_deletes);
+    auto blocks = delta.getMergeBlocks(handle, storage.log(), placed_delta_rows, placed_delta_rows);
 
     for (auto & v : blocks)
     {
@@ -559,7 +561,7 @@ void Segment::placeUpsert(const ColumnDefine & handle, StoragePool & storage, Bl
     BlockInputStreamPtr merged_stream = getPlacedStream(handle, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
 
     auto perm = sortBlockByPk(handle, block);
-    DB::placeInsert(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
+    DM::placeInsert(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
     placed_delta_rows += block.rows();
 }
 
@@ -585,7 +587,7 @@ void Segment::placeDelete(const ColumnDefine & handle, StoragePool & storage, co
     for (const auto & block : delete_data)
     {
         BlockInputStreamPtr merged_stream = getPlacedStream(handle, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
-        DB::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle));
+        DM::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle));
     }
     ++placed_delta_deletes;
 }
@@ -632,4 +634,5 @@ size_t Segment::estimatedBytes()
     return stable_bytes + delta.num_bytes() - (stable_bytes / stable.num_rows()) * delta_tree->numDeletes();
 }
 
+} // namespace DM
 } // namespace DB

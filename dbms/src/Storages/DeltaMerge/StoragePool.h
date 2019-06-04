@@ -7,6 +7,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 static const std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 
@@ -47,4 +49,6 @@ private:
 
     std::mutex mutex;
 };
+
+} // namespace DM
 } // namespace DB
