@@ -24,7 +24,7 @@
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
-#include <Storages/StorageDirectoryMap.h>
+#include <Storages/TablePathSelector.h>
 #include <Storages/CompressionSettingsSelector.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
@@ -154,7 +154,7 @@ struct ContextShared
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
     RaftServicePtr raft_service;                            /// Raft service instance.
     TiDBServicePtr tidb_service;                            /// TiDB service instance.
-    StorageDirectoryMapPtr storage_directory_map_ptr;              /// StorageDirectoryMap service instance.
+    TablePathSelectorPtr table_path_selector_ptr;              /// StorageDirectoryMap service instance.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1418,20 +1418,20 @@ void Context::createTMTContext()
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
 }
 
-void Context::initializeStorageDirectoryMap(const std::vector<std::string> & all_path, const std::string & persist_path)
+void Context::initializeTablePathSelector(const std::vector<std::string> & all_path, const std::string & persist_path)
 {
     auto lock = getLock();
-    if (shared->storage_directory_map_ptr)
+    if (shared->table_path_selector_ptr)
         throw Exception("StorageDirectoryMap instance has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->storage_directory_map_ptr = std::make_shared<StorageDirectoryMap>(all_path, persist_path);
+    shared->table_path_selector_ptr = std::make_shared<TablePathSelector>(all_path, persist_path);
 }
 
-StorageDirectoryMap & Context::getStorageDirectoryMap()
+TablePathSelector & Context::getTablePathSelector()
 {
     auto lock = getLock();
-    if (!shared->storage_directory_map_ptr)
+    if (!shared->table_path_selector_ptr)
         throw Exception("StorageDirectoryMap is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->storage_directory_map_ptr;
+    return *shared->table_path_selector_ptr;
 }
 
 RaftService & Context::getRaftService()

@@ -1,14 +1,14 @@
 #include <Common/escapeForFileName.h>
 #include <Poco/File.h>
 #include <Poco/StringTokenizer.h>
-#include <Storages/StorageDirectoryMap.h>
+#include <Storages/TablePathSelector.h>
 #include <fstream>
 #include <string>
 
 
 namespace DB
 {
-void StorageDirectoryMap::tryInitializeFromFile()
+void TablePathSelector::tryInitializeFromFile()
 {
     LOG_DEBUG(log, "StorageDirectoryMap begin to initialize from file: " + persist_path);
     std::ifstream file(persist_path);
@@ -25,17 +25,16 @@ void StorageDirectoryMap::tryInitializeFromFile()
         {
             throw Exception("StorageDirectoryMap file wrong format");
         }
-        table_paths.insert(std::pair<std::string, std::string>(table_and_path[0], table_and_path[1]));
+        table_paths.emplace(table_and_path[0], table_and_path[1]);
     }
 }
 
-void StorageDirectoryMap::addEntry(const std::string & database, const std::string & table, const std::string & path)
+void TablePathSelector::addEntry(const std::string & database, const std::string & table, const std::string & path)
 {
-    table_paths.erase(database + "@" + table);
-    table_paths.insert(std::pair<std::string, std::string>(database + "@" + table, path));
+    table_paths[database + "@" + table] = path;
 }
 
-const std::string StorageDirectoryMap::getPathForStorage(const std::string & database, const std::string & table)
+const std::string TablePathSelector::getPathForStorage(const std::string & database, const std::string & table)
 {
     LOG_INFO(log, "Trying to get data path for Database " << database << " Table " << table << " from StorageDirectoryMap");
     auto it = table_paths.find(database + "@" + table);
@@ -43,26 +42,22 @@ const std::string StorageDirectoryMap::getPathForStorage(const std::string & dat
     {
         return it->second;
     }
-    if (path_iter == all_path.end())
-    {
-        path_iter = all_path.begin();
-    }
-    std::string result = *path_iter + "data/" + escapeForFileName(database) + "/";
-    path_iter++;
+    std::string result = all_path[(path_index++) % all_path.size()] + "data/" + escapeForFileName(database) + "/";
     addEntry(database, table, result);
     persist();
     return result;
 }
 
-void StorageDirectoryMap::removePathForStorage(const std::string & database, const std::string & table)
+void TablePathSelector::removePathForStorage(const std::string & database, const std::string & table)
 {
     table_paths.erase(database + "@" + table);
     persist();
 }
 
-void StorageDirectoryMap::persist()
+void TablePathSelector::persist()
 {
     std::ofstream newFile(persist_path);
+    SCOPE_EXIT({ newFile.close(); });
 
     if (newFile.is_open())
     {
@@ -75,8 +70,6 @@ void StorageDirectoryMap::persist()
     {
         throw Exception("StorageDirectoryMap cannot open file for persist");
     }
-
-    newFile.close();
 }
 
 } // namespace DB

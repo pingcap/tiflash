@@ -453,7 +453,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     String table_name = create.table;
     String table_name_escaped = escapeForFileName(table_name);
 
-    const String path = context.getStorageDirectoryMap().getPathForStorage(database_name, table_name_escaped);
+    const String path = context.getTablePathSelector().getPathForStorage(database_name, table_name_escaped);
 
     // If this is a stub ATTACH query, read the query definition from the database
     if (create.attach && !create.storage && !create.columns)

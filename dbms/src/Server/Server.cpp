@@ -131,12 +131,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setAllPath(all_path);
     {
 
-        global_context->initializeStorageDirectoryMap(global_context->getAllPath(), global_context->getAllPath()[0]);
+        global_context->initializeTablePathSelector(global_context->getAllPath(), global_context->getAllPath()[0]);
         for (auto path : global_context->getAllPath())
         {
             LOG_DEBUG(log, "Table data path: " + path);
         }
-        LOG_DEBUG(log, "StorageDirectoryMap persist file in path: " + global_context->getAllPath()[0]);
+        LOG_DEBUG(log, "TablePathSelector persist file path: " + global_context->getAllPath()[0]);
     }
 
     std::string path = global_context->getAllPath()[0];

@@ -114,7 +114,7 @@ StoragePtr StorageFactory::get(
         throw Exception("Unknown table engine " + name, ErrorCodes::UNKNOWN_STORAGE);
 
     std::ignore = data_path;
-    const String & table_path = context.getStorageDirectoryMap().getPathForStorage(database_name, table_name);
+    const String & table_path = context.getTablePathSelector().getPathForStorage(database_name, table_name);
 
     Arguments arguments
     {
