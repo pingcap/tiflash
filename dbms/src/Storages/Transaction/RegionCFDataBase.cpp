@@ -26,12 +26,21 @@ TableID RegionCFDataBase<Trait>::insert(const TiKVKey & key, const TiKVValue & v
 template <typename Trait>
 TableID RegionCFDataBase<Trait>::insert(const TiKVKey & key, const TiKVValue & value, const String & raw_key)
 {
-    TableID table_id = RecordKVFormat::getTableId(raw_key);
+    Pair kv_pair = Trait::genKVPair(key, raw_key, value);
+    if (shouldIgnoreInsert(kv_pair.second))
+        return InvalidTableID;
+
+    return insert(RecordKVFormat::getTableId(raw_key), std::move(kv_pair));
+}
+
+template <typename Trait>
+TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, Value> && kv_pair)
+{
     auto & map = data[table_id];
-    auto [it, ok] = map.insert(Trait::genKVPair(key, raw_key, value));
+    auto [it, ok] = map.emplace(std::move(kv_pair));
     std::ignore = it;
     if (!ok)
-        throw Exception(" found existing key [" + key.toString() + "]", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(" found existing key [" + getTiKVKey(kv_pair.second).toString() + "]", ErrorCodes::LOGICAL_ERROR);
     return table_id;
 }
 
@@ -52,17 +61,29 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const 
 
 
 template <typename Trait>
-bool RegionCFDataBase<Trait>::shouldIgnoreRemove(const RegionCFDataBase::Value &) const
+bool RegionCFDataBase<Trait>::shouldIgnoreRemove(const RegionCFDataBase::Value &)
 {
     return false;
 }
 
 template <>
-bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRemove(const RegionCFDataBase::Value & value) const
+bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRemove(const RegionCFDataBase::Value & value)
 {
-    // if this record has DelFlag, keep it.
-    const RegionWriteCFDataTrait::DecodedWriteCFValue & decoded_val = std::get<2>(value);
-    return std::get<0>(decoded_val) == CFModifyFlag::DelFlag;
+    return RegionWriteCFDataTrait::getWriteType(value) == CFModifyFlag::DelFlag;
+}
+
+template <typename Trait>
+bool RegionCFDataBase<Trait>::shouldIgnoreInsert(const RegionCFDataBase::Value &)
+{
+    return false;
+}
+
+template <>
+bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreInsert(const RegionCFDataBase::Value & value)
+{
+    // only keep records with DelFlag or PutFlag.
+    const auto flag = RegionWriteCFDataTrait::getWriteType(value);
+    return flag != CFModifyFlag::DelFlag && flag != CFModifyFlag::PutFlag;
 }
 
 template <typename Trait>
