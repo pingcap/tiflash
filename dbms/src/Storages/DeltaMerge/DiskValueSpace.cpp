@@ -9,7 +9,8 @@
 
 namespace DB
 {
-
+namespace DM
+{
 
 //==========================================================================================
 // Helper functions.
@@ -33,7 +34,6 @@ BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, 
     auto data_size = plain.count();
     return {plain.tryGetReadBuffer(), data_size};
 }
-
 
 void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & page, size_t rows_limit)
 {
@@ -317,7 +317,6 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
             columns[index]->insertRangeFrom(*cache_col, cache_rows_offset + rows_offset_in_chunk, rows_limit - already_read_rows);
         }
     }
-
 
     Block res;
     for (size_t index = 0; index < read_column_defines.size(); ++index)
@@ -713,4 +712,5 @@ std::pair<size_t, size_t> DiskValueSpace::findChunk(size_t rows_offset, size_t d
     return {chunk_index, 0};
 }
 
+} // namespace DM
 } // namespace DB

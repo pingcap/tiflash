@@ -15,6 +15,9 @@
 namespace DB
 {
 
+namespace DM
+{
+
 template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
 inline Handle encodeToPK(T v)
 {
@@ -230,4 +233,5 @@ inline Block createHeader(const ColumnDefines & col_defines)
     return header;
 }
 
+} // namespace DM
 } // namespace DB

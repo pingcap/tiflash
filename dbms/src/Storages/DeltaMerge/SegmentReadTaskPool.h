@@ -5,6 +5,9 @@
 
 namespace DB
 {
+namespace DM
+{
+
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
@@ -40,4 +43,5 @@ private:
 
 using SegmentReadTaskPoolPtr = std::shared_ptr<SegmentReadTaskPool>;
 
+} // namespace DM
 } // namespace DB

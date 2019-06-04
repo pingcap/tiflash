@@ -6,6 +6,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 using NotCompress = std::unordered_set<ColId>;
 
@@ -35,4 +37,6 @@ struct DMContext
     const size_t delta_cache_limit_rows;
     const size_t delta_cache_limit_bytes;
 };
+
+} // namespace DM
 } // namespace DB

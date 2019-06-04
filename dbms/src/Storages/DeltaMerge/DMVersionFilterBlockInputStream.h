@@ -5,6 +5,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 /// Use the latest rows. For rows with the same handle, only take the rows with biggest version and version <= version_limit.
 static constexpr int DM_VESION_FILTER_MODE_MVCC = 0;
@@ -182,4 +184,5 @@ private:
     PaddedPODArray<UInt64> const * version_col_data = nullptr;
     PaddedPODArray<UInt8> const *  delete_col_data  = nullptr;
 };
+} // namespace DM
 } // namespace DB

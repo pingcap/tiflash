@@ -7,6 +7,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 struct ColumnAndValue
 {
@@ -33,4 +35,5 @@ struct RefTuple
 
 using RefTuples = std::vector<RefTuple>;
 
+} // namespace DM
 } // namespace DB

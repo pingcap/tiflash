@@ -13,6 +13,8 @@
 
 namespace DB
 {
+namespace DM
+{
 /// S: Scale factor of delta tree node.
 /// M: Capacity factor of leaf node.
 /// F: Capacity factor of Intern node.
@@ -89,4 +91,5 @@ static constexpr Handle P_INF_HANDLE = MAX_INT64; // Use in range, indicating po
 static_assert(static_cast<Int64>(static_cast<UInt64>(MIN_INT64)) == MIN_INT64, "Unsupported compiler!");
 static_assert(static_cast<Int64>(static_cast<UInt64>(MAX_INT64)) == MAX_INT64, "Unsupported compiler!");
 
+} // namespace DM
 } // namespace DB
