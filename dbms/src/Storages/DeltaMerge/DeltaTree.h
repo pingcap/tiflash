@@ -12,6 +12,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 struct DTMutation;
 struct DTModify;
@@ -439,7 +441,6 @@ struct DTIntern
     }
 };
 
-
 template <size_t M, size_t F, size_t S>
 class DTEntryIterator
 {
@@ -771,7 +772,6 @@ void DT_CLASS::addModify(const UInt64 rid, const UInt16 column_id, const UInt64 
 {
     addModify(rid, RefTuple(column_id, new_value_id));
 }
-
 
 DT_TEMPLATE
 void DT_CLASS::addModify(const UInt64 rid, const RefTuple & tuple)
@@ -1321,4 +1321,5 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 #undef DT_TEMPLATE
 #undef DT_CLASS
 
+} // namespace DM
 } // namespace DB

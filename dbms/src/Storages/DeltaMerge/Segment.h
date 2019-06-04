@@ -10,6 +10,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 class Segment;
 using SegmentPtr = std::shared_ptr<Segment>;
@@ -117,4 +119,5 @@ private:
     std::shared_mutex mutex;
 };
 
+} // namespace DM
 } // namespace DB

@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <unordered_map>
+#include <Storages/RegionQueryInfo.h>
+
 
 namespace DB
 {
@@ -14,8 +16,6 @@ using SetPtr = std::shared_ptr<Set>;
 
 /// Information about calculated sets in right hand side of IN.
 using PreparedSets = std::unordered_map<IAST *, SetPtr>;
-
-struct MvccQueryInfo;
 
 /** Query along with some additional data,
   *  that can be used during query processing
