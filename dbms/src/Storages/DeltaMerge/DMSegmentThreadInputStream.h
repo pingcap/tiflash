@@ -4,6 +4,9 @@
 
 namespace DB
 {
+namespace DM
+{
+
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
 public:
@@ -49,4 +52,6 @@ private:
     bool                   done = false;
     BlockInputStreamPtr    cur_stream;
 };
+
+} // namespace DM
 } // namespace DB

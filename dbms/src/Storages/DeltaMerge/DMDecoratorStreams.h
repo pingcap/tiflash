@@ -7,7 +7,8 @@
 
 namespace DB
 {
-
+namespace DM
+{
 
 class DMColumnFilterBlockInputStream : public IProfilingBlockInputStream
 {
@@ -40,7 +41,6 @@ private:
     ColumnDefines columns_to_read;
     Block         header;
 };
-
 
 class DMHandleConvertBlockInputStream : public IProfilingBlockInputStream
 {
@@ -82,4 +82,5 @@ private:
     const Context & context;
 };
 
+} // namespace DM
 } // namespace DB
