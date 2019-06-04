@@ -151,7 +151,7 @@ T DataTypeDecimal<T>::getScaleMultiplier(UInt32 scale_) const {
 template <typename T>
 T DataTypeDecimal<T>::parseFromString(const String & str) const {
     ReadBufferFromMemory buf(str.data(), str.size());
-    T x;
+    T x(0);
     readDecimalText(x, buf, precision, scale);
     return x;
 }

@@ -225,17 +225,15 @@ inline void readBoolTextWord(bool & x, ReadBuffer & buf)
     }
 }
 
-template<typename T>
-inline void decimalRound(Decimal<T> & x, ReadBuffer & buf, PrecType precision)
+inline void decimalRound(Int256 & value, ReadBuffer & buf)
 {
     ++buf.position();
     if (buf.eof()) {
         return;
     }
     if (*buf.position() >= '5' && *buf.position() <= '9') {
-        x.value ++;
+        value ++;
     }
-    checkDecimalOverflow(x, precision);
     while(!buf.eof() && *buf.position() >= '0' && *buf.position() <= '9') {
         ++buf.position();
     }
@@ -244,9 +242,9 @@ inline void decimalRound(Decimal<T> & x, ReadBuffer & buf, PrecType precision)
 template<typename T>
 inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision, ScaleType scale)
 {
+    Int256 value(0);
     bool negative = false;
     bool fractional = false;
-    x.value = 0;
     if (buf.eof())
     {
         throwReadAfterEOF();
@@ -267,9 +265,9 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
                 }
                 fractional = true;
                 if (scale == 0) {
-                    decimalRound(x, buf, precision);
+                    decimalRound(value, buf);
                     if (negative)
-                        x.value = -x.value;
+                        value = -value;
                     return;
                 }
                 break;
@@ -283,34 +281,35 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
             case '7': [[fallthrough]];
             case '8': [[fallthrough]];
             case '9':
-                x.value *= 10;
-                x.value += *buf.position() - '0';
+                value *= 10;
+                value += *buf.position() - '0';
                 if (fractional) {
                     cur_scale++;
                     if (scale == cur_scale) {
-                        decimalRound(x, buf, precision);
+                        decimalRound(value, buf);
                         if (negative)
-                            x.value = -x.value;
+                            value = -value;
                         return;
                     }
                 } 
                 break;
             default:
                 for(;cur_scale < scale; cur_scale++) {
-                    x.value *= 10;
+                    value *= 10;
                 }
-                checkDecimalOverflow(x, precision);
                 if (negative)
-                    x.value = -x.value;
+                    value = -value;
                 return;
         }
         ++buf.position();
     }
     for(;cur_scale < scale; cur_scale++) {
-        x.value *= 10;
+        value *= 10;
     }
     if (negative)
-        x.value = -x.value;
+        value = -value;
+    x.value = static_cast<T>(value);
+    checkDecimalOverflow(x, precision);
     return;
 }
 
