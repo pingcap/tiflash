@@ -18,6 +18,7 @@
 
 namespace DB
 {
+using namespace DM;
 
 StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     const std::string & name_,

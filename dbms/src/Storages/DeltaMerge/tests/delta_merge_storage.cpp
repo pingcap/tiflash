@@ -19,9 +19,10 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DummyDeltaMergeBlockInputStream.h>
 #include <Storages/DeltaMerge/DummyDeltaMergeBlockOutputStream.h>
-#include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeDummy.h>
 
 using namespace DB;
+using namespace DB::DM;
 
 int main(int, char **) try
 {
@@ -75,7 +76,7 @@ int main(int, char **) try
 
     Context context = Context::createGlobal();
 
-    StoragePtr storage = StorageDeltaMerge::create(".", "mytemptable", ColumnsDescription{names_and_types_list}, astptr, false, 1000);
+    StoragePtr storage = StorageDeltaMergeDummy::create(".", "mytemptable", ColumnsDescription{names_and_types_list}, astptr, false, 1000);
     storage->startup();
     BlockOutputStreamPtr output = storage->write(insertptr, context.getSettingsRef());
 

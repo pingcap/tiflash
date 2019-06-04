@@ -6,6 +6,9 @@
 
 namespace DB
 {
+namespace DM
+{
+
 // TODO: This class should be replaced by better one which use index to skip irrelevant blocks.
 class DMHandleFilterBlockInputStream : public IProfilingBlockInputStream
 {
@@ -80,4 +83,6 @@ private:
     HandleRange  handle_range;
     ColumnDefine handle_define;
 };
+
+} // namespace DM
 } // namespace DB

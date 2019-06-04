@@ -48,10 +48,10 @@ private:
     String path;
     String name;
 
-    DeltaMergeStorePtr store;
+    DM::DeltaMergeStorePtr store;
 
-    ColumnDefines table_column_defines;
-    ColumnDefine handle_column_define;
+    DM::ColumnDefines table_column_defines;
+    DM::ColumnDefine handle_column_define;
     Strings pk_column_names;
 
     OrderedNameSet hidden_columns;
@@ -63,5 +63,6 @@ private:
 
     Logger * log;
 };
+
 
 } // namespace DB

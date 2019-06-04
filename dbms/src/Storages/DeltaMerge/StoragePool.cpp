@@ -2,6 +2,8 @@
 
 namespace DB
 {
+namespace DM
+{
 
 // TODO: Load configs from settings.
 StoragePool::StoragePool(const String & path)
@@ -34,4 +36,6 @@ bool StoragePool::gc(const Seconds try_gc_period)
 
     return ok;
 }
+
+} // namespace DM
 } // namespace DB

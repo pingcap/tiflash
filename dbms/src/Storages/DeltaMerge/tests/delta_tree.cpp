@@ -10,6 +10,7 @@
 #define print(M) std::cout << "" #M ": " << M << std::endl
 
 using namespace DB;
+using namespace DB::DM;
 
 class FakeValueSpace;
 using FakeDeltaTree = DeltaTree<FakeValueSpace, 2, 10>;
