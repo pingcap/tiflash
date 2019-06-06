@@ -21,25 +21,21 @@ using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
 class TMTContext
 {
-private:
-    KVStorePtr kvstore;
-    TMTStorages storages;
-    RegionTable region_table;
-
 public:
     const KVStorePtr & getKVStore() const;
-    KVStorePtr & getKVStoreMut();
+    KVStorePtr & getKVStore();
 
     const TMTStorages & getStorages() const;
-    TMTStorages & getStoragesMut();
+    TMTStorages & getStorages();
 
     const RegionTable & getRegionTable() const;
-    RegionTable & getRegionTableMut();
+    RegionTable & getRegionTable();
 
     bool isInitialized() const;
 
     // TODO: get flusher args from config file
-    explicit TMTContext(Context & context_, std::vector<String> addrs, std::string learner_key_, std::string learner_value_);
+    explicit TMTContext(
+        Context & context, const std::vector<std::string> & addrs, const std::string & learner_key, const std::string & learner_value);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -54,6 +50,11 @@ public:
     pingcap::kv::RpcClientPtr getRpcClient();
 
     void restore();
+
+private:
+    KVStorePtr kvstore;
+    TMTStorages storages;
+    RegionTable region_table;
 
 private:
     SchemaSyncerPtr schema_syncer;

@@ -336,7 +336,7 @@ int main(int, char **)
     }
 
     {
-        kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
+        kvstore->tryPersist(context, Seconds(0), Seconds(0));
 
         auto kvstore2 = std::make_shared<KVStore>(dir_path);
 
@@ -382,7 +382,7 @@ int main(int, char **)
 
         ASSERT_CHECK_EQUAL(2, kvstore->regionSize(), suc);
 
-        kvstore->tryPersistAndReport(context, Seconds(0), Seconds(0));
+        kvstore->tryPersist(context, Seconds(0), Seconds(0));
     }
 
     return suc ? 0 : 1;

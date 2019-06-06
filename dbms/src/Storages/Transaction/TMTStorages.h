@@ -12,7 +12,7 @@ namespace DB
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
 
-class TMTStorages
+class TMTStorages : private boost::noncopyable
 {
 public:
     void put(StoragePtr storage);
