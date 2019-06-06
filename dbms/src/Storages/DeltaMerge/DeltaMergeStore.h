@@ -103,6 +103,8 @@ private:
     SegmentSortedMap segments;
 
     std::shared_mutex mutex;
+
+    Logger * log;
 };
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;

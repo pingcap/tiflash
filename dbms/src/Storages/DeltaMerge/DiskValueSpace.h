@@ -192,6 +192,8 @@ public:
 private:
     void ensurePKColumns(const ColumnDefine & handle, PageStorage & data_storage);
 
+    bool doFlushCache(const OpContext & context);
+
     size_t rowsFromBack(size_t chunks);
     size_t cacheRows();
     size_t cacheBytes();
@@ -210,6 +212,8 @@ private:
     // The cache is mainly used to merge fragment chunks.
     MutableColumnMap cache;
     size_t           cache_chunks = 0;
+
+    Logger * log;
 };
 
 } // namespace DM

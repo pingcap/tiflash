@@ -25,11 +25,11 @@ extern const Event FileOpen;
 extern const Event FileOpenFailed;
 extern const Event Seek;
 extern const Event PSMWritePages;
-extern const Event PSMWritePageCalls;
+extern const Event PSMWriteCalls;
 extern const Event PSMWriteIOCalls;
 extern const Event PSMWriteBytes;
 extern const Event PSMReadPages;
-extern const Event PSMReadPageCalls;
+extern const Event PSMReadCalls;
 extern const Event PSMReadIOCalls;
 extern const Event PSMReadBytes;
 extern const Event PSMWriteFailed;
@@ -119,7 +119,7 @@ void seekFile(int fd, off_t pos, const std::string & path)
 
 void writeFile(int fd, const char * data, size_t to_write, const std::string & path)
 {
-    ProfileEvents::increment(ProfileEvents::PSMWritePageCalls);
+    ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
 
     size_t bytes_written = 0;
@@ -146,7 +146,7 @@ void writeFile(int fd, const char * data, size_t to_write, const std::string & p
 
 void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
 {
-    ProfileEvents::increment(ProfileEvents::PSMReadPageCalls);
+    ProfileEvents::increment(ProfileEvents::PSMReadCalls);
 
     size_t bytes_read = 0;
     while (bytes_read < expected_bytes)
@@ -441,6 +441,8 @@ PageFile::Writer::~Writer()
 
 void PageFile::Writer::write(const WriteBatch & wb, PageCacheMap & page_cache_map)
 {
+    ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
+
     ByteBuffer meta_buf, data_buf;
     std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, page_cache_map);
 
@@ -473,6 +475,8 @@ PageFile::Reader::~Reader()
 
 PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
 {
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
+
     // Sort in ascending order by offset in file.
     std::sort(to_read.begin(), to_read.end(), [](const PageIdAndCache & a, const PageIdAndCache & b) {
         return a.second.offset < b.second.offset;
@@ -520,6 +524,8 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
 
 void PageFile::Reader::read(PageIdAndCaches & to_read, const PageHandler & handler)
 {
+    ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
+
     // Sort in ascending order by offset in file.
     std::sort(to_read.begin(), to_read.end(), [](const PageIdAndCache & a, const PageIdAndCache & b) {
         return a.second.offset < b.second.offset;
