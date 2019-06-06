@@ -5,6 +5,7 @@
 
 #include <Common/Allocator.h>
 #include <Common/ArenaWithFreeLists.h>
+#include <Common/EventRecorder.h>
 #include <DataTypes/DataTypeFactory.h>
 
 #include <Core/NamesAndTypes.h>
@@ -22,8 +23,6 @@ namespace DM
 static constexpr size_t DT_S = 3;
 static constexpr size_t DT_M = 55;
 static constexpr size_t DT_F = 13;
-
-static constexpr UInt64 INVALID_ID = 0;
 
 using Ids = std::vector<UInt64>;
 
@@ -81,6 +80,10 @@ static DataTypePtr TAG_COLUMN_TYPE          = DataTypeFactory::instance().get("U
 
 static ColumnDefine VERSION_COLUMN_DEFINE{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
 static ColumnDefine TAG_COLUMN_DEFINE{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
+
+
+static constexpr UInt64 MIN_UINT64 = std::numeric_limits<UInt64>::min();
+static constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
 
 static constexpr Int64 MIN_INT64 = std::numeric_limits<Int64>::min();
 static constexpr Int64 MAX_INT64 = std::numeric_limits<Int64>::max();
