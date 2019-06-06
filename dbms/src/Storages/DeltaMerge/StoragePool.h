@@ -20,7 +20,7 @@ public:
     using Duration  = Clock::duration;
     using Seconds   = std::chrono::seconds;
 
-    StoragePool(const String & path);
+    explicit StoragePool(const String & path);
 
     PageId maxLogPageId() { return max_log_page_id; }
     PageId maxDataPageId() { return max_data_page_id; }
@@ -34,7 +34,7 @@ public:
     PageStorage & data() { return data_storage; }
     PageStorage & meta() { return meta_storage; }
 
-    bool gc(const Seconds try_gc_period = DELTA_MERGE_GC_PERIOD);
+    bool gc(const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
     std::atomic<PageId> max_log_page_id;
