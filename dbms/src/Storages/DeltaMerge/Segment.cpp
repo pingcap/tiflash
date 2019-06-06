@@ -600,7 +600,7 @@ void Segment::ensurePlace(const ColumnDefine & handle, StoragePool & storage)
     if (placed_delta_rows == delta_rows && placed_delta_deletes == delta_deletes)
         return;
 
-    auto blocks = delta.getMergeBlocks(handle, storage.log(), placed_delta_rows, placed_delta_rows);
+    auto blocks = delta.getMergeBlocks(handle, storage.log(), placed_delta_rows, placed_delta_deletes);
 
     for (auto & v : blocks)
     {
