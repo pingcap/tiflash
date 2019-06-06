@@ -7,6 +7,12 @@
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 #include <Storages/Page/PageStorage.h>
 
+namespace ProfileEvents
+{
+extern const Event DMFlushDeltaCache;
+extern const Event DMFlushDeltaCacheNS;
+} // namespace ProfileEvents
+
 namespace DB
 {
 namespace DM
@@ -115,10 +121,13 @@ Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_
 // DiskValueSpace public methods.
 //==========================================================================================
 
-DiskValueSpace::DiskValueSpace(bool should_cache_, PageId page_id_) : should_cache(should_cache_), page_id(page_id_) {}
+DiskValueSpace::DiskValueSpace(bool should_cache_, PageId page_id_)
+    : should_cache(should_cache_), page_id(page_id_), log(&Logger::get("DiskValueSpace"))
+{
+}
 
 DiskValueSpace::DiskValueSpace(bool should_cache_, PageId page_id_, const Chunks & chunks_)
-    : should_cache(should_cache_), page_id(page_id_), chunks(chunks_)
+    : should_cache(should_cache_), page_id(page_id_), chunks(chunks_), log(&Logger::get("DiskValueSpace"))
 {
 }
 
@@ -422,9 +431,7 @@ bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
 {
     if (!cache_chunks)
         return false;
-    const size_t cache_rows      = cacheRows();
-    const size_t total_rows      = num_rows();
-    const size_t in_storage_rows = total_rows - cache_rows;
+    const size_t cache_rows = cacheRows();
 
     // A chunk can only contains one delete range.
     HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
@@ -432,6 +439,17 @@ bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
         force = true;
     if (!force && cache_rows < context.dm_context.delta_cache_limit_rows && cacheBytes() < context.dm_context.delta_cache_limit_bytes)
         return false;
+
+    return doFlushCache(context);
+}
+
+bool DiskValueSpace::doFlushCache(const OpContext & context)
+{
+    const size_t cache_rows      = cacheRows();
+    const size_t total_rows      = num_rows();
+    const size_t in_storage_rows = total_rows - cache_rows;
+
+    HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
 
     auto & handle = context.dm_context.table_handle_define;
     ensurePKColumns(handle, context.data_storage);
@@ -443,6 +461,10 @@ bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
         cache_chunks = 0;
         return true;
     }
+
+    EventRecorder recorder(ProfileEvents::DMFlushDeltaCache, ProfileEvents::DMFlushDeltaCacheNS);
+
+    LOG_DEBUG(log, "Start flush cache");
 
     /// Flush cache to disk and replace the fragment chunks.
 
@@ -527,6 +549,11 @@ bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
     // ============================================================
 
     context.data_storage.write(data_wb_remove);
+
+    recorder.submit();
+
+    LOG_DEBUG(log, "Done flush cache");
+
     return true;
 }
 

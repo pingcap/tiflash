@@ -34,6 +34,14 @@ public:
     }
     const Writes & getWrites() const { return writes; }
 
+    size_t putWriteCount() const
+    {
+        size_t count = 0;
+        for (auto & w : writes)
+            count += w.is_put;
+        return count;
+    }
+
 private:
     Writes writes;
 };
