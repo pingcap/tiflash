@@ -117,6 +117,8 @@ private:
     size_t       placed_delta_deletes = 0;
 
     std::shared_mutex mutex;
+
+    Logger * log;
 };
 
 } // namespace DM
