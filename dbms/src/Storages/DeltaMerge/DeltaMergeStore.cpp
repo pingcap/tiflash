@@ -10,6 +10,12 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
+namespace ProfileEvents
+{
+extern const Event DMWriteBlock;
+extern const Event DMWriteBlockNS;
+} // namespace ProfileEvents
+
 namespace DB
 {
 
@@ -32,7 +38,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       table_name(name),
       table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
-      settings(settings_)
+      settings(settings_),
+      log(&Logger::get("DeltaMergeStore"))
 {
     // We use Int64 to store handle.
     if (!table_handle_define.type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
@@ -83,6 +90,8 @@ DeltaMergeStore::~DeltaMergeStore()
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
 {
     std::unique_lock lock(mutex);
+
+    EventRecorder recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
     size_t rows = to_write.rows();
     if (!rows)
@@ -179,6 +188,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     // This should be called by background thread.
     checkAll(db_context, db_settings);
+
+    recorder.submit();
 }
 
 

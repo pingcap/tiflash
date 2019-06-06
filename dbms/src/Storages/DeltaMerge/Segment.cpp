@@ -15,6 +15,29 @@
 #include <Storages/DeltaMerge/DeltaPlace.h>
 #include <Storages/DeltaMerge/Segment.h>
 
+namespace ProfileEvents
+{
+extern const Event DMWriteBlock;
+extern const Event DMWriteBlockNS;
+extern const Event DMAppendDelta;
+extern const Event DMAppendDeltaNS;
+extern const Event DMPlace;
+extern const Event DMPlaceNS;
+extern const Event DMPlaceUpsert;
+extern const Event DMPlaceUpsertNS;
+extern const Event DMPlaceDeleteRange;
+extern const Event DMPlaceDeleteRangeNS;
+extern const Event DMSegmentSplit;
+extern const Event DMSegmentSplitNS;
+extern const Event DMSegmentGetSplitPoint;
+extern const Event DMSegmentGetSplitPointNS;
+extern const Event DMSegmentMerge;
+extern const Event DMSegmentMergeNS;
+extern const Event DMDeltaMerge;
+extern const Event DMDeltaMergeNS;
+} // namespace ProfileEvents
+
+
 namespace DB
 {
 
@@ -136,9 +159,13 @@ void Segment::write(DMContext & dm_context, Block && block)
 
     OpContext opc = OpContext::createForLogStorage(dm_context);
 
+    EventRecorder recorder(ProfileEvents::DMAppendDelta, ProfileEvents::DMAppendDeltaNS);
+
     Chunks chunks = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block));
     for (auto & chunk : chunks)
         delta.appendChunkWithCache(opc, std::move(chunk), block);
+
+    recorder.submit();
 
     tryFlush(dm_context);
     if (delta.tryFlushCache(opc))
@@ -184,13 +211,17 @@ SegmentPtr Segment::split(DMContext & dm_context)
 {
     std::unique_lock lock(mutex);
 
+    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] start to split.");
+
     ensurePlace(dm_context.table_handle_define, dm_context.storage_pool);
 
     Handle split_point = getSplitPoint(dm_context);
 
     auto new_segment = doSplit(dm_context, split_point);
 
-    MallocExtension::instance()->ReleaseFreeMemory();
+    //    MallocExtension::instance()->ReleaseFreeMemory();
+
+    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] done split.");
 
     return new_segment;
 }
@@ -200,12 +231,16 @@ void Segment::merge(DMContext & dm_context, const SegmentPtr & other)
     std::unique_lock lock(mutex);
     std::unique_lock lock2(other->mutex);
 
+    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] start to merge with segment [" + DB::toString(other->segment_id) + "]");
+
     ensurePlace(dm_context.table_handle_define, dm_context.storage_pool);
     other->ensurePlace(dm_context.table_handle_define, dm_context.storage_pool);
 
     doMerge(dm_context, other);
 
-    MallocExtension::instance()->ReleaseFreeMemory();
+    //    MallocExtension::instance()->ReleaseFreeMemory();
+
+    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] done merge.");
 }
 
 
@@ -216,7 +251,8 @@ Segment::Segment(UInt64 epoch_, const HandleRange & range_, PageId segment_id_, 
       next_segment_id(next_segment_id_),
       delta(true, delta_id),
       stable(false, stable_id),
-      delta_tree(std::make_shared<DefaultDeltaTree>())
+      delta_tree(std::make_shared<DefaultDeltaTree>()),
+      log(&Logger::get("Segment"))
 {
 }
 
@@ -234,7 +270,8 @@ Segment::Segment(UInt64              epoch_,
       next_segment_id(next_segment_id_),
       delta(true, delta_id, delta_chunks_),
       stable(false, stable_id, stable_chunks_),
-      delta_tree(std::make_shared<DefaultDeltaTree>())
+      delta_tree(std::make_shared<DefaultDeltaTree>()),
+      log(&Logger::get("Segment"))
 {
 }
 
@@ -310,6 +347,8 @@ BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
 
 SegmentPtr Segment::doSplit(DMContext & dm_context, Handle split_point)
 {
+    EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
+
     auto & handle       = dm_context.table_handle_define;
     auto & columns      = dm_context.table_columns;
     auto & storage_pool = dm_context.storage_pool;
@@ -387,6 +426,8 @@ SegmentPtr Segment::doSplit(DMContext & dm_context, Handle split_point)
     storage_pool.log().write(log_wb);
     storage_pool.data().write(data_wb);
 
+    recorder.submit();
+
     return other;
 }
 
@@ -395,6 +436,8 @@ void Segment::doMerge(DMContext & dm_context, const SegmentPtr & other)
     if (this->range.end != other->range.start || this->next_segment_id != other->segment_id)
         throw Exception("The ranges of merge segments are not consecutive: first end: " + DB::toString(this->range.end)
                         + ", second start: " + DB::toString(other->range.start));
+
+    EventRecorder recorder(ProfileEvents::DMSegmentMerge, ProfileEvents::DMSegmentMergeNS);
 
     auto & handle       = dm_context.table_handle_define;
     auto & columns      = dm_context.table_columns;
@@ -466,6 +509,8 @@ void Segment::doMerge(DMContext & dm_context, const SegmentPtr & other)
     // Remove old chunks.
     storage_pool.log().write(log_wb);
     storage_pool.data().write(data_wb);
+
+    recorder.submit();
 }
 
 void Segment::reset(DMContext & dm_context, BlockInputStreamPtr & input_stream)
@@ -520,6 +565,10 @@ bool Segment::tryFlush(DMContext & dm_context, bool force)
 
 void Segment::flush(DMContext & dm_context)
 {
+    EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
+
+    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] start to merge delta.");
+
     auto & handle       = dm_context.table_handle_define;
     auto & columns      = dm_context.table_columns;
     auto & storage_pool = dm_context.storage_pool;
@@ -535,11 +584,17 @@ void Segment::flush(DMContext & dm_context)
     // Force tcmalloc to return memory back to system.
     // https://internal.pingcap.net/jira/browse/FLASH-41
     // TODO: Evaluate the cost of this.
-    MallocExtension::instance()->ReleaseFreeMemory();
+    //    MallocExtension::instance()->ReleaseFreeMemory();
+
+    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] done merge delta.");
+
+    recorder.submit();
 }
 
 void Segment::ensurePlace(const ColumnDefine & handle, StoragePool & storage)
 {
+    EventRecorder recorder(ProfileEvents::DMPlace, ProfileEvents::DMPlaceNS);
+
     size_t delta_rows    = delta.num_rows();
     size_t delta_deletes = delta.num_deletes();
     if (placed_delta_rows == delta_rows && placed_delta_deletes == delta_deletes)
@@ -554,19 +609,27 @@ void Segment::ensurePlace(const ColumnDefine & handle, StoragePool & storage)
         else if (v.block)
             placeUpsert(handle, storage, std::move(v.block));
     }
+
+    recorder.submit();
 }
 
 void Segment::placeUpsert(const ColumnDefine & handle, StoragePool & storage, Block && block)
 {
+    EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
+
     BlockInputStreamPtr merged_stream = getPlacedStream(handle, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
 
     auto perm = sortBlockByPk(handle, block);
     DM::placeInsert(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
     placed_delta_rows += block.rows();
+
+    recorder.submit();
 }
 
 void Segment::placeDelete(const ColumnDefine & handle, StoragePool & storage, const HandleRange & delete_range)
 {
+    EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
+
     Blocks delete_data;
     {
         BlockInputStreamPtr merged_stream = getPlacedStream(handle, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
@@ -590,10 +653,13 @@ void Segment::placeDelete(const ColumnDefine & handle, StoragePool & storage, co
         DM::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle));
     }
     ++placed_delta_deletes;
+
+    recorder.submit();
 }
 
 Handle Segment::getSplitPoint(DMContext & dm_context)
 {
+    EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
     auto & handle  = dm_context.table_handle_define;
     auto & storage = dm_context.storage_pool;
@@ -619,6 +685,9 @@ Handle Segment::getSplitPoint(DMContext & dm_context)
         }
     }
     stream->readSuffix();
+
+    recorder.submit();
+
     return split_handle;
 }
 
