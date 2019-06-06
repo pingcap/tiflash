@@ -19,7 +19,7 @@ StoragePool::StoragePool(const String & path)
     max_meta_page_id = get_max_page_id(meta_storage);
 }
 
-bool StoragePool::gc(const Seconds try_gc_period)
+bool StoragePool::gc(const Seconds & try_gc_period)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
