@@ -209,7 +209,7 @@ private:
             // Modify
             if (!fillStableBlockIfNeed())
                 return false;
-            std::vector<size_t> has_modifies(num_columns, INVALID_ID);
+            std::vector<size_t> has_modifies(num_columns, MAX_UINT64);
 
             if (entry_it.getType() == DT_MULTI_MOD)
             {
@@ -225,7 +225,7 @@ private:
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
             {
                 auto offset = vs_column_offsets[column_id];
-                if (has_modifies[offset] == INVALID_ID)
+                if (has_modifies[offset] == MAX_UINT64)
                 {
                     output_columns[column_id]->insertFrom(*stable_block_columns[column_id], stable_block_pos);
                 }
