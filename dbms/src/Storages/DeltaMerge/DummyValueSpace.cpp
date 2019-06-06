@@ -63,7 +63,7 @@ RefTuples MemoryValueSpace::addFromModify(const Block & block)
         }
         else
         {
-            idmap.emplace_back(rows, INVALID_ID);
+            idmap.emplace_back(rows, MAX_UINT64);
         }
     }
 
@@ -73,7 +73,7 @@ RefTuples MemoryValueSpace::addFromModify(const Block & block)
         for (size_t column_id = 0; column_id < split_columns.size(); ++column_id)
         {
             auto value_id = idmap[column_id][row_id];
-            if (value_id != INVALID_ID)
+            if (value_id != MAX_UINT64)
                 values.emplace_back(column_id, value_id);
         }
         tuples.emplace_back(values);
@@ -99,7 +99,7 @@ UInt64 MemoryValueSpace::withModify(UInt64 old_tuple_id, const ValueSpace & modi
     for (size_t column_id = 0; column_id < split_columns.size(); ++column_id)
     {
         auto & split_column = split_columns[column_id];
-        size_t new_value_id = INVALID_ID;
+        size_t new_value_id = MAX_UINT64;
         for (const auto & cv : tuple.values)
         {
             if (cv.column == column_id)
@@ -108,7 +108,7 @@ UInt64 MemoryValueSpace::withModify(UInt64 old_tuple_id, const ValueSpace & modi
                 break;
             }
         }
-        if (new_value_id != INVALID_ID)
+        if (new_value_id != MAX_UINT64)
         {
             split_column.append(modify_value_space.split_columns[column_id], new_value_id);
         }
