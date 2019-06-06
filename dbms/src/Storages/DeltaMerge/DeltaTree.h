@@ -22,8 +22,6 @@ struct DTLeaf;
 template <size_t M, size_t F, size_t S>
 struct DTIntern;
 
-extern const UInt64 INVALID_ID;
-
 using DTModifies    = std::vector<DTModify>;
 using DTModifiesPtr = DTModifies *;
 static_assert(sizeof(UInt64) >= sizeof(DTModifiesPtr));
@@ -403,7 +401,7 @@ struct DTIntern
 
             auto sibling_cut = sibling->count - adopt_count;
             // if adopt_count equals to sibling->count, new_sep_sid is meaningless.
-            auto new_sep_sid = !sibling_cut ? INVALID_ID : sibling->sids[sibling_cut - 1];
+            auto new_sep_sid = !sibling_cut ? 0 : sibling->sids[sibling_cut - 1];
 
             std::move(std::begin(sibling->sids) + sibling_cut, std::begin(sibling->sids) + sibling->count - 1, std::begin(this->sids));
             std::move(std::begin(sibling->deltas) + sibling_cut, std::begin(sibling->deltas) + sibling->count, std::begin(this->deltas));
@@ -421,7 +419,7 @@ struct DTIntern
         }
         else
         {
-            auto new_sep_sid = adopt_count == sibling->count ? INVALID_ID : sibling->sids[adopt_count - 1];
+            auto new_sep_sid = adopt_count == sibling->count ? 0 : sibling->sids[adopt_count - 1];
 
             std::move(std::begin(sibling->sids), std::begin(sibling->sids) + adopt_count, std::begin(this->sids) + this->count);
             std::move(std::begin(sibling->deltas), std::begin(sibling->deltas) + adopt_count, std::begin(this->deltas) + this->count);
@@ -568,7 +566,7 @@ private:
             return;
 
         InternPtr next;
-        UInt64    subtree_min_sid       = INVALID_ID;
+        UInt64    subtree_min_sid       = 0;
         std::tie(next, subtree_min_sid) = submitMinSid(leaf, subtree_min_sid);
         while (next)
         {
