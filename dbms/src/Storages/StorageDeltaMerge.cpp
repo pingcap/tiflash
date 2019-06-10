@@ -25,7 +25,7 @@ StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
     Context & global_context_)
-    : IStorage{columns_}, path(path_ + "/" + name_), name(name_), global_context(global_context_), log(&Logger::get("StorageDeltaMerge"))
+    : IManageableStorage{columns_}, path(path_ + "/" + name_), name(name_), global_context(global_context_), log(&Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -236,6 +236,8 @@ BlockInputStreams StorageDeltaMerge::read( //
         std::numeric_limits<UInt64>::max(),
         select_query.raw_for_mutable);
 }
+
+void StorageDeltaMerge::check(const Context & context) { store->check(context, context.getSettingsRef()); }
 
 namespace ErrorCodes
 {

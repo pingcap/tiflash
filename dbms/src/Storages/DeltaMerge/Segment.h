@@ -76,6 +76,8 @@ public:
 
     void swap(Segment & other);
 
+    void check(const DMContext & dm_context);
+
 private:
     BlockInputStreamPtr getPlacedStream(const ColumnDefine &  handle,
                                         const ColumnDefines & columns_to_read,
@@ -102,6 +104,8 @@ private:
 
     size_t estimatedRows();
     size_t estimatedBytes();
+
+    void doCheck(const DMContext & dm_context, bool lock);
 
 private:
     UInt64      epoch; // After split/merge, epoch got increase by 1.
