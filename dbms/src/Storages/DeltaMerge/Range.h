@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
 namespace DB
 {
@@ -57,6 +58,8 @@ struct Range
     }
 
     inline bool check(T value) const { return checkStart(value) && checkEnd(value); }
+
+    inline String toString() const { return rangeToString(*this); }
 };
 
 using HandleRange = Range<Handle, true>;
