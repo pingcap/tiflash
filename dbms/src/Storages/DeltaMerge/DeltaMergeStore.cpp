@@ -130,6 +130,28 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         }
     }
 
+    auto write = [&](const SegmentPtr & segment, size_t offset, size_t num) {
+        if (!offset && num == block.rows())
+        {
+            Block my_block = block;
+            segment->write(dm_context, std::move(my_block));
+        }
+        else
+        {
+            Block sub_block;
+            for (const auto & c : block)
+            {
+                auto column = c.column->cloneEmpty();
+                column->insertRangeFrom(*c.column, offset, num);
+                auto sub_col      = c.cloneEmpty();
+                sub_col.column    = std::move(column);
+                sub_col.column_id = c.column_id;
+                sub_block.insert(std::move(sub_col));
+            }
+            segment->write(dm_context, std::move(sub_block));
+        }
+    };
+
     const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(handle_define.name));
 
     Handle start          = handle_data[0];
@@ -142,25 +164,11 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             throw Exception("Failed to find segment with proper range", ErrorCodes::LOGICAL_ERROR);
     }
 
-    auto write = [&](const SegmentPtr & segment, size_t offset, size_t num) {
-        Block sub_block;
-        for (const auto & c : block)
-        {
-            auto column = c.column->cloneEmpty();
-            column->insertRangeFrom(*c.column, offset, num);
-            auto sub_col      = c.cloneEmpty();
-            sub_col.column    = std::move(column);
-            sub_col.column_id = c.column_id;
-            sub_block.insert(std::move(sub_col));
-        }
-        segment->write(dm_context, std::move(sub_block));
-    };
-
     // Prepare segment updates.
     auto cur_seg_end = cur_segment_it->first;
-    if (handle_data[rows - 1] < cur_seg_end)
+    if (cur_seg_end == P_INF_HANDLE || handle_data[rows - 1] < cur_seg_end)
     {
-        // Current segment includes the all data in the block.
+        // Current segment includes all data in the block.
         write(cur_segment_it->second, 0, rows);
     }
     else
@@ -182,12 +190,12 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             }
         }
         if (cur_segment_it == segments.end())
-            throw Exception("No more sutable segment");
+            throw Exception("No more suitable segment");
         write(cur_segment_it->second, from, row_id - from);
     }
 
     // This should be called by background thread.
-    checkAll(db_context, db_settings);
+    afterInsertOrDelete(db_context, db_settings);
 
     recorder.submit();
 }
@@ -244,7 +252,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     return res;
 }
 
-bool DeltaMergeStore::checkAll(const Context & db_context, const DB::Settings & db_settings)
+bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::Settings & db_settings)
 {
     auto   dm_context           = newDMContext(db_context, db_settings);
     size_t segment_rows_setting = db_settings.dm_segment_rows;
@@ -293,6 +301,10 @@ void DeltaMergeStore::split(DMContext & dm_context, SegmentPtr segment)
 
     segments[segment->getRange().end]      = segment;
     segments[next_segment->getRange().end] = next_segment;
+
+#ifndef NDEBUG
+    doCheck(dm_context);
+#endif
 }
 
 void DeltaMergeStore::merge(DMContext & dm_context, SegmentPtr left, SegmentPtr right)
@@ -304,6 +316,37 @@ void DeltaMergeStore::merge(DMContext & dm_context, SegmentPtr left, SegmentPtr 
 
     segments.erase(left_range.end);
     segments[right_range.end] = left;
+}
+
+void DeltaMergeStore::check(const Context & db_context, const DB::Settings & db_settings)
+{
+    auto dm_context = newDMContext(db_context, db_settings);
+    doCheck(dm_context);
+}
+
+void DeltaMergeStore::doCheck(DB::DM::DMContext & dm_context)
+{
+    if (segments.empty())
+        return;
+
+    Handle last = segments.begin()->second->getRange().start;
+    if (last != N_INF_HANDLE)
+        throw Exception("The range start of first segment is not N_INF");
+    for (const auto & [end, segment] : segments)
+    {
+        (void)end;
+        if (segment->getRange().start != last)
+            throw Exception("Segment ranges are not consecutive");
+        last = segment->getRange().end;
+    }
+    if (last != P_INF_HANDLE)
+        throw Exception("The range end of last segment is not P_INF");
+
+    for (const auto & [end, segment] : segments)
+    {
+        (void)end;
+        segment->check(dm_context);
+    }
 }
 
 } // namespace DM
