@@ -76,7 +76,15 @@ public:
 
     void swap(Segment & other);
 
-    void check(const DMContext & dm_context);
+    void check(DMContext & dm_context, const String & when, bool is_lock = true);
+
+    String simpleInfo() { return "{" + DB::toString(segment_id) + ":" + range.toString() + "}"; }
+
+    String info()
+    {
+        return "{id:" + DB::toString(segment_id) + ", next: " + DB::toString(next_segment_id) + ", epoch: " + DB::toString(epoch)
+            + ", range: " + range.toString() + "}";
+    }
 
 private:
     BlockInputStreamPtr getPlacedStream(const ColumnDefine &  handle,
@@ -104,8 +112,6 @@ private:
 
     size_t estimatedRows();
     size_t estimatedBytes();
-
-    void doCheck(const DMContext & dm_context, bool lock);
 
 private:
     UInt64      epoch; // After split/merge, epoch got increase by 1.
