@@ -38,7 +38,7 @@ StorageDeltaMergeDummy::StorageDeltaMergeDummy(const std::string & path_,
     const ASTPtr & primary_expr_ast_,
     bool attach,
     size_t max_compress_block_size_)
-    : IStorage{columns_},
+    : IManageableStorage{columns_},
       path(path_),
       name(name_),
       max_compress_block_size(max_compress_block_size_),
@@ -196,7 +196,7 @@ BlockInputStreamPtr StorageDeltaMergeDummy::status()
     return std::make_shared<OneBlockInputStream>(block);
 }
 
-void StorageDeltaMergeDummy::check()
+void StorageDeltaMergeDummy::check(const Context &)
 {
     delta_tree->checkAll();
 

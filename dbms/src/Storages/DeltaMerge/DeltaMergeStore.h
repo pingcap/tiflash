@@ -60,6 +60,8 @@ public:
     const ColumnDefines & getTableColumns() { return table_columns; }
     const ColumnDefine &  getHandle() { return table_handle_define; }
 
+    void check(const Context & db_context, const DB::Settings & db_settings);
+
 private:
     DMContext newDMContext(const Context & db_context, const DB::Settings & db_settings)
     {
@@ -77,10 +79,12 @@ private:
                          .delta_cache_limit_bytes = db_settings.dm_segment_delta_cache_limit_bytes};
     }
 
-    bool checkAll(const Context & db_context, const DB::Settings & db_settings);
+    bool afterInsertOrDelete(const Context & db_context, const DB::Settings & db_settings);
     bool checkSplitOrMerge(const SegmentPtr & segment, DMContext dm_context, size_t segment_rows_setting);
     void split(DMContext & dm_context, SegmentPtr segment);
     void merge(DMContext & dm_context, SegmentPtr left, SegmentPtr right);
+
+    void doCheck(DMContext & dm_context);
 
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;

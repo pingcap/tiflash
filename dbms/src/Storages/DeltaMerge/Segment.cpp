@@ -167,7 +167,17 @@ void Segment::write(DMContext & dm_context, Block && block)
 
     recorder.submit();
 
-    tryFlush(dm_context);
+#ifndef NDEBUG
+    doCheck(dm_context, false);
+#endif
+
+    if (tryFlush(dm_context))
+    {
+#ifndef NDEBUG
+        doCheck(dm_context, false);
+#endif
+    }
+
     if (delta.tryFlushCache(opc))
         ensurePlace(dm_context.table_handle_define, dm_context.storage_pool);
 }
@@ -302,9 +312,48 @@ size_t Segment::getEstimatedBytes()
     return estimatedBytes();
 }
 
+void Segment::check(const DMContext & dm_context)
+{
+    doCheck(dm_context, true);
+}
+
 //==========================================================================================
 // Segment private methods.
 //==========================================================================================
+
+
+void Segment::doCheck(const DMContext & dm_context, bool is_lock)
+{
+    auto & handle  = dm_context.table_handle_define;
+    auto & storage = dm_context.storage_pool;
+    ensurePlace(handle, storage);
+
+    SharedLock no_lock;
+
+    auto stream = getPlacedStream(handle, //
+                                  {dm_context.table_handle_define},
+                                  storage,
+                                  DEFAULT_BLOCK_SIZE,
+                                  is_lock ? std::shared_lock(mutex) : std::move(no_lock));
+
+    stream->readPrefix();
+    while (true)
+    {
+        Block block = stream->read();
+        if (!block)
+            break;
+        if (!block.rows())
+            continue;
+        size_t rows            = block.rows();
+        auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.table_handle_define.name));
+        for (size_t i = 0; i < rows; ++i)
+        {
+            if (!range.check(handle_col_data[i]))
+                throw Exception("Segment [" + DB::toString(segment_id) + "] contains rows which do not belong to it");
+        }
+    }
+    stream->readSuffix();
+}
 
 BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
                                              const ColumnDefines & columns_to_read,

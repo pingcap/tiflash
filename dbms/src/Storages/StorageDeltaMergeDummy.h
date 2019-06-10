@@ -10,18 +10,19 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DummyDefines.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 
 #include <common/logger_useful.h>
 
 namespace DB
 {
-class StorageDeltaMergeDummy : public ext::shared_ptr_helper<StorageDeltaMergeDummy>, public IStorage
+class StorageDeltaMergeDummy : public ext::shared_ptr_helper<StorageDeltaMergeDummy>, public IManageableStorage
 {
 public:
     bool supportsModification() const override { return true; }
 
-    String getName() const override { return "DeltaMerge"; }
+    String getName() const override { return "DeltaMergeDummy"; }
     String getTableName() const override { return name; }
 
     bool checkData() const override { return stable_storage->checkData(); };
@@ -53,13 +54,13 @@ public:
     /// entries, inserts, deletes, modifies
     std::tuple<UInt64, UInt64, UInt64, UInt64> delta_status();
 
-    void flushDelta();
+    void flushDelta() override;
 
-    BlockInputStreamPtr status();
+    BlockInputStreamPtr status() override;
 
     void initDelta();
 
-    void check();
+    void check(const Context & context) override;
 
     StorageDeltaMergeDummy(const std::string & path_,
         const std::string & name_,
