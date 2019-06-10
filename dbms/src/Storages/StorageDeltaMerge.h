@@ -8,13 +8,14 @@
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 
 #include <common/logger_useful.h>
 
 namespace DB
 {
-class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IStorage
+class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IManageableStorage
 {
 public:
     bool supportsModification() const override { return true; }
@@ -32,6 +33,10 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
+
+    BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
+
+    void check(const Context & context) override;
 
 protected:
     StorageDeltaMerge(const std::string & path_,

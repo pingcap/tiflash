@@ -46,13 +46,17 @@ struct Range
             return start > end;
     }
 
-    inline bool check(T value) const
+    inline bool checkStart(T value) const { return start == MIN || start <= value; }
+
+    inline bool checkEnd(T value) const
     {
         if constexpr (right_open)
-            return (start == MIN || start <= value) && (end == MAX || value < end);
+            return end == MAX || value < end;
         else
-            return (start == MIN || start <= value) && (end == MAX || value <= end);
+            return end == MAX || value <= end;
     }
+
+    inline bool check(T value) const { return checkStart(value) && checkEnd(value); }
 };
 
 using HandleRange = Range<Handle, true>;
