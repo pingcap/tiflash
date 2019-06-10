@@ -5,6 +5,7 @@
 #include <cassert>
 #include <algorithm>
 #include <memory>
+#include <iostream>
 
 #include <boost/noncopyable.hpp>
 #include <boost/iterator_adaptors.hpp>
@@ -95,7 +96,10 @@ protected:
     static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
 
     /// Minimum amount of memory to allocate for num_elements, including padding.
-    static size_t minimum_memory_for_elements(size_t num_elements) { return byte_size(num_elements) + pad_right + pad_left; }
+    static size_t minimum_memory_for_elements(size_t num_elements) {
+        auto res = byte_size(num_elements) + pad_right + pad_left;
+        return res;
+    }
 
     void alloc_for_num_elements(size_t num_elements)
     {
@@ -227,7 +231,7 @@ public:
     template <typename ... TAllocatorParams>
     void push_back_raw(const char * ptr, TAllocatorParams &&... allocator_params)
     {
-        if (unlikely(c_end == c_end_of_storage))
+        if (unlikely(c_end >= c_end_of_storage))
             reserveForNextSize(std::forward<TAllocatorParams>(allocator_params)...);
 
         memcpy(c_end, ptr, ELEMENT_SIZE);
@@ -376,7 +380,8 @@ public:
     template <typename U, typename ... TAllocatorParams>
     void push_back(U && x, TAllocatorParams &&... allocator_params)
     {
-        if (unlikely(this->c_end == this->c_end_of_storage))
+        // FIXME:: It's dangerous here !!
+        if (unlikely(this->c_end >= this->c_end_of_storage))
             this->reserveForNextSize(std::forward<TAllocatorParams>(allocator_params)...);
 
         new (t_end()) T(std::forward<U>(x));
@@ -389,7 +394,7 @@ public:
     template <typename... Args>
     void emplace_back(Args &&... args)
     {
-        if (unlikely(this->c_end == this->c_end_of_storage))
+        if (unlikely(this->c_end >= this->c_end_of_storage))
             this->reserveForNextSize();
 
         new (t_end()) T(std::forward<Args>(args)...);

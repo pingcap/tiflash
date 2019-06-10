@@ -7,8 +7,8 @@
 >> insert into test values (1)
 
 >> select a + 3.141592653 from test
-┌─plus(a, Decimal_3.141592653)─┐
-│ 4.141592653                  │
-└──────────────────────────────┘
+┌─plus(a, Decimal64_3.141592653)─┐
+│ 4.141592653                    │
+└────────────────────────────────┘
 
 >> drop table if exists test

@@ -49,6 +49,7 @@ bool callOnBasicType(TypeIndex number, F && f)
             case TypeIndex::Decimal32:    return f(TypePair<T, Decimal32>());
             case TypeIndex::Decimal64:    return f(TypePair<T, Decimal64>());
             case TypeIndex::Decimal128:   return f(TypePair<T, Decimal128>());
+            case TypeIndex::Decimal256:   return f(TypePair<T, Decimal256>());
             default:
                 break;
         }

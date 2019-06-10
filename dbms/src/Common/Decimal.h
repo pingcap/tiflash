@@ -110,6 +110,9 @@ struct Decimal {
     Decimal() = default;
     Decimal(T v_): value(v_) {}
 
+    constexpr Decimal<T> & operator = (Decimal<T> &&) = default;
+    constexpr Decimal<T> & operator = (const Decimal<T> &) = default;
+
     String toString(ScaleType) const;
 
     template <typename U, std::enable_if_t<std::is_same_v<U, Int256> || std::is_same_v<U, Int512> || std::is_integral_v<U> || std::is_same_v<U, Int128>>* = nullptr>
@@ -263,8 +266,17 @@ std::enable_if_t<IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, Scal
         for (ScaleType i = v_scale; i < scale; i++)
             value *= 10;
     } else {
-        for (ScaleType i = scale; i < v_scale; i++)
+        bool need2Round = false;
+        for (ScaleType i = scale; i < v_scale; i++) {
+            need2Round = (value < 0 ? - value : value) % 10 >= 5;
             value /= 10;
+        }
+        if (need2Round) {
+            if (value < 0)
+                value --;
+            else
+                value ++;
+        }
     }
     return value;
 }

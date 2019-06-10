@@ -268,6 +268,8 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
                     decimalRound(value, buf);
                     if (negative)
                         value = -value;
+                    x.value = static_cast<T>(value);
+                    checkDecimalOverflow(x, precision);
                     return;
                 }
                 break;
@@ -289,6 +291,8 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
                         decimalRound(value, buf);
                         if (negative)
                             value = -value;
+                        x.value = static_cast<T>(value);
+                        checkDecimalOverflow(x, precision);
                         return;
                     }
                 } 
@@ -299,6 +303,8 @@ inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision
                 }
                 if (negative)
                     value = -value;
+                x.value = static_cast<T>(value);
+                checkDecimalOverflow(x, precision);
                 return;
         }
         ++buf.position();

@@ -19,7 +19,7 @@ struct AggregateFunctionAvgData
     T sum;
     UInt64 count = 0;
 
-    AggregateFunctionAvgData(){}
+    AggregateFunctionAvgData(){sum = T(0);}
 };
 
 
@@ -51,8 +51,9 @@ public:
     {
         if constexpr (IsDecimal<T>)
             this->data(place).sum += static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num];
-        else
+        else {
             this->data(place).sum += static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num];
+        }
         ++this->data(place).count;
     }
 
@@ -81,9 +82,10 @@ public:
             TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale) / static_cast<typename TResult::NativeType>(this->data(place).count);
             static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(result);
         }
-        else
+        else {
             static_cast<ColumnFloat64 &>(to).getData().push_back(
                 static_cast<Float64>(this->data(place).sum) / this->data(place).count);
+        }
     }
 
     void create(AggregateDataPtr place) const override {

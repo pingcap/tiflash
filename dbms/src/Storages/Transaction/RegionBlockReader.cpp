@@ -17,7 +17,7 @@ extern const int LOGICAL_ERROR;
 
 static const Field GenDecodeRow(const TiDB::ColumnInfo & col_info)
 {
-    switch (col_info.flag)
+    switch (col_info.getCodecFlag())
     {
         case TiDB::CodecFlagNil:
             return Field();
