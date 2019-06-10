@@ -44,19 +44,20 @@ protected:
     {
         size_t rows            = block.rows();
         auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(handle_define.name));
-        bool   handle_range_include_all
-            = handle_range.all() || (handle_range.check(handle_col_data[0]) && handle_range.check(handle_col_data[rows - 1]));
-        if (handle_range_include_all)
+        auto   first           = handle_col_data[0];
+        auto   last            = handle_col_data[rows - 1];
+
+        bool include_all = handle_range.all() || (handle_range.check(first) && handle_range.check(last));
+        if (include_all)
             return std::move(block);
-        bool handle_range_exclude_all
-            = handle_range.none() || (handle_col_data[0] >= handle_range.end || handle_col_data[rows - 1] < handle_range.start);
-        if (handle_range_exclude_all)
+        bool exclude_all = handle_range.none() || !handle_range.checkEnd(first) || !handle_range.checkStart(last);
+        if (exclude_all)
             return {};
 
         auto   low_it  = std::lower_bound(handle_col_data.cbegin(), handle_col_data.cend(), handle_range.start);
         size_t low_pos = low_it - handle_col_data.cbegin();
         size_t high_pos;
-        if (handle_range.check(handle_col_data[rows - 1]))
+        if (handle_range.check(last))
         {
             high_pos = rows;
         }
