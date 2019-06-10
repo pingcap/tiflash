@@ -69,6 +69,13 @@ public:
         {
             return MockTiDB::instance().getSchemaJson(table_id);
         }
+        String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override
+        {
+            std::ignore = database_name;
+            std::ignore = table_name;
+            std::ignore = context;
+            throw Exception("getSchemaJsonByName not implemented in MockSchemaSyncer");
+        }
     };
 
 public:
