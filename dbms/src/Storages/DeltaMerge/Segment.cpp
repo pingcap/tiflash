@@ -157,6 +157,8 @@ void Segment::write(DMContext & dm_context, Block && block)
 {
     std::unique_lock lock(mutex);
 
+    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] write rows: " + DB::toString(block.rows()));
+
     OpContext opc = OpContext::createForLogStorage(dm_context);
 
     EventRecorder recorder(ProfileEvents::DMAppendDelta, ProfileEvents::DMAppendDeltaNS);
@@ -168,18 +170,62 @@ void Segment::write(DMContext & dm_context, Block && block)
     recorder.submit();
 
 #ifndef NDEBUG
-    doCheck(dm_context, false);
+    check(dm_context, "After write", false);
 #endif
 
     if (tryFlush(dm_context))
     {
 #ifndef NDEBUG
-        doCheck(dm_context, false);
+        check(dm_context, "After delta merge", false);
 #endif
     }
 
     if (delta.tryFlushCache(opc))
+    {
         ensurePlace(dm_context.table_handle_define, dm_context.storage_pool);
+
+#ifndef NDEBUG
+        check(dm_context, "After delta cache flush", false);
+#endif
+    }
+}
+
+void Segment::check(DMContext & dm_context, const String & when, bool is_lock)
+{
+    SharedLock lock;
+    if (is_lock)
+        lock = SharedLock(mutex);
+    auto & handle  = dm_context.table_handle_define;
+    auto & storage = dm_context.storage_pool;
+    ensurePlace(handle, storage);
+
+    LOG_INFO(log,
+             when + ": entries:" + DB::toString(delta_tree->numEntries()) + ", inserts:" + DB::toString(delta_tree->numInserts())
+                 + ", deletes:" + DB::toString(delta_tree->numDeletes()));
+    {
+        SharedLock no_lock;
+        auto       stream = getPlacedStream(handle, {handle}, storage, DEFAULT_BLOCK_SIZE, std::move(no_lock));
+
+        size_t total_rows = 0;
+        while (true)
+        {
+            Block block = stream->read();
+            if (!block)
+                break;
+            if (!block.rows())
+                continue;
+            const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(handle.name));
+            auto         rows        = block.rows();
+            for (size_t i = 0; i < rows; ++i)
+            {
+                if (!range.check(handle_data[i]))
+                    throw Exception(when + ": Segment contains illegal rows(raw)");
+            }
+            total_rows += rows;
+        }
+
+        LOG_DEBUG(log, when + ": rows(raw): " + DB::toString(total_rows));
+    }
 }
 
 void Segment::deleteRange(DMContext & dm_context, const HandleRange & delete_range)
@@ -209,12 +255,27 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context, //
 
     auto & handle  = dm_context.table_handle_define;
     auto & storage = dm_context.storage_pool;
-    ensurePlace(handle, storage);
 
-    auto stream = getPlacedStream(handle, columns_to_read, storage, expected_block_size, std::move(lock));
-    if (!is_raw)
-        stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_MVCC>>(stream, handle, max_version);
-    return stream;
+    if (is_raw)
+    {
+        auto stable_input_stream = stable.getInputStream(columns_to_read, storage.data());
+        auto delta_input_stream  = delta.getInputStream(columns_to_read, storage.log());
+
+        BlockInputStreams streams;
+        streams.push_back(stable.getInputStream(columns_to_read, storage.data()));
+        streams.push_back(delta.getInputStream(columns_to_read, storage.data()));
+
+        return std::make_shared<ConcatBlockInputStream>(streams);
+    }
+    else
+    {
+        ensurePlace(handle, storage);
+
+        auto stream = getPlacedStream(handle, columns_to_read, storage, expected_block_size, std::move(lock));
+        if (!is_raw)
+            stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_MVCC>>(stream, handle, max_version);
+        return stream;
+    }
 }
 
 SegmentPtr Segment::split(DMContext & dm_context)
@@ -312,48 +373,9 @@ size_t Segment::getEstimatedBytes()
     return estimatedBytes();
 }
 
-void Segment::check(const DMContext & dm_context)
-{
-    doCheck(dm_context, true);
-}
-
 //==========================================================================================
 // Segment private methods.
 //==========================================================================================
-
-
-void Segment::doCheck(const DMContext & dm_context, bool is_lock)
-{
-    auto & handle  = dm_context.table_handle_define;
-    auto & storage = dm_context.storage_pool;
-    ensurePlace(handle, storage);
-
-    SharedLock no_lock;
-
-    auto stream = getPlacedStream(handle, //
-                                  {dm_context.table_handle_define},
-                                  storage,
-                                  DEFAULT_BLOCK_SIZE,
-                                  is_lock ? std::shared_lock(mutex) : std::move(no_lock));
-
-    stream->readPrefix();
-    while (true)
-    {
-        Block block = stream->read();
-        if (!block)
-            break;
-        if (!block.rows())
-            continue;
-        size_t rows            = block.rows();
-        auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.table_handle_define.name));
-        for (size_t i = 0; i < rows; ++i)
-        {
-            if (!range.check(handle_col_data[i]))
-                throw Exception("Segment [" + DB::toString(segment_id) + "] contains rows which do not belong to it");
-        }
-    }
-    stream->readSuffix();
-}
 
 BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
                                              const ColumnDefines & columns_to_read,
@@ -361,31 +383,24 @@ BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
                                              size_t                expected_block_size,
                                              SharedLock &&         lock)
 {
-    // We always put handle and version at the beginning of columns.
+    // We always put handle, version and tag column at the beginning of columns.
     ColumnDefines new_columns_to_read;
-    ColumnDefines columns_without_pk;
 
     new_columns_to_read.push_back(handle);
     new_columns_to_read.push_back(VERSION_COLUMN_DEFINE);
+    new_columns_to_read.push_back(TAG_COLUMN_DEFINE);
 
     for (size_t i = 0; i < columns_to_read.size(); ++i)
     {
         const auto & c = columns_to_read[i];
-        if (c.id != handle.id && c.id != VERSION_COLUMN_ID)
+        if (c.id != handle.id && c.id != VERSION_COLUMN_ID && c.id != TAG_COLUMN_ID)
         {
-            columns_without_pk.push_back(c);
             new_columns_to_read.push_back(c);
         }
     }
 
     auto stable_input_stream = stable.getInputStream(new_columns_to_read, storage_pool.data());
-
-    // handle and version column are cached, they can be fetched faster by  delta.getPKColumns().
-    auto delta_block            = delta.read(columns_without_pk, storage_pool.log(), 0, delta.num_rows());
-    auto delta_pk_columns_block = delta.getPKColumns(handle, storage_pool.log()).toBlock(handle);
-
-    delta_block.insert(0, delta_pk_columns_block.getByPosition(0));
-    delta_block.insert(1, delta_pk_columns_block.getByPosition(1));
+    auto delta_block         = delta.read(new_columns_to_read, storage_pool.log(), 0, delta.num_rows());
 
     auto delta_value_space = std::make_shared<DeltaValueSpace>(new_columns_to_read, delta_block);
 

@@ -86,6 +86,12 @@ private:
 
     void doCheck(DMContext & dm_context);
 
+    void write_segment(DMContext &        dm_context, //
+                       const SegmentPtr & segment,
+                       const Block &      block,
+                       size_t             offset,
+                       size_t             limit);
+
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
 
