@@ -233,5 +233,25 @@ inline Block createHeader(const ColumnDefines & col_defines)
     return header;
 }
 
+template <class T, bool right_open = true>
+inline String rangeToString(T start, T end)
+{
+    String s = "[" + DB::toString(start) + "," + DB::toString(end);
+    if constexpr (right_open)
+        s += ")";
+    else
+        s += "]";
+    return s;
+}
+
+template <typename T, bool right_open>
+struct Range;
+
+template <typename T, bool right_open = true>
+inline String rangeToString(const Range<T, right_open> & range)
+{
+    return rangeToString<T, right_open>(range.start, range.end);
+}
+
 } // namespace DM
 } // namespace DB
