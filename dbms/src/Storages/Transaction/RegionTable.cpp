@@ -169,6 +169,9 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         const auto & columns = merge_tree->getColumns();
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
+        if (names.size() < 3)
+            throw Exception("[RegionTable::flushRegion] size of merge tree columns < 3, should not happen", ErrorCodes::LOGICAL_ERROR);
+
         auto [block, status] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, data_list);
         if (!block)
             return;
@@ -392,6 +395,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
                 LOG_DEBUG(log, "[tryFlushRegion] region " << region_id << " fail, no table for mapping");
                 return;
             }
+            // maybe this region contains more than one table, just flush the first one.
             table_id = *it->second.tables.begin();
         }
         else
@@ -428,7 +432,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
     bool status = func_update_region([&](InternalRegion & region) -> bool {
         if (region.pause_flush)
         {
-            LOG_INFO(log, "[tryFlushRegion] internal region " << region_id << " pause flush, might be flushing");
+            LOG_INFO(log, "[tryFlushRegion] internal region " << region_id << " pause flush, may be being flushed");
             return false;
         }
         region.pause_flush = true;
