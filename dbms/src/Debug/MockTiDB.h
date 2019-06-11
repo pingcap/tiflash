@@ -12,10 +12,10 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int TABLE_ALREADY_EXISTS;
-    extern const int UNKNOWN_TABLE;
-}
+extern const int LOGICAL_ERROR;
+extern const int TABLE_ALREADY_EXISTS;
+extern const int UNKNOWN_TABLE;
+} // namespace ErrorCodes
 
 class MockTiDB : public ext::singleton<MockTiDB>
 {
@@ -35,12 +35,12 @@ public:
 
         TableID getPartitionIDByName(const String & partition_name)
         {
-            const auto & partition_def = std::find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&partition_name](const TiDB::PartitionDefinition & part_def) {
-                return part_def.name == partition_name;
-            });
+            const auto & partition_def = std::find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(),
+                [&partition_name](const TiDB::PartitionDefinition & part_def) { return part_def.name == partition_name; });
 
             if (partition_def == table_info.partition.definitions.end())
-                throw Exception("Mock TiDB table " + database_name + "." + table_name + " does not have partition " + partition_name, ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Mock TiDB table " + database_name + "." + table_name + " does not have partition " + partition_name,
+                    ErrorCodes::LOGICAL_ERROR);
 
             return partition_def->id;
         }
@@ -48,27 +48,23 @@ public:
         std::vector<TableID> getPartitionIDs()
         {
             std::vector<TableID> partition_ids;
-            std::for_each(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [&](const TiDB::PartitionDefinition & part_def) {
-                partition_ids.emplace_back(part_def.id);
-            });
+            std::for_each(table_info.partition.definitions.begin(), table_info.partition.definitions.end(),
+                [&](const TiDB::PartitionDefinition & part_def) { partition_ids.emplace_back(part_def.id); });
             return partition_ids;
         }
 
         TiDB::TableInfo table_info;
 
     private:
-        const String          database_name;
-        const String          table_name;
+        const String database_name;
+        const String table_name;
     };
     using TablePtr = std::shared_ptr<Table>;
 
     class MockSchemaSyncer : public JsonSchemaSyncer
     {
     protected:
-        String getSchemaJson(TableID table_id, Context & /*context*/) override
-        {
-            return MockTiDB::instance().getSchemaJson(table_id);
-        }
+        String getSchemaJson(TableID table_id, Context & /*context*/) override { return MockTiDB::instance().getSchemaJson(table_id); }
         String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override
         {
             std::ignore = database_name;
@@ -96,8 +92,8 @@ private:
     std::mutex tables_mutex;
 
     std::unordered_map<String, DatabaseID> databases;
-    std::unordered_map<String, TablePtr>   tables_by_name;
-    std::unordered_map<TableID, TablePtr>  tables_by_id;
+    std::unordered_map<String, TablePtr> tables_by_name;
+    std::unordered_map<TableID, TablePtr> tables_by_id;
 };
 
 } // namespace DB

@@ -36,8 +36,8 @@ public:
 
     // Persist chosen regions.
     // Currently we also trigger region files GC in it.
-    bool tryPersistAndReport(RaftContext & raft_ctx, const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD,
-        const Seconds region_persist_period = REGION_PERSIST_PERIOD);
+    bool tryPersist(
+        const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD, const Seconds region_persist_period = REGION_PERSIST_PERIOD);
 
     size_t regionSize() const;
 

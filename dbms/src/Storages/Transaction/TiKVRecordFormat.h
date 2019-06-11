@@ -164,7 +164,8 @@ inline TiKVKey appendTs(const TiKVKey & key, Timestamp ts)
 {
     auto big_endian_ts = encodeUInt64Desc(ts);
     auto str = key.getStr();
-    return TiKVKey(str.append(reinterpret_cast<const char *>(&big_endian_ts), sizeof(big_endian_ts)));
+    str.append(reinterpret_cast<const char *>(&big_endian_ts), sizeof(big_endian_ts));
+    return TiKVKey(std::move(str));
 }
 
 inline TiKVKey genKey(TableID tableId, HandleID handleId, Timestamp ts)
