@@ -500,7 +500,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
                     LOG_ERROR(log,
                         "WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: " << ori_del
                                                            << " , current: " << is_deleted);
-                    throw Exception("Region::compareAndCompleteSnapshot original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
                 }
                 handle_map.erase(it);
             }
