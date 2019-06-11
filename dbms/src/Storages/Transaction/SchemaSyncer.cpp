@@ -96,8 +96,9 @@ String Curl::getTiDBTableInfoJson(const std::string & database_name, const std::
     CURL * curl = curl_easy_init();
 
     curl_easy_setopt(curl,
-                     CURLOPT_URL,
-                     std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/schema/" + database_name + "/" + table_name).c_str());
+        CURLOPT_URL,
+        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/schema/" + database_name + "/" + table_name)
+            .c_str());
 
     auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
         auto str = reinterpret_cast<String *>(result);
@@ -128,7 +129,10 @@ String Curl::getTiDBTableInfoJson(const std::string & database_name, const std::
 
 String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context) { return Curl::instance().getTiDBTableInfoJson(table_id, context); }
 
-String getTiDBTableInfoJsonByCurl(const std::string & database_name, const std::string & table_name, Context & context) { return Curl::instance().getTiDBTableInfoJson(database_name, table_name, context); }
+String getTiDBTableInfoJsonByCurl(const std::string & database_name, const std::string & table_name, Context & context)
+{
+    return Curl::instance().getTiDBTableInfoJson(database_name, table_name, context);
+}
 
 using TableInfo = TiDB::TableInfo;
 using ColumnInfo = TiDB::ColumnInfo;
@@ -310,6 +314,11 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
 
 JsonSchemaSyncer::JsonSchemaSyncer() : log(&Logger::get("SchemaSyncer")) {}
 
+void JsonSchemaSyncer::syncSchemas(Context & /*context*/)
+{
+    // Too lazy to implement, as the other "decent" schema syncer will do this anyway.
+}
+
 void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool force)
 {
     // Do nothing if table already exists unless forced,
@@ -438,11 +447,13 @@ int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const 
     String table_info_json = getSchemaJsonByName(database_name, table_name, context);
     if (table_info_json.empty())
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ <<  ": Database" << database_name << ": Table " << table_name << "doesn't exist in TiDB, it may have been dropped.");
+        LOG_WARNING(log,
+            __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name
+                                << "doesn't exist in TiDB, it may have been dropped.");
         return InvalidTableID;
     }
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ <<  ": Database" << database_name << ": Table " << table_name << " info json: " << table_info_json);
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name << " info json: " << table_info_json);
 
     // parse table id from table_info_json
     if (table_info_json.empty())
@@ -470,6 +481,9 @@ int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const 
 
 String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }
 
-String HttpJsonSchemaSyncer::getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) { return getTiDBTableInfoJsonByCurl(database_name, table_name, context); }
+String HttpJsonSchemaSyncer::getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context)
+{
+    return getTiDBTableInfoJsonByCurl(database_name, table_name, context);
+}
 
 } // namespace DB

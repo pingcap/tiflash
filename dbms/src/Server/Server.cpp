@@ -27,6 +27,7 @@
 #include <Interpreters/loadMetadata.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
@@ -343,6 +344,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->setLearnerKey("engine");
         }
     }
+    // TODO: Remove this config once decent schema syncer is done.
     if (config().has("tidb"))
     {
         String service_ip = config().getString("tidb.service_ip");
@@ -372,6 +374,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_DEBUG(log, "Loaded metadata.");
 
     global_context->setCurrentDatabase(default_database);
+
+    /// Then, sync schemas with TiDB, and initialize schema sync service.
+    global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+    LOG_DEBUG(log, "Sync schemas done.");
+    global_context->initializeSchemaSyncService();
 
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,

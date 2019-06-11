@@ -79,6 +79,8 @@ class RaftService;
 using RaftServicePtr = std::shared_ptr<RaftService>;
 class TiDBService;
 using TiDBServicePtr = std::shared_ptr<TiDBService>;
+class SchemaSyncService;
+using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
 
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
@@ -372,6 +374,9 @@ public:
 
     void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
     TiDBService & getTiDBService();
+
+    void initializeSchemaSyncService();
+    SchemaSyncService & getSchemaSyncService();
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

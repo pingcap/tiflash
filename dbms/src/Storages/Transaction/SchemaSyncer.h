@@ -2,9 +2,9 @@
 
 #include <common/logger_useful.h>
 
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Types.h>
-#include <IO/ReadBufferFromString.h>
 
 
 namespace DB
@@ -14,6 +14,12 @@ class SchemaSyncer
 {
 public:
     virtual ~SchemaSyncer() = default;
+
+    /**
+     * Synchronize all schemas between TiDB and CH.
+     * @param context
+     */
+    virtual void syncSchemas(Context & context) = 0;
 
     /**
      * Synchronize schema between TiDB and CH, to make sure the CH table is new enough to accept data from raft.
@@ -34,6 +40,8 @@ class JsonSchemaSyncer : public SchemaSyncer
 {
 public:
     JsonSchemaSyncer();
+
+    void syncSchemas(Context & context) override;
 
     void syncSchema(TableID table_id, Context & context, bool force) override;
 
