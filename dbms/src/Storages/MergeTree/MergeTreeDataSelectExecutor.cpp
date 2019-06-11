@@ -168,7 +168,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 
     std::vector<RegionQueryInfo> regions_query_info = mvcc_query_info.regions_query_info;
-    Int64 special_region_index = -1;
+    ssize_t special_region_index = -1;
     RegionMap kvstore_region;
     Blocks region_block_data;
     const std::string handle_col_name = is_txn_engine ? data.getPrimarySortDescription()[0].column_name : "";
@@ -318,6 +318,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                 }
             }
+
+            // if there is no region, just return.
+            if (regions_query_info.size() == 0)
+                return {};
+
+            concurrent_num = std::min(concurrent_num, regions_query_info.size());
         }
 
         region_group_range_parts.assign(concurrent_num, {});
@@ -341,42 +347,50 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         auto start_time = Clock::now();
 
-        size_t mem_region_num = regions_query_info.size();
-        ThreadPool pool(std::min(mem_region_num, concurrent_num));
+        const size_t mem_region_num = regions_query_info.size();
+        size_t batch_size = mem_region_num / concurrent_num;
         std::atomic_bool need_retry = false;
 
-        for (size_t region_begin = 0, size = std::max(mem_region_num / concurrent_num, 1); region_begin < mem_region_num;
-             region_begin += size)
-        {
-            pool.schedule([&, region_begin, size] {
-                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, mem_region_num);
-                     region_index < region_end; ++region_index)
+        const auto func_run_learner_read = [&](const size_t region_begin) {
+            const size_t region_end = std::min(region_begin + batch_size, mem_region_num);
+            for (size_t region_index = region_begin; region_index < region_end; ++region_index)
+            {
+                if (need_retry)
+                    return;
+
+                const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+
+                auto [block, status]
+                    = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
+                        region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
+                        column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
+
+                if (status != RegionTable::OK)
                 {
-                    if (need_retry)
-                        return;
-
-                    const RegionQueryInfo & region_query_info = regions_query_info[region_index];
-
-                    auto [block, status]
-                        = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
-                            region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
-                            column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
-
-                    if (status != RegionTable::OK)
-                    {
-                        LOG_WARNING(log,
-                            "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
-                                                          << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
-                                                          << region_query_info.range_in_table.second.toString() << ") , status "
-                                                          << RegionTable::RegionReadStatusString(status));
-                        need_retry = true;
-                    }
-                    else if (block)
-                        region_block_data[region_index] = std::move(*block);
+                    LOG_WARNING(log,
+                        "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
+                                                      << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
+                                                      << region_query_info.range_in_table.second.toString() << ") , status "
+                                                      << RegionTable::RegionReadStatusString(status));
+                    need_retry = true;
                 }
-            });
+                else if (block)
+                    region_block_data[region_index] = std::move(*block);
+            }
+        };
+
+        if (concurrent_num > 1)
+        {
+            ThreadPool pool(concurrent_num);
+            for (size_t region_begin = 0; region_begin < mem_region_num; region_begin += batch_size)
+                pool.schedule([&, region_begin] { func_run_learner_read(region_begin); });
+            pool.wait();
         }
-        pool.wait();
+        else
+        {
+            // use current thread to run learner read.
+            func_run_learner_read(0);
+        }
 
         if (need_retry)
             func_throw_retry_region();
