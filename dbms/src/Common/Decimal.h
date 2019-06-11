@@ -130,6 +130,15 @@ struct Decimal {
     }
 
     template <typename U>
+    std::enable_if_t<std::is_floating_point_v<U>, U> toFloat(ScaleType scale) const {
+        U result = static_cast<U> (value);
+        for (ScaleType i = 0; i < scale; i++) {
+            result /= 10;
+        }
+        return result;
+    }
+
+    template <typename U>
     const Decimal<T> & operator += (const Decimal<U> & x) { value += static_cast<NativeType>(x.value); return *this; }
     const Decimal<T> & operator -= (const T & x) { value -= x; return *this; }
     const Decimal<T> & operator *= (const T & x) { value *= x; return *this; }

@@ -1,12 +1,31 @@
 #pragma once
 
+#include <limits>
+
+#if !defined(__GLIBCXX_BITSIZE_INT_N_0) && defined(__SIZEOF_INT128__)
+namespace std
+{
+template <>
+struct numeric_limits<__int128_t>
+{
+    static constexpr bool is_specialized = true;
+    static constexpr bool is_signed = true;
+    static constexpr bool is_integer = true;
+    static constexpr int radix = 2;
+    static constexpr int digits = 128;
+    static constexpr __int128_t min() { return __uint128_t(1) << 127; }               // used in boost 1.65.1+
+    static constexpr __int128_t max() { return __uint128_t(-1)>>1; } // used in boost 1.65.1+
+};
+} // namespace std
+#endif
+
 #include <string>
 #include <vector>
 #include <Poco/Types.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-    #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
 #pragma GCC diagnostic pop
 
 namespace DB
