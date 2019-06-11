@@ -251,7 +251,7 @@ bool RegionMeta::isPeerRemoved() const
 
     if (pending_remove)
         return true;
-    for (auto region_peer : region.peers())
+    for (const auto & region_peer : region.peers())
     {
         if (region_peer.id() == peer.id())
             return false;
