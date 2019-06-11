@@ -84,8 +84,6 @@ private:
     void split(DMContext & dm_context, SegmentPtr segment);
     void merge(DMContext & dm_context, SegmentPtr left, SegmentPtr right);
 
-    void doCheck(DMContext & dm_context);
-
     void write_segment(DMContext &        dm_context, //
                        const SegmentPtr & segment,
                        const Block &      block,

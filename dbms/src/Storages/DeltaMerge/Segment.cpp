@@ -258,12 +258,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context, //
 
     if (is_raw)
     {
-        auto stable_input_stream = stable.getInputStream(columns_to_read, storage.data());
-        auto delta_input_stream  = delta.getInputStream(columns_to_read, storage.log());
-
         BlockInputStreams streams;
         streams.push_back(stable.getInputStream(columns_to_read, storage.data()));
-        streams.push_back(delta.getInputStream(columns_to_read, storage.data()));
+        streams.push_back(delta.getInputStream(columns_to_read, storage.log()));
 
         return std::make_shared<ConcatBlockInputStream>(streams);
     }
