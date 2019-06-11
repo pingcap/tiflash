@@ -175,7 +175,7 @@ public:
     class DVSBlockInputStream;
     BlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage);
 
-    const PKColumns & getPKColumns(const ColumnDefine & handle, PageStorage & data_storage);
+//    const PKColumns & getPKColumns(const ColumnDefine & handle, PageStorage & data_storage);
 
     bool tryFlushCache(const OpContext & context, bool force = false);
 
@@ -190,7 +190,7 @@ public:
     const Chunks & getChunks() { return chunks; }
 
 private:
-    void ensurePKColumns(const ColumnDefine & handle, PageStorage & data_storage);
+//    void ensurePKColumns(const ColumnDefine & handle, PageStorage & data_storage);
 
     bool doFlushCache(const OpContext & context);
 
@@ -207,7 +207,7 @@ private:
     PageId page_id;
     Chunks chunks;
 
-    PKColumns pk_columns;
+//    PKColumns pk_columns;
 
     // The cache is mainly used to merge fragment chunks.
     MutableColumnMap cache;
