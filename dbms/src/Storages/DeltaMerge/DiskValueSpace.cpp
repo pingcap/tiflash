@@ -136,7 +136,7 @@ void DiskValueSpace::swap(DiskValueSpace & other)
     std::swap(page_id, other.page_id);
     chunks.swap(other.chunks);
 
-//    pk_columns.swap(other.pk_columns);
+    //    pk_columns.swap(other.pk_columns);
 
     cache.swap(other.cache);
     std::swap(cache_chunks, other.cache_chunks);
@@ -217,7 +217,7 @@ void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, Write
             data_wb.delPage(m.second.page_id);
 
     chunks.swap(new_chunks);
-//    pk_columns = {};
+    //    pk_columns = {};
 
     cache.clear();
     cache_chunks = 0;
@@ -234,8 +234,8 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
         context.meta_storage.write(meta_wb);
     }
 
-//    const auto & handle = context.dm_context.table_handle_define;
-//    ensurePKColumns(handle, context.data_storage);
+    //    const auto & handle = context.dm_context.table_handle_define;
+    //    ensurePKColumns(handle, context.data_storage);
 
     chunks.push_back(std::move(chunk));
 
@@ -248,7 +248,7 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
         return;
     }
 
-//    pk_columns.append(block, handle);
+    //    pk_columns.append(block, handle);
 
     // If former cache is empty, and this chunk is big enough, then no need to cache.
     if (cache_chunks == 0
@@ -299,7 +299,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
         if (cur_chunk.getRows())
         {
             size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_offset_in_start_chunk : 0;
-            size_t rows_limit_in_chunk  = chunk_index == end_chunk_index ? rows_limit_in_end_chunk : cur_chunk.getRows();
+            size_t rows_limit_in_chunk
+                = chunk_index == end_chunk_index ? rows_limit_in_end_chunk : cur_chunk.getRows() - rows_offset_in_chunk;
 
             readChunkData(columns, cur_chunk, read_column_defines, data_storage, rows_offset_in_chunk, rows_limit_in_chunk);
 
