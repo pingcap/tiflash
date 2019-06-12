@@ -4,6 +4,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <tikv/RegionClient.h>
+#include <Storages/Transaction/RegionHelper.hpp>
 
 namespace DB
 {
@@ -26,9 +27,9 @@ RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, co
     return data.removeDataByWriteIt(table_id, write_it);
 }
 
-RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it) const
+RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value) const
 {
-    return data.readDataByWriteIt(table_id, write_it);
+    return data.readDataByWriteIt(table_id, write_it, need_value);
 }
 
 LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
@@ -39,30 +40,11 @@ TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVVa
     return doInsert(cf, key, value);
 }
 
-void Region::batchInsert(std::function<bool(BatchInsertElement &)> && f)
-{
-    std::unique_lock<std::shared_mutex> lock(mutex);
-    for (;;)
-    {
-        if (BatchInsertElement p; f(p))
-        {
-            auto && [k, v, cf] = p;
-            doInsert(*cf, *k, *v);
-        }
-        else
-            break;
-    }
-}
-
 TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
-    // Ignoring all keys other than records.
     std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
-    if (!RecordKVFormat::isRecord(raw_key))
-        return InvalidTableID;
-
-    auto table_id = RecordKVFormat::getTableId(raw_key);
-    if (isTiDBSystemTable(table_id))
+    auto table_id = checkRecordAndValidTable(raw_key);
+    if (table_id == InvalidTableID)
         return InvalidTableID;
 
     auto type = getCf(cf);
@@ -77,13 +59,9 @@ TableID Region::remove(const std::string & cf, const TiKVKey & key)
 
 TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
-    // Ignoring all keys other than records.
     std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
-    if (!RecordKVFormat::isRecord(raw_key))
-        return InvalidTableID;
-
-    auto table_id = RecordKVFormat::getTableId(raw_key);
-    if (isTiDBSystemTable(table_id))
+    auto table_id = checkRecordAndValidTable(raw_key);
+    if (table_id == InvalidTableID)
         return InvalidTableID;
 
     auto type = getCf(cf);
@@ -287,8 +265,14 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 case raft_cmdpb::CmdType::Put:
                 {
                     const auto & put = req.put();
-                    auto [key, value] = RecordKVFormat::genKV(put);
-                    auto table_id = doInsert(put.cf(), key, value);
+
+                    auto & key = put.key();
+                    auto & value = put.value();
+
+                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
+                    const auto & tikv_value = static_cast<const TiKVValue &>(value);
+
+                    auto table_id = doInsert(put.cf(), tikv_key, tikv_value);
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
@@ -299,7 +283,11 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 case raft_cmdpb::CmdType::Delete:
                 {
                     const auto & del = req.delete_();
-                    auto table_id = doRemove(del.cf(), RecordKVFormat::genKey(del));
+
+                    auto & key = del.key();
+                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
+
+                    auto table_id = doRemove(del.cf(), tikv_key);
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
@@ -331,7 +319,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     return result;
 }
 
-size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response) const
+size_t Region::serialize(WriteBuffer & buf) const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
@@ -340,9 +328,6 @@ size_t Region::serialize(WriteBuffer & buf, enginepb::CommandResponse * response
     total_size += meta.serialize(buf);
 
     total_size += data.serialize(buf);
-
-    if (response != nullptr)
-        *response = toCommandResponse();
 
     return total_size;
 }
@@ -388,8 +373,16 @@ void Region::setPendingRemove()
 
 size_t Region::dataSize() const { return data.dataSize(); }
 
+size_t Region::writeCFCount() const
+{
+    std::shared_lock<std::shared_mutex> lock(mutex);
+    return data.writeCF().getSize();
+}
+
 std::string Region::dataInfo() const
 {
+    std::shared_lock<std::shared_mutex> lock(mutex);
+
     std::stringstream ss;
     auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
     if (write_size)
@@ -474,6 +467,72 @@ TableIDSet Region::getCommittedRecordTableID() const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
     return data.getCommittedRecordTableID();
+}
+
+void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point)
+{
+    std::unique_lock<std::shared_mutex> lock(mutex);
+
+    if (handle_map.empty())
+        return;
+
+    auto & region_data = data.writeCFMute().getDataMut();
+    auto & write_map = region_data[table_id];
+
+    size_t deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
+
+    // first check, remove duplicate data in current region.
+    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
+    {
+        const auto & [handle, ts] = write_map_it->first;
+
+        if (auto it = handle_map.find(handle); it != handle_map.end())
+        {
+            const auto & [ori_ts, ori_del] = it->second;
+
+            if (ori_ts > ts)
+                continue;
+            else if (ori_ts == ts)
+            {
+                UInt8 is_deleted = RegionData::getWriteType(write_map_it) == DelFlag;
+                if (is_deleted != ori_del)
+                {
+                    LOG_ERROR(log,
+                        "WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: " << ori_del
+                                                           << " , current: " << is_deleted);
+                    throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+                }
+                handle_map.erase(it);
+            }
+            else
+                handle_map.erase(it);
+        }
+    }
+
+    // second check, remove same data in current region and handle map. remove deleted data by add a record with DelFlag.
+    for (auto it = handle_map.begin(); it != handle_map.end(); ++it)
+    {
+        const auto & handle = it->first;
+        const auto & [ori_ts, ori_del] = it->second;
+        std::ignore = ori_del;
+
+        if (ori_ts >= safe_point)
+            throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+
+        std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
+        TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
+        TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
+        TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
+
+        data.insert(Write, commit_key, raw_key, value);
+        ++deleted_gc_cnt;
+    }
+
+    LOG_DEBUG(log,
+        "[compareAndCompleteSnapshot] table " << table_id << ", gc safe point " << safe_point << ", original write map size "
+                                              << ori_write_map_size << ", remain size " << write_map.size());
+    if (deleted_gc_cnt)
+        LOG_INFO(log, "[compareAndCompleteSnapshot] add deleted gc: " << deleted_gc_cnt);
 }
 
 } // namespace DB

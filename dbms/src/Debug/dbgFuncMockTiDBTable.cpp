@@ -143,9 +143,9 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     {
         auto partition_ids = table->getPartitionIDs();
         std::for_each(partition_ids.begin(), partition_ids.end(),
-            [&](TableID partition_id) { tmt.getRegionTableMut().mockDropRegionsInTable(partition_id); });
+            [&](TableID partition_id) { tmt.getRegionTable().mockDropRegionsInTable(partition_id); });
     }
-    tmt.getRegionTableMut().mockDropRegionsInTable(table_id);
+    tmt.getRegionTable().mockDropRegionsInTable(table_id);
 
     MockTiDB::instance().dropTable(database_name, table_name);
 

@@ -169,6 +169,9 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         const auto & columns = merge_tree->getColumns();
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
+        if (names.size() < 3)
+            throw Exception("[RegionTable::flushRegion] size of merge tree columns < 3, should not happen", ErrorCodes::LOGICAL_ERROR);
+
         auto [block, status] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, data_list);
         if (!block)
             return;
@@ -380,6 +383,78 @@ void RegionTable::removeRegion(const RegionPtr & region)
     }
 }
 
+void RegionTable::tryFlushRegion(RegionID region_id)
+{
+    TableID table_id;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (auto it = regions.find(region_id); it != regions.end())
+        {
+            if (it->second.tables.empty())
+            {
+                LOG_DEBUG(log, "[tryFlushRegion] region " << region_id << " fail, no table for mapping");
+                return;
+            }
+            // maybe this region contains more than one table, just flush the first one.
+            table_id = *it->second.tables.begin();
+        }
+        else
+        {
+            LOG_DEBUG(log, "[tryFlushRegion] region " << region_id << " fail, internal region not exist");
+            return;
+        }
+    }
+
+    const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (auto table_it = tables.find(table_id); table_it != tables.end())
+        {
+            auto & internal_region_map = table_it->second.regions.get();
+            if (auto region_it = internal_region_map.find(region_id); region_it != internal_region_map.end())
+            {
+                InternalRegion & region = region_it->second;
+                return callback(region);
+            }
+            else
+            {
+                LOG_DEBUG(log, "[tryFlushRegion] region " << region_id << " fail, internal region might be removed");
+                return false;
+            }
+        }
+        else
+        {
+            LOG_DEBUG(log, "[tryFlushRegion] region " << region_id << " fail, table not exist");
+            return false;
+        }
+    };
+
+    size_t cache_bytes;
+    bool status = func_update_region([&](InternalRegion & region) -> bool {
+        if (region.pause_flush)
+        {
+            LOG_INFO(log, "[tryFlushRegion] internal region " << region_id << " pause flush, may be being flushed");
+            return false;
+        }
+        region.pause_flush = true;
+        cache_bytes = region.cache_bytes;
+        return true;
+    });
+
+    if (!status)
+        return;
+
+    flushRegion(table_id, region_id, cache_bytes);
+
+    func_update_region([&](InternalRegion & region) -> bool {
+        region.pause_flush = false;
+        region.must_flush = false;
+        region.updated = false;
+        region.cache_bytes = cache_bytes;
+        region.last_flush_time = Clock::now();
+        return true;
+    });
+}
+
 bool RegionTable::tryFlushRegions()
 {
     std::map<std::pair<TableID, RegionID>, size_t> to_flush;
@@ -394,8 +469,8 @@ bool RegionTable::tryFlushRegions()
         });
     }
 
-    for (auto && [id, data] : to_flush)
-        flushRegion(id.first, id.second, data);
+    for (auto && [id, cache_bytes] : to_flush)
+        flushRegion(id.first, id.second, cache_bytes);
 
     { // Now reset status information.
         Timepoint now = Clock::now();
@@ -455,7 +530,7 @@ void RegionTable::traverseRegionsByTable(
 
 void RegionTable::mockDropRegionsInTable(TableID table_id)
 {
-    auto & kvstore = context.getTMTContext().getKVStoreMut();
+    auto & kvstore = context.getTMTContext().getKVStore();
     traverseRegionsByTable(table_id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
         for (auto && [region_id, _] : regions)
         {

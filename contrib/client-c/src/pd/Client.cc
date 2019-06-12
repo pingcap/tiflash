@@ -7,7 +7,7 @@
 namespace pingcap {
 namespace pd {
 
-inline std::vector<std::string> addrsToUrls(std::vector<std::string> addrs) {
+inline std::vector<std::string> addrsToUrls(const std::vector<std::string> & addrs) {
     std::vector<std::string> urls;
     for (const std::string & addr: addrs) {
         if (addr.find("://") == std::string::npos) {

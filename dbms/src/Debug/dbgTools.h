@@ -23,7 +23,7 @@ RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & st
 Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region, HandleID handle_begin, RegionID new_region_id_begin);
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
-    ASTs::const_iterator end, Context & context);
+    ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del = {});
 
 void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_num, Int64 flush_num, Int64 batch_num, UInt64 min_strlen,
     UInt64 max_strlen, Context & context);
