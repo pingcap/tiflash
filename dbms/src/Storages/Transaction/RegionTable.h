@@ -199,7 +199,7 @@ public:
     /// Returns whether this function has done any meaningful job.
     bool tryFlushRegions();
 
-    bool tryFlushRegion(TableID table_id, RegionID region_id);
+    void tryFlushRegion(RegionID region_id);
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);

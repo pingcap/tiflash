@@ -26,7 +26,7 @@ void dbgFuncSetFlushThreshold(Context & context, const ASTs & args, DBGInvoker::
     auto seconds = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTableMut().setFlushThresholds({{bytes, Seconds(seconds)}});
+    tmt.getRegionTable().setFlushThresholds({{bytes, Seconds(seconds)}});
 
     std::stringstream ss;
     ss << "set flush threshold to (" << bytes << " bytes, " << seconds << " seconds)";

@@ -126,7 +126,7 @@ using RPCContextPtr = std::shared_ptr<RPCContext>;
 
 class RegionCache {
 public:
-    RegionCache(pd::ClientPtr pdClient_, std::string key_, std::string value_) : pdClient(pdClient_), learner_key(key_), learner_value(value_), log(&Logger::get("pingcap.tikv")) {
+    RegionCache(pd::ClientPtr pdClient_, std::string key_, std::string value_) : pdClient(pdClient_), learner_key(std::move(key_)), learner_value(std::move(value_)), log(&Logger::get("pingcap.tikv")) {
     }
 
     RPCContextPtr getRPCContext(Backoffer & bo, const RegionVerID & id, bool is_learner);

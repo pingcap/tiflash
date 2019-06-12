@@ -245,7 +245,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         if (regions_query_info.empty())
         {
-            tmt.getRegionTableMut().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
+            tmt.getRegionTable().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
                 for (const auto & [id, region] : regions)
                 {
                     kvstore_region.emplace(id, region);

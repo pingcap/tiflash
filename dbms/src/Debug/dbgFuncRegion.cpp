@@ -67,7 +67,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.getKVStoreMut()->onSnapshot(region, &tmt.getRegionTableMut());
+    tmt.getKVStore()->onSnapshot(region, &tmt.getRegionTable());
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -78,7 +78,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTableMut().tryFlushRegions();
+    tmt.getRegionTable().tryFlushRegions();
 
     std::stringstream ss;
     ss << "region_table try flush regions";
@@ -99,7 +99,7 @@ void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Pri
     TableID table_id = getTableID(context, database_name, table_name, "");
 
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTableMut().tryFlushRegion(table_id, region_id);
+    tmt.getRegionTable().tryFlushRegion(region_id);
 
     std::stringstream ss;
     ss << "region_table try flush table " << table_id << " region " << region_id;
