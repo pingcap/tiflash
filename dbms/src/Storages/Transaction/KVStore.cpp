@@ -39,8 +39,9 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::
 RegionPtr KVStore::getRegion(RegionID region_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    auto it = regions.find(region_id);
-    return (it == regions.end()) ? nullptr : it->second;
+    if (auto it = regions.find(region_id); it != regions.end())
+        return it->second;
+    return nullptr;
 }
 
 size_t KVStore::regionSize() const
