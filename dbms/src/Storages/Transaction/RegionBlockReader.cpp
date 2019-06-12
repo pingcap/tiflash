@@ -233,17 +233,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                                         + std::to_string(day) + ".",
                                     ErrorCodes::LOGICAL_ERROR);
                             }
-                            try
-                            {
-                                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-                            }
-                            catch (std::exception & e)
-                            {
-                                std::cerr << "Wrong datetime format " << year << " " << month << " " << day << " " << hour << " " << minute
-                                          << " " << second << std::endl;
-                                std::cerr << "packed number: " << packed << std::endl;
-                                throw e;
-                            }
+                            datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
                         }
                         it->second.first->insert(static_cast<Int64>(datetime));
                     }
