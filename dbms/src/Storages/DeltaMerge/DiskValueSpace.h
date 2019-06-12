@@ -28,87 +28,6 @@ struct BlockOrRange
 };
 using BlockOrRanges = std::vector<BlockOrRange>;
 
-struct PKColumns
-{
-    ColumnPtr handle_column;
-    ColumnPtr version_column;
-
-    // We don't like to do copy each time update those columns, so let's do a little hack here.
-    IColumn * handle_column_raw  = nullptr;
-    IColumn * version_column_raw = nullptr;
-
-    PKColumns() {}
-
-    PKColumns(const ColumnPtr & handle_column, const ColumnPtr & version_column)
-        : handle_column(handle_column),
-          version_column(version_column),
-          handle_column_raw(const_cast<IColumn *>(handle_column.get())),
-          version_column_raw(const_cast<IColumn *>(version_column.get()))
-    {
-    }
-
-    PKColumns(const PKColumns & from, size_t offset, size_t limit)
-        : handle_column(from.handle_column->cloneEmpty()),
-          version_column(from.version_column->cloneEmpty()),
-          handle_column_raw(const_cast<IColumn *>(handle_column.get())),
-          version_column_raw(const_cast<IColumn *>(version_column.get()))
-    {
-        handle_column_raw->insertRangeFrom(*from.handle_column, offset, limit);
-        version_column_raw->insertRangeFrom(*from.version_column, offset, limit);
-    }
-
-    PKColumns(Block && block, const ColumnDefine & handle)
-    {
-        if (block)
-        {
-            handle_column  = block.getByName(handle.name).column;
-            version_column = block.getByName(VERSION_COLUMN_NAME).column;
-        }
-        else
-        {
-            handle_column  = handle.type->createColumn();
-            version_column = VERSION_COLUMN_TYPE->createColumn();
-        }
-
-        handle_column_raw  = const_cast<IColumn *>(handle_column.get());
-        version_column_raw = const_cast<IColumn *>(version_column.get());
-    }
-
-    void swap(PKColumns & other)
-    {
-        handle_column.swap(other.handle_column);
-        version_column.swap(other.version_column);
-
-        std::swap(handle_column_raw, other.handle_column_raw);
-        std::swap(version_column_raw, other.version_column_raw);
-    }
-
-    void append(const Block & block, const ColumnDefine & handle)
-    {
-        if (!handle_column)
-        {
-            handle_column  = handle.type->createColumn();
-            version_column = VERSION_COLUMN_TYPE->createColumn();
-
-            handle_column_raw  = const_cast<IColumn *>(handle_column.get());
-            version_column_raw = const_cast<IColumn *>(version_column.get());
-        }
-        handle_column_raw->insertRangeFrom(*block.getByName(handle.name).column, 0, block.rows());
-        version_column_raw->insertRangeFrom(*block.getByName(VERSION_COLUMN_NAME).column, 0, block.rows());
-    }
-
-    Block toBlock(const ColumnDefine & handle) const
-    {
-        return {createColumnWithTypeAndName(handle_column, handle.type, handle.name, handle.id),
-                createColumnWithTypeAndName(version_column, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID)};
-    }
-
-    size_t rows() const { return handle_column->size(); }
-
-    explicit operator bool() { return bool(handle_column); }
-    bool     operator!() { return !bool(handle_column); }
-};
-
 class DiskValueSpace
 {
 public:
@@ -175,8 +94,6 @@ public:
     class DVSBlockInputStream;
     BlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage);
 
-//    const PKColumns & getPKColumns(const ColumnDefine & handle, PageStorage & data_storage);
-
     bool tryFlushCache(const OpContext & context, bool force = false);
 
     size_t num_rows();
@@ -190,8 +107,6 @@ public:
     const Chunks & getChunks() { return chunks; }
 
 private:
-//    void ensurePKColumns(const ColumnDefine & handle, PageStorage & data_storage);
-
     bool doFlushCache(const OpContext & context);
 
     size_t rowsFromBack(size_t chunks);
@@ -206,8 +121,6 @@ private:
     bool   should_cache;
     PageId page_id;
     Chunks chunks;
-
-//    PKColumns pk_columns;
 
     // The cache is mainly used to merge fragment chunks.
     MutableColumnMap cache;
