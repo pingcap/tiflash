@@ -34,6 +34,7 @@ class Curl final : public ext::singleton<Curl>
 {
 public:
     String getTiDBTableInfoJson(TableID table_id, Context & context);
+    String getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context);
 
 private:
     Curl();
@@ -88,7 +89,50 @@ String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
     return result;
 }
 
+String Curl::getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context)
+{
+    auto & tidb_service = context.getTiDBService();
+
+    CURL * curl = curl_easy_init();
+
+    curl_easy_setopt(curl,
+        CURLOPT_URL,
+        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/schema/" + database_name + "/" + table_name)
+            .c_str());
+
+    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
+        auto str = reinterpret_cast<String *>(result);
+        size_t real_size = size * nmemb;
+        str->append((const char *)buffer, real_size);
+        return real_size;
+    };
+    typedef size_t (*WriteFuncT)(void * buffer, size_t size, size_t nmemb, void * result);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (WriteFuncT)writeFunc);
+
+    String result;
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&result);
+
+    CURLcode code = curl_easy_perform(curl);
+
+    curl_easy_cleanup(curl);
+
+    if (code != CURLE_OK)
+        throw DB::Exception("Get TiDB schema through HTTP failed.", code);
+
+    if (result.empty() || result[0] == '[')
+    {
+        result.clear();
+    }
+
+    return result;
+}
+
 String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context) { return Curl::instance().getTiDBTableInfoJson(table_id, context); }
+
+String getTiDBTableInfoJsonByCurl(const std::string & database_name, const std::string & table_name, Context & context)
+{
+    return Curl::instance().getTiDBTableInfoJson(database_name, table_name, context);
+}
 
 using TableInfo = TiDB::TableInfo;
 using ColumnInfo = TiDB::ColumnInfo;
@@ -316,7 +360,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
         auto create_table_internal = [&]() {
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Creating table " << table_info.name);
             createTable(table_info, context);
-            context.getTMTContext().getStoragesMut().put(context.getTable(table_info.db_name, table_info.name));
+            context.getTMTContext().getStorages().put(context.getTable(table_info.db_name, table_info.name));
 
             /// Mangle for partition table.
             bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
@@ -324,7 +368,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
             {
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
                 createTable(table_info, context);
-                context.getTMTContext().getStoragesMut().put(context.getTable(table_info.db_name, table_info.name));
+                context.getTMTContext().getStorages().put(context.getTable(table_info.db_name, table_info.name));
             }
         };
 
@@ -393,6 +437,48 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     // TODO: Apply schema changes to partition tables.
 }
 
+int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context)
+{
+    String table_info_json = getSchemaJsonByName(database_name, table_name, context);
+    if (table_info_json.empty())
+    {
+        LOG_WARNING(log,
+            __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name
+                                << "doesn't exist in TiDB, it may have been dropped.");
+        return InvalidTableID;
+    }
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name << " info json: " << table_info_json);
+
+    // parse table id from table_info_json
+    if (table_info_json.empty())
+    {
+        return InvalidTableID;
+    }
+
+    /// The JSON library does not support whitespace. We delete them. Inefficient.
+    /// TODO: This may mis-delete innocent spaces/newlines enclosed by quotes, consider using some lexical way.
+    /// Copy from TableInfo::deserialize
+    ReadBufferFromString in(table_info_json);
+    WriteBufferFromOwnString out;
+    while (!in.eof())
+    {
+        char c;
+        readChar(c, in);
+        if (!isspace(c))
+            writeChar(c, out);
+    }
+
+    JSON json(out.str());
+
+    return json["id"].getInt();
+}
+
 String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }
+
+String HttpJsonSchemaSyncer::getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context)
+{
+    return getTiDBTableInfoJsonByCurl(database_name, table_name, context);
+}
 
 } // namespace DB

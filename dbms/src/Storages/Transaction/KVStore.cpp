@@ -110,7 +110,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table, const
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
 {
-    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().getRegionTableMut()) : nullptr;
+    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().getRegionTable()) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
 
@@ -256,9 +256,11 @@ void KVStore::report(RaftContext & raft_ctx)
     }
 
     raft_ctx.send(responseBatch);
+
+    LOG_INFO(log, "Report status of " << responseBatch.responses_size() << " regions to proxy");
 }
 
-bool KVStore::tryPersistAndReport(RaftContext &, const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
+bool KVStore::tryPersist(const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
 {
     Timepoint now = Clock::now();
     if (now < (last_try_persist_time.load() + kvstore_try_persist_period))
