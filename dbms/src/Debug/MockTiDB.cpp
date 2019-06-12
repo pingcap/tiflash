@@ -1,12 +1,12 @@
-#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 
 #include <Functions/FunctionHelpers.h>
 
@@ -24,8 +24,7 @@ using TablePtr = MockTiDB::TablePtr;
 
 Table::Table(const String & database_name_, const String & table_name_, TableInfo && table_info_)
     : table_info(std::move(table_info_)), database_name(database_name_), table_name(table_name_)
-{
-}
+{}
 
 String MockTiDB::getSchemaJson(TableID table_id)
 {
@@ -90,7 +89,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         ColumnInfo column_info;
         column_info.id = (i++);
         column_info.name = column.name;
-        const IDataType *nested_type = column.type.get();
+        const IDataType * nested_type = column.type.get();
         if (!column.type->isNullable())
         {
             column_info.setNotNullFlag();
@@ -114,8 +113,10 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, cfu, ct, ctu) \
-        if (checkDataType<DataType##ct>(nested_type) || checkDataType<DataType##ctu>(nested_type)) column_info.tp = TiDB::Type##tt; else
+#define M(tt, v, cf, ct, w)                       \
+    if (checkDataType<DataType##ct>(nested_type)) \
+        column_info.tp = TiDB::Type##tt;          \
+    else
         COLUMN_TYPES(M)
 #undef M
         throw DB::Exception("Invalid ?", ErrorCodes::LOGICAL_ERROR);
@@ -140,11 +141,11 @@ TableID MockTiDB::newPartition(const String & database_name, const String & tabl
     TablePtr table = getTableByNameInternal(database_name, table_name);
     TableInfo & table_info = table->table_info;
 
-    const auto & part_def = find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(), [& partition_name](PartitionDefinition & part_def) {
-        return part_def.name == partition_name;
-    });
+    const auto & part_def = find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(),
+        [&partition_name](PartitionDefinition & part_def) { return part_def.name == partition_name; });
     if (part_def != table_info.partition.definitions.end())
-        throw Exception("Mock TiDB table " + database_name + "." + table_name + " already has partition " + partition_name, ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            "Mock TiDB table " + database_name + "." + table_name + " already has partition " + partition_name, ErrorCodes::LOGICAL_ERROR);
 
     table_info.is_partition_table = true;
     table_info.partition.enable = true;
@@ -181,4 +182,4 @@ TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const St
     return it->second;
 }
 
-}
+} // namespace DB

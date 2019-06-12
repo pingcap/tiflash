@@ -359,6 +359,41 @@ catch (const JSONException & e)
         DB::Exception(e));
 }
 
+template <CodecFlag cf>
+CodecFlag getCodecFlagBase(bool /*unsigned_flag*/)
+{
+    return cf;
+}
+
+template <>
+CodecFlag getCodecFlagBase<CodecFlagVarInt>(bool unsigned_flag)
+{
+    return unsigned_flag ? CodecFlagVarUInt : CodecFlagVarInt;
+}
+
+template <>
+CodecFlag getCodecFlagBase<CodecFlagInt>(bool unsigned_flag)
+{
+    return unsigned_flag ? CodecFlagUInt : CodecFlagInt;
+}
+
+CodecFlag ColumnInfo::getCodecFlag() const
+{
+    switch (tp)
+    {
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(tt, v, cf, ct, w) \
+    case Type##tt:          \
+        return getCodecFlagBase<CodecFlag##cf>(hasUnsignedFlag());
+        COLUMN_TYPES(M)
+#undef M
+    }
+
+    throw Exception("Unknown CodecFlag", DB::ErrorCodes::LOGICAL_ERROR);
+}
+
 ColumnID TableInfo::getColumnID(const String & name) const
 {
     for (auto col : columns)

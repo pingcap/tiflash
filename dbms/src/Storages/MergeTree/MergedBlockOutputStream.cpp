@@ -142,7 +142,7 @@ void IMergedBlockOutputStream::writeData(
             return &column_streams[stream_name]->compressed;
         };
 
-        type.serializeBinaryBulkWithMultipleStreams(column, stream_getter, prev_mark, limit, true, {});
+        type.serializeWidenBinaryBulkWithMultipleStreams(column, stream_getter, prev_mark, limit, true, {});
 
         /// So that instead of the marks pointing to the end of the compressed block, there were marks pointing to the beginning of the next one.
         type.enumerateStreams([&] (const IDataType::SubstreamPath & substream_path)

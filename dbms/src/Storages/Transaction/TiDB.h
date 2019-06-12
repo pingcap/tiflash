@@ -9,53 +9,53 @@
 
 namespace DB::ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 namespace TiDB
 {
 
-using DB::String;
-using DB::DatabaseID;
-using DB::TableID;
 using DB::ColumnID;
+using DB::DatabaseID;
 using DB::Exception;
+using DB::String;
+using DB::TableID;
 
 // Column types.
 // In format:
-// TiDB type, int value, signed codec flag, unsigned codec flag, signed CH type, unsigned CH type.
+// TiDB type, int value, codec flag, CH type, should widen.
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define COLUMN_TYPES(M)                                             \
-    M(Decimal, 0, Decimal, Decimal, Decimal, Decimal)               \
-    M(Tiny, 1, VarInt, VarUInt, Int8, UInt8)                        \
-    M(Short, 2, VarInt, VarUInt, Int16, UInt16)                     \
-    M(Long, 3, VarInt, VarUInt, Int32, UInt32)                      \
-    M(Float, 4, Float, Float, Float32, Float32)                     \
-    M(Double, 5, Float, Float, Float64, Float64)                    \
-    M(Null, 6, Nil, Nil, Nothing, Nothing)                          \
-    M(Timestamp, 7, Int, Int, DateTime, DateTime)                   \
-    M(Longlong, 8, Int, UInt, Int64, UInt64)                        \
-    M(Int24, 9, VarInt, VarUInt, Int32, UInt32)                     \
-    M(Date, 10, Int, Int, Date, Date)                               \
-    M(Time, 11, Duration, Duration, Int64, Int64)                   \
-    M(Datetime, 12, Int, Int, DateTime, DateTime)                   \
-    M(Year, 13, Int, Int, Int16, Int16)                             \
-    M(NewDate, 14, Int, Int, Date, Date)                            \
-    M(Varchar, 15, CompactBytes, CompactBytes, String, String)      \
-    M(Bit, 16, CompactBytes, CompactBytes, UInt64, UInt64)          \
-    M(JSON, 0xf5, Json, Json, String, String)                       \
-    M(NewDecimal, 0xf6, Decimal, Decimal, Decimal, Decimal)         \
-    M(Enum, 0xf7, CompactBytes, CompactBytes, Enum16, Enum16)       \
-    M(Set, 0xf8, CompactBytes, CompactBytes, String, String)        \
-    M(TinyBlob, 0xf9, CompactBytes, CompactBytes, String, String)   \
-    M(MediumBlob, 0xfa, CompactBytes, CompactBytes, String, String) \
-    M(LongBlob, 0xfb, CompactBytes, CompactBytes, String, String)   \
-    M(Blob, 0xfc, CompactBytes, CompactBytes, String, String)       \
-    M(VarString, 0xfd, CompactBytes, CompactBytes, String, String)  \
-    M(String, 0xfe, CompactBytes, CompactBytes, String, String)     \
-    M(Geometry, 0xff, CompactBytes, CompactBytes, String, String)
+#define COLUMN_TYPES(M)                              \
+    M(Decimal, 0, Decimal, Decimal, false)           \
+    M(Tiny, 1, VarInt, Int8, true)                   \
+    M(Short, 2, VarInt, Int16, true)                 \
+    M(Long, 3, VarInt, Int32, true)                  \
+    M(Float, 4, Float, Float32, false)               \
+    M(Double, 5, Float, Float64, false)              \
+    M(Null, 6, Nil, Nothing, false)                  \
+    M(Timestamp, 7, Int, DateTime, false)            \
+    M(Longlong, 8, Int, Int64, false)                \
+    M(Int24, 9, VarInt, Int32, true)                 \
+    M(Date, 10, Int, Date, false)                    \
+    M(Time, 11, Duration, Int64, false)              \
+    M(Datetime, 12, Int, DateTime, false)            \
+    M(Year, 13, Int, Int16, false)                   \
+    M(NewDate, 14, Int, Date, false)                 \
+    M(Varchar, 15, CompactBytes, String, false)      \
+    M(Bit, 16, CompactBytes, UInt64, false)          \
+    M(JSON, 0xf5, Json, String, false)               \
+    M(NewDecimal, 0xf6, Decimal, Decimal, false)     \
+    M(Enum, 0xf7, CompactBytes, Enum16, false)       \
+    M(Set, 0xf8, CompactBytes, String, false)        \
+    M(TinyBlob, 0xf9, CompactBytes, String, false)   \
+    M(MediumBlob, 0xfa, CompactBytes, String, false) \
+    M(LongBlob, 0xfb, CompactBytes, String, false)   \
+    M(Blob, 0xfc, CompactBytes, String, false)       \
+    M(VarString, 0xfd, CompactBytes, String, false)  \
+    M(String, 0xfe, CompactBytes, String, false)     \
+    M(Geometry, 0xff, CompactBytes, String, false)
 
 
 enum TP
@@ -63,7 +63,7 @@ enum TP
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(tt, v, cf, cfu, ct, ctu) Type##tt = v,
+#define M(tt, v, cf, ct, w) Type##tt = v,
     COLUMN_TYPES(M)
 #undef M
 };
@@ -152,28 +152,13 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v) \
+#define M(f, v)                                                  \
     inline bool has##f##Flag() const { return (flag & v) != 0; } \
     inline void set##f##Flag() { flag |= v; }
     COLUMN_FLAGS(M)
 #undef M
 
-    inline CodecFlag getCodecFlag() const
-    {
-        switch (tp)
-        {
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(tt, v, cf, cfu, ct, ctu) \
-    case Type##tt:                 \
-        return hasUnsignedFlag() ? CodecFlag##cfu : CodecFlag##cf;
-            COLUMN_TYPES(M)
-#undef M
-        }
-
-        throw Exception("Unknown CodecFlag", DB::ErrorCodes::LOGICAL_ERROR);
-    }
+    CodecFlag getCodecFlag() const;
 };
 
 enum PartitionType
@@ -255,10 +240,16 @@ struct TableInfo
 
         // Some sanity checks for partition table.
         if (unlikely(!(is_partition_table && partition.enable)))
-            throw Exception("Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id) + " but it's not a partition table", DB::ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id)
+                    + " but it's not a partition table",
+                DB::ErrorCodes::LOGICAL_ERROR);
 
-        if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) { return d.id == table_or_partition_id; }) == partition.definitions.end()))
-            throw Exception("Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id), DB::ErrorCodes::LOGICAL_ERROR);
+        if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) {
+                return d.id == table_or_partition_id;
+            }) == partition.definitions.end()))
+            throw Exception(
+                "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id),
+                DB::ErrorCodes::LOGICAL_ERROR);
 
         // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
         belonging_table_id = id;

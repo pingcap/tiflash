@@ -6,6 +6,8 @@
 #include <Common/typeid_cast.h>
 #include <Common/OptimizedRegularExpression.h>
 
+#include <DataTypes/DataTypeNullable.h>
+
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTExpressionList.h>
@@ -579,6 +581,24 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     else if (merging_params.mode == MergeTreeData::MergingParams::Mutable ||
              merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
+        // Widen some specific data types, reason see comment for `IDataType::widen()`.
+        if (merging_params.mode == MergeTreeData::MergingParams::Txn)
+        {
+            std::for_each(columns.ordinary.begin(), columns.ordinary.end(), [] (NameAndTypePair & column) {
+                DataTypePtr t = column.type->isNullable() ? dynamic_cast<const DataTypeNullable *>(column.type.get())->getNestedType() : column.type;
+                if (t->isInteger() &&
+                    !(typeid_cast<const DataTypeInt64 *>(t.get()) || typeid_cast<const DataTypeUInt64 *>(t.get())))
+                {
+                    auto widen = t->widen();
+                    if (column.type->isNullable())
+                    {
+                        widen = std::make_shared<DataTypeNullable>(widen);
+                    }
+                    column.type.swap(widen);
+                }
+            });
+        }
+
         // Add version column and del-mark column, set to engine params.
         const Names & names = args.columns.getNamesOfPhysical();
         if (std::find(names.begin(), names.end(), MutableSupport::version_column_name) == names.end())
