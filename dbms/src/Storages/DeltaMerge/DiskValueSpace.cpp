@@ -136,8 +136,6 @@ void DiskValueSpace::swap(DiskValueSpace & other)
     std::swap(page_id, other.page_id);
     chunks.swap(other.chunks);
 
-    //    pk_columns.swap(other.pk_columns);
-
     cache.swap(other.cache);
     std::swap(cache_chunks, other.cache_chunks);
 }
@@ -217,7 +215,6 @@ void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, Write
             data_wb.delPage(m.second.page_id);
 
     chunks.swap(new_chunks);
-    //    pk_columns = {};
 
     cache.clear();
     cache_chunks = 0;
@@ -234,9 +231,6 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
         context.meta_storage.write(meta_wb);
     }
 
-    //    const auto & handle = context.dm_context.table_handle_define;
-    //    ensurePKColumns(handle, context.data_storage);
-
     chunks.push_back(std::move(chunk));
 
     auto write_rows  = block.rows();
@@ -247,8 +241,6 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
         ++cache_chunks;
         return;
     }
-
-    //    pk_columns.append(block, handle);
 
     // If former cache is empty, and this chunk is big enough, then no need to cache.
     if (cache_chunks == 0
@@ -403,8 +395,6 @@ DiskValueSpace::getMergeBlocks(const ColumnDefine & handle, PageStorage & data_s
 
     auto [start_chunk_index, rows_offset_in_start_chunk] = findChunk(rows_offset, deletes_offset);
 
-    //    ensurePKColumns(handle, data_storage);
-
     size_t block_rows_start = rows_offset;
     size_t block_rows_end   = rows_offset;
     for (size_t chunk_index = start_chunk_index; chunk_index < chunks.size(); ++chunk_index)
@@ -454,9 +444,6 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     const size_t in_storage_rows = total_rows - cache_rows;
 
     HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
-
-    //    auto & handle = context.dm_context.table_handle_define;
-    //    ensurePKColumns(handle, context.data_storage);
 
     if (cache_chunks == 1)
     {
@@ -541,14 +528,6 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     chunks.swap(new_chunks);
     cache.clear();
     cache_chunks = 0;
-    //    {
-    //        // Remove the last cache_rows of pk_columns and append the compacted data
-    //        PKColumns new_pk_columns(pk_columns.handle_column->cloneResized(in_storage_rows),
-    //                                 pk_columns.version_column->cloneResized(in_storage_rows));
-    //        new_pk_columns.append(compacted, handle);
-    //
-    //        pk_columns = new_pk_columns;
-    //    }
 
     // ============================================================
 
@@ -605,14 +584,6 @@ BlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_co
     return std::make_shared<DVSBlockInputStream>(*this, read_columns, data_storage);
 }
 
-//const PKColumns & DiskValueSpace::getPKColumns(const ColumnDefine & handle, PageStorage & data_storage)
-//{
-//    if (!should_cache)
-//        throw Exception("You should not call this method if should_cache is false");
-//    ensurePKColumns(handle, data_storage);
-//    return pk_columns;
-//}
-
 size_t DiskValueSpace::num_rows()
 {
     size_t rows = 0;
@@ -649,15 +620,6 @@ size_t DiskValueSpace::num_chunks()
 {
     return chunks.size();
 }
-
-//void DiskValueSpace::ensurePKColumns(const ColumnDefine & handle, PageStorage & data_storage)
-//{
-//    if (!pk_columns && num_rows())
-//    {
-//        Block block = read({handle, VERSION_COLUMN_DEFINE}, data_storage, 0, num_rows());
-//        pk_columns  = {std::move(block), handle};
-//    }
-//}
 
 size_t DiskValueSpace::rowsFromBack(size_t chunk_num_from_back)
 {
