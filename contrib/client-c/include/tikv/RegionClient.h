@@ -13,7 +13,9 @@ struct RegionClient {
     std::string         store_addr;
     RegionVerID         region_id;
 
-    RegionClient(RegionCachePtr cache_, RpcClientPtr client_, const RegionVerID & id) : cache(cache_), client(client_), store_addr("you guess?"), region_id(id) {}
+    Logger * log;
+
+    RegionClient(RegionCachePtr cache_, RpcClientPtr client_, const RegionVerID & id) : cache(cache_), client(client_), store_addr("you guess?"), region_id(id), log(&Logger::get("pingcap.tikv")) {}
 
     int64_t getReadIndex() {
         auto request = new kvrpcpb::ReadIndexRequest();
@@ -26,7 +28,13 @@ struct RegionClient {
     template<typename T>
     void sendReqToRegion(Backoffer & bo, RpcCallPtr<T> rpc, bool learner) {
         for (;;) {
-            auto ctx = cache -> getRPCContext(bo, region_id, learner);
+            RPCContextPtr ctx; 
+            try {
+                ctx = cache -> getRPCContext(bo, region_id, learner);
+            } catch (const Exception & e) {
+                onGetLearnerFail(bo, e);
+                continue;
+            }
             store_addr = ctx->addr;
             rpc -> setCtx(ctx);
             try {
@@ -81,6 +89,11 @@ struct RegionClient {
         }
 
         cache -> dropRegion(rpc_ctx -> region);
+    }
+
+    void onGetLearnerFail(Backoffer & bo, const Exception & e) {
+        log -> error("error found, retrying. The error msg is: "+ e.message());
+        bo.backoff(boTiKVRPC, e);
     }
 
     void onSendFail(Backoffer & bo, const Exception & e, RPCContextPtr rpc_ctx) {
