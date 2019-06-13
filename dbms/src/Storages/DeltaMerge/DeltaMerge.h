@@ -12,6 +12,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/HandleFilter.h>
 
 namespace DB
 {
@@ -28,10 +29,16 @@ private:
     using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
     using SharedLock         = std::shared_lock<std::shared_mutex>;
 
+    size_t      handle_column_pos;
+    HandleRange handle_range;
+
     BlockInputStreamPtr stable_input_stream;
+    size_t              sid;
 
     DeltaValueSpacePtr delta_value_space;
     size_t             expected_block_size;
+
+    SharedLock lock;
 
     EntryIterator entry_it;
     EntryIterator entry_end;
@@ -46,54 +53,65 @@ private:
     size_t  stable_block_rows = 0;
     size_t  stable_block_pos  = 0;
 
-    size_t sid = 0;
-
-    SharedLock lock;
-
 public:
-    DeltaMergeBlockInputStream(const BlockInputStreamPtr & stable_input_stream_,
-                               DeltaTree &                 delta_tree,
+    DeltaMergeBlockInputStream(size_t                      handle_column_pos_,
+                               const HandleRange &         handle_range_,
+                               const BlockInputStreamPtr & stable_input_stream_,
+                               size_t                      input_offset_rows,
+                               const DeltaTree &           delta_tree,
                                const DeltaValueSpacePtr &  delta_value_space_,
                                size_t                      expected_block_size_,
                                SharedLock &&               lock)
-        : stable_input_stream(stable_input_stream_),
+        : handle_column_pos(handle_column_pos_),
+          handle_range(handle_range_),
+          stable_input_stream(stable_input_stream_),
+          sid(input_offset_rows),
           delta_value_space(delta_value_space_),
           expected_block_size(expected_block_size_),
-          entry_it(delta_tree.begin()),
-          entry_end(delta_tree.end()),
           lock(std::move(lock))
     {
         header      = stable_input_stream->getHeader();
         num_columns = header.columns();
 
-        skip_rows = entry_it != entry_end ? entry_it.getSid() : UNLIMITED;
+        entry_it  = delta_tree.sidLowerBound(sid);
+        entry_end = delta_tree.end();
+
+        skip_rows = entry_it != entry_end ? entry_it.getSid() - sid : UNLIMITED;
     }
 
     String getName() const override { return "DeltaMerge"; }
-    Block  getHeader() const override { return header.cloneEmpty(); }
+    Block  getHeader() const override { return header; }
 
 protected:
     Block readImpl() override
     {
         if (finished)
             return {};
-        MutableColumns columns;
-        initOutputColumns(columns);
-        if (columns.empty())
-            return {};
-
-        while (columns[0]->size() < expected_block_size)
+        while (!finished)
         {
-            if (!next(columns))
-            {
-                finished = true;
-                break;
-            }
-        }
-        if (!columns.at(0)->size())
-            return {};
+            MutableColumns columns;
+            initOutputColumns(columns);
 
-        return header.cloneWithColumns(std::move(columns));
+            while (columns[0]->size() < expected_block_size)
+            {
+                if (!next(columns))
+                {
+                    finished = true;
+                    break;
+                }
+            }
+            // Empty means we are out of data.
+            if (columns.at(0)->empty())
+                continue;
+
+            Block block = header.cloneWithColumns(std::move(columns));
+            Block res   = filterByHandleSorted(handle_range, std::move(block), handle_column_pos);
+            if (!res || !res.rows())
+                continue;
+            else
+                return res;
+        }
+        return {};
     }
 
 private:
@@ -117,7 +135,7 @@ private:
         stable_block_rows = 0;
         stable_block_pos  = 0;
         auto block        = stable_input_stream->read();
-        if (!block)
+        if (!block || !block.rows())
             return false;
 
         stable_block_rows = block.rows();
@@ -126,16 +144,21 @@ private:
         return true;
     }
 
-    inline void ignoreStableTuples(size_t n)
+    inline bool ignoreStableTuples(size_t n)
     {
         while (n)
         {
             if (!fillStableBlockIfNeed())
-                throw Exception("Not more rows to ignore!");
+            {
+                // The rows in the stable input stream could have been filtered by handle_range.
+                // throw Exception("No more rows to ignore!");
+                return false;
+            }
             auto skip = std::min(stable_block_columns.at(0)->size() - stable_block_pos, n);
             stable_block_pos += skip;
             n -= skip;
         }
+        return true;
     }
 
     bool next(MutableColumns & output_columns)
@@ -144,6 +167,8 @@ private:
         {
             if (skip_rows)
             {
+                // TODO: Note that for simplicity, we don't do handle range filter here.
+
                 if (!fillStableBlockIfNeed())
                     return false;
                 auto in_output_rows = output_columns.at(0)->size();
@@ -174,12 +199,15 @@ private:
             }
             else
             {
-                if (!fillStableBlockIfNeed())
-                    throw Exception("No more rows to delete!");
+                // Note that since we don't check the handle value from stable input stream,
+                // we could ignore the rows which are out of handle range, which cause ignoreStableTuples return false.
+
                 if (unlikely(sid != entry_it.getSid()))
                     throw Exception("Algorithm broken!");
 
-                ignoreStableTuples(entry_it.getValue());
+                if (!ignoreStableTuples(entry_it.getValue()))
+                    return false;
+
                 sid += entry_it.getValue();
 
                 ++entry_it;
@@ -193,8 +221,22 @@ private:
         if (entry_it.getType() == DT_INS)
         {
             auto value_id = entry_it.getValue();
-            for (size_t index = 0; index < num_columns; ++index)
-                delta_value_space->insertValue(*output_columns[index], index, value_id);
+            auto handle   = delta_value_space->getHandle(value_id);
+            if (handle < handle_range.start)
+            {
+                // Do nothing.
+                // Ignore current inserting row. We haven't actually started to read rows inside handle range yet.
+            }
+            else if (handle >= handle_range.end)
+            {
+                // Out of handle range, let's finish reading.
+                return false;
+            }
+            else
+            {
+                for (size_t index = 0; index < num_columns; ++index)
+                    delta_value_space->insertValue(*output_columns[index], index, value_id);
+            }
         }
         else
         {
@@ -202,7 +244,7 @@ private:
         }
 
         ++entry_it;
-        skip_rows = (entry_it != entry_end ? entry_it.getSid() : UNLIMITED) - sid;
+        skip_rows = entry_it != entry_end ? entry_it.getSid() - sid : UNLIMITED;
 
         return true;
     }

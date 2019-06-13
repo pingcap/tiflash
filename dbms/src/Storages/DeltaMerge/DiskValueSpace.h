@@ -91,8 +91,9 @@ public:
     /// The data of returned block is in insert order.
     BlockOrRanges getMergeBlocks(const ColumnDefine & handle, PageStorage & data_storage, size_t rows_offset, size_t deletes_offset);
 
-    class DVSBlockInputStream;
-    BlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage);
+    class ChunkBlockInputStream;
+    std::pair<BlockInputStreamPtr, size_t>
+    getInputStream(const HandleRange & handle_range, const ColumnDefines & read_columns, PageStorage & data_storage);
 
     bool tryFlushCache(const OpContext & context, bool force = false);
 

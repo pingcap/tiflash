@@ -32,7 +32,7 @@ struct Range
         if constexpr (right_open)
             return {0, 0};
         else
-            throw Exception("Logical error"); // We should not have none range for version range.
+            throw Exception("Logical error");
     }
 
     static Range startFrom(T start_) { return {start_, MAX}; }
@@ -45,6 +45,26 @@ struct Range
             return start >= end;
         else
             return start > end;
+    }
+
+    inline Range shrink(const Range<T, right_open> & other) const { return Range(std::max(start, other.start), std::min(end, other.end)); }
+
+    // [first, last]
+    inline bool intersect(T first, T last) const
+    {
+        if (last >= end)
+            return !Range<T, true>(std::max(first, start), std::min(last, end)).none();
+        else
+            return !Range<T, right_open>(std::max(first, start), std::min(last, end)).none();
+    }
+
+    // [first, last]
+    inline bool include(T first, T last) const
+    {
+        bool ok = std::max(first, start) == first && std::min(last, end) == last;
+        if constexpr (right_open)
+            ok = ok && last != end;
+        return ok;
     }
 
     inline bool checkStart(T value) const { return start == MIN || start <= value; }

@@ -35,13 +35,25 @@ class Chunk
 public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
-    Chunk() : delete_range(HandleRange::newNone()) {}
-    explicit Chunk(const HandleRange & delete_range_) : delete_range(delete_range_) {}
+    Chunk(Handle handle_first_, Handle handle_last_) : handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false) {}
+    explicit Chunk(const HandleRange & delete_range) : handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
+    {
+    }
 
-    static Chunk newChunk(const HandleRange & delete_range_) { return Chunk{delete_range_}; }
+    bool        isDeleteRange() const { return is_delete_range; }
+    HandleRange getDeleteRange() const
+    {
+        if (!is_delete_range)
+            throw Exception("Not a delete range");
+        return {handle_start, handle_end};
+    }
 
-    bool                isDeleteRange() const { return !delete_range.none(); }
-    const HandleRange & getDeleteRange() const { return delete_range; }
+    std::pair<Handle, Handle> getHandleFirstLast() const
+    {
+        if (is_delete_range)
+            throw Exception("It is a delete range");
+        return {handle_start, handle_end};
+    }
 
     size_t getRows() const { return rows; }
 
@@ -66,7 +78,7 @@ public:
     void insert(const ColumnMeta & c)
     {
         if (isDeleteRange())
-            throw Exception("Insert column into delete range chunk is not allowed.");
+            throw Exception("Insert column into delete range chunk is not allowed");
         columns[c.col_id] = c;
         if (rows && rows != c.rows)
             throw Exception("Rows not match");
@@ -76,8 +88,9 @@ public:
 
     void serialize(WriteBuffer & buf) const
     {
-        writeIntBinary(delete_range.start, buf);
-        writeIntBinary(delete_range.end, buf);
+        writeIntBinary(handle_start, buf);
+        writeIntBinary(handle_end, buf);
+        writePODBinary(is_delete_range, buf);
         writeIntBinary((UInt64)columns.size(), buf);
         for (const auto & [col_id, d] : columns)
         {
@@ -91,9 +104,13 @@ public:
 
     static Chunk deserialize(ReadBuffer & buf)
     {
-        Chunk chunk;
-        readIntBinary(chunk.delete_range.start, buf);
-        readIntBinary(chunk.delete_range.end, buf);
+        Handle start, end;
+        readIntBinary(start, buf);
+        readIntBinary(end, buf);
+
+        Chunk chunk(start, end);
+
+        readPODBinary(chunk.is_delete_range, buf);
         UInt64 col_size;
         readIntBinary(col_size, buf);
         chunk.columns.reserve(col_size);
@@ -120,11 +137,11 @@ public:
     }
 
 private:
+    Handle        handle_start;
+    Handle        handle_end;
+    bool          is_delete_range;
     ColumnMetaMap columns;
     size_t        rows = 0;
-
-    /// delete_range and columns can exist at the same time.
-    HandleRange delete_range;
 };
 
 using Chunks = std::vector<Chunk>;

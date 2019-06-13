@@ -70,7 +70,7 @@ struct DTMutation
     UInt16 type = 0;
     /// for DT_INS and DT_MOD, "value" is the value index in value space;
     /// for DT_MULTI_MOD, "value" represents the chain pointer;
-    /// for DT_DEL, "value" is the consecutive deleting number, e.g. 5 means 5 tuples got deleted starting from current position.
+    /// for DT_DEL, "value" is the consecutive deleting tuple count, e.g. 5 means 5 tuples got deleted starting from current position.
     UInt64 value = 0;
 
     inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
@@ -104,7 +104,7 @@ struct DTLeaf
 
     UInt64     sids[M * S + 1];
     DTMutation mutations[M * S + 1];
-    size_t     count = 0; // mutations number count
+    size_t     count = 0; // mutations count
 
     LeafPtr   prev   = nullptr;
     LeafPtr   next   = nullptr;
@@ -156,7 +156,7 @@ struct DTLeaf
     }
 
     /// Search the first pos with equal or greater id.
-    /// Returns the mutations count if the id is not found in this leaf.
+    /// Returns <pos_in_node, delta>.
     template <bool isRid>
     inline std::pair<size_t, Int64> search(const UInt64 id, Int64 delta) const
     {
@@ -286,7 +286,7 @@ struct DTIntern
     UInt64  sids[F * S + 1];
     Int64   deltas[F * S + 1];
     NodePtr children[F * S + 1];
-    size_t  count = 0; // children number count, and sids' is "count - 1"
+    size_t  count = 0; // deltas / children count, and the number of sids is "count - 1"
 
     InternPtr parent = nullptr;
 
@@ -449,6 +449,7 @@ class DTEntryIterator
     Int64   delta;
 
 public:
+    DTEntryIterator() = default;
     DTEntryIterator(LeafPtr leaf_, size_t pos_, Int64 delta_) : leaf(leaf_), pos(pos_), delta(delta_) {}
 
     bool operator==(const DTEntryIterator & rhs) const { return leaf == rhs.leaf && pos == rhs.pos; }
@@ -544,14 +545,14 @@ private:
 
     void check(NodePtr node) const;
 
-    using LeafAndDeltaPtr = std::pair<LeafPtr, Int64>;
+    using LeafPtrAndDelta = std::pair<LeafPtr, Int64>;
     /// Find right most leaf this id (rid/sid) could exists/insert.
     template <bool isRid>
-    LeafAndDeltaPtr findRightLeaf(const UInt64 id) const;
+    LeafPtrAndDelta findRightLeaf(const UInt64 id) const;
 
     /// Find left most leaf this id (rid/sid) could exists.
     template <bool isRid>
-    LeafAndDeltaPtr findLeftLeaf(const UInt64 id) const;
+    LeafPtrAndDelta findLeftLeaf(const UInt64 id) const;
 
     using InterAndSid = std::pair<InternPtr, UInt64>;
     template <typename T>
@@ -701,6 +702,20 @@ public:
     {
         Int64 delta = isLeaf(root) ? as(Leaf, root)->getDelta() : as(Intern, root)->getDelta();
         return EntryIterator(right_leaf, right_leaf->count, delta);
+    }
+
+    EntryIterator sidLowerBound(UInt64 sid) const
+    {
+        LeafPtr leaf;
+        Int64   delta;
+        size_t  pos;
+        std::tie(leaf, delta) = findLeftLeaf<false>(sid);
+        std::tie(pos, delta)  = leaf->searchSid(sid, delta);
+        EntryIterator it(leaf, pos, delta);
+        if (unlikely(it != end() && pos == leaf->count))
+            throw Exception("Unexpected pos: sidLowerBound returns a passed the end entry of a node");
+        else
+            return it;
     }
 
     size_t numEntries() const { return num_entries; }
@@ -1037,7 +1052,7 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 
 DT_TEMPLATE
 template <bool isRid>
-typename DT_CLASS::LeafAndDeltaPtr DT_CLASS::findRightLeaf(const UInt64 id) const
+typename DT_CLASS::LeafPtrAndDelta DT_CLASS::findRightLeaf(const UInt64 id) const
 {
     NodePtr node  = root;
     Int64   delta = 0;
@@ -1072,7 +1087,7 @@ typename DT_CLASS::LeafAndDeltaPtr DT_CLASS::findRightLeaf(const UInt64 id) cons
 
 DT_TEMPLATE
 template <bool isRid>
-typename DT_CLASS::LeafAndDeltaPtr DT_CLASS::findLeftLeaf(const UInt64 id) const
+typename DT_CLASS::LeafPtrAndDelta DT_CLASS::findLeftLeaf(const UInt64 id) const
 {
     NodePtr node      = root;
     Int64   delta     = 0;

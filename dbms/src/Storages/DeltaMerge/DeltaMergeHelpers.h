@@ -99,16 +99,22 @@ inline PermutationPtr sortBlockByPk(const ColumnDefine & handle, Block & block)
 }
 
 template <typename T>
+inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
+{
+    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+    return &c.getData();
+}
+
+template <typename T>
 inline const PaddedPODArray<T> & getColumnVectorData(const Block & block, size_t pos)
 {
-    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(block.getByPosition(pos).column));
-    return c.getData();
+    return *toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
 template <typename T>
 inline PaddedPODArray<T> const * getColumnVectorDataPtr(const Block & block, size_t pos)
 {
-    return &getColumnVectorData<T>(block, pos);
+    return toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
 inline void addColumn(Block & block, ColId col_id, String col_name, const DataTypePtr & col_type, const ColumnPtr & col)

@@ -93,10 +93,44 @@ void readChunkData(MutableColumns &      columns,
     storage.read(page_ids, page_handler);
 }
 
-using GetColumn = std::function<const IColumn &(ColId)>;
+
+Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage)
+{
+    if (read_column_defines.empty())
+        return {};
+
+    MutableColumns columns;
+    for (const auto & define : read_column_defines)
+    {
+        columns.emplace_back(define.type->createColumn());
+        columns.back()->reserve(chunk.getRows());
+    }
+
+    if (chunk.getRows())
+    {
+        // Read from storage
+        readChunkData(columns, chunk, read_column_defines, data_storage, 0, chunk.getRows());
+    }
+
+    Block res;
+    for (size_t index = 0; index < read_column_defines.size(); ++index)
+    {
+        ColumnDefine          define = read_column_defines[index];
+        ColumnWithTypeAndName col;
+        col.type      = define.type;
+        col.name      = define.name;
+        col.column_id = define.id;
+        col.column    = std::move(columns[index]);
+
+        res.insert(col);
+    }
+    return res;
+}
+
 Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block)
 {
-    Chunk chunk;
+    auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.table_handle_define.name));
+    Chunk  chunk(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
     for (const auto & col_define : dm_context.table_columns)
     {
         auto            col_id = col_define.id;
@@ -190,6 +224,8 @@ Chunks DiskValueSpace::writeChunks(const OpContext & context, const BlockInputSt
         Block block = input_stream->read();
         if (!block)
             break;
+        if (!block.rows())
+            continue;
         WriteBatch wb;
         Chunk      chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wb, block);
         context.data_storage.write(wb);
@@ -200,7 +236,7 @@ Chunks DiskValueSpace::writeChunks(const OpContext & context, const BlockInputSt
 
 Chunk DiskValueSpace::writeDelete(const OpContext &, const HandleRange & delete_range)
 {
-    return Chunk::newChunk(delete_range);
+    return Chunk(delete_range);
 }
 
 void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, WriteBatch & data_wb)
@@ -542,11 +578,11 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     return true;
 }
 
-class DiskValueSpace::DVSBlockInputStream final : public IProfilingBlockInputStream
+class DiskValueSpace::ChunkBlockInputStream final : public IProfilingBlockInputStream
 {
 public:
-    DVSBlockInputStream(DiskValueSpace & dvs_, const ColumnDefines & read_columns_, PageStorage & data_storage_)
-        : dvs(dvs_), read_columns(read_columns_), data_storage(data_storage_)
+    ChunkBlockInputStream(Chunks && chunks_, const ColumnDefines & read_columns_, PageStorage & data_storage_)
+        : chunks(std::move(chunks_)), read_columns(read_columns_), data_storage(data_storage_)
     {
     }
 
@@ -569,21 +605,32 @@ public:
 protected:
     Block readImpl() override
     {
-        if (chunk_index >= dvs.num_chunks())
+        if (chunk_index >= chunks.size())
             return {};
-        return dvs.read(read_columns, data_storage, chunk_index++);
+        return readChunk(chunks[chunk_index++], read_columns, data_storage);
     }
 
 private:
-    DiskValueSpace & dvs;
-    ColumnDefines    read_columns;
-    PageStorage &    data_storage;
-    size_t           chunk_index = 0;
+    Chunks        chunks;
+    size_t        chunk_index = 0;
+    ColumnDefines read_columns;
+    PageStorage & data_storage;
 };
 
-BlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage)
+std::pair<BlockInputStreamPtr, size_t>
+DiskValueSpace::getInputStream(const HandleRange & handle_range, const ColumnDefines & read_columns, PageStorage & data_storage)
 {
-    return std::make_shared<DVSBlockInputStream>(*this, read_columns, data_storage);
+    Chunks read_chunks;
+    size_t offset = 0;
+    for (const auto & chunk : chunks)
+    {
+        auto [first, last] = chunk.getHandleFirstLast();
+        if (handle_range.intersect(first, last))
+            read_chunks.push_back(chunk);
+        else if (last < handle_range.start)
+            offset += chunk.getRows();
+    }
+    return {std::make_shared<ChunkBlockInputStream>(std::move(read_chunks), read_columns, data_storage), offset};
 }
 
 size_t DiskValueSpace::num_rows()

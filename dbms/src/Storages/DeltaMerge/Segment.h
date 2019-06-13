@@ -88,6 +88,7 @@ public:
 
 private:
     BlockInputStreamPtr getPlacedStream(const ColumnDefine &  handle,
+                                        const HandleRange &   read_range,
                                         const ColumnDefines & columns_to_read,
                                         StoragePool &         storage_pool,
                                         size_t                expected_block_size,
