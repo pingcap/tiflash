@@ -8,11 +8,33 @@ static inline void extendMutableEngineColumnNames(Names & column_names_to_read, 
     column_names_to_read.insert(column_names_to_read.end(), MutableSupport::version_column_name);
     column_names_to_read.insert(column_names_to_read.end(), MutableSupport::delmark_column_name);
 
-    std::vector<String> add_columns = data.getPrimaryExpression()->getRequiredColumns();
+    std::vector<std::string> add_columns = data.getPrimaryExpression()->getRequiredColumns();
     column_names_to_read.insert(column_names_to_read.end(), add_columns.begin(), add_columns.end());
 
     std::sort(column_names_to_read.begin(), column_names_to_read.end());
     column_names_to_read.erase(std::unique(column_names_to_read.begin(), column_names_to_read.end()), column_names_to_read.end());
+}
+
+/// make pk, version, delmark is always the first 3 columns, maybe some sample column will be added later.
+static inline void extendMutableEngineColumnNames(Names & column_names_to_read, const std::string & handle_col_name)
+{
+    // use std::set to make order same.
+    std::set<std::string> names;
+
+    for (auto & name : column_names_to_read)
+        names.emplace(std::move(name));
+    column_names_to_read.clear();
+
+    column_names_to_read.push_back(handle_col_name);
+    column_names_to_read.push_back(MutableSupport::version_column_name);
+    column_names_to_read.push_back(MutableSupport::delmark_column_name);
+
+    names.erase(MutableSupport::version_column_name);
+    names.erase(MutableSupport::delmark_column_name);
+    names.erase(handle_col_name);
+
+    for (auto & name : names)
+        column_names_to_read.emplace_back(std::move(name));
 }
 
 static inline size_t computeMinMarksForSeek(const Settings & settings, const MergeTreeData & data)
@@ -131,5 +153,12 @@ static inline void computeHandleRenges(std::vector<std::deque<size_t>> & block_d
     }
 }
 
+template <TMTPKType pk_type>
+BlockInputStreamPtr makeMultiWayMergeSortInput(const BlockInputStreams & inputs, const SortDescription & description,
+    const size_t version_column_index, const size_t delmark_column_index, size_t max_block_size)
+{
+    return std::make_shared<TMTSortedBlockInputStream<pk_type>>(
+        inputs, description, version_column_index, delmark_column_index, max_block_size);
+};
 
 } // namespace DB
