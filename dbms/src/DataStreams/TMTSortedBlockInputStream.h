@@ -11,13 +11,12 @@ template <TMTPKType pk_type>
 class TMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
-    TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, const std::string & version_column,
-        const std::string & delmark_column, size_t max_block_size_, WriteBuffer * out_row_sources_buf_ = nullptr)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, out_row_sources_buf_, true)
-    {
-        version_column_number = header.getPositionByName(version_column);
-        delmark_column_number = header.getPositionByName(delmark_column);
-    }
+    TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, const size_t version_column_index_,
+        const size_t delmark_column_index_, size_t max_block_size_, WriteBuffer * out_row_sources_buf_ = nullptr)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, out_row_sources_buf_, true),
+          version_column_index(version_column_index_),
+          delmark_column_index(delmark_column_index_)
+    {}
 
     String getName() const override { return "TMTSortedBlockInputStream"; }
 
@@ -30,8 +29,8 @@ private:
     using TMTPKQueue = std::priority_queue<TMTSortCursorPK>;
     TMTPKQueue tmt_queue;
 
-    ssize_t version_column_number = -1;
-    ssize_t delmark_column_number = -1;
+    size_t version_column_index;
+    size_t delmark_column_index;
 
     Logger * log = &Logger::get("TMTSortedBlockInputStream");
 

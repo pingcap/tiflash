@@ -171,7 +171,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     Int64 special_region_index = -1;
     RegionMap kvstore_region;
     Blocks region_block_data;
-    String handle_col_name;
+    const std::string handle_col_name = is_txn_engine ? data.getPrimarySortDescription()[0].column_name : "";
     size_t region_cnt = 0;
     std::vector<std::vector<RangesInDataParts>> region_group_range_parts;
     std::vector<std::vector<std::deque<size_t>>> region_group_mem_block;
@@ -226,8 +226,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         ;
     else if (!select.no_kvstore)
     {
-        handle_col_name = data.getPrimarySortDescription()[0].column_name;
-
         const auto pk_family_name = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
 
         if (std::strcmp(pk_family_name, TypeName<UInt64>::get()) == 0)
@@ -334,7 +332,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         Names column_names_to_read = real_column_names;
 
-        extendMutableEngineColumnNames(column_names_to_read, data);
+        extendMutableEngineColumnNames(column_names_to_read, handle_col_name);
 
         if (column_names_to_read.size() < 3)
             throw Exception("size of column_names_to_read < 3", ErrorCodes::LOGICAL_ERROR);
@@ -892,7 +890,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             use_uncompressed_cache = false;
 
         // must extend mutable engine column.
-        extendMutableEngineColumnNames(column_names_to_read, data);
+        extendMutableEngineColumnNames(column_names_to_read, handle_col_name);
 
         if (select.raw_for_mutable)
         {
@@ -919,6 +917,21 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
         else if (!select.no_kvstore)
         {
+            // extendMutableEngineColumnNames can make sure all necessary column are added.
+            // pk, version, delmark is always the first 3 columns.
+            // the index of column is constant after MergeTreeBlockInputStream is constructed. exception will be thrown if not found.
+            const size_t version_column_index
+                = std::find(column_names_to_read.begin(), column_names_to_read.end(), MutableSupport::version_column_name)
+                - column_names_to_read.begin();
+            const size_t delmark_column_index
+                = std::find(column_names_to_read.begin(), column_names_to_read.end(), MutableSupport::delmark_column_name)
+                - column_names_to_read.begin();
+            const size_t handle_column_index
+                = std::find(column_names_to_read.begin(), column_names_to_read.end(), handle_col_name) - column_names_to_read.begin();
+
+            if (handle_column_index != 0 || version_column_index != 1 || delmark_column_index != 2)
+                throw Exception("Wrong column order for mutable engine, should not happen", ErrorCodes::LOGICAL_ERROR);
+
             const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
                 return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
                     settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names_to_read,
@@ -927,36 +940,35 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             };
 
             const auto func_make_version_filter_input = [&](const BlockInputStreamPtr & source_stream) {
-                return std::make_shared<VersionFilterBlockInputStream>(
-                    source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+                return std::make_shared<VersionFilterBlockInputStream>(source_stream, version_column_index, mvcc_query_info.read_tso);
             };
 
             const auto func_make_range_filter_input
                 = [&](const BlockInputStreamPtr & source_stream, const HandleRange<Int64> & handle_ranges) {
-                      return std::make_shared<RangesFilterBlockInputStream<Int64>>(source_stream, handle_ranges, handle_col_name);
+                      return std::make_shared<RangesFilterBlockInputStream<Int64>>(source_stream, handle_ranges, handle_column_index);
                   };
 
             const auto func_make_uint64_range_filter_input
                 = [&](const BlockInputStreamPtr & source_stream, const HandleRange<UInt64> & handle_ranges) {
-                      return std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_ranges, handle_col_name);
+                      return std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_ranges, handle_column_index);
                   };
 
+            auto func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::UNSPECIFIED>;
+            switch (pk_type)
+            {
+                case TMTPKType::UINT64:
+                    func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::UINT64>;
+                    break;
+                case TMTPKType::INT64:
+                    func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::INT64>;
+                    break;
+                default:
+                    break;
+            }
+
             const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) -> BlockInputStreamPtr {
-                switch (pk_type)
-                {
-                    case TMTPKType::UINT64:
-                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UINT64>>(merging, data.getPrimarySortDescription(),
-                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
-
-                    case TMTPKType::INT64:
-                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::INT64>>(merging, data.getPrimarySortDescription(),
-                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
-
-                    default:
-                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UNSPECIFIED>>(merging,
-                            data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
-                            DEFAULT_MERGE_BLOCK_SIZE);
-                }
+                return func_make_multi_way_merge_sort_input_impl(
+                    merging, data.getPrimarySortDescription(), version_column_index, delmark_column_index, DEFAULT_MERGE_BLOCK_SIZE);
             };
 
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)
