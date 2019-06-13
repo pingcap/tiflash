@@ -179,6 +179,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
     std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
 
+    Names tmt_column_names_to_read;
+
+    // pk, version, delmark is always the first 3 columns.
+    // the index of column is constant after MergeTreeBlockInputStream is constructed. exception will be thrown if not found.
+    const size_t handle_column_index = 0, version_column_index = 1, delmark_column_index = 2;
+
     const auto func_throw_retry_region = [&]() {
         std::vector<RegionID> region_ids;
         for (size_t region_index = 0; region_index < region_cnt; ++region_index)
@@ -221,6 +227,22 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     ASTSelectQuery & select = typeid_cast<ASTSelectQuery &>(*query_info.query);
 
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
+
+    if (is_txn_engine)
+    {
+        tmt_column_names_to_read = real_column_names;
+
+        // must extend mutable engine column.
+        extendMutableEngineColumnNames(tmt_column_names_to_read, handle_col_name);
+
+        if (tmt_column_names_to_read.size() < 3)
+            throw Exception("size of tmt_column_names_to_read < 3", ErrorCodes::LOGICAL_ERROR);
+
+        if (tmt_column_names_to_read[handle_column_index] != handle_col_name
+            || tmt_column_names_to_read[version_column_index] != MutableSupport::version_column_name
+            || tmt_column_names_to_read[delmark_column_index] != MutableSupport::delmark_column_name)
+            throw Exception("Wrong column order for txn engine, should not happen", ErrorCodes::LOGICAL_ERROR);
+    }
 
     if (!is_txn_engine)
         ;
@@ -336,13 +358,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         // for special region.
         region_block_data.resize(regions_query_info.size());
 
-        Names column_names_to_read = real_column_names;
-
-        extendMutableEngineColumnNames(column_names_to_read, handle_col_name);
-
-        if (column_names_to_read.size() < 3)
-            throw Exception("size of column_names_to_read < 3", ErrorCodes::LOGICAL_ERROR);
-
         // get data block from region first.
 
         auto start_time = Clock::now();
@@ -360,10 +375,10 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                auto [block, status]
-                    = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
-                        region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
-                        column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
+                    auto [block, status]
+                        = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
+                            region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
+                            tmt_column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
 
                 if (status != RegionTable::OK)
                 {
@@ -903,23 +918,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (sum_marks > max_marks_to_use_cache)
             use_uncompressed_cache = false;
 
-        // must extend mutable engine column.
-        extendMutableEngineColumnNames(column_names_to_read, handle_col_name);
-
-        // pk, version, delmark is always the first 3 columns.
-        // the index of column is constant after MergeTreeBlockInputStream is constructed. exception will be thrown if not found.
-        const size_t handle_column_index = 0, version_column_index = 1, delmark_column_index = 2;
-
-        if (column_names_to_read.size() < 3 || column_names_to_read[handle_column_index] != handle_col_name
-            || column_names_to_read[version_column_index] != MutableSupport::version_column_name
-            || column_names_to_read[delmark_column_index] != MutableSupport::delmark_column_name)
-            throw Exception("Wrong column order for txn engine, should not happen", ErrorCodes::LOGICAL_ERROR);
-
         if (select.raw_for_mutable)
         {
             res = spreadMarkRangesAmongStreams(std::move(parts_with_ranges),
                 num_streams,
-                column_names_to_read,
+                tmt_column_names_to_read,
                 max_block_size,
                 use_uncompressed_cache,
                 prewhere_actions,
@@ -942,7 +945,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         {
             const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
                 return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names_to_read,
+                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, tmt_column_names_to_read,
                     mark_ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
                     settings.max_read_buffer_size, true, true, virt_column_names, part.part_index_in_query);
             };
