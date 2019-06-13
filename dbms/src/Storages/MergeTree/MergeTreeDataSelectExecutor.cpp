@@ -341,11 +341,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 }
             }
 
-            // if there is no region, just return.
-            if (regions_query_info.size() == 0)
-                return {};
-
-            concurrent_num = std::min(concurrent_num, regions_query_info.size());
+            concurrent_num = std::max(1, std::min(concurrent_num, regions_query_info.size()));
         }
 
         region_group_range_parts.assign(concurrent_num, {});
