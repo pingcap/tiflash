@@ -359,7 +359,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         auto start_time = Clock::now();
 
         const size_t mem_region_num = regions_query_info.size();
-        size_t batch_size = mem_region_num / concurrent_num;
+        const size_t batch_size = mem_region_num / concurrent_num;
         std::atomic_bool need_retry = false;
 
         const auto func_run_learner_read = [&](const size_t region_begin) {
