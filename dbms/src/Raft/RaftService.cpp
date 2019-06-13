@@ -1,7 +1,7 @@
 #include <Interpreters/Context.h>
 #include <Raft/RaftService.h>
-#include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
 
@@ -28,11 +28,67 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
 
     grpc_server = builder.BuildAndStart();
 
+    persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); });
+    table_flush_handle = background_pool.addTask([this] {
+        RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+        return region_table.tryFlushRegions();
+    });
+
+    for (size_t i = 0; i < region_flush_handles.size(); ++i)
+    {
+        region_flush_handles[i] = background_pool.addTask([this] {
+            RegionID region_id;
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                if (regions_to_flush.empty())
+                    return false;
+                region_id = regions_to_flush.front();
+                regions_to_flush.pop();
+            }
+            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+            region_table.tryFlushRegion(region_id);
+            return true;
+        });
+    }
+
     LOG_INFO(log, "Raft service listening on [" << address << "]");
 }
 
+void RaftService::addRegionToFlush(const Regions & regions)
+{
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        for (auto & region : regions)
+            regions_to_flush.push(region->id());
+    }
+    for (size_t i = 0; i < region_flush_handles.size(); ++i)
+    {
+        region_flush_handles[i]->wake();
+    }
+};
+
 RaftService::~RaftService()
 {
+    if (persist_handle)
+    {
+        background_pool.removeTask(persist_handle);
+        persist_handle = nullptr;
+    }
+    if (table_flush_handle)
+    {
+        background_pool.removeTask(table_flush_handle);
+        table_flush_handle = nullptr;
+    }
+
+    for (size_t i = 0; i < region_flush_handles.size(); ++i)
+    {
+        if (region_flush_handles[i])
+        {
+            background_pool.removeTask(region_flush_handles[i]);
+            region_flush_handles[i] = nullptr;
+        }
+    }
+
     grpc_server->Shutdown();
     grpc_server->Wait();
 }
@@ -40,17 +96,10 @@ RaftService::~RaftService()
 grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream)
 {
     RaftContext rctx(&db_context, grpc_context, stream);
-    BackgroundProcessingPool::TaskHandle persist_handle;
-    BackgroundProcessingPool::TaskHandle flush_handle;
-
-    RegionTable & region_table = db_context.getTMTContext().getRegionTable();
 
     try
     {
         kvstore->report(rctx);
-
-        persist_handle = background_pool.addTask([&, this] { return kvstore->tryPersist(); });
-        flush_handle = background_pool.addTask([&] { return region_table.tryFlushRegions(); });
 
         enginepb::CommandRequestBatch request;
         while (stream->Read(&request))
@@ -62,11 +111,6 @@ grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, 
     {
         tryLogCurrentException(log, "gRPC ApplyCommandBatch on " + address + " error");
     }
-
-    if (persist_handle)
-        background_pool.removeTask(persist_handle);
-    if (flush_handle)
-        background_pool.removeTask(flush_handle);
 
     return grpc::Status::CANCELLED;
 }

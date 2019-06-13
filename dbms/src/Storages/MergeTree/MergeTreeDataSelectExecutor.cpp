@@ -755,17 +755,19 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     BlockInputStreams res;
 
-    if (!is_txn_engine)
+    if (!is_txn_engine || select.raw_for_mutable)
         LOG_DEBUG(log,
             "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, " << sum_marks
                         << " marks to read from " << sum_ranges << " ranges");
-    else if (!select.raw_for_mutable)
+    else
     {
         TMTContext & tmt = context.getTMTContext();
 
         auto safe_point = tmt.getPDClient()->getGCSafePoint();
         if (mvcc_query_info.read_tso < safe_point)
-            func_throw_retry_region();
+            throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
+                    + " is smaller than tidb gc safe point: " + toString(safe_point),
+                ErrorCodes::LOGICAL_ERROR);
 
         const size_t min_marks_for_seek = computeMinMarksForSeek(settings, data);
 
