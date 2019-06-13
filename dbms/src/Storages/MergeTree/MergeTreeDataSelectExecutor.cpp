@@ -892,6 +892,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         // must extend mutable engine column.
         extendMutableEngineColumnNames(column_names_to_read, handle_col_name);
 
+        // pk, version, delmark is always the first 3 columns.
+        // the index of column is constant after MergeTreeBlockInputStream is constructed. exception will be thrown if not found.
+        const size_t handle_column_index = 0, version_column_index = 1, delmark_column_index = 2;
+
+        if (column_names_to_read.size() < 3 || column_names_to_read[handle_column_index] != handle_col_name
+            || column_names_to_read[version_column_index] != MutableSupport::version_column_name
+            || column_names_to_read[delmark_column_index] != MutableSupport::delmark_column_name)
+            throw Exception("Wrong column order for txn engine, should not happen", ErrorCodes::LOGICAL_ERROR);
+
         if (select.raw_for_mutable)
         {
             res = spreadMarkRangesAmongStreams(std::move(parts_with_ranges),
@@ -917,21 +926,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         }
         else if (!select.no_kvstore)
         {
-            // extendMutableEngineColumnNames can make sure all necessary column are added.
-            // pk, version, delmark is always the first 3 columns.
-            // the index of column is constant after MergeTreeBlockInputStream is constructed. exception will be thrown if not found.
-            const size_t version_column_index
-                = std::find(column_names_to_read.begin(), column_names_to_read.end(), MutableSupport::version_column_name)
-                - column_names_to_read.begin();
-            const size_t delmark_column_index
-                = std::find(column_names_to_read.begin(), column_names_to_read.end(), MutableSupport::delmark_column_name)
-                - column_names_to_read.begin();
-            const size_t handle_column_index
-                = std::find(column_names_to_read.begin(), column_names_to_read.end(), handle_col_name) - column_names_to_read.begin();
-
-            if (handle_column_index != 0 || version_column_index != 1 || delmark_column_index != 2)
-                throw Exception("Wrong column order for mutable engine, should not happen", ErrorCodes::LOGICAL_ERROR);
-
             const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
                 return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
                     settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names_to_read,
