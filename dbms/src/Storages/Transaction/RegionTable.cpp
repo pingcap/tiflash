@@ -147,9 +147,17 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         storage = getOrCreateStorage(table_id);
     }
 
-    LOG_DEBUG(log, "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", original " << cache_size << " bytes");
+    LOG_DEBUG(log, "[flushRegion] table_id: " << table_id << ", region_id: " << region_id << ", original " << cache_size << " bytes");
 
     TMTContext & tmt = context.getTMTContext();
+
+    // store region ptr first.
+    RegionPtr region = tmt.getKVStore()->getRegion(region_id);
+    if (!region)
+    {
+        LOG_WARNING(log, "[flushRegion] region " << region_id << " is not found");
+        return;
+    }
 
     RegionDataReadInfoList data_list;
     if (storage == nullptr)
@@ -170,11 +178,15 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         // TODO: confirm names is right
         Names names = columns.getNamesOfPhysical();
         if (names.size() < 3)
-            throw Exception("[RegionTable::flushRegion] size of merge tree columns < 3, should not happen", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("[flushRegion] size of merge tree columns < 3, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-        auto [block, status] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, data_list);
+        auto [block, status] = getBlockInputStreamByRegion(table_id, region, table_info, columns, names, data_list);
         if (!block)
+        {
+            // no data in region for table. update cache size.
+            cache_size = region->dataSize();
             return;
+        }
 
         std::ignore = status;
 
@@ -184,9 +196,13 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     // remove data in region
     {
-        auto region = tmt.getKVStore()->getRegion(region_id);
-        if (!region)
+        // avoid ABA problem.
+        if (region != tmt.getKVStore()->getRegion(region_id))
+        {
+            LOG_DEBUG(log, "[flushRegion] region is moved out and back, ignore removing data.");
             return;
+        }
+
         auto remover = region->createCommittedRemover(table_id);
         for (const auto & [handle, write_type, commit_ts, value] : data_list)
         {
@@ -201,7 +217,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
             region->incDirtyFlag();
 
         LOG_DEBUG(
-            log, "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");
+            log, "[flushRegion] table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");
     }
 }
 
@@ -366,7 +382,7 @@ void RegionTable::removeRegion(const RegionPtr & region)
         auto r_it = regions.find(region_id);
         if (r_it == regions.end())
         {
-            LOG_WARNING(log, "RegionTable::removeRegion: region " << region_id << " does not exist.");
+            LOG_WARNING(log, "[removeRegion] region " << region_id << " does not exist.");
             return;
         }
         RegionInfo & region_info = r_it->second;
@@ -469,7 +485,7 @@ bool RegionTable::tryFlushRegions()
         });
     }
 
-    for (auto && [id, cache_bytes] : to_flush)
+    for (auto & [id, cache_bytes] : to_flush)
         flushRegion(id.first, id.second, cache_bytes);
 
     { // Now reset status information.

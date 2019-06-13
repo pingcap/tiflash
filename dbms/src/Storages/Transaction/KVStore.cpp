@@ -1,5 +1,6 @@
 #include <Interpreters/Context.h>
 #include <Raft/RaftContext.h>
+#include <Raft/RaftService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
@@ -38,8 +39,9 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::
 RegionPtr KVStore::getRegion(RegionID region_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    auto it = regions.find(region_id);
-    return (it == regions.end()) ? nullptr : it->second;
+    if (auto it = regions.find(region_id); it != regions.end())
+        return it->second;
+    return nullptr;
 }
 
 size_t KVStore::regionSize() const
@@ -110,7 +112,8 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table, const
 
 void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
 {
-    RegionTable * region_table = raft_ctx.context ? &(raft_ctx.context->getTMTContext().getRegionTable()) : nullptr;
+    TMTContext * tmt_context = raft_ctx.context ? &(raft_ctx.context->getTMTContext()) : nullptr;
+    RegionTable * region_table = tmt_context ? &(tmt_context->getRegionTable()) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
 
@@ -207,6 +210,9 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                 region_table->splitRegion(curr_region, split_regions);
 
             report_sync_log();
+
+            if (raft_ctx.context)
+                raft_ctx.context->getRaftService().addRegionToFlush(split_regions);
         };
 
         const auto handle_update_table_ids = [&](const TableIDSet & table_ids) {
