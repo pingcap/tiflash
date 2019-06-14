@@ -1,6 +1,6 @@
 #include <Common/Exception.h>
 
-#include <Storages/DeltaMerge/ValueSpace.h>
+#include <Storages/DeltaMerge/DummyValueSpace.h>
 
 namespace DB
 {

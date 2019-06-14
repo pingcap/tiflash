@@ -3,8 +3,8 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/DummyValueSpace.h>
 #include <Storages/DeltaMerge/Tuple.h>
-#include <Storages/DeltaMerge/ValueSpace.h>
 
 #define psizeof(M) std::cout << "sizeof(" #M "): " << sizeof(M) << std::endl
 #define print(M) std::cout << "" #M ": " << M << std::endl
@@ -12,7 +12,7 @@
 using namespace DB;
 
 class FakeValueSpace;
-using MyDeltaTree = DeltaTree<FakeValueSpace, 2, 10>;
+using FakeDeltaTree = DeltaTree<FakeValueSpace, 2, 10>;
 
 class FakeValueSpace
 {
@@ -47,14 +47,14 @@ using FakeValueSpacePtr = std::shared_ptr<FakeValueSpace>;
 
 void print_sizes()
 {
-    psizeof(MyDeltaTree::Leaf);
-    psizeof(MyDeltaTree::Intern);
+    psizeof(FakeDeltaTree::Leaf);
+    psizeof(FakeDeltaTree::Intern);
 
     psizeof(DefaultDeltaTree::Leaf);
     psizeof(DefaultDeltaTree::Intern);
 }
 
-void printTree(MyDeltaTree & tree)
+void printTree(FakeDeltaTree & tree)
 {
     print(tree.getHeight());
     for (auto it = tree.begin(), end = tree.end(); it != end; ++it)
@@ -65,7 +65,7 @@ void printTree(MyDeltaTree & tree)
     std::cout << std::endl;
 }
 
-std::string treeToString(MyDeltaTree & tree)
+std::string treeToString(FakeDeltaTree & tree)
 {
     std::string result = "";
     std::string temp;
@@ -86,7 +86,7 @@ std::string treeToString(MyDeltaTree & tree)
     return result;
 }
 
-void insertTest(MyDeltaTree & tree)
+void insertTest(FakeDeltaTree & tree)
 {
     for (int i = 0; i < 100; ++i)
     {
@@ -185,7 +185,7 @@ void insertTest(MyDeltaTree & tree)
 }
 
 
-void deleteAfterInsertTest(MyDeltaTree & tree)
+void deleteAfterInsertTest(FakeDeltaTree & tree)
 {
     std::cout << "insert test2 begin====\n";
 
@@ -250,7 +250,7 @@ void deleteAfterInsertTest(MyDeltaTree & tree)
     std::cout << "after many delete 2\n";
 }
 
-void deleteTest1(MyDeltaTree & tree)
+void deleteTest1(FakeDeltaTree & tree)
 {
     std::cout << "delete test begin====\n";
 
@@ -270,7 +270,7 @@ void deleteTest1(MyDeltaTree & tree)
 }
 
 
-void deleteTest2(MyDeltaTree & tree)
+void deleteTest2(FakeDeltaTree & tree)
 {
     std::cout << "delete test2 begin====\n";
 
@@ -296,7 +296,7 @@ void deleteTest2(MyDeltaTree & tree)
 }
 
 // insert skip delete entry
-void insertSkipDelete(MyDeltaTree & tree)
+void insertSkipDelete(FakeDeltaTree & tree)
 {
     std::cout << "delete test2 begin====\n";
 
@@ -326,7 +326,7 @@ void insertSkipDelete(MyDeltaTree & tree)
 }
 
 // delete after update
-void deleteAfterUpdateTest(MyDeltaTree & tree)
+void deleteAfterUpdateTest(FakeDeltaTree & tree)
 {
     std::cout << "update test begin====\n";
 
@@ -373,7 +373,7 @@ void deleteAfterUpdateTest(MyDeltaTree & tree)
 }
 
 // update skip delete
-void updateSkipDelete(MyDeltaTree & tree)
+void updateSkipDelete(FakeDeltaTree & tree)
 {
     std::cout << "delete test2 begin====\n";
 
@@ -396,7 +396,7 @@ void updateSkipDelete(MyDeltaTree & tree)
 }
 
 // in-place update
-void inplaceUpdate(MyDeltaTree & tree)
+void inplaceUpdate(FakeDeltaTree & tree)
 {
     std::cout << "insert test2 begin====\n";
 
@@ -424,13 +424,13 @@ int main(int, char **)
     print_sizes();
     FakeValueSpacePtr insert_vs = std::make_shared<FakeValueSpace>();
     FakeValueSpacePtr modify_vs = std::make_shared<FakeValueSpace>();
-    MyDeltaTree       delta_tree(insert_vs, modify_vs);
-    MyDeltaTree       delta_tree2(insert_vs, modify_vs);
-    MyDeltaTree       delta_tree3(insert_vs, modify_vs);
-    MyDeltaTree       delta_tree4(insert_vs, modify_vs);
-    MyDeltaTree       delta_tree5(insert_vs, modify_vs);
-    MyDeltaTree       delta_tree6(insert_vs, modify_vs);
-    MyDeltaTree       delta_tree7(insert_vs, modify_vs);
+    FakeDeltaTree     delta_tree(insert_vs, modify_vs);
+    FakeDeltaTree     delta_tree2(insert_vs, modify_vs);
+    FakeDeltaTree     delta_tree3(insert_vs, modify_vs);
+    FakeDeltaTree     delta_tree4(insert_vs, modify_vs);
+    FakeDeltaTree     delta_tree5(insert_vs, modify_vs);
+    FakeDeltaTree     delta_tree6(insert_vs, modify_vs);
+    FakeDeltaTree     delta_tree7(insert_vs, modify_vs);
     try
     {
         //insertTest(delta_tree);

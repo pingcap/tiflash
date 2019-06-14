@@ -20,7 +20,7 @@ struct DTLeaf;
 template <size_t M, size_t F, size_t S>
 struct DTIntern;
 
-extern const size_t INVALID_ID;
+extern const UInt64 INVALID_ID;
 
 using DTModifies    = std::vector<DTModify>;
 using DTModifiesPtr = DTModifies *;
@@ -66,11 +66,11 @@ struct DTMutation
     /// DT_INS : Insert
     /// DT_DEL : Delete
     /// DT_MULTI_MOD : modify chain
-    /// otherwise, mutation is in MOD mode, "type" is modify columnId.
+    /// otherwise, mutation is in DT_MOD mode, "type" is modify columnId.
     UInt16 type = 0;
-    /// for DT_INS and MOD, "value" is the value index in value space;
+    /// for DT_INS and DT_MOD, "value" is the value index in value space;
     /// for DT_MULTI_MOD, "value" represents the chain pointer;
-    /// for DT_DEL, "value" is the consecutive deleting number, e.g. 5 means 5 tuples deleted from current position.
+    /// for DT_DEL, "value" is the consecutive deleting number, e.g. 5 means 5 tuples got deleted starting from current position.
     UInt64 value = 0;
 
     inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
@@ -366,7 +366,7 @@ struct DTIntern
     }
 
     /// Split into two nodes.
-    /// Returns the newly created node, and new separator sid.
+    /// Returns the new separator sid.
     inline UInt64 split(InternPtr right_n)
     {
         size_t split = F * S / 2;
@@ -390,9 +390,9 @@ struct DTIntern
     /// Note that sibling should be deleted outside.
     inline void merge(InternPtr sibling, bool left, size_t node_pos) { adopt(sibling, left, sibling->count, node_pos); }
 
-    /// Adopt one entry from sibling, whether sibling is from left or right are handled in different way.
+    /// Adopt entries from sibling, whether sibling is from left or right are handled in different way.
     /// node_pos is the position of currently node in parent.
-    /// Returns new separator sid.
+    /// Returns the new separator sid.
     inline UInt64 adopt(InternPtr sibling, bool left, size_t adopt_count, size_t node_pos)
     {
         if (left)
@@ -502,9 +502,10 @@ public:
 };
 
 template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
-class DeltaTree : private Allocator
+class DeltaTree
 {
 public:
+    using Self          = DeltaTree<ValueSpace, M, F, S, Allocator>;
     using NodePtr       = void *;
     using Leaf          = DTLeaf<M, F, S>;
     using Intern        = DTIntern<M, F, S>;
@@ -525,13 +526,15 @@ private:
     LeafPtr left_leaf, right_leaf;
     size_t  height = 1;
 
-    size_t insert_count = 0;
-    size_t delete_count = 0;
-    size_t modify_count = 0;
+    size_t num_inserts  = 0;
+    size_t num_deletes  = 0;
+    size_t num_modifies = 0;
 
     size_t num_entries = 0;
 
     Logger * log;
+
+    Allocator * allocator;
 
 public:
     ValueSpacePtr insert_value_space;
@@ -585,13 +588,14 @@ private:
     template <typename T>
     void freeNode(T * node)
     {
-        Allocator::free(reinterpret_cast<char *>(node), sizeof(T));
+
+        allocator->free(reinterpret_cast<char *>(node), sizeof(T));
     }
 
     template <typename T>
     T * createNode()
     {
-        T * n = reinterpret_cast<T *>(Allocator::alloc(sizeof(T)));
+        T * n = reinterpret_cast<T *>(allocator->alloc(sizeof(T)));
         new (n) T();
         return n;
     }
@@ -616,18 +620,54 @@ private:
         freeNode<T>(node);
     }
 
-public:
-    DeltaTree(const ValueSpacePtr & insert_value_space_, const ValueSpacePtr & modify_value_space_)
-        : log(&Logger::get("DeltaTree")), //
-          insert_value_space(insert_value_space_),
-          modify_value_space(modify_value_space_)
+    void init(const ValueSpacePtr & insert_value_space_, const ValueSpacePtr & modify_value_space_)
     {
+        allocator = new Allocator();
+
+        log = &Logger::get("DeltaTree");
+
+        insert_value_space = insert_value_space_;
+        modify_value_space = modify_value_space_;
+
         root      = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
 
-        LOG_TRACE(log, "MM create");
+        LOG_TRACE(log, "create");
     }
 
+public:
+    DeltaTree(const ValueSpacePtr & insert_value_space_, const ValueSpacePtr & modify_value_space_)
+    {
+        init(insert_value_space_, modify_value_space_);
+    }
+
+    DeltaTree()
+    {
+        // We don't use modify by default.
+        init(std::make_shared<ValueSpace>(), {});
+    }
+
+    void swap(Self & other)
+    {
+        std::swap(root, other.root);
+
+        std::swap(left_leaf, other.left_leaf);
+        std::swap(right_leaf, other.right_leaf);
+        std::swap(height, other.height);
+
+        std::swap(num_inserts, other.num_inserts);
+        std::swap(num_deletes, other.num_deletes);
+        std::swap(num_modifies, other.num_modifies);
+
+        std::swap(num_entries, other.num_entries);
+
+        std::swap(log, other.log);
+
+        std::swap(allocator, allocator);
+
+        insert_value_space.swap(other.insert_value_space);
+        modify_value_space.swap(other.modify_value_space);
+    }
 
     ~DeltaTree()
     {
@@ -636,7 +676,9 @@ public:
         else
             freeTree<Intern>((InternPtr)root);
 
-        LOG_TRACE(log, "MM free");
+        delete allocator;
+
+        LOG_TRACE(log, "free");
     }
 
     void checkAll() const
@@ -649,7 +691,7 @@ public:
         }
         count += right_leaf->count;
         if (count != num_entries)
-            throw Exception("WTF");
+            throw Exception("entries count not match");
 
         check(root);
     }
@@ -662,7 +704,10 @@ public:
         return EntryIterator(right_leaf, right_leaf->count, delta);
     }
 
-    size_t entries() const { return num_entries; }
+    size_t numEntries() const { return num_entries; }
+    size_t numInserts() const { return num_inserts; }
+    size_t numDeletes() const { return num_deletes; }
+    size_t numModifies() const { return num_modifies; }
 
     void addModify(const UInt64 rid, const UInt16 column_id, const UInt64 new_value_id);
     void addModify(const UInt64 rid, const RefTuple & tuple);
@@ -680,20 +725,20 @@ void DT_CLASS::check(NodePtr node) const
     {
         LeafPtr p = as(Leaf, node);
         if (p->mark > 1 || ((node != root) && (Leaf::overflow(p->count) || Leaf::underflow(p->count))))
-            throw Exception("WTF");
+            throw Exception("illegal node");
         InternPtr parent = p->parent;
         if (parent)
         {
             auto pos = parent->searchChild(p);
             if (pos >= parent->count)
-                throw Exception("WTF");
+                throw Exception("illegal node");
             if (parent->deltas[pos] != p->getDelta())
             {
-                throw Exception("WTF");
+                throw Exception("illegal node");
             }
             if (pos > 0 && parent->sids[pos - 1] != p->sids[0])
             {
-                throw Exception("WTF");
+                throw Exception("illegal node");
             }
         }
     }
@@ -701,17 +746,17 @@ void DT_CLASS::check(NodePtr node) const
     {
         InternPtr p = as(Intern, node);
         if (p->mark > 1 || ((node != root) && (Intern::overflow(p->count) || Intern::underflow(p->count))))
-            throw Exception("WTF");
+            throw Exception("illegal node");
 
         InternPtr parent = p->parent;
         if (parent)
         {
             auto pos = parent->searchChild(p);
             if (pos >= parent->count)
-                throw Exception("WTF");
+                throw Exception("illegal node");
             if (parent->deltas[pos] != p->getDelta())
             {
-                throw Exception("WTF");
+                throw Exception("illegal node");
             }
         }
         for (size_t i = 0; i < p->count; ++i)
@@ -734,7 +779,7 @@ void DT_CLASS::addModify(const UInt64 rid, const RefTuple & tuple)
     if (tuple.values.empty())
         return;
 
-    ++modify_count;
+    ++num_modifies;
 
     size_t  pos;
     LeafPtr leaf;
@@ -856,7 +901,7 @@ void DT_CLASS::addModify(const UInt64 rid, const RefTuple & tuple)
 DT_TEMPLATE
 void DT_CLASS::addDelete(const UInt64 rid)
 {
-    ++delete_count;
+    ++num_deletes;
 
     size_t  pos;
     LeafPtr leaf;
@@ -896,6 +941,8 @@ void DT_CLASS::addDelete(const UInt64 rid)
         if (leaf->mutations[pos].type == DT_INS)
         {
             --num_entries;
+            --num_deletes; // delete entries in delta tree haven't increased.
+            --num_inserts;
 
             insert_value_space->removeFromInsert(leaf->mutations[pos].value);
             leaf->shiftEntries(pos + 1, -1);
@@ -913,14 +960,18 @@ void DT_CLASS::addDelete(const UInt64 rid)
             auto & m = leaf->mutations[pos];
             if (m.type == DT_MULTI_MOD)
             {
-                DTModifiesPtr modifies = reinterpret_cast<DTModifiesPtr>(m.value);
+                auto modifies = reinterpret_cast<DTModifiesPtr>(m.value);
                 for (const auto & md : *modifies)
+                {
                     modify_value_space->removeFromModify(md.value, md.column_id);
+                    --num_modifies;
+                }
                 delete modifies;
             }
             else
             {
                 modify_value_space->removeFromModify(m.value, m.type);
+                --num_modifies;
             }
 
             leaf->shiftEntries(pos + 1, -1);
@@ -949,7 +1000,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
 DT_TEMPLATE
 void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 {
-    ++insert_count;
+    ++num_inserts;
 
     size_t  pos;
     LeafPtr leaf;

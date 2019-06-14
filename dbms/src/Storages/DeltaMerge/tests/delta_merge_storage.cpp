@@ -1,24 +1,24 @@
-#include <string>
 #include <iostream>
+#include <string>
 
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/WriteBufferFromFile.h>
+#include <Core/Field.h>
+#include <Core/SortDescription.h>
+#include <DataStreams/copyData.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataStreams/copyData.h>
-#include <Core/Field.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
-#include <Storages/ColumnsDescription.h>
-#include <Storages/DeltaMerge/DeltaMergeBlockInputStream.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Core/SortDescription.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
-#include <Storages/DeltaMerge/DeltaMergeBlockOutputStream.h>
+#include <Storages/ColumnsDescription.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/DummyDeltaMergeBlockInputStream.h>
+#include <Storages/DeltaMerge/DummyDeltaMergeBlockOutputStream.h>
 #include <Storages/StorageDeltaMerge.h>
 
 using namespace DB;
@@ -55,7 +55,8 @@ int main(int, char **) try
     sample.insert(col2);
 
     NamesAndTypesList names_and_types_list{
-        {"col1", std::make_shared<DataTypeUInt64>()}, {"col2", std::make_shared<DataTypeString>()},
+        {"col1", std::make_shared<DataTypeUInt64>()},
+        {"col2", std::make_shared<DataTypeString>()},
     };
 
     DataTypes data_types;
@@ -83,7 +84,7 @@ int main(int, char **) try
     output->writeSuffix();
 
     QueryProcessingStage::Enum stage2;
-    BlockInputStreamPtr dms = storage->read(column_names, {}, context, stage2, 8192, 1)[0];
+    BlockInputStreamPtr        dms = storage->read(column_names, {}, context, stage2, 8192, 1)[0];
 
     dms->readPrefix();
 

@@ -21,6 +21,9 @@ struct ColumnWithTypeAndName
     DataTypePtr type;
     String name;
 
+    /// TODO Handle column_id properly after we support DDL.
+    Int64 column_id;
+
     ColumnWithTypeAndName() {}
     ColumnWithTypeAndName(const ColumnPtr & column_, const DataTypePtr & type_, const String & name_)
         : column(column_), type(type_), name(name_) {}
