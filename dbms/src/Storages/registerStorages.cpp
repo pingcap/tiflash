@@ -43,6 +43,7 @@ void registerStorages()
 
     registerStorageLog(factory);
     registerStorageTinyLog(factory);
+    registerStorageDeltaMerge(factory);
     registerStorageStripeLog(factory);
     registerStorageMergeTree(factory);
     registerStorageNull(factory);
