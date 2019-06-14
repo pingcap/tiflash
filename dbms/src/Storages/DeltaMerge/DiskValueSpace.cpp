@@ -54,17 +54,21 @@ void readChunkData(MutableColumns &      columns,
                    size_t                rows_offset,
                    size_t                rows_limit)
 {
-
-    PageIds page_ids;
+    std::unordered_map<PageId, size_t> page_to_index;
+    PageIds                            page_ids;
     page_ids.reserve(column_defines.size());
-    for (const auto & define : column_defines)
-        page_ids.push_back(chunk.getColumn(define.id).page_id);
-
-    auto pages = storage.read(page_ids);
     for (size_t index = 0; index < column_defines.size(); ++index)
     {
+        auto & define  = column_defines[index];
+        auto   page_id = chunk.getColumn(define.id).page_id;
+        page_ids.push_back(page_id);
+        page_to_index[page_id] = index;
+    }
+
+    PageHandler page_handler = [&](PageId page_id, const Page & page) {
+        size_t index = page_to_index[page_id];
+
         ColumnDefine         define = column_defines[index];
-        const Page &         page   = pages.at(page_ids[index]);
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         const ColumnMeta &   meta = chunk.getColumn(define.id);
         IColumn &            col  = *columns[index];
@@ -79,7 +83,8 @@ void readChunkData(MutableColumns &      columns,
             deserializeColumn(*tmp_col, meta, page, rows_limit);
             col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
         }
-    }
+    };
+    storage.read(page_ids, page_handler);
 }
 
 using GetColumn = std::function<const IColumn &(ColId)>;
