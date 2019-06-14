@@ -23,8 +23,9 @@ struct Page
 
     MemHolder mem_holder;
 };
-using Pages   = std::vector<Page>;
-using PageMap = std::map<PageId, Page>;
+using Pages       = std::vector<Page>;
+using PageMap     = std::map<PageId, Page>;
+using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
 struct PageCache
 {

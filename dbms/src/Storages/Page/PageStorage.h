@@ -49,6 +49,7 @@ public:
     void    write(const WriteBatch & write_batch);
     Page    read(PageId page_id);
     PageMap read(const std::vector<PageId> & page_ids);
+    void    read(const std::vector<PageId> & page_ids, PageHandler & handler);
     void    traverse(std::function<void(const Page & page)> acceptor);
     void    traversePageCache(std::function<void(PageId page_id, const PageCache & page)> acceptor);
     bool    gc();
