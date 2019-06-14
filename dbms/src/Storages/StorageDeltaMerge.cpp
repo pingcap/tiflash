@@ -103,7 +103,7 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, const Block & old_bloc
             block.erase(TAG_COLUMN_NAME);
     }
 
-    size_t rows = block.rows();
+    const size_t rows = block.rows();
     if (!block.has(handle_column_define.name))
     {
         // put handle column.
@@ -130,6 +130,7 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, const Block & old_bloc
         addColumn(block, EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE, std::move(handle_column));
     }
 
+    // add version column
     if (!block.has(VERSION_COLUMN_NAME))
     {
         auto column = VERSION_COLUMN_TYPE->createColumn();
@@ -143,6 +144,7 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, const Block & old_bloc
         addColumn(block, VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE, std::move(column));
     }
 
+    // add tag column (upsert / delete)
     if (!block.has(TAG_COLUMN_NAME))
     {
         auto column = TAG_COLUMN_TYPE->createColumn();
@@ -206,8 +208,6 @@ BlockInputStreams StorageDeltaMerge::read( //
     size_t max_block_size,
     unsigned num_streams)
 {
-    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-
     ColumnDefines to_read;
     for (auto & n : column_names)
     {
@@ -228,6 +228,8 @@ BlockInputStreams StorageDeltaMerge::read( //
         to_read.push_back(col_define);
     }
 
+    assert(query_info.query != nullptr);
+    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
     return store->read(context,
         context.getSettingsRef(),
         to_read,
