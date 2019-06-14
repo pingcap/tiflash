@@ -87,7 +87,7 @@ int openFile(const std::string & path)
     if (-1 == fd)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        if constexpr (must_exist)
+        if constexpr (!must_exist)
         {
             if (errno == ENOENT)
                 return 0;
@@ -251,13 +251,13 @@ namespace PageMetaFormat
 {
 using WBSize          = UInt32;
 using PageFileVersion = PageFile::Version;
-using PageVersion     = UInt64;
+using PageTag         = UInt64;
 using IsPut           = UInt8;
 using PageOffset      = UInt64;
 using PageSize        = UInt32;
 using Checksum        = UInt64;
 
-static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageVersion) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
+static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
 
 /// Return <data to write into meta file, data to write into data file>.
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
@@ -315,7 +315,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             page_cache_map[write.page_id] = pc;
 
             put(meta_pos, (PageId)write.page_id);
-            put(meta_pos, (PageVersion)write.version);
+            put(meta_pos, (PageTag)write.tag);
             put(meta_pos, (PageOffset)page_data_file_off);
             put(meta_pos, (PageSize)write.size);
             put(meta_pos, (Checksum)page_checksum);
@@ -384,7 +384,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 PageCache pc{};
 
                 auto page_id = get<PageId>(pos);
-                pc.version   = get<PageVersion>(pos);
+                pc.tag       = get<PageTag>(pos);
                 pc.offset    = get<PageOffset>(pos);
                 pc.size      = get<PageSize>(pos);
                 pc.checksum  = get<Checksum>(pos);

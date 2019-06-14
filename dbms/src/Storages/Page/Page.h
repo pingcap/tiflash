@@ -11,7 +11,7 @@ namespace DB
 {
 
 using MemHolder = std::shared_ptr<char>;
-inline MemHolder createMemHolder(char * memory, std::function<void(char *)> free)
+inline MemHolder createMemHolder(char * memory, const std::function<void(char *)> & free)
 {
     return std::shared_ptr<char>(memory, free);
 }
@@ -24,15 +24,15 @@ struct Page
     MemHolder mem_holder;
 };
 using Pages   = std::vector<Page>;
-using PageMap = std::unordered_map<PageId, Page>;
+using PageMap = std::map<PageId, Page>;
 
 struct PageCache
 {
-    PageFileId file_id;
+    PageFileId file_id = 0;
     UInt32     level;
     UInt32     size;
-    UInt64     version;
     UInt64     offset;
+    UInt64     tag;
     UInt64     checksum;
 
     bool               isValid() { return file_id; }
