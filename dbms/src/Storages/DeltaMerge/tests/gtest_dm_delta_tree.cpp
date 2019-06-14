@@ -1,16 +1,18 @@
-#include <cmath>
-#include <iostream>
+#include <gtest/gtest.h>
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DummyValueSpace.h>
 #include <Storages/DeltaMerge/Tuple.h>
 
-#define psizeof(M) std::cout << "sizeof(" #M "): " << sizeof(M) << std::endl
-#define print(M) std::cout << "" #M ": " << M << std::endl
+namespace DB
+{
+namespace DM
+{
+namespace tests
+{
 
-using namespace DB;
-using namespace DB::DM;
+#define print(M) std::cout << "" #M ": " << M << std::endl
 
 class FakeValueSpace;
 using FakeDeltaTree = DeltaTree<FakeValueSpace, 2, 10>;
@@ -46,14 +48,11 @@ public:
 
 using FakeValueSpacePtr = std::shared_ptr<FakeValueSpace>;
 
-void print_sizes()
+class DeltaTree_test : public ::testing::Test
 {
-    psizeof(FakeDeltaTree::Leaf);
-    psizeof(FakeDeltaTree::Intern);
-
-    psizeof(DefaultDeltaTree::Leaf);
-    psizeof(DefaultDeltaTree::Intern);
-}
+protected:
+    FakeDeltaTree tree;
+};
 
 void printTree(FakeDeltaTree & tree)
 {
@@ -87,77 +86,79 @@ std::string treeToString(FakeDeltaTree & tree)
     return result;
 }
 
-void insertTest(FakeDeltaTree & tree)
+
+TEST_F(DeltaTree_test, Insert)
 {
+    // insert 100 items
     for (int i = 0; i < 100; ++i)
     {
         tree.addInsert(i, i);
         tree.checkAll();
     }
-
     std::cout << "a====\n";
     printTree(tree);
 
+    // delete 100 items
     for (int i = 0; i < 100; ++i)
     {
         tree.addDelete(0);
         tree.checkAll();
     }
-
     std::cout << "b====\n";
     printTree(tree);
 
+    // insert 100 items
     for (int i = 0; i < 100; ++i)
     {
         tree.addInsert(i, i);
         tree.checkAll();
     }
-
     std::cout << "1111====\n";
     printTree(tree);
 
+    // delete
     for (int i = 0; i < 100; ++i)
     {
         tree.addDelete(0);
         tree.checkAll();
     }
-
     std::cout << "c====\n";
     printTree(tree);
 
+    // modify
     tree.addModify(8, 0, 8);
     tree.addModify(8, 1, 8);
     tree.addModify(8, 0, 8);
-
     std::cout << "d====\n";
     printTree(tree);
 
+    // modify
     tree.addModify(97, 0, 97);
     tree.addModify(97, 0, 97);
     tree.addModify(97, 8, 97);
     tree.addModify(97, 1, 97);
-
     std::cout << "e====\n";
     printTree(tree);
 
+    // delete
     for (int i = 5; i <= 8; ++i)
     {
         tree.addDelete(i);
         tree.checkAll();
     }
-
     std::cout << "f====\n";
     printTree(tree);
 
+    // modify
     for (int i = 5; i <= 8; ++i)
     {
         tree.addModify(i, 1, i);
         tree.checkAll();
     }
-
     std::cout << "g====\n";
     printTree(tree);
 
+    // delete
     tree.addDelete(30);
     tree.addDelete(30);
     tree.addDelete(30);
@@ -176,20 +177,17 @@ void insertTest(FakeDeltaTree & tree)
     std::cout << "g111====\n";
     printTree(tree);
 
+    // insert
     for (int i = 0; i < 5; ++i)
     {
         tree.addInsert(i, i);
     }
-
     std::cout << "h====\n";
     printTree(tree);
 }
 
-
-void deleteAfterInsertTest(FakeDeltaTree & tree)
+TEST_F(DeltaTree_test, DeleteAfterInsert)
 {
-    std::cout << "insert test2 begin====\n";
-
     int batch_num = 100;
 
     std::string expectedResult;
@@ -198,12 +196,11 @@ void deleteAfterInsertTest(FakeDeltaTree & tree)
         tree.addInsert(i, i);
         tree.checkAll();
         expectedResult += "(" + std::to_string(i) + "|0|INS|" + std::to_string(i) + "),";
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
     std::cout << "after many insert 1\n";
 
     expectedResult = "";
-
     for (int i = 0; i < batch_num; ++i)
     {
         tree.addDelete(0);
@@ -213,13 +210,11 @@ void deleteAfterInsertTest(FakeDeltaTree & tree)
         {
             expectedResult += "(" + std::to_string(j) + "|0|INS|" + std::to_string(j + i + 1) + "),";
         }
-        //std::cout << expectedResult << std::endl;
-        //std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
 
     expectedResult = "";
-    assert(expectedResult == treeToString(tree));
+    ASSERT_EQ(expectedResult, treeToString(tree));
     std::cout << "after many delete 1\n";
 
     for (int i = 0; i < batch_num; ++i)
@@ -231,7 +226,7 @@ void deleteAfterInsertTest(FakeDeltaTree & tree)
         {
             expectedResult += "(" + std::to_string(j) + "|0|INS|" + std::to_string(i - j) + "),";
         }
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
     std::cout << "after many insert 2\n";
 
@@ -244,17 +239,13 @@ void deleteAfterInsertTest(FakeDeltaTree & tree)
         {
             expectedResult += "(" + std::to_string(j) + "|0|INS|" + std::to_string(batch_num - j - 1) + "),";
         }
-        //std::cout << expectedResult << std::endl;
-        //std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
     std::cout << "after many delete 2\n";
 }
 
-void deleteTest1(FakeDeltaTree & tree)
+TEST_F(DeltaTree_test, Delete1)
 {
-    std::cout << "delete test begin====\n";
-
     int batch_num = 100;
 
     std::string expectedResult;
@@ -264,17 +255,12 @@ void deleteTest1(FakeDeltaTree & tree)
         tree.addDelete(0);
         tree.checkAll();
         expectedResult = "(0|0|DEL|" + std::to_string(i + 1) + "),";
-        //std::cout << expectedResult << std::endl;
-        //std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
 }
 
-
-void deleteTest2(FakeDeltaTree & tree)
+TEST_F(DeltaTree_test, Delete2)
 {
-    std::cout << "delete test2 begin====\n";
-
     int batch_num = 100;
 
     std::string expectedResult;
@@ -290,25 +276,16 @@ void deleteTest2(FakeDeltaTree & tree)
             expectedResult += "(" + std::to_string(i) + "|" + std::to_string(j) + "|DEL|1),";
         }
 
-        //std::cout << expectedResult << std::endl;
-        //std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
 }
 
-// insert skip delete entry
-void insertSkipDelete(FakeDeltaTree & tree)
+TEST_F(DeltaTree_test, InsertSkipDelete)
 {
-    std::cout << "delete test2 begin====\n";
-
     int batch_num = 100;
-
     tree.addDelete(0);
-
-    std::string expectedResult;
-
-    expectedResult = "(0|0|DEL|1),";
-    assert(expectedResult == treeToString(tree));
+    std::string expectedResult = "(0|0|DEL|1),";
+    ASSERT_EQ(expectedResult, treeToString(tree));
 
     for (int i = 0; i < batch_num; ++i)
     {
@@ -319,18 +296,12 @@ void insertSkipDelete(FakeDeltaTree & tree)
         {
             expectedResult += "(" + std::to_string(j) + "|1|INS|" + std::to_string(i - j) + "),";
         }
-
-        std::cout << expectedResult << std::endl;
-        std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
 }
 
-// delete after update
-void deleteAfterUpdateTest(FakeDeltaTree & tree)
+TEST_F(DeltaTree_test, DeleteAfterUpdate)
 {
-    std::cout << "update test begin====\n";
-
     int batch_num = 100;
 
     std::string expectedResult;
@@ -341,16 +312,12 @@ void deleteAfterUpdateTest(FakeDeltaTree & tree)
         tree.addModify(i, 0, 2 * i);
         tree.checkAll();
         expectedResult = expectedResult2 + "(" + std::to_string(i) + "|" + std::to_string(i) + "|0|" + std::to_string(2 * i) + "),";
-        std::cout << expectedResult << std::endl;
-        std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
 
         tree.addModify(i, 0, 2 * i + 1);
         tree.checkAll();
         expectedResult2 = expectedResult2 + "(" + std::to_string(i) + "|" + std::to_string(i) + "|0|" + std::to_string(2 * i + 1) + "),";
-        //std::cout << expectedResult2 << std::endl;
-        //std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult2 == treeToString(tree));
+        ASSERT_EQ(expectedResult2, treeToString(tree));
     }
 
     for (int i = batch_num - 1; i >= 0; --i)
@@ -366,24 +333,15 @@ void deleteAfterUpdateTest(FakeDeltaTree & tree)
         {
             expectedResult += "(" + std::to_string(i) + "|" + std::to_string(j) + "|DEL|1),";
         }
-        //std::cout << expectedResult << std::endl;
-        //std::cout << treeToString(tree) << std::endl;
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
-    std::cout << "after deleteAfterUpdateTest 1\n";
 }
 
-// update skip delete
-void updateSkipDelete(FakeDeltaTree & tree)
+TEST_F(DeltaTree_test, UpdateSkipDelete)
 {
-    std::cout << "delete test2 begin====\n";
-
     tree.addDelete(0);
-
-    std::string expectedResult;
-
-    expectedResult = "(0|0|DEL|1),";
-    assert(expectedResult == treeToString(tree));
+    std::string expectedResult = "(0|0|DEL|1),";
+    ASSERT_EQ(expectedResult, treeToString(tree));
 
     tree.addModify(0, 0, 0);
     tree.checkAll();
@@ -391,70 +349,25 @@ void updateSkipDelete(FakeDeltaTree & tree)
 
     std::cout << expectedResult << std::endl;
     std::cout << treeToString(tree) << std::endl;
-    assert(expectedResult == treeToString(tree));
-
-    std::cout << "updateSkipDelete tests complete\n";
+    ASSERT_EQ(expectedResult, treeToString(tree));
 }
 
-// in-place update
-void inplaceUpdate(FakeDeltaTree & tree)
+TEST_F(DeltaTree_test, InplaceUpdate)
 {
-    std::cout << "insert test2 begin====\n";
-
-    int batch_num = 100;
-
+    int         batch_num = 100;
     std::string expectedResult;
-
     for (int i = 0; i < batch_num; ++i)
     {
         tree.addInsert(i, i);
         tree.checkAll();
         expectedResult = expectedResult + "(" + std::to_string(i) + "|0|INS|" + std::to_string(i) + "),";
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
         tree.addModify(i, 0, i);
         tree.checkAll();
-        assert(expectedResult == treeToString(tree));
+        ASSERT_EQ(expectedResult, treeToString(tree));
     }
-
-    std::cout << "after in-place update delete 2\n";
 }
 
-
-int main(int, char **)
-{
-    print_sizes();
-    FakeValueSpacePtr insert_vs = std::make_shared<FakeValueSpace>();
-    FakeValueSpacePtr modify_vs = std::make_shared<FakeValueSpace>();
-    FakeDeltaTree     delta_tree(insert_vs, modify_vs);
-    FakeDeltaTree     delta_tree2(insert_vs, modify_vs);
-    FakeDeltaTree     delta_tree3(insert_vs, modify_vs);
-    FakeDeltaTree     delta_tree4(insert_vs, modify_vs);
-    FakeDeltaTree     delta_tree5(insert_vs, modify_vs);
-    FakeDeltaTree     delta_tree6(insert_vs, modify_vs);
-    FakeDeltaTree     delta_tree7(insert_vs, modify_vs);
-    try
-    {
-        //insertTest(delta_tree);
-        deleteAfterInsertTest(delta_tree);
-        deleteTest1(delta_tree2);
-        deleteTest2(delta_tree3);
-        insertSkipDelete(delta_tree4);
-        deleteAfterUpdateTest(delta_tree5);
-        updateSkipDelete(delta_tree6);
-        inplaceUpdate(delta_tree7);
-        std::cout << "tests pass\n";
-    }
-    catch (const DB::Exception & ex)
-    {
-        std::cout << "Caught exception " << ex.displayText() << "\n";
-    }
-    catch (const std::exception & ex)
-    {
-        std::cout << "Caught exception " << ex.what() << "\n";
-    }
-    catch (...)
-    {
-        std::cout << "Caught unhandled exception\n";
-    }
-    return 0;
-}
+} // namespace tests
+} // namespace DM
+} // namespace DB
