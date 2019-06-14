@@ -92,8 +92,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     EventRecorder recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
-    size_t rows = to_write.rows();
-    if (!rows)
+    const size_t rows = to_write.rows();
+    if (rows == 0)
         return;
 
     DMContext dm_context = newDMContext(db_context, db_settings);
@@ -208,6 +208,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     auto         dm_context    = newDMContext(db_context, db_settings);
     const auto & handle_define = table_handle_define;
 
+    // divide segment data streams to `num_streams`
     auto stream_creator = [=](const SegmentPtr & segment) {
         return segment->getInputStream(dm_context, columns_to_read, expected_block_size, max_version, is_raw);
     };
