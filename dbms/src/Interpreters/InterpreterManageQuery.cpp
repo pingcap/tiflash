@@ -4,7 +4,7 @@
 #include <Storages/IStorage.h>
 #include <Common/typeid_cast.h>
 
-#include <Storages/StorageDeltaMerge.h>
+#include <Storages/StorageDeltaMergeDummy.h>
 
 namespace DB
 {
@@ -17,7 +17,7 @@ BlockIO InterpreterManageQuery::execute()
     {
         throw Exception("Manage operation can only be applied to DeltaMerge engine tables");
     }
-    auto & dm_table = static_cast<StorageDeltaMerge &>(*table);
+    auto & dm_table = static_cast<StorageDeltaMergeDummy &>(*table);
     switch (ast.operation)
     {
         case ManageOperation::Enum::Flush:

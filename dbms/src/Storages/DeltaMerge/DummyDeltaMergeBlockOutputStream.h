@@ -4,6 +4,7 @@
 
 #include <Common/Exception.h>
 
+#include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 
@@ -11,7 +12,7 @@
 
 #include <common/logger_useful.h>
 
-#include <Storages/DeltaMerge/ValueSpace.h>
+#include <Storages/DeltaMerge/DummyValueSpace.h>
 
 namespace DB
 {
@@ -24,9 +25,9 @@ enum class Action : UInt8
     Update = 4
 };
 
-inline int compareTuple(const ValueSpacePtr &   left,
+inline int compareTuple(const MyValueSpacePtr &   left,
                         size_t                  l_pos,
-                        const ValueSpacePtr &   right,
+                        const MyValueSpacePtr &   right,
                         size_t                  r_pos,
                         const SortDescription & sort_desc,
                         const Ids &             vs_column_offsets)
@@ -266,15 +267,15 @@ struct RidGenerator
     }
 };
 
-class DeltaMergeBlockOutputStream final : public IBlockOutputStream
+class DummyDeltaMergeBlockOutputStream final : public IBlockOutputStream
 {
 public:
     using InputStreamCreator = std::function<BlockInputStreamPtr()>;
     using Flusher            = std::function<void()>;
 
-    DeltaMergeBlockOutputStream( //
+    DummyDeltaMergeBlockOutputStream( //
         const InputStreamCreator & stable_input_stream_creator_,
-        DeltaTreePtr &             delta_tree_,
+        MyDeltaTreePtr &           delta_tree_,
         const Action               action_,
         const SortDescription &    primary_sort_descr_,
         const Flusher              flusher_,
@@ -379,16 +380,16 @@ public:
             throw Exception("Illegal action");
         }
 
-        if (delta_tree->entries() >= flush_limit)
+        if (delta_tree->numEntries() >= flush_limit)
             flusher();
     }
 
 private:
     InputStreamCreator stable_input_stream_creator;
 
-    DeltaTreePtr &  delta_tree; // it could be changed by flusher.
-    Action          action;
-    SortDescription primary_sort_descr;
+    MyDeltaTreePtr & delta_tree; // it could be changed by flusher.
+    Action           action;
+    SortDescription  primary_sort_descr;
 
     Flusher flusher;
     size_t  flush_limit;
