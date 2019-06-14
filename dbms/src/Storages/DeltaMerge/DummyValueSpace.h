@@ -10,6 +10,7 @@
 #include <Core/SortDescription.h>
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DummyDefines.h>
 #include <Storages/DeltaMerge/Tuple.h>
 
 namespace DB
