@@ -174,6 +174,34 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids)
     return page_map;
 }
 
+void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handler)
+{
+    std::shared_lock lock(read_mutex);
+
+    std::map<PageFileIdAndLevel, std::pair<PageIdAndCaches, ReaderPtr>> file_read_infos;
+    for (auto page_id : page_ids)
+    {
+        auto it = page_cache_map.find(page_id);
+        if (it == page_cache_map.end())
+            throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+        const auto & page_cache                  = it->second;
+        auto         file_id_level               = page_cache.fileIdLevel();
+        auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
+        page_id_and_caches.emplace_back(page_id, page_cache);
+        if (!file_reader)
+            file_reader = getReader(file_id_level);
+    }
+
+    for (auto & [file_id_level, cache_and_reader] : file_read_infos)
+    {
+        (void)file_id_level;
+        auto & page_id_and_caches = cache_and_reader.first;
+        auto & reader             = cache_and_reader.second;
+
+        reader->read(page_id_and_caches, handler);
+    }
+}
+
 void PageStorage::traverse(std::function<void(const Page & page)> acceptor)
 {
     std::shared_lock lock(read_mutex);
