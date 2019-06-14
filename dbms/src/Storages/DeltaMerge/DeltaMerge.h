@@ -12,28 +12,30 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/ValueSpace.h>
 
 namespace DB
 {
 
+// Note that the columns in stable input stream and value space must exactly the same, include the name, type, and id.
+template <class DeltaTree, class DeltaValueSpace>
 class DeltaMergeBlockInputStream final : public IProfilingBlockInputStream
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
 
 private:
-    DeltaTreePtr delta_tree;
+    using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
+    using SharedLock         = std::shared_lock<std::shared_mutex>;
 
-    ValueSpacePtr insert_value_space;
-    ValueSpacePtr modify_value_space;
+    BlockInputStreamPtr stable_input_stream;
+
+    DeltaValueSpacePtr delta_value_space;
+    size_t             expected_block_size;
 
     EntryIterator entry_it;
     EntryIterator entry_end;
 
     Block  header;
     size_t num_columns;
-    size_t expected_block_size;
-    Ids    vs_column_offsets;
 
     size_t skip_rows;
 
@@ -44,36 +46,29 @@ private:
 
     size_t sid = 0;
 
+    SharedLock lock;
+
 public:
-    DeltaMergeBlockInputStream(const BlockInputStreamPtr & stable_input_stream,
-                               const DeltaTreePtr &        delta_tree_,
-                               size_t                      expected_block_size_)
-        : delta_tree(delta_tree_),
-          insert_value_space(delta_tree->insert_value_space),
-          modify_value_space(delta_tree->modify_value_space),
-          entry_it(delta_tree->begin()),
-          entry_end(delta_tree->end()),
-          expected_block_size(expected_block_size_)
+    DeltaMergeBlockInputStream(const BlockInputStreamPtr & stable_input_stream_,
+                               DeltaTree &                 delta_tree,
+                               const DeltaValueSpacePtr &  delta_value_space_,
+                               size_t                      expected_block_size_,
+                               SharedLock &&               lock)
+        : stable_input_stream(stable_input_stream_),
+          delta_value_space(delta_value_space_),
+          expected_block_size(expected_block_size_),
+          entry_it(delta_tree.begin()),
+          entry_end(delta_tree.end()),
+          lock(std::move(lock))
     {
-        children.push_back(stable_input_stream);
         header      = stable_input_stream->getHeader();
         num_columns = header.columns();
-
-        const auto & names_and_types = insert_value_space->namesAndTypes();
-        for (const auto & c : header)
-        {
-            for (size_t i = 0; i < names_and_types.size(); ++i)
-            {
-                if (c.name == names_and_types[i].name)
-                    vs_column_offsets.push_back(i);
-            }
-        }
 
         skip_rows = entry_it != entry_end ? entry_it.getSid() : UNLIMITED;
     }
 
     String getName() const override { return "DeltaMerge"; }
-    Block  getHeader() const override { return children.back()->getHeader(); }
+    Block  getHeader() const override { return header.cloneEmpty(); }
 
 protected:
     Block readImpl() override
@@ -119,7 +114,7 @@ private:
         stable_block_columns.clear();
         stable_block_rows = 0;
         stable_block_pos  = 0;
-        auto block        = children.back()->read();
+        auto block        = stable_input_stream->read();
         if (!block)
             return false;
 
@@ -196,47 +191,12 @@ private:
         if (entry_it.getType() == DT_INS)
         {
             auto value_id = entry_it.getValue();
-            for (size_t column_id = 0; column_id < num_columns; ++column_id)
-            {
-                const auto & split_column = insert_value_space->columnAt(vs_column_offsets[column_id]);
-                output_columns[column_id]->insertFrom(split_column.chunk(value_id), split_column.offsetInChunk(value_id));
-            }
+            for (size_t index = 0; index < num_columns; ++index)
+                delta_value_space->insertValue(*output_columns[index], index, value_id);
         }
         else
         {
-            // Modify
-            if (!fillStableBlockIfNeed())
-                return false;
-            std::vector<size_t> has_modifies(num_columns, INVALID_ID);
-
-            if (entry_it.getType() == DT_MULTI_MOD)
-            {
-                DTModifiesPtr modifies = reinterpret_cast<DTModifiesPtr>(entry_it.getValue());
-                for (const auto & m : *modifies)
-                    has_modifies[m.column_id] = m.value;
-            }
-            else
-            {
-                has_modifies[entry_it.getType()] = entry_it.getValue();
-            }
-
-            for (size_t column_id = 0; column_id < num_columns; ++column_id)
-            {
-                auto offset = vs_column_offsets[column_id];
-                if (has_modifies[offset] == INVALID_ID)
-                {
-                    output_columns[column_id]->insertFrom(*stable_block_columns[column_id], stable_block_pos);
-                }
-                else
-                {
-                    auto & split_column = insert_value_space->columnAt(offset);
-                    auto   value_id     = has_modifies[offset];
-                    output_columns[column_id]->insertFrom(split_column.chunk(value_id), split_column.offsetInChunk(value_id));
-                }
-            }
-
-            ++stable_block_pos;
-            ++sid;
+            throw Exception("Entry type " + DTTypeString(entry_it.getType()) + " is not supported");
         }
 
         ++entry_it;
