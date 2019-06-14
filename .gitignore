@@ -242,3 +242,4 @@ build_docker
 docker/builder/tics
 tests/docker/data
 tests/docker/log
+CoverageReport

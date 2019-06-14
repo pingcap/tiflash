@@ -204,9 +204,10 @@ if (USE_INCLUDE_WHAT_YOU_USE)
 endif ()
 
 # Flags for test coverage
-if (TEST_COVERAGE)
+if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
+    include(CodeCoverage)
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage -DIS_DEBUG")
-endif (TEST_COVERAGE)
+endif ()
 
 if (ENABLE_TESTS)
     message (STATUS "Tests are enabled")

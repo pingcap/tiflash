@@ -95,7 +95,7 @@ protected:
                 break;
             }
         }
-        if (!columns.at(0)->size())
+        if (columns.at(0)->empty())
             return {};
 
         return header.cloneWithColumns(std::move(columns));
