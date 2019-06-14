@@ -7,13 +7,10 @@
 namespace DB
 {
 
-const static std::string kvstore_name = "kvstore/";
-const static std::string region_table_name = "regmap/";
-
-TMTContext::TMTContext(
-    Context & context, const std::vector<std::string> & addrs, const std::string & learner_key, const std::string & learner_value)
-    : kvstore(std::make_shared<KVStore>(context.getPath() + kvstore_name)),
-      region_table(context, context.getPath() + region_table_name),
+TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
+    const std::string & learner_value, const std::string & kvstore_path, const std::string & region_mapping_path)
+    : kvstore(std::make_shared<KVStore>(kvstore_path)),
+      region_table(context, region_mapping_path),
       schema_syncer(std::make_shared<HttpJsonSchemaSyncer>()),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),

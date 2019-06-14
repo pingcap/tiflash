@@ -313,6 +313,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::vector<std::string> pd_addrs;
     std::string learner_key;
     std::string learner_value;
+    std::string kvstore_path = path + "kvstore/";
+    std::string region_mapping_path = path + "regmap/";
 
     if (config().has("raft"))
     {
@@ -350,6 +352,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             learner_value = "engine";
         }
+
+        if (config().has("raft.kvstore_path"))
+        {
+            kvstore_path = config().getString("raft.kvstore_path");
+        }
+
+        if (config().has("raft.regmap"))
+        {
+            region_mapping_path = config().getString("raft.regmap");
+        }
     }
     if (config().has("tidb"))
     {
@@ -373,7 +385,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
     }
 
     /// Then, load remaining databases
