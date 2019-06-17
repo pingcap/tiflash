@@ -171,7 +171,8 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     continue;
 
                 row.push_back(Field(column.id));
-                // TODO: Fill `zero` value if NOT NULL specified or else NULL. Need checking DEFAULT VALUE too.
+                // Fill `zero` value if NOT NULL specified or else NULL.
+                // TODO: Need to consider default value.
                 row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
             }
 

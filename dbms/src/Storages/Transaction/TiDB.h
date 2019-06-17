@@ -20,6 +20,7 @@ using DB::DatabaseID;
 using DB::Exception;
 using DB::String;
 using DB::TableID;
+using DB::Timestamp;
 
 // Column types.
 // In format:
@@ -225,6 +226,7 @@ struct TableInfo
     UInt8 state = 0;
     bool pk_is_handle = false;
     String comment;
+    Timestamp update_timestamp = 0;
     bool is_partition_table = false;
     TableID belonging_table_id = -1;
     PartitionInfo partition;

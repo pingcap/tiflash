@@ -268,6 +268,7 @@ String TableInfo::serialize(bool escaped) const
                     JsonSer::Field("state", state),
                     JsonSer::Field("pk_is_handle", pk_is_handle),
                     JsonSer::Field("comment", comment),
+                    JsonSer::Field("update_timestamp", update_timestamp),
                     JsonSer::Field("belonging_table_id", belonging_table_id, !is_partition_table),
                     // TODO: Hack to tell Spark this table is a physical/sub table of a partition.
                     JsonSer::Field("is_partition_sub_table", "true", !(is_partition_table && belonging_table_id != -1)),
@@ -341,6 +342,7 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
     state = static_cast<UInt8>(table_json["state"].getInt());
     pk_is_handle = table_json["pk_is_handle"].getBool();
     comment = table_json["comment"].getString();
+    update_timestamp = table_json["update_timestamp"].getUInt();
     is_partition_table = !table_json["partition"].isNull();
     if (is_partition_table)
     {
