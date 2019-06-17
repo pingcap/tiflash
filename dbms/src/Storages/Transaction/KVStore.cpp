@@ -235,11 +235,26 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                 persist_and_sync();
         };
 
-        std::visit(overload{[&](IndexError) { report_sync_log(); }, [&](BatchSplit & split) { handle_batch_split(split.split_regions); },
-                       [&](UpdateTableID & tables) { handle_update_table_ids(tables.table_ids); },
-                       [&](DefaultResult) { persist_and_sync(); }, [&](ChangePeer) { handle_change_peer(); },
-                       [](auto) { throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR); }},
-            result.inner);
+        switch (result.type)
+        {
+            case RaftCommandResult::Type::IndexError:
+                report_sync_log();
+                break;
+            case RaftCommandResult::Type::BatchSplit:
+                handle_batch_split(result.split_regions);
+                break;
+            case RaftCommandResult::Type::UpdateTableID:
+                handle_update_table_ids(result.table_ids);
+                break;
+            case RaftCommandResult::Type::Default:
+                persist_and_sync();
+                break;
+            case RaftCommandResult::Type::ChangePeer:
+                handle_change_peer();
+                break;
+            default:
+                throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     if (responseBatch.responses_size())

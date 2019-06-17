@@ -190,13 +190,14 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
 
-    RaftCommandResult result{sync_log, DefaultResult{}};
+    RaftCommandResult result;
+    result.sync_log = sync_log;
 
     {
         auto applied_index = meta.appliedIndex();
         if (index <= applied_index)
         {
-            result.inner = IndexError{};
+            result.type = RaftCommandResult::Type::IndexError;
             if (term == 0 && index == 0)
             {
                 // special cmd, used to heart beat and sync log, just ignore
@@ -224,7 +225,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
             case raft_cmdpb::AdminCmdType::ChangePeer:
             {
                 execChangePeer(request, response, index, term);
-                result.inner = ChangePeer{};
+                result.type = RaftCommandResult::Type::ChangePeer;
 
                 break;
             }
@@ -234,7 +235,8 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 for (auto & region : split_regions)
                     region->last_persist_time.store(last_persist_time);
 
-                result.inner = BatchSplit{split_regions};
+                result.type = RaftCommandResult::Type::BatchSplit;
+                result.split_regions = split_regions;
 
                 is_dirty = true;
                 break;
@@ -308,7 +310,8 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
             }
         }
         meta.setApplied(index, term);
-        result.inner = UpdateTableID{table_ids};
+        result.type = RaftCommandResult::Type::UpdateTableID;
+        result.table_ids = table_ids;
     }
 
     meta.notifyAll();
