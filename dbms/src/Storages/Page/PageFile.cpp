@@ -500,7 +500,7 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
         {
             auto checksum = CityHash_v1_0_2::CityHash64(pos, page_cache.size);
             if (checksum != page_cache.checksum)
-                throw Exception("Page checksum not match, broken file.", ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path, ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
 
         Page page;
