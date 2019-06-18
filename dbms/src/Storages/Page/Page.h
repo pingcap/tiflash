@@ -27,14 +27,15 @@ using Pages       = std::vector<Page>;
 using PageMap     = std::map<PageId, Page>;
 using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
+// Indicate the page size && offset in PageFile. TODO: rename to `PageEntry`?
 struct PageCache
 {
-    PageFileId file_id = 0;
-    UInt32     level;
-    UInt32     size;
-    UInt64     offset;
-    UInt64     tag;
-    UInt64     checksum;
+    PageFileId file_id  = 0;
+    UInt32     level    = 0;
+    UInt32     size     = 0;
+    UInt64     offset   = 0;
+    UInt64     tag      = 0;
+    UInt64     checksum = 0;
 
     bool               isValid() { return file_id; }
     PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }

@@ -1,0 +1,6 @@
+
+add_executable(page_test_page_storage gtest_page_storage.cpp)
+target_link_libraries(page_test_page_storage gtest_main dbms)
+
+add_executable(page_test_page_file gtest_page_file.cpp)
+target_link_libraries(page_test_page_file gtest_main dbms)

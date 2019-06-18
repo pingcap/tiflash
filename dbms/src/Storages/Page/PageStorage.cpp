@@ -11,8 +11,9 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::set<PageFile, PageFile::Comparator> listAllPageFiles(std::string storage_path, bool remove_tmp_file, Logger * page_file_log)
+std::set<PageFile, PageFile::Comparator> listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log)
 {
+    // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
     if (!folder.exists())
         folder.createDirectories();
@@ -45,7 +46,7 @@ PageStorage::PageStorage(const std::string & storage_path_, const Config & confi
     : storage_path(storage_path_), config(config_), page_file_log(&Logger::get("PageFile")), log(&Logger::get("PageStorage"))
 {
     /// page_files are in ascending ordered by (file_id, level).
-    auto page_files = listAllPageFiles(storage_path, true, page_file_log);
+    auto page_files = listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
     for (auto & page_file : page_files)
     {
         const_cast<PageFile &>(page_file).readAndSetPageMetas(page_cache_map);
@@ -246,7 +247,7 @@ bool PageStorage::gc()
 
     {
         /// Select the GC candidates and write them into an new file.
-        /// Since we don't update any shared informations, only a read lock is sufficient.
+        /// Since we don't update any shared information, only a read lock is sufficient.
 
         std::shared_lock lock(read_mutex);
 
@@ -260,6 +261,7 @@ bool PageStorage::gc()
             }
         }
 
+        // select gc candidate files into `merge_files`
         UInt64 candidate_total_size = 0;
         size_t migrate_page_count   = 0;
         for (auto & page_file : page_files)
@@ -284,7 +286,7 @@ bool PageStorage::gc()
             }
 
             // Don't gc writing page file.
-            bool is_candidate = page_file.fileIdLevel() != writing_file_id_level
+            bool is_candidate = (page_file.fileIdLevel() != writing_file_id_level)
                 && (valid_rate < config.merge_hint_low_used_rate || file_size < config.file_small_size);
             if (!is_candidate)
                 continue;
@@ -304,10 +306,11 @@ bool PageStorage::gc()
 
         LOG_DEBUG(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
 
-        if (migrate_page_count)
+        // if there are no valid pages to be migrated, then jump over
+        if (migrate_page_count > 0)
         {
             auto [largest_file_id, level] = *(merge_files.rbegin());
-            PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, true, page_file_log);
+            PageFile gc_file = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
 
             {
                 // No need to sync after each write. Do sync before closing is enough.
@@ -345,6 +348,7 @@ bool PageStorage::gc()
 
                     if (!page_id_and_caches.empty())
                     {
+                        // copy valid pages from `to_merge_file` to `gc_file`
                         PageMap    pages = to_merge_file_reader->read(page_id_and_caches);
                         WriteBatch wb;
                         for (const auto & [page_id, page_cache] : page_id_and_caches)
@@ -373,7 +377,7 @@ bool PageStorage::gc()
     }
 
     {
-        /// Here we have to update the cache informations which readers need to synchronize, a write lock is needed.
+        /// Here we have to update the cache information which readers need to synchronize, a write lock is needed.
 
         std::unique_lock lock(read_mutex);
 
@@ -399,6 +403,7 @@ bool PageStorage::gc()
         }
     }
 
+    // destroy the files have already been gc
     for (const auto & [file_id, level] : merge_files)
     {
         auto page_file = PageFile::openPageFileForRead(file_id, level, storage_path, page_file_log);
