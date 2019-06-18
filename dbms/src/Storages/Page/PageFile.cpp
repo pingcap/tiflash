@@ -10,6 +10,10 @@
 
 #include <IO/WriteHelpers.h>
 
+#ifndef __APPLE__
+#include <fcntl.h>
+#endif
+
 #include <Poco/File.h>
 #include <ext/scope_guard.h>
 
@@ -87,7 +91,7 @@ int openFile(const std::string & path)
     if (-1 == fd)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        if constexpr (must_exist)
+        if constexpr (!must_exist)
         {
             if (errno == ENOENT)
                 return 0;
@@ -251,13 +255,13 @@ namespace PageMetaFormat
 {
 using WBSize          = UInt32;
 using PageFileVersion = PageFile::Version;
-using PageVersion     = UInt64;
+using PageTag         = UInt64;
 using IsPut           = UInt8;
 using PageOffset      = UInt64;
 using PageSize        = UInt32;
 using Checksum        = UInt64;
 
-static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageVersion) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
+static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
 
 /// Return <data to write into meta file, data to write into data file>.
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
@@ -315,7 +319,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             page_cache_map[write.page_id] = pc;
 
             put(meta_pos, (PageId)write.page_id);
-            put(meta_pos, (PageVersion)write.version);
+            put(meta_pos, (PageTag)write.tag);
             put(meta_pos, (PageOffset)page_data_file_off);
             put(meta_pos, (PageSize)write.size);
             put(meta_pos, (Checksum)page_checksum);
@@ -384,7 +388,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 PageCache pc{};
 
                 auto page_id = get<PageId>(pos);
-                pc.version   = get<PageVersion>(pos);
+                pc.tag       = get<PageTag>(pos);
                 pc.offset    = get<PageOffset>(pos);
                 pc.size      = get<PageSize>(pos);
                 pc.checksum  = get<Checksum>(pos);
@@ -496,7 +500,7 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
         {
             auto checksum = CityHash_v1_0_2::CityHash64(pos, page_cache.size);
             if (checksum != page_cache.checksum)
-                throw Exception("Page checksum not match, broken file.", ErrorCodes::CHECKSUM_DOESNT_MATCH);
+                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path, ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
 
         Page page;
@@ -512,6 +516,54 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
         throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
 
     return page_map;
+}
+
+void PageFile::Reader::read(PageIdAndCaches & to_read, const PageHandler & handler)
+{
+    // Sort in ascending order by offset in file.
+    std::sort(to_read.begin(), to_read.end(), [](const PageIdAndCache & a, const PageIdAndCache & b) {
+        return a.second.offset < b.second.offset;
+    });
+
+    size_t buf_size = 0;
+    for (const auto & p : to_read)
+        buf_size = std::max(buf_size, p.second.size);
+
+    char *    data_buf   = (char *)alloc(buf_size);
+    MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
+
+
+    auto it = to_read.begin();
+    while (it != to_read.end())
+    {
+        auto && [page_id, page_cache] = *it;
+
+        readFile(data_file_fd, page_cache.offset, data_buf, page_cache.size, data_file_path);
+
+        if constexpr (PAGE_CHECKSUM_ON_READ)
+        {
+            auto checksum = CityHash_v1_0_2::CityHash64(data_buf, page_cache.size);
+            if (checksum != page_cache.checksum)
+                throw Exception("Page checksum not match, broken file.", ErrorCodes::CHECKSUM_DOESNT_MATCH);
+        }
+
+        Page page;
+        page.page_id    = page_id;
+        page.data       = ByteBuffer(data_buf, data_buf + page_cache.size);
+        page.mem_holder = mem_holder;
+
+        ++it;
+
+#ifndef __APPLE__
+        if (it != to_read.end())
+        {
+            auto & next_page_cache = it->second;
+            ::posix_fadvise(data_file_fd, next_page_cache.offset, next_page_cache.size, POSIX_FADV_WILLNEED);
+        }
+#endif
+
+        handler(page_id, page);
+    }
 }
 
 // =========================================================
