@@ -6,6 +6,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <ctype.h>
 #include <Common/StringUtils/StringUtils.h>
 
 namespace DB
@@ -27,11 +28,19 @@ public:
         int part_name_start = 0;
         if (startsWith(part, "tmp_"))
         {
-            part_name_start = 4;
+            for (unsigned i = 0; i < part.length(); i++)
+            {
+                if (isdigit(part[i]))
+                {
+                    part_name_start = i;
+                    LOG_DEBUG(log, "part_name_start: " << i << " part name: " << part);
+                    break;
+                }
+            }
         }
-        LOG_DEBUG(log, "part name: " + part);
         std::size_t path_index = std::hash<std::string>{}(database + "@" + table + "@" + part.substr(part_name_start)) % all_path.size();
-        return all_path[path_index] + database + "/" + table + "/";
+        LOG_DEBUG(log, "database: " << database << " table: " << table << " part name: " << part << " path index: " << path_index << " path: " << all_path[path_index] + "data/" + database + "/" + table + "/");
+        return all_path[path_index] + "data/" + database + "/" + table + "/";
     }
 
 private:

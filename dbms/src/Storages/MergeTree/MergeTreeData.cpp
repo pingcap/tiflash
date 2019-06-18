@@ -153,11 +153,15 @@ MergeTreeData::MergeTreeData(
 
     auto path_exists = Poco::File(full_path).exists();
     /// Creating directories, if not exist.
-    Poco::File(full_path).createDirectories();
+    for (String & path : context.getAllPath())
+    {
+        String candidate_path = path + "data/" + getDatabaseName() + "/" + getTableName() + "/";
+        Poco::File(candidate_path).createDirectories();
 
-    Poco::File(full_path + "detached").createDirectory();
-
+        Poco::File(candidate_path + "detached").createDirectory();
+    }
     String version_file_path = full_path + "format_version.txt";
+
     // When data path not exists, ignore the format_version check
     if (!attach || !path_exists)
     {
@@ -441,14 +445,18 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
     Strings part_file_names;
     Poco::DirectoryIterator end;
-    for (Poco::DirectoryIterator it(full_path); it != end; ++it)
-    {
-        /// Skip temporary directories.
-        if (startsWith(it.name(), "tmp"))
-            continue;
+    for (const String & path : context.getAllPath()) {
+        String data_path = path + "data/" + getDatabaseName() + "/" + getTableName() + "/";
+        for (Poco::DirectoryIterator it(data_path); it != end; ++it)
+        {
+            /// Skip temporary directories.
+            if (startsWith(it.name(), "tmp"))
+                continue;
 
-        part_file_names.push_back(it.name());
+            part_file_names.push_back(it.name());
+        }
     }
+
 
     DataPartsVector broken_parts_to_remove;
     DataPartsVector broken_parts_to_detach;
