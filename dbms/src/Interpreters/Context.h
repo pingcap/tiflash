@@ -13,7 +13,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/ClientInfo.h>
 #include <IO/CompressionSettings.h>
-#include <Storages/TablePathSelector.h>
+#include <Storages/PartPathSelector.h>
 
 
 namespace Poco
@@ -373,8 +373,8 @@ public:
     void createTMTContext();
     RaftService & getRaftService();
 
-    void initializeTablePathSelector(const std::vector<std::string> & all_path, const std::string & persist_path);
-    TablePathSelector & getTablePathSelector();
+    void initializePartPathSelector(const std::vector<std::string> & all_path);
+    PartPathSelector & getPartPathSelector();
 
     void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
     TiDBService & getTiDBService();

@@ -146,15 +146,10 @@ BlockIO InterpreterDropQuery::execute()
             /// If it is not virtual database like Dictionary then drop remaining data dir
             if (!database_data_path.empty())
             {
-                String table_data_path = context.getTablePathSelector().getPathForStorage(database_name, current_table_name);
-                LOG_WARNING((&Logger::get("InterpreterDropQuery")),
-                            "Dropping  table: " + database_name + " " + current_table_name + " from path " + table_data_path);
+                String table_data_path = database_data_path + "/" + escapeForFileName(current_table_name);
 
                 if (Poco::File(table_data_path).exists())
-                {
                     Poco::File(table_data_path).remove(true);
-                    context.getTablePathSelector().removePathForStorage(database_name, current_table_name);
-                }
             }
         }
     }

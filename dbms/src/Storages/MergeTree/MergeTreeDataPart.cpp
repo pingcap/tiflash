@@ -137,6 +137,10 @@ void MergeTreeDataPart::MinMaxIndex::merge(const MinMaxIndex & other)
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_)
     : storage(storage_), name(name_), info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
 {
+    full_path_prefix = storage.getContext().getPartPathSelector().getPathForPart(
+            storage.getDatabaseName(),
+            storage.getTableName(),
+            name);
 }
 
 /// Takes into account the fact that several columns can e.g. share their .size substreams.
@@ -221,7 +225,7 @@ String MergeTreeDataPart::getFullPath() const
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. This is bug.", ErrorCodes::LOGICAL_ERROR);
 
-    return storage.full_path + relative_path + "/";
+    return full_path_prefix + relative_path + "/";
 }
 
 String MergeTreeDataPart::getNameWithPrefix() const
@@ -315,8 +319,8 @@ void MergeTreeDataPart::remove() const
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. This is bug.", ErrorCodes::LOGICAL_ERROR);
 
-    String from = storage.full_path + relative_path;
-    String to = storage.full_path + "tmp_delete_" + name;
+    String from = full_path_prefix + relative_path;
+    String to = full_path_prefix + "tmp_delete_" + name;
 
     Poco::File from_dir{from};
     Poco::File to_dir{to};
@@ -356,7 +360,7 @@ void MergeTreeDataPart::remove() const
 void MergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_new_dir_if_exists) const
 {
     String from = getFullPath();
-    String to = storage.full_path + new_relative_path + "/";
+    String to = full_path_prefix + new_relative_path + "/";
 
     Poco::File from_file(from);
     if (!from_file.exists())

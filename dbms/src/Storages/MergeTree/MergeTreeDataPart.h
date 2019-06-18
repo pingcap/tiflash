@@ -74,6 +74,7 @@ struct MergeTreeDataPart
     MergeTreeData & storage;
 
     String name;
+    String full_path_prefix;
     MergeTreePartInfo info;
 
     /// A directory path (relative to storage's path) where part data is actually stored

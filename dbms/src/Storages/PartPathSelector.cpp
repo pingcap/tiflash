@@ -1,0 +1,4 @@
+namespace DB
+{
+
+} // namespace DB

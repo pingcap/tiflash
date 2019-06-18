@@ -447,13 +447,12 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         return executeDDLQueryOnCluster(query_ptr, context, databases);
     }
 
+    String path = context.getPath();
     String current_database = context.getCurrentDatabase();
 
     String database_name = create.database.empty() ? current_database : create.database;
     String table_name = create.table;
     String table_name_escaped = escapeForFileName(table_name);
-
-    const String path = context.getTablePathSelector().getPathForStorage(database_name, table_name_escaped);
 
     // If this is a stub ATTACH query, read the query definition from the database
     if (create.attach && !create.storage && !create.columns)
@@ -503,6 +502,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         if (!create.is_temporary)
         {
             database = context.getDatabase(database_name);
+            data_path = database->getDataPath();
 
             /** If the table already exists, and the request specifies IF NOT EXISTS,
               *  then we allow concurrent CREATE queries (which do nothing).
@@ -524,7 +524,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
              return {};
              
         res = StorageFactory::instance().get(create,
-            path,
+            data_path,
             table_name,
             database_name,
             context,
