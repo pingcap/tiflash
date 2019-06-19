@@ -236,7 +236,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     region->last_persist_time.store(last_persist_time);
 
                 result.type = RaftCommandResult::Type::BatchSplit;
-                result.split_regions = split_regions;
+                result.split_regions = std::move(split_regions);
 
                 is_dirty = true;
                 break;
@@ -311,7 +311,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
         }
         meta.setApplied(index, term);
         result.type = RaftCommandResult::Type::UpdateTableID;
-        result.table_ids = table_ids;
+        result.table_ids = std::move(table_ids);
     }
 
     meta.notifyAll();
