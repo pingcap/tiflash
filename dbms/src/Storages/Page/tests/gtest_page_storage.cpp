@@ -1,6 +1,8 @@
 #include "gtest/gtest.h"
 
+#define private public
 #include <Storages/Page/PageStorage.h>
+#undef private
 
 namespace DB
 {
@@ -127,6 +129,64 @@ TEST_F(PageStorage_test, WriteReadGc)
         }
     }
 
+}
+
+TEST_F(PageStorage_test, GcConcurrencyDelPage)
+{
+    PageId pid = 0;
+    // gc move Page0 -> PageFile{5,1}
+    PageCacheMap map;
+    map.emplace(pid, PageCache{.file_id=1, .level=0});
+    // write thread del Page0 in page_map before gc thread get unique_lock of `read_mutex`
+    storage->page_cache_map.clear();
+    // gc continue
+    storage->gcUpdatePageMap(map);
+    // page0 don't update to page_map
+    const PageCache entry = storage->getCache(pid);
+    ASSERT_FALSE(entry.isValid());
+}
+
+static void EXPECT_PagePos_LT(PageFileIdAndLevel p0, PageFileIdAndLevel p1)
+{
+    EXPECT_LT(p0, p1);
+}
+
+TEST_F(PageStorage_test, GcPageMove)
+{
+    EXPECT_PagePos_LT({4, 0}, {5, 1});
+    EXPECT_PagePos_LT({5, 0}, {5, 1});
+    EXPECT_PagePos_LT({5, 1}, {6, 1});
+    EXPECT_PagePos_LT({5, 2}, {6, 1});
+
+    const PageId pid = 0;
+    // old Page0 is in PageFile{5, 0}
+    storage->page_cache_map.emplace(pid, PageCache{.file_id=5, .level=0,});
+    // gc move Page0 -> PageFile{5,1}
+    PageCacheMap map;
+    map.emplace(pid, PageCache{.file_id=5, .level=1,});
+    storage->gcUpdatePageMap(map);
+    // page_map get updated
+    const PageCache entry = storage->getCache(pid);
+    ASSERT_TRUE(entry.isValid());
+    ASSERT_EQ(entry.file_id, 5);
+    ASSERT_EQ(entry.level, 1);
+}
+
+TEST_F(PageStorage_test, GcConcurrencySetPage)
+{
+    const PageId pid = 0;
+    // gc move Page0 -> PageFile{5,1}
+    PageCacheMap map;
+    map.emplace(pid, PageCache{.file_id=5, .level=1,});
+    // write thread insert newer Page0 before gc thread get unique_lock on `read_mutex`
+    storage->page_cache_map.emplace(pid, PageCache{.file_id=6, .level=0,});
+    // gc continue
+    storage->gcUpdatePageMap(map);
+    // read
+    const PageCache entry = storage->getCache(pid);
+    ASSERT_TRUE(entry.isValid());
+    ASSERT_EQ(entry.file_id, 6);
+    ASSERT_EQ(entry.level, 0);
 }
 
 } // namespace tests

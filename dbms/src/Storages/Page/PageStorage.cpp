@@ -380,7 +380,7 @@ PageCacheMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
                 for (auto page_id : page_ids)
                 {
                     auto it2 = page_cache_map.find(page_id);
-                    // This page is removed already.
+                    // This page is already removed.
                     if (it2 == page_cache_map.end())
                         continue;
                     const auto & page_cache = it2->second;
@@ -426,7 +426,7 @@ void PageStorage::gcUpdatePageMap(const PageCacheMap & gc_pages_map)
     for (const auto & [page_id, page_cache] : gc_pages_map)
     {
         auto it = page_cache_map.find(page_id);
-        // if the gc page have been remove, just ignore it
+        // if the gc page have already been remove, just ignore it
         if (it == page_cache_map.end())
         {
             continue;
@@ -435,9 +435,10 @@ void PageStorage::gcUpdatePageMap(const PageCacheMap & gc_pages_map)
         // In case of page being updated during GC process.
         if (old_page_cache.fileIdLevel() < page_cache.fileIdLevel())
         {
-
+            // no new page write to `page_cache_map`, replace it with gc page
             old_page_cache = page_cache;
         }
+        // else new page written by another thread, gc page is replaced. leave the page for next gc
     }
 }
 
