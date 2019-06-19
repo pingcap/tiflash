@@ -504,7 +504,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             if (part->info.level == 0)
             {
                 /// It is impossible to restore level 0 parts.
-                LOG_ERROR(log, "Considering to remove broken part " << full_path + file_name << " because it's impossible to repair.");
+                LOG_ERROR(log, "Considering to remove broken part " << part->getFullPath() + file_name << " because it's impossible to repair.");
                 broken_parts_to_remove.push_back(part);
             }
             else
@@ -514,7 +514,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
                 /// delete it.
                 int contained_parts = 0;
 
-                LOG_ERROR(log, "Part " << full_path + file_name << " is broken. Looking for parts to replace it.");
+                LOG_ERROR(log, "Part " << part->getFullPath() << " is broken. Looking for parts to replace it.");
 
                 for (const String & contained_name : part_file_names)
                 {
@@ -527,19 +527,19 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
                     if (part->info.contains(contained_part_info))
                     {
-                        LOG_ERROR(log, "Found part " << full_path + contained_name);
+                        LOG_ERROR(log, "Found part name " << contained_name);
                         ++contained_parts;
                     }
                 }
 
                 if (contained_parts >= 2)
                 {
-                    LOG_ERROR(log, "Considering to remove broken part " << full_path + file_name << " because it covers at least 2 other parts");
+                    LOG_ERROR(log, "Considering to remove broken part " << part->getFullPath() << " because it covers at least 2 other parts");
                     broken_parts_to_remove.push_back(part);
                 }
                 else
                 {
-                    LOG_ERROR(log, "Detaching broken part " << full_path + file_name
+                    LOG_ERROR(log, "Detaching broken part " << part->getFullPath()
                         << " because it covers less than 2 parts. You need to resolve this manually");
                     broken_parts_to_detach.push_back(part);
                     ++suspicious_broken_parts;
@@ -549,7 +549,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             continue;
         }
 
-        part->modification_time = Poco::File(full_path + file_name).getLastModified().epochTime();
+        part->modification_time = Poco::File(part->getFullPath()).getLastModified().epochTime();
         /// Assume that all parts are Committed, covered parts will be detected and marked as Outdated later
         part->state = DataPartState::Committed;
 
