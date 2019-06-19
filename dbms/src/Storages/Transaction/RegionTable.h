@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <vector>
+#include <optional>
 
 #include <Common/PersistedContainer.h>
 #include <Core/Names.h>

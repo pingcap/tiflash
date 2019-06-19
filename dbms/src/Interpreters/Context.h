@@ -355,7 +355,11 @@ public:
     DDLWorker & getDDLWorker() const;
 
     void initializeRaftService(const std::string & service_addr);
-    void createTMTContext(const std::vector<std::string> & pd_addrs, const std::string & learner_key, const std::string & learner_value);
+    void createTMTContext(const std::vector<std::string> & pd_addrs,
+                          const std::string & learner_key,
+                          const std::string & learner_value,
+                          const std::string & kvstore_path,
+                          const std::string & region_mapping_path);
     RaftService & getRaftService();
 
     void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);

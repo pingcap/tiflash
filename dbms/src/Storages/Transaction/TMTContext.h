@@ -34,8 +34,8 @@ public:
     bool isInitialized() const;
 
     // TODO: get flusher args from config file
-    explicit TMTContext(
-        Context & context, const std::vector<std::string> & addrs, const std::string & learner_key, const std::string & learner_value);
+    explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
+        const std::string & learner_value, const std::string & kv_store_path, const std::string & region_mapping_path);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
