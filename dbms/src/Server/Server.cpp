@@ -144,7 +144,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setPath(path);
 
     /// Create directories for 'path' and for default database, if not exist.
-    Poco::File(path + "data/" + default_database).createDirectories();
+    for (String & candidate_path : global_context->getAllPath())
+    {
+        Poco::File(candidate_path + "data/" + default_database).createDirectories();
+    }
     Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};

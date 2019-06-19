@@ -447,6 +447,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     Poco::DirectoryIterator end;
     for (const String & path : context.getAllPath()) {
         String data_path = path + "data/" + getDatabaseName() + "/" + getTableName() + "/";
+        LOG_DEBUG(log, "Loading data parts from path: " << data_path);
         for (Poco::DirectoryIterator it(data_path); it != end; ++it)
         {
             /// Skip temporary directories.
@@ -455,6 +456,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
             part_file_names.push_back(it.name());
         }
+        LOG_DEBUG(log, "After loading data parts from path: " << data_path << " current part_file_names length: " << part_file_names.size());
     }
 
 
