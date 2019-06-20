@@ -104,10 +104,7 @@ size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool q
     }
     else if (!quiet)
     {
-        auto tikv_key = Trait::genTiKVKey(table_id, key);
         throw Exception("Key not found", ErrorCodes::LOGICAL_ERROR);
-
-        return 0;
     }
     return 0;
 }
