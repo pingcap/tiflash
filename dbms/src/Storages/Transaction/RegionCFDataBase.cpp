@@ -40,7 +40,7 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
     auto [it, ok] = map.emplace(std::move(kv_pair));
     std::ignore = it;
     if (!ok)
-        throw Exception(" found existing key [" + getTiKVKey(kv_pair.second).toString() + "]", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Found existing key", ErrorCodes::LOGICAL_ERROR);
     return table_id;
 }
 
@@ -104,10 +104,7 @@ size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool q
     }
     else if (!quiet)
     {
-        auto tikv_key = Trait::genTiKVKey(table_id, key);
-        throw Exception(" key not found [" + tikv_key.toString() + "]", ErrorCodes::LOGICAL_ERROR);
-
-        return 0;
+        throw Exception("Key not found", ErrorCodes::LOGICAL_ERROR);
     }
     return 0;
 }
