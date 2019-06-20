@@ -11,7 +11,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::set<PageFile, PageFile::Comparator> listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log)
+std::set<PageFile, PageFile::Comparator>
+PageStorage::listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -46,7 +47,7 @@ PageStorage::PageStorage(const std::string & storage_path_, const Config & confi
     : storage_path(storage_path_), config(config_), page_file_log(&Logger::get("PageFile")), log(&Logger::get("PageStorage"))
 {
     /// page_files are in ascending ordered by (file_id, level).
-    auto page_files = listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
+    auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
     for (auto & page_file : page_files)
     {
         const_cast<PageFile &>(page_file).readAndSetPageMetas(page_cache_map);
@@ -232,9 +233,11 @@ void PageStorage::traversePageCache(std::function<void(PageId page_id, const Pag
 
 bool PageStorage::gc()
 {
-    auto page_files = listAllPageFiles(storage_path, true, page_file_log);
+    auto page_files = PageStorage::listAllPageFiles(storage_path, true, page_file_log);
     if (page_files.empty())
         return false;
+
+    LOG_DEBUG(log, "PageStorage GC start");
 
     PageFileIdAndLevel writing_file_id_level;
     {
@@ -270,6 +273,8 @@ bool PageStorage::gc()
             || (merge_files.size() >= 2 && candidate_total_size >= config.merge_hint_low_used_file_total_size);
         if (!should_merge)
         {
+            LOG_DEBUG(log,
+                      "GC exit without merging. merge file size: " << merge_files.size() << ", candidate size: " << candidate_total_size);
             return false;
         }
 

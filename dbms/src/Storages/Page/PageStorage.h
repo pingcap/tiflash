@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <optional>
+#include <set>
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -53,6 +54,9 @@ public:
     void    traverse(std::function<void(const Page & page)> acceptor);
     void    traversePageCache(std::function<void(PageId page_id, const PageCache & page)> acceptor);
     bool    gc();
+
+    static std::set<PageFile, PageFile::Comparator>
+    listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log);
 
 private:
     PageFile::Writer & getWriter();
