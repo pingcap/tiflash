@@ -283,7 +283,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     {
                         LOG_ERROR(log,
                             toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
-                                       << ", index: " << index << "] with key in hex " << tikv_key.toHex());
+                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << put.cf());
                         e.rethrow();
                     }
 
@@ -309,7 +309,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     {
                         LOG_ERROR(log,
                             toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
-                                       << ", index: " << index << "] with key in hex " << tikv_key.toHex());
+                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
                         e.rethrow();
                     }
 
