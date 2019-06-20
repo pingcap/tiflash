@@ -76,8 +76,7 @@ roundDownToPowerOfTwo(T x)
 template <typename T>
 inline T roundDownToPowerOfTwo(Decimal<T>)
 {
-    // FIXME: implement it
-    throw Exception("have not implement it.");
+    throw Exception("have not implement roundDownToPowerOfTwo of type Decimal.");
 }
 
 /** For integer data types:

@@ -22,9 +22,6 @@ class DataTypeNumber final : public DataTypeNumberBase<T>
     bool canBeInsideNullable() const override { return true; }
 };
 
-//template <>
-//class DataTypeNumber<Decimal> : public DataTypeDecimal{};
-
 using DataTypeUInt8 = DataTypeNumber<UInt8>;
 using DataTypeUInt16 = DataTypeNumber<UInt16>;
 using DataTypeUInt32 = DataTypeNumber<UInt32>;

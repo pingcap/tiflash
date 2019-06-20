@@ -214,6 +214,7 @@ template <typename T> constexpr bool isDecimalField() { return false; }
 template <> constexpr bool isDecimalField<DecimalField<Decimal32>>() { return true; }
 template <> constexpr bool isDecimalField<DecimalField<Decimal64>>() { return true; }
 template <> constexpr bool isDecimalField<DecimalField<Decimal128>>() { return true; }
+template <> constexpr bool isDecimalField<DecimalField<Decimal256>>() { return true; }
 
 /** More precise comparison, used for index.
   * Differs from Field::operator< and Field::operator== in that it also compares values of different types.
