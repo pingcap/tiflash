@@ -394,11 +394,15 @@ struct CurrentlyMergingPartsTagger
 
     CurrentlyMergingPartsTagger() = default;
 
-    CurrentlyMergingPartsTagger(const MergeTreeData::DataPartsVector & parts_, size_t total_size, StorageMergeTree & storage_)
-        : parts(parts_), storage(&storage_)
+    CurrentlyMergingPartsTagger(const MergeTreeDataMerger::FuturePart & future_part, size_t total_size, StorageMergeTree & storage_)
+        : parts(future_part.parts), storage(&storage_)
     {
         /// Assume mutex is already locked, because this method is called from mergeTask.
-        reserved_space = DiskSpaceMonitor::reserve(storage->full_path, total_size); /// May throw.
+        reserved_space = DiskSpaceMonitor::reserve(storage->context.getPartPathSelector().getPathForPart(
+                storage->getDatabaseName(),
+                storage->getTableName(),
+                future_part.name
+                ), total_size); /// May throw.
         for (const auto & part : parts)
         {
             if (storage->currently_merging.count(part))
@@ -469,7 +473,7 @@ bool StorageMergeTree::merge(
         if (!selected)
             return false;
 
-        merging_tagger.emplace(future_part.parts, MergeTreeDataMerger::estimateDiskSpaceForMerge(future_part.parts), *this);
+        merging_tagger.emplace(future_part, MergeTreeDataMerger::estimateDiskSpaceForMerge(future_part.parts), *this);
     }
 
     MergeList::EntryPtr merge_entry = context.getMergeList().insert(database_name, table_name, future_part.name, future_part.parts);
