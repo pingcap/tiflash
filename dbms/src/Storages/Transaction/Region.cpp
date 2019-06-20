@@ -255,7 +255,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     else
     {
         TableIDSet table_ids;
-        TableID table_id;
+        TableID table_id = InvalidTableID;
 
         std::unique_lock<std::shared_mutex> lock(mutex);
 
