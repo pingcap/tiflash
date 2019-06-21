@@ -260,7 +260,7 @@ std::enable_if_t<std::is_floating_point_v<T>, U> ToDecimal(T value, ScaleType sc
 }
 
 template<typename T, typename U>
-std::enable_if_t<IsDecimal<T>, U> ToDecimal(T value, ScaleType scale) {
+std::enable_if_t<IsDecimal<T>, U> ToDecimal(T /*value*/, ScaleType /*scale*/) {
     throw Exception("Should not call here", ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -287,7 +287,7 @@ std::enable_if_t<IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, Scal
 }
 
 template<typename T, typename U>
-std::enable_if_t<!IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, ScaleType scale) {
+std::enable_if_t<!IsDecimal<T>, U> ToDecimal(const T & /*v*/, ScaleType /*v_scale*/, ScaleType /*scale*/) {
     throw Exception("Should not call here", ErrorCodes::LOGICAL_ERROR);
 }
 

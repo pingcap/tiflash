@@ -1479,7 +1479,7 @@ public:
         });
     }
 
-    template <typename A, typename B, bool check = IsDecimal<A>> class RefineCls;
+    template <typename A, typename B, bool check = IsDecimal<A>> struct RefineCls;
 
     template<typename T, typename ResultType>
     struct RefineCls <T, ResultType, true> {
