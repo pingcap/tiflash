@@ -82,7 +82,8 @@ struct Range
     inline String toString() const { return rangeToString(*this); }
 };
 
-using HandleRange = Range<Handle, true>;
+using HandleRange  = Range<Handle, true>;
+using HandleRanges = std::vector<HandleRange>;
 
 } // namespace DM
 } // namespace DB

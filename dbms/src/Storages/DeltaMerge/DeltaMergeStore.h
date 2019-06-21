@@ -55,6 +55,14 @@ public:
                            UInt64                max_version,
                            bool                  is_raw);
 
+    BlockInputStreams read(const Context &       db_context,
+                           const DB::Settings &  db_settings,
+                           const ColumnDefines & column_defines,
+                           size_t                expected_block_size,
+                           size_t                num_streams,
+                           UInt64                max_version,
+                           const HandleRanges &  ranges);
+
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
     const ColumnDefines & getTableColumns() { return table_columns; }

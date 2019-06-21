@@ -41,11 +41,10 @@ public:
 
     void deleteRange(DMContext & dm_context, const HandleRange & delete_range);
 
-    BlockInputStreamPtr getInputStream(const DMContext &     dm_context, //
-                                       const ColumnDefines & columns_to_read,
-                                       size_t                expected_block_size,
-                                       UInt64                max_version,
-                                       bool                  is_raw);
+    BlockInputStreamPtr
+    getInputStream(const DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version, const HandleRange );
+
+    BlockInputStreamPtr getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 
     SegmentPtr split(DMContext & dm_context);
 
@@ -87,6 +86,7 @@ public:
     }
 
 private:
+    template <bool add_tag_column>
     BlockInputStreamPtr getPlacedStream(const ColumnDefine &  handle,
                                         const HandleRange &   read_range,
                                         const ColumnDefines & columns_to_read,
