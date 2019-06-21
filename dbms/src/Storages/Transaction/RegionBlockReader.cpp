@@ -277,7 +277,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                     // Check overflow for potential un-synced data type widen,
                     // i.e. schema is old and narrow, meanwhile data is new and wide.
                     // So far only integers is possible of overflow.
-                    if (tp->isInteger())
+                    if (tp->isInteger()
+                        || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isInteger()))
                     {
                         // Check by bitwise compare between the inserted value (casted to column type) and original value in row.
                         if (unlikely(it->second.first->get64(it->second.first->size() - 1) != row[i + 1].get<UInt64>()))
