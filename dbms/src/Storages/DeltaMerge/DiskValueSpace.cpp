@@ -86,7 +86,7 @@ void readChunkData(MutableColumns &      columns,
         else
         {
             auto tmp_col = define.type->createColumn();
-            deserializeColumn(*tmp_col, meta, page, rows_limit);
+            deserializeColumn(*tmp_col, meta, page, rows_offset + rows_limit);
             col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
         }
     };
@@ -311,8 +311,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
         columns.back()->reserve(rows_limit);
     }
 
-    auto [start_chunk_index, rows_offset_in_start_chunk] = findChunk(rows_offset);
-    auto [end_chunk_index, rows_limit_in_end_chunk]      = findChunk(rows_offset + rows_limit);
+    auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(rows_offset);
+    auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(rows_offset + rows_limit);
 
     size_t chunk_cache_start = chunks.size() - cache_chunks;
     size_t already_read_rows = 0;
@@ -328,13 +328,13 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
 
         if (cur_chunk.getRows())
         {
-            size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_offset_in_start_chunk : 0;
-            size_t rows_limit_in_chunk
-                = chunk_index == end_chunk_index ? rows_limit_in_end_chunk : cur_chunk.getRows() - rows_offset_in_chunk;
+            size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
+            size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : cur_chunk.getRows();
 
-            readChunkData(columns, cur_chunk, read_column_defines, data_storage, rows_offset_in_chunk, rows_limit_in_chunk);
+            readChunkData(
+                columns, cur_chunk, read_column_defines, data_storage, rows_start_in_chunk, rows_end_in_chunk - rows_start_in_chunk);
 
-            already_read_rows += rows_limit_in_chunk - rows_offset_in_chunk;
+            already_read_rows += rows_end_in_chunk - rows_start_in_chunk;
         }
     }
 
@@ -352,7 +352,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
             ColumnDefine define    = read_column_defines[index];
             auto &       cache_col = cache.at(define.id);
 
-            size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_offset_in_start_chunk : 0;
+            size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
 
             columns[index]->insertRangeFrom(*cache_col, cache_rows_offset + rows_offset_in_chunk, rows_limit - already_read_rows);
         }
