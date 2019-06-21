@@ -1,9 +1,5 @@
 #pragma once
 
-/// Remove the population of thread_local from Poco
-#ifdef thread_local
-#   undef thread_local
-#endif
 #include <ext/singleton.h>
 #include <Common/Exception.h>
 #include <Core/Types.h>

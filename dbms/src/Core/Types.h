@@ -1,5 +1,10 @@
 #pragma once
 
+/// Remove the population of thread_local from Poco
+#ifdef thread_local
+#   undef thread_local
+#endif
+
 #include <limits>
 
 #if !defined(__GLIBCXX_BITSIZE_INT_N_0) && defined(__SIZEOF_INT128__)
