@@ -29,7 +29,6 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     {
         throw Exception("Table " + database_name + "." + table_name + " doesn't not exist", ErrorCodes::UNKNOWN_TABLE);
     }
-    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
     auto schema_syncer = tmt.getSchemaSyncer();
     int table_id = schema_syncer->getTableIdByName(database_name, table_name, context);
     if (table_id != InvalidTableID)
@@ -43,7 +42,7 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
 
 
     std::stringstream ss;
-    ss << "refreshed schema for table #" << merge_tree->getTableInfo().id;
+    ss << "refreshed schema for table #" << storage->getTableInfo().id;
     output(ss.str());
 }
 

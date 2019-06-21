@@ -23,30 +23,12 @@ RegionTable::Table & RegionTable::getOrCreateTable(TableID table_id)
     if (it == tables.end())
     {
         // Load persisted info.
-        getOrCreateStorage(table_id);
-
         std::tie(it, std::ignore) = tables.try_emplace(table_id, parent_path + "tables/", table_id);
 
         auto & table = it->second;
         table.persist();
     }
     return it->second;
-}
-
-StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
-{
-    auto & tmt_ctx = context.getTMTContext();
-    auto storage = tmt_ctx.getStorages().get(table_id);
-    if (storage == nullptr)
-    {
-        tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context, false);
-        storage = tmt_ctx.getStorages().get(table_id);
-    }
-    if (storage == nullptr)
-    {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " not found in TMT context.");
-    }
-    return storage;
 }
 
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const RegionPtr & region)
@@ -141,54 +123,24 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
 
 void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cache_size)
 {
-    StoragePtr storage = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        storage = getOrCreateStorage(table_id);
-    }
-
     LOG_DEBUG(log, "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", original " << cache_size << " bytes");
 
-    TMTContext & tmt = context.getTMTContext();
+    const auto & tmt = context.getTMTContext();
 
-    RegionDataReadInfoList data_list;
-    if (storage == nullptr)
+    RegionDataReadInfoList data_list_to_remove;
+
+    /// Write region data into corresponding storage.
     {
-        // If storage still not existing after syncing schema, meaning this table is dropped and the data is to be GC-ed.
-        // Ignore such data.
-        LOG_WARNING(log,
-            __PRETTY_FUNCTION__ << ": Not flushing table_id: " << table_id << ", region_id: " << region_id << " as storage doesn't exist.");
-    }
-    else
-    {
-        auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-
-        auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
-
-        const auto & table_info = merge_tree->getTableInfo();
-        const auto & columns = merge_tree->getColumns();
-        // TODO: confirm names is right
-        Names names = columns.getNamesOfPhysical();
-        if (names.size() < 3)
-            throw Exception("[RegionTable::flushRegion] size of merge tree columns < 3, should not happen", ErrorCodes::LOGICAL_ERROR);
-
-        auto [block, status] = getBlockInputStreamByRegion(tmt, table_id, region_id, table_info, columns, names, data_list);
-        if (!block)
-            return;
-
-        std::ignore = status;
-
-        TxnMergeTreeBlockOutputStream output(*merge_tree);
-        output.write(*block);
+        writeBlockByRegion(context, table_id, region_id, data_list_to_remove);
     }
 
-    // remove data in region
+    /// Remove data in region.
     {
         auto region = tmt.getKVStore()->getRegion(region_id);
         if (!region)
             return;
         auto remover = region->createCommittedRemover(table_id);
-        for (const auto & [handle, write_type, commit_ts, value] : data_list)
+        for (const auto & [handle, write_type, commit_ts, value] : data_list_to_remove)
         {
             std::ignore = write_type;
             std::ignore = value;
@@ -199,10 +151,9 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
         if (cache_size == 0)
             region->incDirtyFlag();
-
-        LOG_DEBUG(
-            log, "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");
     }
+
+    LOG_DEBUG(log, "Flush region - table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");
 }
 
 static const Int64 FTH_BYTES_1 = 1024;             // 1 KB

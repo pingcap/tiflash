@@ -89,7 +89,7 @@ void StorageMergeTree::startup()
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.getStorages().put(shared_from_this());
+        tmt.getStorages().put(std::static_pointer_cast<StorageMergeTree>(shared_from_this()));
     }
 
     merge_task_handle = background_pool.addTask([this] { return mergeTask(); });

@@ -1,105 +1,168 @@
 #include <Core/Block.h>
+#include <Interpreters/Context.h>
+#include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+
 #include <common/logger_useful.h>
 
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 using BlockOption = std::optional<Block>;
 
-std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TMTContext & tmt,
-    TableID table_id,
-    const RegionID region_id,
-    const TiDB::TableInfo & table_info,
-    const ColumnsDescription & columns,
-    const Names & ordered_columns,
-    RegionDataReadInfoList & data_list_for_remove)
+void RegionTable::writeBlockByRegion(Context & context, TableID table_id, RegionID region_id, RegionDataReadInfoList & data_list_to_remove)
 {
-    return getBlockInputStreamByRegion(table_id,
-        tmt.getKVStore()->getRegion(region_id),
-        InvalidRegionVersion,
-        InvalidRegionVersion,
-        table_info,
-        columns,
-        ordered_columns,
-        false,
-        false,
-        0,
-        &data_list_for_remove);
+    // TODO: Logging.
+
+    const auto & tmt = context.getTMTContext();
+
+    /// Read raw KVs from region cache.
+    RegionDataReadInfoList data_list_read;
+    {
+        auto region = tmt.getKVStore()->getRegion(region_id);
+        // TODO: Need this checking?
+        if (!region || region->isPendingRemove())
+            return;
+
+        auto scanner = region->createCommittedScanner(table_id);
+        // Shortcut for empty region.
+        if (!scanner->hasNext())
+            return;
+        do
+        {
+            data_list_read.emplace_back(scanner->next());
+        } while (scanner->hasNext());
+    }
+
+    /// Assure table's existence.
+    tmt.getSchemaSyncer()->syncSchema(table_id, context, false);
+
+    /// Declare lambda of atomic read then write to call multiple times.
+    auto atomicReadWrite = [&](bool force_decode) {
+        /// Get storage based on table ID.
+        auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            // Table must have just been dropped or truncated.
+            // TODO: What if we support delete range? Do we still want to remove KVs from region cache?
+            data_list_to_remove = std::move(data_list_read);
+            return true;
+        }
+
+        /// Lock throughout decode and write, during which schema must not change.
+        auto lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+
+        /// Read region data as block.
+        auto [block, ok] = readRegionBlock(storage->getTableInfo(),
+            storage->getColumns(),
+            storage->getColumns().getNamesOfPhysical(),
+            data_list_read,
+            std::numeric_limits<Timestamp>::max(),
+            force_decode);
+        if (!ok)
+            return false;
+
+        /// Write block into storage.
+        TxnMergeTreeBlockOutputStream output(*storage);
+        output.write(block);
+
+        /// Move read data to outer to remove.
+        data_list_to_remove = std::move(data_list_read);
+
+        return true;
+    };
+
+    /// Try read then write once.
+    if (atomicReadWrite(false))
+        return;
+
+    /// If first try failed, sync schema and force read then write.
+    tmt.getSchemaSyncer()->syncSchema(table_id, context, true);
+    if (!atomicReadWrite(true))
+        // Failure won't be tolerated this time.
+        // TODO: Enrich exception message.
+        throw Exception(
+            "Write region " + std::to_string(region_id) + " to table " + std::to_string(table_id) + " failed", ErrorCodes::LOGICAL_ERROR);
 }
 
-std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
-    RegionPtr region,
-    const RegionVersion region_version,
-    const RegionVersion conf_version,
-    const TiDB::TableInfo & table_info,
+std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockByRegion(const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
-    const Names & ordered_columns,
-    bool learner_read,
+    const Names & column_names_to_read,
+    const RegionPtr & region,
+    RegionVersion region_version,
+    RegionVersion conf_version,
     bool resolve_locks,
-    Timestamp start_ts,
-    RegionDataReadInfoList * data_list_for_remove)
+    Timestamp start_ts)
 {
+    // TODO: Logging.
+
     if (!region)
         return {BlockOption{}, NOT_FOUND};
 
-    if (learner_read)
-        region->waitIndex(region->learnerRead());
+    auto scanner = region->createCommittedScanner(table_info.id);
 
-    auto schema_fetcher = [&](TableID) {
-        return std::make_tuple<const TiDB::TableInfo *, const ColumnsDescription *, const Names *>(&table_info, &columns, &ordered_columns);
-    };
-
+    /// Blocking learner read.
     {
-        RegionDataReadInfoList data_list;
-        const auto [table_info, columns, ordered_columns] = schema_fetcher(table_id);
-
-        bool need_value = true;
-
-        if (ordered_columns->size() == 3)
-            need_value = false;
-
-        {
-            auto scanner = region->createCommittedScanner(table_id);
-
-            if (region->isPendingRemove())
-                return {BlockOption{}, PENDING_REMOVE};
-
-            if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
-                return {BlockOption{}, VERSION_ERROR};
-
-            if (resolve_locks)
-            {
-                LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
-                if (lock_info)
-                {
-                    LockInfos lock_infos;
-                    lock_infos.emplace_back(std::move(lock_info));
-                    throw LockException(std::move(lock_infos));
-                }
-            }
-
-            if (!scanner->hasNext())
-                return {BlockOption{}, OK};
-
-            do
-            {
-                data_list.emplace_back(scanner->next(need_value));
-            } while (scanner->hasNext());
-        }
-
-        auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, data_list);
-
-        if (data_list_for_remove)
-            *data_list_for_remove = std::move(data_list);
-
-        return {block, OK};
+        region->waitIndex(region->learnerRead());
     }
+
+    /// Some sanity checks for region meta.
+    {
+        if (region->isPendingRemove())
+            return {BlockOption{}, PENDING_REMOVE};
+
+        if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
+            return {BlockOption{}, VERSION_ERROR};
+    }
+
+    /// Deal with locks.
+    {
+        if (resolve_locks)
+        {
+            LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
+            if (lock_info)
+            {
+                LockInfos lock_infos;
+                lock_infos.emplace_back(std::move(lock_info));
+                throw LockException(std::move(lock_infos));
+            }
+        }
+    }
+
+    /// Read raw KVs from region cache.
+    RegionDataReadInfoList data_list_read;
+    {
+        // Shortcut for empty region.
+        if (!scanner->hasNext())
+            return {BlockOption{}, OK};
+        // Tiny optimization for queries that need only handle, tso, delmark.
+        bool need_value = column_names_to_read.size() != 3;
+        do
+        {
+            data_list_read.emplace_back(scanner->next(need_value));
+        } while (scanner->hasNext());
+    }
+
+    /// Read region data as block.
+    auto [block, ok] = readRegionBlock(table_info, columns, column_names_to_read, data_list_read, start_ts, true);
+    if (!ok)
+        // TODO: Enrich exception message.
+        throw Exception("Read region " + std::to_string(region->id()) + " of table " + std::to_string(table_info.id) + " failed",
+            ErrorCodes::LOGICAL_ERROR);
+
+    return {block, OK};
 }
 
 } // namespace DB

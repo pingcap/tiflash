@@ -365,7 +365,8 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
         auto create_table_internal = [&]() {
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Creating table " << table_info.name);
             createTable(table_info, context);
-            context.getTMTContext().getStorages().put(context.getTable(table_info.db_name, table_info.name));
+            auto logical_storage = std::static_pointer_cast<StorageMergeTree>(context.getTable(table_info.db_name, table_info.name));
+            context.getTMTContext().getStorages().put(logical_storage);
 
             /// Mangle for partition table.
             bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
@@ -373,7 +374,8 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
             {
                 LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
                 createTable(table_info, context);
-                context.getTMTContext().getStorages().put(context.getTable(table_info.db_name, table_info.name));
+                auto physical_storage = std::static_pointer_cast<StorageMergeTree>(context.getTable(table_info.db_name, table_info.name));
+                context.getTMTContext().getStorages().put(physical_storage);
             }
         };
 

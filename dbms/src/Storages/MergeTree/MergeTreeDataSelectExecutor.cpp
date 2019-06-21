@@ -359,10 +359,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                    auto [block, status]
-                        = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
-                            region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
-                            column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
+                    auto [block, status] = RegionTable::getBlockByRegion(*data.table_info, data.getColumns(), column_names_to_read,
+                        kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
+                        mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
 
                     if (status != RegionTable::OK)
                     {

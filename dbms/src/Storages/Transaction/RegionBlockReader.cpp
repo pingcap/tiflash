@@ -1,4 +1,6 @@
 #include <Columns/ColumnsNumber.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
@@ -41,8 +43,12 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
     }
 }
 
-Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns,
-    RegionDataReadInfoList & data_list)
+std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
+    const ColumnsDescription & columns,
+    const Names & column_names_to_read,
+    RegionDataReadInfoList & data_list,
+    Timestamp start_ts,
+    bool force_decode)
 {
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
@@ -112,6 +118,10 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     {
         std::ignore = value;
 
+        // Ignore data after the start_ts.
+        if (commit_ts > start_ts)
+            continue;
+
         delmark_data.emplace_back(write_type == Region::DelFlag);
         version_data.emplace_back(commit_ts);
         if (pk_is_uint64)
@@ -120,13 +130,18 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
             column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
     }
 
-    /// optimize for only need handle, tso, delmark.
-    if (ordered_columns.size() > 3)
+    Block block;
+
+    // optimize for only need handle, tso, delmark.
+    if (column_names_to_read.size() > 3)
     {
         for (const auto & [handle, write_type, commit_ts, value] : data_list)
         {
-            std::ignore = commit_ts;
             std::ignore = handle;
+
+            // Ignore data after the start_ts.
+            if (commit_ts > start_ts)
+                continue;
 
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
@@ -170,7 +185,10 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 if (col_id_included.count(column.id))
                     continue;
 
-                row.push_back(Field(column.id));
+                if (!force_decode)
+                    return std::make_tuple(block, false);
+
+                row.emplace_back(Field(column.id));
                 // Fill `zero` value if NOT NULL specified or else NULL.
                 // TODO: Need to consider default value.
                 row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
@@ -183,6 +201,9 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 Field & col_id = row[i];
                 if (column_map.find(col_id.get<ColumnID>()) == column_map.end())
                 {
+                    if (!force_decode)
+                        return std::make_tuple(block, false);
+
                     row.erase(row.begin() + i, row.begin() + i + 2);
                 }
             }
@@ -199,8 +220,9 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
-                const auto & tp = it->second.second.type->getName();
-                if (tp == "Nullable(DateTime)" || tp == "Nullable(Date)" || tp == "DateTime" || tp == "Date")
+                const auto & tp = it->second.second.type;
+                if (tp->isDateOrDateTime()
+                    || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isDateOrDateTime()))
                 {
                     Field & field = row[i + 1];
                     if (field.isNull())
@@ -221,7 +243,10 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     int minute = int((hms >> 6) & ((1 << 6) - 1));
                     int hour = int(hms >> 12);
 
-                    if (tp == "Nullable(DateTime)" || tp == "DateTime")
+                    if (typeid_cast<const DataTypeDateTime *>(tp.get())
+                        || (tp->isNullable()
+                               && typeid_cast<const DataTypeDateTime *>(
+                                      dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType().get())))
                     {
                         time_t datetime;
                         if (unlikely(year == 0))
@@ -248,13 +273,33 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 else
                 {
                     it->second.first->insert(row[i + 1]);
+
+                    // Check overflow for potential un-synced data type widen,
+                    // i.e. schema is old and narrow, meanwhile data is new and wide.
+                    // So far only integers is possible of overflow.
+                    if (tp->isInteger())
+                    {
+                        // Check by bitwise compare between the inserted value (casted to column type) and original value in row.
+                        if (unlikely(it->second.first->get64(it->second.first->size() - 1) != row[i + 1].get<UInt64>()))
+                        {
+                            // Overflow detected, fatal if force_decode is true,
+                            // as schema being newer and narrow shouldn't happen.
+                            // Otherwise return false to outer, outer should sync schema and try again.
+                            if (force_decode)
+                                throw Exception(
+                                    "Detected overflow for data " + std::to_string(row[i + 1].get<UInt64>()) + " of type " + tp->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+
+                            return std::make_tuple(block, false);
+                        }
+                    }
+                    // TODO: Consider other kind of type change? I.e. arbitary type change.
                 }
             }
         }
     }
 
-    Block block;
-    for (const auto & name : ordered_columns)
+    for (const auto & name : column_names_to_read)
     {
         if (name == MutableSupport::delmark_column_name)
         {
@@ -271,7 +316,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
         }
     }
 
-    return block;
+    return std::make_tuple(block, true);
 }
 
 } // namespace DB
