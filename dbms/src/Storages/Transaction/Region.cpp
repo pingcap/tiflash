@@ -236,7 +236,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     region->last_persist_time.store(last_persist_time);
 
                 result.type = RaftCommandResult::Type::BatchSplit;
-                result.split_regions = split_regions;
+                result.split_regions = std::move(split_regions);
 
                 is_dirty = true;
                 break;
@@ -255,6 +255,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     else
     {
         TableIDSet table_ids;
+        TableID table_id = InvalidTableID;
 
         std::unique_lock<std::shared_mutex> lock(mutex);
 
@@ -274,7 +275,18 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     const auto & tikv_key = static_cast<const TiKVKey &>(key);
                     const auto & tikv_value = static_cast<const TiKVValue &>(value);
 
-                    auto table_id = doInsert(put.cf(), tikv_key, tikv_value);
+                    try
+                    {
+                        table_id = doInsert(put.cf(), tikv_key, tikv_value);
+                    }
+                    catch (Exception & e)
+                    {
+                        LOG_ERROR(log,
+                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
+                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << put.cf());
+                        e.rethrow();
+                    }
+
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
@@ -289,7 +301,18 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     auto & key = del.key();
                     const auto & tikv_key = static_cast<const TiKVKey &>(key);
 
-                    auto table_id = doRemove(del.cf(), tikv_key);
+                    try
+                    {
+                        table_id = doRemove(del.cf(), tikv_key);
+                    }
+                    catch (Exception & e)
+                    {
+                        LOG_ERROR(log,
+                            toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
+                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
+                        e.rethrow();
+                    }
+
                     if (table_id != InvalidTableID)
                     {
                         table_ids.emplace(table_id);
@@ -311,7 +334,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
         }
         meta.setApplied(index, term);
         result.type = RaftCommandResult::Type::UpdateTableID;
-        result.table_ids = table_ids;
+        result.table_ids = std::move(table_ids);
     }
 
     meta.notifyAll();
