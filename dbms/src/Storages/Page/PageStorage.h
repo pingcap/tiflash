@@ -26,7 +26,7 @@ public:
     {
         Config() {}
 
-        bool sync_on_write = false;
+        bool sync_on_write = true;
 
         size_t file_roll_size  = PAGE_FILE_ROLL_SIZE;
         size_t file_max_size   = PAGE_FILE_MAX_SIZE;
@@ -90,6 +90,7 @@ private:
 
     std::mutex        write_mutex;
     std::shared_mutex read_mutex;
+    std::mutex        gc_mutex; // A mutex used to protect only gc
 };
 
 } // namespace DB

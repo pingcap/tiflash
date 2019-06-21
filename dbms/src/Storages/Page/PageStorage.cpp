@@ -233,6 +233,8 @@ void PageStorage::traversePageCache(std::function<void(PageId page_id, const Pag
 
 bool PageStorage::gc()
 {
+    std::lock_guard<std::mutex> gc_lock(gc_mutex);
+    // get all PageFiles
     auto page_files = PageStorage::listAllPageFiles(storage_path, true, page_file_log);
     if (page_files.empty())
         return false;
@@ -363,9 +365,10 @@ PageCacheMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
     auto [largest_file_id, level] = *(merge_files.rbegin());
     PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
 
+    size_t num_successful_migrate_pages = 0;
     {
         // No need to sync after each write. Do sync before closing is enough.
-        auto gc_file_writer = gc_file.createWriter(false);
+        auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
 
         for (const auto & file_id_level : merge_files)
         {
@@ -393,6 +396,7 @@ PageCacheMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
                     if (page_cache.fileIdLevel() != file_id_level)
                         continue;
                     page_id_and_caches.emplace_back(page_id, page_cache);
+                    num_successful_migrate_pages += 1;
                 }
             }
 
@@ -422,6 +426,8 @@ PageCacheMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
     else
     {
         gc_file.setFormal();
+        auto id = gc_file.fileIdLevel();
+        LOG_DEBUG(log, "GC have migrated " << num_successful_migrate_pages << " regions to PageFile_" << id.first << "_" << id.second);
     }
     return gc_file_page_cache_map;
 }
