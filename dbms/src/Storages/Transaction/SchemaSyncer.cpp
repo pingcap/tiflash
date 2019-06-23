@@ -324,7 +324,7 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
         }
         else
         {
-            // Dropped column.
+            // Type changed column.
             command.type = AlterCommand::MODIFY_COLUMN;
             command.column_name = orig_column_info.name;
             command.data_type = getDataTypeByColumnInfo(*column_info);
