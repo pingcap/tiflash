@@ -260,7 +260,6 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
     AlterCommands alter_commands;
 
     /// Detect new columns.
-    // TODO: Detect rename or type-changed columns.
     for (const auto & column_info : table_info.columns)
     {
         const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
@@ -308,6 +307,33 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
 
         alter_commands.emplace_back(std::move(command));
     }
+
+    /// Detect type changed columns.
+    for (const auto & orig_column_info : orig_table_info.columns)
+    {
+        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+            // TODO: Check primary key.
+            return column_info_.id == orig_column_info.id && column_info_.tp != orig_column_info.tp;
+        });
+
+        AlterCommand command;
+        if (column_info == table_info.columns.end())
+        {
+            // Column unchanged.
+            continue;
+        }
+        else
+        {
+            // Dropped column.
+            command.type = AlterCommand::MODIFY_COLUMN;
+            command.column_name = orig_column_info.name;
+            command.data_type = getDataTypeByColumnInfo(*column_info);
+        }
+
+        alter_commands.emplace_back(std::move(command));
+    }
+
+    // TODO: Detect rename columns.
 
     return alter_commands;
 }
@@ -425,6 +451,8 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
             ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
         else if (command.type == AlterCommand::DROP_COLUMN)
             ss << "DROP COLUMN " << command.column_name << ", ";
+        else if (command.type == AlterCommand::MODIFY_COLUMN)
+            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
     }
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
