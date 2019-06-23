@@ -83,6 +83,12 @@ public:
 
     void dropTable(const String & database_name, const String & table_name);
 
+    void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+
+    void dropColumnFromTable(const String & database_name, const String & table_name, const String & column_name);
+
+    void modifyColumnInTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
 private:

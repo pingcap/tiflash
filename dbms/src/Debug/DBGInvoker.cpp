@@ -38,6 +38,9 @@ DBGInvoker::DBGInvoker()
     regFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
     regFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
     regFunc("drop_tidb_table", MockTiDBTable::dbgFuncDropTiDBTable);
+    regFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
+    regFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
+    regFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
 
     regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 

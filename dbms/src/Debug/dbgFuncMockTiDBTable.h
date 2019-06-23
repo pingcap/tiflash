@@ -1,7 +1,7 @@
 #pragma once
 
-#include <Parsers/IAST.h>
 #include <Debug/DBGInvoker.h>
+#include <Parsers/IAST.h>
 
 namespace DB
 {
@@ -37,6 +37,21 @@ struct MockTiDBTable
     // Usage:
     //   ./storages-client.sh "DBGInvoke drop_tidb_table(database_name, table_name)"
     static void dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Add a column to a mocked TiDB table.
+    // Usage:
+    //   ./storages-client.sh "DBGInvoke add_column_to_tidb_table(database_name, table_name, 'col type')"
+    static void dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Drop a column from a mocked TiDB table.
+    // Usage:
+    //   ./storages-client.sh "DBGInvoke drop_column_from_tidb_table(database_name, table_name, column_name)"
+    static void dbgFuncDropColumnFromTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Modify a column's type in a mocked TiDB table.
+    // Usage:
+    //   ./storages-client.sh "DBGInvoke modify_column_in_tidb_table(database_name, table_name, 'col type')"
+    static void dbgFuncModifyColumnInTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
 };
 
 } // namespace DB

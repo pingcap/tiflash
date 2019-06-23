@@ -154,4 +154,84 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, 'col type'", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    auto col_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    ASTPtr col_ast;
+    ParserColumnDeclarationList schema_parser;
+    Tokens tokens(col_str.data(), col_str.data() + col_str.length());
+    TokenIterator pos(tokens);
+    Expected expected;
+    if (!schema_parser.parse(pos, col_ast, expected))
+        throw Exception("Invalid TiDB table column", ErrorCodes::LOGICAL_ERROR);
+    ColumnsDescription cols = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*col_ast), context);
+    if (cols.getAllPhysical().size() > 1)
+        throw Exception("Not support multiple columns", ErrorCodes::LOGICAL_ERROR);
+
+    // TODO: Support partition table.
+
+    const NameAndTypePair & column = cols.getAllPhysical().front();
+    MockTiDB::instance().addColumnToTable(database_name, table_name, column);
+
+    std::stringstream ss;
+    ss << "added column " << column.name << " " << column.type->getName();
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncDropColumnFromTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, column-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    const String & column_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+    // TODO: Support partition table.
+
+    MockTiDB::instance().dropColumnFromTable(database_name, table_name, column_name);
+
+    std::stringstream ss;
+    ss << "dropped column " << column_name;
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncModifyColumnInTiDBTable(DB::Context & context, const DB::ASTs & args, DB::DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, 'col type'", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    auto col_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    ASTPtr col_ast;
+    ParserColumnDeclarationList schema_parser;
+    Tokens tokens(col_str.data(), col_str.data() + col_str.length());
+    TokenIterator pos(tokens);
+    Expected expected;
+    if (!schema_parser.parse(pos, col_ast, expected))
+        throw Exception("Invalid TiDB table column", ErrorCodes::LOGICAL_ERROR);
+    ColumnsDescription cols = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*col_ast), context);
+    if (cols.getAllPhysical().size() > 1)
+        throw Exception("Not support multiple columns", ErrorCodes::LOGICAL_ERROR);
+
+    // TODO: Support partition table.
+
+    const NameAndTypePair & column = cols.getAllPhysical().front();
+    MockTiDB::instance().modifyColumnInTable(database_name, table_name, column);
+
+    std::stringstream ss;
+    ss << "modified column " << column.name << " " << column.type->getName();
+    output(ss.str());
+}
+
 } // namespace DB
