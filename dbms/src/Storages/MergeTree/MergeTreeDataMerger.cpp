@@ -151,7 +151,16 @@ size_t MergeTreeDataMerger::getMaxPartsSizeForMerge(size_t pool_size, size_t poo
             data.settings.max_bytes_to_merge_at_max_space_in_pool,
             static_cast<double>(free_entries) / data.settings.number_of_free_entries_in_pool_to_lower_max_size_of_merge);
 
-    return std::min(max_size, static_cast<size_t>(DiskSpaceMonitor::getUnreservedFreeSpace(data.full_path) / DISK_USAGE_COEFFICIENT_TO_SELECT));
+    size_t max_parts_size = max_size;
+    for (auto & path : data.context.getAllPath())
+    {
+        size_t s = static_cast<size_t>(DiskSpaceMonitor::getUnreservedFreeSpace(path) / DISK_USAGE_COEFFICIENT_TO_SELECT);
+        if (s < max_parts_size)
+        {
+            max_parts_size = s;
+        }
+    }
+    return max_parts_size;
 }
 
 

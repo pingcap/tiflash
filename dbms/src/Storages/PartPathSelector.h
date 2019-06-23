@@ -25,20 +25,7 @@ public:
 
     const std::string getPathForPart(const std::string & database, const std::string & table, const std::string & part)
     {
-        int part_name_start = 0;
-        if (startsWith(part, "tmp_"))
-        {
-            for (unsigned i = 0; i < part.length(); i++)
-            {
-                if (isdigit(part[i]))
-                {
-                    part_name_start = i;
-                    LOG_DEBUG(log, "part_name_start: " << i << " part name: " << part);
-                    break;
-                }
-            }
-        }
-        std::size_t path_index = std::hash<std::string>{}(database + "@" + table + "@" + part.substr(part_name_start)) % all_path.size();
+        std::size_t path_index = std::hash<std::string>{}(database + "@" + table + "@" + part) % all_path.size();
         LOG_DEBUG(log, "database: " << database << " table: " << table << " part name: " << part << " path index: " << path_index << " path: " << all_path[path_index] + "data/" + database + "/" + table + "/");
         return all_path[path_index] + "data/" + database + "/" + table + "/";
     }

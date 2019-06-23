@@ -344,6 +344,8 @@ public:
 
     String getFullPath() const { return full_path; }
 
+    String getDataPartPath(const String& path) { return path + + "data/" + getDatabaseName() + "/" + getTableName() + "/"; }
+
     String getLogName() const { return log_name; }
 
     Context & getContext() const { return context; }

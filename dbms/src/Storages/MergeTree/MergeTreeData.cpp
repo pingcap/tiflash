@@ -155,11 +155,12 @@ MergeTreeData::MergeTreeData(
     /// Creating directories, if not exist.
     for (String & path : context.getAllPath())
     {
-        String candidate_path = path + "data/" + getDatabaseName() + "/" + getTableName() + "/";
+        String candidate_path = getDataPartPath(path);
         Poco::File(candidate_path).createDirectories();
 
         Poco::File(candidate_path + "detached").createDirectory();
     }
+
     String version_file_path = full_path + "format_version.txt";
 
     // When data path not exists, ignore the format_version check
@@ -446,7 +447,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     Strings part_file_names;
     Poco::DirectoryIterator end;
     for (const String & path : context.getAllPath()) {
-        String data_path = path + "data/" + getDatabaseName() + "/" + getTableName() + "/";
+        String data_path = getDataPartPath(path);
         LOG_DEBUG(log, "Loading data parts from path: " << data_path);
         for (Poco::DirectoryIterator it(data_path); it != end; ++it)
         {
@@ -650,24 +651,22 @@ void MergeTreeData::clearOldTemporaryDirectories(ssize_t custom_directories_life
         : current_time - settings.temporary_directories_lifetime.totalSeconds();
 
     /// Delete temporary directories older than a day.
-    Poco::DirectoryIterator end;
-    for (Poco::DirectoryIterator it{full_path}; it != end; ++it)
-    {
-        if (startsWith(it.name(), "tmp"))
-        {
-            Poco::File tmp_dir(full_path + it.name());
+    for (auto & path : context.getAllPath()) {
+        Poco::DirectoryIterator end;
+        String storage_path = getDataPartPath(path);
+        for (Poco::DirectoryIterator it{storage_path}; it != end; ++it) {
+            if (startsWith(it.name(), "tmp")) {
+                Poco::File tmp_dir(storage_path + it.name());
 
-            try
-            {
-                if (tmp_dir.isDirectory() && isOldPartDirectory(tmp_dir, deadline))
-                {
-                    LOG_WARNING(log, "Removing temporary directory " << full_path << it.name());
-                    Poco::File(full_path + it.name()).remove(true);
+                try {
+                    if (tmp_dir.isDirectory() && isOldPartDirectory(tmp_dir, deadline)) {
+                        LOG_WARNING(log, "Removing temporary directory " << storage_path << it.name());
+                        Poco::File(storage_path + it.name()).remove(true);
+                    }
                 }
-            }
-            catch (const Poco::FileNotFoundException &)
-            {
-                /// If the file is already deleted, do nothing.
+                catch (const Poco::FileNotFoundException &) {
+                    /// If the file is already deleted, do nothing.
+                }
             }
         }
     }
@@ -814,7 +813,11 @@ void MergeTreeData::dropAllData()
 
     LOG_TRACE(log, "dropAllData: removing data from filesystem.");
 
-    Poco::File(full_path).remove(true);
+
+    for (auto & path : context.getAllPath())
+    {
+        Poco::File(getDataPartPath(path)).remove(true);
+    }
 
     LOG_TRACE(log, "dropAllData: done.");
 }
