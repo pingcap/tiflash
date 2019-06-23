@@ -164,7 +164,7 @@ void ColumnInfo::deserialize(const JSON & json) try
     flen = static_cast<Int32>(json["type"]["Flen"].getInt());
     decimal = static_cast<Int32>(json["type"]["Decimal"].getInt());
     // TODO: deserialize elems.
-    state = static_cast<UInt8>(json["state"].getInt());
+    state = static_cast<SchemaState>(json["state"].getInt());
     comment = json.getWithDefault<String>("comment", "");
 }
 catch (const JSONException & e)
@@ -339,7 +339,7 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
         ColumnInfo column_info(col_json);
         columns.emplace_back(column_info);
     }
-    state = static_cast<UInt8>(table_json["state"].getInt());
+    state = static_cast<SchemaState>(table_json["state"].getInt());
     pk_is_handle = table_json["pk_is_handle"].getBool();
     comment = table_json["comment"].getString();
     update_timestamp = table_json["update_timestamp"].getUInt();

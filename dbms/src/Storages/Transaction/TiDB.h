@@ -58,7 +58,6 @@ using DB::Timestamp;
     M(String, 0xfe, CompactBytes, String, false)     \
     M(Geometry, 0xff, CompactBytes, String, false)
 
-
 enum TP
 {
 #ifdef M
@@ -68,7 +67,6 @@ enum TP
     COLUMN_TYPES(M)
 #undef M
 };
-
 
 // Column flags.
 #ifdef M
@@ -92,7 +90,6 @@ enum TP
     M(PartKey, (1 << 14))        \
     M(Num, (1 << 15))
 
-
 // Codec flags.
 // In format: TiDB codec flag, int value.
 #ifdef M
@@ -112,7 +109,6 @@ enum TP
     M(Json, 10)        \
     M(Max, 250)
 
-
 enum CodecFlag
 {
 #ifdef M
@@ -123,6 +119,15 @@ enum CodecFlag
 #undef M
 };
 
+enum SchemaState
+{
+    StateNone = 0,
+    StateDeleteOnly,
+    StateWriteOnly,
+    StateWriteReorganization,
+    StateDeleteReorganization,
+    StatePublic,
+};
 
 struct ColumnInfo
 {
@@ -147,7 +152,7 @@ struct ColumnInfo
     Int32 decimal = 0;
     // Elems is the element list for enum and set type.
     std::vector<std::pair<std::string, Int16>> elems;
-    UInt8 state = 0;
+    SchemaState state = StateNone;
     String comment;
 
 #ifdef M
@@ -223,7 +228,7 @@ struct TableInfo
     String name;
     // Columns are listed in the order in which they appear in the schema.
     std::vector<ColumnInfo> columns;
-    UInt8 state = 0;
+    SchemaState state = StateNone;
     bool pk_is_handle = false;
     String comment;
     Timestamp update_timestamp = 0;
