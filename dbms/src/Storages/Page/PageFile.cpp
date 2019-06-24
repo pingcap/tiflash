@@ -75,7 +75,6 @@ template <bool read, bool must_exist = true>
 int openFile(const std::string & path)
 {
     ProfileEvents::increment(ProfileEvents::FileOpen);
-    int fd;
 
     int flags;
     if constexpr (read)
@@ -87,14 +86,16 @@ int openFile(const std::string & path)
         flags = O_WRONLY | O_CREAT;
     }
 
-    fd = ::open(path.c_str(), flags, 0666);
+    int fd = ::open(path.c_str(), flags, 0666);
     if (-1 == fd)
     {
         ProfileEvents::increment(ProfileEvents::FileOpenFailed);
         if constexpr (!must_exist)
         {
             if (errno == ENOENT)
+            {
                 return 0;
+            }
         }
         throwFromErrno("Cannot open file " + path, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
     }
@@ -345,6 +346,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
 /// Analyze meta file, and return <available meta size, available data size>.
 std::pair<UInt64, UInt64> analyzeMetaFile( //
+    const String & path,
     PageFileId     file_id,
     UInt32         level,
     const char *   meta_data,
@@ -356,7 +358,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
 
     UInt64 page_data_file_size = 0;
     char * pos                 = const_cast<char *>(meta_data);
-    while (pos < meta_data + meta_data_size)
+    while (pos < meta_data_end)
     {
         if (pos + sizeof(WBSize) > meta_data_end)
         {
@@ -364,36 +366,42 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             break;
         }
         const char * wb_start_pos = pos;
-        auto         wb_bytes     = get<WBSize>(pos);
+        const auto   wb_bytes     = get<WBSize>(pos);
         if (wb_start_pos + wb_bytes > meta_data_end)
         {
             LOG_WARNING(log, "Incomplete write batch, ignored.");
             break;
         }
-        auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
 
-        auto version     = get<PageFileVersion>(pos);
-        auto wb_checksum = get<Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
-
-        if (wb_checksum != CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum))
-            throw Exception("Write batch checksum not match", ErrorCodes::CHECKSUM_DOESNT_MATCH);
+        // this field is always true now
+        const auto version = get<PageFileVersion>(pos);
         if (version != PageFile::CURRENT_VERSION)
             throw Exception("Version not match", ErrorCodes::LOGICAL_ERROR);
 
+        // check the checksum of WriteBatch
+        const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
+        const auto wb_checksum               = get<Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
+        if (wb_checksum != CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum))
+        {
+            throw Exception("Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data),
+                            ErrorCodes::CHECKSUM_DOESNT_MATCH);
+        }
+
+        // recover WriteBatch
         while (pos < wb_start_pos + wb_bytes_without_checksum)
         {
             auto is_put = get<UInt8>(pos);
             if (is_put)
             {
-                PageCache pc{};
 
-                auto page_id = get<PageId>(pos);
-                pc.tag       = get<PageTag>(pos);
-                pc.offset    = get<PageOffset>(pos);
-                pc.size      = get<PageSize>(pos);
-                pc.checksum  = get<Checksum>(pos);
-                pc.file_id   = file_id;
-                pc.level     = level;
+                auto      page_id = get<PageId>(pos);
+                PageCache pc;
+                pc.file_id  = file_id;
+                pc.level    = level;
+                pc.tag      = get<PageTag>(pos);
+                pc.offset   = get<PageOffset>(pos);
+                pc.size     = get<PageSize>(pos);
+                pc.checksum = get<Checksum>(pos);
 
                 page_caches[page_id] = pc;
                 page_data_file_size += pc.size;
@@ -404,6 +412,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 page_caches.erase(page_id); // Reserve the order of removal.
             }
         }
+        // move `pos` over the checksum of WriteBatch
         pos += sizeof(Checksum);
 
         if (pos != wb_start_pos + wb_bytes)
@@ -441,6 +450,7 @@ PageFile::Writer::~Writer()
 
 void PageFile::Writer::write(const WriteBatch & wb, PageCacheMap & page_cache_map)
 {
+    // TODO: investigate if not copy data into heap, write big pages can be faster?
     ByteBuffer meta_buf, data_buf;
     std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, page_cache_map);
 
@@ -478,10 +488,12 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
         return a.second.offset < b.second.offset;
     });
 
+    // allocate data_buf that can hold all pages
     size_t buf_size = 0;
     for (const auto & p : to_read)
+    {
         buf_size += p.second.size;
-
+    }
     // TODO optimization:
     // 1. Succeeding pages can be read by one call.
     // 2. Pages with small gaps between them can also read together.
@@ -500,7 +512,10 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
         {
             auto checksum = CityHash_v1_0_2::CityHash64(pos, page_cache.size);
             if (checksum != page_cache.checksum)
-                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path, ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            {
+                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
+                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            }
         }
 
         Page page;
@@ -544,7 +559,10 @@ void PageFile::Reader::read(PageIdAndCaches & to_read, const PageHandler & handl
         {
             auto checksum = CityHash_v1_0_2::CityHash64(data_buf, page_cache.size);
             if (checksum != page_cache.checksum)
-                throw Exception("Page checksum not match, broken file.", ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            {
+                throw Exception("Page [" + DB::toString(page_id) + "] checksum not match, broken file: " + data_file_path,
+                                ErrorCodes::CHECKSUM_DOESNT_MATCH);
+            }
         }
 
         Page page;
@@ -604,10 +622,22 @@ std::pair<PageFile, bool> PageFile::recover(const std::string & parent_path, con
         LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
         return {{}, false};
     }
-
+    // ensure both meta && data exist
     PageFileId file_id = std::stoull(ss[1]);
     UInt32     level   = std::stoi(ss[2]);
-    return {PageFile(file_id, level, parent_path, false, false, log), true};
+    PageFile   pf(file_id, level, parent_path, false, false, log);
+    if (!Poco::File(pf.metaPath()).exists())
+    {
+        LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
+        return {{}, false};
+    }
+    if (!Poco::File(pf.dataPath()).exists())
+    {
+        LOG_INFO(log, "Broken page without data file, ignored: " + pf.dataPath());
+        return {{}, false};
+    }
+
+    return {pf, true};
 }
 
 PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, bool is_tmp, Logger * log)
@@ -622,7 +652,7 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
 
 void PageFile::readAndSetPageMetas(PageCacheMap & page_caches)
 {
-    auto       path = metaPath();
+    const auto path = metaPath();
     Poco::File file(path);
     size_t     file_size = file.getSize();
 
@@ -635,7 +665,9 @@ void PageFile::readAndSetPageMetas(PageCacheMap & page_caches)
 
     readFile(file_fd, 0, data, file_size, path);
 
-    std::tie(this->meta_file_pos, this->data_file_pos) = PageMetaFormat::analyzeMetaFile(file_id, level, data, file_size, page_caches, log);
+    // analyze meta file and update page_caches
+    std::tie(this->meta_file_pos, this->data_file_pos)
+        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, page_caches, log);
 }
 
 void PageFile::setFormal()
@@ -652,7 +684,21 @@ void PageFile::destroy()
     // TODO: delay remove.
     Poco::File file(folderPath());
     if (file.exists())
+    {
+        // remove meta first, then remove data
+        Poco::File meta_file(metaPath());
+        if (meta_file.exists())
+        {
+            meta_file.remove();
+        }
+        Poco::File data_file(dataPath());
+        if (data_file.exists())
+        {
+            data_file.remove();
+        }
+        // drop dir
         file.remove(true);
+    }
 }
 
 UInt64 PageFile::getDataFileSize() const

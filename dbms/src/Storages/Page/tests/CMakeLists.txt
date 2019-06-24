@@ -1,0 +1,12 @@
+
+add_executable(page_test_page_storage gtest_page_storage.cpp)
+target_link_libraries(page_test_page_storage gtest_main dbms)
+
+add_executable(page_test_page_file gtest_page_file.cpp)
+target_link_libraries(page_test_page_file gtest_main dbms)
+
+add_executable(page_stress_page_storage stress_page_stroage.cpp)
+target_link_libraries(page_stress_page_storage dbms)
+
+add_executable(page_utils_get_valid_pages utils_get_valid_pages.cpp)
+target_link_libraries(page_utils_get_valid_pages dbms)

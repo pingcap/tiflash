@@ -11,8 +11,10 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::set<PageFile, PageFile::Comparator> listAllPageFiles(std::string storage_path, bool remove_tmp_file, Logger * page_file_log)
+std::set<PageFile, PageFile::Comparator>
+PageStorage::listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log)
 {
+    // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
     if (!folder.exists())
         folder.createDirectories();
@@ -45,7 +47,7 @@ PageStorage::PageStorage(const std::string & storage_path_, const Config & confi
     : storage_path(storage_path_), config(config_), page_file_log(&Logger::get("PageFile")), log(&Logger::get("PageStorage"))
 {
     /// page_files are in ascending ordered by (file_id, level).
-    auto page_files = listAllPageFiles(storage_path, true, page_file_log);
+    auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
     for (auto & page_file : page_files)
     {
         const_cast<PageFile &>(page_file).readAndSetPageMetas(page_cache_map);
@@ -231,9 +233,13 @@ void PageStorage::traversePageCache(std::function<void(PageId page_id, const Pag
 
 bool PageStorage::gc()
 {
-    auto page_files = listAllPageFiles(storage_path, true, page_file_log);
+    std::lock_guard<std::mutex> gc_lock(gc_mutex);
+    // get all PageFiles
+    auto page_files = PageStorage::listAllPageFiles(storage_path, true, page_file_log);
     if (page_files.empty())
         return false;
+
+    LOG_DEBUG(log, "PageStorage GC start");
 
     PageFileIdAndLevel writing_file_id_level;
     {
@@ -246,7 +252,7 @@ bool PageStorage::gc()
 
     {
         /// Select the GC candidates and write them into an new file.
-        /// Since we don't update any shared informations, only a read lock is sufficient.
+        /// Since we don't update any shared information, only a read lock is sufficient.
 
         std::shared_lock lock(read_mutex);
 
@@ -260,138 +266,37 @@ bool PageStorage::gc()
             }
         }
 
+        // select gc candidate files into `merge_files`
         UInt64 candidate_total_size = 0;
         size_t migrate_page_count   = 0;
-        for (auto & page_file : page_files)
-        {
-            auto   file_size = page_file.getDataFileSize();
-            UInt64 valid_size;
-            float  valid_rate;
-            size_t valid_page_count;
-
-            auto it = file_valid_pages.find(page_file.fileIdLevel());
-            if (it == file_valid_pages.end())
-            {
-                valid_size       = 0;
-                valid_rate       = 0;
-                valid_page_count = 0;
-            }
-            else
-            {
-                valid_size       = it->second.first;
-                valid_rate       = (float)valid_size / file_size;
-                valid_page_count = it->second.second.size();
-            }
-
-            // Don't gc writing page file.
-            bool is_candidate = page_file.fileIdLevel() != writing_file_id_level
-                && (valid_rate < config.merge_hint_low_used_rate || file_size < config.file_small_size);
-            if (!is_candidate)
-                continue;
-
-            merge_files.emplace(page_file.fileIdLevel());
-
-            migrate_page_count += valid_page_count;
-            candidate_total_size += valid_size;
-            if (candidate_total_size >= config.file_max_size)
-                break;
-        }
+        merge_files = gcSelectCandidateFiles(page_files, file_valid_pages, writing_file_id_level, candidate_total_size, migrate_page_count);
 
         bool should_merge = merge_files.size() >= config.merge_hint_low_used_file_num
             || (merge_files.size() >= 2 && candidate_total_size >= config.merge_hint_low_used_file_total_size);
         if (!should_merge)
+        {
+            LOG_DEBUG(log,
+                      "GC exit without merging. merge file size: " << merge_files.size() << ", candidate size: " << candidate_total_size);
             return false;
+        }
 
         LOG_DEBUG(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
 
-        if (migrate_page_count)
+        // if there are no valid pages to be migrated, then jump over
+        if (migrate_page_count > 0)
         {
-            auto [largest_file_id, level] = *(merge_files.rbegin());
-            PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, true, page_file_log);
-
-            {
-                // No need to sync after each write. Do sync before closing is enough.
-                auto gc_file_writer = gc_file.createWriter(false);
-
-                for (const auto & file_id_level : merge_files)
-                {
-                    auto it = file_valid_pages.find(file_id_level);
-                    if (it == file_valid_pages.end())
-                    {
-                        // This file does not contain any valid page.
-                        continue;
-                    }
-                    const auto & page_ids = it->second.second;
-
-                    PageFile to_merge_file
-                        = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
-                    auto to_merge_file_reader = to_merge_file.createReader();
-
-                    PageIdAndCaches page_id_and_caches;
-                    {
-                        for (auto page_id : page_ids)
-                        {
-                            auto it2 = page_cache_map.find(page_id);
-                            // This page is removed already.
-                            if (it2 == page_cache_map.end())
-                                continue;
-                            const auto & page_cache = it2->second;
-                            // This page is covered by newer file.
-                            if (page_cache.fileIdLevel() != file_id_level)
-                                continue;
-                            page_id_and_caches.emplace_back(page_id, page_cache);
-                        }
-                    }
-
-                    if (!page_id_and_caches.empty())
-                    {
-                        PageMap    pages = to_merge_file_reader->read(page_id_and_caches);
-                        WriteBatch wb;
-                        for (const auto & [page_id, page_cache] : page_id_and_caches)
-                        {
-                            auto & page = pages.find(page_id)->second;
-                            wb.putPage(page_id,
-                                       page_cache.tag,
-                                       std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
-                                       page.data.size());
-                        }
-
-                        gc_file_writer->write(wb, gc_file_page_cache_map);
-                    }
-                }
-            }
-
-            if (gc_file_page_cache_map.empty())
-            {
-                gc_file.destroy();
-            }
-            else
-            {
-                gc_file.setFormal();
-            }
+            gc_file_page_cache_map = gcMigratePages(file_valid_pages, merge_files);
         }
     }
 
     {
-        /// Here we have to update the cache informations which readers need to synchronize, a write lock is needed.
-
+        /// Here we have to update the cache information which readers need to synchronize, a write lock is needed.
         std::unique_lock lock(read_mutex);
-
-        for (const auto & [page_id, page_cache] : gc_file_page_cache_map)
-        {
-            auto it = page_cache_map.find(page_id);
-            if (it == page_cache_map.end())
-                continue;
-            auto & old_page_cache = it->second;
-            // In case of page being updated during GC process.
-            if (old_page_cache.fileIdLevel() < page_cache.fileIdLevel())
-                old_page_cache = page_cache;
-        }
+        gcUpdatePageMap(gc_file_page_cache_map);
 
         // TODO: potential bug: A read thread may just select a file F, while F is being GCed. And after GC, we remove F from
         // reader cache. But after that, A could come in and re-add F reader cache. It is not a very big issue, because
         // it only cause a hanging opened fd, which no one will use anymore.
-
         // Remove reader cache.
         for (const auto & [file_id, level] : merge_files)
         {
@@ -399,13 +304,153 @@ bool PageStorage::gc()
         }
     }
 
+    // destroy the files have already been gc
     for (const auto & [file_id, level] : merge_files)
     {
         auto page_file = PageFile::openPageFileForRead(file_id, level, storage_path, page_file_log);
         page_file.destroy();
     }
-
     return true;
+}
+
+PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable indent
+    const std::set<PageFile, PageFile::Comparator> & page_files,
+    const GcLivesPages &                             file_valid_pages,
+    const PageFileIdAndLevel &                       writing_file_id_level,
+    UInt64 &                                         candidate_total_size,
+    size_t &                                         migrate_page_count) const
+{
+    GcCandidates merge_files;
+    for (auto & page_file : page_files)
+    {
+        auto   file_size = page_file.getDataFileSize();
+        UInt64 valid_size;
+        float  valid_rate;
+        size_t valid_page_count;
+
+        auto it = file_valid_pages.find(page_file.fileIdLevel());
+        if (it == file_valid_pages.end())
+        {
+            valid_size       = 0;
+            valid_rate       = 0;
+            valid_page_count = 0;
+        }
+        else
+        {
+            valid_size       = it->second.first;
+            valid_rate       = (float)valid_size / file_size;
+            valid_page_count = it->second.second.size();
+        }
+
+        // Don't gc writing page file.
+        bool is_candidate = (page_file.fileIdLevel() != writing_file_id_level)
+            && (valid_rate < config.merge_hint_low_used_rate || file_size < config.file_small_size);
+        if (!is_candidate)
+            continue;
+
+        merge_files.emplace(page_file.fileIdLevel());
+
+        migrate_page_count += valid_page_count;
+        candidate_total_size += valid_size;
+        if (candidate_total_size >= config.file_max_size)
+            break;
+    }
+    return merge_files;
+}
+
+PageCacheMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const
+{
+    PageCacheMap gc_file_page_cache_map;
+    // merge `merge_files` to PageFile which PageId = max of all `merge_files` and level = level + 1
+    auto [largest_file_id, level] = *(merge_files.rbegin());
+    PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
+
+    size_t num_successful_migrate_pages = 0;
+    {
+        // No need to sync after each write. Do sync before closing is enough.
+        auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
+
+        for (const auto & file_id_level : merge_files)
+        {
+            auto it = file_valid_pages.find(file_id_level);
+            if (it == file_valid_pages.end())
+            {
+                // This file does not contain any valid page.
+                continue;
+            }
+            const auto & page_ids = it->second.second;
+
+            PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
+            auto     to_merge_file_reader = to_merge_file.createReader();
+
+            PageIdAndCaches page_id_and_caches;
+            {
+                for (auto page_id : page_ids)
+                {
+                    auto it2 = page_cache_map.find(page_id);
+                    // This page is already removed.
+                    if (it2 == page_cache_map.end())
+                        continue;
+                    const auto & page_cache = it2->second;
+                    // This page is covered by newer file.
+                    if (page_cache.fileIdLevel() != file_id_level)
+                        continue;
+                    page_id_and_caches.emplace_back(page_id, page_cache);
+                    num_successful_migrate_pages += 1;
+                }
+            }
+
+            if (!page_id_and_caches.empty())
+            {
+                // copy valid pages from `to_merge_file` to `gc_file`
+                PageMap    pages = to_merge_file_reader->read(page_id_and_caches);
+                WriteBatch wb;
+                for (const auto & [page_id, page_cache] : page_id_and_caches)
+                {
+                    auto & page = pages.find(page_id)->second;
+                    wb.putPage(page_id,
+                               page_cache.tag,
+                               std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
+                               page.data.size());
+                }
+
+                gc_file_writer->write(wb, gc_file_page_cache_map);
+            }
+        }
+    }
+
+    if (gc_file_page_cache_map.empty())
+    {
+        gc_file.destroy();
+    }
+    else
+    {
+        gc_file.setFormal();
+        auto id = gc_file.fileIdLevel();
+        LOG_DEBUG(log, "GC have migrated " << num_successful_migrate_pages << " regions to PageFile_" << id.first << "_" << id.second);
+    }
+    return gc_file_page_cache_map;
+}
+
+void PageStorage::gcUpdatePageMap(const PageCacheMap & gc_pages_map)
+{
+    for (const auto & [page_id, page_cache] : gc_pages_map)
+    {
+        auto it = page_cache_map.find(page_id);
+        // if the gc page have already been remove, just ignore it
+        if (it == page_cache_map.end())
+        {
+            continue;
+        }
+        auto & old_page_cache = it->second;
+        // In case of page being updated during GC process.
+        if (old_page_cache.fileIdLevel() < page_cache.fileIdLevel())
+        {
+            // no new page write to `page_cache_map`, replace it with gc page
+            old_page_cache = page_cache;
+        }
+        // else new page written by another thread, gc page is replaced. leave the page for next gc
+    }
 }
 
 } // namespace DB
