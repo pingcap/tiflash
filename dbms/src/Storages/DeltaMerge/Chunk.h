@@ -8,9 +8,11 @@
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <Storages/Page/Page.h>
+#include <Storages/Page/PageStorage.h>
+
 
 namespace DB
 {
@@ -48,7 +50,7 @@ public:
         return {handle_start, handle_end};
     }
 
-    std::pair<Handle, Handle> getHandleFirstLast() const
+    HandlePair getHandleFirstLast() const
     {
         if (is_delete_range)
             throw Exception("It is a delete range");
@@ -86,55 +88,8 @@ public:
             rows = c.rows;
     }
 
-    void serialize(WriteBuffer & buf) const
-    {
-        writeIntBinary(handle_start, buf);
-        writeIntBinary(handle_end, buf);
-        writePODBinary(is_delete_range, buf);
-        writeIntBinary((UInt64)columns.size(), buf);
-        for (const auto & [col_id, d] : columns)
-        {
-            writeIntBinary(col_id, buf);
-            writeIntBinary(d.page_id, buf);
-            writeIntBinary(d.rows, buf);
-            writeIntBinary(d.bytes, buf);
-            writeStringBinary(d.type->getName(), buf);
-        }
-    }
-
-    static Chunk deserialize(ReadBuffer & buf)
-    {
-        Handle start, end;
-        readIntBinary(start, buf);
-        readIntBinary(end, buf);
-
-        Chunk chunk(start, end);
-
-        readPODBinary(chunk.is_delete_range, buf);
-        UInt64 col_size;
-        readIntBinary(col_size, buf);
-        chunk.columns.reserve(col_size);
-        for (UInt64 ci = 0; ci < col_size; ++ci)
-        {
-            ColumnMeta d;
-            String     type;
-            readIntBinary(d.col_id, buf);
-            readIntBinary(d.page_id, buf);
-            readIntBinary(d.rows, buf);
-            readIntBinary(d.bytes, buf);
-            readStringBinary(type, buf);
-
-            d.type = DataTypeFactory::instance().get(type);
-
-            chunk.columns.emplace(d.col_id, d);
-
-            if (chunk.rows && chunk.rows != d.rows)
-                throw Exception("Rows not match");
-            else
-                chunk.rows = d.rows;
-        }
-        return chunk;
-    }
+    void         serialize(WriteBuffer & buf) const;
+    static Chunk deserialize(ReadBuffer & buf);
 
 private:
     Handle        handle_start;
@@ -144,27 +99,29 @@ private:
     size_t        rows = 0;
 };
 
-using Chunks = std::vector<Chunk>;
+using Chunks    = std::vector<Chunk>;
+using GenPageId = std::function<PageId()>;
 
-inline void serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, std::optional<Chunk> extra_chunk)
-{
-    UInt64 size = extra_chunk.has_value() ? (UInt64)(end - begin) + 1 : (UInt64)(end - begin);
-    writeIntBinary(size, buf);
-    for (; begin != end; ++begin)
-        (*begin).serialize(buf);
-    if (extra_chunk)
-        extra_chunk->serialize(buf);
-}
+void   serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, std::optional<Chunk> extra_chunk);
+Chunks deserializeChunks(ReadBuffer & buf);
 
-inline Chunks deserializeChunks(ReadBuffer & buf)
-{
-    Chunks chunks;
-    UInt64 size;
-    readIntBinary(size, buf);
-    for (UInt64 i = 0; i < size; ++i)
-        chunks.push_back(Chunk::deserialize(buf));
-    return chunks;
-}
+
+using BufferAndSize = std::pair<ReadBufferPtr, size_t>;
+BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, size_t offset, size_t num, bool compress);
+Chunk         prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block);
+
+void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & page, size_t rows_limit);
+
+void readChunkData(MutableColumns &      columns,
+                   const Chunk &         chunk,
+                   const ColumnDefines & column_defines,
+                   PageStorage &         storage,
+                   size_t                rows_offset,
+                   size_t                rows_limit);
+
+
+Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage);
+
 
 } // namespace DM
 } // namespace DB

@@ -106,9 +106,16 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
 }
 
 template <typename T>
+inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
+{
+    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+    return c.getData();
+}
+
+template <typename T>
 inline const PaddedPODArray<T> & getColumnVectorData(const Block & block, size_t pos)
 {
-    return *toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
+    return toColumnVectorData<T>(block.getByPosition(pos).column);
 }
 
 template <typename T>
@@ -250,13 +257,13 @@ inline String rangeToString(T start, T end)
     return s;
 }
 
-template <typename T, bool right_open>
+template <typename T>
 struct Range;
 
-template <typename T, bool right_open = true>
-inline String rangeToString(const Range<T, right_open> & range)
+template <typename T>
+inline String rangeToString(const Range<T> & range)
 {
-    return rangeToString<T, right_open>(range.start, range.end);
+    return rangeToString<T, true>(range.start, range.end);
 }
 
 } // namespace DM

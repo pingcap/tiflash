@@ -18,6 +18,8 @@ namespace DB
 {
 namespace DM
 {
+namespace Dummy
+{
 
 class DummyDeltaMergeBlockInputStream final : public IProfilingBlockInputStream
 {
@@ -247,6 +249,6 @@ private:
         return true;
     }
 };
-
+} // namespace Dummy
 } // namespace DM
 } // namespace DB

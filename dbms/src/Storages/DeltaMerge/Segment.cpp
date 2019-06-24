@@ -205,6 +205,13 @@ void Segment::check(DMContext & dm_context, const String & when, bool is_lock)
         lock = SharedLock(mutex);
     auto & handle  = dm_context.table_handle_define;
     auto & storage = dm_context.storage_pool;
+
+    size_t stable_rows = stable.num_rows();
+    size_t delta_rows = delta.num_rows();
+
+    LOG_INFO(log,
+             when + ": stable_rows:" + DB::toString(stable_rows) + ", delta_rows:" + DB::toString(delta_rows));
+
     ensurePlace(handle, storage);
 
     LOG_INFO(log,
@@ -254,7 +261,7 @@ void Segment::deleteRange(DMContext & dm_context, const HandleRange & delete_ran
 }
 
 BlockInputStreamPtr
-Segment::getInputStream(const DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version, )
+Segment::getInputStream(const DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version)
 {
     std::shared_lock lock(mutex);
 
@@ -289,9 +296,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
     BlockInputStreamPtr delta_stream = std::make_shared<OneBlockInputStream>(delta_block);
     delta_stream                     = std::make_shared<DMHandleFilterBlockInputStream>(delta_stream, range, 0, false);
 
-    BlockInputStreamPtr stable_stream;
-    std::tie(stable_stream, std::ignore) = stable.getInputStream(range, new_columns_to_read, storage.data());
-    stable_stream                        = std::make_shared<DMHandleFilterBlockInputStream>(stable_stream, range, 0, true);
+    BlockInputStreamPtr stable_stream = stable.getInputStream(new_columns_to_read, storage.data());
+    stable_stream                     = std::make_shared<DMHandleFilterBlockInputStream>(stable_stream, range, 0, true);
 
     BlockInputStreams streams;
     streams.push_back(delta_stream);
@@ -427,13 +433,13 @@ BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
 
     HandleRange real_range = range.shrink(read_range);
 
-    auto [stable_input_stream, offset] = stable.getInputStream(real_range, new_columns_to_read, storage_pool.data());
-    auto delta_block                   = delta.read(new_columns_to_read, storage_pool.log(), 0, delta.num_rows());
+    auto stable_input_stream = stable.getInputStream(new_columns_to_read, storage_pool.data());
+    auto delta_block         = delta.read(new_columns_to_read, storage_pool.log(), 0, delta.num_rows());
 
     auto delta_value_space = std::make_shared<DeltaValueSpace>(handle, new_columns_to_read, delta_block);
 
     return std::make_shared<MyDeltaMergeBlockInputStream>(
-        0, real_range, stable_input_stream, offset, *delta_tree, delta_value_space, expected_block_size, std::move(lock));
+        0, real_range, stable_input_stream, *delta_tree, delta_value_space, expected_block_size, std::move(lock));
 }
 
 

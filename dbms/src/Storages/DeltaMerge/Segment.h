@@ -42,7 +42,7 @@ public:
     void deleteRange(DMContext & dm_context, const HandleRange & delete_range);
 
     BlockInputStreamPtr
-    getInputStream(const DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version, const HandleRange );
+    getInputStream(const DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version);
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 

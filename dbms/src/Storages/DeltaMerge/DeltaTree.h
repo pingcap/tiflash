@@ -31,7 +31,7 @@ static_assert(sizeof(UInt64) >= sizeof(DTModifiesPtr));
 #define isLeaf(p) (((*reinterpret_cast<size_t *>(p)) & 0x01) != 0)
 #define nodeName(p) (isLeaf(p) ? "leaf" : "intern")
 
-std::string addrToHex(const void * addr)
+inline std::string addrToHex(const void * addr)
 {
     if (!addr)
         return "null";
@@ -41,10 +41,12 @@ std::string addrToHex(const void * addr)
 }
 
 /// DTMutation type available values.
-static constexpr UInt16 DT_INS           = 65535;
-static constexpr UInt16 DT_DEL           = 65534;
-static constexpr UInt16 DT_MULTI_MOD     = 65533;
-static constexpr UInt16 DT_MAX_COLUMN_ID = 65500;
+using DT_TYPE = UInt16;
+
+static constexpr DT_TYPE DT_INS           = 65535;
+static constexpr DT_TYPE DT_DEL           = 65534;
+static constexpr DT_TYPE DT_MULTI_MOD     = 65533;
+static constexpr DT_TYPE DT_MAX_COLUMN_ID = 65500;
 
 inline std::string DTTypeString(UInt16 type)
 {
@@ -731,9 +733,8 @@ public:
         std::tie(leaf, delta) = findLeftLeaf<false>(sid);
         std::tie(pos, delta)  = leaf->searchSid(sid, delta);
         EntryIterator it(leaf, pos, delta);
-        if (unlikely(it != end() && pos == leaf->count))
-            throw Exception("Unexpected pos: sidLowerBound returns a passed the end entry of a node. it: " + it.toString()
-                            + ", end:" + end().toString() + ", leaf: " + leaf->toString());
+        if (it != end() && pos == leaf->count)
+            return {leaf->next, 0, delta};
         else
             return it;
     }
@@ -1028,6 +1029,9 @@ void DT_CLASS::addDelete(const UInt64 rid)
     }
 
     afterLeafUpdated(leaf);
+
+    if (unlikely(!isRootOnly() && !leaf->legal()))
+        throw Exception("Illegal leaf state: " + leaf->state());
 }
 
 DT_TEMPLATE
@@ -1068,6 +1072,9 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
     ++(leaf->count);
 
     afterLeafUpdated(leaf);
+
+    if (unlikely(!isRootOnly() && !leaf->legal()))
+        throw Exception("Illegal leaf state: " + leaf->state());
 }
 
 DT_TEMPLATE

@@ -9,47 +9,53 @@ namespace DB
 namespace DM
 {
 
-inline Block filterByHandleSorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
+namespace HandleFilter
 {
-    size_t rows            = block.rows();
-    auto & handle_col_data = getColumnVectorData<Handle>(block, handle_pos);
-    auto   first           = handle_col_data[0];
-    auto   last            = handle_col_data[rows - 1];
+/// return <offset, limit>
+inline std::pair<size_t, size_t>
+getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_column, const size_t offset, const size_t limit)
+{
+    const auto & handle_col_data = toColumnVectorData<Handle>(handle_column);
 
-    if (handle_range.include(first, last))
-        return std::move(block);
-    if (!handle_range.intersect(first, last))
-        return {};
+    const auto begin_it    = handle_col_data.cbegin() + offset;
+    const auto end_it      = begin_it + limit;
+    const auto first_value = handle_col_data[offset];
+    const auto last_value  = handle_col_data[offset + limit - 1];
 
-    auto   low_it  = std::lower_bound(handle_col_data.cbegin(), handle_col_data.cend(), handle_range.start);
-    size_t low_pos = low_it - handle_col_data.cbegin();
-    size_t high_pos;
-    if (handle_range.check(last))
-    {
-        high_pos = rows;
-    }
-    else
-    {
-        // It mean end of range is not MAX.
-        auto high_it = std::lower_bound(low_it, handle_col_data.cend(), handle_range.end);
-        high_pos     = high_it - handle_col_data.cbegin();
-    }
-    if (low_pos >= high_pos)
+    //    if (handle_range.include(first_value, last_value))
+    //        return {offset, limit};
+    //    if (!handle_range.intersect(first_value, last_value))
+    //        return {offset, 0};
+
+    const auto low_it  = handle_range.check(first_value) ? begin_it : std::lower_bound(begin_it, end_it, handle_range.start);
+    const auto high_it = handle_range.check(last_value) ? end_it : std::lower_bound(low_it, end_it, handle_range.end);
+
+    size_t  low_pos   = low_it - handle_col_data.cbegin();
+    ssize_t res_limit = high_it - low_it;
+
+    return {low_pos, res_limit};
+}
+
+inline Block filterSorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
+{
+    size_t rows          = block.rows();
+    auto [offset, limit] = getPosRangeOfSorted(handle_range, block.getByPosition(handle_pos).column, 0, rows);
+    if (!limit)
         return {};
-    if (low_pos == 0 && high_pos == rows)
+    if (!offset && limit == rows)
         return std::move(block);
 
     for (size_t i = 0; i < block.columns(); i++)
     {
         auto & column     = block.getByPosition(i);
         auto   new_column = column.column->cloneEmpty();
-        new_column->insertRangeFrom(*column.column, low_pos, high_pos - low_pos);
+        new_column->insertRangeFrom(*column.column, offset, limit);
         column.column = std::move(new_column);
     }
     return std::move(block);
 }
 
-inline Block filterByHandleUnsorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
+inline Block filterUnsorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
 {
     size_t rows            = block.rows();
     auto & handle_col_data = getColumnVectorData<Handle>(block, handle_pos);
@@ -75,6 +81,7 @@ inline Block filterByHandleUnsorted(const HandleRange & handle_range, Block && b
     }
     return std::move(block);
 }
+} // namespace HandleFilter
 
 class DMHandleFilterBlockInputStream : public IProfilingBlockInputStream
 {
@@ -101,8 +108,8 @@ protected:
                 return {};
             if (!block.rows())
                 continue;
-            Block res = is_block_sorted ? filterByHandleSorted(handle_range, std::move(block), handle_col_pos)
-                                        : filterByHandleUnsorted(handle_range, std::move(block), handle_col_pos);
+            Block res = is_block_sorted ? HandleFilter::filterSorted(handle_range, std::move(block), handle_col_pos)
+                                        : HandleFilter::filterUnsorted(handle_range, std::move(block), handle_col_pos);
             if (!res || !res.rows())
                 continue;
             else

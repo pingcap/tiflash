@@ -3,6 +3,7 @@
 #include <IO/MemoryReadWriteBuffer.h>
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Storages/DeltaMerge/ChunkBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 #include <Storages/Page/PageStorage.h>
@@ -17,140 +18,6 @@ namespace DB
 {
 namespace DM
 {
-
-//==========================================================================================
-// Helper functions.
-//==========================================================================================
-
-using BufferAndSize = std::pair<ReadBufferPtr, size_t>;
-BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, size_t offset, size_t num, bool compress)
-{
-    MemoryWriteBuffer plain;
-    CompressionMethod method = compress ? CompressionMethod::LZ4 : CompressionMethod::NONE;
-
-    CompressedWriteBuffer compressed(plain, CompressionSettings(method));
-    type->serializeBinaryBulkWithMultipleStreams(column, //
-                                                 [&](const IDataType::SubstreamPath &) { return &compressed; },
-                                                 offset,
-                                                 num,
-                                                 true,
-                                                 {});
-    compressed.next();
-
-    auto data_size = plain.count();
-    return {plain.tryGetReadBuffer(), data_size};
-}
-
-void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & page, size_t rows_limit)
-{
-    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    CompressedReadBuffer compressed(buf);
-    meta.type->deserializeBinaryBulkWithMultipleStreams(column, //
-                                                        [&](const IDataType::SubstreamPath &) { return &compressed; },
-                                                        rows_limit,
-                                                        (double)(page.data.size()) / meta.rows,
-                                                        true,
-                                                        {});
-}
-
-void readChunkData(MutableColumns &      columns,
-                   const Chunk &         chunk,
-                   const ColumnDefines & column_defines,
-                   PageStorage &         storage,
-                   size_t                rows_offset,
-                   size_t                rows_limit)
-{
-    std::unordered_map<PageId, size_t> page_to_index;
-    PageIds                            page_ids;
-    page_ids.reserve(column_defines.size());
-    for (size_t index = 0; index < column_defines.size(); ++index)
-    {
-        auto & define  = column_defines[index];
-        auto   page_id = chunk.getColumn(define.id).page_id;
-        page_ids.push_back(page_id);
-        page_to_index[page_id] = index;
-    }
-
-    PageHandler page_handler = [&](PageId page_id, const Page & page) {
-        size_t index = page_to_index[page_id];
-
-        ColumnDefine         define = column_defines[index];
-        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        const ColumnMeta &   meta = chunk.getColumn(define.id);
-        IColumn &            col  = *columns[index];
-
-        if (!rows_offset)
-        {
-            deserializeColumn(col, meta, page, rows_limit);
-        }
-        else
-        {
-            auto tmp_col = define.type->createColumn();
-            deserializeColumn(*tmp_col, meta, page, rows_offset + rows_limit);
-            col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
-        }
-    };
-    storage.read(page_ids, page_handler);
-}
-
-
-Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage)
-{
-    if (read_column_defines.empty())
-        return {};
-
-    MutableColumns columns;
-    for (const auto & define : read_column_defines)
-    {
-        columns.emplace_back(define.type->createColumn());
-        columns.back()->reserve(chunk.getRows());
-    }
-
-    if (chunk.getRows())
-    {
-        // Read from storage
-        readChunkData(columns, chunk, read_column_defines, data_storage, 0, chunk.getRows());
-    }
-
-    Block res;
-    for (size_t index = 0; index < read_column_defines.size(); ++index)
-    {
-        ColumnDefine          define = read_column_defines[index];
-        ColumnWithTypeAndName col;
-        col.type      = define.type;
-        col.name      = define.name;
-        col.column_id = define.id;
-        col.column    = std::move(columns[index]);
-
-        res.insert(col);
-    }
-    return res;
-}
-
-Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block)
-{
-    auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.table_handle_define.name));
-    Chunk  chunk(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
-    for (const auto & col_define : dm_context.table_columns)
-    {
-        auto            col_id = col_define.id;
-        const IColumn & column = *(block.getByName(col_define.name).column);
-        auto [buf, size]       = serializeColumn(column, col_define.type, 0, column.size(), !dm_context.not_compress.count(col_id));
-
-        ColumnMeta d;
-        d.col_id  = col_id;
-        d.page_id = gen_data_page_id();
-        d.rows    = column.size();
-        d.bytes   = size;
-        d.type    = col_define.type;
-
-        wb.putPage(d.page_id, 0, buf, size);
-        chunk.insert(d);
-    }
-
-    return chunk;
-}
-
 //==========================================================================================
 // DiskValueSpace public methods.
 //==========================================================================================
@@ -578,59 +445,9 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     return true;
 }
 
-class DiskValueSpace::ChunkBlockInputStream final : public IProfilingBlockInputStream
+ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage)
 {
-public:
-    ChunkBlockInputStream(Chunks && chunks_, const ColumnDefines & read_columns_, PageStorage & data_storage_)
-        : chunks(std::move(chunks_)), read_columns(read_columns_), data_storage(data_storage_)
-    {
-    }
-
-    String getName() const override { return "DiskValueSpace"; }
-    Block  getHeader() const override
-    {
-        Block res;
-        for (const auto & c : read_columns)
-        {
-            ColumnWithTypeAndName col;
-            col.column    = c.type->createColumn();
-            col.type      = c.type;
-            col.name      = c.name;
-            col.column_id = c.id;
-            res.insert(col);
-        }
-        return res;
-    }
-
-protected:
-    Block readImpl() override
-    {
-        if (chunk_index >= chunks.size())
-            return {};
-        return readChunk(chunks[chunk_index++], read_columns, data_storage);
-    }
-
-private:
-    Chunks        chunks;
-    size_t        chunk_index = 0;
-    ColumnDefines read_columns;
-    PageStorage & data_storage;
-};
-
-std::pair<BlockInputStreamPtr, size_t>
-DiskValueSpace::getInputStream(const HandleRange & handle_range, const ColumnDefines & read_columns, PageStorage & data_storage)
-{
-    Chunks read_chunks;
-    size_t offset = 0;
-    for (const auto & chunk : chunks)
-    {
-        auto [first, last] = chunk.getHandleFirstLast();
-        if (handle_range.intersect(first, last))
-            read_chunks.push_back(chunk);
-        else if (last < handle_range.start)
-            offset += chunk.getRows();
-    }
-    return {std::make_shared<ChunkBlockInputStream>(std::move(read_chunks), read_columns, data_storage), offset};
+    return std::make_shared<ChunkBlockInputStream>(chunks, read_columns, data_storage);
 }
 
 size_t DiskValueSpace::num_rows()

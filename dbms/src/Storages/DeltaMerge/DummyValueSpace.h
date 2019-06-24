@@ -17,6 +17,8 @@ namespace DB
 {
 namespace DM
 {
+namespace Dummy
+{
 
 /// Store the tuple values of delta tree.
 /// Garbage collection is poorly supported.
@@ -146,5 +148,6 @@ private:
     Logger * log;
 };
 
+} // namespace Dummy
 } // namespace DM
 } // namespace DB

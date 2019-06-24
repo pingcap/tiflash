@@ -210,7 +210,10 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 
     // divide segment data streams to `num_streams`
     auto stream_creator = [=](const SegmentPtr & segment) {
-        return segment->getInputStream(dm_context, columns_to_read, expected_block_size, max_version, is_raw);
+        if (!is_raw)
+            return segment->getInputStream(dm_context, columns_to_read, expected_block_size, max_version);
+        else
+            return segment->getInputStreamRaw(dm_context, columns_to_read);
     };
 
     Segments to_read_segments;
