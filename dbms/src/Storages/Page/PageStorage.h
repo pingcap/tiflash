@@ -6,7 +6,11 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/PageFile.h>
+#include <Storages/Page/WriteBatch.h>
 
 namespace DB
 {
@@ -42,21 +46,21 @@ public:
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
 public:
-    PageStorage(const std::string & storage_path, const Config & config_);
+    PageStorage(const String & storage_path, const Config & config_);
 
     PageId    getMaxId();
-    PageCache getCache(PageId page_id);
+    PageEntry getEntry(PageId page_id);
 
     void    write(const WriteBatch & write_batch);
     Page    read(PageId page_id);
     PageMap read(const std::vector<PageId> & page_ids);
     void    read(const std::vector<PageId> & page_ids, PageHandler & handler);
-    void    traverse(const std::function<void(const Page & page)>& acceptor);
-    void    traversePageCache(const std::function<void(PageId page_id, const PageCache & page)>& acceptor);
+    void    traverse(const std::function<void(const Page & page)> & acceptor);
+    void    traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor);
     bool    gc();
 
     static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log);
+    listAllPageFiles(const String & storage_path, bool remove_tmp_file, Poco::Logger * page_file_log);
 
 private:
     PageFile::Writer & getWriter();
@@ -69,14 +73,14 @@ private:
                                         const PageFileIdAndLevel &                       writing_file_id_level,
                                         UInt64 &                                         candidate_total_size,
                                         size_t &                                         migrate_page_count) const;
-    PageCacheMap gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
-    void         gcUpdatePageMap(const PageCacheMap & gc_pages_map);
+    PageEntryMap gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
+    void         gcUpdatePageMap(const PageEntryMap & gc_pages_map);
 
 private:
-    std::string storage_path;
-    Config      config;
+    String storage_path;
+    Config config;
 
-    PageCacheMap page_cache_map;
+    PageEntryMap page_entry_map;
     PageId       max_page_id = 0;
 
     PageFile  write_file;
@@ -85,8 +89,8 @@ private:
     OpenReadFiles open_read_files;
     std::mutex    open_read_files_mutex; // A mutex only used to protect open_read_files.
 
-    Logger * page_file_log;
-    Logger * log;
+    Poco::Logger * page_file_log;
+    Poco::Logger * log;
 
     std::mutex        write_mutex;
     std::shared_mutex read_mutex;

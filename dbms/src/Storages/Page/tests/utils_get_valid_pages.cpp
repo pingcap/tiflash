@@ -16,6 +16,19 @@ void Usage(const char * prog)
             prog);
 }
 
+void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
+{
+    printf("\tpid:%9lld\t\t"
+           "%llu\t%u\t%u\t%9llu\t%llu\t%016llx\n",
+           pid, //
+           entry.file_id,
+           entry.level,
+           entry.size,
+           entry.offset,
+           entry.tag,
+           entry.checksum);
+}
+
 int main(int argc, char ** argv)
 {
     (void)argc;
@@ -46,44 +59,32 @@ int main(int argc, char ** argv)
     }
     auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
 
-    DB::PageCacheMap valid_page_entries;
+    DB::PageEntryMap valid_page_entries;
     for (auto & page_file : page_files)
     {
-        DB::PageCacheMap page_entries;
+        DB::PageEntryMap page_entries;
         const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries);
-        printf("File: page_%llu_%llu with %llu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
-        for (auto & [pid, entry] : page_entries)
+        printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
+        for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
         {
+            const DB::PageId      pid   = iter.pageId();
+            const DB::PageEntry & entry = iter.pageEntry();
             if (mode == MODE_DUMP_ALL_ENTRIES)
             {
-                printf("\tpid:%9lld\t\t"
-                       "%llu\t%llu\t%llu\t%9llu\t%llu\t%016llx\n",
-                       pid, //
-                       entry.file_id,
-                       entry.level,
-                       entry.size,
-                       entry.offset,
-                       entry.tag,
-                       entry.checksum);
+                printPageEntry(pid, entry);
             }
-            valid_page_entries[pid] = entry;
+            valid_page_entries.put(pid, entry);
         }
     }
 
     if (mode == MODE_DUMP_VALID_ENTRIES)
     {
-        printf("Valid page entries: %lld\n", valid_page_entries.size());
-        for (auto & [pid, entry] : valid_page_entries)
+        printf("Valid page entries: %zu\n", valid_page_entries.size());
+        for (auto iter = valid_page_entries.cbegin(); iter != valid_page_entries.cend(); ++iter)
         {
-            printf("\tpid:%9lld\t\t"
-                   "%llu\t%llu\t%llu\t%9llu\t%llu\t%016llx\n",
-                   pid, //
-                   entry.file_id,
-                   entry.level,
-                   entry.size,
-                   entry.offset,
-                   entry.tag,
-                   entry.checksum);
+            const DB::PageId      pid   = iter.pageId();
+            const DB::PageEntry & entry = iter.pageEntry();
+            printPageEntry(pid, entry);
         }
     }
 

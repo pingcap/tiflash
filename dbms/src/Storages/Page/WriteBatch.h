@@ -11,22 +11,24 @@ namespace DB
 class WriteBatch
 {
 public:
-    enum class WriteType : UInt8 {
+    enum class WriteType : UInt8
+    {
         DEL = 0,
         PUT = 1,
         REF = 2,
     };
+
 private:
     struct Write
     {
-        WriteType     type;
-        PageId        page_id;
-        UInt64        tag;
+        WriteType type;
+        PageId    page_id;
+        UInt64    tag;
         // Page's data and size
         ReadBufferPtr read_buffer;
         UInt32        size;
         // RefPage's origin page
-        PageId        ori_page_id;
+        PageId ori_page_id;
     };
     using Writes = std::vector<Write>;
 

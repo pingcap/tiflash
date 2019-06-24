@@ -33,10 +33,10 @@ void RegionPersister::doPersist(const RegionPtr & region)
     auto region_id = region->id();
     UInt64 applied_index = region->getIndex();
 
-    auto cache = page_storage.getCache(region_id);
-    if (cache.isValid() && cache.tag > applied_index)
+    auto entry = page_storage.getEntry(region_id);
+    if (entry.isValid() && entry.tag > applied_index)
     {
-        LOG_INFO(log, region->toString() << " have already persisted index: " << cache.tag);
+        LOG_INFO(log, region->toString() << " have already persisted index: " << entry.tag);
         return;
     }
 
