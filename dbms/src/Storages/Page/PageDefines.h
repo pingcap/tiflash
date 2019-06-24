@@ -8,7 +8,7 @@
 namespace DB
 {
 
-#define MB 1048576ULL;
+static constexpr UInt64 MB = 1048576ULL;
 
 static constexpr UInt64 PAGE_SIZE_STEP       = (1 << 10) * 16; // 16 KB
 static constexpr UInt64 PAGE_BUFFER_SIZE     = DBMS_DEFAULT_BUFFER_SIZE;

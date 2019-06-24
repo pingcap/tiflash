@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <optional>
+#include <set>
 #include <shared_mutex>
 #include <unordered_map>
 
@@ -25,7 +26,7 @@ public:
     {
         Config() {}
 
-        bool sync_on_write = false;
+        bool sync_on_write = true;
 
         size_t file_roll_size  = PAGE_FILE_ROLL_SIZE;
         size_t file_max_size   = PAGE_FILE_MAX_SIZE;
@@ -54,9 +55,22 @@ public:
     void    traversePageCache(std::function<void(PageId page_id, const PageCache & page)> acceptor);
     bool    gc();
 
+    static std::set<PageFile, PageFile::Comparator>
+    listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log);
+
 private:
     PageFile::Writer & getWriter();
     ReaderPtr          getReader(const PageFileIdAndLevel & file_id_level);
+    // gc helper functions
+    using GcCandidates = std::set<PageFileIdAndLevel>;
+    using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
+    GcCandidates gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                        const GcLivesPages &                             file_valid_pages,
+                                        const PageFileIdAndLevel &                       writing_file_id_level,
+                                        UInt64 &                                         candidate_total_size,
+                                        size_t &                                         migrate_page_count) const;
+    PageCacheMap gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
+    void         gcUpdatePageMap(const PageCacheMap & gc_pages_map);
 
 private:
     std::string storage_path;
@@ -76,6 +90,7 @@ private:
 
     std::mutex        write_mutex;
     std::shared_mutex read_mutex;
+    std::mutex        gc_mutex; // A mutex used to protect only gc
 };
 
 } // namespace DB
