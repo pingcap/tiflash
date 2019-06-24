@@ -14,7 +14,9 @@
 #include <fcntl.h>
 #endif
 
+#include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
+#include <common/logger_useful.h>
 #include <ext/scope_guard.h>
 
 #include <Storages/Page/PageFile.h>
@@ -245,7 +247,7 @@ static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(P
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     const WriteBatch & wb,
     PageFile &         page_file,
-    PageCacheMap &     page_cache_map)
+    PageEntryMap &     page_entry_map)
 {
     WBSize meta_write_bytes = 0;
     size_t data_write_bytes = 0;
@@ -255,18 +257,20 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     for (const auto & write : wb.getWrites())
     {
         meta_write_bytes += sizeof(IsPut);
-        switch (write.type) {
-            case WriteBatch::WriteType::PUT:
-                data_write_bytes += write.size;
-                meta_write_bytes += PAGE_META_SIZE;
-                break;
-            case WriteBatch::WriteType::DEL:
-                // For delete page, store page id only. And don't need to write data file.
-                meta_write_bytes += sizeof(PageId);
-                break;
-            case WriteBatch::WriteType::REF:
-                // TODO
-                break;
+        switch (write.type)
+        {
+        case WriteBatch::WriteType::PUT:
+            data_write_bytes += write.size;
+            meta_write_bytes += PAGE_META_SIZE;
+            break;
+        case WriteBatch::WriteType::DEL:
+            // For delete page, store page id only. And don't need to write data file.
+            meta_write_bytes += sizeof(PageId);
+            break;
+        case WriteBatch::WriteType::REF:
+            // For ref page, store RefPageId -> PageId. And don't need to write data file.
+            meta_write_bytes += (sizeof(PageId) + sizeof(PageId));
+            break;
         }
     }
 
@@ -287,44 +291,45 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         put(meta_pos, static_cast<IsPut>(write.type));
         switch (write.type)
         {
-            case WriteBatch::WriteType::PUT:
-            {
-                write.read_buffer->readStrict(data_pos, write.size);
-                Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
-                data_pos += write.size;
+        case WriteBatch::WriteType::PUT:
+        {
+            write.read_buffer->readStrict(data_pos, write.size);
+            Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
+            data_pos += write.size;
 
-                PageCache pc{};
-                pc.file_id = page_file.getFileId();
-                pc.level = page_file.getLevel();
-                pc.size = write.size;
-                pc.offset = page_data_file_off;
-                pc.checksum = page_checksum;
+            PageEntry pc{};
+            pc.file_id  = page_file.getFileId();
+            pc.level    = page_file.getLevel();
+            pc.size     = write.size;
+            pc.offset   = page_data_file_off;
+            pc.checksum = page_checksum;
 
-                page_cache_map.put(write.page_id, pc);
+            page_entry_map.put(write.page_id, pc);
 
-                put(meta_pos, (PageId) write.page_id);
-                put(meta_pos, (PageTag) write.tag);
-                put(meta_pos, (PageOffset) page_data_file_off);
-                put(meta_pos, (PageSize) write.size);
-                put(meta_pos, (Checksum) page_checksum);
+            put(meta_pos, (PageId)write.page_id);
+            put(meta_pos, (PageTag)write.tag);
+            put(meta_pos, (PageOffset)page_data_file_off);
+            put(meta_pos, (PageSize)write.size);
+            put(meta_pos, (Checksum)page_checksum);
 
-                page_data_file_off += write.size;
-                break;
-            }
-            case WriteBatch::WriteType::DEL:
-            {
-                put(meta_pos, (PageId) write.page_id);
+            page_data_file_off += write.size;
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+            put(meta_pos, (PageId)write.page_id);
 
-                page_cache_map.del(write.page_id);
-                break;
-            }
-            case WriteBatch::WriteType::REF:
-                //TODO
-                break;
+            page_entry_map.del(write.page_id);
+            break;
+        case WriteBatch::WriteType::REF:
+            put(meta_pos, static_cast<PageId>(write.page_id));
+            put(meta_pos, static_cast<PageId>(write.ori_page_id));
+
+            page_entry_map.ref(write.page_id, write.ori_page_id);
+            break;
         }
     }
 
-    Checksum wb_checksum = CityHash_v1_0_2::CityHash64(meta_buffer, meta_write_bytes - sizeof(Checksum));
+    const Checksum wb_checksum = CityHash_v1_0_2::CityHash64(meta_buffer, meta_write_bytes - sizeof(Checksum));
     put(meta_pos, wb_checksum);
 
     if (unlikely(meta_pos != meta_buffer + meta_write_bytes || data_pos != data_buffer + data_write_bytes))
@@ -340,7 +345,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
     UInt32         level,
     const char *   meta_data,
     const size_t   meta_data_size,
-    PageCacheMap & page_caches,
+    PageEntryMap & page_entries,
     Logger *       log)
 {
     const char * meta_data_end = meta_data + meta_data_size;
@@ -379,12 +384,14 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         // recover WriteBatch
         while (pos < wb_start_pos + wb_bytes_without_checksum)
         {
-            auto is_put = get<IsPut>(pos);
-            if (is_put)
+            const auto is_put     = get<IsPut>(pos);
+            const auto write_type = static_cast<WriteBatch::WriteType>(is_put);
+            switch (write_type)
             {
-
+            case WriteBatch::WriteType::PUT:
+            {
                 auto      page_id = get<PageId>(pos);
-                PageCache pc;
+                PageEntry pc;
                 pc.file_id  = file_id;
                 pc.level    = level;
                 pc.tag      = get<PageTag>(pos);
@@ -392,13 +399,22 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 pc.size     = get<PageSize>(pos);
                 pc.checksum = get<Checksum>(pos);
 
-                page_caches.put(page_id, pc);
+                page_entries.put(page_id, pc);
                 page_data_file_size += pc.size;
+                break;
             }
-            else
+            case WriteBatch::WriteType::DEL:
             {
                 auto page_id = get<PageId>(pos);
-                page_caches.del(page_id); // Reserve the order of removal.
+                page_entries.del(page_id); // Reserve the order of removal.
+                break;
+            }
+            case WriteBatch::WriteType::REF:
+            {
+                const auto ref_id  = get<PageId>(pos);
+                const auto page_id = get<PageId>(pos);
+                page_entries.ref(ref_id, page_id);
+            }
             }
         }
         // move `pos` over the checksum of WriteBatch
@@ -435,13 +451,13 @@ PageFile::Writer::~Writer()
     syncFile(meta_file_fd, meta_file_path);
 }
 
-void PageFile::Writer::write(const WriteBatch & wb, PageCacheMap & page_cache_map)
+void PageFile::Writer::write(const WriteBatch & wb, PageEntryMap & page_entries)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
     // TODO: investigate if not copy data into heap, write big pages can be faster?
     ByteBuffer meta_buf, data_buf;
-    std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, page_cache_map);
+    std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, page_entries);
 
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
@@ -470,12 +486,12 @@ PageFile::Reader::~Reader()
     ::close(data_file_fd);
 }
 
-PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
+PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
     // Sort in ascending order by offset in file.
-    std::sort(to_read.begin(), to_read.end(), [](const PageIdAndCache & a, const PageIdAndCache & b) {
+    std::sort(to_read.begin(), to_read.end(), [](const PageIdAndEntry & a, const PageIdAndEntry & b) {
         return a.second.offset < b.second.offset;
     });
 
@@ -524,12 +540,12 @@ PageMap PageFile::Reader::read(PageIdAndCaches & to_read)
     return page_map;
 }
 
-void PageFile::Reader::read(PageIdAndCaches & to_read, const PageHandler & handler)
+void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & handler)
 {
     ProfileEvents::increment(ProfileEvents::PSMReadPages, to_read.size());
 
     // Sort in ascending order by offset in file.
-    std::sort(to_read.begin(), to_read.end(), [](const PageIdAndCache & a, const PageIdAndCache & b) {
+    std::sort(to_read.begin(), to_read.end(), [](const PageIdAndEntry & a, const PageIdAndEntry & b) {
         return a.second.offset < b.second.offset;
     });
 
@@ -643,11 +659,11 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
     return PageFile(file_id, level, parent_path, false, false, log);
 }
 
-void PageFile::readAndSetPageMetas(PageCacheMap & page_caches)
+void PageFile::readAndSetPageMetas(PageEntryMap & page_entries)
 {
-    const auto path = metaPath();
-    Poco::File file(path);
-    size_t     file_size = file.getSize();
+    const auto   path = metaPath();
+    Poco::File   file(path);
+    const size_t file_size = file.getSize();
 
     int file_fd = openFile<true, false>(path);
     // File not exists.
@@ -658,9 +674,9 @@ void PageFile::readAndSetPageMetas(PageCacheMap & page_caches)
 
     readFile(file_fd, 0, data, file_size, path);
 
-    // analyze meta file and update page_caches
+    // analyze meta file and update page_entries
     std::tie(this->meta_file_pos, this->data_file_pos)
-        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, page_caches, log);
+        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, page_entries, log);
 }
 
 void PageFile::setFormal()

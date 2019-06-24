@@ -4,6 +4,7 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Poco/Logger.h>
 
 #include <Storages/Page/PageStorage.h>
 
@@ -17,10 +18,10 @@ void Usage(const char * prog)
             prog);
 }
 
-void printPageEntry(const DB::PageId pid, const DB::PageCache & entry)
+void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
-    printf("\tpid:%9lu\t\t"
-           "%9lu\t%u\t%u\t%9lu\t%9lu\t%016lx\n",
+    printf("\tpid:%9lld\t\t"
+           "%llu\t%u\t%u\t%9llu\t%llu\t%016llx\n",
            pid, //
            entry.file_id,
            entry.level,
@@ -45,8 +46,8 @@ int main(int argc, char ** argv)
     Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
     formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Logger::root().setChannel(formatting_channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel("trace");
 
     DB::String    path                    = argv[1];
     const int32_t MODE_DUMP_ALL_ENTRIES   = 1;
@@ -58,23 +59,25 @@ int main(int argc, char ** argv)
         Usage(argv[0]);
         return 1;
     }
-    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
+    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
 
-    DB::PageCacheMap valid_page_entries;
+    DB::PageEntryMap valid_page_entries;
     for (auto & page_file : page_files)
     {
-        DB::PageCacheMap page_entries;
+        DB::PageEntryMap page_entries;
         const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries);
         printf("File: page_%lu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
-        DB::PageIdAndCaches id_and_caches;
-        for (auto & [pid, entry] : page_entries)
+        DB::PageIdAndEntries id_and_caches;
+        for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
         {
+            const DB::PageId      pid   = iter.pageId();
+            const DB::PageEntry & entry = iter.pageEntry();
             id_and_caches.emplace_back(pid, entry);
             if (mode == MODE_DUMP_ALL_ENTRIES)
             {
                 printPageEntry(pid, entry);
             }
-            valid_page_entries[pid] = entry;
+            valid_page_entries.put(pid, entry);
         }
         // Read correspond page and check checksum
         auto reader = const_cast<DB::PageFile &>(page_file).createReader();
@@ -92,8 +95,10 @@ int main(int argc, char ** argv)
     if (mode == MODE_DUMP_VALID_ENTRIES)
     {
         printf("Valid page entries: %zu\n", valid_page_entries.size());
-        for (auto & [pid, entry] : valid_page_entries)
+        for (auto iter = valid_page_entries.cbegin(); iter != valid_page_entries.cend(); ++iter)
         {
+            const DB::PageId      pid   = iter.pageId();
+            const DB::PageEntry & entry = iter.pageEntry();
             printPageEntry(pid, entry);
         }
     }

@@ -9,8 +9,12 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <Poco/Logger.h>
+#include <Poco/File.h>
+#include <IO/ReadBufferFromMemory.h>
 
 #include <Storages/Page/PageStorage.h>
+#include <common/logger_useful.h>
 
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
@@ -37,11 +41,11 @@ public:
             DB::WriteBatch wb;
             // fill page with random bytes
             const size_t buff_sz = 2048 * 1024 + random() % 3000;
-            char         *buff = new char[buff_sz];
+            char *       buff    = new char[buff_sz];
             const char   buff_ch = random() % 0xFF;
             memset(buff, buff_ch, buff_sz);
             wb.putPage(pageId, 0, std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz), buff_sz);
-            delete []buff;
+            delete[] buff;
 
             ps->write(wb);
         }
@@ -106,9 +110,11 @@ int main(int argc, char ** argv)
     (void)argv;
 
     bool drop_before_run = false;
-    if (argc > 2) {
+    if (argc > 2)
+    {
         DB::String drop_str = argv[2];
-        if (drop_str == "drop") {
+        if (drop_str == "drop")
+        {
             drop_before_run = true;
         }
     }
