@@ -117,11 +117,14 @@ void MockTiDBTable::dbgFuncRenameTableForPartition(Context & context, const ASTs
 
 void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() != 2 && args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name[, drop-regions]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    bool drop_regions = true;
+    if (args.size() == 3)
+        drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
 
     MockTiDB::TablePtr table = nullptr;
     TableID table_id = InvalidTableID;
@@ -130,7 +133,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
         table = MockTiDB::instance().getTableByName(database_name, table_name);
         table_id = table->id();
     }
-    catch (Exception e)
+    catch (const Exception & e)
     {
         if (e.code() != ErrorCodes::UNKNOWN_TABLE)
             throw;
@@ -139,13 +142,14 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     }
 
     TMTContext & tmt = context.getTMTContext();
-    if (table->isPartitionTable())
+    if (table->isPartitionTable() && drop_regions)
     {
         auto partition_ids = table->getPartitionIDs();
         std::for_each(partition_ids.begin(), partition_ids.end(),
             [&](TableID partition_id) { tmt.getRegionTable().mockDropRegionsInTable(partition_id); });
     }
-    tmt.getRegionTable().mockDropRegionsInTable(table_id);
+    if (drop_regions)
+        tmt.getRegionTable().mockDropRegionsInTable(table_id);
 
     MockTiDB::instance().dropTable(database_name, table_name);
 
@@ -176,7 +180,7 @@ void MockTiDBTable::dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & 
 
     // TODO: Support partition table.
 
-    const NameAndTypePair & column = cols.getAllPhysical().front();
+    NameAndTypePair column = cols.getAllPhysical().front();
     MockTiDB::instance().addColumnToTable(database_name, table_name, column);
 
     std::stringstream ss;
@@ -226,7 +230,7 @@ void MockTiDBTable::dbgFuncModifyColumnInTiDBTable(DB::Context & context, const 
 
     // TODO: Support partition table.
 
-    const NameAndTypePair & column = cols.getAllPhysical().front();
+    NameAndTypePair column = cols.getAllPhysical().front();
     MockTiDB::instance().modifyColumnInTable(database_name, table_name, column);
 
     std::stringstream ss;

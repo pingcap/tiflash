@@ -362,7 +362,15 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     String table_info_json = getSchemaJson(table_id, context);
     if (table_info_json.empty())
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Table " << table_id << "doesn't exist in TiDB, it may have been dropped.");
+        /// Table dropped.
+        auto storage = tmt_context.getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << "doesn't exist in TiDB and doesn't exist in TMT, do nothing.");
+            return;
+        }
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << "doesn't exist in TiDB, dropping.");
+        dropTable(storage->getDatabaseName(), storage->getTableName(), context);
         return;
     }
 
@@ -472,7 +480,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     // TODO: Apply schema changes to partition tables.
 }
 
-int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context)
+TableID JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context)
 {
     String table_info_json = getSchemaJsonByName(database_name, table_name, context);
     if (table_info_json.empty())
@@ -484,12 +492,6 @@ int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const 
     }
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name << " info json: " << table_info_json);
-
-    // parse table id from table_info_json
-    if (table_info_json.empty())
-    {
-        return InvalidTableID;
-    }
 
     /// The JSON library does not support whitespace. We delete them. Inefficient.
     /// TODO: This may mis-delete innocent spaces/newlines enclosed by quotes, consider using some lexical way.
@@ -506,7 +508,7 @@ int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const 
 
     JSON json(out.str());
 
-    return json["id"].getInt();
+    return static_cast<TableID>(json["id"].getInt());
 }
 
 String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }

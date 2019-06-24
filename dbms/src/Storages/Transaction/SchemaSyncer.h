@@ -30,7 +30,7 @@ public:
      */
     virtual void syncSchema(TableID table_id, Context & context, bool force) = 0;
 
-    virtual int getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) = 0;
+    virtual TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
@@ -45,7 +45,7 @@ public:
 
     void syncSchema(TableID table_id, Context & context, bool force) override;
 
-    int getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) override;
+    TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) override;
 
 protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;

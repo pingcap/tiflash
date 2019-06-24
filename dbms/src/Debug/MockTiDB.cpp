@@ -33,10 +33,24 @@ String MockTiDB::getSchemaJson(TableID table_id)
     auto it = tables_by_id.find(table_id);
     if (it == tables_by_id.end())
     {
-        throw Exception("Mock TiDB table with ID " + toString(table_id) + " does not exists", ErrorCodes::UNKNOWN_TABLE);
+        return "";
     }
 
     return it->second->table_info.serialize(false);
+}
+
+TableID MockTiDB::getTableIDByName(const std::string & database_name, const std::string & table_name)
+{
+    std::lock_guard lock(tables_mutex);
+
+    String qualified_name = database_name + "." + table_name;
+    auto it = tables_by_name.find(qualified_name);
+    if (it == tables_by_name.end())
+    {
+        return InvalidTableID;
+    }
+
+    return it->second->table_info.id;
 }
 
 void MockTiDB::dropTable(const String & database_name, const String & table_name)

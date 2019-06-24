@@ -63,6 +63,12 @@ public:
 
     class MockSchemaSyncer : public JsonSchemaSyncer
     {
+    public:
+        TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & /*context*/) override
+        {
+            return MockTiDB::instance().getTableIDByName(database_name, table_name);
+        }
+
     protected:
         String getSchemaJson(TableID table_id, Context & /*context*/) override { return MockTiDB::instance().getSchemaJson(table_id); }
         String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override
@@ -76,6 +82,8 @@ public:
 
 public:
     String getSchemaJson(TableID table_id);
+
+    TableID getTableIDByName(const std::string & database_name, const std::string & table_name);
 
     TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns);
 
