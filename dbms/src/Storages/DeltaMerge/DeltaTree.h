@@ -31,6 +31,15 @@ static_assert(sizeof(UInt64) >= sizeof(DTModifiesPtr));
 #define isLeaf(p) (((*reinterpret_cast<size_t *>(p)) & 0x01) != 0)
 #define nodeName(p) (isLeaf(p) ? "leaf" : "intern")
 
+std::string addrToHex(const void * addr)
+{
+    if (!addr)
+        return "null";
+    std::stringstream ss;
+    ss << addr;
+    return ss.str();
+}
+
 /// DTMutation type available values.
 static constexpr UInt16 DT_INS           = 65535;
 static constexpr UInt16 DT_DEL           = 65534;
@@ -109,6 +118,12 @@ struct DTLeaf
     LeafPtr   prev   = nullptr;
     LeafPtr   next   = nullptr;
     InternPtr parent = nullptr;
+
+    std::string toString()
+    {
+        return "{count:" + DB::toString(count) + ",prev:" + addrToHex(prev) + ",next:" + addrToHex(next) + ",parent:" + addrToHex(parent)
+            + "}";
+    }
 
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
     inline UInt64 rid(size_t pos, Int64 delta) const { return sids[pos] + delta; }
@@ -290,6 +305,8 @@ struct DTIntern
 
     InternPtr parent = nullptr;
 
+    std::string toString() { return "{count:" + DB::toString(count) + ",parent:" + addrToHex(parent) + "}"; }
+
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
     inline UInt64 rid(size_t pos, Int64 delta) const { return sids[pos] + delta; }
 
@@ -451,6 +468,8 @@ class DTEntryIterator
 public:
     DTEntryIterator() = default;
     DTEntryIterator(LeafPtr leaf_, size_t pos_, Int64 delta_) : leaf(leaf_), pos(pos_), delta(delta_) {}
+
+    std::string toString() { return "{leaf:" + addrToHex(leaf) + ",pos:" + DB::toString(pos) + ",delta:" + DB::toString(delta) + "}"; }
 
     bool operator==(const DTEntryIterator & rhs) const { return leaf == rhs.leaf && pos == rhs.pos; }
     bool operator!=(const DTEntryIterator & rhs) const { return !(*this == rhs); }
@@ -713,7 +732,8 @@ public:
         std::tie(pos, delta)  = leaf->searchSid(sid, delta);
         EntryIterator it(leaf, pos, delta);
         if (unlikely(it != end() && pos == leaf->count))
-            throw Exception("Unexpected pos: sidLowerBound returns a passed the end entry of a node");
+            throw Exception("Unexpected pos: sidLowerBound returns a passed the end entry of a node. it: " + it.toString()
+                            + ", end:" + end().toString() + ", leaf: " + leaf->toString());
         else
             return it;
     }
