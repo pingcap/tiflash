@@ -51,8 +51,8 @@ public:
     Page    read(PageId page_id);
     PageMap read(const std::vector<PageId> & page_ids);
     void    read(const std::vector<PageId> & page_ids, PageHandler & handler);
-    void    traverse(std::function<void(const Page & page)> acceptor);
-    void    traversePageCache(std::function<void(PageId page_id, const PageCache & page)> acceptor);
+    void    traverse(const std::function<void(const Page & page)>& acceptor);
+    void    traversePageCache(const std::function<void(PageId page_id, const PageCache & page)>& acceptor);
     bool    gc();
 
     static std::set<PageFile, PageFile::Comparator>
@@ -90,7 +90,7 @@ private:
 
     std::mutex        write_mutex;
     std::shared_mutex read_mutex;
-    std::mutex        gc_mutex; // A mutex used to protect only gc
+    std::mutex        gc_mutex; // A mutex used to protect gc
 };
 
 } // namespace DB

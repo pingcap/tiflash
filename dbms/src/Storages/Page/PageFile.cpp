@@ -257,7 +257,7 @@ namespace PageMetaFormat
 using WBSize          = UInt32;
 using PageFileVersion = PageFile::Version;
 using PageTag         = UInt64;
-using IsPut           = UInt8;
+using IsPut           = std::underlying_type<WriteBatch::WriteType>::type;
 using PageOffset      = UInt64;
 using PageSize        = UInt32;
 using Checksum        = UInt64;
@@ -278,14 +278,18 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     for (const auto & write : wb.getWrites())
     {
         meta_write_bytes += sizeof(IsPut);
-        if (write.is_put)
-        {
-            data_write_bytes += write.size;
-            meta_write_bytes += PAGE_META_SIZE;
-        }
-        else
-        {
-            meta_write_bytes += sizeof(PageId); // For delete page, store page id only. And don't need to write data file.
+        switch (write.type) {
+            case WriteBatch::WriteType::PUT:
+                data_write_bytes += write.size;
+                meta_write_bytes += PAGE_META_SIZE;
+                break;
+            case WriteBatch::WriteType::DEL:
+                // For delete page, store page id only. And don't need to write data file.
+                meta_write_bytes += sizeof(PageId);
+                break;
+            case WriteBatch::WriteType::REF:
+                // TODO
+                break;
         }
     }
 
@@ -303,35 +307,43 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
     for (const auto & write : wb.getWrites())
     {
-        put(meta_pos, (IsPut)(write.is_put ? 1 : 0));
-        if (write.is_put)
+        put(meta_pos, static_cast<IsPut>(write.type));
+        switch (write.type)
         {
-            write.read_buffer->readStrict(data_pos, write.size);
-            Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
-            data_pos += write.size;
+            case WriteBatch::WriteType::PUT:
+            {
+                write.read_buffer->readStrict(data_pos, write.size);
+                Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
+                data_pos += write.size;
 
-            PageCache pc{};
-            pc.file_id  = page_file.getFileId();
-            pc.level    = page_file.getLevel();
-            pc.size     = write.size;
-            pc.offset   = page_data_file_off;
-            pc.checksum = page_checksum;
+                PageCache pc{};
+                pc.file_id = page_file.getFileId();
+                pc.level = page_file.getLevel();
+                pc.size = write.size;
+                pc.offset = page_data_file_off;
+                pc.checksum = page_checksum;
 
-            page_cache_map[write.page_id] = pc;
+                page_cache_map.put(write.page_id, pc);
 
-            put(meta_pos, (PageId)write.page_id);
-            put(meta_pos, (PageTag)write.tag);
-            put(meta_pos, (PageOffset)page_data_file_off);
-            put(meta_pos, (PageSize)write.size);
-            put(meta_pos, (Checksum)page_checksum);
+                put(meta_pos, (PageId) write.page_id);
+                put(meta_pos, (PageTag) write.tag);
+                put(meta_pos, (PageOffset) page_data_file_off);
+                put(meta_pos, (PageSize) write.size);
+                put(meta_pos, (Checksum) page_checksum);
 
-            page_data_file_off += write.size;
-        }
-        else
-        {
-            put(meta_pos, (PageId)write.page_id);
+                page_data_file_off += write.size;
+                break;
+            }
+            case WriteBatch::WriteType::DEL:
+            {
+                put(meta_pos, (PageId) write.page_id);
 
-            page_cache_map.erase(write.page_id);
+                page_cache_map.del(write.page_id);
+                break;
+            }
+            case WriteBatch::WriteType::REF:
+                //TODO
+                break;
         }
     }
 
@@ -390,7 +402,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         // recover WriteBatch
         while (pos < wb_start_pos + wb_bytes_without_checksum)
         {
-            auto is_put = get<UInt8>(pos);
+            auto is_put = get<IsPut>(pos);
             if (is_put)
             {
 
@@ -403,13 +415,13 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 pc.size     = get<PageSize>(pos);
                 pc.checksum = get<Checksum>(pos);
 
-                page_caches[page_id] = pc;
+                page_caches.put(page_id, pc);
                 page_data_file_size += pc.size;
             }
             else
             {
                 auto page_id = get<PageId>(pos);
-                page_caches.erase(page_id); // Reserve the order of removal.
+                page_caches.del(page_id); // Reserve the order of removal.
             }
         }
         // move `pos` over the checksum of WriteBatch
