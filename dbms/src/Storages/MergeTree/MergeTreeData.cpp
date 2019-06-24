@@ -505,7 +505,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             if (part->info.level == 0)
             {
                 /// It is impossible to restore level 0 parts.
-                LOG_ERROR(log, "Considering to remove broken part " << part->getFullPath() + file_name << " because it's impossible to repair.");
+                LOG_ERROR(log, "Considering to remove broken part " << part->getFullPath() << " because it's impossible to repair.");
                 broken_parts_to_remove.push_back(part);
             }
             else

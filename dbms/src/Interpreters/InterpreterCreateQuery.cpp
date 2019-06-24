@@ -102,7 +102,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     /// Create directories for tables metadata.
     String path = context.getPath();
-    String metadata_path = path + "metadata/" + database_name_escaped + "/";
+    String metadata_path = path + "metadata/" + database_name_escaped;
     Poco::File(metadata_path).createDirectory();
 
     DatabasePtr database = DatabaseFactory::get(database_engine_name, database_name, metadata_path, context);
