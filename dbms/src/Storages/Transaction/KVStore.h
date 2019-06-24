@@ -27,17 +27,17 @@ public:
 
     void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
 
-    void onSnapshot(RegionPtr region, RegionTable * context);
+    bool onSnapshot(RegionPtr new_region, RegionTable * region_table, const std::optional<UInt64> expect_old_index = {});
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & context);
 
     // Send all regions status to remote TiKV.
     void report(RaftContext & context);
 
-    // Persist and report those expired regions.
+    // Persist chosen regions.
     // Currently we also trigger region files GC in it.
-    bool tryPersistAndReport(RaftContext & context, const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD,
-        const Seconds region_persist_period = REGION_PERSIST_PERIOD);
+    bool tryPersist(
+        const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD, const Seconds region_persist_period = REGION_PERSIST_PERIOD);
 
     size_t regionSize() const;
 

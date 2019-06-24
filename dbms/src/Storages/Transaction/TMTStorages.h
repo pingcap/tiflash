@@ -12,12 +12,13 @@ namespace DB
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
 
-class TMTStorages
+class TMTStorages : private boost::noncopyable
 {
 public:
     void put(StoragePtr storage);
 
     StoragePtr get(TableID table_id) const;
+    std::unordered_map<TableID, StoragePtr> getAllStorage() const;
 
     StoragePtr getByName(const std::string & db, const std::string & table) const;
 

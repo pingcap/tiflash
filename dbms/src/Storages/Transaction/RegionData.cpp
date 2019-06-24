@@ -12,7 +12,8 @@ TableID RegionData::insert(ColumnFamilyType cf, const TiKVKey & key, const Strin
         case Write:
         {
             auto table_id = write_cf.insert(key, value, raw_key);
-            cf_data_size += key.dataSize() + value.dataSize();
+            if (table_id != InvalidTableID)
+                cf_data_size += key.dataSize() + value.dataSize();
             return table_id;
         }
         case Default:
@@ -26,7 +27,7 @@ TableID RegionData::insert(ColumnFamilyType cf, const TiKVKey & key, const Strin
             return lock_cf.insert(key, value, raw_key);
         }
         default:
-            throw Exception(" should not happen", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("RegionData::insert with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -47,6 +48,7 @@ void RegionData::removeWriteCF(const TableID & table_id, const TiKVKey & key, co
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
     Timestamp ts = RecordKVFormat::getTs(key);
+
     cf_data_size -= write_cf.remove(table_id, RegionWriteCFData::Key{handle_id, ts}, true);
 }
 
@@ -77,7 +79,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id
     return write_cf.getDataMut()[table_id].erase(write_it);
 }
 
-RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it) const
+RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it, bool need_value) const
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [handle, ts] = write_it->first;
@@ -85,6 +87,9 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const
     std::ignore = value;
 
     const auto & [write_type, prewrite_ts, short_value] = decoded_val;
+
+    if (!need_value)
+        return std::make_tuple(handle, write_type, ts, TiKVValue());
 
     if (write_type != PutFlag)
         return std::make_tuple(handle, write_type, ts, TiKVValue());
@@ -187,5 +192,7 @@ bool RegionData::isEqual(const RegionData & r2) const
 RegionData::RegionData(RegionData && data)
     : write_cf(std::move(data.write_cf)), default_cf(std::move(data.default_cf)), lock_cf(std::move(data.lock_cf))
 {}
+
+UInt8 RegionData::getWriteType(const WriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
 
 } // namespace DB

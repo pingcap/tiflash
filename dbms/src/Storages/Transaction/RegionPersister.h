@@ -22,12 +22,12 @@ public:
     {}
 
     void drop(RegionID region_id);
-    void persist(const RegionPtr & region, enginepb::CommandResponse * response = nullptr);
+    void persist(const RegionPtr & region);
     void restore(RegionMap & regions, RegionClientCreateFunc * func = nullptr);
     bool gc();
 
 private:
-    void doPersist(const RegionPtr & region, enginepb::CommandResponse * response = nullptr);
+    void doPersist(const RegionPtr & region);
 
 private:
     PageStorage page_storage;

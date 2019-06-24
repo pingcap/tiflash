@@ -352,25 +352,17 @@ public:
     void setUseL0Opt(bool use_l0_opt) ;
     bool useL0Opt() const;
 
-    void setPDAddrs(std::vector<String> addrs_) {
-        pd_addrs = std::move(addrs_);
-    }
-
-    void setLearnerKey(std::string key_) {
-        learner_key = key_;
-    }
-
-    void setLearnerValue(std::string value_) {
-        learner_value = value_;
-    }
-
     BackgroundProcessingPool & getBackgroundPool();
 
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
     DDLWorker & getDDLWorker() const;
 
     void initializeRaftService(const std::string & service_addr);
-    void createTMTContext();
+    void createTMTContext(const std::vector<std::string> & pd_addrs,
+                          const std::string & learner_key,
+                          const std::string & learner_value,
+                          const std::string & kvstore_path,
+                          const std::string & region_mapping_path);
     RaftService & getRaftService();
 
     void initializePartPathSelector(const std::vector<std::string> & all_path);
@@ -458,12 +450,6 @@ private:
 
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
-
-    std::vector<String> pd_addrs;
-
-    std::string learner_key;
-
-    std::string learner_value;
 };
 
 

@@ -211,6 +211,8 @@ protected:
         row_ref.columns = &row_ref.shared_block->sort_columns;
     }
 
+    virtual void initQueue();
+
 private:
 
     /** We support two different cursors - with Collation and without.

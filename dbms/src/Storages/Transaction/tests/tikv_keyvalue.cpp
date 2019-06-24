@@ -249,5 +249,13 @@ int main(int, char **)
         assert(CHTableHandle::UInt64TableHandle::max == new_range[1].second);
     }
 
+    {
+        std::string s = "1234";
+        s[0] = char(1);
+        s[3] = char(111);
+        TiKVKey key(s);
+        assert(key.toHex() == "[1 32 33 6f]");
+    }
+
     return res ? 0 : 1;
 }
