@@ -62,7 +62,7 @@ void MockTiDB::dropTable(const String & database_name, const String & table_name
     tables_by_name.erase(it_by_name);
 }
 
-ColumnInfo && getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
+ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
 {
     ColumnInfo column_info;
     column_info.id = id;
@@ -99,7 +99,7 @@ ColumnInfo && getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID i
 #undef M
     throw DB::Exception("Invalid ?", ErrorCodes::LOGICAL_ERROR);
 
-    return std::move(column_info);
+    return column_info;
 }
 
 TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns)
@@ -126,8 +126,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     int i = 0;
     for (auto & column : columns.getAllPhysical())
     {
-        ColumnInfo column_info = getColumnInfoFromColumn(column, i++);
-        table_info.columns.emplace_back(column_info);
+        table_info.columns.emplace_back(getColumnInfoFromColumn(column, i++));
     }
 
     table_info.pk_is_handle = false;
