@@ -33,6 +33,7 @@ protected:
 
 TEST_F(PageStorage_test, WriteRead)
 {
+    const UInt64 tag = 0;
     const size_t buf_sz = 1024;
     char c_buff[buf_sz];
     for (size_t i = 0; i < buf_sz; ++i)
@@ -43,9 +44,9 @@ TEST_F(PageStorage_test, WriteRead)
     {
         WriteBatch batch;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff,sizeof(c_buff));
-        batch.putPage(0, 0, buff, buf_sz);
+        batch.putPage(0, tag, buff, buf_sz);
         buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, 0, buff, buf_sz);
+        batch.putPage(1, tag, buff, buf_sz);
         storage->write(batch);
     }
 
@@ -63,6 +64,59 @@ TEST_F(PageStorage_test, WriteRead)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
+
+    // put ref page
+    {
+        WriteBatch batch;
+        // RefPage0 -> Page0
+        batch.putRefPage(0, 0, tag);
+        // RefPage2 -> Page0
+        batch.putRefPage(2, 0, tag);
+        storage->write(batch);
+    }
+    // if update PageId == 0 or PageId == 2, both RefPage0 && RefPage2 get updated
+    {
+        // update RefPage0
+        WriteBatch batch;
+        memset(c_buff, 0x00, buf_sz);
+        batch.putPage(0, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        // check RefPage0 and RefPage2 both get updated
+
+        // update RefPage2
+        memset(c_buff, 0x02, buf_sz);
+        batch.putPage(2, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
+        // check RefPage0 and RefPage2 both get updated
+    }
+
+    {
+        // tests for delete Page
+        // delete RefPage0, RefPage2 don't get deleted
+        {
+            WriteBatch batch;
+            batch.delPage(0);
+            storage->write(batch);
+            EXPECT_FALSE(storage->getCache(0).isValid());
+            EXPECT_TRUE(storage->getCache(2).isValid());
+        }
+        // delete RefPage2, Page0 get deleted
+        {
+            WriteBatch batch;
+            batch.delPage(2);
+            storage->write(batch);
+            EXPECT_FALSE(storage->getCache(2).isValid());
+        }
+    }
+
+
+    // put ref page to ref page, ref path collapse to normal page
+    {
+        WriteBatch batch;
+        // RefPage3 -> Page1
+        batch.putRefPage(3, 1, tag);
+        // RefPage4 -> RefPage3 -> Page1
+        batch.putRefPage(4, 3, tag);
+    }
+
 }
 
 TEST_F(PageStorage_test, WriteReadGc)
@@ -136,7 +190,7 @@ TEST_F(PageStorage_test, GcConcurrencyDelPage)
     PageId pid = 0;
     // gc move Page0 -> PageFile{5,1}
     PageCacheMap map;
-    map.emplace(pid, PageCache{.file_id=1, .level=0});
+    map.put(pid, PageCache{.file_id=1, .level=0});
     // write thread del Page0 in page_map before gc thread get unique_lock of `read_mutex`
     storage->page_cache_map.clear();
     // gc continue
@@ -160,10 +214,10 @@ TEST_F(PageStorage_test, GcPageMove)
 
     const PageId pid = 0;
     // old Page0 is in PageFile{5, 0}
-    storage->page_cache_map.emplace(pid, PageCache{.file_id=5, .level=0,});
+    storage->page_cache_map.put(pid, PageCache{.file_id=5, .level=0,});
     // gc move Page0 -> PageFile{5,1}
     PageCacheMap map;
-    map.emplace(pid, PageCache{.file_id=5, .level=1,});
+    map.put(pid, PageCache{.file_id=5, .level=1,});
     storage->gcUpdatePageMap(map);
     // page_map get updated
     const PageCache entry = storage->getCache(pid);
@@ -177,9 +231,9 @@ TEST_F(PageStorage_test, GcConcurrencySetPage)
     const PageId pid = 0;
     // gc move Page0 -> PageFile{5,1}
     PageCacheMap map;
-    map.emplace(pid, PageCache{.file_id=5, .level=1,});
+    map.put(pid, PageCache{.file_id=5, .level=1,});
     // write thread insert newer Page0 before gc thread get unique_lock on `read_mutex`
-    storage->page_cache_map.emplace(pid, PageCache{.file_id=6, .level=0,});
+    storage->page_cache_map.put(pid, PageCache{.file_id=6, .level=0,});
     // gc continue
     storage->gcUpdatePageMap(map);
     // read
