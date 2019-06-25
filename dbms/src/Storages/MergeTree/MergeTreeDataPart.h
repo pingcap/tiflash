@@ -234,6 +234,8 @@ struct MergeTreeDataPart
     /// Changes only relative_dir_name, you need to update other metadata (name, is_temp) explicitly
     void renameTo(const String & new_relative_path, bool remove_new_dir_if_exists = true) const;
 
+    void moveFrom(const String & from, const String & new_relative_path, bool remove_new_dir_if_exists = true) const;
+
     /// Renames a part by appending a prefix to the name. To_detached - also moved to the detached directory.
     void renameAddPrefix(bool to_detached, const String & prefix) const;
 

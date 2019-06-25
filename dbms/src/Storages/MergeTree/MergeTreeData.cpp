@@ -445,6 +445,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     LOG_DEBUG(log, "Loading data parts");
 
     Strings part_file_names;
+    Strings part_file_parent_paths;
     Poco::DirectoryIterator end;
     for (const String & path : context.getAllPath()) {
         String data_path = getDataPartsPath(path);
@@ -456,6 +457,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
                 continue;
 
             part_file_names.push_back(it.name());
+            part_file_parent_paths.push_back(data_path);
         }
         LOG_DEBUG(log, "After loading data parts from path: " << data_path << " current part_file_names length: " << part_file_names.size());
     }
@@ -468,13 +470,19 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     std::lock_guard<std::mutex> lock(data_parts_mutex);
     data_parts_indexes.clear();
 
-    for (const String & file_name : part_file_names)
+    for (unsigned i = 0; i < part_file_names.size(); i++)
     {
+        const String & file_name = part_file_names[i];
+        const String & parent_path = part_file_parent_paths[i];
         MergeTreePartInfo part_info;
         if (!MergeTreePartInfo::tryParsePartName(file_name, &part_info, format_version))
             continue;
 
         MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info);
+        if (part->full_path_prefix != parent_path)
+        {
+            part->moveFrom(parent_path + file_name, file_name);
+        }
         part->relative_path = file_name;
         bool broken = false;
 
