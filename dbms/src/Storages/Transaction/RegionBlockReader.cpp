@@ -1,3 +1,4 @@
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -277,11 +278,30 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                     // Check overflow for potential un-synced data type widen,
                     // i.e. schema is old and narrow, meanwhile data is new and wide.
                     // So far only integers is possible of overflow.
-                    if (tp->isInteger()
-                        || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isInteger()))
+                    auto nested_tp = tp->isNullable() ? dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType() : tp;
+                    auto & orig_column = *it->second.first;
+                    auto & nested_column = it->second.first->isColumnNullable()
+                        ? dynamic_cast<ColumnNullable &>(*it->second.first).getNestedColumn()
+                        : *it->second.first;
+                    auto inserted_index = orig_column.size() - 1;
+                    if (!orig_column.isNullAt(inserted_index) && nested_tp->isInteger())
                     {
-                        // Check by bitwise compare between the inserted value (casted to column type) and original value in row.
-                        if (unlikely(it->second.first->get64(it->second.first->size() - 1) != row[i + 1].get<UInt64>()))
+                        bool overflow = false;
+                        if (nested_tp->isUnsignedInteger())
+                        {
+                            // Unsigned checking by bitwise compare.
+                            UInt64 inserted = nested_column.get64(inserted_index);
+                            UInt64 orig = row[i + 1].get<UInt64>();
+                            overflow = inserted != orig;
+                        }
+                        else
+                        {
+                            // Singed checking by arithmetical cast.
+                            Int64 inserted = nested_column.getInt(inserted_index);
+                            Int64 orig = row[i + 1].get<Int64>();
+                            overflow = inserted != orig;
+                        }
+                        if (overflow)
                         {
                             // Overflow detected, fatal if force_decode is true,
                             // as schema being newer and narrow shouldn't happen.
