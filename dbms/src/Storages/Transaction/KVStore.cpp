@@ -24,7 +24,7 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::
     region_persister.restore(regions, const_cast<RegionClientCreateFunc *>(&region_client_create));
     LOG_INFO(log, "restore regions done");
 
-    // Remove regions which pending_remove = true, those regions still exist because progress crash after persisted and before removal.
+    // Remove regions whose state = Tombstone, those regions still exist because progress crash after persisted and before removal.
     if (regions_to_remove != nullptr)
     {
         for (auto & p : regions)
@@ -162,7 +162,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
         const auto report_sync_log = [&]() {
             if (result.sync_log)
             {
-                LOG_INFO(log, "Sync status: " << curr_region->toString(true));
+                LOG_INFO(log, curr_region->toString(true) << " response for sync");
                 region_report();
             }
         };

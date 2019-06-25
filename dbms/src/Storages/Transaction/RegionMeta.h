@@ -23,26 +23,25 @@ using RegionRange = std::pair<TiKVKey, TiKVKey>;
 class RegionMeta
 {
 public:
-    RegionMeta(const metapb::Peer & peer_, const metapb::Region & region_, const raft_serverpb::RaftApplyState & apply_state_)
-        : peer(peer_),
-          region(region_),
-          apply_state(apply_state_),
+    RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_,
+        raft_serverpb::RegionLocalState region_state_)
+        : peer(std::move(peer_)),
+          apply_state(std::move(apply_state_)),
+          applied_term(applied_term_),
+          region_state(std::move(region_state_)),
+          region_id(region_state.region().id())
+    {}
+
+    RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_)
+        : peer(std::move(peer_)),
+          apply_state(std::move(apply_state_)),
           applied_term(apply_state.truncated_state().term()),
           region_id(region.id())
-    {}
-
-    RegionMeta(const metapb::Peer & peer_, const metapb::Region & region_, const raft_serverpb::RaftApplyState & apply_state_,
-        UInt64 applied_term_, bool pending_remove_)
-        : peer(peer_),
-          region(region_),
-          apply_state(apply_state_),
-          applied_term(applied_term_),
-          region_id(region.id()),
-          pending_remove(pending_remove_)
-    {}
+    {
+        *region_state.mutable_region() = std::move(region);
+    }
 
     RegionMeta(RegionMeta && meta);
-    RegionMeta(const RegionMeta & meta);
 
     RegionID regionId() const;
     UInt64 peerId() const;
@@ -54,14 +53,13 @@ public:
     RegionRange getRange() const;
 
     metapb::Peer getPeer() const;
-    metapb::Region getRegion() const;
     pingcap::kv::RegionVerID getRegionVerID() const;
 
     UInt64 version() const;
 
     UInt64 confVer() const;
 
-    const raft_serverpb::RaftApplyState & getApplyState() const;
+    raft_serverpb::RaftApplyState getApplyState() const;
 
     void setApplied(UInt64 index, UInt64 term);
     void notifyAll();
@@ -70,21 +68,16 @@ public:
 
     enginepb::CommandResponse toCommandResponse() const;
 
-    size_t serializeSize() const;
     size_t serialize(WriteBuffer & buf) const;
 
     static RegionMeta deserialize(ReadBuffer & buf);
 
-    bool isPendingRemove() const;
-    void setPendingRemove();
+    raft_serverpb::PeerState peerState() const;
+    void setPeerState(const raft_serverpb::PeerState peer_state_);
 
     void assignRegionMeta(RegionMeta && other);
 
-    friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
-    {
-        return meta1.peer == meta2.peer && meta1.region == meta2.region && meta1.apply_state == meta2.apply_state
-            && meta1.applied_term == meta2.applied_term;
-    }
+    friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
     void waitIndex(UInt64 index);
     bool checkIndex(UInt64 index);
@@ -92,27 +85,27 @@ public:
     bool isPeerRemoved() const;
 
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    void execCompactLog(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
 
 private:
-    void doSetPendingRemove();
-
     void doSetRegion(const metapb::Region & region);
 
     void doSetApplied(UInt64 index, UInt64 term);
 
-    bool doCheckIndex(UInt64 index);
+    bool doCheckIndex(UInt64 index) const;
 
 private:
     metapb::Peer peer;
-    metapb::Region region;
+
+    // raft_serverpb::RaftApplyState contains applied_index_ and it's truncated_state_ can be used for CompactLog.
     raft_serverpb::RaftApplyState apply_state;
     UInt64 applied_term;
-    const RegionID region_id;
 
-    bool pending_remove = false;
+    raft_serverpb::RegionLocalState region_state;
 
     mutable std::mutex mutex;
     std::condition_variable cv;
+    const RegionID region_id;
 };
 
 // TODO: Integrate initialApplyState to MockTiKV

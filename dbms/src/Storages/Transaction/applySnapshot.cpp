@@ -105,7 +105,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         }
         return nullptr;
     };
-    auto new_region = std::make_shared<Region>(meta, region_client_create);
+    auto new_region = std::make_shared<Region>(std::move(meta), region_client_create);
 
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 

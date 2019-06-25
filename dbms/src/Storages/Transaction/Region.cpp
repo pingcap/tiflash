@@ -15,7 +15,7 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
 
-const UInt32 Region::CURRENT_VERSION = 0;
+const UInt32 Region::CURRENT_VERSION = 1;
 
 const std::string Region::lock_cf_name = "lock";
 const std::string Region::default_cf_name = "default";
@@ -94,26 +94,29 @@ UInt64 Region::getIndex() const
 
 UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
 
-RegionPtr Region::splitInto(const RegionMeta & meta)
+RegionPtr Region::splitInto(RegionMeta meta)
 {
     RegionPtr new_region;
     if (client != nullptr)
-        new_region = std::make_shared<Region>(meta, [&](pingcap::kv::RegionVerID) {
-            return std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, meta.getRegionVerID());
+    {
+        new_region = std::make_shared<Region>(std::move(meta), [&](pingcap::kv::RegionVerID ver_id) {
+            return std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, ver_id);
         });
+    }
     else
-        new_region = std::make_shared<Region>(meta);
+        new_region = std::make_shared<Region>(std::move(meta));
 
-    data.splitInto(meta.getRange(), new_region->data);
+    data.splitInto(new_region->getRange(), new_region->data);
 
     return new_region;
 }
 
-void Region::execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
+void Region::execChangePeer(
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
 
-    LOG_INFO(log, toString() << " change peer " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
+    LOG_INFO(log, "Region [" << id() << "] change peer " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
     meta.execChangePeer(request, response, index, term);
 }
@@ -129,15 +132,14 @@ const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
 }
 
 Regions Region::execBatchSplit(
-    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
+    const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
-    const auto & split_reqs = request.splits();
     const auto & new_region_infos = response.splits().regions();
 
-    if (split_reqs.requests().empty())
+    if (new_region_infos.empty())
     {
-        LOG_ERROR(log, "execBatchSplit: empty split requests");
-        return {};
+        LOG_ERROR(log, toString() << ", [execBatchSplit] empty BatchSplitResponse, at [index: " << index << ", term: " << term << "]");
+        throw Exception("[execBatchSplit] empty BatchSplitResponse, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 
     std::vector<RegionPtr> split_regions;
@@ -153,7 +155,7 @@ Regions Region::execBatchSplit(
             {
                 const auto & peer = findPeer(region_info, meta.storeId());
                 RegionMeta new_meta(peer, region_info, initialApplyState());
-                auto split_region = splitInto(new_meta);
+                auto split_region = splitInto(std::move(new_meta));
                 split_regions.emplace_back(split_region);
             }
             else
@@ -161,12 +163,12 @@ Regions Region::execBatchSplit(
                 if (new_region_index == -1)
                     new_region_index = i;
                 else
-                    throw Exception("Region::execBatchSplit duplicate region index", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("[execBatchSplit] duplicate region index", ErrorCodes::LOGICAL_ERROR);
             }
         }
 
         if (new_region_index == -1)
-            throw Exception("Region::execBatchSplit region index not found", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("[execBatchSplit] region index not found", ErrorCodes::LOGICAL_ERROR);
 
         RegionMeta new_meta(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState());
         new_meta.setApplied(index, term);
@@ -177,9 +179,20 @@ Regions Region::execBatchSplit(
     for (const auto & region : split_regions)
         ids << region->id() << ",";
     ids << id();
-    LOG_INFO(log, toString() << " split into [" << ids.str() << "]");
+    LOG_INFO(log, "Region [" << id() << "] split into [" << ids.str() << "]");
 
     return split_regions;
+}
+
+void Region::execCompactLog(
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
+{
+    const auto & compact_log_request = request.compact_log();
+    LOG_INFO(log,
+        "Region [" << id() << "] execute compact log, compact_term: " << compact_log_request.compact_term()
+                   << ", compact_index: " << compact_log_request.compact_index());
+
+    meta.execCompactLog(request, response, index, term);
 }
 
 RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
@@ -217,8 +230,8 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
         auto type = request.cmd_type();
 
         LOG_INFO(log,
-            "Region [" << region_id << "] execute admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term
-                       << ", index: " << index << "]");
+            toString() << " execute admin command " << raft_cmdpb::AdminCmdType_Name(type) << " at [term: " << term << ", index: " << index
+                       << "]");
 
         switch (type)
         {
@@ -242,11 +255,16 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 break;
             }
             case raft_cmdpb::AdminCmdType::CompactLog:
+                execCompactLog(request, response, index, term);
+                break;
             case raft_cmdpb::AdminCmdType::ComputeHash:
             case raft_cmdpb::AdminCmdType::VerifyHash:
                 // Ignore
                 meta.setApplied(index, term);
                 break;
+            case raft_cmdpb::AdminCmdType::PrepareMerge:
+            case raft_cmdpb::AdminCmdType::CommitMerge:
+            case raft_cmdpb::AdminCmdType::RollbackMerge:
             default:
                 throw Exception("Unsupported admin command type " + raft_cmdpb::AdminCmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
                 break;
@@ -389,11 +407,11 @@ ColumnFamilyType Region::getCf(const std::string & cf)
 
 RegionID Region::id() const { return meta.regionId(); }
 
-bool Region::isPendingRemove() const { return meta.isPendingRemove(); }
+bool Region::isPendingRemove() const { return meta.peerState() == raft_serverpb::PeerState::Tombstone; }
 
 void Region::setPendingRemove()
 {
-    meta.setPendingRemove();
+    meta.setPeerState(raft_serverpb::PeerState::Tombstone);
     meta.notifyAll();
 }
 
