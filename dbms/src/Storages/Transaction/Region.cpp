@@ -216,7 +216,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 // special cmd, used to heart beat and sync log, just ignore
             }
             else
-                LOG_WARNING(log, toString() + " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+                LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
             return result;
         }
     }
@@ -380,7 +380,8 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * r
 {
     auto version = readBinary2<UInt32>(buf);
     if (version != Region::CURRENT_VERSION)
-        throw Exception("Unexpected region version: " + DB::toString(version) + ", expected: " + DB::toString(CURRENT_VERSION),
+        throw Exception(
+            "[Region::deserialize] unexpected version: " + DB::toString(version) + ", expected: " + DB::toString(CURRENT_VERSION),
             ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
     auto region = region_client_create == nullptr ? std::make_shared<Region>(RegionMeta::deserialize(buf))
@@ -542,8 +543,8 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
                 if (is_deleted != ori_del)
                 {
                     LOG_ERROR(log,
-                        "WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: " << ori_del
-                                                           << " , current: " << is_deleted);
+                        "[compareAndCompleteSnapshot] WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: "
+                                                                                        << ori_del << " , current: " << is_deleted);
                     throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
                 }
                 handle_map.erase(it);
