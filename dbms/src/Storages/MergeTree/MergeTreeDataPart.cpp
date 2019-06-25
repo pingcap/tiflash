@@ -401,9 +401,10 @@ void MergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_n
 }
 
 
-void MergeTreeDataPart::moveFrom(const String & from, const String & new_relative_path, bool remove_new_dir_if_exists) const
+void MergeTreeDataPart::moveFrom(const String & from_path, const String & new_relative_path, bool remove_new_dir_if_exists) const
 {
-    String to = full_path_prefix + new_relative_path + "/";
+    String from = from_path + new_relative_path + "/";
+    String to = full_path_prefix + new_relative_path;
     LOG_DEBUG(storage.log, "Part file " << from << " will be moved to " << to);
 
     Poco::File from_file(from);
