@@ -750,7 +750,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         auto safe_point = tmt.getPDClient()->getGCSafePoint();
         if (mvcc_query_info.read_tso < safe_point)
-            throw Exception("read tso: " + std::to_string(mvcc_query_info.read_tso) + " is smaller than safe point : " + std::to_string(safe_point));
+            throw Exception("read tso: " + std::to_string(mvcc_query_info.read_tso) + " is smaller than safe point : " + std::to_string(safe_point), ErrorCodes::LOGICAL_ERROR);
 
         const size_t min_marks_for_seek = computeMinMarksForSeek(settings, data);
 
@@ -790,7 +790,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         std::sort(invalid_regions.begin(), invalid_regions.end());
         for (Int64 i = invalid_regions.size() - 1; i >= 0; i--) {
             auto it = regions_query_info.begin() + invalid_regions[i];
-            std::cout<<"push : " << it->region_id << std::endl;
             context.query_context->invalid_region_ids.push_back(it->region_id);
             regions_query_info.erase(it);
         }

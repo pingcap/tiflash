@@ -854,7 +854,6 @@ void TCPHandler::sendRegionException(const std::vector<UInt64> & region_ids) {
     writeVarUInt(Protocol::Server::RegionException, *out);
     writeVarUInt(region_ids.size(), *out);
     for (size_t i = 0; i < region_ids.size(); i++) {
-        std::cout<<"write error: "<< region_ids[i]<<std::endl;
         writeVarUInt(region_ids[i], *out);
     }
     out->next();
