@@ -318,13 +318,13 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         case WriteBatch::WriteType::DEL:
             put(meta_pos, (PageId)write.page_id);
 
-            page_entry_map.del(write.page_id);
+            page_entry_map.del<false>(write.page_id);
             break;
         case WriteBatch::WriteType::REF:
             put(meta_pos, static_cast<PageId>(write.page_id));
             put(meta_pos, static_cast<PageId>(write.ori_page_id));
 
-            page_entry_map.ref(write.page_id, write.ori_page_id);
+            page_entry_map.ref<false>(write.page_id, write.ori_page_id);
             break;
         }
     }

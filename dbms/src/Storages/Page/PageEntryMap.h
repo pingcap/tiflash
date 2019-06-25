@@ -2,11 +2,18 @@
 
 #include <unordered_map>
 
+#include <IO/WriteHelpers.h>
+#include <common/likely.h>
+
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 class PageEntryMap
 {
@@ -17,19 +24,22 @@ public:
 
     inline bool empty() const { return normal_pages.empty(); }
 
-    // Update Page{page_id} / RefPage{page_id} entry
-    // If page_id is a ref-id of RefPage, it will
-    // find corresponding Page and update that Page,
-    // all other RefPages reference to that Page get updated.
+    // Update Page{page_id} / RefPage{page_id} entry.
+    // If page_id is a ref-id of RefPage, it will find corresponding Page
+    // and update that Page, all other RefPages reference to that Page get updated.
     void put(PageId page_id, const PageEntry & entry);
 
-    // Delete RefPage{page_id} and decrease corresponding Page ref-count
-    // if origin Page ref-count down to 0, the Page is gone forever
+    // Delete RefPage{page_id} and decrease corresponding Page ref-count.
+    // if origin Page ref-count down to 0, the Page is erased from entry map
+    // template must_exist = true ensure that corresponding Page must exist.
+    template <bool must_exist = true>
     void del(PageId page_id);
 
-    // Bind RefPage{ref_id} to Page{page_id}
-    // If page+id is a ref-id of RefPage, it will
-    // find corresponding Page and bind ref-id to that Page.
+    // Bind RefPage{ref_id} to Page{page_id}.
+    // If page+id is a ref-id of RefPage, it will find corresponding Page
+    // and bind ref-id to that Page.
+    // template must_exist = true ensure that corresponding Page must exist.
+    template <bool must_exist = true>
     void ref(PageId ref_id, PageId page_id);
 
     inline void clear()
@@ -56,6 +66,7 @@ private:
         return page_id;
     }
 
+    template <bool must_exist = true>
     void decreasePageRef(PageId page_id);
 
 public:
@@ -128,11 +139,10 @@ public:
 
     inline iterator       end() { return iterator(page_ref.end(), normal_pages); }
     inline const_iterator end() const { return const_iterator(page_ref.end(), normal_pages); }
-    inline iterator       begin() { return iterator(page_ref.begin(), normal_pages); }
-    inline const_iterator begin() const { return const_iterator(page_ref.begin(), normal_pages); }
 
+    // read only scan
     inline const_iterator cend() const { return const_iterator(page_ref.cend(), normal_pages); }
-    inline const_iterator cbegin() { return const_iterator(page_ref.cbegin(), normal_pages); }
+    inline const_iterator cbegin() const { return const_iterator(page_ref.cbegin(), normal_pages); }
 
     inline iterator       find(const PageId page_id) { return iterator(page_ref.find(page_id), normal_pages); }
     inline const_iterator find(const PageId page_id) const { return const_iterator(page_ref.find(page_id), normal_pages); }
@@ -157,5 +167,72 @@ public:
         return *this;
     }
 };
+
+template <bool must_exist>
+void PageEntryMap::del(PageId page_id)
+{
+    // Note: must resolve ref-id before erasing entry in `page_ref`
+    const PageId normal_page_id = resolveRefId(page_id);
+    page_ref.erase(page_id);
+
+    // decrease origin page's ref counting
+    decreasePageRef<must_exist>(normal_page_id);
+}
+
+template <bool must_exist>
+void PageEntryMap::ref(const PageId ref_id, const PageId page_id)
+{
+    // if `page_id` is a ref-id, collapse the ref-path to actual PageId
+    // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
+    const PageId normal_page_id = resolveRefId(page_id);
+    auto         iter           = normal_pages.find(normal_page_id);
+    if (likely(iter != normal_pages.end()))
+    {
+        // if RefPage{ref_id} already exist, release that ref first
+        const auto ori_ref = page_ref.find(ref_id);
+        if (unlikely(ori_ref != page_ref.end()))
+        {
+            decreasePageRef<must_exist>(ori_ref->second);
+        }
+        // build ref
+        page_ref[ref_id] = normal_page_id;
+        iter->second.ref += 1;
+    }
+    else
+    {
+        if constexpr (must_exist)
+        {
+            throw Exception("Adding RefPage" + DB::toString(ref_id) + " to non-exist Page" + DB::toString(page_id),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+        else
+        {
+            // else accept dangling ref if we are writing to a tmp entry map.
+            // like entry map of WriteBatch or Gc or AnalyzeMeta
+            // TODO: do we need add dangling ref records?
+            //page_ref[ref_id] = normal_page_id;
+        }
+    }
+}
+
+template <bool must_exist>
+void PageEntryMap::decreasePageRef(const PageId page_id)
+{
+    auto iter = normal_pages.find(page_id);
+    if constexpr (must_exist)
+    {
+        assert(iter != normal_pages.end());
+    }
+    if (iter != normal_pages.end())
+    {
+        auto & cache = iter->second;
+        cache.ref -= 1;
+        if (cache.ref == 0)
+        {
+            normal_pages.erase(iter);
+        }
+    }
+}
+
 
 } // namespace DB

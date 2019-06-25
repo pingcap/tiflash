@@ -66,7 +66,7 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
         }
     }
 
-    for (auto iter = page_entry_map.begin(); iter != page_entry_map.end(); ++iter)
+    for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
     {
         max_page_id = std::max(max_page_id, iter.pageId());
     }
@@ -233,7 +233,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
     {
-        for (auto iter = page_entry_map.begin(); iter != page_entry_map.end(); ++iter)
+        for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
         {
             const PageId      page_id    = iter.pageId();
             const PageEntry & page_entry = iter.pageEntry();
@@ -257,7 +257,7 @@ void PageStorage::traversePageEntries( //
     std::shared_lock lock(read_mutex);
 
     // traverse over pages not referred by any RefPages
-    for (auto iter = page_entry_map.begin(); iter != page_entry_map.end(); ++iter)
+    for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
     {
         const PageId      page_id    = iter.pageId();
         const PageEntry & page_entry = iter.pageEntry();
@@ -295,7 +295,7 @@ bool PageStorage::gc()
 
         std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>> file_valid_pages;
         {
-            for (auto iter = page_entry_map.begin(); iter != page_entry_map.end(); ++iter)
+            for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
             {
                 const PageId      page_id                    = iter.pageId();
                 const PageEntry & page_entry                 = iter.pageEntry();
@@ -481,7 +481,7 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
 
 void PageStorage::gcUpdatePageMap(const PageEntryMap & gc_pages_map)
 {
-    for (auto iter = gc_pages_map.begin(); iter != gc_pages_map.end(); ++iter)
+    for (auto iter = gc_pages_map.cbegin(); iter != gc_pages_map.cend(); ++iter)
     {
         const PageId      page_id    = iter.pageId();
         const PageEntry & page_entry = iter.pageEntry();

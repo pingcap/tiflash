@@ -10,17 +10,12 @@ TEST(PageEntryMap_test, Empty)
     PageEntryMap map;
     ASSERT_TRUE(map.empty());
     size_t item_count = 0;
-    for (auto iter = map.begin(); iter != map.end(); ++iter)
-    {
-        item_count += 1;
-    }
-    ASSERT_EQ(item_count, 0);
-    item_count = 0;
     for (auto iter = map.cbegin(); iter != map.cend(); ++iter)
     {
         item_count += 1;
     }
-    ASSERT_EQ(item_count, 0);
+    ASSERT_EQ(item_count, 0UL);
+    ASSERT_EQ(map.size(), 0UL);
 
 
     // add some Pages, RefPages
@@ -29,32 +24,22 @@ TEST(PageEntryMap_test, Empty)
     map.ref(1, 0);
     ASSERT_FALSE(map.empty());
     item_count = 0;
-    for (auto iter = map.begin(); iter != map.end(); ++iter)
-    {
-        item_count += 1;
-    }
-    ASSERT_EQ(item_count, 2);
-    item_count = 0;
     for (auto iter = map.cbegin(); iter != map.cend(); ++iter)
     {
         item_count += 1;
     }
-    ASSERT_EQ(item_count, 2);
+    ASSERT_EQ(item_count, 2UL);
+    ASSERT_EQ(map.size(), 2UL);
 
     map.clear();
     ASSERT_TRUE(map.empty());
     item_count = 0;
-    for (auto iter = map.begin(); iter != map.end(); ++iter)
-    {
-        item_count += 1;
-    }
-    ASSERT_EQ(item_count, 0);
-    item_count = 0;
     for (auto iter = map.cbegin(); iter != map.cend(); ++iter)
     {
         item_count += 1;
     }
-    ASSERT_EQ(item_count, 0);
+    ASSERT_EQ(item_count, 0UL);
+    ASSERT_EQ(map.size(), 0UL);
 }
 
 TEST(PageEntryMap_test, UpdatePageEntry)
@@ -264,7 +249,7 @@ TEST(PageEntryMap_test, Scan)
 
     // scan through all RefPages {0, 1, 10, 11}
     std::set<PageId> page_ids;
-    for (auto iter = map.begin(); iter != map.end(); ++iter)
+    for (auto iter = map.cbegin(); iter != map.cend(); ++iter)
     {
         page_ids.insert(iter.pageId());
         if (iter.pageId() % 10 == 0)
@@ -289,7 +274,7 @@ TEST(PageEntryMap_test, Scan)
     map.clear();
     ASSERT_TRUE(map.empty());
     page_ids.clear();
-    for (auto iter = map.begin(); iter != map.end(); ++iter)
+    for (auto iter = map.cbegin(); iter != map.cend(); ++iter)
     {
         page_ids.insert(iter.pageId());
     }
