@@ -17,9 +17,9 @@ template <typename T>
 struct AggregateFunctionAvgData
 {
     T sum;
-    UInt64 count = 0;
+    UInt64 count;
 
-    AggregateFunctionAvgData(){sum = T(0);}
+    AggregateFunctionAvgData():sum(0), count(0){}
 };
 
 

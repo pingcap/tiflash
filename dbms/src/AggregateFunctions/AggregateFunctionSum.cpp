@@ -59,10 +59,10 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
     else if ((res = createDecimalFunction<Decimal128>(p)) != nullptr) {}
     else if ((res = createDecimalFunction<Decimal256>(p)) != nullptr) {}
     else
-        res = AggregateFunctionPtr(createWithNumericType<Function>(*argument_types[0]));
+        res = AggregateFunctionPtr(createWithNumericType<Function>(*p));
 
     if (!res)
-        throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("Illegal type " + p->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
