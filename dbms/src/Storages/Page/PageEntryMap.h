@@ -42,6 +42,21 @@ public:
     template <bool must_exist = true>
     void ref(PageId ref_id, PageId page_id);
 
+    bool isRefExists(PageId ref_id, PageId page_id) const
+    {
+        const PageId normal_page_id = resolveRefId(page_id);
+        const auto   ref_pair       = page_ref.find(ref_id);
+        if (ref_pair != page_ref.end())
+        {
+            return ref_pair->second == normal_page_id;
+        }
+        else
+        {
+            // ref_id not exists.
+            return false;
+        }
+    }
+
     inline void clear()
     {
         page_ref.clear();
@@ -147,6 +162,18 @@ public:
     inline iterator       find(const PageId page_id) { return iterator(page_ref.find(page_id), normal_pages); }
     inline const_iterator find(const PageId page_id) const { return const_iterator(page_ref.find(page_id), normal_pages); }
 
+    using normal_page_iterator       = std::unordered_map<PageId, PageEntry>::iterator;
+    using const_normal_page_iterator = std::unordered_map<PageId, PageEntry>::const_iterator;
+    // only scan over normal Pages, excluding RefPages
+    inline const_normal_page_iterator pages_cbegin() const { return normal_pages.cbegin(); }
+    inline const_normal_page_iterator pages_cend() const { return normal_pages.cend(); }
+
+    using ref_pair_iterator       = std::unordered_map<PageId, PageId>::iterator;
+    using const_ref_pair_iterator = std::unordered_map<PageId, PageId>::const_iterator;
+    // only scan over ref-pairs
+    inline const_ref_pair_iterator ref_pairs_cbegin() const { return page_ref.cbegin(); }
+    inline const_ref_pair_iterator ref_pairs_cend() const { return page_ref.cend(); }
+
 private:
     std::unordered_map<PageId, PageEntry> normal_pages;
     std::unordered_map<PageId, PageId>    page_ref; // RefPageId -> PageId
@@ -192,6 +219,9 @@ void PageEntryMap::ref(const PageId ref_id, const PageId page_id)
         const auto ori_ref = page_ref.find(ref_id);
         if (unlikely(ori_ref != page_ref.end()))
         {
+            // if RefPage{ref-id} -> Page{normal_page_id} already exists, just ignore
+            if (ori_ref->second == normal_page_id)
+                return;
             decreasePageRef<must_exist>(ori_ref->second);
         }
         // build ref
@@ -210,7 +240,7 @@ void PageEntryMap::ref(const PageId ref_id, const PageId page_id)
             // else accept dangling ref if we are writing to a tmp entry map.
             // like entry map of WriteBatch or Gc or AnalyzeMeta
             // TODO: do we need add dangling ref records?
-            //page_ref[ref_id] = normal_page_id;
+            page_ref[ref_id] = normal_page_id;
         }
     }
 }

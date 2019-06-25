@@ -4,12 +4,16 @@
 #include <random>
 
 #include <Poco/ConsoleChannel.h>
+#include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <common/logger_useful.h>
 
+#include <IO/ReadBufferFromMemory.h>
 #include <Storages/Page/PageStorage.h>
 
 using PSPtr = std::shared_ptr<DB::PageStorage>;
