@@ -91,7 +91,7 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
         auto nullable_type = checkAndGetDataType<DataTypeNullable>(nested_type);
         nested_type = nullable_type->getNestedType().get();
     }
-    if (column.type->isUnsignedInteger())
+    if (nested_type->isUnsignedInteger())
     {
         column_info.setUnsignedFlag();
     }
@@ -111,7 +111,18 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
     else
     COLUMN_TYPES(M)
 #undef M
-    throw DB::Exception("Invalid ?", ErrorCodes::LOGICAL_ERROR);
+    if (checkDataType<DataTypeUInt8>(nested_type))
+        column_info.tp = TiDB::TypeTiny;
+    else if (checkDataType<DataTypeUInt16>(nested_type))
+        column_info.tp = TiDB::TypeShort;
+    else if (checkDataType<DataTypeUInt32>(nested_type))
+        column_info.tp = TiDB::TypeLong;
+    else
+        throw DB::Exception("Invalid ?", ErrorCodes::LOGICAL_ERROR);
+
+    // UInt64 is hijacked by the macro expansion, we check it again.
+    if (checkDataType<DataTypeUInt64>(nested_type))
+        column_info.tp = TiDB::TypeLongLong;
 
     return column_info;
 }
