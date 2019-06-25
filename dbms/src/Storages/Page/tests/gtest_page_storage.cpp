@@ -1,5 +1,8 @@
 #include "gtest/gtest.h"
 
+#include <IO/ReadBufferFromMemory.h>
+#include <Poco/File.h>
+
 #define private public
 #include <Storages/Page/PageStorage.h>
 #undef private
