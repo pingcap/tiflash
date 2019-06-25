@@ -288,17 +288,18 @@ bool PageStorage::gc()
     PageEntryMap                 gc_file_page_entry_map;
 
     {
-        /// Select the GC candidates and write them into an new file.
+        /// Select the GC candidates files and migrate valid pages into an new file.
         /// Since we don't update any shared information, only a read lock is sufficient.
 
         std::shared_lock lock(read_mutex);
 
         std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>> file_valid_pages;
         {
-            for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
+            // only scan over normal Pages, excluding RefPages
+            for (auto iter = page_entry_map.pages_cbegin(); iter != page_entry_map.pages_cend(); ++iter)
             {
-                const PageId      page_id                    = iter.pageId();
-                const PageEntry & page_entry                 = iter.pageEntry();
+                const PageId      page_id                    = iter->first;
+                const PageEntry & page_entry                 = iter->second;
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry.fileIdLevel()];
                 valid_size += page_entry.size;
                 valid_page_ids_in_file.push_back(page_id);
@@ -404,30 +405,35 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
 PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const
 {
     PageEntryMap gc_file_page_entries;
+
     // merge `merge_files` to PageFile which PageId = max of all `merge_files` and level = level + 1
     auto [largest_file_id, level] = *(merge_files.rbegin());
     PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
 
     size_t num_successful_migrate_pages = 0;
+    size_t num_valid_ref_pages          = 0;
     {
+        PageEntryMap legacy_entries; // All page entries in `merge_files`
         // No need to sync after each write. Do sync before closing is enough.
         auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
 
         for (const auto & file_id_level : merge_files)
         {
+            PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
+            // Note: This file may not contain any valid page, but valid RefPages which we need to migrate
+            to_merge_file.readAndSetPageMetas(legacy_entries); // TODO accept dangling ref
+
             auto it = file_valid_pages.find(file_id_level);
             if (it == file_valid_pages.end())
             {
                 // This file does not contain any valid page.
                 continue;
             }
-            const auto & page_ids = it->second.second;
 
-            PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
-            auto     to_merge_file_reader = to_merge_file.createReader();
-
+            auto             to_merge_file_reader = to_merge_file.createReader();
             PageIdAndEntries page_id_and_entries;
             {
+                const auto & page_ids = it->second.second;
                 for (auto page_id : page_ids)
                 {
                     auto it2 = page_entry_map.find(page_id);
@@ -464,27 +470,43 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
                 gc_file_writer->write(wb, gc_file_page_entries);
             }
         }
+
+        {
+            // Migrate RefPages which are still valid.
+            WriteBatch batch;
+            for (auto iter = legacy_entries.ref_pairs_cbegin(); iter != legacy_entries.ref_pairs_cend(); ++iter)
+            {
+                if (page_entry_map.isRefExists(iter->first, iter->second))
+                {
+                    batch.putRefPage(iter->first, iter->second);
+                    num_valid_ref_pages += 1;
+                }
+            }
+            gc_file_writer->write(batch, gc_file_page_entries);
+        }
     }
 
-    if (gc_file_page_entries.empty())
+    if (gc_file_page_entries.empty() && num_valid_ref_pages == 0)
     {
         gc_file.destroy();
     }
     else
     {
         gc_file.setFormal();
-        auto id = gc_file.fileIdLevel();
-        LOG_DEBUG(log, "GC have migrated " << num_successful_migrate_pages << " regions to PageFile_" << id.first << "_" << id.second);
+        const auto id = gc_file.fileIdLevel();
+        LOG_DEBUG(log,
+                  "GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages << " RefPages to PageFile_"
+                                      << id.first << "_" << id.second);
     }
     return gc_file_page_entries;
 }
 
 void PageStorage::gcUpdatePageMap(const PageEntryMap & gc_pages_map)
 {
-    for (auto iter = gc_pages_map.cbegin(); iter != gc_pages_map.cend(); ++iter)
+    for (auto iter = gc_pages_map.pages_cbegin(); iter != gc_pages_map.pages_cend(); ++iter)
     {
-        const PageId      page_id    = iter.pageId();
-        const PageEntry & page_entry = iter.pageEntry();
+        const PageId      page_id    = iter->first;
+        const PageEntry & page_entry = iter->second;
         auto              current    = page_entry_map.find(page_id);
         // if the gc page have already been remove, just ignore it
         if (current == page_entry_map.end())

@@ -39,9 +39,9 @@ public:
         writes.emplace_back(w);
     }
 
-    void putRefPage(PageId page_id, PageId ori_page_id, UInt64 tag)
+    void putRefPage(PageId page_id, PageId ori_page_id)
     {
-        Write w = {WriteType::REF, page_id, tag, {}, 0, ori_page_id};
+        Write w = {WriteType::REF, page_id, 0, {}, 0, ori_page_id};
         writes.emplace_back(w);
     }
 

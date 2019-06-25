@@ -1,8 +1,13 @@
 #include "gtest/gtest.h"
 
-#include <Poco/File.h>
-#include <Poco/Logger.h>
 #include <IO/ReadBufferFromMemory.h>
+#include <Poco/AutoPtr.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/File.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
+#include <Poco/PatternFormatter.h>
+#include <common/logger_useful.h>
 
 #define private public
 #include <Storages/Page/PageStorage.h>
@@ -19,6 +24,16 @@ public:
     PageStorage_test() : path("./t"), storage() {}
 
 protected:
+    static void SetUpTestCase()
+    {
+        Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
+        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
+        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
+        Logger::root().setChannel(formatting_channel);
+        Logger::root().setLevel("trace");
+    }
+
     void SetUp() override
     {
         // drop dir if exists
@@ -242,11 +257,12 @@ protected:
 
 TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
 {
+    /// update on RefPage, all references get updated.
     const UInt64 tag = 0;
     // put ref page: RefPage3 -> Page2
     {
         WriteBatch batch;
-        batch.putRefPage(3, 2, tag);
+        batch.putRefPage(3, 2);
         storage->write(batch);
     }
     const size_t buf_sz = 1024;
@@ -296,12 +312,11 @@ TEST_F(PageStorageWith2Pages_test, UpdateRefPages)
 
 TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
 {
-    const UInt64 tag = 0;
     // put ref page: RefPage3 -> Page2, RefPage4 -> Page2
     {
         WriteBatch batch;
-        batch.putRefPage(3, 2, tag);
-        batch.putRefPage(4, 2, tag);
+        batch.putRefPage(3, 2);
+        batch.putRefPage(4, 2);
         storage->write(batch);
     }
     { // tests for delete Page
@@ -326,14 +341,12 @@ TEST_F(PageStorageWith2Pages_test, DeleteRefPages)
 TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
 {
     /// put ref page to ref page, ref path collapse to normal page
-    const UInt64 tag = 0;
-
     {
         WriteBatch batch;
         // RefPage3 -> Page1
-        batch.putRefPage(3, 1, tag);
+        batch.putRefPage(3, 1);
         // RefPage4 -> RefPage3 -> Page1
-        batch.putRefPage(4, 3, tag);
+        batch.putRefPage(4, 3);
         storage->write(batch);
     }
 

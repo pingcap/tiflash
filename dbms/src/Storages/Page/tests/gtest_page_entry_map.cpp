@@ -153,6 +153,24 @@ TEST(PageEntryMap_test, AddIllegalRef)
     ASSERT_FALSE(map.empty());
 }
 
+TEST(PageEntryMap_test, PutDuplicateRef)
+{
+    PageEntryMap map;
+    PageEntry    p0entry{.checksum = 0xFF};
+    map.put(0, p0entry);
+    ASSERT_EQ(map.at(0).checksum, p0entry.checksum);
+
+    // if put RefPage1 -> Page0 twice, the second ref call is collapse
+    map.ref(1, 0);
+    ASSERT_EQ(map.at(1).checksum, p0entry.checksum);
+    map.ref(1, 0);
+    ASSERT_EQ(map.at(1).checksum, p0entry.checksum);
+
+    map.del(0);
+    ASSERT_EQ(map.find(0), map.end());
+    ASSERT_EQ(map.at(1).checksum, p0entry.checksum);
+}
+
 TEST(PageEntryMap_test, PutRefOnRef)
 {
     PageEntryMap map;
