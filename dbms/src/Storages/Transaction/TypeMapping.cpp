@@ -35,24 +35,24 @@ struct SignedType : public std::false_type
     using UnsignedType = T;
 };
 template <>
-struct SignedType<Int8> : public std::true_type
+struct SignedType<DataTypeInt8> : public std::true_type
 {
-    using UnsignedType = UInt8;
+    using UnsignedType = DataTypeUInt8;
 };
 template <>
-struct SignedType<Int16> : public std::true_type
+struct SignedType<DataTypeInt16> : public std::true_type
 {
-    using UnsignedType = UInt16;
+    using UnsignedType = DataTypeUInt16;
 };
 template <>
-struct SignedType<Int32> : public std::true_type
+struct SignedType<DataTypeInt32> : public std::true_type
 {
-    using UnsignedType = UInt32;
+    using UnsignedType = DataTypeUInt32;
 };
 template <>
-struct SignedType<Int64> : public std::true_type
+struct SignedType<DataTypeInt64> : public std::true_type
 {
-    using UnsignedType = UInt64;
+    using UnsignedType = DataTypeUInt64;
 };
 template <typename T>
 inline constexpr bool IsSignedType = SignedType<T>::value;

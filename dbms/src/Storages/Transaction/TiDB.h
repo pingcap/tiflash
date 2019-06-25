@@ -37,7 +37,7 @@ using DB::Timestamp;
     M(Double, 5, Float, Float64, false)              \
     M(Null, 6, Nil, Nothing, false)                  \
     M(Timestamp, 7, Int, DateTime, false)            \
-    M(Longlong, 8, Int, Int64, false)                \
+    M(LongLong, 8, Int, Int64, false)                \
     M(Int24, 9, VarInt, Int32, true)                 \
     M(Date, 10, Int, Date, false)                    \
     M(Time, 11, Duration, Int64, false)              \
