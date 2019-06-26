@@ -1,5 +1,6 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
@@ -44,8 +45,8 @@ int main(int argc, char ** argv)
     Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
     formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Logger::root().setChannel(formatting_channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel("trace");
 
     DB::String    path                    = argv[1];
     const int32_t MODE_DUMP_ALL_ENTRIES   = 1;
@@ -57,13 +58,13 @@ int main(int argc, char ** argv)
         Usage(argv[0]);
         return 1;
     }
-    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
+    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
 
     DB::PageEntryMap valid_page_entries;
     for (auto & page_file : page_files)
     {
         DB::PageEntryMap page_entries;
-        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries);
+        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries, false);
         printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
         for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
         {

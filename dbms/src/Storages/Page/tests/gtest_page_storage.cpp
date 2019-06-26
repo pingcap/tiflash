@@ -9,6 +9,12 @@
 #include <Poco/PatternFormatter.h>
 #include <common/logger_useful.h>
 
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/PageEntryMap.h>
+#include <Storages/Page/PageFile.h>
+#include <Storages/Page/WriteBatch.h>
+
 #define private public
 #include <Storages/Page/PageStorage.h>
 #undef private
@@ -42,10 +48,16 @@ protected:
         {
             file.remove(true);
         }
+        // default test config
         config.file_roll_size               = 512;
         config.merge_hint_low_used_file_num = 1;
 
-        storage = std::make_shared<PageStorage>(path, config);
+        storage = reopenWithConfig(config);
+    }
+
+    std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config)
+    {
+        return std::make_shared<PageStorage>(path, config);
     }
 
 protected:
@@ -89,7 +101,7 @@ TEST_F(PageStorage_test, WriteRead)
     }
 }
 
-TEST_F(PageStorage_test, WriteReadGc)
+TEST_F(PageStorage_test, WriteReadAfterGc)
 {
     const size_t buf_sz = 256;
     char         c_buff[buf_sz];
@@ -152,6 +164,59 @@ TEST_F(PageStorage_test, WriteReadGc)
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(num_repeat % 0xff));
         }
     }
+}
+
+TEST_F(PageStorage_test, GcMigrateValidRefPages)
+{
+    const size_t buf_sz      = 1024;
+    char         buf[buf_sz] = {0};
+    const PageId ref_id      = 1024;
+    const PageId page_id     = 32;
+
+    const PageId placeholder_page_id = 33;
+    const PageId deleted_ref_id      = 1025;
+
+    {
+        // prepare ref page record without any valid pages
+        PageStorage::Config tmp_config(config);
+        tmp_config.file_roll_size = 1;
+        storage                   = reopenWithConfig(tmp_config);
+        {
+            // this batch is written to PageFile{1,0}
+            WriteBatch batch;
+            batch.putPage(page_id, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
+            storage->write(batch);
+        }
+        {
+            // this batch is written to PageFile{2,0}
+            WriteBatch batch;
+            batch.putRefPage(ref_id, page_id);
+            batch.delPage(page_id);
+            // deleted ref pages will not migrate
+            batch.putRefPage(deleted_ref_id, page_id);
+            batch.putPage(placeholder_page_id, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
+            storage->write(batch);
+        }
+        {
+            // this batch is written to PageFile{3,0}
+            WriteBatch batch;
+            batch.delPage(deleted_ref_id);
+            storage->write(batch);
+        }
+        const PageEntry entry2 = storage->getEntry(ref_id);
+        ASSERT_TRUE(entry2.isValid());
+    }
+
+    const PageStorage::GcLivesPages lives_pages;
+    PageStorage::GcCandidates       candidates;
+    //candidates.insert(PageFileIdAndLevel{1, 0});
+    candidates.insert(PageFileIdAndLevel{2, 0});
+    const PageEntryMap gc_file_entries = storage->gcMigratePages(lives_pages, candidates);
+    ASSERT_FALSE(gc_file_entries.empty());
+    // check the ref is migrated.
+    ASSERT_TRUE(gc_file_entries.isRefExists(ref_id, page_id));
+    // check the deleted ref is not migrated.
+    ASSERT_FALSE(gc_file_entries.isRefExists(deleted_ref_id, page_id));
 }
 
 TEST_F(PageStorage_test, GcConcurrencyDelPage)
@@ -228,6 +293,9 @@ TEST_F(PageStorage_test, GcConcurrencySetPage)
     ASSERT_EQ(entry.level, 0);
 }
 
+/**
+ * PageStorage tests with predefine Page1 && Page2
+ */
 class PageStorageWith2Pages_test : public PageStorage_test
 {
 public:
@@ -376,6 +444,100 @@ TEST_F(PageStorageWith2Pages_test, PutRefPagesOverRefPages)
         {
             EXPECT_EQ(*(page4.data.begin() + i), 0x01);
         }
+    }
+}
+
+TEST_F(PageStorageWith2Pages_test, PutDuplicateRefPages)
+{
+    /// put duplicated RefPages in different WriteBatch
+    {
+        WriteBatch batch;
+        batch.putRefPage(3, 1);
+        storage->write(batch);
+
+        WriteBatch batch2;
+        batch2.putRefPage(3, 1);
+        storage->write(batch);
+        // now Page1's entry has ref count == 2 but not 3
+    }
+    PageEntry entry1 = storage->getEntry(1);
+    ASSERT_TRUE(entry1.isValid());
+    PageEntry entry3 = storage->getEntry(3);
+    ASSERT_TRUE(entry3.isValid());
+
+    EXPECT_EQ(entry1.fileIdLevel(), entry3.fileIdLevel());
+    EXPECT_EQ(entry1.offset, entry3.offset);
+    EXPECT_EQ(entry1.size, entry3.size);
+    EXPECT_EQ(entry1.checksum, entry3.checksum);
+
+    // check Page1's entry has ref count == 2 but not 1
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        storage->write(batch);
+        PageEntry entry_after_del1 = storage->getEntry(3);
+        ASSERT_TRUE(entry_after_del1.isValid());
+        EXPECT_EQ(entry1.fileIdLevel(), entry_after_del1.fileIdLevel());
+        EXPECT_EQ(entry1.offset, entry_after_del1.offset);
+        EXPECT_EQ(entry1.size, entry_after_del1.size);
+        EXPECT_EQ(entry1.checksum, entry_after_del1.checksum);
+
+        WriteBatch batch2;
+        batch2.delPage(3);
+        storage->write(batch2);
+        PageEntry entry_after_del2 = storage->getEntry(3);
+        ASSERT_FALSE(entry_after_del2.isValid());
+    }
+}
+
+TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
+{
+    /// put duplicated RefPages due to ref-path-collapse
+    {
+        WriteBatch batch;
+        // RefPage3 -> Page1
+        batch.putRefPage(3, 1);
+        // RefPage4 -> RefPage3, collapse to RefPage4 -> Page1
+        batch.putRefPage(4, 3);
+        storage->write(batch);
+
+        WriteBatch batch2;
+        // RefPage4 -> Page1, duplicated due to ref-path-collapse
+        batch2.putRefPage(4, 1);
+        storage->write(batch);
+        // now Page1's entry has ref count == 3 but not 2
+    }
+
+    PageEntry entry1 = storage->getEntry(1);
+    ASSERT_TRUE(entry1.isValid());
+    PageEntry entry3 = storage->getEntry(3);
+    ASSERT_TRUE(entry3.isValid());
+    PageEntry entry4 = storage->getEntry(4);
+    ASSERT_TRUE(entry4.isValid());
+
+    EXPECT_EQ(entry1.fileIdLevel(), entry4.fileIdLevel());
+    EXPECT_EQ(entry1.offset, entry4.offset);
+    EXPECT_EQ(entry1.size, entry4.size);
+    EXPECT_EQ(entry1.checksum, entry4.checksum);
+
+    // check Page1's entry has ref count == 3 but not 2
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        batch.delPage(4);
+        storage->write(batch);
+        PageEntry entry_after_del2 = storage->getEntry(3);
+        ASSERT_TRUE(entry_after_del2.isValid());
+        EXPECT_EQ(entry1.fileIdLevel(), entry_after_del2.fileIdLevel());
+        EXPECT_EQ(entry1.offset, entry_after_del2.offset);
+        EXPECT_EQ(entry1.size, entry_after_del2.size);
+        EXPECT_EQ(entry1.checksum, entry_after_del2.checksum);
+
+        WriteBatch batch2;
+        batch2.delPage(3);
+        storage->write(batch2);
+        PageEntry entry_after_del3 = storage->getEntry(3);
+        ASSERT_FALSE(entry_after_del3.isValid());
     }
 }
 
