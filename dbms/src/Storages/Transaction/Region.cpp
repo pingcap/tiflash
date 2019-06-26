@@ -116,7 +116,7 @@ void Region::execChangePeer(
 {
     const auto & change_peer_request = request.change_peer();
 
-    LOG_INFO(log, toString(false) << " change peer " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
+    LOG_INFO(log, toString(false) << " execute change type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
     meta.execChangePeer(request, response, index, term);
 }

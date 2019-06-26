@@ -333,7 +333,7 @@ void KVStore::removeRegion(RegionID region_id, RegionTable * region_table)
     if (region_table)
         region_table->removeRegion(region);
 
-    LOG_INFO(log, "Remove [region " << region_id << "] end");
+    LOG_INFO(log, "Remove [region " << region_id << "] done");
 }
 
 void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)
