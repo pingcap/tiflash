@@ -66,7 +66,7 @@ raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 void RegionMeta::doSetRegion(const metapb::Region & region)
 {
     if (regionId() != region.id())
-        throw Exception("RegionMeta::doSetRegion region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("[RegionMeta::doSetRegion] region id is not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     *region_state.mutable_region() = region;
 }
@@ -186,7 +186,7 @@ void RegionMeta::assignRegionMeta(RegionMeta && rhs)
     std::lock_guard<std::mutex> lock(mutex);
 
     if (regionId() != rhs.regionId())
-        throw Exception("RegionMeta::assignRegionMeta region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("[RegionMeta::assignRegionMeta] region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     peer = std::move(rhs.peer);
     apply_state = std::move(rhs.apply_state);
@@ -227,7 +227,7 @@ void RegionMeta::execChangePeer(
             return;
         }
         default:
-            throw Exception("execChangePeer: unsupported cmd", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("[RegionMeta::execChangePeer] unsupported cmd", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
