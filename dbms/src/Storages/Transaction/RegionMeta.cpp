@@ -126,16 +126,18 @@ RegionRange RegionMeta::getRange() const
 std::string RegionMeta::toString(bool dump_status) const
 {
     std::stringstream ss;
-    UInt64 term = 0;
-    UInt64 index = 0;
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        term = applied_term;
-        index = apply_state.applied_index();
-    }
-    ss << "region[id: " << regionId();
+    ss << "[region " << regionId();
     if (dump_status)
-        ss << ", term: " << term << ", applied_index: " << index;
+    {
+        UInt64 term = 0;
+        UInt64 index = 0;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            term = applied_term;
+            index = apply_state.applied_index();
+        }
+        ss << ", applied_term: " << term << ", applied_index: " << index;
+    }
     ss << "]";
     return ss.str();
 }
