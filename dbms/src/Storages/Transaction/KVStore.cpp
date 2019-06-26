@@ -170,7 +170,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
         const auto persist_region = [&](const RegionPtr & region) {
             LOG_INFO(log, "Start to persist " << region->toString(true) << ", cache size: " << region->dataSize() << " bytes");
             region_persister.persist(region);
-            LOG_INFO(log, "Persist region " << region->id() << " done");
+            LOG_INFO(log, "Persist " << region->toString(false) << " done");
         };
 
         const auto persist_and_sync = [&]() {
