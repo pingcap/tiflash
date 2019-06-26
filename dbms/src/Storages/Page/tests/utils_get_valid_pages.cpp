@@ -1,5 +1,6 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
@@ -65,9 +66,9 @@ int main(int argc, char ** argv)
     for (auto & page_file : page_files)
     {
         DB::PageEntryMap page_entries;
-        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries);
-        printf("File: page_%lu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
         DB::PageIdAndEntries id_and_caches;
+        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries, false);
+        printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
         for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
         {
             const DB::PageId      pid   = iter.pageId();

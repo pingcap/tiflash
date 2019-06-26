@@ -22,23 +22,27 @@ public:
 
     inline PageEntry & at(const PageId page_id) { return normal_pages.at(resolveRefId(page_id)); }
 
-    inline bool empty() const { return normal_pages.empty(); }
+    inline bool empty() const { return normal_pages.empty() && page_ref.empty(); }
 
-    // Update Page{page_id} / RefPage{page_id} entry.
-    // If page_id is a ref-id of RefPage, it will find corresponding Page
-    // and update that Page, all other RefPages reference to that Page get updated.
+    /** Update Page{page_id} / RefPage{page_id} entry. If it's a new page_id,
+     *  create a RefPage{page_id} -> Page{page_id} at the same time.
+     *  If page_id is a ref-id of RefPage, it will find corresponding Page
+     *  and update that Page, all other RefPages reference to that Page get updated.
+     */
     void put(PageId page_id, const PageEntry & entry);
 
-    // Delete RefPage{page_id} and decrease corresponding Page ref-count.
-    // if origin Page ref-count down to 0, the Page is erased from entry map
-    // template must_exist = true ensure that corresponding Page must exist.
+    /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
+     *  if origin Page ref-count down to 0, the Page is erased from entry map
+     *  template must_exist = true ensure that corresponding Page must exist.
+     */
     template <bool must_exist = true>
     void del(PageId page_id);
 
-    // Bind RefPage{ref_id} to Page{page_id}.
-    // If page+id is a ref-id of RefPage, it will find corresponding Page
-    // and bind ref-id to that Page.
-    // template must_exist = true ensure that corresponding Page must exist.
+    /** Bind RefPage{ref_id} to Page{page_id}.
+     *  If page+id is a ref-id of RefPage, it will find corresponding Page
+     *  and bind ref-id to that Page.
+     *  template must_exist = true ensure that corresponding Page must exist.
+     */
     template <bool must_exist = true>
     void ref(PageId ref_id, PageId page_id);
 

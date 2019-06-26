@@ -339,6 +339,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 }
 
 /// Analyze meta file, and return <available meta size, available data size>.
+template <bool check_map_is_complete>
 std::pair<UInt64, UInt64> analyzeMetaFile( //
     const String & path,
     PageFileId     file_id,
@@ -406,14 +407,14 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             case WriteBatch::WriteType::DEL:
             {
                 auto page_id = get<PageId>(pos);
-                page_entries.del(page_id); // Reserve the order of removal.
+                page_entries.del<check_map_is_complete>(page_id); // Reserve the order of removal.
                 break;
             }
             case WriteBatch::WriteType::REF:
             {
                 const auto ref_id  = get<PageId>(pos);
                 const auto page_id = get<PageId>(pos);
-                page_entries.ref(ref_id, page_id);
+                page_entries.ref<check_map_is_complete>(ref_id, page_id);
             }
             }
         }
@@ -659,7 +660,7 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
     return PageFile(file_id, level, parent_path, false, false, log);
 }
 
-void PageFile::readAndSetPageMetas(PageEntryMap & page_entries)
+void PageFile::readAndSetPageMetas(PageEntryMap & page_entries, bool check_map_is_complete)
 {
     const auto   path = metaPath();
     Poco::File   file(path);
@@ -675,8 +676,16 @@ void PageFile::readAndSetPageMetas(PageEntryMap & page_entries)
     readFile(file_fd, 0, data, file_size, path);
 
     // analyze meta file and update page_entries
-    std::tie(this->meta_file_pos, this->data_file_pos)
-        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, page_entries, log);
+    if (check_map_is_complete)
+    {
+        std::tie(this->meta_file_pos, this->data_file_pos)
+            = PageMetaFormat::analyzeMetaFile<true>(folderPath(), file_id, level, data, file_size, page_entries, log);
+    }
+    else
+    {
+        std::tie(this->meta_file_pos, this->data_file_pos)
+            = PageMetaFormat::analyzeMetaFile<false>(folderPath(), file_id, level, data, file_size, page_entries, log);
+    }
 }
 
 void PageFile::setFormal()

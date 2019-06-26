@@ -90,7 +90,8 @@ public:
 
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
-    void readAndSetPageMetas(PageEntryMap & page_entries);
+    /// if check_page_map_complete is true, do del or ref on non-exist page will throw exception.
+    void readAndSetPageMetas(PageEntryMap & page_entries, bool check_page_map_complete);
 
     /// Rename this page file into formal style.
     void setFormal();

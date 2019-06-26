@@ -57,7 +57,7 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
     auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
     for (auto & page_file : page_files)
     {
-        const_cast<PageFile &>(page_file).readAndSetPageMetas(page_entry_map);
+        const_cast<PageFile &>(page_file).readAndSetPageMetas(page_entry_map, false);
 
         // Only level 0 is writable.
         if (page_file.getLevel() == 0)
@@ -320,13 +320,10 @@ bool PageStorage::gc()
             return false;
         }
 
-        LOG_DEBUG(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
+        LOG_INFO(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
 
-        // if there are no valid pages to be migrated, then jump over
-        if (migrate_page_count > 0)
-        {
-            gc_file_page_entry_map = gcMigratePages(file_valid_pages, merge_files);
-        }
+        // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
+        gc_file_page_entry_map = gcMigratePages(file_valid_pages, merge_files);
     }
 
     {
@@ -363,19 +360,13 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     GcCandidates merge_files;
     for (auto & page_file : page_files)
     {
-        auto   file_size = page_file.getDataFileSize();
-        UInt64 valid_size;
-        float  valid_rate;
-        size_t valid_page_count;
+        const auto file_size        = page_file.getDataFileSize();
+        UInt64     valid_size       = 0;
+        float      valid_rate       = 0.0f;
+        size_t     valid_page_count = 0;
 
         auto it = file_valid_pages.find(page_file.fileIdLevel());
-        if (it == file_valid_pages.end())
-        {
-            valid_size       = 0;
-            valid_rate       = 0;
-            valid_page_count = 0;
-        }
-        else
+        if (it != file_valid_pages.end())
         {
             valid_size       = it->second.first;
             valid_rate       = (float)valid_size / file_size;
@@ -421,7 +412,7 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
         {
             PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
             // Note: This file may not contain any valid page, but valid RefPages which we need to migrate
-            to_merge_file.readAndSetPageMetas(legacy_entries); // TODO accept dangling ref
+            to_merge_file.readAndSetPageMetas(legacy_entries, /* check_page_map_complete= */ false);
 
             auto it = file_valid_pages.find(file_id_level);
             if (it == file_valid_pages.end())
@@ -484,7 +475,7 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
             }
             gc_file_writer->write(batch, gc_file_page_entries);
         }
-    }
+    } // free gc_file_writer and sync
 
     if (gc_file_page_entries.empty() && num_valid_ref_pages == 0)
     {
@@ -494,9 +485,9 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
     {
         gc_file.setFormal();
         const auto id = gc_file.fileIdLevel();
-        LOG_DEBUG(log,
-                  "GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages << " RefPages to PageFile_"
-                                      << id.first << "_" << id.second);
+        LOG_INFO(log,
+                 "GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages << " RefPages to PageFile_"
+                                     << id.first << "_" << id.second);
     }
     return gc_file_page_entries;
 }
