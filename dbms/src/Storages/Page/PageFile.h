@@ -9,6 +9,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageEntryMap.h>
+#include <Storages/Page/VersionedPageEntryMap.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace Poco
@@ -37,7 +38,7 @@ public:
         Writer(PageFile &, bool sync_on_write);
         ~Writer();
 
-        void write(const WriteBatch & wb, PageEntryMap & page_entries);
+        void write(const WriteBatch & wb, PageEntriesEdit & edit);
 
     private:
         PageFile & page_file;
@@ -91,7 +92,7 @@ public:
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
     /// if check_page_map_complete is true, do del or ref on non-exist page will throw exception.
-    void readAndSetPageMetas(PageEntryMap & page_entries, bool check_page_map_complete);
+    void readAndSetPageMetas(PageEntriesEdit & edit);
 
     /// Rename this page file into formal style.
     void setFormal();

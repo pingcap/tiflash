@@ -18,7 +18,6 @@ extern const int LOGICAL_ERROR;
 class PageEntryMap
 {
 public:
-    PageEntryMap() = default;
 
     inline PageEntry & at(const PageId page_id)
     {
@@ -54,8 +53,8 @@ public:
     void del(PageId page_id);
 
     /** Bind RefPage{ref_id} to Page{page_id}.
-     *  If page+id is a ref-id of RefPage, it will find corresponding Page
-     *  and bind ref-id to that Page.
+     *  If page_id is a ref-id of RefPage, it will find corresponding Page
+     *  and bind ref_id to that Page.
      *  template must_exist = true ensure that corresponding Page must exist.
      *           must_exist = false if corresponding Page not exist, just add a record for RefPage{ref_id} -> Page{page_id}
      */
@@ -85,6 +84,21 @@ public:
 
     size_t size() const { return page_ref.size(); }
 
+
+    void incrRefCount() { ++ref_count; }
+
+    void decrRefCount()
+    {
+        assert(ref_count >= 1);
+        --ref_count;
+        if (ref_count == 0)
+        {
+            delete this; // remove this node from version set
+        }
+    }
+
+    PageId maxId() const { return max_page_id; }
+
 private:
     PageId resolveRefId(PageId page_id) const
     {
@@ -103,6 +117,8 @@ private:
 
     template <bool must_exist = true>
     void decreasePageRef(PageId page_id);
+
+    void copyEntries(const PageEntryMap & rhs);
 
 public:
     /// iterator definition
@@ -221,6 +237,24 @@ private:
     std::unordered_map<PageId, PageEntry> normal_pages;
     std::unordered_map<PageId, PageId>    page_ref; // RefPageId -> PageId
 
+    // For MVCC
+    UInt32         ref_count;
+    PageEntryMap * next;
+    PageEntryMap * prev;
+
+    PageId max_page_id;
+
+private:
+    PageEntryMap() : normal_pages(), page_ref(), ref_count(0), next(this), prev(this), max_page_id(0) {}
+    ~PageEntryMap()
+    {
+        assert(ref_count == 0);
+
+        // Remove from linked list
+        prev->next = next;
+        next->prev = prev;
+    }
+
 public:
     // no copying allowed
     PageEntryMap(const PageEntryMap &) = delete;
@@ -236,6 +270,8 @@ public:
         }
         return *this;
     }
+
+    friend class VersionedPageEntryMap;
 };
 
 template <bool must_exist>
@@ -286,6 +322,7 @@ void PageEntryMap::ref(const PageId ref_id, const PageId page_id)
             page_ref[ref_id] = normal_page_id;
         }
     }
+    max_page_id = std::max(max_page_id, std::max(ref_id, page_id));
 }
 
 template <bool must_exist>

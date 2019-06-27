@@ -39,9 +39,10 @@ public:
         writes.emplace_back(w);
     }
 
-    void putRefPage(PageId page_id, PageId ori_page_id)
+    // Add RefPage{ref_id} -> Page{page_id}
+    void putRefPage(PageId ref_id, PageId page_id)
     {
-        Write w = {WriteType::REF, page_id, 0, {}, 0, ori_page_id};
+        Write w = {WriteType::REF, ref_id, 0, {}, 0, page_id};
         writes.emplace_back(w);
     }
 
