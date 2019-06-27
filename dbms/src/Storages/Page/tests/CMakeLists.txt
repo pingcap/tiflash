@@ -13,3 +13,5 @@ target_link_libraries(page_stress_page_storage dbms)
 
 add_executable(page_utils_get_valid_pages utils_get_valid_pages.cpp)
 target_link_libraries(page_utils_get_valid_pages dbms)
+
+add_executable(mem_usage_test mem_usage_test.cpp)
