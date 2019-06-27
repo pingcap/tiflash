@@ -447,7 +447,8 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     Strings part_file_names;
     Strings part_file_parent_paths;
     Poco::DirectoryIterator end;
-    for (const String & path : context.getAllPath()) {
+    for (const String & path : context.getAllPath())
+    {
         String data_path = getDataPartsPath(path);
         LOG_DEBUG(log, "Loading data parts from path: " << data_path);
         for (Poco::DirectoryIterator it(data_path); it != end; ++it)
@@ -661,20 +662,26 @@ void MergeTreeData::clearOldTemporaryDirectories(ssize_t custom_directories_life
         : current_time - settings.temporary_directories_lifetime.totalSeconds();
 
     /// Delete temporary directories older than a day.
-    for (auto & path : context.getAllPath()) {
+    for (auto & path : context.getAllPath())
+    {
         Poco::DirectoryIterator end;
         String storage_path = getDataPartsPath(path);
-        for (Poco::DirectoryIterator it{storage_path}; it != end; ++it) {
-            if (startsWith(it.name(), "tmp")) {
+        for (Poco::DirectoryIterator it{storage_path}; it != end; ++it)
+        {
+            if (startsWith(it.name(), "tmp"))
+            {
                 Poco::File tmp_dir(storage_path + it.name());
 
-                try {
-                    if (tmp_dir.isDirectory() && isOldPartDirectory(tmp_dir, deadline)) {
+                try
+                {
+                    if (tmp_dir.isDirectory() && isOldPartDirectory(tmp_dir, deadline))
+                    {
                         LOG_WARNING(log, "Removing temporary directory " << storage_path << it.name());
                         Poco::File(storage_path + it.name()).remove(true);
                     }
                 }
-                catch (const Poco::FileNotFoundException &) {
+                catch (const Poco::FileNotFoundException &)
+                {
                     /// If the file is already deleted, do nothing.
                 }
             }
@@ -1973,9 +1980,11 @@ size_t MergeTreeData::getPartitionSize(const std::string & partition_id) const
 
     Poco::DirectoryIterator end;
 
-    for (const String & path : context.getAllPath()) {
+    for (const String & path : context.getAllPath())
+    {
         String parts_path = getDataPartsPath(path);
-        for (Poco::DirectoryIterator it(parts_path); it != end; ++it) {
+        for (Poco::DirectoryIterator it(parts_path); it != end; ++it)
+        {
             MergeTreePartInfo part_info;
             if (!MergeTreePartInfo::tryParsePartName(it.name(), &part_info, format_version))
                 continue;
@@ -1983,7 +1992,8 @@ size_t MergeTreeData::getPartitionSize(const std::string & partition_id) const
                 continue;
 
             const auto part_path = it.path().absolute().toString();
-            for (Poco::DirectoryIterator it2(part_path); it2 != end; ++it2) {
+            for (Poco::DirectoryIterator it2(part_path); it2 != end; ++it2)
+            {
                 const auto part_file_path = it2.path().absolute().toString();
                 size += Poco::File(part_file_path).getSize();
             }

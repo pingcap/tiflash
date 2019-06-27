@@ -899,8 +899,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             for (auto & rd : region_group_range_parts[thread_idx])
             {
                 for (auto & r : rd)
-                {
-                    LOG_DEBUG(log, "Stream " << thread_idx << ", read " << r.data_part->getFullPath());
+                    LOG_TRACE(log, "Stream " << thread_idx << ", read " << r.data_part->getFullPath());
                 }
             }
         }
@@ -908,7 +907,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     if (parts_with_ranges.empty() && !is_txn_engine)
         return {};
-
+L
     ProfileEvents::increment(ProfileEvents::SelectedParts, parts_with_ranges.size());
     ProfileEvents::increment(ProfileEvents::SelectedRanges, sum_ranges);
     ProfileEvents::increment(ProfileEvents::SelectedMarks, sum_marks);
