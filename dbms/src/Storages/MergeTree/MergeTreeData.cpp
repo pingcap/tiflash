@@ -157,7 +157,6 @@ MergeTreeData::MergeTreeData(
     {
         String candidate_path = getDataPartsPath(path);
         Poco::File(candidate_path).createDirectories();
-
         Poco::File(candidate_path + "detached").createDirectory();
     }
 

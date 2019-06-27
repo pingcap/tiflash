@@ -130,7 +130,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setAllPath(all_path);
     {
-
         global_context->initializePartPathSelector(global_context->getAllPath());
         for (auto path : global_context->getAllPath())
         {
