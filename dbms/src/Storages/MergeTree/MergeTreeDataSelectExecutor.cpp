@@ -896,6 +896,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 "Stream " << thread_idx << ", read " << thread_region_size << " regions, selected "
                           << region_group_range_parts[thread_idx].size() << " handle ranges, " << region_sum_marks << " marks to read from "
                           << region_sum_ranges << " ranges, read " << mem_rows << " rows from memory");
+            for (auto & rd : region_group_range_parts[thread_idx])
+            {
+                for (auto & r : rd)
+                {
+                    LOG_DEBUG(log, "Stream " << thread_idx << ", read " << r.data_part->getFullPath());
+                }
+            }
         }
     }
 
