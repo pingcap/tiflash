@@ -270,7 +270,7 @@ static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(P
 std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     const WriteBatch & wb,
     PageFile &         page_file,
-    PageEntryMap &     page_entry_map)
+    PageEntriesEdit &  edit)
 {
     WBSize meta_write_bytes = 0;
     size_t data_write_bytes = 0;
@@ -327,7 +327,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             pc.offset   = page_data_file_off;
             pc.checksum = page_checksum;
 
-            page_entry_map.put(write.page_id, pc);
+            edit.put(write.page_id, pc);
 
             put(meta_pos, (PageId)write.page_id);
             put(meta_pos, (PageTag)write.tag);
@@ -341,13 +341,13 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         case WriteBatch::WriteType::DEL:
             put(meta_pos, (PageId)write.page_id);
 
-            page_entry_map.del<false>(write.page_id);
+            edit.del(write.page_id);
             break;
         case WriteBatch::WriteType::REF:
             put(meta_pos, static_cast<PageId>(write.page_id));
             put(meta_pos, static_cast<PageId>(write.ori_page_id));
 
-            page_entry_map.ref<false>(write.page_id, write.ori_page_id);
+            edit.ref(write.page_id, write.ori_page_id);
             break;
         }
     }
@@ -362,15 +362,14 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 }
 
 /// Analyze meta file, and return <available meta size, available data size>.
-template <bool check_map_is_complete>
 std::pair<UInt64, UInt64> analyzeMetaFile( //
-    const String & path,
-    PageFileId     file_id,
-    UInt32         level,
-    const char *   meta_data,
-    const size_t   meta_data_size,
-    PageEntryMap & page_entries,
-    Logger *       log)
+    const String &    path,
+    PageFileId        file_id,
+    UInt32            level,
+    const char *      meta_data,
+    const size_t      meta_data_size,
+    PageEntriesEdit & edit,
+    Logger *          log)
 {
     const char * meta_data_end = meta_data + meta_data_size;
 
@@ -423,21 +422,21 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 pc.size     = get<PageSize>(pos);
                 pc.checksum = get<Checksum>(pos);
 
-                page_entries.put(page_id, pc);
+                edit.put(page_id, pc);
                 page_data_file_size += pc.size;
                 break;
             }
             case WriteBatch::WriteType::DEL:
             {
                 auto page_id = get<PageId>(pos);
-                page_entries.del<check_map_is_complete>(page_id); // Reserve the order of removal.
+                edit.del(page_id); // Reserve the order of removal.
                 break;
             }
             case WriteBatch::WriteType::REF:
             {
                 const auto ref_id  = get<PageId>(pos);
                 const auto page_id = get<PageId>(pos);
-                page_entries.ref<check_map_is_complete>(ref_id, page_id);
+                edit.ref(ref_id, page_id);
             }
             }
         }
@@ -477,11 +476,11 @@ PageFile::Writer::~Writer()
     syncFile(meta_file_fd, meta_file_path);
 }
 
-void PageFile::Writer::write(const WriteBatch & wb, PageEntryMap & page_entries)
+void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
 {
     // TODO: investigate if not copy data into heap, write big pages can be faster?
     ByteBuffer meta_buf, data_buf;
-    std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, page_entries);
+    std::tie(meta_buf, data_buf) = PageMetaFormat::genWriteData(wb, page_file, edit);
 
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
@@ -679,7 +678,7 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
     return PageFile(file_id, level, parent_path, false, false, log);
 }
 
-void PageFile::readAndSetPageMetas(PageEntryMap & page_entries, bool check_map_is_complete)
+void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
 {
     const auto   path = metaPath();
     Poco::File   file(path);
@@ -695,16 +694,8 @@ void PageFile::readAndSetPageMetas(PageEntryMap & page_entries, bool check_map_i
     readFile(file_fd, 0, data, file_size, path);
 
     // analyze meta file and update page_entries
-    if (check_map_is_complete)
-    {
-        std::tie(this->meta_file_pos, this->data_file_pos)
-            = PageMetaFormat::analyzeMetaFile<true>(folderPath(), file_id, level, data, file_size, page_entries, log);
-    }
-    else
-    {
-        std::tie(this->meta_file_pos, this->data_file_pos)
-            = PageMetaFormat::analyzeMetaFile<false>(folderPath(), file_id, level, data, file_size, page_entries, log);
-    }
+    std::tie(this->meta_file_pos, this->data_file_pos)
+        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, edit, log);
 }
 
 void PageFile::setFormal()

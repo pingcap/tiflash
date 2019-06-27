@@ -5,6 +5,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/File.h>
 #include <common/logger_useful.h>
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -51,13 +52,19 @@ PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file,
 }
 
 PageStorage::PageStorage(const String & storage_path_, const Config & config_)
-    : storage_path(storage_path_), config(config_), page_file_log(&Poco::Logger::get("PageFile")), log(&Poco::Logger::get("PageStorage"))
+    : storage_path(storage_path_),
+      config(config_),
+      version_set(),
+      page_file_log(&Poco::Logger::get("PageFile")),
+      log(&Poco::Logger::get("PageStorage"))
 {
     /// page_files are in ascending ordered by (file_id, level).
     auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
+    // TODO recover current map from files
+    PageEntriesEdit edit;
     for (auto & page_file : page_files)
     {
-        const_cast<PageFile &>(page_file).readAndSetPageMetas(page_entry_map, false);
+        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
 
         // Only level 0 is writable.
         if (page_file.getLevel() == 0)
@@ -65,26 +72,24 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
             write_file = page_file;
         }
     }
-
-    for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
-    {
-        max_page_id = std::max(max_page_id, iter.pageId());
-    }
+    version_set.apply(edit);
 }
 
 PageId PageStorage::getMaxId()
 {
     std::lock_guard<std::mutex> write_lock(write_mutex);
-
-    return max_page_id;
+    return version_set.currentMap()->maxId();
 }
 
 PageEntry PageStorage::getEntry(PageId page_id)
 {
     std::shared_lock lock(read_mutex);
+    PageEntryMap *   page_entry_map = version_set.currentMap();
+    page_entry_map->incrRefCount();
+    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
 
-    auto it = page_entry_map.find(page_id);
-    if (it != page_entry_map.end())
+    auto it = page_entry_map->find(page_id);
+    if (it != page_entry_map->end())
     {
         return it.pageEntry();
     }
@@ -124,30 +129,16 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
 
 void PageStorage::write(const WriteBatch & wb)
 {
-    PageEntryMap new_entries;
+    //PageEntryMap new_entries;
+    PageEntriesEdit edit;
     {
         std::lock_guard<std::mutex> lock(write_mutex);
-        getWriter().write(wb, new_entries);
+        getWriter().write(wb, edit);
 
         {
             std::unique_lock read_lock(read_mutex);
-
-            for (const auto & w : wb.getWrites())
-            {
-                max_page_id = std::max(max_page_id, w.page_id);
-                switch (w.type)
-                {
-                case WriteBatch::WriteType::PUT:
-                    page_entry_map.put(w.page_id, new_entries.at(w.page_id));
-                    break;
-                case WriteBatch::WriteType::DEL:
-                    page_entry_map.del(w.page_id);
-                    break;
-                case WriteBatch::WriteType::REF:
-                    page_entry_map.ref(w.page_id, w.ori_page_id);
-                    break;
-                }
-            }
+            // TODO apply changes into version_set(generate a new version)
+            version_set.apply(edit);
         }
     }
 }
@@ -156,8 +147,12 @@ Page PageStorage::read(PageId page_id)
 {
     std::shared_lock lock(read_mutex);
 
-    auto it = page_entry_map.find(page_id);
-    if (it == page_entry_map.end())
+    PageEntryMap * const page_entry_map = version_set.currentMap();
+    page_entry_map->incrRefCount();
+    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+
+    auto it = page_entry_map->find(page_id);
+    if (it == page_entry_map->end())
         throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
     const auto &     page_entry    = it.pageEntry();
     auto             file_id_level = page_entry.fileIdLevel();
@@ -168,13 +163,16 @@ Page PageStorage::read(PageId page_id)
 
 PageMap PageStorage::read(const std::vector<PageId> & page_ids)
 {
-    std::shared_lock lock(read_mutex);
+    std::shared_lock     lock(read_mutex);
+    PageEntryMap * const page_entry_map = version_set.currentMap();
+    page_entry_map->incrRefCount();
+    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto it = page_entry_map.find(page_id);
-        if (it == page_entry_map.end())
+        auto it = page_entry_map->find(page_id);
+        if (it == page_entry_map->end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         const auto & page_entry                  = it.pageEntry();
         auto         file_id_level               = page_entry.fileIdLevel();
@@ -199,13 +197,16 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids)
 
 void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handler)
 {
-    std::shared_lock lock(read_mutex);
+    std::shared_lock     lock(read_mutex);
+    PageEntryMap * const page_entry_map = version_set.currentMap();
+    page_entry_map->incrRefCount();
+    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto it = page_entry_map.find(page_id);
-        if (it == page_entry_map.end())
+        auto it = page_entry_map->find(page_id);
+        if (it == page_entry_map->end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         const auto & page_entry                  = it.pageEntry();
         auto         file_id_level               = page_entry.fileIdLevel();
@@ -227,11 +228,14 @@ void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handl
 
 void PageStorage::traverse(const std::function<void(const Page & page)> & acceptor)
 {
-    std::shared_lock lock(read_mutex);
+    std::shared_lock     lock(read_mutex);
+    PageEntryMap * const page_entry_map = version_set.currentMap();
+    page_entry_map->incrRefCount();
+    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
     {
-        for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
+        for (auto iter = page_entry_map->cbegin(); iter != page_entry_map->cend(); ++iter)
         {
             const PageId      page_id    = iter.pageId();
             const PageEntry & page_entry = iter.pageEntry();
@@ -252,10 +256,13 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 void PageStorage::traversePageEntries( //
     const std::function<void(PageId page_id, const PageEntry & page)> & acceptor)
 {
-    std::shared_lock lock(read_mutex);
+    std::shared_lock     lock(read_mutex);
+    PageEntryMap * const page_entry_map = version_set.currentMap();
+    page_entry_map->incrRefCount();
+    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
 
     // traverse over pages not referred by any RefPages
-    for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
+    for (auto iter = page_entry_map->cbegin(); iter != page_entry_map->cend(); ++iter)
     {
         const PageId      page_id    = iter.pageId();
         const PageEntry & page_entry = iter.pageEntry();
@@ -283,18 +290,21 @@ bool PageStorage::gc()
     }
 
     std::set<PageFileIdAndLevel> merge_files;
-    PageEntryMap                 gc_file_page_entry_map;
+    PageEntriesEdit              gc_file_entries_edit;
 
     {
         /// Select the GC candidates files and migrate valid pages into an new file.
         /// Since we don't update any shared information, only a read lock is sufficient.
 
-        std::shared_lock lock(read_mutex);
+        std::shared_lock     lock(read_mutex);
+        PageEntryMap * const page_entry_map = version_set.currentMap();
+        page_entry_map->incrRefCount();
+        SCOPE_EXIT({ page_entry_map->decrRefCount(); });
 
         std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>> file_valid_pages;
         {
             // only scan over normal Pages, excluding RefPages
-            for (auto iter = page_entry_map.pages_cbegin(); iter != page_entry_map.pages_cend(); ++iter)
+            for (auto iter = page_entry_map->pages_cbegin(); iter != page_entry_map->pages_cend(); ++iter)
             {
                 const PageId      page_id                    = iter->first;
                 const PageEntry & page_entry                 = iter->second;
@@ -321,13 +331,13 @@ bool PageStorage::gc()
         LOG_INFO(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
 
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
-        gc_file_page_entry_map = gcMigratePages(file_valid_pages, merge_files);
+        gc_file_entries_edit = gcMigratePages(page_entry_map, file_valid_pages, merge_files);
     }
 
     {
         /// Here we have to update the cache information which readers need to synchronize, a write lock is needed.
         std::unique_lock lock(read_mutex);
-        gcUpdatePageMap(gc_file_page_entry_map);
+        gcUpdatePageMap(gc_file_entries_edit);
 
         // TODO: potential bug: A read thread may just select a file F, while F is being GCed. And after GC, we remove F from
         // reader cache. But after that, A could come in and re-add F reader cache. It is not a very big issue, because
@@ -391,9 +401,10 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     return merge_files;
 }
 
-PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const
+PageEntriesEdit
+PageStorage::gcMigratePages(PageEntryMap * const current, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const
 {
-    PageEntryMap gc_file_page_entries;
+    PageEntriesEdit gc_file_edit;
 
     // merge `merge_files` to PageFile which PageId = max of all `merge_files` and level = level + 1
     auto [largest_file_id, level] = *(merge_files.rbegin());
@@ -402,7 +413,7 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
     size_t num_successful_migrate_pages = 0;
     size_t num_valid_ref_pages          = 0;
     {
-        PageEntryMap legacy_entries; // All page entries in `merge_files`
+        PageEntriesEdit legacy_edit; // All page entries in `merge_files`
         // No need to sync after each write. Do sync before closing is enough.
         auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
 
@@ -410,7 +421,7 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
         {
             PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
             // Note: This file may not contain any valid page, but valid RefPages which we need to migrate
-            to_merge_file.readAndSetPageMetas(legacy_entries, /* check_page_map_complete= */ false);
+            to_merge_file.readAndSetPageMetas(legacy_edit);
 
             auto it = file_valid_pages.find(file_id_level);
             if (it == file_valid_pages.end())
@@ -425,9 +436,9 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
                 const auto & page_ids = it->second.second;
                 for (auto page_id : page_ids)
                 {
-                    auto it2 = page_entry_map.find(page_id);
+                    auto it2 = current->find(page_id);
                     // This page is already removed.
-                    if (it2 == page_entry_map.end())
+                    if (it2 == current->end())
                     {
                         continue;
                     }
@@ -456,26 +467,27 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
                                page.data.size());
                 }
 
-                gc_file_writer->write(wb, gc_file_page_entries);
+                gc_file_writer->write(wb, gc_file_edit);
             }
         }
 
         {
             // Migrate RefPages which are still valid.
             WriteBatch batch;
-            for (auto iter = legacy_entries.ref_pairs_cbegin(); iter != legacy_entries.ref_pairs_cend(); ++iter)
+            for (const auto & rec : legacy_edit.getRecords())
             {
-                if (page_entry_map.isRefExists(iter->first, iter->second))
+                if (rec.type == WriteBatch::WriteType::REF && current->isRefExists(rec.page_id, rec.ori_page_id))
                 {
-                    batch.putRefPage(iter->first, iter->second);
+
+                    batch.putRefPage(rec.page_id, rec.ori_page_id);
                     num_valid_ref_pages += 1;
                 }
             }
-            gc_file_writer->write(batch, gc_file_page_entries);
+            gc_file_writer->write(batch, gc_file_edit);
         }
     } // free gc_file_writer and sync
 
-    if (gc_file_page_entries.empty() && num_valid_ref_pages == 0)
+    if (gc_file_edit.empty() && num_valid_ref_pages == 0)
     {
         gc_file.destroy();
     }
@@ -487,11 +499,15 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
                  "GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages << " RefPages to PageFile_"
                                      << id.first << "_" << id.second);
     }
-    return gc_file_page_entries;
-}
+    return gc_file_edit;
+} // namespace DB
 
-void PageStorage::gcUpdatePageMap(const PageEntryMap & gc_pages_map)
+void PageStorage::gcUpdatePageMap(const PageEntriesEdit & edit)
 {
+    // TODO edit conflict?
+    version_set.gcApply(edit);
+#if 0
+    version_set.apply(edit);
     for (auto iter = gc_pages_map.pages_cbegin(); iter != gc_pages_map.pages_cend(); ++iter)
     {
         const PageId      page_id    = iter->first;
@@ -511,6 +527,7 @@ void PageStorage::gcUpdatePageMap(const PageEntryMap & gc_pages_map)
         }
         // else new page written by another thread, gc page is replaced. leave the page for next gc
     }
+#endif
 }
 
 } // namespace DB

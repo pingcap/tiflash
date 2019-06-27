@@ -101,6 +101,45 @@ TEST_F(PageStorage_test, WriteRead)
     }
 }
 
+TEST_F(PageStorage_test, WriteMultipleBatchRead)
+{
+    const UInt64 tag    = 0;
+    const size_t buf_sz = 1024;
+    char         c_buff[buf_sz];
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch    batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(0, tag, buff, buf_sz);
+        storage->write(batch);
+    }
+    {
+        WriteBatch    batch;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, tag, buff, buf_sz);
+        storage->write(batch);
+    }
+
+    Page page0 = storage->read(0);
+    ASSERT_EQ(page0.data.size(), buf_sz);
+    ASSERT_EQ(page0.page_id, 0UL);
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+    Page page1 = storage->read(1);
+    ASSERT_EQ(page1.data.size(), buf_sz);
+    ASSERT_EQ(page1.page_id, 1UL);
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
+    }
+}
+
 TEST_F(PageStorage_test, WriteReadAfterGc)
 {
     const size_t buf_sz = 256;
@@ -209,26 +248,42 @@ TEST_F(PageStorage_test, GcMigrateValidRefPages)
 
     const PageStorage::GcLivesPages lives_pages;
     PageStorage::GcCandidates       candidates;
+    PageEntryMap *                  current = storage->version_set.currentMap();
     //candidates.insert(PageFileIdAndLevel{1, 0});
     candidates.insert(PageFileIdAndLevel{2, 0});
-    const PageEntryMap gc_file_entries = storage->gcMigratePages(lives_pages, candidates);
-    ASSERT_FALSE(gc_file_entries.empty());
+    const PageEntriesEdit gc_file_edit = storage->gcMigratePages(current, lives_pages, candidates);
+    ASSERT_FALSE(gc_file_edit.empty());
     // check the ref is migrated.
-    ASSERT_TRUE(gc_file_entries.isRefExists(ref_id, page_id));
     // check the deleted ref is not migrated.
-    ASSERT_FALSE(gc_file_entries.isRefExists(deleted_ref_id, page_id));
+    bool is_deleted_ref_id_exists = false;
+    for (const auto & rec : gc_file_edit.getRecords())
+    {
+        if (rec.type == WriteBatch::WriteType::REF)
+        {
+            if (rec.page_id == ref_id)
+            {
+                ASSERT_EQ(rec.ori_page_id, page_id);
+            }
+            if (rec.page_id == deleted_ref_id)
+            {
+                ASSERT_NE(rec.ori_page_id, page_id);
+                is_deleted_ref_id_exists = true;
+            }
+        }
+    }
+    ASSERT_FALSE(is_deleted_ref_id_exists);
 }
 
 TEST_F(PageStorage_test, GcConcurrencyDelPage)
 {
     PageId pid = 0;
     // gc move Page0 -> PageFile{5,1}
-    PageEntryMap map;
-    map.put(pid, PageEntry{.file_id = 1, .level = 0});
+    PageEntriesEdit edit;
+    edit.put(pid, PageEntry{.file_id = 1, .level = 0});
     // write thread del Page0 in page_map before gc thread get unique_lock of `read_mutex`
-    storage->page_entry_map.clear();
+    storage->version_set.currentMap()->clear();
     // gc continue
-    storage->gcUpdatePageMap(map);
+    storage->gcUpdatePageMap(edit);
     // page0 don't update to page_map
     const PageEntry entry = storage->getEntry(pid);
     ASSERT_FALSE(entry.isValid());
@@ -248,19 +303,19 @@ TEST_F(PageStorage_test, GcPageMove)
 
     const PageId pid = 0;
     // old Page0 is in PageFile{5, 0}
-    storage->page_entry_map.put(pid,
-                                PageEntry{
-                                    .file_id = 5,
-                                    .level   = 0,
-                                });
+    storage->version_set.currentMap()->put(pid,
+                                           PageEntry{
+                                               .file_id = 5,
+                                               .level   = 0,
+                                           });
     // gc move Page0 -> PageFile{5,1}
-    PageEntryMap map;
-    map.put(pid,
-            PageEntry{
-                .file_id = 5,
-                .level   = 1,
-            });
-    storage->gcUpdatePageMap(map);
+    PageEntriesEdit edit;
+    edit.put(pid,
+             PageEntry{
+                 .file_id = 5,
+                 .level   = 1,
+             });
+    storage->gcUpdatePageMap(edit);
     // page_map get updated
     const PageEntry entry = storage->getEntry(pid);
     ASSERT_TRUE(entry.isValid());
@@ -272,20 +327,20 @@ TEST_F(PageStorage_test, GcConcurrencySetPage)
 {
     const PageId pid = 0;
     // gc move Page0 -> PageFile{5,1}
-    PageEntryMap map;
-    map.put(pid,
-            PageEntry{
-                .file_id = 5,
-                .level   = 1,
-            });
+    PageEntriesEdit edit;
+    edit.put(pid,
+             PageEntry{
+                 .file_id = 5,
+                 .level   = 1,
+             });
     // write thread insert newer Page0 before gc thread get unique_lock on `read_mutex`
-    storage->page_entry_map.put(pid,
-                                PageEntry{
-                                    .file_id = 6,
-                                    .level   = 0,
-                                });
+    storage->version_set.currentMap()->put(pid,
+                                           PageEntry{
+                                               .file_id = 6,
+                                               .level   = 0,
+                                           });
     // gc continue
-    storage->gcUpdatePageMap(map);
+    storage->gcUpdatePageMap(edit);
     // read
     const PageEntry entry = storage->getEntry(pid);
     ASSERT_TRUE(entry.isValid());

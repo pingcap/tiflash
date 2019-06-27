@@ -1,13 +1,16 @@
 #include "gtest/gtest.h"
 
 #include <Storages/Page/PageEntryMap.h>
+#include <Storages/Page/VersionedPageEntryMap.h>
+
 namespace DB
 {
 namespace tests
 {
 TEST(PageEntryMap_test, Empty)
 {
-    PageEntryMap map;
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
     ASSERT_TRUE(map.empty());
     size_t item_count = 0;
     for (auto iter = map.cbegin(); iter != map.cend(); ++iter)
@@ -44,9 +47,10 @@ TEST(PageEntryMap_test, Empty)
 
 TEST(PageEntryMap_test, UpdatePageEntry)
 {
-    const PageId    page_id = 0;
-    PageEntryMap    map;
-    const PageEntry entry0{.checksum = 0x123};
+    const PageId          page_id = 0;
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
+    const PageEntry       entry0{.checksum = 0x123};
     map.put(page_id, entry0);
     ASSERT_EQ(map.at(page_id).checksum, entry0.checksum);
 
@@ -61,8 +65,9 @@ TEST(PageEntryMap_test, UpdatePageEntry)
 
 TEST(PageEntryMap_test, PutDel)
 {
-    PageEntryMap map;
-    PageEntry    p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
+    PageEntry             p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map.put(0, p0entry);
     ASSERT_FALSE(map.empty());
     {
@@ -106,10 +111,11 @@ TEST(PageEntryMap_test, PutDel)
 
 TEST(PageEntryMap_test, UpdateRefPageEntry)
 {
-    const PageId    page_id = 0;
-    const PageId    ref_id  = 1; // RefPage1 -> Page0
-    PageEntryMap    map;
-    const PageEntry entry0{.checksum = 0x123};
+    const PageId          page_id = 0;
+    const PageId          ref_id  = 1; // RefPage1 -> Page0
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
+    const PageEntry       entry0{.checksum = 0x123};
     map.put(page_id, entry0);
     ASSERT_NE(map.find(page_id), map.end());
     ASSERT_EQ(map.at(page_id).checksum, entry0.checksum);
@@ -143,7 +149,8 @@ TEST(PageEntryMap_test, UpdateRefPageEntry)
 
 TEST(PageEntryMap_test, AddIllegalRef)
 {
-    PageEntryMap map;
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
     ASSERT_TRUE(map.empty());
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map.put(0, p0entry);
@@ -155,8 +162,9 @@ TEST(PageEntryMap_test, AddIllegalRef)
 
 TEST(PageEntryMap_test, PutDuplicateRef)
 {
-    PageEntryMap map;
-    PageEntry    p0entry{.checksum = 0xFF};
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
+    PageEntry             p0entry{.checksum = 0xFF};
     map.put(0, p0entry);
     ASSERT_EQ(map.at(0).checksum, p0entry.checksum);
 
@@ -173,8 +181,9 @@ TEST(PageEntryMap_test, PutDuplicateRef)
 
 TEST(PageEntryMap_test, PutRefOnRef)
 {
-    PageEntryMap map;
-    PageEntry    p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
+    PageEntry             p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     // put Page0
     map.put(0, p0entry);
     // add RefPage2 -> Page0
@@ -236,9 +245,10 @@ TEST(PageEntryMap_test, PutRefOnRef)
 
 TEST(PageEntryMap_test, ReBindRef)
 {
-    PageEntryMap map;
-    PageEntry    entry0{.file_id = 1, .level = 0, .checksum = 0x123};
-    PageEntry    entry1{.file_id = 1, .level = 0, .checksum = 0x123};
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
+    PageEntry             entry0{.file_id = 1, .level = 0, .checksum = 0x123};
+    PageEntry             entry1{.file_id = 1, .level = 0, .checksum = 0x123};
     // put Page0, Page1
     map.put(0, entry0);
     ASSERT_EQ(map.at(0).checksum, entry0.checksum);
@@ -257,9 +267,10 @@ TEST(PageEntryMap_test, ReBindRef)
 
 TEST(PageEntryMap_test, Scan)
 {
-    PageEntryMap map;
-    PageEntry    p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
-    PageEntry    p1entry{.file_id = 2, .level = 1, .checksum = 0x456};
+    VersionedPageEntryMap version_set;
+    PageEntryMap &        map = *version_set.currentMap();
+    PageEntry             p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
+    PageEntry             p1entry{.file_id = 2, .level = 1, .checksum = 0x456};
     map.put(0, p0entry);
     map.put(1, p1entry);
     map.ref(10, 0);

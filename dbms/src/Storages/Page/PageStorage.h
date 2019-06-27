@@ -10,6 +10,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/PageFile.h>
+#include <Storages/Page/VersionedPageEntryMap.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace DB
@@ -73,15 +74,15 @@ private:
                                         const PageFileIdAndLevel &                       writing_file_id_level,
                                         UInt64 &                                         candidate_total_size,
                                         size_t &                                         migrate_page_count) const;
-    PageEntryMap gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
-    void         gcUpdatePageMap(const PageEntryMap & gc_pages_map);
+    PageEntriesEdit
+         gcMigratePages(PageEntryMap * const current, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
+    void gcUpdatePageMap(const PageEntriesEdit & edit);
 
 private:
     String storage_path;
     Config config;
 
-    PageEntryMap page_entry_map;
-    PageId       max_page_id = 0;
+    VersionedPageEntryMap version_set;
 
     PageFile  write_file;
     WriterPtr write_file_writer;
