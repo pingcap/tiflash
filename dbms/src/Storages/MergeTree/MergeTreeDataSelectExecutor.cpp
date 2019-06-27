@@ -907,7 +907,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     if (parts_with_ranges.empty() && !is_txn_engine)
         return {};
-L
+
     ProfileEvents::increment(ProfileEvents::SelectedParts, parts_with_ranges.size());
     ProfileEvents::increment(ProfileEvents::SelectedRanges, sum_ranges);
     ProfileEvents::increment(ProfileEvents::SelectedMarks, sum_marks);
