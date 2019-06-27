@@ -116,7 +116,7 @@ void Region::execChangePeer(
 {
     const auto & change_peer_request = request.change_peer();
 
-    LOG_INFO(log, "Region [" << id() << "] change peer " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
+    LOG_INFO(log, toString(false) << " execute change peer type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
     meta.execChangePeer(request, response, index, term);
 }
@@ -128,7 +128,7 @@ const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
         if (peer.store_id() == store_id)
             return peer;
     }
-    throw Exception("peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+    throw Exception("[findPeer] peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
 Regions Region::execBatchSplit(
@@ -138,8 +138,8 @@ Regions Region::execBatchSplit(
 
     if (new_region_infos.empty())
     {
-        LOG_ERROR(log, toString() << ", [execBatchSplit] empty BatchSplitResponse, at [index: " << index << ", term: " << term << "]");
-        throw Exception("[execBatchSplit] empty BatchSplitResponse, should not happen", ErrorCodes::LOGICAL_ERROR);
+        LOG_ERROR(log, "[execBatchSplit] " << toString(false) << " got no new region");
+        throw Exception("[execBatchSplit] no new region, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 
     std::vector<RegionPtr> split_regions;
@@ -179,7 +179,7 @@ Regions Region::execBatchSplit(
     for (const auto & region : split_regions)
         ids << region->id() << ",";
     ids << id();
-    LOG_INFO(log, "Region [" << id() << "] split into [" << ids.str() << "]");
+    LOG_INFO(log, toString(false) << " split into [" << ids.str() << "]");
 
     return split_regions;
 }
@@ -189,8 +189,8 @@ void Region::execCompactLog(
 {
     const auto & compact_log_request = request.compact_log();
     LOG_INFO(log,
-        "Region [" << id() << "] execute compact log, compact_term: " << compact_log_request.compact_term()
-                   << ", compact_index: " << compact_log_request.compact_index());
+        toString(false) << " execute compact log, compact_term: " << compact_log_request.compact_term()
+                        << ", compact_index: " << compact_log_request.compact_index());
 
     meta.execCompactLog(request, response, index, term);
 }
@@ -198,7 +198,6 @@ void Region::execCompactLog(
 RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 {
     auto & header = cmd.header();
-    RegionID region_id = id();
     UInt64 term = header.term();
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
@@ -266,7 +265,8 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
             case raft_cmdpb::AdminCmdType::CommitMerge:
             case raft_cmdpb::AdminCmdType::RollbackMerge:
             default:
-                throw Exception("Unsupported admin command type " + raft_cmdpb::AdminCmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
+                throw Exception(
+                    "[Region::onCommand] unsupported admin command type " + raft_cmdpb::AdminCmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
                 break;
         }
     }
@@ -341,11 +341,12 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 case raft_cmdpb::CmdType::Snap:
                 case raft_cmdpb::CmdType::Get:
                 case raft_cmdpb::CmdType::ReadIndex:
-                    LOG_WARNING(log, "Region [" << region_id << "] skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
+                    LOG_WARNING(log, toString(false) << " skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
                     break;
                 default:
                 {
-                    throw Exception("Unsupported command type " + raft_cmdpb::CmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        "[Region::onCommand] unsupported command type " + raft_cmdpb::CmdType_Name(type), ErrorCodes::LOGICAL_ERROR);
                     break;
                 }
             }
