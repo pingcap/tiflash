@@ -138,9 +138,8 @@ Regions Region::execBatchSplit(
 
     if (new_region_infos.empty())
     {
-        LOG_ERROR(log,
-            "[execBatchSplit] " << toString(false) << " got empty BatchSplitResponse, at [index: " << index << ", term: " << term << "]");
-        throw Exception("[execBatchSplit] empty BatchSplitResponse, should not happen", ErrorCodes::LOGICAL_ERROR);
+        LOG_ERROR(log, "[execBatchSplit] " << toString(false) << " got no new region");
+        throw Exception("[execBatchSplit] no new region, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 
     std::vector<RegionPtr> split_regions;
