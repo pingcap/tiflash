@@ -283,7 +283,7 @@ TEST_F(PageStorage_test, GcConcurrencyDelPage)
     // write thread del Page0 in page_map before gc thread get unique_lock of `read_mutex`
     storage->version_set.currentMap()->clear();
     // gc continue
-    storage->gcUpdatePageMap(edit);
+    storage->version_set.gcApply(edit);
     // page0 don't update to page_map
     const PageEntry entry = storage->getEntry(pid);
     ASSERT_FALSE(entry.isValid());
@@ -318,7 +318,7 @@ TEST_F(PageStorage_test, GcPageMove)
                  .file_id = 5,
                  .level   = 1,
              });
-    storage->gcUpdatePageMap(edit);
+    storage->version_set.gcApply(edit);
     // page_map get updated
     PageEntry entry = storage->getEntry(pid);
     ASSERT_TRUE(entry.isValid());
@@ -351,7 +351,7 @@ TEST_F(PageStorage_test, GcConcurrencySetPage)
                                                .level   = 0,
                                            });
     // gc continue
-    storage->gcUpdatePageMap(edit);
+    storage->version_set.gcApply(edit);
     // read
     const PageEntry entry = storage->getEntry(pid);
     ASSERT_TRUE(entry.isValid());

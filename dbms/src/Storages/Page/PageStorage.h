@@ -75,8 +75,7 @@ private:
                                         UInt64 &                                         candidate_total_size,
                                         size_t &                                         migrate_page_count) const;
     PageEntriesEdit
-         gcMigratePages(PageEntryMap * const current, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
-    void gcUpdatePageMap(const PageEntriesEdit & edit);
+    gcMigratePages(const PageEntryMap * current, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
 
 private:
     String storage_path;

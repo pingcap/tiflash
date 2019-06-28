@@ -688,7 +688,7 @@ void PageFile::setFormal()
     file.renameTo(folderPath());
 }
 
-void PageFile::destroy()
+void PageFile::destroy() const
 {
     // TODO: delay remove.
     Poco::File file(folderPath());
