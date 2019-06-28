@@ -97,7 +97,7 @@ public:
     /// Rename this page file into formal style.
     void setFormal();
     /// Destroy underlying system files.
-    void destroy();
+    void destroy() const;
 
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
