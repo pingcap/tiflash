@@ -72,6 +72,8 @@ struct Backoff {
 };
 
 constexpr int readIndexMaxBackoff = 20000;
+constexpr int GetMaxBackoff = 20000;
+constexpr int scanMaxBackoff = 20000;
 
 using BackoffPtr = std::shared_ptr<Backoff>;
 

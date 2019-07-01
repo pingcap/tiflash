@@ -390,6 +390,7 @@ namespace ErrorCodes
     extern const int LOCK_EXCEPTION = 10000;
     extern const int VERSION_ERROR = 10001;
     extern const int REGION_MISS = 10002;
+    extern const int SCHEMA_SYNC_ERROR = 10003;
 }
 
 }

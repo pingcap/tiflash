@@ -6,7 +6,6 @@
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
-#include <Debug/dbgFuncSchema.h>
 #include <Parsers/ASTLiteral.h>
 
 namespace DB
@@ -33,7 +32,6 @@ DBGInvoker::DBGInvoker()
     // TODO: remove this, use sleep in bash script
     regFunc("sleep", dbgFuncSleep);
 
-    regFunc("mock_schema_syncer", MockTiDBTable::dbgFuncMockSchemaSyncer);
     regFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
     regFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
     regFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
@@ -60,7 +58,6 @@ DBGInvoker::DBGInvoker()
 
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
 
-    regFunc("refresh_schema", dbgFuncRefreshSchema);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

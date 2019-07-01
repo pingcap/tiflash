@@ -5,7 +5,14 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Types.h>
-#include <common/JSON.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+    #include <Poco/JSON/Parser.h>
+    #include <Poco/JSON/Array.h>
+    #include <Poco/Dynamic/Var.h>
+    #include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
 
 namespace DB::ErrorCodes
 {
@@ -133,19 +140,17 @@ struct ColumnInfo
 {
     ColumnInfo() = default;
 
-    explicit ColumnInfo(const JSON & json);
+    explicit ColumnInfo(Poco::JSON::Object::Ptr json);
 
-    String serialize() const;
+    Poco::JSON::Object::Ptr getJSONObject() const;
 
-    void deserialize(const JSON & json);
+    void deserialize(Poco::JSON::Object::Ptr json);
 
     ColumnID id = -1;
     String name;
     Int32 offset = -1;
-    String origin_default_value;
-    bool has_origin_default_value = false;
-    String default_value;
-    bool has_default_value = false;
+    Poco::Dynamic::Var origin_default_value;
+    Poco::Dynamic::Var default_value;
     TP tp = TypeDecimal; // TypeDecimal is not used by TiDB.
     UInt32 flag = 0;
     Int32 flen = 0;
@@ -178,11 +183,11 @@ struct PartitionDefinition
 {
     PartitionDefinition() = default;
 
-    PartitionDefinition(const JSON & json);
+    PartitionDefinition(Poco::JSON::Object::Ptr json);
 
-    String serialize() const;
+    Poco::JSON::Object::Ptr getJSONObject() const;
 
-    void deserialize(const JSON & json);
+    void deserialize(Poco::JSON::Object::Ptr json);
 
     Int64 id = -1;
     String name;
@@ -194,11 +199,11 @@ struct PartitionInfo
 {
     PartitionInfo() = default;
 
-    PartitionInfo(const JSON & json);
+    PartitionInfo(Poco::JSON::Object::Ptr json);
 
-    String serialize() const;
+    Poco::JSON::Object::Ptr getJSONObject() const;
 
-    void deserialize(const JSON & json);
+    void deserialize(Poco::JSON::Object::Ptr json);
 
     PartitionType type = PartitionTypeRange;
     String expr;
@@ -208,9 +213,27 @@ struct PartitionInfo
     UInt64 num = 0;
 };
 
+struct DBInfo
+{
+    Int64 id;
+    String name;
+    String charset;
+    String collate;
+    SchemaState   state;
+
+    DBInfo(const String & json) { deserialize(json); }
+
+    void deserialize(const String & json_str);
+};
+
+struct TableInfo;
+using TableInfoPtr = std::shared_ptr<TableInfo>;
+
 struct TableInfo
 {
     TableInfo() = default;
+
+    TableInfo(const TableInfo &) = default;
 
     TableInfo(const String & table_info_json, bool escaped);
 
@@ -238,6 +261,27 @@ struct TableInfo
     Int64 schema_version = -1;
 
     ColumnID getColumnID(const String & name) const;
+
+    TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id) const
+    {
+        //
+        // Some sanity checks for partition table.
+        if (unlikely(!(is_partition_table && partition.enable)))
+            throw Exception("Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id) + " but it's not a partition table", DB::ErrorCodes::LOGICAL_ERROR);
+
+        if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) { return d.id == table_or_partition_id; }) == partition.definitions.end()))
+            throw Exception("Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id), DB::ErrorCodes::LOGICAL_ERROR);
+
+        // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
+        TableInfoPtr new_table = std::make_shared<TableInfo>(*this);
+        new_table->belonging_table_id = id;
+        new_table->id = table_or_partition_id;
+
+        // Mangle the table name by appending partition name.
+        new_table-> name += "_" + std::to_string(table_or_partition_id);
+
+        return new_table;
+    }
 
     bool manglePartitionTableIfNeeded(TableID table_or_partition_id)
     {
@@ -268,5 +312,7 @@ struct TableInfo
         return true;
     }
 };
+
+using DBInfoPtr = std::shared_ptr<DBInfo>;
 
 } // namespace TiDB

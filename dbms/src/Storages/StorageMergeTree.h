@@ -79,6 +79,8 @@ public:
 
     void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
+    void alterForTMT(const AlterCommands & params, const TiDB::TableInfo & table_info, const Context & context);
+
     bool checkTableCanBeDropped() const override;
 
     const TableInfo & getTableInfo() const;

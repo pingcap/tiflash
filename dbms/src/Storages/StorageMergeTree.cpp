@@ -383,6 +383,39 @@ void StorageMergeTree::alter(
         data.loadDataParts(false);
 }
 
+void StorageMergeTree::alterForTMT(
+    const AlterCommands & params,
+    const TiDB::TableInfo & table_info,
+    const Context & context)
+{
+    const String & database_name = table_info.db_name;
+    const String & table_name = table_info.name;
+    /// NOTE: Here, as in ReplicatedMergeTree, you can do ALTER which does not block the writing of data for a long time.
+    auto merge_blocker = merger.merges_blocker.cancel();
+
+    auto table_soft_lock = lockDataForAlter(__PRETTY_FUNCTION__);
+
+    data.checkAlter(params);
+
+    auto new_columns = data.getColumns();
+    params.apply(new_columns);
+
+//    std::vector<MergeTreeData::AlterDataPartTransactionPtr> transactions;
+
+    auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
+
+    IDatabase::ASTModifier storage_modifier = [this] (IAST & ast)
+    {
+        auto & storage_ast = typeid_cast<ASTStorage &>(ast);
+
+        auto literal = std::make_shared<ASTLiteral>(Field(data.table_info->serialize(true)));
+        typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
+    };
+
+    context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
+    setTableInfo(table_info);
+    setColumns(std::move(new_columns));
+}
 
 /// While exists, marks parts as 'currently_merging' and reserves free space on filesystem.
 /// It's possible to mark parts before.
