@@ -56,7 +56,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     ColumnID handle_col_id = InvalidColumnID;
 
-    std::map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
+    std::unordered_map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
     for (const auto & column_info : table_info.columns)
     {
         ColumnID col_id = column_info.id;
@@ -77,12 +77,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     bool pk_is_uint64 = false;
 
-    const auto pk_type = column_map[handle_col_id].second.type->getFamilyName();
-
-    if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-        pk_is_uint64 = true;
-
-    if (pk_is_uint64)
+    if (typeid_cast<const DataTypeUInt64 *>(column_map[handle_col_id].second.type.get()))
     {
         size_t ori_size = data_list.size();
         std::ignore = ori_size;
@@ -314,7 +309,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                             return std::make_tuple(block, false);
                         }
                     }
-                    // TODO: Consider other kind of type change? I.e. arbitary type change.
+                    // TODO: Consider other kind of type change? I.e. arbitrary type change.
                 }
             }
         }
