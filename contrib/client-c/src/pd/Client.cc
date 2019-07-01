@@ -187,13 +187,16 @@ uint64_t Client::getGCSafePoint() {
 
     context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
 
-    auto status = leaderStub()->GetGCSafePoint(&context, request, &response);
-    if (!status.ok()) {
-        std::string err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
+    ::grpc::Status status;
+    std::string err_msg;
+    for (int i = 0; i < max_init_cluster_retries; i++) {
+        auto status = leaderStub()->GetGCSafePoint(&context, request, &response);
+        if (status.ok())
+            return response.safe_point();
+        err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
-        throw Exception(err_msg, GRPCErrorCode);
     }
-    return response.safe_point();
+    throw Exception(err_msg, status.error_code());
 }
 
 std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegion(std::string key) {
