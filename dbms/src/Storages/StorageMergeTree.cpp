@@ -113,8 +113,9 @@ void StorageMergeTree::shutdown()
 
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
-        TMTContext &tmt_context = context.getTMTContext();
+        TMTContext & tmt_context = context.getTMTContext();
         tmt_context.getStorages().remove(data.table_info->id);
+        tmt_context.getRegionTable().removeTable(data.table_info->id);
     }
 }
 

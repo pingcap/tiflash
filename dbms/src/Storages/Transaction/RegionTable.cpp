@@ -220,6 +220,26 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
     }
 }
 
+void RegionTable::removeTable(TableID table_id)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    auto it = tables.find(table_id);
+    if (it == tables.end())
+        return;
+    auto & table = it->second;
+
+    // Remove from region list.
+    for (const auto & region_info : table.regions.get())
+    {
+        regions[region_info.first].tables.erase(table.table_id);
+    }
+
+    // Remove from table map.
+    table.regions.drop();
+    tables.erase(it);
+}
+
 void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids)
 {
     TableIDSet table_to_persist;

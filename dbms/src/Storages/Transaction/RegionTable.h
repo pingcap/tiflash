@@ -180,6 +180,9 @@ public:
 
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
+    /// Remove a table and associated regions.
+    void removeTable(TableID table_id);
+
     /// After the region is updated (insert or delete KVs).
     void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
