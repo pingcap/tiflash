@@ -1060,6 +1060,7 @@ void BaseDaemon::initialize(Application & self)
 void BaseDaemon::logRevision() const
 {
     Logger::root().information("Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
+    Logger::root().information("TiFlash version: " + TiFlashVersion::get());
 }
 
 /// Makes server shutdown if at least one Poco::Task have failed.
