@@ -194,7 +194,7 @@ public:
     }
 
     static Int256 MaxValue() {
-        return Get(65);
+        return Get(maxDecimalPrecision<Decimal256>());
     }
 };
 
