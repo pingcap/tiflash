@@ -162,6 +162,7 @@ def run():
                 print ' ' * 4 + it
 
     if not matched:
+        print '  File:', path
         print '  Error:', matcher.query
         print '  Result:'
         display(matcher.outputs)
