@@ -1,5 +1,5 @@
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 => DBGInvoke __mock_schema_syncer('true')
@@ -38,5 +38,5 @@ Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test
 Received exception from server (version {#WORD}):
 Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test doesn't exist..
 
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test

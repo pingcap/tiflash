@@ -1,6 +1,6 @@
 # Preparation.
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 => DBGInvoke __mock_schema_syncer('true')
@@ -130,5 +130,5 @@ Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_2.
 
 # Clean up.
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
