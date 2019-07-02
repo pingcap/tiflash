@@ -498,7 +498,7 @@ void MergedBlockOutputStream::writeImpl(const Block & block, const IColumn::Perm
         }
         else
         {
-            writeData(column.name, *column.type, *column.column, offset_columns, false);
+            writeData(column.name, *it.type, *column.column, offset_columns, false);
         }
     }
 
