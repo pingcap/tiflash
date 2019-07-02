@@ -20,6 +20,8 @@
 │ wrote 80000 row to default.test with raft commands │
 └────────────────────────────────────────────────────┘
 
+=> DBGInvoke __try_flush_region(4)
+
 => select count(*) from default.test
 ┌─count()─┐
 │   80004 │
