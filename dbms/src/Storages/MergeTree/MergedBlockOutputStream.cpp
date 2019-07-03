@@ -487,13 +487,13 @@ void MergedBlockOutputStream::writeImpl(const Block & block, const IColumn::Perm
             auto primary_column_it = primary_columns_name_to_position.find(it.name);
             if (primary_columns_name_to_position.end() != primary_column_it)
             {
-                writeData(column.name, *column.type, *primary_columns[primary_column_it->second].column, offset_columns, false);
+                writeData(column.name, *it.type, *primary_columns[primary_column_it->second].column, offset_columns, false);
             }
             else
             {
                 /// We rearrange the columns that are not included in the primary key here; Then the result is released - to save RAM.
                 ColumnPtr permutted_column = column.column->permute(*permutation, 0);
-                writeData(column.name, *column.type, *permutted_column, offset_columns, false);
+                writeData(column.name, *it.type, *permutted_column, offset_columns, false);
             }
         }
         else
