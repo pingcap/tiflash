@@ -9,8 +9,8 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageEntryMap.h>
+#include <Storages/Page/PageEntryMapVersionSet.h>
 #include <Storages/Page/PageFile.h>
-#include <Storages/Page/VersionedPageEntryMap.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace DB
@@ -81,7 +81,7 @@ private:
     String storage_path;
     Config config;
 
-    VersionedPageEntryMap version_set;
+    PageEntryMapVersionSet version_set;
 
     PageFile  write_file;
     WriterPtr write_file_writer;

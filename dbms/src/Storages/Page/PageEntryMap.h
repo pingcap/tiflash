@@ -1,9 +1,11 @@
 #pragma once
 
+#include <shared_mutex>
 #include <unordered_map>
 
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
+#include <common/logger_useful.h>
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
@@ -87,19 +89,30 @@ public:
 
     void incrRefCount() { ++ref_count; }
 
-    void decrRefCount()
+    void decrRefCount(std::shared_mutex & mutex)
     {
         assert(ref_count >= 1);
-        --ref_count;
-        if (ref_count == 0)
+        if (--ref_count == 0)
         {
-            delete this; // remove this node from version set
+            // in case two neighbor nodes remove from linked list
+            std::unique_lock lock(mutex);
+            delete this;
         }
     }
 
     PageId maxId() const { return max_page_id; }
 
 private:
+    // Not thread-safe, caller ensure.
+    void decrRefCount()
+    {
+        assert(ref_count >= 1);
+        if (--ref_count == 0)
+        {
+            delete this; // remove this node from version set
+        }
+    }
+
     PageId resolveRefId(PageId page_id) const
     {
         // resolve RefPageId to normal PageId
@@ -238,9 +251,9 @@ private:
     std::unordered_map<PageId, PageId>    page_ref; // RefPageId -> PageId
 
     // For MVCC
-    UInt32         ref_count;
-    PageEntryMap * next;
-    PageEntryMap * prev;
+    std::atomic<UInt32> ref_count;
+    PageEntryMap *      next;
+    PageEntryMap *      prev;
 
     PageId max_page_id;
 
@@ -271,7 +284,7 @@ public:
         return *this;
     }
 
-    friend class VersionedPageEntryMap;
+    friend class PageEntryMapVersionSet;
 };
 
 template <bool must_exist>

@@ -1,27 +1,29 @@
-#include <Storages/Page/VersionedPageEntryMap.h>
+#include <Storages/Page/PageEntryMapVersionSet.h>
 
 namespace DB
 {
 
-void VersionedPageEntryMap::apply(const PageEntriesEdit &edit) {
+void PageEntryMapVersionSet::apply(const PageEntriesEdit & edit)
+{
+
     PageEntryMap * base = current_map;
     base->incrRefCount();
 
     auto * v = new PageEntryMap;
-    v->copyEntries(*base);
+    v->copyEntries(*base); // maybe expensive if there are millions of pages?
     for (const auto & rec : edit.getRecords())
     {
         switch (rec.type)
         {
-            case WriteBatch::WriteType::PUT:
-                v->put(rec.page_id, rec.entry);
-                break;
-            case WriteBatch::WriteType::DEL:
-                v->del(rec.page_id);
-                break;
-            case WriteBatch::WriteType::REF:
-                v->ref(rec.page_id, rec.ori_page_id);
-                break;
+        case WriteBatch::WriteType::PUT:
+            v->put(rec.page_id, rec.entry);
+            break;
+        case WriteBatch::WriteType::DEL:
+            v->del(rec.page_id);
+            break;
+        case WriteBatch::WriteType::REF:
+            v->ref(rec.page_id, rec.ori_page_id);
+            break;
         }
     }
 
@@ -30,12 +32,13 @@ void VersionedPageEntryMap::apply(const PageEntriesEdit &edit) {
     appendVersion(v);
 }
 
-void VersionedPageEntryMap::gcApply(const PageEntriesEdit &edit) {
+void PageEntryMapVersionSet::gcApply(const PageEntriesEdit & edit)
+{
     PageEntryMap * base = current_map;
     base->incrRefCount();
 
     auto * v = new PageEntryMap;
-    v->copyEntries(*base);
+    v->copyEntries(*base); // maybe expensive if there are millions of pages?
     for (const auto & rec : edit.getRecords())
     {
         if (rec.type != WriteBatch::WriteType::PUT)
@@ -64,7 +67,8 @@ void VersionedPageEntryMap::gcApply(const PageEntriesEdit &edit) {
     appendVersion(v);
 }
 
-std::set<PageFileIdAndLevel> VersionedPageEntryMap::listAllLiveFiles() const {
+std::set<PageFileIdAndLevel> PageEntryMapVersionSet::listAllLiveFiles() const
+{
     std::set<PageFileIdAndLevel> liveFiles;
     for (PageEntryMap * v = dummy_versions.next; v != &dummy_versions; v = v->next)
     {
@@ -76,7 +80,16 @@ std::set<PageFileIdAndLevel> VersionedPageEntryMap::listAllLiveFiles() const {
     return liveFiles;
 }
 
-void VersionedPageEntryMap::appendVersion(PageEntryMap *const v) {
+size_t PageEntryMapVersionSet::getVersionSetSize()
+{
+    size_t size = 0;
+    for (PageEntryMap * v = dummy_versions.next; v != &dummy_versions; v = v->next)
+        size += 1;
+    return size;
+}
+
+void PageEntryMapVersionSet::appendVersion(PageEntryMap * const v)
+{
     // Make "v" become "current_map"
     assert(v->ref_count == 0);
     assert(v != current_map);
@@ -93,4 +106,5 @@ void VersionedPageEntryMap::appendVersion(PageEntryMap *const v) {
     current_map->prev->next = current_map;
     current_map->next->prev = current_map;
 }
+
 } // namespace DB

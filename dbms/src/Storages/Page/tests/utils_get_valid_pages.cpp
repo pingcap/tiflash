@@ -61,23 +61,33 @@ int main(int argc, char ** argv)
     }
     auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
 
-    DB::PageEntryMap valid_page_entries;
+    DB::PageEntryMapVersionSet versions;
     for (auto & page_file : page_files)
     {
-        DB::PageEntryMap     page_entries;
+        DB::PageEntriesEdit edit;
         DB::PageIdAndEntries id_and_caches;
-        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries, false);
-        printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
-        for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
+        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(edit);
+
+        printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), edit.size());
+        for (const auto & record : edit.getRecords())
         {
-            const DB::PageId      pid   = iter.pageId();
-            const DB::PageEntry & entry = iter.pageEntry();
-            id_and_caches.emplace_back(pid, entry);
             if (mode == MODE_DUMP_ALL_ENTRIES)
             {
-                printPageEntry(pid, entry);
+                switch (record.type)
+                {
+                case DB::WriteBatch::WriteType::PUT:
+                    printf("PUT");
+                    printPageEntry(record.page_id, record.entry);
+                    id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
+                    break;
+                case DB::WriteBatch::WriteType::DEL:
+                    printf("DEL\t%lld\n", record.page_id);
+                    break;
+                case DB::WriteBatch::WriteType::REF:
+                    printf("REF\t%lld\t%lld\n", record.page_id, record.ori_page_id);
+                    break;
+                }
             }
-            valid_page_entries.put(pid, entry);
         }
         // Read correspond page and check checksum
         auto reader = const_cast<DB::PageFile &>(page_file).createReader();
@@ -90,12 +100,15 @@ int main(int argc, char ** argv)
         {
             fprintf(stderr, "%s\n", e.displayText().c_str());
         }
+
+        versions.apply(edit);
     }
 
     if (mode == MODE_DUMP_VALID_ENTRIES)
     {
-        printf("Valid page entries: %zu\n", valid_page_entries.size());
-        for (auto iter = valid_page_entries.cbegin(); iter != valid_page_entries.cend(); ++iter)
+        DB::PageEntryMap * valid_page_entries = versions.currentMap();
+        printf("Valid page entries: %zu\n", valid_page_entries->size());
+        for (auto iter = valid_page_entries->cbegin(); iter != valid_page_entries->cend(); ++iter)
         {
             const DB::PageId      pid   = iter.pageId();
             const DB::PageEntry & entry = iter.pageEntry();
