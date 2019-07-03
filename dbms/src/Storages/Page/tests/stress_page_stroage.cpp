@@ -45,9 +45,9 @@ public:
             const char   buff_ch = random() % 0xFF;
             memset(buff, buff_ch, buff_sz);
             wb.putPage(pageId, 0, std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz), buff_sz);
-            delete[] buff;
 
             ps->write(wb);
+            delete[] buff;
         }
         LOG_INFO(&Logger::get("root"), "writer exit");
     }
@@ -71,13 +71,11 @@ public:
             const DB::PageId pageId = random() % MAX_PAGE_ID;
             try
             {
-                ps->read({
-                    pageId,
-                });
+                ps->read(pageId);
             }
             catch (DB::Exception & e)
             {
-                LOG_TRACE(&Logger::get("root"), e.displayText());
+                //LOG_TRACE(&Logger::get("root"), e.displayText());
             }
         }
         LOG_INFO(&Logger::get("root"), "reader exit");
@@ -112,9 +110,9 @@ int main(int argc, char ** argv)
     (void)argv;
 
     bool drop_before_run = false;
-    if (argc > 2)
+    if (argc >= 2)
     {
-        DB::String drop_str = argv[2];
+        DB::String drop_str = argv[1];
         if (drop_str == "drop")
         {
             drop_before_run = true;

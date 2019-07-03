@@ -36,6 +36,7 @@ void PageEntryMap::copyEntries(const PageEntryMap & rhs)
 {
     page_ref     = rhs.page_ref;
     normal_pages = rhs.normal_pages;
+    max_page_id  = rhs.max_page_id;
 }
 
 

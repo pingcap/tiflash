@@ -83,9 +83,16 @@ PageId PageStorage::getMaxId()
 
 PageEntry PageStorage::getEntry(PageId page_id)
 {
-    PageEntryMap * page_entry_map = version_set.currentMap();
-    page_entry_map->incrRefCount();
-    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+    PageEntryMap * page_entry_map = nullptr;
+    {
+        std::shared_lock lock(read_mutex);
+        page_entry_map = version_set.currentMap();
+        page_entry_map->incrRefCount();
+    }
+    SCOPE_EXIT({
+        std::unique_lock decr_lock(read_mutex);
+        page_entry_map->decrRefCount();
+    });
 
     auto it = page_entry_map->find(page_id);
     if (it != page_entry_map->end())
@@ -141,9 +148,16 @@ void PageStorage::write(const WriteBatch & wb)
 
 Page PageStorage::read(PageId page_id)
 {
-    PageEntryMap * const page_entry_map = version_set.currentMap();
-    page_entry_map->incrRefCount();
-    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+    PageEntryMap * page_entry_map = nullptr;
+    {
+        std::shared_lock lock(read_mutex);
+        page_entry_map = version_set.currentMap();
+        page_entry_map->incrRefCount();
+    }
+    SCOPE_EXIT({
+        std::unique_lock decr_lock(read_mutex);
+        page_entry_map->decrRefCount();
+    });
 
     auto it = page_entry_map->find(page_id);
     if (it == page_entry_map->end())
@@ -157,9 +171,16 @@ Page PageStorage::read(PageId page_id)
 
 PageMap PageStorage::read(const std::vector<PageId> & page_ids)
 {
-    PageEntryMap * const page_entry_map = version_set.currentMap();
-    page_entry_map->incrRefCount();
-    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+    PageEntryMap * page_entry_map = nullptr;
+    {
+        std::shared_lock lock(read_mutex);
+        page_entry_map = version_set.currentMap();
+        page_entry_map->incrRefCount();
+    }
+    SCOPE_EXIT({
+        std::unique_lock decr_lock(read_mutex);
+        page_entry_map->decrRefCount();
+    });
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
@@ -190,9 +211,16 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids)
 
 void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handler)
 {
-    PageEntryMap * const page_entry_map = version_set.currentMap();
-    page_entry_map->incrRefCount();
-    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+    PageEntryMap * page_entry_map = nullptr;
+    {
+        std::shared_lock lock(read_mutex);
+        page_entry_map = version_set.currentMap();
+        page_entry_map->incrRefCount();
+    }
+    SCOPE_EXIT({
+        std::unique_lock decr_lock(read_mutex);
+        page_entry_map->decrRefCount();
+    });
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
@@ -220,9 +248,16 @@ void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handl
 
 void PageStorage::traverse(const std::function<void(const Page & page)> & acceptor)
 {
-    PageEntryMap * const page_entry_map = version_set.currentMap();
-    page_entry_map->incrRefCount();
-    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+    PageEntryMap * page_entry_map = nullptr;
+    {
+        std::shared_lock lock(read_mutex);
+        page_entry_map = version_set.currentMap();
+        page_entry_map->incrRefCount();
+    }
+    SCOPE_EXIT({
+        std::unique_lock decr_lock(read_mutex);
+        page_entry_map->decrRefCount();
+    });
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
     {
@@ -247,9 +282,16 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 void PageStorage::traversePageEntries( //
     const std::function<void(PageId page_id, const PageEntry & page)> & acceptor)
 {
-    PageEntryMap * const page_entry_map = version_set.currentMap();
-    page_entry_map->incrRefCount();
-    SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+    PageEntryMap * page_entry_map = nullptr;
+    {
+        std::shared_lock lock(read_mutex);
+        page_entry_map = version_set.currentMap();
+        page_entry_map->incrRefCount();
+    }
+    SCOPE_EXIT({
+        std::unique_lock decr_lock(read_mutex);
+        page_entry_map->decrRefCount();
+    });
 
     // traverse over all Pages or RefPages
     for (auto iter = page_entry_map->cbegin(); iter != page_entry_map->cend(); ++iter)
@@ -285,9 +327,16 @@ bool PageStorage::gc()
     {
         /// Select the GC candidates files and migrate valid pages into an new file.
         /// Acquire a snapshot version of page map, new edit on page map store in `gc_file_entries_edit`
-        PageEntryMap * const page_entry_map = version_set.currentMap();
-        page_entry_map->incrRefCount();
-        SCOPE_EXIT({ page_entry_map->decrRefCount(); });
+        PageEntryMap * page_entry_map = nullptr;
+        {
+            std::shared_lock lock(read_mutex);
+            page_entry_map = version_set.currentMap();
+            page_entry_map->incrRefCount();
+        }
+        SCOPE_EXIT({
+            std::unique_lock decr_lock(read_mutex);
+            page_entry_map->decrRefCount();
+        });
 
         std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>> file_valid_pages;
         {

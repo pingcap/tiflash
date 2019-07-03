@@ -94,6 +94,8 @@ public:
 private:
     void appendVersion(PageEntryMap *v);
 
+    size_t getVersionSetSize();
+
 private:
     PageEntryMap   dummy_versions; // Head of circular double-linked list of all PageEntryMap
     PageEntryMap * current_map;    // == dummy_versions.prev
