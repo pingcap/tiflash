@@ -17,20 +17,28 @@ public:
 
     void put(PageId page_id, const PageEntry & entry)
     {
-        records.emplace_back( //
-            EditRecord{.type = WriteBatch::WriteType::PUT, .page_id = page_id, .entry = entry});
+        EditRecord record;
+        record.type = WriteBatch::WriteType::PUT;
+        record.page_id = page_id;
+        record.entry = entry;
+        records.emplace_back(record);
     }
 
     void del(PageId page_id)
     {
-        records.emplace_back( //
-            EditRecord{.type = WriteBatch::WriteType::DEL, .page_id = page_id});
+        EditRecord record;
+        record.type = WriteBatch::WriteType::DEL;
+        record.page_id = page_id;
+        records.emplace_back(record);
     }
 
     void ref(PageId ref_id, PageId page_id)
     {
-        records.emplace_back( //
-            EditRecord{.type = WriteBatch::WriteType::REF, .page_id = ref_id, .ori_page_id = page_id});
+        EditRecord record;
+        record.type = WriteBatch::WriteType::REF;
+        record.page_id = ref_id;
+        record.ori_page_id = page_id;
+        records.emplace_back(record);
     }
 
     bool empty() const { return records.empty(); }
@@ -39,11 +47,8 @@ public:
     {
         WriteBatch::WriteType type;
         PageId                page_id;
-        union
-        {
-            PageEntry entry;
-            PageId    ori_page_id;
-        };
+        PageEntry entry;
+        PageId    ori_page_id;
     };
     using EditRecords = std::vector<EditRecord>;
 

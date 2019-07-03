@@ -66,6 +66,8 @@ public:
             DB::WriteBatch wb;
             wb.putPage(pageId, 0, buff, buff->buffer().size());
             ps->write(wb);
+            if (pageId % 100 == 0)
+                LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
         }
     }
 
@@ -299,7 +301,7 @@ int main(int argc, char ** argv)
     pool.joinAll();
     high_resolution_clock::time_point endTime = high_resolution_clock::now();
     milliseconds timeInterval = std::chrono::duration_cast<milliseconds>(endTime - beginTime);
-    fprintf(stderr, "end in %lldms\n", timeInterval.count());
+    fprintf(stderr, "end in %ldms\n", timeInterval.count());
     double seconds_run = 1.0 * timeInterval.count() / 1000;
 
     size_t total_pages_written = 0;
