@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <shared_mutex>
 
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
@@ -71,13 +72,14 @@ public:
 
     void incrRefCount() { ++ref_count; }
 
-    void decrRefCount()
+    void decrRefCount(std::shared_mutex &mutex)
     {
         assert(ref_count >= 1);
         if (--ref_count == 0)
         {
-            LOG_TRACE(&Poco::Logger::root(), "Removing version, maxId:" + DB::toString(max_page_id) + ", " + DB::toString(normal_pages.size()) + " pages from version set");
-            delete this; // remove this node from version set
+            // require for lock in case two node remove from linked list
+            std::unique_lock lock(mutex);
+            delete this;
         }
     }
 
@@ -101,6 +103,15 @@ private:
 
     template <bool must_exist = true>
     void decreasePageRef(PageId page_id);
+
+    void decrRefCount()
+    {
+        assert(ref_count >= 1);
+        if (--ref_count == 0)
+        {
+            delete this; // remove this node from version set
+        }
+    }
 
     void copyEntries(const PageEntryMap & rhs);
 

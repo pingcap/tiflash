@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <random>
+#include <chrono>
 
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -16,67 +17,144 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <Storages/Page/PageStorage.h>
 
+using std::chrono::high_resolution_clock;
+using std::chrono::milliseconds;
+
 using PSPtr = std::shared_ptr<DB::PageStorage>;
 
 const DB::PageId MAX_PAGE_ID = 1000;
 
 std::atomic<bool> running_without_exception = true;
+std::atomic<bool> running_without_timeout   = true;
 
 class PSWriter : public Poco::Runnable
 {
     PSPtr        ps;
     std::mt19937 gen;
 
+    static size_t approx_page_mb;
+
 public:
-    PSWriter(const PSPtr & ps_) : ps(ps_), gen() {}
+    PSWriter(const PSPtr & ps_) : ps(ps_), gen(), bytes_written(0), pages_written(0) {}
+
+    static void setApproxPageSize(size_t size_mb)
+    {
+        LOG_INFO(&Logger::get("root"), "Page approx size is set to " + DB::toString(size_mb) + "MB");
+        approx_page_mb = size_mb;
+    }
+
+    static DB::ReadBufferPtr genRandomData(const DB::PageId pageId, DB::MemHolder & holder)
+    {
+        // fill page with random bytes
+        const size_t buff_sz = approx_page_mb * 1024 * 1024 + random() % 3000;
+        char *       buff    = (char *)malloc(buff_sz);
+        const char   buff_ch = pageId % 0xFF;
+        memset(buff, buff_ch, buff_sz);
+
+        holder = DB::createMemHolder(buff, [&](char * p) { free(p); });
+
+        return std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz);
+    }
+
+    static void fillAllPages(const PSPtr & ps)
+    {
+        for (DB::PageId pageId = 0; pageId < MAX_PAGE_ID; ++pageId)
+        {
+            DB::MemHolder     holder;
+            DB::ReadBufferPtr buff = genRandomData(pageId, holder);
+
+            DB::WriteBatch wb;
+            wb.putPage(pageId, 0, buff, buff->buffer().size());
+            ps->write(wb);
+        }
+    }
+
+    size_t bytes_written;
+    size_t pages_written;
+
     void run() override
     {
-        while (running_without_exception)
+        while (running_without_exception && running_without_timeout)
         {
             assert(ps != nullptr);
             std::normal_distribution<> d{MAX_PAGE_ID / 2, 150};
             const DB::PageId           pageId = static_cast<DB::PageId>(std::round(d(gen))) % MAX_PAGE_ID;
             //const DB::PageId pageId = random() % MAX_PAGE_ID;
 
-            DB::WriteBatch wb;
-            // fill page with random bytes
-            const size_t buff_sz = 2048 * 1024 + random() % 3000;
-            char *       buff    = new char[buff_sz];
-            const char   buff_ch = random() % 0xFF;
-            memset(buff, buff_ch, buff_sz);
-            wb.putPage(pageId, 0, std::make_shared<DB::ReadBufferFromMemory>(buff, buff_sz), buff_sz);
+            DB::MemHolder     holder;
+            DB::ReadBufferPtr buff = genRandomData(pageId, holder);
 
+            DB::WriteBatch wb;
+            wb.putPage(pageId, 0, buff, buff->buffer().size());
             ps->write(wb);
-            delete[] buff;
+            ++pages_written;
+            bytes_written += buff->buffer().size();
+            //LOG_INFO(&Logger::get("root"), "writer wrote page" + DB::toString(pageId));
         }
         LOG_INFO(&Logger::get("root"), "writer exit");
     }
 };
 
+size_t PSWriter::approx_page_mb = 2;
+
 class PSReader : public Poco::Runnable
 {
     PSPtr ps;
+    const size_t heavy_read_delay_ms;
 
 public:
-    PSReader(const PSPtr & ps_) : ps(ps_) {}
+    PSReader(const PSPtr & ps_, size_t delay_ms) : ps(ps_), heavy_read_delay_ms(delay_ms), pages_read(0), bytes_read(0) {}
+
+    size_t pages_read;
+    size_t bytes_read;
+
     void run() override
     {
-        while (running_without_exception)
+        while (running_without_exception && running_without_timeout)
         {
             {
-                const uint32_t micro_seconds_to_sleep = random() % 50;
+                // sleep [0~10) ms
+                const uint32_t micro_seconds_to_sleep = random() % 10;
                 usleep(micro_seconds_to_sleep * 1000);
             }
             assert(ps != nullptr);
+#if 0
             const DB::PageId pageId = random() % MAX_PAGE_ID;
             try
             {
-                ps->read(pageId);
+                DB::Page page = ps->read(pageId);
+                ++pages_read;
+                bytes_read += page.data.size();
             }
             catch (DB::Exception & e)
             {
-                //LOG_TRACE(&Logger::get("root"), e.displayText());
+                LOG_TRACE(&Logger::get("root"), e.displayText());
             }
+#else
+            std::vector<DB::PageId> pageIds;
+            for (size_t i = 0; i < 5; ++i) {
+                pageIds.emplace_back(random() % MAX_PAGE_ID);
+            }
+            try
+            {
+                // std::function<void(PageId page_id, const Page &)>;
+                DB::PageHandler handler = [&](DB::PageId page_id, const DB::Page &page){
+                    (void)page_id;
+                    // use `sleep` to mock heavy read
+                    if (heavy_read_delay_ms > 0) {
+                        //const uint32_t micro_seconds_to_sleep = 10;
+                        usleep(heavy_read_delay_ms * 1000);
+                    }
+                    ++pages_read;
+                    bytes_read += page.data.size();
+                };
+                ps->read(pageIds, handler);
+            }
+            catch (DB::Exception &e)
+            {
+                LOG_TRACE(&Logger::get("root"), e.displayText());
+            }
+#endif
         }
         LOG_INFO(&Logger::get("root"), "reader exit");
     }
@@ -104,20 +182,20 @@ public:
     }
 };
 
+class StressTimeout
+{
+public:
+    void onTime(Poco::Timer & /* t */)
+    {
+        LOG_INFO(&Logger::get("root"), "timeout.");
+        running_without_timeout = false;
+    }
+};
+
 int main(int argc, char ** argv)
 {
     (void)argc;
     (void)argv;
-
-    bool drop_before_run = false;
-    if (argc >= 2)
-    {
-        DB::String drop_str = argv[1];
-        if (drop_str == "drop")
-        {
-            drop_before_run = true;
-        }
-    }
 
     Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
     Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
@@ -126,12 +204,47 @@ int main(int argc, char ** argv)
     Logger::root().setChannel(formatting_channel);
     Logger::root().setLevel("trace");
 
+    bool drop_before_run = false;
+    long timeout_s = 0;
+    size_t num_writers = 1;
+    size_t num_readers = 4;
+    size_t heavy_read_delay_ms = 0;
+    if (argc >= 2)
+    {
+        DB::String drop_str = argv[1];
+        if (drop_str == "drop")
+            drop_before_run = true;
+        // timeout for benchmark
+        if (argc >= 3)
+            timeout_s = strtol(argv[2], nullptr, 10);
+        // num writers
+        if (argc >= 4)
+            num_writers = strtoul(argv[3], nullptr, 10);
+        // num readers
+        if (argc >= 5)
+            num_readers = strtoul(argv[4], nullptr, 10);
+        if (argc >= 6)
+        {
+            size_t page_mb = strtoul(argv[5], nullptr, 10);
+            page_mb = std::max(page_mb, 1UL);
+            PSWriter::setApproxPageSize(page_mb);
+        }
+        if (argc >= 7)
+        {
+            heavy_read_delay_ms = strtoul(argv[6], nullptr, 10);
+            heavy_read_delay_ms = std::max(heavy_read_delay_ms, 0);
+            LOG_INFO(&Logger::get("root"), "read dealy: " + DB::toString(heavy_read_delay_ms) + "ms");
+        }
+    }
+    // set random seed
+    srand(0x123987);
 
     const DB::String path = "./stress";
     // drop dir if exists
     Poco::File file(path);
     if (file.exists() && drop_before_run)
     {
+        LOG_INFO(&Logger::get("root"), "All pages have been drop.");
         file.remove(true);
     }
 
@@ -139,30 +252,82 @@ int main(int argc, char ** argv)
     DB::PageStorage::Config config;
     PSPtr                   ps = std::make_shared<DB::PageStorage>(path, config);
 
+    // init all pages in PageStorage
+    PSWriter::fillAllPages(ps);
+    LOG_INFO(&Logger::get("root"), "All pages have been init.");
+
+    high_resolution_clock::time_point beginTime = high_resolution_clock::now();
+
     // create thread pool
-    const size_t     num_readers = 4;
-    Poco::ThreadPool pool(/* minCapacity= */ 2 + num_readers);
+    LOG_INFO(&Logger::get("root"),
+             "start running with these threads: W:" + DB::toString(num_writers) + ",R:" + DB::toString(num_readers) + ",Gc:1");
+    Poco::ThreadPool pool(/* minCapacity= */ 1 + num_writers + num_readers, 1 + num_writers + num_readers);
 
     // start one writer thread
-    PSWriter writer(ps);
-    pool.start(writer, "writer");
+    std::vector<std::shared_ptr<PSWriter>> writers(num_writers);
+    for (size_t i = 0; i < num_writers; ++i)
+    {
+        writers[i] = std::make_shared<PSWriter>(ps);
+        pool.start(*writers[i], "writer");
+    }
 
     // start one gc thread
     PSGc        gc(ps);
-    Poco::Timer timer(0, 30 * 1000);
+    Poco::Timer timer(0);
     timer.setStartInterval(1000);
     timer.setPeriodicInterval(30 * 1000);
     timer.start(Poco::TimerCallback<PSGc>(gc, &PSGc::onTime));
 
-    // start mutiple read thread
+    // start multiple read thread
     std::vector<std::shared_ptr<PSReader>> readers(num_readers);
     for (size_t i = 0; i < num_readers; ++i)
     {
-        readers[i] = std::make_shared<PSReader>(ps);
+        readers[i] = std::make_shared<PSReader>(ps, heavy_read_delay_ms);
         pool.start(*readers[i]);
     }
 
-    pool.joinAll();
+    // set timeout
+    Poco::Timer   timeout_timer(timeout_s);
+    StressTimeout canceler;
+    if (timeout_s > 0)
+    {
+        LOG_INFO(&Logger::get("root"), "benchmark timeout: " + DB::toString(timeout_s) + "s");
+        timeout_timer.setStartInterval(timeout_s * 1000);
+        timeout_timer.start(Poco::TimerCallback<StressTimeout>(canceler, &StressTimeout::onTime));
+    }
 
-    return -1;
+    pool.joinAll();
+    high_resolution_clock::time_point endTime = high_resolution_clock::now();
+    milliseconds timeInterval = std::chrono::duration_cast<milliseconds>(endTime - beginTime);
+    fprintf(stderr, "end in %lldms\n", timeInterval.count());
+    double seconds_run = 1.0 * timeInterval.count() / 1000;
+
+    size_t total_pages_written = 0;
+    size_t total_bytes_written = 0;
+    for (auto & writer : writers)
+    {
+        total_pages_written += writer->pages_written;
+        total_bytes_written += writer->bytes_written;
+    }
+
+    size_t total_pages_read = 0;
+    size_t total_bytes_read = 0;
+    for (auto & reader : readers)
+    {
+        total_pages_read += reader->pages_read;
+        total_bytes_read += reader->bytes_read;
+    }
+
+    const double GB = 1024 * 1024 * 1024;
+    fprintf(stderr, "W: %zu pages, %.4lf GB, %.4lf GB/s\n", total_pages_written, total_bytes_written / GB, total_bytes_written / GB / seconds_run);
+    fprintf(stderr, "R: %zu pages, %.4lf GB, %.4lf GB/s\n", total_pages_read, total_bytes_read / GB, total_bytes_read / GB / seconds_run);
+
+    if (running_without_exception)
+    {
+        return 0;
+    }
+    else
+    {
+        return -1;
+    }
 }

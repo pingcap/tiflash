@@ -4,7 +4,7 @@ namespace DB
 {
 
 void VersionedPageEntryMap::apply(const PageEntriesEdit &edit) {
-    LOG_TRACE(&Poco::Logger::root(), "before apply, size=" + DB::toString(getVersionSetSize()));
+    //LOG_TRACE(&Poco::Logger::root(), "before apply, size=" + DB::toString(getVersionSetSize()));
 
     PageEntryMap * base = current_map;
     base->incrRefCount();
@@ -30,11 +30,11 @@ void VersionedPageEntryMap::apply(const PageEntriesEdit &edit) {
     base->decrRefCount();
 
     appendVersion(v);
-    LOG_TRACE(&Poco::Logger::root(), "after apply, size=" + DB::toString(getVersionSetSize()));
+    //LOG_TRACE(&Poco::Logger::root(), "after apply, size=" + DB::toString(getVersionSetSize()));
 }
 
 void VersionedPageEntryMap::gcApply(const PageEntriesEdit &edit) {
-    LOG_TRACE(&Poco::Logger::root(), "before gc apply, size=" + DB::toString(getVersionSetSize()));
+    //LOG_TRACE(&Poco::Logger::root(), "before gc apply, size=" + DB::toString(getVersionSetSize()));
     PageEntryMap * base = current_map;
     base->incrRefCount();
 
@@ -66,7 +66,7 @@ void VersionedPageEntryMap::gcApply(const PageEntriesEdit &edit) {
     base->decrRefCount();
 
     appendVersion(v);
-    LOG_TRACE(&Poco::Logger::root(), "after gc apply, size=" + DB::toString(getVersionSetSize()));
+    //LOG_TRACE(&Poco::Logger::root(), "after gc apply, size=" + DB::toString(getVersionSetSize()));
 }
 
 std::set<PageFileIdAndLevel> VersionedPageEntryMap::listAllLiveFiles() const {
