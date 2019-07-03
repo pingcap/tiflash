@@ -15,7 +15,7 @@ public:
         it = children.begin();
     }
 
-    String getName() const override { return "TMTUnionBlockInputStream"; }
+    String getName() const override { return "TMTUnion"; }
 
 protected:
     Block getHeader() const override { return children.back()->getHeader(); }
