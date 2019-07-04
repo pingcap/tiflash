@@ -4,6 +4,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <Common/Exception.h>
 #include <Columns/ColumnDecimal.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -26,8 +27,8 @@ class DataTypeDecimal : public IDataType
 {
     static_assert(IsDecimal<T>);
 private:
-    UInt32 precision;
-    UInt32 scale;
+    PrecType  precision;
+    ScaleType scale;
 
 public:
     using FieldType = T;
@@ -38,7 +39,8 @@ public:
 
     static constexpr size_t maxPrecision() { return maxDecimalPrecision<T>(); }
 
-    DataTypeDecimal() {}
+    // If scale is omitted, the default is 0. If precision is omitted, the default is 10.
+    DataTypeDecimal(): DataTypeDecimal(10, 0) {}
 
     DataTypeDecimal(size_t precision_, size_t scale_) : precision(precision_), scale(scale_)
     {
@@ -152,10 +154,10 @@ using DataTypeDecimal256 = DataTypeDecimal<Decimal256>;
 inline DataTypePtr createDecimal(UInt64 prec, UInt64 scale)
 {
     if (prec < minDecimalPrecision() || prec > maxDecimalPrecision<Decimal256>())
-        throw Exception("Wrong precision", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception("Wrong precision:" + DB::toString(prec), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (static_cast<UInt64>(scale) > prec)
-        throw Exception("Negative scales and scales larger than presicion are not supported", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception("Negative scales and scales larger than precision are not supported. precision:" + DB::toString(prec) + ", scale:" + DB::toString(scale), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (prec <= maxDecimalPrecision<Decimal32>()) {
         return (std::make_shared<DataTypeDecimal32>(prec, scale));
@@ -175,7 +177,7 @@ inline const DataTypeDecimal<T> * checkDecimal(const IDataType & data_type)
     return typeid_cast<const DataTypeDecimal<T> *>(&data_type);
 }
 
-inline bool IsDecimalDataType(DataTypePtr type) {
+inline bool IsDecimalDataType(const DataTypePtr& type) {
     return checkDecimal<Decimal32>(*type) || checkDecimal<Decimal64>(*type) || checkDecimal<Decimal128>(*type) || checkDecimal<Decimal256>(*type);
 }
 template <typename T, typename U>

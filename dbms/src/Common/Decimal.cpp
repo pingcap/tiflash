@@ -46,7 +46,7 @@ String Decimal<T>::toString(ScaleType scale) const
 bool parseDecimal(const char* str, size_t len, bool negative, Field & field) {
     PrecType prec = 0;
     ScaleType scale = 0;
-    Int256 value = 0;
+    Int256 value = 0; // Int256 is ok for 65 digits number at most.
     bool frac = false;
     for (size_t i = 0; i < len; i++) {
         char c = str[i];
@@ -82,6 +82,8 @@ bool parseDecimal(const char* str, size_t len, bool negative, Field & field) {
     } else if (prec <= maxDecimalPrecision<Decimal256>()){
         field = DecimalField<Decimal256>(value, scale);
     } else {
+        // This branch expect to be dead code. Cause if prec > decimal_max_prec,
+        // it will return false in for-loop
         throw Exception("Decimal Overflow");
     }
 

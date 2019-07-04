@@ -242,7 +242,7 @@ inline void decimalRound(Int256 & value, ReadBuffer & buf)
 template<typename T>
 inline void readDecimalText(Decimal<T> & x, ReadBuffer & buf, PrecType precision, ScaleType scale)
 {
-    Int256 value(0);
+    Int256 value(0); // Int256 is ok for 65 digits number at most.
     bool negative = false;
     bool fractional = false;
     if (buf.eof())

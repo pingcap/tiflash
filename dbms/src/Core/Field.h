@@ -171,9 +171,12 @@ public:
             {
                 case Null:    return "Null";
                 case UInt64:  return "UInt64";
-                case UInt128: return "UInt128";
                 case Int64:   return "Int64";
                 case Float64: return "Float64";
+                case UInt128: return "UInt128";
+                case Int128:  return "Int128";
+                case Int256:  return "Int256";
+
                 case String:  return "String";
                 case Array:   return "Array";
                 case Tuple:   return "Tuple";

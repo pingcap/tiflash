@@ -1279,8 +1279,8 @@ private:
         }
         else
         {
-            PrecType result_prec;
-            ScaleType result_scale;
+            PrecType result_prec = 0;
+            ScaleType result_scale = 0;
             // Treat integer as a kind of decimal;
             if constexpr (std::is_integral_v<LeftFieldType>) {
                 PrecType leftPrec = IntPrec<LeftFieldType>::prec;

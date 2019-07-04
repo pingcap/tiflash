@@ -74,3 +74,6 @@ target_link_libraries (stopwatch clickhouse_common_io)
 
 add_executable (persisted_container persisted_container.cpp)
 target_link_libraries (persisted_container clickhouse_common_io)
+
+add_executable(decimal_test_decimal_type gtest_decimal_type.cpp)
+target_link_libraries(decimal_test_decimal_type clickhouse_common_io gtest_main)
