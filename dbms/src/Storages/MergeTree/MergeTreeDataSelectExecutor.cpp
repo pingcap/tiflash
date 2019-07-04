@@ -39,7 +39,7 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/ReplacingSortedBlockInputStream.h>
 #include <DataStreams/SummingSortedBlockInputStream.h>
 #include <DataStreams/TMTSortedBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/TMTUnionBlockInputStream.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/VersionedCollapsingSortedBlockInputStream.h>
 #include <DataTypes/DataTypeDate.h>
@@ -1106,7 +1106,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 }
 
                 if (!union_regions_stream.empty())
-                    res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
+                    res.emplace_back(std::make_shared<TMTUnionBlockInputStream>(std::move(union_regions_stream)));
             }
         }
         else
