@@ -3,6 +3,7 @@
 #include <grpcpp/security/credentials.h>
 #include <grpcpp/create_channel.h>
 #include <Poco/URI.h>
+#include <unistd.h>
 
 namespace pingcap {
 namespace pd {
@@ -85,6 +86,7 @@ pdpb::GetMembersResponse Client::getMembers(std::string url)
 }
 
 std::unique_ptr<pdpb::PD::Stub> Client::leaderStub() {
+    std::shared_lock lk(leader_mutex);
     auto cc = getOrCreateGRPCConn(leader);
     return pdpb::PD::NewStub(cc);
 }
@@ -122,6 +124,7 @@ void Client::updateLeader() {
 }
 
 void Client::switchLeader(const ::google::protobuf::RepeatedPtrField<std::string>& leader_urls) {
+    std::unique_lock lk(leader_mutex);
     std::string old_leader = leader;
     leader = leader_urls[0];
     if (leader == old_leader) {
@@ -149,7 +152,7 @@ void Client::leaderLoop() {
         bool should_update = false;
         std::unique_lock<std::mutex> lk(update_leader_mutex);
         auto now = std::chrono::system_clock::now();
-        if (update_leader_cv.wait_until(lk, now + loop_interval, [this](){return check_leader;})) {
+        if (update_leader_cv.wait_until(lk, now + loop_interval, [this](){return check_leader.load();})) {
             should_update = true;
         } else {
             if (work_threads_stop)
@@ -163,7 +166,7 @@ void Client::leaderLoop() {
         }
         if (should_update) {
             try {
-                check_leader = false;
+                check_leader.store(false);
                 updateLeader();
             } catch (Exception & e) {
                 log->error(e.displayText());
@@ -195,6 +198,9 @@ uint64_t Client::getGCSafePoint() {
             return response.safe_point();
         err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
+        check_leader.store(true);
+        usleep(100000);
+        // TODO retry outside.
     }
     throw Exception(err_msg, status.error_code());
 }
@@ -214,6 +220,7 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
     if (!status.ok()) {
         std::string err_msg = ("get region failed: " + std::to_string(status.error_code()) + " : " + status.error_message());
         log->error(err_msg);
+        check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
     }
 
@@ -239,6 +246,7 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
     if (!status.ok()) {
         std::string err_msg = ("get region by id failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
         log->error(err_msg);
+        check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
     }
 
@@ -264,6 +272,7 @@ metapb::Store Client::getStore(uint64_t store_id) {
     if (!status.ok()) {
         std::string err_msg = ("get store failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
         log->error(err_msg);
+        check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
     }
     return response.store();
