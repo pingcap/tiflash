@@ -1,7 +1,7 @@
 #pragma once
 
-#include <unordered_map>
 #include <shared_mutex>
+#include <unordered_map>
 
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
@@ -72,12 +72,12 @@ public:
 
     void incrRefCount() { ++ref_count; }
 
-    void decrRefCount(std::shared_mutex &mutex)
+    void decrRefCount(std::shared_mutex & mutex)
     {
         assert(ref_count >= 1);
         if (--ref_count == 0)
         {
-            // require for lock in case two node remove from linked list
+            // in case two neighbor nodes remove from linked list
             std::unique_lock lock(mutex);
             delete this;
         }
@@ -86,6 +86,16 @@ public:
     PageId maxId() const { return max_page_id; }
 
 private:
+    // Not thread-safe, caller ensure.
+    void decrRefCount()
+    {
+        assert(ref_count >= 1);
+        if (--ref_count == 0)
+        {
+            delete this; // remove this node from version set
+        }
+    }
+
     PageId resolveRefId(PageId page_id) const
     {
         // resolve RefPageId to normal PageId
@@ -103,15 +113,6 @@ private:
 
     template <bool must_exist = true>
     void decreasePageRef(PageId page_id);
-
-    void decrRefCount()
-    {
-        assert(ref_count >= 1);
-        if (--ref_count == 0)
-        {
-            delete this; // remove this node from version set
-        }
-    }
 
     void copyEntries(const PageEntryMap & rhs);
 
@@ -243,7 +244,7 @@ public:
         return *this;
     }
 
-    friend class VersionedPageEntryMap;
+    friend class PageEntryMapVersionSet;
 };
 
 template <bool must_exist>

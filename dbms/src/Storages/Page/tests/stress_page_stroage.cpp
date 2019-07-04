@@ -1,8 +1,8 @@
 #include <atomic>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <random>
-#include <chrono>
 
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
@@ -101,7 +101,7 @@ size_t PSWriter::approx_page_mb = 2;
 
 class PSReader : public Poco::Runnable
 {
-    PSPtr ps;
+    PSPtr        ps;
     const size_t heavy_read_delay_ms;
 
 public:
@@ -134,16 +134,18 @@ public:
             }
 #else
             std::vector<DB::PageId> pageIds;
-            for (size_t i = 0; i < 5; ++i) {
+            for (size_t i = 0; i < 5; ++i)
+            {
                 pageIds.emplace_back(random() % MAX_PAGE_ID);
             }
             try
             {
                 // std::function<void(PageId page_id, const Page &)>;
-                DB::PageHandler handler = [&](DB::PageId page_id, const DB::Page &page){
+                DB::PageHandler handler = [&](DB::PageId page_id, const DB::Page & page) {
                     (void)page_id;
                     // use `sleep` to mock heavy read
-                    if (heavy_read_delay_ms > 0) {
+                    if (heavy_read_delay_ms > 0)
+                    {
                         //const uint32_t micro_seconds_to_sleep = 10;
                         usleep(heavy_read_delay_ms * 1000);
                     }
@@ -152,7 +154,7 @@ public:
                 };
                 ps->read(pageIds, handler);
             }
-            catch (DB::Exception &e)
+            catch (DB::Exception & e)
             {
                 LOG_TRACE(&Logger::get("root"), e.displayText());
             }
@@ -206,10 +208,10 @@ int main(int argc, char ** argv)
     Logger::root().setChannel(formatting_channel);
     Logger::root().setLevel("trace");
 
-    bool drop_before_run = false;
-    long timeout_s = 0;
-    size_t num_writers = 1;
-    size_t num_readers = 4;
+    bool   drop_before_run     = false;
+    long   timeout_s           = 0;
+    size_t num_writers         = 1;
+    size_t num_readers         = 4;
     size_t heavy_read_delay_ms = 0;
     if (argc >= 2)
     {
@@ -228,7 +230,7 @@ int main(int argc, char ** argv)
         if (argc >= 6)
         {
             size_t page_mb = strtoul(argv[5], nullptr, 10);
-            page_mb = std::max(page_mb, 1UL);
+            page_mb        = std::max(page_mb, 1UL);
             PSWriter::setApproxPageSize(page_mb);
         }
         if (argc >= 7)
@@ -299,8 +301,8 @@ int main(int argc, char ** argv)
     }
 
     pool.joinAll();
-    high_resolution_clock::time_point endTime = high_resolution_clock::now();
-    milliseconds timeInterval = std::chrono::duration_cast<milliseconds>(endTime - beginTime);
+    high_resolution_clock::time_point endTime      = high_resolution_clock::now();
+    milliseconds                      timeInterval = std::chrono::duration_cast<milliseconds>(endTime - beginTime);
     fprintf(stderr, "end in %ldms\n", timeInterval.count());
     double seconds_run = 1.0 * timeInterval.count() / 1000;
 
@@ -321,7 +323,11 @@ int main(int argc, char ** argv)
     }
 
     const double GB = 1024 * 1024 * 1024;
-    fprintf(stderr, "W: %zu pages, %.4lf GB, %.4lf GB/s\n", total_pages_written, total_bytes_written / GB, total_bytes_written / GB / seconds_run);
+    fprintf(stderr,
+            "W: %zu pages, %.4lf GB, %.4lf GB/s\n",
+            total_pages_written,
+            total_bytes_written / GB,
+            total_bytes_written / GB / seconds_run);
     fprintf(stderr, "R: %zu pages, %.4lf GB, %.4lf GB/s\n", total_pages_read, total_bytes_read / GB, total_bytes_read / GB / seconds_run);
 
     if (running_without_exception)

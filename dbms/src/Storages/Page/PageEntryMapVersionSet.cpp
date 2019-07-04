@@ -1,10 +1,10 @@
-#include <Storages/Page/VersionedPageEntryMap.h>
+#include <Storages/Page/PageEntryMapVersionSet.h>
 
 namespace DB
 {
 
-void VersionedPageEntryMap::apply(const PageEntriesEdit &edit) {
-    //LOG_TRACE(&Poco::Logger::root(), "before apply, size=" + DB::toString(getVersionSetSize()));
+void PageEntryMapVersionSet::apply(const PageEntriesEdit & edit)
+{
 
     PageEntryMap * base = current_map;
     base->incrRefCount();
@@ -15,26 +15,25 @@ void VersionedPageEntryMap::apply(const PageEntriesEdit &edit) {
     {
         switch (rec.type)
         {
-            case WriteBatch::WriteType::PUT:
-                v->put(rec.page_id, rec.entry);
-                break;
-            case WriteBatch::WriteType::DEL:
-                v->del(rec.page_id);
-                break;
-            case WriteBatch::WriteType::REF:
-                v->ref(rec.page_id, rec.ori_page_id);
-                break;
+        case WriteBatch::WriteType::PUT:
+            v->put(rec.page_id, rec.entry);
+            break;
+        case WriteBatch::WriteType::DEL:
+            v->del(rec.page_id);
+            break;
+        case WriteBatch::WriteType::REF:
+            v->ref(rec.page_id, rec.ori_page_id);
+            break;
         }
     }
 
     base->decrRefCount();
 
     appendVersion(v);
-    //LOG_TRACE(&Poco::Logger::root(), "after apply, size=" + DB::toString(getVersionSetSize()));
 }
 
-void VersionedPageEntryMap::gcApply(const PageEntriesEdit &edit) {
-    //LOG_TRACE(&Poco::Logger::root(), "before gc apply, size=" + DB::toString(getVersionSetSize()));
+void PageEntryMapVersionSet::gcApply(const PageEntriesEdit & edit)
+{
     PageEntryMap * base = current_map;
     base->incrRefCount();
 
@@ -66,10 +65,10 @@ void VersionedPageEntryMap::gcApply(const PageEntriesEdit &edit) {
     base->decrRefCount();
 
     appendVersion(v);
-    //LOG_TRACE(&Poco::Logger::root(), "after gc apply, size=" + DB::toString(getVersionSetSize()));
 }
 
-std::set<PageFileIdAndLevel> VersionedPageEntryMap::listAllLiveFiles() const {
+std::set<PageFileIdAndLevel> PageEntryMapVersionSet::listAllLiveFiles() const
+{
     std::set<PageFileIdAndLevel> liveFiles;
     for (PageEntryMap * v = dummy_versions.next; v != &dummy_versions; v = v->next)
     {
@@ -81,7 +80,7 @@ std::set<PageFileIdAndLevel> VersionedPageEntryMap::listAllLiveFiles() const {
     return liveFiles;
 }
 
-size_t VersionedPageEntryMap::getVersionSetSize()
+size_t PageEntryMapVersionSet::getVersionSetSize()
 {
     size_t size = 0;
     for (PageEntryMap * v = dummy_versions.next; v != &dummy_versions; v = v->next)
@@ -89,7 +88,8 @@ size_t VersionedPageEntryMap::getVersionSetSize()
     return size;
 }
 
-void VersionedPageEntryMap::appendVersion(PageEntryMap *const v) {
+void PageEntryMapVersionSet::appendVersion(PageEntryMap * const v)
+{
     // Make "v" become "current_map"
     assert(v->ref_count == 0);
     assert(v != current_map);

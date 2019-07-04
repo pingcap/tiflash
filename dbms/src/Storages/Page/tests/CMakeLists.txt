@@ -10,6 +10,7 @@ target_link_libraries(page_test_page_file gtest_main dbms)
 
 add_executable(page_stress_page_storage stress_page_stroage.cpp)
 target_link_libraries(page_stress_page_storage dbms)
+target_compile_options(page_stress_page_storage PRIVATE -Wno-format) # turn off printf format check
 
 add_executable(page_utils_get_valid_pages utils_get_valid_pages.cpp)
 target_link_libraries(page_utils_get_valid_pages dbms)

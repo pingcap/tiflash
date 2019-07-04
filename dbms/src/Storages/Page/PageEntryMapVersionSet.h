@@ -18,16 +18,16 @@ public:
     void put(PageId page_id, const PageEntry & entry)
     {
         EditRecord record;
-        record.type = WriteBatch::WriteType::PUT;
+        record.type    = WriteBatch::WriteType::PUT;
         record.page_id = page_id;
-        record.entry = entry;
+        record.entry   = entry;
         records.emplace_back(record);
     }
 
     void del(PageId page_id)
     {
         EditRecord record;
-        record.type = WriteBatch::WriteType::DEL;
+        record.type    = WriteBatch::WriteType::DEL;
         record.page_id = page_id;
         records.emplace_back(record);
     }
@@ -35,20 +35,22 @@ public:
     void ref(PageId ref_id, PageId page_id)
     {
         EditRecord record;
-        record.type = WriteBatch::WriteType::REF;
-        record.page_id = ref_id;
+        record.type        = WriteBatch::WriteType::REF;
+        record.page_id     = ref_id;
         record.ori_page_id = page_id;
         records.emplace_back(record);
     }
 
     bool empty() const { return records.empty(); }
 
+    size_t size() const { return records.size(); }
+
     struct EditRecord
     {
         WriteBatch::WriteType type;
         PageId                page_id;
-        PageEntry entry;
-        PageId    ori_page_id;
+        PageEntry             entry;
+        PageId                ori_page_id;
     };
     using EditRecords = std::vector<EditRecord>;
 
@@ -73,11 +75,11 @@ public:
     }
 };
 
-class VersionedPageEntryMap
+class PageEntryMapVersionSet
 {
 public:
-    VersionedPageEntryMap() : dummy_versions(), current_map(nullptr) { appendVersion(new PageEntryMap); }
-    ~VersionedPageEntryMap()
+    PageEntryMapVersionSet() : dummy_versions(), current_map(nullptr) { appendVersion(new PageEntryMap); }
+    ~PageEntryMapVersionSet()
     {
         current_map->decrRefCount();
         assert(dummy_versions.next == &dummy_versions); // List must be empty
@@ -97,7 +99,7 @@ public:
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 
 private:
-    void appendVersion(PageEntryMap *v);
+    void appendVersion(PageEntryMap * v);
 
     size_t getVersionSetSize();
 
