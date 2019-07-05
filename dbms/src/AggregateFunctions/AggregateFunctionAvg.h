@@ -33,10 +33,11 @@ class AggregateFunctionAvg final : public IAggregateFunctionDataHelper<Aggregate
     ScaleType result_scale;
 public:
     AggregateFunctionAvg() {}
-    AggregateFunctionAvg(PrecType prec_, ScaleType scale_) : prec(prec_), scale(scale_)
-    {
-        AvgDecimalInferer::infer(prec, scale, result_prec, result_scale);
-    }
+    AggregateFunctionAvg(PrecType prec_, ScaleType scale_, PrecType result_prec_, ScaleType result_scale_)
+        : prec(prec_),
+        scale(scale_),
+        result_prec(result_prec_),
+        result_scale(result_scale_) {}
     String getName() const override { return "avg"; }
 
     DataTypePtr getReturnType() const override
