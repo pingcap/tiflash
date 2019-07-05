@@ -165,8 +165,8 @@ void TMTSortedBlockInputStream<pk_type>::mergeOptimized(MutableColumns & merged_
             if (out_row_sources_buf)
                 current_row_sources.emplace_back(current.impl->order, true);
 
-            UInt64 version = static_cast<const ColumnUInt64 *>(current->all_columns[version_column_number])->getElement(current->pos);
-            UInt8 delmark = static_cast<const ColumnUInt8 *>(current->all_columns[delmark_column_number])->getElement(current->pos);
+            UInt64 version = static_cast<const ColumnUInt64 *>(current->all_columns[version_column_index])->getElement(current->pos);
+            UInt8 delmark = static_cast<const ColumnUInt8 *>(current->all_columns[delmark_column_index])->getElement(current->pos);
 
             /// A non-strict comparison, since we select the last row for the same version values.
             if ((version > max_version) || (version == max_version && delmark >= max_delmark))
@@ -269,9 +269,9 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
     size_t source_num = current.impl->order;
 
     bool direct_move = true;
-    if (version_column_number != -1)
+
     {
-        const auto del_column = typeid_cast<const ColumnUInt8 *>(current->all_columns[delmark_column_number]);
+        const auto del_column = typeid_cast<const ColumnUInt8 *>(current->all_columns[delmark_column_index]);
 
         // reverse_filter - 1: delete, 0: remain.
         // filter         - 0: delete, 1: remain.

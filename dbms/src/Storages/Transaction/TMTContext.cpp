@@ -7,13 +7,14 @@
 namespace DB
 {
 
-TMTContext::TMTContext(Context & context, std::vector<String> addrs, std::string learner_key_, std::string learner_value_)
-    : kvstore(std::make_shared<KVStore>(context.getPath() + "kvstore/")),
-      region_table(context, context.getPath() + "regmap/"),
+TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
+    const std::string & learner_value, const std::string & kvstore_path, const std::string & region_mapping_path)
+    : kvstore(std::make_shared<KVStore>(kvstore_path)),
+      region_table(context, region_mapping_path),
       schema_syncer(std::make_shared<HttpJsonSchemaSyncer>()),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
-      region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key_, learner_value_)),
+      region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key, learner_value)),
       rpc_client(std::make_shared<pingcap::kv::RpcClient>())
 {}
 
@@ -31,15 +32,15 @@ void TMTContext::restore()
     initialized = true;
 }
 
-KVStorePtr & TMTContext::getKVStoreMut() { return kvstore; }
+KVStorePtr & TMTContext::getKVStore() { return kvstore; }
 
 const KVStorePtr & TMTContext::getKVStore() const { return kvstore; }
 
-TMTStorages & TMTContext::getStoragesMut() { return storages; }
+TMTStorages & TMTContext::getStorages() { return storages; }
 
 const TMTStorages & TMTContext::getStorages() const { return storages; }
 
-RegionTable & TMTContext::getRegionTableMut() { return region_table; }
+RegionTable & TMTContext::getRegionTable() { return region_table; }
 
 const RegionTable & TMTContext::getRegionTable() const { return region_table; }
 

@@ -159,7 +159,7 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     RaftContext raft_ctx(&context, nullptr, nullptr);
     enginepb::CommandRequestBatch cmds;
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, is_del);
-    tmt.getKVStoreMut()->onServiceCommand(cmds, raft_ctx);
+    tmt.getKVStore()->onServiceCommand(cmds, raft_ctx);
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)
@@ -180,7 +180,7 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, true);
 
-    tmt.getKVStoreMut()->onServiceCommand(cmds, raft_ctx);
+    tmt.getKVStore()->onServiceCommand(cmds, raft_ctx);
 }
 
 struct BatchCtrl
@@ -288,7 +288,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
             addRequestsToRaftCmd(cmd, region->id(), key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
-        tmt.getKVStoreMut()->onServiceCommand(cmds, raft_ctx);
+        tmt.getKVStore()->onServiceCommand(cmds, raft_ctx);
     }
 }
 
@@ -310,7 +310,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStoreMut()->onSnapshot(region, &tmt.getRegionTableMut());
+        tmt.getKVStore()->onSnapshot(region, &tmt.getRegionTable());
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
@@ -332,7 +332,7 @@ Int64 concurrentRangeOperate(
 
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.getRegionTableMut().traverseRegionsByTable(table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & d) {
+        tmt.getRegionTable().traverseRegionsByTable(table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & d) {
             for (auto && [_, r] : d)
             {
                 std::ignore = _;
