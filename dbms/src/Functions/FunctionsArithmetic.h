@@ -349,7 +349,8 @@ struct ModuloImpl<A,B,false>
 template <typename A, typename B>
 struct ModuloImpl<A,B,true>
 {
-    using ResultType = If<std::is_unsigned_v<A> || std::is_unsigned_v<B>, uint64_t, int64_t>;
+    using ResultPrecInferer = ModDecimalInferer;
+    using ResultType = If<std::is_floating_point_v<A> || std::is_floating_point_v<B>, double, Decimal32>;
 
     template <typename Result = ResultType>
     static inline Result apply(A a, B b)
@@ -939,6 +940,7 @@ struct DecimalBinaryOperation
     static constexpr bool is_plus_minus =   std::is_same_v<Operation<Int32, Int32>, PlusImpl<Int32, Int32>> ||
                                             std::is_same_v<Operation<Int32, Int32>, MinusImpl<Int32, Int32>>;
     static constexpr bool is_multiply =     std::is_same_v<Operation<Int32, Int32>, MultiplyImpl<Int32, Int32>>;
+    static constexpr bool is_mod =     std::is_same_v<Operation<Int32, Int32>, ModuloImpl<Int32, Int32>>;
     static constexpr bool is_float_division = std::is_same_v<Operation<Int32, Int32>, DivideFloatingImpl<Int32, Int32>>;
     static constexpr bool is_int_division = std::is_same_v<Operation<Int32, Int32>, DivideIntegralImpl<Int32, Int32>> ||
                                             std::is_same_v<Operation<Int32, Int32>, DivideIntegralOrZeroImpl<Int32, Int32>>;
@@ -966,7 +968,7 @@ struct DecimalBinaryOperation
                                         NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus_compare || is_mod)
         {
             if (scale_a != 1)
             {
@@ -1003,7 +1005,7 @@ struct DecimalBinaryOperation
                                         NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = a.size();
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus_compare || is_mod)
         {
             if (scale_a != 1)
             {
@@ -1040,7 +1042,7 @@ struct DecimalBinaryOperation
                                         NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
         size_t size = b.size();
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus_compare || is_mod)
         {
             if (scale_a != 1)
             {
@@ -1074,7 +1076,7 @@ struct DecimalBinaryOperation
 
     static ResultType constant_constant(A a, B b, NativeResultType scale_a [[maybe_unused]], NativeResultType scale_b [[maybe_unused]], NativeResultType scale_result [[maybe_unused]])
     {
-        if constexpr (is_plus_minus_compare)
+        if constexpr (is_plus_minus_compare || is_mod)
         {
             if (scale_a != 1)
                 return applyScaled<true>(a, b, scale_a);
@@ -1131,7 +1133,7 @@ private:
     template <bool scale_left>
     static NativeResultType applyScaled(InputType a, InputType b, InputType scale)
     {
-        if constexpr (is_plus_minus_compare || is_division)
+        if constexpr (is_plus_minus_compare || is_division || is_mod)
         {
             InputType res;
 

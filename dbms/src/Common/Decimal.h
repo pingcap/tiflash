@@ -92,6 +92,13 @@ struct AvgDecimalInferer {
     }
 };
 
+struct ModDecimalInferer {
+    static inline void infer(PrecType left_prec, ScaleType left_scale, PrecType right_prec, ScaleType right_scale, PrecType& result_prec, ScaleType& result_scale) {
+        result_prec = std::max(left_prec , right_prec);
+        result_scale = std::max(left_scale , right_scale);
+    }
+};
+
 struct OtherInferer {
     static inline void infer(PrecType, ScaleType , PrecType , ScaleType, PrecType&, ScaleType&) {}
 };
