@@ -310,6 +310,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
     /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
     bool need_raft_service = false;
+    std::vector<std::string> pd_addrs;
+    std::string learner_key;
+    std::string learner_value;
+    std::string kvstore_path = path + "kvstore/";
+    std::string region_mapping_path = path + "regmap/";
+
     if (config().has("raft"))
     {
         need_raft_service = true;
@@ -318,29 +324,43 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             String pd_service_addrs = config().getString("raft.pd_addr");
             Poco::StringTokenizer string_tokens(pd_service_addrs, ";");
-            std::vector<std::string> pd_addrs;
-            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
+            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+            {
                 pd_addrs.push_back(*it);
-              }
-            global_context->setPDAddrs(pd_addrs);
+            }
             LOG_INFO(log, "Found pd addrs.");
-        } else {
+        }
+        else
+        {
             LOG_INFO(log, "Not found pd addrs.");
         }
 
         if (config().has("raft.learner_key"))
         {
-            String learner_key = config().getString("raft.learner_key");
-            global_context->setLearnerKey(learner_key);
-        } else {
-            global_context->setLearnerKey("zone");
+            learner_key = config().getString("raft.learner_key");
         }
+        else
+        {
+            learner_key = "zone";
+        }
+
         if (config().has("raft.learner_value"))
         {
-            String learner_value = config().getString("raft.learner_value");
-            global_context->setLearnerValue(learner_value);
-        } else {
-            global_context->setLearnerKey("engine");
+            learner_value = config().getString("raft.learner_value");
+        }
+        else
+        {
+            learner_value = "engine";
+        }
+
+        if (config().has("raft.kvstore_path"))
+        {
+            kvstore_path = config().getString("raft.kvstore_path");
+        }
+
+        if (config().has("raft.regmap"))
+        {
+            region_mapping_path = config().getString("raft.regmap");
         }
     }
     if (config().has("tidb"))
@@ -353,7 +373,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             String ignore_dbs = config().getString("tidb.ignore_databases");
             Poco::StringTokenizer string_tokens(ignore_dbs, ",");
             std::stringstream ss;
-            for (const auto & string_token : string_tokens) {
+            for (const auto & string_token : string_tokens)
+            {
                 ignore_databases.emplace(string_token);
                 ss << string_token << std::endl;
             }
@@ -364,7 +385,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        global_context->createTMTContext();
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
     }
 
     /// Then, load remaining databases

@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <vector>
+#include <optional>
 
 #include <Common/PersistedContainer.h>
 #include <Core/Names.h>
@@ -199,15 +200,14 @@ public:
     /// Returns whether this function has done any meaningful job.
     bool tryFlushRegions();
 
-    bool tryFlushRegion(TableID table_id, RegionID region_id);
+    void tryFlushRegion(RegionID region_id);
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback);
 
-    static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TMTContext & tmt,
-        TableID table_id,
-        const RegionID region_id,
+    static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
+        RegionPtr region,
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,

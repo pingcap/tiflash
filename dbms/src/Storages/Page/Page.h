@@ -11,7 +11,7 @@ namespace DB
 {
 
 using MemHolder = std::shared_ptr<char>;
-inline MemHolder createMemHolder(char * memory, std::function<void(char *)> free)
+inline MemHolder createMemHolder(char * memory, const std::function<void(char *)> & free)
 {
     return std::shared_ptr<char>(memory, free);
 }
@@ -23,19 +23,22 @@ struct Page
 
     MemHolder mem_holder;
 };
-using Pages   = std::vector<Page>;
-using PageMap = std::unordered_map<PageId, Page>;
+using Pages       = std::vector<Page>;
+using PageMap     = std::map<PageId, Page>;
+using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
+// Indicate the page size && offset in PageFile. TODO: rename to `PageEntry`?
 struct PageCache
 {
-    PageFileId file_id;
-    UInt32     level;
-    UInt32     size;
-    UInt64     version;
-    UInt64     offset;
-    UInt64     checksum;
+    // if file_id == 0, means it is invalid
+    PageFileId file_id  = 0;
+    UInt32     level    = 0;
+    UInt32     size     = 0;
+    UInt64     offset   = 0;
+    UInt64     tag      = 0;
+    UInt64     checksum = 0;
 
-    bool               isValid() { return file_id; }
+    bool               isValid() const { return file_id != 0; }
     PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
 };
 static_assert(std::is_trivially_copyable_v<PageCache>);

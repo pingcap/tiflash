@@ -89,7 +89,7 @@ void StorageMergeTree::startup()
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.getStoragesMut().put(shared_from_this());
+        tmt.getStorages().put(shared_from_this());
     }
 
     merge_task_handle = background_pool.addTask([this] { return mergeTask(); });
@@ -114,7 +114,7 @@ void StorageMergeTree::shutdown()
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext &tmt_context = context.getTMTContext();
-        tmt_context.getStoragesMut().remove(data.table_info->id);
+        tmt_context.getStorages().remove(data.table_info->id);
     }
 }
 
@@ -144,10 +144,8 @@ BlockInputStreams StorageMergeTree::read(
             Names filtered_names;
             filtered_names.push_back(MutableSupport::version_column_name);
             filtered_names.push_back(MutableSupport::delmark_column_name);
-            BlockInputStreams filtered(res.size());
             for (size_t i = 0; i < res.size(); ++i)
-                filtered[i] = std::make_shared<RemoveColumnsBlockInputStream>(res[i], filtered_names);
-            res = filtered;
+                res[i] = std::make_shared<RemoveColumnsBlockInputStream>(res[i], filtered_names);
         }
         else
             LOG_DEBUG(log, "Mutable table raw read.");

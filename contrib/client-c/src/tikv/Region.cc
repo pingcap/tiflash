@@ -7,7 +7,7 @@ namespace kv {
 RPCContextPtr RegionCache::getRPCContext(Backoffer & bo, const RegionVerID & id, bool is_learner) {
     RegionPtr region = getCachedRegion(bo, id);
     if (region == nullptr) {
-        return nullptr;
+        throw Exception("not found region, region id is: " + std::to_string(id.id));
     }
     const auto & meta = region -> meta;
     auto  peer = region -> peer;
@@ -15,14 +15,15 @@ RPCContextPtr RegionCache::getRPCContext(Backoffer & bo, const RegionVerID & id,
     if (is_learner) {
         peer = region -> learner;
         if (peer.store_id() == 0) {
-            throw Exception("no learner");
+            dropRegion(id);
+            throw Exception("no learner! the request region id is: " + std::to_string(id.id));
         }
     }
 
     std::string addr = getStoreAddr(bo, peer.store_id());
     if (addr == "") {
         dropRegion(id);
-        return NULL;
+        throw Exception("miss store, region id is: " + std::to_string(id.id) + " store id is: " + std::to_string(peer.store_id()));
     }
     return std::make_shared<RPCContext>(id, meta, peer, addr);
 }
@@ -82,7 +83,7 @@ metapb::Peer RegionCache::selectLearner(Backoffer & bo, const std::vector<metapb
             return slave;
         }
     }
-    log->error("there is no valid slave.");
+    log->error("there is no valid slave. slave length is " + std::to_string(slaves.size()));
     return metapb::Peer();
 }
 

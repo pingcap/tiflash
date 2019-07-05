@@ -79,7 +79,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     }
 
     // context may be null in test cases.
-    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTableMut() : nullptr, expect_old_index);
+    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr, expect_old_index);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)
@@ -105,7 +105,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         }
         return nullptr;
     };
-    auto new_region = std::make_shared<Region>(meta, region_client_create);
+    auto new_region = std::make_shared<Region>(std::move(meta), region_client_create);
 
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 

@@ -214,7 +214,12 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 if (tp == "Nullable(DateTime)" || tp == "Nullable(Date)" || tp == "DateTime" || tp == "Date")
                 {
                     Field & field = row[i + 1];
-                    UInt64 packed = field.get<Int64>();
+                    if (field.isNull())
+                    {
+                        it->second.first->insert(row[i + 1]);
+                        continue;
+                    }
+                    UInt64 packed = field.get<UInt64>();
                     UInt64 ymdhms = packed >> 24;
                     UInt64 ymd = ymdhms >> 17;
                     int day = int(ymd & ((1 << 5) - 1));
@@ -227,13 +232,21 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     int minute = int((hms >> 6) & ((1 << 6) - 1));
                     int hour = int(hms >> 12);
 
-                    if (tp == "Nullable(DateTime)" || tp == "DataTime")
+                    if (tp == "Nullable(DateTime)" || tp == "DateTime")
                     {
                         time_t datetime;
                         if (unlikely(year == 0))
                             datetime = 0;
                         else
+                        {
+                            if (unlikely(month == 0 || day == 0))
+                            {
+                                throw Exception("wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " "
+                                        + std::to_string(day) + ".",
+                                    ErrorCodes::LOGICAL_ERROR);
+                            }
                             datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+                        }
                         it->second.first->insert(static_cast<Int64>(datetime));
                     }
                     else
