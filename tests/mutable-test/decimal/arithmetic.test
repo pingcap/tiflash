@@ -64,6 +64,18 @@
 │ 0.90909        │
 └────────────────┘
 
+>> select d1 % 2 from test order by i
+┌─modulo(d1, 2)─┐
+│           0.9 │
+│          -0.9 │
+└───────────────┘
+
+>> select abs(d1),abs(d2) from test order by i
+┌─abs(d1)─┬─abs(d2)─┐
+│ 0.9     │ 0.99    │
+│ 0.9     │ 0.99    │
+└─────────┴─────────┘
+
 >> drop table if exists test
 
 >> create table test (i Int64, d1 decimal(65, 30), d2 decimal(65, 30)) engine = MutableMergeTree((i), 8192)
