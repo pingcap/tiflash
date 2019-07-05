@@ -30,8 +30,8 @@
 
 >> select d1 % d2 from test order by i
 ┌─modulo(d1, d2)─┐
-│              9 │
-│             -9 │
+│ 9              │
+│ -9             │
 └────────────────┘
 
 >> drop table if exists test
@@ -66,8 +66,8 @@
 
 >> select d1 % 2 from test order by i
 ┌─modulo(d1, 2)─┐
-│           0.9 │
-│          -0.9 │
+│ 0.9           │
+│ -0.9          │
 └───────────────┘
 
 >> select abs(d1),abs(d2) from test order by i
