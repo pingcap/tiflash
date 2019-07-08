@@ -67,7 +67,7 @@ public:
             const DB::PageId pageId = random() % MAX_PAGE_ID;
             try
             {
-                ps->read({pageId,});
+                ps->read(pageId);
             }
             catch (DB::Exception & e)
             {
