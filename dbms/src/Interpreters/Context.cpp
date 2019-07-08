@@ -1400,7 +1400,7 @@ void Context::destroyRaftService()
 {
     auto lock = getLock();
     if (!shared->raft_service)
-        return;
+        throw Exception("Raft Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
     shared->raft_service.reset();
 }
 

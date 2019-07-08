@@ -400,10 +400,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
           * It is important to do early, not in destructor of Context, because
           *  table engines could use Context on destroy.
           */
-        LOG_INFO(log, "Shutting down raft service.");
-        global_context->destroyRaftService();
-        LOG_DEBUG(log, "Shutted down raft service.");
-
         LOG_INFO(log, "Shutting down storages.");
         global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
@@ -425,6 +421,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         String raft_service_addr = config().getString("raft.service_addr");
         global_context->initializeRaftService(raft_service_addr);
+        SCOPE_EXIT({
+            LOG_INFO(log, "Shutting down raft service.");
+            global_context->destroyRaftService();
+            LOG_DEBUG(log, "Shutted down raft service.");
+        });
     }
 
     {

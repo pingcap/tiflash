@@ -69,6 +69,7 @@ void RaftService::addRegionToFlush(const Regions & regions)
 
 RaftService::~RaftService()
 {
+    LOG_DEBUG(log, "Begin to destroy RaftService instance");
     if (persist_handle)
     {
         background_pool.removeTask(persist_handle);
