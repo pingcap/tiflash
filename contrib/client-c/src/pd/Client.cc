@@ -182,6 +182,8 @@ pdpb::RequestHeader * Client::requestHeader() {
 }
 
 uint64_t Client::getGCSafePoint() {
+    std::lock_guard<std::mutex> lk(gc_safepoint_mutex);
+
     pdpb::GetGCSafePointRequest request{};
     pdpb::GetGCSafePointResponse response{};
     request.set_allocated_header(requestHeader());
