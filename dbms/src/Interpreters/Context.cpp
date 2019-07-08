@@ -1396,6 +1396,14 @@ void Context::initializeRaftService(const std::string & service_addr)
     shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
 }
 
+void Context::destroyRaftService()
+{
+    auto lock = getLock();
+    if (!shared->raft_service)
+        return;
+    shared->raft_service.reset();
+}
+
 void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & learner_key,
                                const std::string & learner_value,

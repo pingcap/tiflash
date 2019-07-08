@@ -400,6 +400,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
           * It is important to do early, not in destructor of Context, because
           *  table engines could use Context on destroy.
           */
+        LOG_INFO(log, "Shutting down raft service.");
+        global_context->destroyRaftService();
+        LOG_DEBUG(log, "Shutted down raft service.");
+
         LOG_INFO(log, "Shutting down storages.");
         global_context->shutdown();
         LOG_DEBUG(log, "Shutted down storages.");
