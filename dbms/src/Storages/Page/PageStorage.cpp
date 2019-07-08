@@ -79,21 +79,18 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
 PageId PageStorage::getMaxId()
 {
     std::lock_guard<std::mutex> write_lock(write_mutex);
-    return version_set.currentMap()->maxId();
+    return version_set.getSnapshot()->version()->maxId();
 }
 
-PageEntry PageStorage::getEntry(PageId page_id)
+PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 {
-    PageEntryMap * page_entry_map = nullptr;
+    if (snapshot == nullptr)
     {
-        std::shared_lock lock(read_mutex);
-        page_entry_map = version_set.currentMap();
-        page_entry_map->incrRefCount();
+        snapshot = this->getSnapshot();
     }
-    SCOPE_EXIT({ page_entry_map->decrRefCount(read_mutex); });
 
-    auto it = page_entry_map->find(page_id);
-    if (it != page_entry_map->end())
+    auto it = snapshot->version()->find(page_id);
+    if (it != snapshot->version()->end())
     {
         try
         { // this may throw an exception if ref to non-exist page
@@ -148,24 +145,25 @@ void PageStorage::write(const WriteBatch & wb)
     getWriter().write(wb, edit);
 
     {
-        std::unique_lock read_lock(read_mutex);
         // apply changes into version_set(generate a new version)
         version_set.apply(edit);
     }
 }
 
-Page PageStorage::read(PageId page_id)
+PageStorage::SnapshotPtr PageStorage::getSnapshot()
 {
-    PageEntryMap * page_entry_map = nullptr;
-    {
-        std::shared_lock lock(read_mutex);
-        page_entry_map = version_set.currentMap();
-        page_entry_map->incrRefCount();
-    }
-    SCOPE_EXIT({ page_entry_map->decrRefCount(read_mutex); });
+    return version_set.getSnapshot();
+}
 
-    auto it = page_entry_map->find(page_id);
-    if (it == page_entry_map->end())
+Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
+{
+    if (snapshot == nullptr)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    auto it = snapshot->version()->find(page_id);
+    if (it == snapshot->version()->end())
         throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
     const auto &     page_entry    = it.pageEntry(); // this may throw an exception if ref to non-exist page
     auto             file_id_level = page_entry.fileIdLevel();
@@ -174,21 +172,18 @@ Page PageStorage::read(PageId page_id)
     return file_reader->read(to_read)[page_id];
 }
 
-PageMap PageStorage::read(const std::vector<PageId> & page_ids)
+PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot)
 {
-    PageEntryMap * page_entry_map = nullptr;
+    if (snapshot == nullptr)
     {
-        std::shared_lock lock(read_mutex);
-        page_entry_map = version_set.currentMap();
-        page_entry_map->incrRefCount();
+        snapshot = this->getSnapshot();
     }
-    SCOPE_EXIT({ page_entry_map->decrRefCount(read_mutex); });
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto it = page_entry_map->find(page_id);
-        if (it == page_entry_map->end())
+        auto it = snapshot->version()->find(page_id);
+        if (it == snapshot->version()->end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         const auto & page_entry                  = it.pageEntry(); // this may throw an exception if ref to non-exist page
         auto         file_id_level               = page_entry.fileIdLevel();
@@ -211,21 +206,18 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids)
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handler)
+void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot)
 {
-    PageEntryMap * page_entry_map = nullptr;
+    if (snapshot == nullptr)
     {
-        std::shared_lock lock(read_mutex);
-        page_entry_map = version_set.currentMap();
-        page_entry_map->incrRefCount();
+        snapshot = this->getSnapshot();
     }
-    SCOPE_EXIT({ page_entry_map->decrRefCount(read_mutex); });
 
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto it = page_entry_map->find(page_id);
-        if (it == page_entry_map->end())
+        auto it = snapshot->version()->find(page_id);
+        if (it == snapshot->version()->end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         const auto & page_entry                  = it.pageEntry(); // this may throw an exception if ref to non-exist page
         auto         file_id_level               = page_entry.fileIdLevel();
@@ -245,19 +237,16 @@ void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handl
     }
 }
 
-void PageStorage::traverse(const std::function<void(const Page & page)> & acceptor)
+void PageStorage::traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot)
 {
-    PageEntryMap * page_entry_map = nullptr;
+    if (snapshot == nullptr)
     {
-        std::shared_lock lock(read_mutex);
-        page_entry_map = version_set.currentMap();
-        page_entry_map->incrRefCount();
+        snapshot = this->getSnapshot();
     }
-    SCOPE_EXIT({ page_entry_map->decrRefCount(read_mutex); });
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
     {
-        for (auto iter = page_entry_map->cbegin(); iter != page_entry_map->cend(); ++iter)
+        for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
         {
             const PageId      page_id    = iter.pageId();
             const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
@@ -267,7 +256,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 
     for (const auto & p : file_and_pages)
     {
-        auto pages = read(p.second);
+        auto pages = read(p.second, snapshot);
         for (const auto & id_page : pages)
         {
             acceptor(id_page.second);
@@ -276,18 +265,16 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
 }
 
 void PageStorage::traversePageEntries( //
-    const std::function<void(PageId page_id, const PageEntry & page)> & acceptor)
+    const std::function<void(PageId page_id, const PageEntry & page)> & acceptor,
+    SnapshotPtr                                                         snapshot)
 {
-    PageEntryMap * page_entry_map = nullptr;
+    if (snapshot == nullptr)
     {
-        std::shared_lock lock(read_mutex);
-        page_entry_map = version_set.currentMap();
-        page_entry_map->incrRefCount();
+        snapshot = this->getSnapshot();
     }
-    SCOPE_EXIT({ page_entry_map->decrRefCount(read_mutex); });
 
     // traverse over all Pages or RefPages
-    for (auto iter = page_entry_map->cbegin(); iter != page_entry_map->cend(); ++iter)
+    for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
     {
         const PageId      page_id    = iter.pageId();
         const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
@@ -320,18 +307,12 @@ bool PageStorage::gc()
     {
         /// Select the GC candidates files and migrate valid pages into an new file.
         /// Acquire a snapshot version of page map, new edit on page map store in `gc_file_entries_edit`
-        PageEntryMap * page_entry_map = nullptr;
-        {
-            std::shared_lock lock(read_mutex);
-            page_entry_map = version_set.currentMap();
-            page_entry_map->incrRefCount();
-        }
-        SCOPE_EXIT({ page_entry_map->decrRefCount(read_mutex); });
+        SnapshotPtr snapshot = this->getSnapshot();
 
         std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>> file_valid_pages;
         {
             // Only scan over normal Pages, excluding RefPages
-            for (auto iter = page_entry_map->pages_cbegin(); iter != page_entry_map->pages_cend(); ++iter)
+            for (auto iter = snapshot->version()->pages_cbegin(); iter != snapshot->version()->pages_cend(); ++iter)
             {
                 const PageId      page_id                    = iter->first;
                 const PageEntry & page_entry                 = iter->second;
@@ -358,17 +339,12 @@ bool PageStorage::gc()
         LOG_INFO(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
 
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
-        gc_file_entries_edit = gcMigratePages(page_entry_map, file_valid_pages, merge_files);
+        gc_file_entries_edit = gcMigratePages(snapshot->version(), file_valid_pages, merge_files);
     }
 
     std::set<PageFileIdAndLevel> live_files;
-    {
-        /// Here we have to apply edit to version_set and generate a new version
-        std::unique_lock lock(read_mutex);
-        version_set.gcApply(gc_file_entries_edit);
-        /// list all files that are in used
-        live_files = version_set.listAllLiveFiles();
-    }
+    /// Here we have to apply edit to version_set and generate a new version, then return all files that are in used
+    live_files = version_set.gcApply(gc_file_entries_edit);
 
     {
         // Remove obsolete files' reader cache that are not used by any version

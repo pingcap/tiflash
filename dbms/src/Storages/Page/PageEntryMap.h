@@ -3,6 +3,7 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+#include <Common/VersionSet.h>
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
@@ -17,7 +18,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-class PageEntryMap
+class PageEntryMap : public ::DB::MVCC::MultiVersionCountable<PageEntryMap>
 {
 public:
 
@@ -86,33 +87,9 @@ public:
 
     size_t size() const { return page_ref.size(); }
 
-
-    void incrRefCount() { ++ref_count; }
-
-    void decrRefCount(std::shared_mutex & mutex)
-    {
-        assert(ref_count >= 1);
-        if (--ref_count == 0)
-        {
-            // in case two neighbor nodes remove from linked list
-            std::unique_lock lock(mutex);
-            delete this;
-        }
-    }
-
     PageId maxId() const { return max_page_id; }
 
 private:
-    // Not thread-safe, caller ensure.
-    void decrRefCount()
-    {
-        assert(ref_count >= 1);
-        if (--ref_count == 0)
-        {
-            delete this; // remove this node from version set
-        }
-    }
-
     PageId resolveRefId(PageId page_id) const
     {
         // resolve RefPageId to normal PageId
@@ -240,33 +217,14 @@ public:
     inline const_normal_page_iterator pages_cbegin() const { return normal_pages.cbegin(); }
     inline const_normal_page_iterator pages_cend() const { return normal_pages.cend(); }
 
-    using ref_pair_iterator       = std::unordered_map<PageId, PageId>::iterator;
-    using const_ref_pair_iterator = std::unordered_map<PageId, PageId>::const_iterator;
-    // only scan over ref-pairs
-    inline const_ref_pair_iterator ref_pairs_cbegin() const { return page_ref.cbegin(); }
-    inline const_ref_pair_iterator ref_pairs_cend() const { return page_ref.cend(); }
-
 private:
     std::unordered_map<PageId, PageEntry> normal_pages;
     std::unordered_map<PageId, PageId>    page_ref; // RefPageId -> PageId
 
-    // For MVCC
-    std::atomic<UInt32> ref_count;
-    PageEntryMap *      next;
-    PageEntryMap *      prev;
-
     PageId max_page_id;
 
 private:
-    PageEntryMap() : normal_pages(), page_ref(), ref_count(0), next(this), prev(this), max_page_id(0) {}
-    ~PageEntryMap()
-    {
-        assert(ref_count == 0);
-
-        // Remove from linked list
-        prev->next = next;
-        next->prev = prev;
-    }
+    PageEntryMap() : MultiVersionCountable(this), normal_pages(), page_ref(), max_page_id(0) {}
 
 public:
     // no copying allowed
@@ -285,6 +243,9 @@ public:
     }
 
     friend class PageEntryMapVersionSet;
+    template <typename Version_t, typename VersionEdit_t, typename Builder_t>
+    friend class ::DB::MVCC::VersionSet;
+    friend class PageEntryMapBuilder;
 };
 
 template <bool must_exist>

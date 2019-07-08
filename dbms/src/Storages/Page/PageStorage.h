@@ -50,14 +50,18 @@ public:
     PageStorage(const String & storage_path, const Config & config_);
 
     PageId    getMaxId();
-    PageEntry getEntry(PageId page_id);
 
     void    write(const WriteBatch & write_batch);
-    Page    read(PageId page_id);
-    PageMap read(const std::vector<PageId> & page_ids);
-    void    read(const std::vector<PageId> & page_ids, PageHandler & handler);
-    void    traverse(const std::function<void(const Page & page)> & acceptor);
-    void    traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor);
+
+    using SnapshotPtr = PageEntryMapVersionSet::SnapshotPtr;
+    SnapshotPtr getSnapshot();
+
+    PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = nullptr);
+    Page    read(PageId page_id, SnapshotPtr snapshot = nullptr);
+    PageMap read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = nullptr);
+    void    read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot = nullptr);
+    void    traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = nullptr);
+    void    traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
     bool    gc();
 
     static std::set<PageFile, PageFile::Comparator>
@@ -93,7 +97,6 @@ private:
     Poco::Logger * log;
 
     std::mutex        write_mutex;
-    std::shared_mutex read_mutex;
     std::mutex        gc_mutex; // A mutex used to protect gc
 };
 

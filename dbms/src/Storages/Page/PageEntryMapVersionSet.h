@@ -3,6 +3,7 @@
 #include <set>
 #include <vector>
 
+#include <Common/VersionSet.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/WriteBatch.h>
@@ -75,37 +76,73 @@ public:
     }
 };
 
-class PageEntryMapVersionSet
+class PageEntryMapBuilder
 {
 public:
-    PageEntryMapVersionSet() : dummy_versions(), current_map(nullptr) { appendVersion(new PageEntryMap); }
-    ~PageEntryMapVersionSet()
+    PageEntryMapBuilder(PageEntryMap * base) : v(new PageEntryMap) { v->copyEntries(*base); }
+
+    void apply(const PageEntriesEdit & edit)
     {
-        current_map->decrRefCount();
-        assert(dummy_versions.next == &dummy_versions); // List must be empty
+        for (const auto & rec : edit.getRecords())
+        {
+            switch (rec.type)
+            {
+            case WriteBatch::WriteType::PUT:
+                v->put(rec.page_id, rec.entry);
+                break;
+            case WriteBatch::WriteType::DEL:
+                v->del(rec.page_id);
+                break;
+            case WriteBatch::WriteType::REF:
+                v->ref(rec.page_id, rec.ori_page_id);
+                break;
+            }
+        }
     }
 
-    /// current version
-    PageEntryMap * currentMap() const { return current_map; }
+    void gcApply(const PageEntriesEdit & edit)
+    {
+        for (const auto & rec : edit.getRecords())
+        {
+            if (rec.type != WriteBatch::WriteType::PUT)
+            {
+                continue;
+            }
+            // Gc only apply PUT for updating page entries
+            auto old_iter = v->find(rec.page_id);
+            // If the gc page have already been removed, just ignore it
+            if (old_iter == v->end())
+            {
+                continue;
+            }
+            auto & old_page_entry = old_iter.pageEntry();
+            // In case of page being updated during GC process.
+            if (old_page_entry.fileIdLevel() < rec.entry.fileIdLevel())
+            {
+                // no new page write to `page_entry_map`, replace it with gc page
+                old_page_entry = rec.entry;
+            }
+            // else new page written by another thread, gc page is replaced. leave the page for next gc
+        }
+    }
 
-    /// `apply` accept changes and append new version to version-list
-    void apply(const PageEntriesEdit & edit);
+    PageEntryMap * build() { return v; }
+
+private:
+    PageEntryMap * v;
+};
+
+class PageEntryMapVersionSet : public ::DB::MVCC::VersionSet<PageEntryMap, PageEntriesEdit, PageEntryMapBuilder>
+{
+public:
+    using SnapshotPtr = ::DB::MVCC::VersionSet<PageEntryMap, PageEntriesEdit, PageEntryMapBuilder>::SnapshotPtr;
 
     /// `gcApply` only accept PageEntry's `PUT` changes and will discard changes if PageEntry is invalid
     /// append new version to version-list
-    void gcApply(const PageEntriesEdit & edit);
+    std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
 
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
-
-private:
-    void appendVersion(PageEntryMap * v);
-
-    size_t getVersionSetSize();
-
-private:
-    PageEntryMap   dummy_versions; // Head of circular double-linked list of all PageEntryMap
-    PageEntryMap * current_map;    // == dummy_versions.prev
 };
 
 } // namespace DB
