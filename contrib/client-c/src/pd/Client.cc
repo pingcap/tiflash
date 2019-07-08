@@ -80,7 +80,7 @@ pdpb::GetMembersResponse Client::getMembers(std::string url)
     if (!status.ok()) {
         std::string err_msg = "get member failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
-        throw Exception(err_msg, GRPCErrorCode);
+        return {};
     }
     return resp;
 }
@@ -109,6 +109,7 @@ void Client::initClusterID() {
 }
 
 void Client::updateLeader() {
+    std::unique_lock lk(leader_mutex);
     for (auto url: urls) {
         auto resp = getMembers(url);
         if (!resp.has_header() || resp.leader().client_urls_size() == 0)
@@ -124,7 +125,6 @@ void Client::updateLeader() {
 }
 
 void Client::switchLeader(const ::google::protobuf::RepeatedPtrField<std::string>& leader_urls) {
-    std::unique_lock lk(leader_mutex);
     std::string old_leader = leader;
     leader = leader_urls[0];
     if (leader == old_leader) {
