@@ -118,7 +118,7 @@ void seekFile(int fd, off_t pos, const std::string & path)
         throwFromErrno("Cannot seek through file " + path, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 }
 
-void writeFile(int fd, const char * data, size_t to_write, const std::string & path)
+void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const std::string & path)
 {
     ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
     ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
@@ -130,7 +130,7 @@ void writeFile(int fd, const char * data, size_t to_write, const std::string & p
         ssize_t res = 0;
         {
             CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
-            res = ::write(fd, data + bytes_written, to_write - bytes_written);
+            res = ::pwrite(fd, data + bytes_written, to_write - bytes_written, offset + bytes_written);
         }
 
         if ((-1 == res || 0 == res) && errno != EINTR)
@@ -223,29 +223,6 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
         throw Exception("pos not match", ErrorCodes::FILE_SIZE_NOT_MATCH);
 
     return values;
-}
-
-template <typename C, typename T = typename C::value_type>
-void writeValuesIntoFile(C values, const std::string & path, Allocator<false> & allocator)
-{
-    std::string tmp_file_path = path + ".tmp." + DB::toString(randomSeed());
-
-    int fd = openFile<false>(tmp_file_path);
-
-    size_t data_size = sizeof(UInt64) + sizeof(T) * values.size();
-    char * data      = (char *)allocator.alloc(data_size);
-    SCOPE_EXIT({ allocator.free(data, data_size); });
-
-    put(data, (UInt64)values.size());
-    for (const auto & v : values)
-    {
-        put(data, v);
-    }
-
-    writeFile(fd, data, data_size, tmp_file_path);
-    syncFile(fd, tmp_file_path);
-
-    Poco::File(tmp_file_path).renameTo(path);
 }
 
 // =========================================================
@@ -434,8 +411,6 @@ PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_)
       data_file_fd(openFile<false>(data_file_path)),
       meta_file_fd(openFile<false>(meta_file_path))
 {
-    seekFile(data_file_fd, page_file.data_file_pos, page_file.dataPath());
-    seekFile(meta_file_fd, page_file.meta_file_pos, page_file.metaPath());
 }
 
 PageFile::Writer::~Writer()
@@ -459,14 +434,14 @@ void PageFile::Writer::write(const WriteBatch & wb, PageCacheMap & page_cache_ma
     SCOPE_EXIT({ page_file.free(meta_buf.begin(), meta_buf.size()); });
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
-    auto write_buf = [&](int fd, const std::string & path, ByteBuffer buf) {
-        writeFile(fd, buf.begin(), buf.size(), path);
+    auto write_buf = [&](int fd, UInt64 offset, const std::string & path, ByteBuffer buf) {
+        writeFile(fd, offset, buf.begin(), buf.size(), path);
         if (sync_on_write)
             syncFile(fd, path);
     };
 
-    write_buf(data_file_fd, data_file_path, data_buf);
-    write_buf(meta_file_fd, meta_file_path, meta_buf);
+    write_buf(data_file_fd, page_file.data_file_pos, data_file_path, data_buf);
+    write_buf(meta_file_fd, page_file.meta_file_pos, meta_file_path, meta_buf);
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
