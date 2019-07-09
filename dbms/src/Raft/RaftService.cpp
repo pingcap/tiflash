@@ -89,7 +89,7 @@ RaftService::~RaftService()
             region_flush_handles[i] = nullptr;
         }
     }
-
+    LOG_DEBUG(log, "Begin to shut down grpc server");
     grpc_server->Shutdown();
     LOG_DEBUG(log, "Wait grpc server shut down");
     grpc_server->Wait();
