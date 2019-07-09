@@ -421,7 +421,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         String raft_service_addr = config().getString("raft.service_addr");
         global_context->initializeRaftService(raft_service_addr);
-
     }
 
     SCOPE_EXIT({
