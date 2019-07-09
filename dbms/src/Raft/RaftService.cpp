@@ -89,10 +89,7 @@ RaftService::~RaftService()
         }
     }
     // wait 5 seconds for pending rpcs to gracefully stop
-    //gpr_timespec deadline{5, 0, GPR_TIMESPAN};
-    gpr_timespec now = gpr_now(GPR_CLOCK_MONOTONIC);
-    gpr_timespec delta = {5, 0, GPR_CLOCK_MONOTONIC};
-    gpr_timespec deadline = gpr_time_add(now, delta);
+    gpr_timespec deadline{5, 0, GPR_TIMESPAN};
     LOG_DEBUG(log, "Begin to shutting down grpc server");
     grpc_server->Shutdown(deadline);
     grpc_server->Wait();
