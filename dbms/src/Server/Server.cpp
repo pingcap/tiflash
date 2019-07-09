@@ -427,7 +427,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     SCOPE_EXIT({
         LOG_INFO(log, "Shutting down raft service.");
         global_context->destroyRaftService();
-        LOG_DEBUG(log, "Shutted down raft service.");
+        LOG_INFO(log, "Shutted down raft service.");
     });
 
     {

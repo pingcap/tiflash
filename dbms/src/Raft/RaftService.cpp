@@ -91,6 +91,7 @@ RaftService::~RaftService()
     }
 
     grpc_server->Shutdown();
+    LOG_DEBUG(log, "Wait grpc server shut down");
     grpc_server->Wait();
 }
 
