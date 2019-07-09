@@ -90,7 +90,7 @@ RaftService::~RaftService()
         }
     }
     // shut down in 5 seconds
-    gpr_timespec deadline{5, 0, GPR_CLOCK_MONOTONIC};
+    gpr_timespec deadline{10, 0, GPR_TIMESPAN};
     LOG_DEBUG(log, "Begin to shut down grpc server");
     grpc_server->Shutdown(deadline);
     LOG_DEBUG(log, "Wait grpc server shut down");
