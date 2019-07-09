@@ -89,8 +89,10 @@ RaftService::~RaftService()
             region_flush_handles[i] = nullptr;
         }
     }
+    gpr_timespec deadline;
+    deadline.tv_sec = 5;
     LOG_DEBUG(log, "Begin to shut down grpc server");
-    grpc_server->Shutdown();
+    grpc_server->Shutdown(deadline);
     LOG_DEBUG(log, "Wait grpc server shut down");
     grpc_server->Wait();
 }

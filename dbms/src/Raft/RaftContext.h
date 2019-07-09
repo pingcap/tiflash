@@ -16,6 +16,7 @@ using CommandServerReaderWriter = grpc::ServerReaderWriter<enginepb::CommandResp
 using CommandServerReader = grpc::ServerReader<enginepb::SnapshotRequest>;
 using GRPCServerPtr = std::unique_ptr<grpc::Server>;
 
+
 struct RaftContext
 {
     RaftContext() = default;
