@@ -69,7 +69,6 @@ void RaftService::addRegionToFlush(const Regions & regions)
 
 RaftService::~RaftService()
 {
-    LOG_DEBUG(log, "Begin to destroy RaftService instance");
     if (persist_handle)
     {
         background_pool.removeTask(persist_handle);
@@ -90,10 +89,9 @@ RaftService::~RaftService()
         }
     }
     // shut down in 5 seconds
-    gpr_timespec deadline{10, 0, GPR_TIMESPAN};
-    LOG_DEBUG(log, "Begin to shut down grpc server");
+    gpr_timespec deadline{5, 0, GPR_TIMESPAN};
+    LOG_DEBUG(log, "Begin to shutting down grpc server");
     grpc_server->Shutdown(deadline);
-    LOG_DEBUG(log, "Wait grpc server shut down");
     grpc_server->Wait();
 }
 
