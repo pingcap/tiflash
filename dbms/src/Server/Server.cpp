@@ -423,6 +423,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeRaftService(raft_service_addr);
     }
 
+    SCOPE_EXIT({
+        LOG_INFO(log, "Shutting down raft service.");
+        global_context->shutdownRaftService();
+        LOG_INFO(log, "Shutted down raft service.");
+    });
+
     {
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
 
