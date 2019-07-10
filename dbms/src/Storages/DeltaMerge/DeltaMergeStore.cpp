@@ -43,8 +43,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     // We use Int64 to store handle.
     if (!table_handle_define.type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
     {
-        table_handle_original_type = table_handle_define.type;
-        table_handle_define.type   = EXTRA_HANDLE_COLUMN_TYPE;
+        table_handle_real_type   = table_handle_define.type;
+        table_handle_define.type = EXTRA_HANDLE_COLUMN_TYPE;
     }
 
     table_columns.emplace_back(table_handle_define);
@@ -142,10 +142,10 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         auto segment_it = segments.upper_bound(start);
         if (segment_it == segments.end())
         {
-            if (start == MAX_INT64)
-                segment_it--;
+            if (start == P_INF_HANDLE)
+                --segment_it;
             else
-                throw Exception("Failed to find segment with proper range", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Failed to locate segment begin with start: " + DB::toString(start), ErrorCodes::LOGICAL_ERROR);
         }
         auto segment = segment_it->second;
         auto range   = segment->getRange();
@@ -195,34 +195,24 @@ void DeltaMergeStore::write_segment(DMContext &        dm_context, //
     }
 }
 
-BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
-                                        const DB::Settings &  db_settings,
-                                        const ColumnDefines & columns_to_read,
-                                        size_t                expected_block_size,
-                                        size_t                num_streams,
-                                        UInt64                max_version,
-                                        bool                  is_raw)
+BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
+                                           const DB::Settings &  db_settings,
+                                           const ColumnDefines & columns_to_read,
+                                           size_t                num_streams)
 {
     std::shared_lock lock(mutex);
 
-    auto         dm_context    = newDMContext(db_context, db_settings);
-    const auto & handle_define = table_handle_define;
+    auto dm_context     = newDMContext(db_context, db_settings);
+    auto stream_creator = [=](const SegmentReadTask & task) { return task.segment->getInputStreamRaw(dm_context, columns_to_read); };
 
-    // divide segment data streams to `num_streams`
-    auto stream_creator = [=](const SegmentPtr & segment) {
-        if (!is_raw)
-            return segment->getInputStream(dm_context, columns_to_read, expected_block_size, max_version);
-        else
-            return segment->getInputStreamRaw(dm_context, columns_to_read);
-    };
-
-    Segments to_read_segments;
+    SegmentReadTasks tasks;
     for (const auto & [handle, segment] : segments)
     {
         (void)handle;
-        to_read_segments.emplace_back(segment);
+        tasks.emplace_back(SegmentReadTask(segment, {segment->getRange()}));
     }
-    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(to_read_segments, stream_creator);
+
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks), stream_creator);
 
     BlockInputStreams res;
     for (size_t i = 0; i < num_streams && i < segments.size(); ++i)
@@ -230,8 +220,87 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
             read_task_pool,
             columns_to_read,
-            handle_define.name,
-            is_raw ? DataTypePtr{} : table_handle_original_type,
+            table_handle_define.name,
+            DataTypePtr{},
+            db_context);
+
+        res.push_back(stream);
+    }
+    return res;
+}
+
+BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
+                                        const DB::Settings &  db_settings,
+                                        const ColumnDefines & columns_to_read,
+                                        const HandleRanges &  sorted_ranges,
+                                        size_t                num_streams,
+                                        UInt64                max_version,
+                                        size_t                expected_block_size)
+{
+    std::shared_lock lock(mutex);
+
+    auto range_it = sorted_ranges.begin();
+    auto seg_it   = segments.upper_bound(range_it->start);
+
+    if (seg_it == segments.end())
+    {
+        if (range_it->start == P_INF_HANDLE)
+            --seg_it;
+        else
+            throw Exception("Failed to locate segment begin with start: " + DB::toString(range_it->start), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    SegmentReadTasks tasks;
+    while (range_it != sorted_ranges.end() && seg_it != segments.end())
+    {
+        auto & req_range = *range_it;
+        auto & seg_range = seg_it->second->getRange();
+        if (req_range.intersect(seg_range))
+        {
+            if (tasks.empty() || tasks.back().segment != seg_it->second)
+                tasks.emplace_back(seg_it->second);
+
+            tasks.back().addRange(req_range);
+
+            if (req_range.end < seg_range.end)
+            {
+                ++range_it;
+            }
+            else if (req_range.end > seg_range.end)
+            {
+                ++seg_it;
+            }
+            else
+            {
+                ++range_it;
+                ++seg_it;
+            }
+        }
+        else
+        {
+            if (req_range.end < seg_range.start)
+                ++range_it;
+            else
+                ++seg_it;
+        }
+    }
+
+    auto dm_context = newDMContext(db_context, db_settings);
+
+    auto stream_creator = [=](const SegmentReadTask & task) {
+        return task.segment->getInputStream(dm_context, columns_to_read, task.ranges, expected_block_size, max_version);
+    };
+
+    auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks), stream_creator);
+
+    BlockInputStreams res;
+    for (size_t i = 0; i < num_streams && i < segments.size(); ++i)
+    {
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
+            read_task_pool,
+            columns_to_read,
+            table_handle_define.name,
+            table_handle_real_type,
             db_context);
 
         res.push_back(stream);

@@ -1,3 +1,5 @@
+#include <random>
+
 #include <gperftools/malloc_extension.h>
 
 #include <DataStreams/IBlockOutputStream.h>
@@ -25,7 +27,11 @@ StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
     Context & global_context_)
-    : IManageableStorage{columns_}, path(path_ + "/" + name_), name(name_), global_context(global_context_), log(&Logger::get("StorageDeltaMerge"))
+    : IManageableStorage{columns_},
+      path(path_ + "/" + name_),
+      name(name_),
+      global_context(global_context_),
+      log(&Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -228,15 +234,32 @@ BlockInputStreams StorageDeltaMerge::read( //
         to_read.push_back(col_define);
     }
 
-    assert(query_info.query != nullptr);
+
+    /// TODO Those code is used to test range read, should be removed later
+    size_t split_count = std::abs(random()) % 1000;
+    split_count = 0;
+
+    std::vector<Int64> splits(split_count);
+    HandleRanges ranges;
+
+    for (size_t i = 0; i < split_count; ++i)
+        splits[i] = random();
+    std::sort(splits.begin(), splits.end());
+
+    Handle start = DB::DM::N_INF_HANDLE;
+    for (Int64 s : splits)
+    {
+        ranges.emplace_back(start, s);
+        start = s;
+    }
+    ranges.emplace_back(start, DB::DM::P_INF_HANDLE);
+
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    return store->read(context,
-        context.getSettingsRef(),
-        to_read,
-        max_block_size,
-        num_streams,
-        std::numeric_limits<UInt64>::max(),
-        select_query.raw_for_mutable);
+    if (select_query.raw_for_mutable)
+        return store->readRaw(context, context.getSettingsRef(), to_read, num_streams);
+    else
+        return store->read(
+            context, context.getSettingsRef(), to_read, ranges, num_streams, std::numeric_limits<UInt64>::max(), max_block_size);
 }
 
 void StorageDeltaMerge::check(const Context & context) { store->check(context, context.getSettingsRef()); }

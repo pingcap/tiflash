@@ -10,16 +10,17 @@ namespace DM
 class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
 public:
+    /// If handle_real_type_ is empty, means do not convert handle column back to real type.
     DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr & task_pool_,
                                const ColumnDefines &          columns_to_read_,
                                const String &                 handle_name_,
-                               const DataTypePtr &            handle_original_type_,
+                               const DataTypePtr &            handle_real_type_,
                                const Context &                context_)
         : task_pool(task_pool_),
           columns_to_read(columns_to_read_),
           header(createHeader(columns_to_read)),
           handle_name(handle_name_),
-          handle_original_type(handle_original_type_),
+          handle_real_type(handle_real_type_),
           context(context_)
     {
     }
@@ -65,11 +66,11 @@ protected:
         for (auto & cd : columns_to_read)
             res.insert(original_block.getByName(cd.name));
 
-        if (handle_original_type && res.has(handle_name))
+        if (handle_real_type && res.has(handle_name))
         {
             auto pos = res.getPositionByName(handle_name);
-            convertColumn(res, pos, handle_original_type, context);
-            res.getByPosition(pos).type = handle_original_type;
+            convertColumn(res, pos, handle_real_type, context);
+            res.getByPosition(pos).type = handle_real_type;
         }
         return res;
     }
@@ -79,7 +80,7 @@ private:
     ColumnDefines          columns_to_read;
     Block                  header;
     String                 handle_name;
-    DataTypePtr            handle_original_type;
+    DataTypePtr            handle_real_type;
     const Context &        context;
 
     bool                done = false;

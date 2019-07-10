@@ -47,21 +47,17 @@ public:
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
-    BlockInputStreams read(const Context &       db_context,
-                           const DB::Settings &  db_settings,
-                           const ColumnDefines & column_defines,
-                           size_t                expected_block_size,
-                           size_t                num_streams,
-                           UInt64                max_version,
-                           bool                  is_raw);
+    BlockInputStreams
+    readRaw(const Context & db_context, const DB::Settings & db_settings, const ColumnDefines & column_defines, size_t num_streams);
 
+    /// ranges should be sorted and merged already.
     BlockInputStreams read(const Context &       db_context,
                            const DB::Settings &  db_settings,
-                           const ColumnDefines & column_defines,
-                           size_t                expected_block_size,
+                           const ColumnDefines & columns_to_read,
+                           const HandleRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
-                           const HandleRanges &  ranges);
+                           size_t                expected_block_size);
 
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
@@ -106,8 +102,8 @@ private:
     String        table_name;
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;
+    DataTypePtr   table_handle_real_type;
 
-    DataTypePtr                          table_handle_original_type;
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
 
@@ -115,7 +111,7 @@ private:
 
     UInt64 min_version = 0;
 
-    /// end -> segment
+    /// end of range -> segment
     SegmentSortedMap segments;
 
     std::shared_mutex mutex;

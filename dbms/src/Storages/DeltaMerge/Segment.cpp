@@ -86,6 +86,18 @@ struct DeltaValueSpace
     PaddedPODArray<Handle> const * handle_column;
 };
 
+class ConcatBlockInputStreamWitLock : public ConcatBlockInputStream
+{
+public:
+    ConcatBlockInputStreamWitLock(const BlockInputStreams & inputs, std::shared_lock<std::shared_mutex> && lock_)
+        : ConcatBlockInputStream(inputs), lock(std::move(lock_))
+    {
+    }
+
+private:
+    std::shared_lock<std::shared_mutex> lock;
+};
+
 using MyDeltaMergeBlockInputStream = DeltaMergeBlockInputStream<DefaultDeltaTree, DeltaValueSpace>;
 using OpContext                    = DiskValueSpace::OpContext;
 
@@ -207,10 +219,9 @@ void Segment::check(DMContext & dm_context, const String & when, bool is_lock)
     auto & storage = dm_context.storage_pool;
 
     size_t stable_rows = stable.num_rows();
-    size_t delta_rows = delta.num_rows();
+    size_t delta_rows  = delta.num_rows();
 
-    LOG_INFO(log,
-             when + ": stable_rows:" + DB::toString(stable_rows) + ", delta_rows:" + DB::toString(delta_rows));
+    LOG_INFO(log, when + ": stable_rows:" + DB::toString(stable_rows) + ", delta_rows:" + DB::toString(delta_rows));
 
     ensurePlace(handle, storage);
 
@@ -219,7 +230,7 @@ void Segment::check(DMContext & dm_context, const String & when, bool is_lock)
                  + ", deletes:" + DB::toString(delta_tree->numDeletes()));
     {
         SharedLock no_lock;
-        auto       stream = getPlacedStream<false>(handle, range, {handle}, storage, DEFAULT_BLOCK_SIZE, std::move(no_lock));
+        auto       stream = getPlacedStream<false>(handle, {range}, {handle}, storage, DEFAULT_BLOCK_SIZE, std::move(no_lock));
 
         size_t total_rows = 0;
         while (true)
@@ -260,8 +271,11 @@ void Segment::deleteRange(DMContext & dm_context, const HandleRange & delete_ran
     delta.tryFlushCache(opc);
 }
 
-BlockInputStreamPtr
-Segment::getInputStream(const DMContext & dm_context, const ColumnDefines & columns_to_read, size_t expected_block_size, UInt64 max_version)
+BlockInputStreamPtr Segment::getInputStream(const DMContext &     dm_context,
+                                            const ColumnDefines & columns_to_read,
+                                            const HandleRanges &  read_ranges,
+                                            UInt64                max_version,
+                                            size_t                expected_block_size)
 {
     std::shared_lock lock(mutex);
 
@@ -270,7 +284,7 @@ Segment::getInputStream(const DMContext & dm_context, const ColumnDefines & colu
 
     ensurePlace(handle, storage);
 
-    auto stream = getPlacedStream<true>(handle, range, columns_to_read, storage, expected_block_size, std::move(lock));
+    auto stream = getPlacedStream<true>(handle, read_ranges, columns_to_read, storage, expected_block_size, std::move(lock));
     stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_MVCC>>(stream, handle, max_version);
     return stream;
 }
@@ -406,7 +420,7 @@ size_t Segment::getEstimatedBytes()
 
 template <bool add_tag_column>
 BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
-                                             const HandleRange &   read_range,
+                                             const HandleRanges &  read_ranges,
                                              const ColumnDefines & columns_to_read,
                                              StoragePool &         storage_pool,
                                              size_t                expected_block_size,
@@ -431,15 +445,31 @@ BlockInputStreamPtr Segment::getPlacedStream(const ColumnDefine &  handle,
             new_columns_to_read.push_back(c);
     }
 
-    HandleRange real_range = range.shrink(read_range);
+    const auto delta_block       = delta.read(new_columns_to_read, storage_pool.log(), 0, delta.num_rows());
+    const auto delta_value_space = std::make_shared<DeltaValueSpace>(handle, new_columns_to_read, delta_block);
 
-    auto stable_input_stream = stable.getInputStream(new_columns_to_read, storage_pool.data());
-    auto delta_block         = delta.read(new_columns_to_read, storage_pool.log(), 0, delta.num_rows());
+    auto placed_stream_creator = [&](const HandleRange & read_range, SharedLock && lock) {
+        auto stable_input_stream = stable.getInputStream(new_columns_to_read, storage_pool.data());
+        return std::make_shared<MyDeltaMergeBlockInputStream>(0, //
+                                                              range.shrink(read_range),
+                                                              stable_input_stream,
+                                                              *delta_tree,
+                                                              delta_value_space,
+                                                              expected_block_size,
+                                                              std::move(lock));
+    };
 
-    auto delta_value_space = std::make_shared<DeltaValueSpace>(handle, new_columns_to_read, delta_block);
-
-    return std::make_shared<MyDeltaMergeBlockInputStream>(
-        0, real_range, stable_input_stream, *delta_tree, delta_value_space, expected_block_size, std::move(lock));
+    if (read_ranges.size() == 1)
+    {
+        return placed_stream_creator(read_ranges[0], std::move(lock));
+    }
+    else
+    {
+        BlockInputStreams streams;
+        for (auto & read_range : read_ranges)
+            streams.push_back(placed_stream_creator(read_range, {}));
+        return std::make_shared<ConcatBlockInputStreamWitLock>(streams, std::move(lock));
+    }
 }
 
 
@@ -461,7 +491,7 @@ SegmentPtr Segment::doSplit(DMContext & dm_context, Handle split_point)
     OpContext opc = OpContext::createForDataStorage(dm_context);
     {
         // Write my data
-        BlockInputStreamPtr my_data = getPlacedStream<true>(handle, my_range, columns, storage_pool, STABLE_CHUNK_ROWS, {});
+        BlockInputStreamPtr my_data = getPlacedStream<true>(handle, {my_range}, columns, storage_pool, STABLE_CHUNK_ROWS, {});
         my_data  = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
         auto tmp = DiskValueSpace::writeChunks(opc, my_data);
         my_new_stable_chunks.swap(tmp);
@@ -469,7 +499,7 @@ SegmentPtr Segment::doSplit(DMContext & dm_context, Handle split_point)
 
     {
         // Write new segment's data
-        BlockInputStreamPtr other_data = getPlacedStream<true>(handle, other_range, columns, storage_pool, STABLE_CHUNK_ROWS, {});
+        BlockInputStreamPtr other_data = getPlacedStream<true>(handle, {other_range}, columns, storage_pool, STABLE_CHUNK_ROWS, {});
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
         auto tmp   = DiskValueSpace::writeChunks(opc, other_data);
         other_new_stable_chunks.swap(tmp);
@@ -542,10 +572,10 @@ void Segment::doMerge(DMContext & dm_context, const SegmentPtr & other)
 
     Chunks new_stable_chunks;
     {
-        BlockInputStreamPtr my_data = this->getPlacedStream<true>(handle, range, columns, storage_pool, STABLE_CHUNK_ROWS, {});
+        BlockInputStreamPtr my_data = this->getPlacedStream<true>(handle, {range}, columns, storage_pool, STABLE_CHUNK_ROWS, {});
         my_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
 
-        BlockInputStreamPtr other_data = other->getPlacedStream<true>(handle, range, columns, storage_pool, STABLE_CHUNK_ROWS, {});
+        BlockInputStreamPtr other_data = other->getPlacedStream<true>(handle, {range}, columns, storage_pool, STABLE_CHUNK_ROWS, {});
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
 
         BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams({my_data, other_data}));
@@ -672,7 +702,7 @@ void Segment::flush(DMContext & dm_context)
 
     ensurePlace(handle, storage_pool);
 
-    auto data_stream = getPlacedStream<true>(handle, range, columns, storage_pool, STABLE_CHUNK_ROWS, {});
+    auto data_stream = getPlacedStream<true>(handle, {range}, columns, storage_pool, STABLE_CHUNK_ROWS, {});
     data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(data_stream, handle, min_version);
 
     reset(dm_context, data_stream);
@@ -714,7 +744,7 @@ void Segment::placeUpsert(const ColumnDefine & handle, StoragePool & storage, Bl
     EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
 
     BlockInputStreamPtr merged_stream
-        = getPlacedStream<false>(handle, range, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
+        = getPlacedStream<false>(handle, {range}, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
 
     auto perm = sortBlockByPk(handle, block);
     DM::placeInsert(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
@@ -730,7 +760,7 @@ void Segment::placeDelete(const ColumnDefine & handle, StoragePool & storage, co
     Blocks delete_data;
     {
         BlockInputStreamPtr delete_stream
-            = getPlacedStream<false>(handle, delete_range, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
+            = getPlacedStream<false>(handle, {delete_range}, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
         // Try to merge into big block. 128 MB should be enough.
         SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20));
 
@@ -747,7 +777,7 @@ void Segment::placeDelete(const ColumnDefine & handle, StoragePool & storage, co
     for (const auto & block : delete_data)
     {
         BlockInputStreamPtr merged_stream
-            = getPlacedStream<false>(handle, range, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
+            = getPlacedStream<false>(handle, {range}, {handle, VERSION_COLUMN_DEFINE}, storage, DEFAULT_BLOCK_SIZE, {});
         DM::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle));
     }
     ++placed_delta_deletes;
@@ -763,7 +793,7 @@ Handle Segment::getSplitPoint(DMContext & dm_context)
     auto & storage = dm_context.storage_pool;
 
     ensurePlace(handle, storage);
-    auto stream = getPlacedStream<false>(handle, range, {dm_context.table_handle_define}, storage, DEFAULT_BLOCK_SIZE, {});
+    auto stream = getPlacedStream<false>(handle, {range}, {dm_context.table_handle_define}, storage, DEFAULT_BLOCK_SIZE, {});
 
     stream->readPrefix();
     size_t split_row_index = estimatedRows() / 2;
