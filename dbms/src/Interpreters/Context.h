@@ -355,6 +355,7 @@ public:
     DDLWorker & getDDLWorker() const;
 
     void initializeRaftService(const std::string & service_addr);
+    void shutdownRaftService();
     void createTMTContext(const std::vector<std::string> & pd_addrs,
                           const std::string & learner_key,
                           const std::string & learner_value,
