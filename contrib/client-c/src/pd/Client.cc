@@ -80,7 +80,7 @@ pdpb::GetMembersResponse Client::getMembers(std::string url)
     if (!status.ok()) {
         std::string err_msg = "get member failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
-        throw Exception(err_msg, GRPCErrorCode);
+        return {};
     }
     return resp;
 }
@@ -109,6 +109,7 @@ void Client::initClusterID() {
 }
 
 void Client::updateLeader() {
+    std::unique_lock lk(leader_mutex);
     for (auto url: urls) {
         auto resp = getMembers(url);
         if (!resp.has_header() || resp.leader().client_urls_size() == 0)
@@ -124,7 +125,6 @@ void Client::updateLeader() {
 }
 
 void Client::switchLeader(const ::google::protobuf::RepeatedPtrField<std::string>& leader_urls) {
-    std::unique_lock lk(leader_mutex);
     std::string old_leader = leader;
     leader = leader_urls[0];
     if (leader == old_leader) {
@@ -182,17 +182,20 @@ pdpb::RequestHeader * Client::requestHeader() {
 }
 
 uint64_t Client::getGCSafePoint() {
+    std::lock_guard<std::mutex> lk(gc_safepoint_mutex);
+
     pdpb::GetGCSafePointRequest request{};
     pdpb::GetGCSafePointResponse response{};
     request.set_allocated_header(requestHeader());
 ;
-    grpc::ClientContext context;
-
-    context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
-
     ::grpc::Status status;
     std::string err_msg;
+
     for (int i = 0; i < max_init_cluster_retries; i++) {
+        grpc::ClientContext context;
+
+        context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
+
         auto status = leaderStub()->GetGCSafePoint(&context, request, &response);
         if (status.ok())
             return response.safe_point();
