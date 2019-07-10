@@ -133,7 +133,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializePartPathSelector(global_context->getAllPath());
         for (auto path : global_context->getAllPath())
         {
-            LOG_DEBUG(log, "Part data candidate paths: " + path);
+            LOG_DEBUG(log, "Data part candidate path: " + path);
         }
     }
 

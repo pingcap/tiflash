@@ -137,7 +137,7 @@ void MergeTreeDataPart::MinMaxIndex::merge(const MinMaxIndex & other)
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_)
         : storage(storage_), name(name_), info(info_)
 {
-    full_path_prefix = storage.getContext().getPartPathSelector().getPathForPart(
+    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(
             storage.getDatabaseName(),
             storage.getTableName(),
             name);
@@ -147,7 +147,7 @@ MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & na
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_)
     : storage(storage_), name(name_), info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
 {
-    full_path_prefix = storage.getContext().getPartPathSelector().getPathForPart(
+    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(
             storage.getDatabaseName(),
             storage.getTableName(),
             name);
@@ -399,42 +399,6 @@ void MergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_n
     from_file.renameTo(to);
     relative_path = new_relative_path;
 }
-
-
-void MergeTreeDataPart::moveFrom(const String & from_path, const String & new_relative_path, bool remove_new_dir_if_exists) const
-{
-    String from = from_path + new_relative_path + "/";
-    String to = full_path_prefix + new_relative_path;
-    LOG_DEBUG(storage.log, "Part file " << from << " will be moved to " << to);
-
-    Poco::File from_file(from);
-    if (!from_file.exists())
-        throw Exception("Part directory " + from + " doesn't exists. Most likely it is logical error.", ErrorCodes::FILE_DOESNT_EXIST);
-
-    Poco::File to_file(to);
-    if (to_file.exists())
-    {
-        if (remove_new_dir_if_exists)
-        {
-            Names files;
-            Poco::File(from).list(files);
-
-            LOG_WARNING(storage.log, "Part directory " << to << " already exists"
-                                                       << " and contains " << files.size() << " files. Removing it.");
-
-            to_file.remove(true);
-        }
-        else
-        {
-            throw Exception("part directory " + to + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
-        }
-    }
-
-    from_file.setLastModified(Poco::Timestamp::fromEpochTime(time(nullptr)));
-    from_file.moveTo(to);
-    relative_path = new_relative_path;
-}
-
 
 void MergeTreeDataPart::renameAddPrefix(bool to_detached, const String & prefix) const
 {

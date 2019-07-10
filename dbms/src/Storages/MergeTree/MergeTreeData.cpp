@@ -481,10 +481,10 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
         MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info);
         if (part->full_path_prefix != parent_path)
         {
-            LOG_DEBUG(log, "Part file: " << file_name << " is not in the supposed path. Its current path is " << parent_path << ", and it will be moved to path: " << part->full_path_prefix);
-            part->moveFrom(parent_path, file_name);
-            LOG_DEBUG(log, "Part file: " << file_name << " moved successfully.");
+            LOG_DEBUG(log, "Part file: " << file_name << " is loaded from path " << parent_path);
+            part->full_path_prefix = parent_path;
         }
+
         part->relative_path = file_name;
         bool broken = false;
 

@@ -344,11 +344,9 @@ public:
 
     String getFullPath() const { return full_path; }
 
-    String getDataPartsPath(const String& path) const { return path + + "data/" + getDatabaseName() + "/" + getTableName() + "/"; }
+    String getDataPartsPath(const String& path) const { return path + "data/" + getDatabaseName() + "/" + getTableName() + "/"; }
 
     String getLogName() const { return log_name; }
-
-    Context & getContext() const { return context; }
 
     /// Returns a copy of the list so that the caller shouldn't worry about locks.
     DataParts getDataParts(const DataPartStates & affordable_states) const;
