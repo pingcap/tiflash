@@ -1,6 +1,9 @@
 #include <gtest/gtest-typed-test.h>
 #include <gtest/gtest.h>
 
+#include <type_traits>
+
+#include <Storages/Page/PageEntryMapDeltaVersionSet.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
 
 namespace DB
@@ -14,6 +17,83 @@ class PageMapVersionSet_test : public ::testing::Test
 };
 
 TYPED_TEST_CASE_P(PageMapVersionSet_test);
+
+TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
+{
+    TypeParam       versions;
+    PageEntriesEdit edit;
+    edit.put(0, PageEntry{.checksum = 0x123});
+    versions.apply(edit);
+    // VersionSet, new version generate && old version removed at the same time
+    // VersionDeltaSet, delta version merged
+    EXPECT_EQ(versions.size(), 1UL);
+    auto s2 = versions.getSnapshot();
+    EXPECT_EQ(versions.size(), 1UL);
+    auto entry = s2->version()->at(0);
+    ASSERT_EQ(entry.checksum, 0x123UL);
+    s2.reset(); // release snapshot
+    EXPECT_EQ(versions.size(), 1UL);
+}
+
+TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
+{
+    TypeParam versions;
+    auto      s1 = versions.getSnapshot();
+    EXPECT_EQ(versions.size(), 1UL);
+    PageEntriesEdit edit;
+    edit.put(0, PageEntry{.checksum = 0x123});
+    versions.apply(edit);
+    EXPECT_EQ(versions.size(), 2UL); // former node is hold by s1, append new version
+    auto s2    = versions.getSnapshot();
+    auto entry = s2->version()->at(0);
+    ASSERT_EQ(entry.checksum, 0x123UL);
+    s2.reset();
+    EXPECT_EQ(versions.size(), 2UL);
+    s1.reset();
+    // VersionSet, old version removed from version set
+    // VersionDeltaSet, delta version merged
+    EXPECT_EQ(versions.size(), 1UL);
+}
+
+TYPED_TEST_P(PageMapVersionSet_test, FormerSnapshotReleaseFirst)
+{
+    TypeParam       versions;
+    auto            s1 = versions.getSnapshot();
+    PageEntriesEdit edit;
+    edit.put(0, PageEntry{.checksum = 0x123});
+    versions.apply(edit);
+    auto s2    = versions.getSnapshot();
+    auto entry = s2->version()->at(0);
+    ASSERT_EQ(entry.checksum, 0x123UL);
+    s1.reset();
+    // VersionSet, size decrease to 1 when s1 release
+    // VersionDeltaSet, size is 2 since we can not do a compaction on delta
+    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+        EXPECT_EQ(versions.size(), 1UL);
+    else
+        EXPECT_EQ(versions.size(), 2UL);
+    s2.reset();
+    EXPECT_EQ(versions.size(), 1UL);
+}
+
+TYPED_TEST_P(PageMapVersionSet_test, Restore)
+{
+    TypeParam versions;
+    {
+        auto s1 = versions.getSnapshot();
+
+        typename TypeParam::BuilderType builder(s1->version(), true, &Poco::Logger::root());
+
+        PageEntriesEdit edit;
+        edit.put(1, PageEntry{.checksum = 123});
+        edit.del(1);
+
+        builder.apply(edit);
+        versions.restore(builder.build());
+    }
+    auto s = versions.getSnapshot();
+    ASSERT_EQ(s->version()->find(1), s->version()->end());
+}
 
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
 {
@@ -156,10 +236,18 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
     ASSERT_EQ(s2->version()->find(1), s2->version()->end());
 }
 
-REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test, GcConcurrencyDelPage, GcPageMove, GcConcurrencySetPage, Snapshot);
+REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
+                           ApplyEdit,
+                           ApplyEditWithReadLock,
+                           FormerSnapshotReleaseFirst,
+                           Restore,
+                           GcConcurrencyDelPage,
+                           GcPageMove,
+                           GcConcurrencySetPage,
+                           Snapshot);
 
-INSTANTIATE_TYPED_TEST_CASE_P(VersionSet, PageMapVersionSet_test, PageEntryMapVersionSet);
-//INSTANTIATE_TYPED_TEST_CASE_P(VersionSetDelta, PageMapVersionSet_test, PageEntryMapDeltaVersionSet);
+using VersionSetTypes = ::testing::Types<PageEntryMapVersionSet, PageEntryMapDeltaVersionSet>;
+INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);
 
 
 } // namespace tests

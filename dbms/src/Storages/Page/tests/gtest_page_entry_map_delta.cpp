@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include <Storages/Page/PageEntryMap.h>
+#include <Storages/Page/PageEntryMapDeltaVersionSet.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
 
 namespace DB
@@ -8,68 +9,46 @@ namespace DB
 namespace tests
 {
 
-class PageEntryMap_test : public ::testing::Test
+class PageEntryMapDelta_test : public ::testing::Test
 {
 public:
-    PageEntryMap_test() : map(nullptr), versions() {}
+    PageEntryMapDelta_test() : map(nullptr), versions() {}
 
 protected:
     void SetUp() override
     {
         // Generate an empty PageEntryMap for each test
-        auto                snapshot = versions.getSnapshot();
-        PageEntryMapBuilder builder(snapshot->version());
+        auto                     snapshot = versions.getSnapshot();
+        PageEntryMapDeltaBuilder builder(snapshot->version());
         map = builder.build();
     }
 
     void TearDown() override { delete map; }
 
-    PageEntryMap * map;
+    PageEntryMapDelta * map;
 
 private:
-    PageEntryMapVersionSet versions;
+    PageEntryMapDeltaVersionSet versions;
 };
 
-TEST_F(PageEntryMap_test, Empty)
+TEST_F(PageEntryMapDelta_test, Empty)
 {
     ASSERT_TRUE(map->empty());
-    size_t item_count = 0;
-    for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
-    {
-        item_count += 1;
-    }
-    ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->size(), 0UL);
     ASSERT_EQ(map->maxId(), 0UL);
-
 
     // add some Pages, RefPages
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
     map->ref(1, 0);
     ASSERT_FALSE(map->empty());
-    item_count = 0;
-    for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
-    {
-        item_count += 1;
-    }
-    ASSERT_EQ(item_count, 2UL);
-    ASSERT_EQ(map->size(), 2UL);
     ASSERT_EQ(map->maxId(), 1UL);
 
     map->clear();
     ASSERT_TRUE(map->empty());
-    item_count = 0;
-    for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
-    {
-        item_count += 1;
-    }
-    ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->size(), 0UL);
     ASSERT_EQ(map->maxId(), 0UL);
 }
 
-TEST_F(PageEntryMap_test, UpdatePageEntry)
+TEST_F(PageEntryMapDelta_test, UpdatePageEntry)
 {
     const PageId    page_id = 0;
     const PageEntry entry0{.checksum = 0x123};
@@ -82,10 +61,9 @@ TEST_F(PageEntryMap_test, UpdatePageEntry)
 
     map->del(page_id);
     ASSERT_EQ(map->find(page_id), map->end());
-    ASSERT_TRUE(map->empty());
 }
 
-TEST_F(PageEntryMap_test, PutDel)
+TEST_F(PageEntryMapDelta_test, PutDel)
 {
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
@@ -125,11 +103,9 @@ TEST_F(PageEntryMap_test, PutDel)
     map->del(2);
     ASSERT_EQ(map->find(0), map->end());
     ASSERT_EQ(map->find(2), map->end());
-
-    ASSERT_TRUE(map->empty());
 }
 
-TEST_F(PageEntryMap_test, UpdateRefPageEntry)
+TEST_F(PageEntryMapDelta_test, UpdateRefPageEntry)
 {
     const PageId    page_id = 0;
     const PageId    ref_id  = 1; // RefPage1 -> Page0
@@ -162,49 +138,22 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
 
     map->del(ref_id);
     ASSERT_EQ(map->find(ref_id), map->end());
-    ASSERT_TRUE(map->empty());
 }
 
-TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
-{
-    const PageEntry entry0{.checksum = 0xf};
-    map->put(0, entry0);
-    map->ref(1, 0);
-    map->del(0);
-    ASSERT_EQ(map->find(0), map->end());
-    ASSERT_EQ(map->at(1).checksum, 0xfUL);
-
-    // update Page0, both Page0 and RefPage1 got update
-    const PageEntry entry1{.checksum = 0x1};
-    map->put(0, entry1);
-    ASSERT_EQ(map->at(0).checksum, 0x1UL);
-    ASSERT_EQ(map->at(1).checksum, 0x1UL);
-}
-
-TEST_F(PageEntryMap_test, AddRefToNonExistPage)
+TEST_F(PageEntryMapDelta_test, AddRefToNonExistPage)
 {
     ASSERT_TRUE(map->empty());
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
     ASSERT_FALSE(map->empty());
-    // if try to add ref to non-exist page
-    ASSERT_THROW({ map->ref<true>(3, 2); }, DB::Exception);
-    // if try to access to non exist page, we get an exception
-    ASSERT_THROW({ map->at(3); }, DB::Exception);
-
-    // accept add RefPage{3} to non-exist Page{2}
-    ASSERT_NO_THROW(map->ref<false>(3, 2));
-    // we can find iterator by RefPage's id
-    auto iter_to_non_exist_ref_page = map->find(3);
-    ASSERT_NE(iter_to_non_exist_ref_page, map->end());
-    ASSERT_EQ(iter_to_non_exist_ref_page.pageId(), 3UL);
-    // but if we want to access that non-exist Page, we get an exception
-    ASSERT_THROW({ iter_to_non_exist_ref_page.pageEntry(); }, DB::Exception);
-    // if try to access to non exist page, we get an exception
-    ASSERT_THROW({ map->at(3); }, DB::Exception);
+    // if try to add ref
+    map->ref(3, 2);
+    auto [is_ref, ori_page_id] = map->isRefId(3);
+    ASSERT_TRUE(is_ref);
+    ASSERT_EQ(ori_page_id, 2UL);
 }
 
-TEST_F(PageEntryMap_test, PutDuplicateRef)
+TEST_F(PageEntryMapDelta_test, PutDuplicateRef)
 {
     PageEntry p0entry{.checksum = 0xFF};
     map->put(0, p0entry);
@@ -221,7 +170,7 @@ TEST_F(PageEntryMap_test, PutDuplicateRef)
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 }
 
-TEST_F(PageEntryMap_test, PutRefOnRef)
+TEST_F(PageEntryMapDelta_test, PutRefOnRef)
 {
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     // put Page0
@@ -279,11 +228,9 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     ASSERT_EQ(map->find(3), map->end());
     ASSERT_EQ(map->find(0), map->end());
     ASSERT_EQ(map->find(2), map->end());
-
-    ASSERT_TRUE(map->empty());
 }
 
-TEST_F(PageEntryMap_test, ReBindRef)
+TEST_F(PageEntryMapDelta_test, ReBindRef)
 {
     PageEntry entry0{.file_id = 1, .level = 0, .checksum = 0x123};
     PageEntry entry1{.file_id = 1, .level = 0, .checksum = 0x123};
@@ -300,55 +247,6 @@ TEST_F(PageEntryMap_test, ReBindRef)
     map->del(1);
     ASSERT_EQ(map->at(0).checksum, entry1.checksum);
     map->del(0);
-    ASSERT_TRUE(map->empty());
-}
-
-TEST_F(PageEntryMap_test, Scan)
-{
-    PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
-    PageEntry p1entry{.file_id = 2, .level = 1, .checksum = 0x456};
-    map->put(0, p0entry);
-    map->put(1, p1entry);
-    map->ref(10, 0);
-    map->ref(11, 1);
-
-    // scan through all RefPages {0, 1, 10, 11}
-    std::set<PageId> page_ids;
-    for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
-    {
-        page_ids.insert(iter.pageId());
-        if (iter.pageId() % 10 == 0)
-        {
-            const PageEntry & entry = iter.pageEntry();
-            EXPECT_EQ(entry.file_id, p0entry.file_id);
-            EXPECT_EQ(entry.level, p0entry.level);
-            EXPECT_EQ(entry.checksum, p0entry.checksum);
-        }
-        else if (iter.pageId() % 10 == 1)
-        {
-            const PageEntry & entry = iter.pageEntry();
-            EXPECT_EQ(entry.file_id, p1entry.file_id);
-            EXPECT_EQ(entry.level, p1entry.level);
-            EXPECT_EQ(entry.checksum, p1entry.checksum);
-        }
-    }
-    ASSERT_EQ(page_ids.size(), 4UL);
-
-    // clear all mapping
-    ASSERT_FALSE(map->empty());
-    map->clear();
-    ASSERT_TRUE(map->empty());
-    page_ids.clear();
-    for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
-    {
-        page_ids.insert(iter.pageId());
-    }
-    ASSERT_TRUE(page_ids.empty());
-}
-
-TEST(PageEntriesEdit_test, size)
-{
-    fprintf(stderr, "entry:%zu,edit:%zu\n", sizeof(PageEntry), sizeof(PageEntriesEdit::EditRecord));
 }
 
 } // namespace tests

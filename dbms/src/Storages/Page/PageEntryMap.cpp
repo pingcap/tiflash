@@ -10,8 +10,13 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void PageEntryMap::put(const PageId page_id, const PageEntry & entry)
+template <bool is_base>
+void PageEntryMap_t<is_base>::put(const PageId page_id, const PageEntry & entry)
 {
+    if constexpr (!is_base)
+    {
+        page_deletions.erase(page_id);
+    }
     const PageId normal_page_id = resolveRefId(page_id);
 
     // update ref-pairs
@@ -39,12 +44,8 @@ void PageEntryMap::put(const PageId page_id, const PageEntry & entry)
     max_page_id = std::max(max_page_id, page_id);
 }
 
-void PageEntryMap::copyEntries(const PageEntryMap & rhs)
-{
-    page_ref     = rhs.page_ref;
-    normal_pages = rhs.normal_pages;
-    max_page_id  = rhs.max_page_id;
-}
 
+template class PageEntryMap_t<true>;
+template class PageEntryMap_t<false>;
 
 } // namespace DB

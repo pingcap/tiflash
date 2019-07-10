@@ -49,11 +49,13 @@ public:
     struct EditRecord
     {
         WriteBatch::WriteType type;
+        char                  _padding[7]; // 7 bytes unused since type is only 1 byte.
         PageId                page_id;
-        PageEntry             entry;
         PageId                ori_page_id;
+        PageEntry             entry;
     };
     using EditRecords = std::vector<EditRecord>;
+    static_assert(std::is_trivially_copyable_v<EditRecord>);
 
     const EditRecords & getRecords() const { return records; }
 
@@ -79,9 +81,9 @@ public:
 class PageEntryMapBuilder
 {
 public:
-    explicit PageEntryMapBuilder(const PageEntryMap * base_, //
-                                 bool                 ignore_invalid_ref_ = false,
-                                 Poco::Logger *       log_                = nullptr)
+    PageEntryMapBuilder(const PageEntryMap * base_, //
+                        bool                 ignore_invalid_ref_ = false,
+                        Poco::Logger *       log_                = nullptr)
         : base(const_cast<PageEntryMap *>(base_)),
           v(new PageEntryMap), //
           ignore_invalid_ref(ignore_invalid_ref_),
@@ -124,5 +126,6 @@ public:
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 };
+
 
 } // namespace DB

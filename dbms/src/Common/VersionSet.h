@@ -1,8 +1,11 @@
 #pragma once
 
 #include <stdint.h>
+#include <cassert>
 #include <mutex>
 #include <shared_mutex>
+
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -126,6 +129,20 @@ public:
         return sz;
     }
 
+    std::string toDebugStringUnlocked() const
+    {
+        std::string s;
+        for (Version_t * v = placeholder_node.next; v != &placeholder_node; v = v->next)
+        {
+            if (!s.empty())
+                s += "->";
+            s += "{\"rc\":";
+            s += DB::toString(uint32_t(v->ref_count));
+            s += '}';
+        }
+        return s;
+    }
+
 public:
     /// A snapshot class for holding particular version
     class Snapshot
@@ -185,6 +202,7 @@ public:
     VersionSet(const VersionSet &) = delete;
     VersionSet & operator=(const VersionSet &) = delete;
 };
+
 
 } // namespace MVCC
 } // namespace DB
