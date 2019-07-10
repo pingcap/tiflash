@@ -339,7 +339,7 @@ bool PageStorage::gc()
         LOG_INFO(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
 
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
-        gc_file_entries_edit = gcMigratePages(snapshot->version(), file_valid_pages, merge_files);
+        gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files);
     }
 
     std::set<PageFileIdAndLevel> live_files;
@@ -424,9 +424,8 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     return merge_files;
 }
 
-PageEntriesEdit PageStorage::gcMigratePages(const PageEntryMap * const current,
-                                            const GcLivesPages &       file_valid_pages,
-                                            const GcCandidates &       merge_files) const
+PageEntriesEdit
+PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const
 {
     PageEntriesEdit gc_file_edit;
 
@@ -436,14 +435,14 @@ PageEntriesEdit PageStorage::gcMigratePages(const PageEntryMap * const current,
                                              page_file_log);
 
     size_t num_successful_migrate_pages = 0;
-    size_t num_valid_ref_pages = 0;
+    size_t num_valid_ref_pages          = 0;
+    auto * current                      = snapshot->version();
     {
         PageEntriesEdit legacy_edit; // All page entries in `merge_files`
         // No need to sync after each write. Do sync before closing is enough.
         auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
 
-        for (const auto &file_id_level : merge_files
-                )
+        for (const auto &file_id_level : merge_files)
         {
             PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second,
                                                                    storage_path, page_file_log);
@@ -461,8 +460,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const PageEntryMap * const current,
             PageIdAndEntries page_id_and_entries;
             {
                 const auto &page_ids = it->second.second;
-                for (auto page_id : page_ids
-                        )
+                for (auto page_id : page_ids)
                 {
                     auto it2 = current->find(page_id);
                     // This page is already removed.
@@ -494,8 +492,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const PageEntryMap * const current,
                 // copy valid pages from `to_merge_file` to `gc_file`
                 PageMap pages = to_merge_file_reader->read(page_id_and_entries);
                 WriteBatch wb;
-                for (const auto &[page_id, page_cache] : page_id_and_entries
-                        )
+                for (const auto &[page_id, page_cache] : page_id_and_entries)
                 {
                     auto &page = pages.find(page_id)->second;
                     wb.putPage(page_id,

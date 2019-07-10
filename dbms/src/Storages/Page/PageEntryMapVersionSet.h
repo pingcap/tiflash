@@ -79,7 +79,7 @@ public:
 class PageEntryMapBuilder
 {
 public:
-    PageEntryMapBuilder(PageEntryMap * base) : v(new PageEntryMap) { v->copyEntries(*base); }
+    explicit PageEntryMapBuilder(const PageEntryMap * base) : v(new PageEntryMap) { v->copyEntries(*base); }
 
     void apply(const PageEntriesEdit & edit)
     {

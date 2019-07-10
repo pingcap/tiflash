@@ -83,6 +83,7 @@ public:
     {
         page_ref.clear();
         normal_pages.clear();
+        max_page_id = 0;
     }
 
     size_t size() const { return page_ref.size(); }

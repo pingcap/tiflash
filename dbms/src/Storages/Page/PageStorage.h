@@ -49,20 +49,20 @@ public:
 public:
     PageStorage(const String & storage_path, const Config & config_);
 
-    PageId    getMaxId();
+    PageId getMaxId();
 
-    void    write(const WriteBatch & write_batch);
+    void write(const WriteBatch & write_batch);
 
     using SnapshotPtr = PageEntryMapVersionSet::SnapshotPtr;
     SnapshotPtr getSnapshot();
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = nullptr);
-    Page    read(PageId page_id, SnapshotPtr snapshot = nullptr);
-    PageMap read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = nullptr);
-    void    read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot = nullptr);
-    void    traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = nullptr);
-    void    traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
-    bool    gc();
+    Page      read(PageId page_id, SnapshotPtr snapshot = nullptr);
+    PageMap   read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = nullptr);
+    void      read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot = nullptr);
+    void      traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = nullptr);
+    void      traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
+    bool      gc();
 
     static std::set<PageFile, PageFile::Comparator>
     listAllPageFiles(const String & storage_path, bool remove_tmp_file, Poco::Logger * page_file_log);
@@ -79,7 +79,7 @@ private:
                                         UInt64 &                                         candidate_total_size,
                                         size_t &                                         migrate_page_count) const;
     PageEntriesEdit
-    gcMigratePages(const PageEntryMap * current, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
+    gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
 
 private:
     String storage_path;
@@ -96,8 +96,8 @@ private:
     Poco::Logger * page_file_log;
     Poco::Logger * log;
 
-    std::mutex        write_mutex;
-    std::mutex        gc_mutex; // A mutex used to protect gc
+    std::mutex write_mutex;
+    std::mutex gc_mutex; // A mutex used to protect gc
 };
 
 } // namespace DB

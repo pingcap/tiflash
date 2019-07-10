@@ -55,9 +55,9 @@ protected:
         storage = reopenWithConfig(config);
     }
 
-    std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config)
+    std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        return std::make_shared<PageStorage>(path, config);
+        return std::make_shared<PageStorage>(path, config_);
     }
 
 protected:
@@ -248,10 +248,10 @@ TEST_F(PageStorage_test, GcMigrateValidRefPages)
 
     const PageStorage::GcLivesPages lives_pages;
     PageStorage::GcCandidates       candidates;
-    PageEntryMap *                  current = storage->version_set.currentMap();
+    PageStorage::SnapshotPtr        snapshot = storage->getSnapshot();
     //candidates.insert(PageFileIdAndLevel{1, 0});
     candidates.insert(PageFileIdAndLevel{2, 0});
-    const PageEntriesEdit gc_file_edit = storage->gcMigratePages(current, lives_pages, candidates);
+    const PageEntriesEdit gc_file_edit = storage->gcMigratePages(snapshot, lives_pages, candidates);
     ASSERT_FALSE(gc_file_edit.empty());
     // check the ref is migrated.
     // check the deleted ref is not migrated.
@@ -272,91 +272,6 @@ TEST_F(PageStorage_test, GcMigrateValidRefPages)
         }
     }
     ASSERT_FALSE(is_deleted_ref_id_exists);
-}
-
-TEST_F(PageStorage_test, GcConcurrencyDelPage)
-{
-    PageId pid = 0;
-    // gc move Page0 -> PageFile{5,1}
-    PageEntriesEdit edit;
-    edit.put(pid, PageEntry{.file_id = 1, .level = 0});
-    // write thread del Page0 in page_map before gc thread get unique_lock of `read_mutex`
-    storage->version_set.currentMap()->clear();
-    // gc continue
-    storage->version_set.gcApply(edit);
-    // page0 don't update to page_map
-    const PageEntry entry = storage->getEntry(pid);
-    ASSERT_FALSE(entry.isValid());
-}
-
-static void EXPECT_PagePos_LT(PageFileIdAndLevel p0, PageFileIdAndLevel p1)
-{
-    EXPECT_LT(p0, p1);
-}
-
-TEST_F(PageStorage_test, GcPageMove)
-{
-    EXPECT_PagePos_LT({4, 0}, {5, 1});
-    EXPECT_PagePos_LT({5, 0}, {5, 1});
-    EXPECT_PagePos_LT({5, 1}, {6, 1});
-    EXPECT_PagePos_LT({5, 2}, {6, 1});
-
-    const PageId pid = 0;
-    const PageId ref_pid = 1;
-    // old Page0 is in PageFile{5, 0}, ref_count = 2
-    storage->version_set.currentMap()->put(pid,
-                                           PageEntry{
-                                               .file_id = 5,
-                                               .level   = 0,
-                                               .ref     = 2,
-                                           });
-    storage->version_set.currentMap()->ref(ref_pid, pid);
-    // gc move Page0 -> PageFile{5,1}
-    PageEntriesEdit edit;
-    edit.put(pid,
-             PageEntry{
-                 .file_id = 5,
-                 .level   = 1,
-             });
-    storage->version_set.gcApply(edit);
-    // page_map get updated
-    PageEntry entry = storage->getEntry(pid);
-    ASSERT_TRUE(entry.isValid());
-    ASSERT_EQ(entry.file_id, 5u);
-    ASSERT_EQ(entry.level, 1u);
-    ASSERT_EQ(entry.ref, 2u);
-
-    // RefPage got update at the same time
-    entry = storage->getEntry(ref_pid);
-    ASSERT_TRUE(entry.isValid());
-    ASSERT_EQ(entry.file_id, 5u);
-    ASSERT_EQ(entry.level, 1u);
-    ASSERT_EQ(entry.ref, 2u);
-}
-
-TEST_F(PageStorage_test, GcConcurrencySetPage)
-{
-    const PageId pid = 0;
-    // gc move Page0 -> PageFile{5,1}
-    PageEntriesEdit edit;
-    edit.put(pid,
-             PageEntry{
-                 .file_id = 5,
-                 .level   = 1,
-             });
-    // write thread insert newer Page0 before gc thread get unique_lock on `read_mutex`
-    storage->version_set.currentMap()->put(pid,
-                                           PageEntry{
-                                               .file_id = 6,
-                                               .level   = 0,
-                                           });
-    // gc continue
-    storage->version_set.gcApply(edit);
-    // read
-    const PageEntry entry = storage->getEntry(pid);
-    ASSERT_TRUE(entry.isValid());
-    ASSERT_EQ(entry.file_id, 6u);
-    ASSERT_EQ(entry.level, 0u);
 }
 
 /**
@@ -622,6 +537,171 @@ TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
     // Invalid Pages is filtered after reopen PageStorage
     ASSERT_NO_THROW(reopenWithConfig(config));
     ASSERT_FALSE(storage->getEntry(3).isValid());
+}
+
+TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
+{
+    char      ch_before         = 0x01;
+    char      ch_update         = 0xFF;
+    auto      snapshot          = storage->getSnapshot();
+    PageEntry p1_snapshot_entry = storage->getEntry(1, snapshot);
+
+    {
+        // write new version of Page1
+        const size_t buf_sz = 1024;
+        char         buf[buf_sz];
+        {
+            WriteBatch wb;
+            memset(buf, ch_update, buf_sz);
+            wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
+            wb.putPage(3, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
+            storage->write(wb);
+        }
+    }
+
+    {
+        /// read without snapshot
+        PageEntry p1_entry = storage->getEntry(1);
+        ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
+
+        Page page1 = storage->read(1);
+        ASSERT_EQ(*page1.data.begin(), ch_update);
+
+        // Page3
+        PageEntry p3_entry = storage->getEntry(3);
+        ASSERT_TRUE(p3_entry.isValid());
+        Page page3 = storage->read(3);
+        ASSERT_EQ(*page3.data.begin(), ch_update);
+    }
+
+    {
+        /// read with snapshot
+        // getEntry with snapshot
+        PageEntry p1_entry = storage->getEntry(1, snapshot);
+        ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
+
+        // read(PageId) with snapshot
+        Page page1 = storage->read(1, snapshot);
+        ASSERT_EQ(*page1.data.begin(), ch_before);
+
+        // read(vec<PageId>) with snapshot
+        PageIds ids{
+            1,
+        };
+        auto pages = storage->read(ids, snapshot);
+        ASSERT_EQ(pages.count(1), 1UL);
+        ASSERT_EQ(*pages[1].data.begin(), ch_before);
+        // TODO read(vec<PageId>, callback) with snapshot
+
+        // new page do appear while read with snapshot
+        PageEntry p3_entry = storage->getEntry(3, snapshot);
+        ASSERT_FALSE(p3_entry.isValid());
+        ASSERT_THROW({ storage->read(3, snapshot); }, DB::Exception);
+    }
+}
+
+TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
+{
+    char      ch_before         = 0x01;
+    char      ch_update         = 0xFF;
+    PageEntry p1_snapshot_entry = storage->getEntry(1);
+    auto      s1                = storage->getSnapshot();
+    auto      s2                = storage->getSnapshot();
+    auto      s3                = storage->getSnapshot();
+
+    {
+        // write new version of Page1
+        const size_t buf_sz = 1024;
+        char         buf[buf_sz];
+        {
+            WriteBatch wb;
+            memset(buf, ch_update, buf_sz);
+            wb.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
+            wb.putPage(3, 0, std::make_shared<ReadBufferFromMemory>(buf, buf_sz), buf_sz);
+            storage->write(wb);
+        }
+    }
+
+    /// read with snapshot
+    const PageIds ids{
+        1,
+    };
+    // getEntry with snapshot
+    PageEntry p1_entry = storage->getEntry(1, s1);
+    ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
+    p1_entry = storage->getEntry(1, s2);
+    ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
+    p1_entry = storage->getEntry(1, s3);
+    ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
+    // read(PageId) with snapshot
+    Page page1 = storage->read(1, s1);
+    ASSERT_EQ(*page1.data.begin(), ch_before);
+    page1 = storage->read(1, s2);
+    ASSERT_EQ(*page1.data.begin(), ch_before);
+    page1 = storage->read(1, s3);
+    ASSERT_EQ(*page1.data.begin(), ch_before);
+    // read(vec<PageId>) with snapshot
+    auto pages = storage->read(ids, s1);
+    ASSERT_EQ(pages.count(1), 1UL);
+    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    pages = storage->read(ids, s2);
+    ASSERT_EQ(pages.count(1), 1UL);
+    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    pages = storage->read(ids, s3);
+    ASSERT_EQ(pages.count(1), 1UL);
+    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    // TODO read(vec<PageId>, callback) with snapshot
+    // without snapshot
+    p1_entry = storage->getEntry(1);
+    ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
+
+    s1.reset(); /// free snapshot 1
+
+    // getEntry with snapshot
+    p1_entry = storage->getEntry(1, s2);
+    ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
+    p1_entry = storage->getEntry(1, s3);
+    ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
+    // read(PageId) with snapshot
+    page1 = storage->read(1, s2);
+    ASSERT_EQ(*page1.data.begin(), ch_before);
+    page1 = storage->read(1, s3);
+    ASSERT_EQ(*page1.data.begin(), ch_before);
+    // read(vec<PageId>) with snapshot
+    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    pages = storage->read(ids, s2);
+    ASSERT_EQ(pages.count(1), 1UL);
+    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    pages = storage->read(ids, s3);
+    ASSERT_EQ(pages.count(1), 1UL);
+    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    // TODO read(vec<PageId>, callback) with snapshot
+    // without snapshot
+    p1_entry = storage->getEntry(1);
+    ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
+
+    s2.reset(); /// free snapshot 2
+
+    // getEntry with snapshot
+    p1_entry = storage->getEntry(1, s3);
+    ASSERT_EQ(p1_entry.checksum, p1_snapshot_entry.checksum);
+    // read(PageId) with snapshot
+    page1 = storage->read(1, s3);
+    ASSERT_EQ(*page1.data.begin(), ch_before);
+    // read(vec<PageId>) with snapshot
+    pages = storage->read(ids, s3);
+    ASSERT_EQ(pages.count(1), 1UL);
+    ASSERT_EQ(*pages[1].data.begin(), ch_before);
+    // TODO read(vec<PageId>, callback) with snapshot
+    // without snapshot
+    p1_entry = storage->getEntry(1);
+    ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
+
+    s3.reset(); /// free snapshot 3
+
+    // without snapshot
+    p1_entry = storage->getEntry(1);
+    ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 }
 
 } // namespace tests
