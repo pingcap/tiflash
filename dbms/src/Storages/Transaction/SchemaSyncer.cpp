@@ -41,9 +41,17 @@ private:
     ~Curl();
 
     friend class ext::singleton<Curl>;
+
+private:
+    const int maxTimeout = 5 * 60;
+    const int maxInterval = 10;
+    const int scale = 2;
+    const int minInterval = 1;
+
+    Logger * log;
 };
 
-Curl::Curl()
+Curl::Curl() : log(&Logger::get("Curl"))
 {
     CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
     if (code != CURLE_OK)
@@ -55,38 +63,55 @@ Curl::~Curl() { curl_global_cleanup(); }
 String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
 {
     auto & tidb_service = context.getTiDBService();
+    auto start = std::chrono::steady_clock::now();
+    auto interval = minInterval;
 
-    CURL * curl = curl_easy_init();
-
-    curl_easy_setopt(curl,
-        CURLOPT_URL,
-        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/db-table/" + toString(table_id)).c_str());
-
-    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
-        auto str = reinterpret_cast<String *>(result);
-        size_t real_size = size * nmemb;
-        str->append((const char *)buffer, real_size);
-        return real_size;
-    };
-    typedef size_t (*WriteFuncT)(void * buffer, size_t size, size_t nmemb, void * result);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (WriteFuncT)writeFunc);
-
-    String result;
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&result);
-
-    CURLcode code = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-
-    if (code != CURLE_OK)
-        throw DB::Exception("Get TiDB schema through HTTP failed.", code);
-
-    if (result.empty() || result[0] == '[')
+    while (true)
     {
-        result.clear();
-    }
+        CURL * curl = curl_easy_init();
 
-    return result;
+        curl_easy_setopt(curl,
+                         CURLOPT_URL,
+                         std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/db-table/" + toString(table_id)).c_str());
+
+        auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
+            auto str = reinterpret_cast<String *>(result);
+            size_t real_size = size * nmemb;
+            str->append((const char *)buffer, real_size);
+            return real_size;
+        };
+        typedef size_t (*WriteFuncT)(void * buffer, size_t size, size_t nmemb, void * result);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (WriteFuncT)writeFunc);
+
+        String result;
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&result);
+
+        CURLcode code = curl_easy_perform(curl);
+
+        curl_easy_cleanup(curl);
+
+        if (code != CURLE_OK)
+        {
+            auto now = std::chrono::steady_clock::now();
+            std::chrono::duration<double> elapsed_seconds = now - start;
+            if (elapsed_seconds > std::chrono::seconds(maxTimeout))
+            {
+                throw DB::Exception("Get TiDB schema through HTTP failed.", code);
+            }
+            LOG_DEBUG(log, "Get TiDB schema elapsed time: " << elapsed_seconds.count());
+            std::this_thread::sleep_for(std::chrono::seconds(interval));
+            interval = std::min(interval * scale, maxInterval);
+        }
+        else
+        {
+            if (result.empty() || result[0] == '[')
+            {
+                result.clear();
+            }
+
+            return result;
+        }
+    }
 }
 
 String Curl::getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context)
