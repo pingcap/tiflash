@@ -1396,7 +1396,7 @@ void Context::initializeRaftService(const std::string & service_addr)
     shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
 }
 
-void Context::destroyRaftService()
+void Context::shutdownRaftService()
 {
     auto lock = getLock();
     if (!shared->raft_service)
