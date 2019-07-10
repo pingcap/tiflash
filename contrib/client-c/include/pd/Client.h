@@ -81,6 +81,8 @@ private:
 
     std::mutex update_leader_mutex;
 
+    std::mutex gc_safepoint_mutex;
+
     std::unordered_map<std::string, std::shared_ptr<grpc::Channel> > channel_map;
 
     std::vector<std::string> urls;
