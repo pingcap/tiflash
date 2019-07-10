@@ -131,7 +131,7 @@ protected:
 
             Block block = header.cloneWithColumns(std::move(columns));
 
-            Block res = filterByHandleSorted(handle_range, std::move(block), handle_column_pos);
+            Block res = HandleFilter::filterSorted(handle_range, std::move(block), handle_column_pos);
             if (!res || !res.rows())
                 continue;
             else
