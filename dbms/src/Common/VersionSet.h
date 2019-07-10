@@ -149,7 +149,7 @@ protected:
     Version_t placeholder_node; // Head of circular double-linked list of all versions
     Version_t * current;        // current version; current == placeholder_node.prev
 
-    std::shared_mutex read_mutex;
+    mutable std::shared_mutex read_mutex;
 
 protected:
     void appendVersion(Version_t * const v)
