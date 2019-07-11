@@ -43,8 +43,8 @@ private:
     friend class ext::singleton<Curl>;
 
 private:
-    const int maxTimeout = 5 * 60;
-    const int maxInterval = 10;
+    const int maxTimeout = 2 * 60;
+    const int maxInterval = 4;
     const int scale = 2;
     const int minInterval = 1;
 
