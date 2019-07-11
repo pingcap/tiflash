@@ -147,8 +147,6 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         storage = getOrCreateStorage(table_id);
     }
 
-    LOG_DEBUG(log, "[flushRegion] table_id: " << table_id << ", region_id: " << region_id << ", original " << cache_size << " bytes");
-
     TMTContext & tmt = context.getTMTContext();
 
     // store region ptr first.
@@ -158,6 +156,8 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         LOG_WARNING(log, "[flushRegion] region " << region_id << " is not found");
         return;
     }
+
+    LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] original " << region->dataSize() << " bytes");
 
     RegionDataReadInfoList data_list;
     if (storage == nullptr)
@@ -219,8 +219,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         if (cache_size == 0)
             tmt.getKVStore()->tryPersist(region_id);
 
-        LOG_DEBUG(
-            log, "[flushRegion] table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");
+        LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] after flush " << cache_size << " bytes");
     }
 }
 
