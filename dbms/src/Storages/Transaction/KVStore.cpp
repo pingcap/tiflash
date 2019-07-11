@@ -94,13 +94,6 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table, const
             std::lock_guard<std::mutex> lock(mutex);
             regions[region_id] = new_region;
         }
-
-        if (new_region->isPendingRemove())
-        {
-            LOG_INFO(log, "KVStore::onSnapshot region " << region_id << " is pending remove, remove it");
-            removeRegion(region_id, region_table);
-            return true;
-        }
     }
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
