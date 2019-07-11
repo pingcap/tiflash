@@ -470,7 +470,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     std::lock_guard<std::mutex> lock(data_parts_mutex);
     data_parts_indexes.clear();
 
-    for (unsigned i = 0; i < part_file_names.size(); i++)
+    for (size_t i = 0; i < part_file_names.size(); i++)
     {
         const String & file_name = part_file_names[i];
         const String & parent_path = part_file_parent_paths[i];
@@ -479,6 +479,10 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             continue;
 
         MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info);
+
+        // part->full_path_prefix is the path calculated from part name
+        // parent_path is the path where the part is currently in
+        // if these two paths don't match, this part must be a level 0 part
         if (part->full_path_prefix != parent_path)
         {
             LOG_DEBUG(log, "Part file: " << file_name << " is loaded from path " << parent_path);
@@ -538,7 +542,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
                     if (part->info.contains(contained_part_info))
                     {
-                        LOG_ERROR(log, "Found part name " << contained_name);
+                        LOG_ERROR(log, "Found part " << part->getFullPath() << contained_name);
                         ++contained_parts;
                     }
                 }

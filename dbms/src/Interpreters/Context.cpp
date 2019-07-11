@@ -115,7 +115,7 @@ struct ContextShared
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
 
-    std::shared_ptr<std::vector<String>> paths;             /// Path to all candidate data directory
+    std::vector<String> paths;                              /// Path to all candidate data directory
     String path;                                            /// Path to the primary data directory, with a slash at the end.
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
@@ -485,7 +485,7 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
 std::vector<String> & Context::getAllPath() const
 {
     auto lock = getLock();
-    return *(shared->paths);
+    return shared->paths;
 }
 
 String Context::getPath() const
@@ -515,7 +515,7 @@ String Context::getUserFilesPath() const
 void Context::setAllPath(const std::vector<String> & paths_)
 {
     auto lock = getLock();
-    shared->paths = std::make_shared<std::vector<String>>(paths_);
+    shared->paths = paths_;
 }
 
 void Context::setPath(const String & path)

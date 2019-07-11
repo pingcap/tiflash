@@ -127,14 +127,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
     {
         all_path.push_back(getCanonicalPath(std::string(*it)));
+        LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
     }
     global_context->setAllPath(all_path);
     {
         global_context->initializePartPathSelector(global_context->getAllPath());
-        for (auto path : global_context->getAllPath())
-        {
-            LOG_DEBUG(log, "Data part candidate path: " + path);
-        }
     }
 
     std::string path = global_context->getAllPath()[0];
