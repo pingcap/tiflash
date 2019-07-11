@@ -203,18 +203,21 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
             return;
         }
 
-        auto remover = region->createCommittedRemover(table_id);
-        for (const auto & [handle, write_type, commit_ts, value] : data_list)
         {
-            std::ignore = write_type;
-            std::ignore = value;
+            auto remover = region->createCommittedRemover(table_id);
+            for (const auto & [handle, write_type, commit_ts, value] : data_list)
+            {
+                std::ignore = write_type;
+                std::ignore = value;
 
-            remover->remove({handle, commit_ts});
+                remover->remove({handle, commit_ts});
+            }
         }
+
         cache_size = region->dataSize();
 
         if (cache_size == 0)
-            region->incDirtyFlag();
+            tmt.getKVStore()->tryPersist(region_id);
 
         LOG_DEBUG(
             log, "[flushRegion] table_id: " << table_id << ", region_id: " << region_id << ", after flush " << cache_size << " bytes");

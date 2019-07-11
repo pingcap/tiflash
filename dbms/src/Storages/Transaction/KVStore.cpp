@@ -59,6 +59,8 @@ void KVStore::traverseRegions(std::function<void(RegionID region_id, const Regio
 
 bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table, const std::optional<UInt64> expect_old_index)
 {
+    region_persister.persist(new_region);
+
     {
         std::lock_guard<std::mutex> lock(task_mutex);
 
@@ -100,8 +102,6 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table, const
             return true;
         }
     }
-
-    region_persister.persist(new_region);
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
     if (region_table)
@@ -276,6 +276,17 @@ void KVStore::report(RaftContext & raft_ctx)
     raft_ctx.send(responseBatch);
 
     LOG_INFO(log, "Report status of " << responseBatch.responses_size() << " regions to proxy");
+}
+
+void KVStore::tryPersist(const RegionID region_id)
+{
+    auto region = getRegion(region_id);
+    if (region)
+    {
+        LOG_INFO(log, "Try to persist " << region->toString(false));
+        region_persister.persist(region);
+        LOG_INFO(log, "After persisted " << region->toString(false) << ", cache " << region->dataSize() << " bytes");
+    }
 }
 
 bool KVStore::tryPersist(const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
