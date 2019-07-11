@@ -46,6 +46,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer {
         return true;
     }
 
+    void syncSchema(TableID , Context & context, bool ) override {
+        syncSchemas(context);
+    }
+
+    TableID getTableIdByName(const std::string & , const std::string & , Context & ) override {
+        return 0;
+    }
+
     bool tryLoadSchemaDiffs(SchemaGetter & getter, Int64 version, Context & context) {
         if (isTooOldSchema(cur_version, version)) {
             return false;

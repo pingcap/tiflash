@@ -61,6 +61,25 @@ public:
     };
     using TablePtr = std::shared_ptr<Table>;
 
+    class MockSchemaSyncer : public JsonSchemaSyncer
+    {
+    public:
+        TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & /*context*/) override
+        {
+            return MockTiDB::instance().getTableIDByName(database_name, table_name);
+        }
+
+    protected:
+        String getSchemaJson(TableID table_id, Context & /*context*/) override { return MockTiDB::instance().getSchemaJson(table_id); }
+        String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override
+        {
+            std::ignore = database_name;
+            std::ignore = table_name;
+            std::ignore = context;
+            throw Exception("getSchemaJsonByName not implemented in MockSchemaSyncer");
+        }
+    };
+
 public:
     String getSchemaJson(TableID table_id);
 

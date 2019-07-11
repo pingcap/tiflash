@@ -19,7 +19,7 @@ using DBInfo = TiDB::DBInfo;
 using TableInfoPtr = TiDB::TableInfoPtr;
 using DBInfoPtr = TiDB::DBInfoPtr;
 
-AlterCommands detectSchemaChanges(const TiDB::TableInfo & table_info, const TiDB::TableInfo & orig_table_info)
+inline AlterCommands detectSchemaChanges(const TiDB::TableInfo & table_info, const TiDB::TableInfo & orig_table_info)
 {
     AlterCommands alter_commands;
 
