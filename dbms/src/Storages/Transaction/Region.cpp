@@ -599,14 +599,22 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
             {
                 const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
 
-                bool ok = start_key ? key >= start_key : true;
-                ok = ok && (end_key ? key < end_key : true);
+                {
+                    bool ok = start_key ? key >= start_key : true;
+                    ok = ok && (end_key ? key < end_key : true);
 
-                if (!ok)
-                    continue;
+                    if (!ok)
+                        continue;
+                }
 
                 const auto & [handle, ts] = write_map_it->first;
-                handle_map[handle] = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
+                const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
+                auto [it, ok] = handle_map.emplace(handle, cur_ele);
+                if (!ok)
+                {
+                    auto & ele = it->second;
+                    ele = std::max(ele, cur_ele);
+                }
             }
 
             LOG_DEBUG(log,
