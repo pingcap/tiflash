@@ -79,57 +79,37 @@ public:
 class PageEntryMapBuilder
 {
 public:
-    explicit PageEntryMapBuilder(const PageEntryMap * base) : v(new PageEntryMap) { v->copyEntries(*base); }
-
-    void apply(const PageEntriesEdit & edit)
+    explicit PageEntryMapBuilder(const PageEntryMap * base_, //
+                                 bool                 ignore_invalid_ref_ = false,
+                                 Poco::Logger *       log_                = nullptr)
+        : base(const_cast<PageEntryMap *>(base_)),
+          v(new PageEntryMap), //
+          ignore_invalid_ref(ignore_invalid_ref_),
+          log(log_)
     {
-        for (const auto & rec : edit.getRecords())
+#ifndef NDEBUG
+        if (ignore_invalid_ref)
         {
-            switch (rec.type)
-            {
-            case WriteBatch::WriteType::PUT:
-                v->put(rec.page_id, rec.entry);
-                break;
-            case WriteBatch::WriteType::DEL:
-                v->del(rec.page_id);
-                break;
-            case WriteBatch::WriteType::REF:
-                v->ref(rec.page_id, rec.ori_page_id);
-                break;
-            }
+            assert(log != nullptr);
         }
+#endif
+        base->incrRefCount();
+        v->copyEntries(*base);
     }
 
-    void gcApply(const PageEntriesEdit & edit)
-    {
-        for (const auto & rec : edit.getRecords())
-        {
-            if (rec.type != WriteBatch::WriteType::PUT)
-            {
-                continue;
-            }
-            // Gc only apply PUT for updating page entries
-            auto old_iter = v->find(rec.page_id);
-            // If the gc page have already been removed, just ignore it
-            if (old_iter == v->end())
-            {
-                continue;
-            }
-            auto & old_page_entry = old_iter.pageEntry();
-            // In case of page being updated during GC process.
-            if (old_page_entry.fileIdLevel() < rec.entry.fileIdLevel())
-            {
-                // no new page write to `page_entry_map`, replace it with gc page
-                old_page_entry = rec.entry;
-            }
-            // else new page written by another thread, gc page is replaced. leave the page for next gc
-        }
-    }
+    ~PageEntryMapBuilder() { base->decrRefCount(); }
+
+    void apply(const PageEntriesEdit & edit);
+
+    void gcApply(const PageEntriesEdit & edit);
 
     PageEntryMap * build() { return v; }
 
 private:
+    PageEntryMap * base;
     PageEntryMap * v;
+    bool           ignore_invalid_ref;
+    Poco::Logger * log;
 };
 
 class PageEntryMapVersionSet : public ::DB::MVCC::VersionSet<PageEntryMap, PageEntriesEdit, PageEntryMapBuilder>

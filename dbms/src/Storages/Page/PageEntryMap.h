@@ -50,7 +50,7 @@ public:
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
      *  template must_exist = true ensure that corresponding Page must exist.
-     *            must_exist = false just ignore if that corresponding Page is not exist.
+     *           must_exist = false just ignore if that corresponding Page is not exist.
      */
     template <bool must_exist = false>
     void del(PageId page_id);

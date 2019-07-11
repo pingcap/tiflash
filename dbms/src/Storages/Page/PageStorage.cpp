@@ -60,7 +60,9 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
 {
     /// page_files are in ascending ordered by (file_id, level).
     auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
-    // recover current map from files
+    // recover current version from files
+    auto                                snapshot = version_set.getSnapshot();
+    PageEntryMapVersionSet::BuilderType builder(snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
     for (auto & page_file : page_files)
     {
         PageEntriesEdit edit;
@@ -71,9 +73,10 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
         {
             write_file = page_file;
         }
-        // apply edit to version_set
-        version_set.apply(edit);
+        // apply edit to new version
+        builder.apply(edit);
     }
+    version_set.restore(builder.build());
 }
 
 PageId PageStorage::getMaxId()
@@ -144,10 +147,11 @@ void PageStorage::write(const WriteBatch & wb)
     std::lock_guard<std::mutex> lock(write_mutex);
     getWriter().write(wb, edit);
 
-    {
-        // apply changes into version_set(generate a new version)
-        version_set.apply(edit);
-    }
+    // Apply changes into version_set(generate a new version)
+    // If there are RefPages to non-exist Pages, just put the ref pair to new version
+    // instead of throwing exception. Or we can't open PageStorage since we have already
+    // persist the invalid ref pair into PageFile.
+    version_set.apply(edit);
 }
 
 PageStorage::SnapshotPtr PageStorage::getSnapshot()
@@ -166,7 +170,7 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
     if (it == snapshot->version()->end())
         throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
     const auto &     page_entry    = it.pageEntry(); // this may throw an exception if ref to non-exist page
-    auto             file_id_level = page_entry.fileIdLevel();
+    const auto       file_id_level = page_entry.fileIdLevel();
     PageIdAndEntries to_read       = {{page_id, page_entry}};
     auto             file_reader   = getReader(file_id_level);
     return file_reader->read(to_read)[page_id];

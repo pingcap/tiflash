@@ -80,6 +80,9 @@ template <typename Version_t, typename VersionEdit_t, typename Builder_t>
 class VersionSet
 {
 public:
+    using BuilderType = Builder_t;
+
+public:
     VersionSet() : placeholder_node(), current(nullptr)
     {
         // append a init version to link
@@ -92,18 +95,24 @@ public:
         assert(placeholder_node.next == &placeholder_node); // List must be empty
     }
 
+    void restore(Version_t * const v)
+    {
+        std::unique_lock read_lock(read_mutex);
+        appendVersion(v);
+    }
+
     /// `apply` accept changes and append new version to version-list
     void apply(const VersionEdit_t & edit)
     {
         std::unique_lock read_lock(read_mutex);
 
         // apply edit on base
-        Version_t * base = current;
-        base->incrRefCount();
-        Builder_t builder(base);
-        builder.apply(edit);
-        Version_t * v = builder.build();
-        base->decrRefCount();
+        Version_t * v = nullptr;
+        {
+            Builder_t builder(current);
+            builder.apply(edit);
+            v = builder.build();
+        }
 
         appendVersion(v);
     }

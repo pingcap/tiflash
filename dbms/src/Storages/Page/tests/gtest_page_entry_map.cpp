@@ -11,7 +11,7 @@ namespace tests
 class PageEntryMap_test : public ::testing::Test
 {
 public:
-    PageEntryMap_test(): map(nullptr), versions() {}
+    PageEntryMap_test() : map(nullptr), versions() {}
 
 protected:
     void SetUp() override

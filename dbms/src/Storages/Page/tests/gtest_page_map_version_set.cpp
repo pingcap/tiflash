@@ -48,7 +48,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
-static void EXPECT_PagePos_LT(PageFileIdAndLevel p0, PageFileIdAndLevel p1)
+static void              EXPECT_PagePos_LT(PageFileIdAndLevel p0, PageFileIdAndLevel p1)
 {
     EXPECT_LT(p0, p1);
 }
