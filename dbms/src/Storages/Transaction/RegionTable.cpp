@@ -139,7 +139,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     });
 }
 
-void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cache_size)
+void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cache_size, const bool try_persist)
 {
     StoragePtr storage = nullptr;
     {
@@ -217,7 +217,12 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         cache_size = region->dataSize();
 
         if (cache_size == 0)
-            tmt.getKVStore()->tryPersist(region_id);
+        {
+            if (try_persist)
+                tmt.getKVStore()->tryPersist(region_id);
+            else
+                region->incDirtyFlag();
+        }
 
         LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] after flush " << cache_size << " bytes");
     }
@@ -461,7 +466,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
     if (!status)
         return;
 
-    flushRegion(table_id, region_id, cache_bytes);
+    flushRegion(table_id, region_id, cache_bytes, false);
 
     func_update_region([&](InternalRegion & region) -> bool {
         region.pause_flush = false;
