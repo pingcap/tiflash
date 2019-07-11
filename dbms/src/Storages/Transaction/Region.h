@@ -162,6 +162,7 @@ public:
 
     /// only can be used for applying snapshot. only can be called by single thread.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
+    void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
 
     static ColumnFamilyType getCf(const std::string & cf);
 

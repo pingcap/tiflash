@@ -136,7 +136,7 @@ std::string RegionMeta::toString(bool dump_status) const
             term = applied_term;
             index = apply_state.applied_index();
         }
-        ss << ", applied_term: " << term << ", applied_index: " << index;
+        ss << ", applied: term " << term << " index " << index;
     }
     ss << "]";
     return ss.str();
