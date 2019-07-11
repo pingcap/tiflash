@@ -180,7 +180,9 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
-            // TODO: split update kvstore first then region_table, merge should reverse.
+            if (raft_ctx.context)
+                raft_ctx.context->getRaftService().addRegionToFlush(*curr_region);
+
             {
                 std::lock_guard<std::mutex> lock(mutex);
 
