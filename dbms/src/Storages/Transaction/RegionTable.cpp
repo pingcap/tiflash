@@ -127,16 +127,18 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     /// Store region ptr first, for ABA avoidance when removing region data.
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
-    if (!region)
     {
-        LOG_WARNING(log, "[flushRegion] region " << region_id << " is not found");
-        return;
+        if (!region)
+        {
+            LOG_WARNING(log, "[flushRegion] region " << region_id << " is not found");
+            return;
+        }
+
+        LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] original " << region->dataSize() << " bytes");
     }
 
-    LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] original " << region->dataSize() << " bytes");
-
-    RegionDataReadInfoList data_list_to_remove;
     /// Write region data into corresponding storage.
+    RegionDataReadInfoList data_list_to_remove;
     {
         writeBlockByRegion(context, table_id, region, data_list_to_remove);
     }
@@ -237,6 +239,26 @@ void RegionTable::restore(std::function<RegionPtr(RegionID)> region_fetcher)
 
         table.persist();
     }
+}
+
+void RegionTable::removeTable(TableID table_id)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    auto it = tables.find(table_id);
+    if (it == tables.end())
+        return;
+    auto & table = it->second;
+
+    // Remove from region list.
+    for (const auto & region_info : table.regions.get())
+    {
+        regions[region_info.first].tables.erase(table.table_id);
+    }
+
+    // Remove from table map.
+    table.regions.drop();
+    tables.erase(it);
 }
 
 void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids)
