@@ -127,8 +127,7 @@ using DB::WriteBufferFromOwnString;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
-try
+Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -145,12 +144,15 @@ try
     tp_json->set("Flag", flag);
     tp_json->set("Flen", flen);
     tp_json->set("Decimal", decimal);
-    if (elems.size() > 0) {
+    if (elems.size() > 0)
+    {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
         for (auto & elem : elems)
             elem_arr->add(elem.first);
         tp_json->set("Elems", elem_arr);
-    } else {
+    }
+    else
+    {
         tp_json->set("Elems", Poco::Dynamic::Var());
     }
     json->set("type", tp_json);
@@ -182,11 +184,13 @@ void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json) try
     flag = type_json->getValue<UInt32>("Flag");
     flen = type_json->getValue<Int64>("Flen");
     decimal = type_json->getValue<Int64>("Decimal");
-    if (!type_json->isNull("Elems")) {
+    if (!type_json->isNull("Elems"))
+    {
         auto elems_arr = type_json->getArray("Elems");
         size_t elems_size = elems_arr->size();
-        for (size_t i = 1; i <= elems_size; i++) {
-            elems.push_back(std::make_pair(elems_arr->getElement<String>(i-1), Int16(i)));
+        for (size_t i = 1; i <= elems_size; i++)
+        {
+            elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), Int16(i)));
         }
     }
     state = static_cast<SchemaState>(json->getValue<Int32>("state"));
@@ -200,8 +204,7 @@ catch (const Poco::Exception & e)
 
 PartitionDefinition::PartitionDefinition(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const
-try
+Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
@@ -237,8 +240,7 @@ catch (const Poco::Exception & e)
 
 PartitionInfo::PartitionInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const
-try
+Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -249,7 +251,8 @@ try
 
     Poco::JSON::Array::Ptr def_arr = new Poco::JSON::Array();
 
-    for (auto & part_def : definitions) {
+    for (auto & part_def : definitions)
+    {
         def_arr->add(part_def.getJSONObject());
     }
 
@@ -290,8 +293,7 @@ catch (const Poco::Exception & e)
 
 TableInfo::TableInfo(const String & table_info_json, bool escaped) { deserialize(table_info_json, escaped); }
 
-String TableInfo::serialize(bool escaped) const
-try
+String TableInfo::serialize(bool escaped) const try
 {
     std::stringstream buf;
 
@@ -303,7 +305,8 @@ try
     json->set("name", name_json);
 
     Poco::JSON::Array::Ptr cols_arr = new Poco::JSON::Array();
-    for (auto & col_info : columns) {
+    for (auto & col_info : columns)
+    {
         auto col_obj = col_info.getJSONObject();
         cols_arr->add(col_obj);
     }
@@ -313,13 +316,17 @@ try
     json->set("pk_is_handle", pk_is_handle);
     json->set("comment", comment);
     json->set("update_timestamp", update_timestamp);
-    if (is_partition_table) {
+    if (is_partition_table)
+    {
         json->set("belonging_table_id", belonging_table_id);
         json->set("partition", partition.getJSONObject());
-        if (belonging_table_id != -1) {
+        if (belonging_table_id != -1)
+        {
             json->set("is_partition_sub_table", true);
         }
-    } else {
+    }
+    else
+    {
         json->set("partition", Poco::Dynamic::Var());
     }
 
@@ -344,14 +351,14 @@ catch (const Poco::Exception & e)
 
 void DBInfo::deserialize(const String & json_str) try
 {
-        Poco::JSON::Parser parser;
-        Poco::Dynamic::Var result = parser.parse(json_str);
-        auto obj = result.extract<Poco::JSON::Object::Ptr>();
-        id = obj->getValue<Int64>("id");
-        name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
-        charset = obj->get("charset").convert<String>();
-        collate = obj->get("collate").convert<String>();
-        state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var result = parser.parse(json_str);
+    auto obj = result.extract<Poco::JSON::Object::Ptr>();
+    id = obj->getValue<Int64>("id");
+    name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
+    charset = obj->get("charset").convert<String>();
+    collate = obj->get("collate").convert<String>();
+    state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
 }
 catch (const Poco::Exception & e)
 {

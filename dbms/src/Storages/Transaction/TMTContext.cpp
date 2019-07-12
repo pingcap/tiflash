@@ -1,8 +1,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
-#include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <pd/MockPDClient.h>
 
 namespace DB

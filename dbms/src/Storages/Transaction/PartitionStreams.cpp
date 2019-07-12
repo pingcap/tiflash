@@ -89,8 +89,8 @@ void RegionTable::writeBlockByRegion(Context & context, TableID table_id, Region
     if (!atomicReadWrite(true))
         // Failure won't be tolerated this time.
         // TODO: Enrich exception message.
-        throw Exception(
-            "Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
+            ErrorCodes::LOGICAL_ERROR);
 }
 
 std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockByRegion(const TiDB::TableInfo & table_info,

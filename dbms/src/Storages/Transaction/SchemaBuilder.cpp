@@ -1,18 +1,19 @@
-#include <Storages/Transaction/SchemaBuilder.h>
-#include <Storages/Transaction/TMTContext.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
-#include <Interpreters/InterpreterAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Storages/Transaction/TypeMapping.h>
 #include <Storages/MutableSupport.h>
-#include <IO/WriteHelpers.h>
+#include <Storages/Transaction/SchemaBuilder.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TypeMapping.h>
 
-namespace DB {
+namespace DB
+{
 
 using TableInfo = TiDB::TableInfo;
 using DBInfo = TiDB::DBInfo;
@@ -53,9 +54,9 @@ inline AlterCommands detectSchemaChanges(const TiDB::TableInfo & table_info, con
     /// Detect dropped columns.
     for (const auto & orig_column_info : orig_table_info.columns)
     {
-        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const TiDB::ColumnInfo & column_info_) {
-            return column_info_.id == orig_column_info.id;
-        });
+        const auto & column_info = std::find_if(table_info.columns.begin(),
+            table_info.columns.end(),
+            [&](const TiDB::ColumnInfo & column_info_) { return column_info_.id == orig_column_info.id; });
 
         AlterCommand command;
         if (column_info == table_info.columns.end())
@@ -76,40 +77,48 @@ inline AlterCommands detectSchemaChanges(const TiDB::TableInfo & table_info, con
     return alter_commands;
 }
 
-void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, StorageMergeTree * storage) {
+void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, StorageMergeTree * storage)
+{
     auto orig_table_info = storage->getTableInfo();
     auto commands = detectSchemaChanges(*table_info, orig_table_info);
 
     storage->alterForTMT(commands, *table_info, context);
 
-    if (table_info->is_partition_table) {
+    if (table_info->is_partition_table)
+    {
         // create partition table.
-        for(auto part_def : table_info->partition.definitions) {
+        for (auto part_def : table_info->partition.definitions)
+        {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
             storage->alterForTMT(commands, *new_table_info, context);
         }
     }
 }
 
-void SchemaBuilder::applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id) {
+void SchemaBuilder::applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
+{
 
     auto table_info = getter.getTableInfo(dbInfo->id, table_id);
     auto & tmt_context = context.getTMTContext();
-    auto storage = static_cast<StorageMergeTree * >(tmt_context.getStorages().get(table_id).get());
-    if (storage == nullptr) {
+    auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_id).get());
+    if (storage == nullptr)
+    {
         // TODO throw exception
     }
     applyAlterTableImpl(table_info, storage);
 }
 
-void SchemaBuilder::applyDiff(const SchemaDiff & diff) {
+void SchemaBuilder::applyDiff(const SchemaDiff & diff)
+{
 
-    if (diff.type == SchemaActionCreateSchema) {
+    if (diff.type == SchemaActionCreateSchema)
+    {
         applyCreateSchema(diff.schema_id);
         return;
     }
 
-    if (diff.type == SchemaActionDropSchema) {
+    if (diff.type == SchemaActionDropSchema)
+    {
         applyDropSchema(diff.schema_id);
         return;
     }
@@ -121,7 +130,8 @@ void SchemaBuilder::applyDiff(const SchemaDiff & diff) {
 
     Int64 oldTableID = 0, newTableID = 0;
 
-    switch (diff.type) {
+    switch (diff.type)
+    {
         case SchemaActionCreateTable:
         case SchemaActionRecoverTable:
         {
@@ -165,25 +175,30 @@ void SchemaBuilder::applyDiff(const SchemaDiff & diff) {
         }
     }
 
-    if (oldTableID) {
+    if (oldTableID)
+    {
         applyDropTable(di, diff.table_id);
     }
 
-    if (newTableID) {
+    if (newTableID)
+    {
         applyCreateTable(di, diff.table_id);
     }
 }
 
-bool SchemaBuilder::applyCreateSchema(DatabaseID schema_id) {
+bool SchemaBuilder::applyCreateSchema(DatabaseID schema_id)
+{
     auto db = getter.getDatabase(schema_id);
-    if (db->name == "") {
+    if (db->name == "")
+    {
         return false;
     }
     applyCreateSchemaImpl(db);
     return true;
 }
 
-void SchemaBuilder::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info) {
+void SchemaBuilder::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info)
+{
     ASTCreateQuery * create_query = new ASTCreateQuery();
     create_query->database = db_info->name;
     create_query->if_not_exists = true;
@@ -196,9 +211,11 @@ void SchemaBuilder::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info) {
     databases[db_info->id] = db_info->name;
 }
 
-void SchemaBuilder::applyDropSchema(DatabaseID schema_id) {
+void SchemaBuilder::applyDropSchema(DatabaseID schema_id)
+{
     auto database_name = databases[schema_id];
-    if (database_name == "") {
+    if (database_name == "")
+    {
         return;
     }
     auto drop_query = std::make_shared<ASTDropQuery>();
@@ -260,7 +277,8 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
     return stmt;
 }
 
-void SchemaBuilder::applyCreatePhysicalTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info) {
+void SchemaBuilder::applyCreatePhysicalTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info)
+{
     String stmt = createTableStmt(*db_info, *table_info);
 
     ParserCreateQuery parser;
@@ -276,29 +294,37 @@ void SchemaBuilder::applyCreatePhysicalTableImpl(TiDB::DBInfoPtr db_info, TiDB::
     interpreter.execute();
 }
 
-void SchemaBuilder::applyCreateTable(TiDB::DBInfoPtr db_info, Int64 table_id) {
+void SchemaBuilder::applyCreateTable(TiDB::DBInfoPtr db_info, Int64 table_id)
+{
 
     auto table_info = getter.getTableInfo(db_info->id, table_id);
-    if (table_info == nullptr) {
+    if (table_info == nullptr)
+    {
         // this table is dropped.
         return;
     }
     applyCreateTableImpl(db_info, table_info);
 }
 
-void SchemaBuilder::applyCreateTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info) {
-    if (table_info->is_partition_table) {
+void SchemaBuilder::applyCreateTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info)
+{
+    if (table_info->is_partition_table)
+    {
         // create partition table.
-        for(auto part_def : table_info->partition.definitions) {
+        for (auto part_def : table_info->partition.definitions)
+        {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
             applyCreatePhysicalTableImpl(db_info, new_table_info);
         }
-    } else {
+    }
+    else
+    {
         applyCreatePhysicalTableImpl(db_info, table_info);
     }
 }
 
-void SchemaBuilder::applyDropTableImpl(const String & database_name, const String & table_name) {
+void SchemaBuilder::applyDropTableImpl(const String & database_name, const String & table_name)
+{
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
     drop_query->table = table_name;
@@ -308,13 +334,16 @@ void SchemaBuilder::applyDropTableImpl(const String & database_name, const Strin
     drop_interpreter.execute();
 }
 
-void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id) {
+void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
+{
     String database_name = dbInfo->name;
     auto & tmt_context = context.getTMTContext();
-    const auto & table_info = static_cast<StorageMergeTree * >(tmt_context.getStorages().get(table_id).get())->getTableInfo();
-    if (table_info.is_partition_table) {
+    const auto & table_info = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_id).get())->getTableInfo();
+    if (table_info.is_partition_table)
+    {
         // drop all partition tables.
-        for(auto part_def : table_info.partition.definitions) {
+        for (auto part_def : table_info.partition.definitions)
+        {
             auto new_table_info = table_info.producePartitionTableInfo(part_def.id);
             applyDropTableImpl(database_name, new_table_info->name);
         }
@@ -323,22 +352,28 @@ void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id) {
     applyDropTableImpl(database_name, table_info.name);
 }
 
-void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info) {
+void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info)
+{
     auto database_name = databases[db_info->id];
-    if (database_name == "") {
+    if (database_name == "")
+    {
         applyCreateSchemaImpl(db_info);
     }
     auto tables = getter.listTables(db_info->id);
     auto & tmt_context = context.getTMTContext();
-    for (auto table : tables) {
-        auto storage = static_cast<StorageMergeTree * >(tmt_context.getStorages().get(table->id).get());
-        if (storage == nullptr) {
+    for (auto table : tables)
+    {
+        auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table->id).get());
+        if (storage == nullptr)
+        {
             applyCreateTable(db_info, table->id);
-        } else {
+        }
+        else
+        {
             applyAlterTableImpl(table, storage);
         }
     }
 }
 
 // end namespace
-}
+} // namespace DB
