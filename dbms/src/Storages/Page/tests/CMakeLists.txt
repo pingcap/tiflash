@@ -1,0 +1,17 @@
+
+add_executable(page_test_page_storage gtest_page_storage.cpp)
+target_link_libraries(page_test_page_storage gtest_main dbms)
+
+add_executable(page_test_page_file gtest_page_file.cpp)
+target_link_libraries(page_test_page_file gtest_main dbms)
+
+add_executable(page_stress_page_storage stress_page_stroage.cpp)
+target_link_libraries(page_stress_page_storage dbms)
+
+add_executable(page_utils_get_valid_pages utils_get_valid_pages.cpp)
+target_link_libraries(page_utils_get_valid_pages dbms)
+target_compile_options(page_utils_get_valid_pages PRIVATE -Wno-format)
+
+add_executable(test_page_storage_write_disk_full test_page_storage_write_disk_full.cpp)
+target_link_libraries(test_page_storage_write_disk_full dbms)
+target_compile_options(test_page_storage_write_disk_full PRIVATE -Wno-format)

@@ -39,6 +39,8 @@ public:
     bool tryPersist(
         const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD, const Seconds region_persist_period = REGION_PERSIST_PERIOD);
 
+    void tryPersist(const RegionID region_id);
+
     size_t regionSize() const;
 
     void removeRegion(RegionID region_id, RegionTable * context);

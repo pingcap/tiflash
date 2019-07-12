@@ -1398,12 +1398,24 @@ void Context::initializeRaftService(const std::string & service_addr)
     shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
 }
 
-void Context::createTMTContext(const std::vector<std::string> & pd_addrs, const std::string & learner_key, const std::string & learner_value)
+void Context::shutdownRaftService()
+{
+    auto lock = getLock();
+    if (!shared->raft_service)
+        return;
+    shared->raft_service.reset();
+}
+
+void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
+                               const std::string & learner_key,
+                               const std::string & learner_value,
+                               const std::string & kvstore_path,
+                               const std::string & region_mapping_path)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
 }
 
 RaftService & Context::getRaftService()

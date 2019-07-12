@@ -65,6 +65,8 @@ public:
         /// After return, the items in to_read could be reordered, but won't be removed or added.
         PageMap read(PageIdAndCaches & to_read);
 
+        void read(PageIdAndCaches & to_read, const PageHandler & handler);
+
     private:
         std::string data_file_path;
         int         data_file_fd;

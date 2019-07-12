@@ -1,18 +1,22 @@
 #pragma once
 
-#include <Storages/Transaction/SchemaGetter.h>
-#include <Storages/StorageMergeTree.h>
 #include <Interpreters/Context.h>
+#include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/SchemaGetter.h>
 
-namespace DB {
+namespace DB
+{
 
-struct SchemaBuilder {
+struct SchemaBuilder
+{
 
     SchemaGetter & getter;
     Context & context;
     std::unordered_map<DB::DatabaseID, String> & databases;
 
-    SchemaBuilder(SchemaGetter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> dbs_): getter(getter_), context(context_), databases(dbs_){}
+    SchemaBuilder(SchemaGetter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> & dbs_)
+        : getter(getter_), context(context_), databases(dbs_)
+    {}
 
     void applyDiff(const SchemaDiff & diff);
 
@@ -21,7 +25,6 @@ struct SchemaBuilder {
     void applyDropSchema(DatabaseID schema_id);
 
 private:
-
     bool applyCreateSchema(DatabaseID schema_id);
 
     void applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
@@ -33,7 +36,7 @@ private:
 
     void applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id);
 
-    void applyAlterTableImpl(TiDB::TableInfoPtr table_info, StorageMergeTree* storage);
+    void applyAlterTableImpl(TiDB::TableInfoPtr table_info, StorageMergeTree * storage);
 
     //void applyAddPartition(TiDB::DBInfoPtr dbInfo, Int64 table_id);
 
@@ -45,6 +48,6 @@ private:
 
     void applyDropTableImpl(const String &, const String &);
 };
-    bool applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
+bool applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
 
-}
+} // namespace DB

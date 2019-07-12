@@ -97,16 +97,10 @@ public:
     };
 
 public:
-    explicit Region(RegionMeta && meta_) : meta(std::move(meta_)), client(nullptr), log(&Logger::get(log_name)) {}
+    explicit Region(RegionMeta meta_) : meta(std::move(meta_)), client(nullptr), log(&Logger::get(log_name)) {}
 
-    explicit Region(const RegionMeta & meta_) : meta(meta_), client(nullptr), log(&Logger::get(log_name)) {}
-
-    explicit Region(RegionMeta && meta_, const RegionClientCreateFunc & region_client_create)
+    explicit Region(RegionMeta meta_, const RegionClientCreateFunc & region_client_create)
         : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
-    {}
-
-    explicit Region(const RegionMeta & meta_, const RegionClientCreateFunc & region_client_create)
-        : meta(meta_), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
@@ -168,6 +162,7 @@ public:
 
     /// only can be used for applying snapshot. only can be called by single thread.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
+    void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
 
     static ColumnFamilyType getCf(const std::string & cf);
 
@@ -183,9 +178,13 @@ private:
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
 
-    RegionPtr splitInto(const RegionMeta & meta);
-    Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    RegionPtr splitInto(RegionMeta meta);
+    Regions execBatchSplit(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execChangePeer(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execCompactLog(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 
 private:
     RegionData data;

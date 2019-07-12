@@ -43,9 +43,9 @@ public:
 
     bool syncSchemas(Context & context) override;
 
-    void syncSchema(TableID table_id, Context & context, bool force);
+    void syncSchema(TableID table_id, Context & context, bool force) override;
 
-    TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context);
+    TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) override;
 
 protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;

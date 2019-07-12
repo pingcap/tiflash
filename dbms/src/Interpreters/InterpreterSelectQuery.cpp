@@ -705,14 +705,16 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
         String request_str = settings.regions;
 
-        if (request_str.size() > 0) {
+        if (request_str.size() > 0)
+        {
             Poco::JSON::Parser parser;
             Poco::Dynamic::Var result = parser.parse(request_str);
             auto obj = result.extract<Poco::JSON::Object::Ptr>();
             Poco::Dynamic::Var regions_obj = obj->get("regions");
             auto arr = regions_obj.extract<Poco::JSON::Array::Ptr>();
 
-            for (size_t i = 0; i < arr->size() ; i++) {
+            for (size_t i = 0; i < arr->size() ; i++)
+            {
                 String str =  arr->getElement<String>(i);
                 ::metapb::Region region;
                 ::google::protobuf::TextFormat::ParseFromString(str, &region);
@@ -729,6 +731,8 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 info.range_in_table = HandleRange<HandleID>(start_key, end_key);
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
+
+            query_info.mvcc_query_info->concurrent = 0.0;
         }
 
         /// PREWHERE optimization

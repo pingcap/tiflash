@@ -5,7 +5,7 @@
 namespace pingcap {
 namespace kv {
 
-class Scanner;
+struct Scanner;
 
 struct Snapshot {
     RegionCachePtr      cache;
