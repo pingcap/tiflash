@@ -41,18 +41,18 @@ RegionPtr RegionCache::getCachedRegion(Backoffer & bo, const RegionVerID & id) {
     return it->second;
 }
 
-//KeyLocation RegionCache::locateKey(Backoffer & bo, std::string key) {
-//    RegionPtr region = searchCachedRegion(key);
-//    if (region != nullptr) {
-//        return KeyLocation (region -> verID() , region -> startKey(), region -> endKey());
-//    }
-//
-//    region = loadRegion(bo, key);
-//
-//    insertRegionToCache(region);
-//
-//    return KeyLocation (region -> verID() , region -> startKey(), region -> endKey());
-//}
+KeyLocation RegionCache::locateKey(Backoffer & bo, std::string key) {
+    RegionPtr region = searchCachedRegion(key);
+    if (region != nullptr) {
+        return KeyLocation (region -> verID() , region -> startKey(), region -> endKey());
+    }
+
+    region = loadRegion(bo, key);
+
+    insertRegionToCache(region);
+
+    return KeyLocation (region -> verID() , region -> startKey(), region -> endKey());
+}
 
 RegionPtr RegionCache::loadRegionByID(Backoffer & bo, uint64_t region_id) {
     for(;;) {
@@ -149,22 +149,28 @@ std::string RegionCache::getStoreAddr(Backoffer & bo, uint64_t id) {
     return reloadStore(bo, id).addr;
 }
 
-//RegionPtr RegionCache::searchCachedRegion(std::string key) {
-//    auto it = regions_map.upper_bound(key);
-//    if (it != regions_map.end() && it->second->contains(key)) {
-//        return it->second;
-//    }
-//    return nullptr;
-//}
+RegionPtr RegionCache::searchCachedRegion(std::string key) {
+    auto it = regions_map.upper_bound(key);
+    if (it != regions_map.end() && it->second->contains(key)) {
+        return it->second;
+    }
+    return nullptr;
+}
 
 void RegionCache::insertRegionToCache(RegionPtr region) {
-//    regions_map[region -> endKey()] = region;
+    regions_map[region -> endKey()] = region;
     regions[region->verID()] = region;
 }
 
 void RegionCache::dropRegion(const RegionVerID & region_id) {
     std::lock_guard<std::mutex> lock(region_mutex);
-    if(regions.erase(region_id)) {
+    auto it1 = regions.find(region_id);
+    if (it1 != regions.end()) {
+        regions.erase(it1);
+        auto it = regions_map.find(it1 -> second -> endKey());
+        if (it != regions_map.end()) {
+            regions_map.erase(it);
+        }
         log->information("drop region because of send failure");
     }
 }

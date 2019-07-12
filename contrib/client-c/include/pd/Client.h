@@ -35,9 +35,7 @@ public:
     //uint64_t getClusterID() override;
 
     // only implement a weak get ts.
-    uint64_t getTS() override {
-        throw "not implemented";
-    }
+    uint64_t getTS() override;
 
     std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> getRegion(std::string key) override;
 

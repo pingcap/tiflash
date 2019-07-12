@@ -12,6 +12,8 @@ const int InitClusterIDFailed = 3;
 const int UpdatePDLeaderFailed = 4;
 const int TimeoutError = 5;
 const int RegionUnavailable = 6;
+const int LogicalError = 7;
+const int LockError = 8;
 
 class Exception : public Poco::Exception
 {

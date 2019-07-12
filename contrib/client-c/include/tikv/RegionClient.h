@@ -52,6 +52,7 @@ struct RegionClient {
         }
     }
 
+private:
     void onRegionError(Backoffer & bo, RPCContextPtr rpc_ctx, const errorpb::Error & err) {
         if (err.has_not_leader()) {
             auto not_leader = err.not_leader();

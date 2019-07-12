@@ -36,13 +36,51 @@ struct RpcTypeTraits {};
 
 template<>
 struct RpcTypeTraits<kvrpcpb::ReadIndexRequest> {
+    using RequestType = kvrpcpb::ReadIndexRequest;
     using ResultType = kvrpcpb::ReadIndexResponse;
+
+    static std::string err_msg() {
+        return "Read Index Failed";
+    }
+
+    static ::grpc::Status doRPCCall(grpc::ClientContext * context, std::unique_ptr<tikvpb::Tikv::Stub> stub, const RequestType & req, ResultType * res) {
+        return stub -> ReadIndex(context, req, res);
+    }
+};
+
+template<>
+struct RpcTypeTraits<kvrpcpb::GetRequest> {
+    using RequestType = kvrpcpb::GetRequest;
+    using ResultType = kvrpcpb::GetResponse;
+
+    static std::string err_msg() {
+        return "Kv Get Failed";
+    }
+
+    static ::grpc::Status doRPCCall(grpc::ClientContext * context, std::unique_ptr<tikvpb::Tikv::Stub> stub, const RequestType & req, ResultType * res) {
+        return stub -> KvGet(context, req, res);
+    }
+};
+
+template<>
+struct RpcTypeTraits<kvrpcpb::ScanRequest> {
+    using RequestType = kvrpcpb::ScanRequest;
+    using ResultType = kvrpcpb::ScanResponse;
+
+    static std::string err_msg() {
+        return "Kv Scan Failed";
+    }
+
+    static ::grpc::Status doRPCCall(grpc::ClientContext * context, std::unique_ptr<tikvpb::Tikv::Stub> stub, const RequestType & req, ResultType * res) {
+        return stub -> KvScan(context, req, res);
+    }
 };
 
 template<class T>
 class RpcCall {
 
-    using S = typename RpcTypeTraits<T>::ResultType;
+    using Trait = RpcTypeTraits<T>;
+    using S = typename Trait::ResultType;
 
     T * req  ;
     S * resp ;
@@ -55,10 +93,10 @@ public:
     }
 
     ~RpcCall() {
-        if (req != NULL) {
+        if (req != nullptr) {
             delete req;
         }
-        if (resp != NULL) {
+        if (resp != nullptr) {
             delete resp;
         }
     }
@@ -76,15 +114,13 @@ public:
     }
 
     void call(std::unique_ptr<tikvpb::Tikv::Stub> stub) {
-        if constexpr(std::is_same<T, kvrpcpb::ReadIndexRequest>::value) {
-            grpc::ClientContext context;
-            context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(3));
-            auto status = stub->ReadIndex(&context, *req, resp);
-            if (!status.ok()) {
-                std::string err_msg = ("read index failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
-                log->error(err_msg);
-                throw Exception(err_msg, GRPCErrorCode);
-            }
+        grpc::ClientContext context;
+        context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(20));
+        auto status = Trait::doRPCCall(&context, std::move(stub), *req, resp);
+        if (!status.ok()) {
+            std::string err_msg = Trait::err_msg() + std::to_string(status.error_code()) + ": " + status.error_message();
+            log->error(err_msg);
+            throw Exception(err_msg, GRPCErrorCode);
         }
     }
 };

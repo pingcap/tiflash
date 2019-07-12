@@ -1,6 +1,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <pd/MockPDClient.h>
 
@@ -14,11 +15,11 @@ TMTContext::TMTContext(
     Context & context, const std::vector<std::string> & addrs, const std::string & learner_key, const std::string & learner_value)
     : kvstore(std::make_shared<KVStore>(context.getPath() + kvstore_name)),
       region_table(context, context.getPath() + region_table_name),
-      schema_syncer(std::make_shared<HttpJsonSchemaSyncer>()),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key, learner_value)),
-      rpc_client(std::make_shared<pingcap::kv::RpcClient>())
+      rpc_client(std::make_shared<pingcap::kv::RpcClient>()),
+      schema_syncer(std::make_shared<TiDBSchemaSyncer>(pd_client, region_cache, rpc_client))
 {}
 
 void TMTContext::restore()
