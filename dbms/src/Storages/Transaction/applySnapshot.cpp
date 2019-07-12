@@ -39,6 +39,9 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         auto & tmt = context->getTMTContext();
         Timestamp safe_point = tmt.getPDClient()->getGCSafePoint();
 
+        if (old_region)
+            new_region->compareAndCompleteSnapshot(safe_point, *old_region);
+
         for (auto [table_id, storage] : tmt.getStorages().getAllStorage())
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
@@ -128,10 +131,8 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         }
     }
 
-    {
-        if (new_region->isPeerRemoved())
-            new_region->setPendingRemove();
-    }
+    if (new_region->isPeerRemoved())
+        throw Exception("[applySnapshot] region is removed, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     bool status = applySnapshot(kvstore, new_region, context);
 

@@ -581,4 +581,50 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         LOG_INFO(log, "[compareAndCompleteSnapshot] add deleted gc: " << deleted_gc_cnt);
 }
 
+void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region)
+{
+    const auto & [start_key, end_key] = getRange();
+    std::unordered_map<TableID, HandleMap> handle_maps;
+    {
+        std::shared_lock<std::shared_mutex> source_lock(source_region.mutex);
+
+        const auto & region_data = source_region.data.writeCF().getData();
+        for (auto & [table_id, write_map] : region_data)
+        {
+            if (write_map.empty())
+                continue;
+
+            auto & handle_map = handle_maps[table_id];
+            for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
+            {
+                const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
+
+                {
+                    bool ok = start_key ? key >= start_key : true;
+                    ok = ok && (end_key ? key < end_key : true);
+
+                    if (!ok)
+                        continue;
+                }
+
+                const auto & [handle, ts] = write_map_it->first;
+                const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
+                auto [it, ok] = handle_map.emplace(handle, cur_ele);
+                if (!ok)
+                {
+                    auto & ele = it->second;
+                    ele = std::max(ele, cur_ele);
+                }
+            }
+
+            LOG_DEBUG(log,
+                "[compareAndCompleteSnapshot] memory cache: source " << source_region.toString(false) << ", table " << table_id
+                                                                     << ", record size " << write_map.size());
+        }
+    }
+
+    for (auto & [table_id, handle_map] : handle_maps)
+        compareAndCompleteSnapshot(handle_map, table_id, safe_point);
+}
+
 } // namespace DB
