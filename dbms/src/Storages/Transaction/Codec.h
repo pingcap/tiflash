@@ -73,7 +73,7 @@ inline String DecodeBytes(size_t & cursor, const String & raw_value)
         if (next_cursor > raw_value.size())
             throw Exception("Wrong format, cursor over buffer size. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
         UInt8 marker = (UInt8)raw_value[cursor + 8];
-        UInt8 pad_size = 255  - marker;
+        UInt8 pad_size = ENC_MARKER - marker;
 
         if (pad_size > 8)
             throw Exception("Wrong format, too many padding bytes. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
@@ -258,6 +258,13 @@ inline void EncodeNumber(T u, std::stringstream & ss)
     writeIntBinary(u, ss);
 }
 
+template<typename T>
+inline void EncodeNumber(T u, std::stringstream & ss)
+{
+    u = toBigEndian(u);
+    writeIntBinary(u, ss);
+}
+
 inline void EncodeFloat64(Float64 num, std::stringstream & ss)
 {
     UInt64 u = enforce_cast<UInt64>(num);
@@ -276,7 +283,7 @@ inline void EncodeBytes(const String & ori_str, std::stringstream & ss)
     {
         size_t remain = len - index;
         size_t pad = 0;
-        if (remain > ENC_GROUP_SIZE)
+        if (remain >= ENC_GROUP_SIZE)
         {
             ss.write(ori_str.data() + index, ENC_GROUP_SIZE);
         }

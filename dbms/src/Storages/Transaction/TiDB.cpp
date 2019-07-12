@@ -125,120 +125,164 @@ using DB::ReadBufferFromString;
 using DB::WriteBuffer;
 using DB::WriteBufferFromOwnString;
 
-ColumnInfo::ColumnInfo(const JSON & json) { deserialize(json); }
+ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-String ColumnInfo::serialize() const
+Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
+try
 {
-    WriteBufferFromOwnString buf;
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
-    JsonSer::serValue(buf,
-        JsonSer::Struct(JsonSer::Field("id", id),
-            JsonSer::Field("name", JsonSer::Struct(JsonSer::Field("O", name), JsonSer::Field("L", name))),
-            JsonSer::Field("offset", offset),
-            JsonSer::Field("origin_default", JsonSer::Nullable(origin_default_value, has_origin_default_value)),
-            JsonSer::Field("default", JsonSer::Nullable(default_value, has_default_value)),
-            JsonSer::Field("type",
-                JsonSer::Struct(
-                    // TODO: serialize elems.
-                    JsonSer::Field("Tp", tp),
-                    JsonSer::Field("Flag", flag),
-                    JsonSer::Field("Flen", flen),
-                    JsonSer::Field("Decimal", decimal))),
-            JsonSer::Field("state", state),
-            JsonSer::Field("comment", comment)));
+    json->set("id", id);
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", name);
+    name_json->set("L", name);
+    json->set("name", name_json);
+    json->set("offset", offset);
+    json->set("origin_default", origin_default_value);
+    json->set("default", default_value);
+    Poco::JSON::Object::Ptr tp_json = new Poco::JSON::Object();
+    tp_json->set("Tp", static_cast<Int32>(tp));
+    tp_json->set("Flag", flag);
+    tp_json->set("Flen", flen);
+    tp_json->set("Decimal", decimal);
+    if (elems.size() > 0) {
+        Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
+        for (auto & elem : elems)
+            elem_arr->add(elem.first);
+        tp_json->set("Elems", elem_arr);
+    } else {
+        tp_json->set("Elems", Poco::Dynamic::Var());
+    }
+    json->set("type", tp_json);
+    json->set("state", static_cast<Int32>(state));
+    json->set("comment", comment);
 
-    return buf.str();
+    std::stringstream str;
+    json->stringify(str);
+
+    return json;
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void ColumnInfo::deserialize(const JSON & json) try
+void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json) try
 {
-    id = json["id"].getInt();
-    name = json["name"]["L"].getString();
-    offset = static_cast<Int32>(json["offset"].getInt());
-    has_origin_default_value = json["origin_default"].isNull();
-    origin_default_value = has_origin_default_value ? "" : json["origin_default"].getString();
-    has_default_value = json["default"].isNull();
-    default_value = has_default_value ? "" : json["default"].getString();
-    tp = static_cast<TP>(json["type"]["Tp"].getInt());
-    flag = static_cast<UInt32>(json["type"]["Flag"].getInt());
-    flen = static_cast<Int32>(json["type"]["Flen"].getInt());
-    decimal = static_cast<Int32>(json["type"]["Decimal"].getInt());
-    // TODO: deserialize elems.
-    state = static_cast<SchemaState>(json["state"].getInt());
-    comment = json.getWithDefault<String>("comment", "");
+    id = json->getValue<Int64>("id");
+    name = json->getObject("name")->getValue<String>("L");
+    offset = json->getValue<Int32>("offset");
+    if (!json->isNull("origin_default"))
+        origin_default_value = json->get("origin_default");
+    if (!json->isNull("default"))
+        default_value = json->get("default");
+    auto type_json = json->getObject("type");
+    tp = static_cast<TP>(type_json->getValue<Int32>("Tp"));
+    flag = type_json->getValue<UInt32>("Flag");
+    flen = type_json->getValue<Int64>("Flen");
+    decimal = type_json->getValue<Int64>("Decimal");
+    if (!type_json->isNull("Elems")) {
+        auto elems_arr = type_json->getArray("Elems");
+        size_t elems_size = elems_arr->size();
+        for (size_t i = 1; i <= elems_size; i++) {
+            elems.push_back(std::make_pair(elems_arr->getElement<String>(i-1), Int16(i)));
+        }
+    }
+    state = static_cast<SchemaState>(json->getValue<Int32>("state"));
+    comment = json->getValue<String>("comment");
 }
-catch (const JSONException & e)
+catch (const Poco::Exception & e)
 {
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
-PartitionDefinition::PartitionDefinition(const JSON & json) { deserialize(json); }
+PartitionDefinition::PartitionDefinition(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-String PartitionDefinition::serialize() const
+Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const
+try
 {
-    WriteBufferFromOwnString buf;
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("id", id);
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", name);
+    name_json->set("L", name);
+    json->set("name", name_json);
+    json->set("comment", comment);
 
-    JsonSer::serValue(buf,
-        JsonSer::Struct(JsonSer::Field("id", id),
-            JsonSer::Field("name", JsonSer::Struct(JsonSer::Field("O", name), JsonSer::Field("L", name))),
-            JsonSer::Field("comment", comment)));
+    std::stringstream str;
+    json->stringify(str);
 
-    return buf.str();
+    return json;
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionDef): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionDefinition::deserialize(const JSON & json) try
+void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json) try
 {
-    id = json["id"].getInt();
-    name = json["name"]["L"].getString();
-    comment = json.getWithDefault<String>("comment", "");
+    id = json->getValue<Int64>("id");
+    name = json->getObject("name")->getValue<String>("L");
+    if (json->has("comment"))
+        comment = json->getValue<String>("comment");
 }
-catch (const JSONException & e)
+catch (const Poco::Exception & e)
 {
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionDefinition): " + e.displayText(), DB::Exception(e));
 }
 
-PartitionInfo::PartitionInfo(const JSON & json) { deserialize(json); }
+PartitionInfo::PartitionInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-String PartitionInfo::serialize() const
+Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const
+try
 {
-    WriteBufferFromOwnString buf;
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
-    JsonSer::serValue(buf,
-        JsonSer::Struct(JsonSer::Field("type", type),
-            JsonSer::Field("expr", expr),
-            JsonSer::Field("enable", enable),
-            JsonSer::Field("definitions",
-                [this]() {
-                    std::vector<JsonSer::JsonString> v(definitions.size());
-                    std::transform(definitions.begin(), definitions.end(), v.begin(), [](const PartitionDefinition & definition) {
-                        return JsonSer::JsonString{definition.serialize()};
-                    });
-                    return v;
-                }()),
-            JsonSer::Field("num", num)));
+    json->set("type", static_cast<Int32>(type));
+    json->set("expr", expr);
+    json->set("enable", enable);
+    json->set("num", num);
 
-    return buf.str();
+    Poco::JSON::Array::Ptr def_arr = new Poco::JSON::Array();
+
+    for (auto & part_def : definitions) {
+        def_arr->add(part_def.getJSONObject());
+    }
+
+    json->set("definitions", def_arr);
+
+    std::stringstream str;
+    json->stringify(str);
+
+    return json;
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionInfo::deserialize(const JSON & json) try
+void PartitionInfo::deserialize(Poco::JSON::Object::Ptr json) try
 {
-    type = static_cast<PartitionType>(json["type"].getInt());
-    expr = json["expr"].getString();
-    enable = json["enable"].getBool();
+    type = static_cast<PartitionType>(json->getValue<Int32>("type"));
+    expr = json->getValue<String>("expr");
+    enable = json->getValue<bool>("enable");
 
-    JSON defs_json = json["definitions"];
+    auto defs_json = json->getArray("definitions");
     definitions.clear();
-    for (const auto & def_json : defs_json)
+    for (size_t i = 0; i < defs_json->size(); i++)
     {
-        PartitionDefinition definition(def_json);
+        PartitionDefinition definition(defs_json->getObject(i));
         definitions.emplace_back(definition);
     }
 
-    num = static_cast<UInt64>(json["num"].getInt());
+    num = json->getValue<UInt64>("num");
 }
-catch (const JSONException & e)
+catch (const Poco::Exception & e)
 {
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
@@ -247,38 +291,39 @@ catch (const JSONException & e)
 TableInfo::TableInfo(const String & table_info_json, bool escaped) { deserialize(table_info_json, escaped); }
 
 String TableInfo::serialize(bool escaped) const
+try
 {
-    WriteBufferFromOwnString buf;
+    std::stringstream buf;
 
-    JsonSer::serValue(buf,
-        JsonSer::Struct(JsonSer::Field("db_info",
-                            JsonSer::Struct(JsonSer::Field("id", db_id),
-                                JsonSer::Field("db_name", JsonSer::Struct(JsonSer::Field("O", db_name), JsonSer::Field("L", db_name))))),
-            JsonSer::Field("table_info",
-                JsonSer::Struct(JsonSer::Field("id", id),
-                    JsonSer::Field("name", JsonSer::Struct(JsonSer::Field("O", name), JsonSer::Field("L", name))),
-                    JsonSer::Field("cols",
-                        [this]() {
-                            std::vector<JsonSer::JsonString> v(columns.size());
-                            std::transform(columns.begin(), columns.end(), v.begin(), [](const ColumnInfo & column) {
-                                return JsonSer::JsonString{column.serialize()};
-                            });
-                            return v;
-                        }()),
-                    JsonSer::Field("state", state),
-                    JsonSer::Field("pk_is_handle", pk_is_handle),
-                    JsonSer::Field("comment", comment),
-                    JsonSer::Field("update_timestamp", update_timestamp),
-                    JsonSer::Field("belonging_table_id", belonging_table_id, !is_partition_table),
-                    // TODO: Hack to tell Spark this table is a physical/sub table of a partition.
-                    JsonSer::Field("is_partition_sub_table", "true", !(is_partition_table && belonging_table_id != -1)),
-                    JsonSer::Field("partition",
-                        // lazy serializing partition as it could be null.
-                        JsonSer::Nullable(std::function<void(WriteBuffer &)>([this](WriteBuffer & buf) {
-                            JsonSer::serValue(buf, JsonSer::JsonString{partition.serialize()});
-                        }),
-                            !is_partition_table)))),
-            JsonSer::Field("schema_version", schema_version)));
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("id", id);
+    Poco::JSON::Object::Ptr name_json = new Poco::JSON::Object();
+    name_json->set("O", name);
+    name_json->set("L", name);
+    json->set("name", name_json);
+
+    Poco::JSON::Array::Ptr cols_arr = new Poco::JSON::Array();
+    for (auto & col_info : columns) {
+        auto col_obj = col_info.getJSONObject();
+        cols_arr->add(col_obj);
+    }
+
+    json->set("cols", cols_arr);
+    json->set("state", static_cast<Int32>(state));
+    json->set("pk_is_handle", pk_is_handle);
+    json->set("comment", comment);
+    json->set("update_timestamp", update_timestamp);
+    if (is_partition_table) {
+        json->set("belonging_table_id", belonging_table_id);
+        json->set("partition", partition.getJSONObject());
+        if (belonging_table_id != -1) {
+            json->set("is_partition_sub_table", true);
+        }
+    } else {
+        json->set("partition", Poco::Dynamic::Var());
+    }
+
+    json->stringify(buf);
 
     if (!escaped)
     {
@@ -290,6 +335,29 @@ String TableInfo::serialize(bool escaped) const
         writeEscapedString(buf.str(), escaped_buf);
         return escaped_buf.str();
     }
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
+}
+
+void DBInfo::deserialize(const String & json_str) try
+{
+        Poco::JSON::Parser parser;
+        Poco::Dynamic::Var result = parser.parse(json_str);
+        auto obj = result.extract<Poco::JSON::Object::Ptr>();
+        id = obj->getValue<Int64>("id");
+        name = obj->get("db_name").extract<Poco::JSON::Object::Ptr>()->get("L").convert<String>();
+        charset = obj->get("charset").convert<String>();
+        collate = obj->get("collate").convert<String>();
+        state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
+}
+catch (const Poco::Exception & e)
+{
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (DBInfo): " + e.displayText() + ", json: " + json_str,
+        DB::Exception(e));
 }
 
 void TableInfo::deserialize(const String & json_str, bool escaped) try
@@ -311,50 +379,37 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
         unescaped_json_str = json_str;
     }
 
-    /// The JSON library does not support whitespace. We delete them. Inefficient.
-    // TODO: This may mis-delete innocent spaces/newlines enclosed by quotes, consider using some lexical way.
-    ReadBufferFromString in(unescaped_json_str);
-    WriteBufferFromOwnString out;
-    while (!in.eof())
-    {
-        char c;
-        readChar(c, in);
-        if (!isspace(c))
-            writeChar(c, out);
-    }
+    Poco::JSON::Parser parser;
 
-    JSON json(out.str());
+    Poco::Dynamic::Var result = parser.parse(unescaped_json_str);
 
-    JSON db_json = json["db_info"];
-    db_id = db_json["id"].getInt();
-    db_name = db_json["db_name"]["L"].getString();
+    auto obj = result.extract<Poco::JSON::Object::Ptr>();
+    id = obj->getValue<Int64>("id");
+    name = obj->getObject("name")->getValue<String>("L");
 
-    JSON table_json = json["table_info"];
-    id = table_json["id"].getInt();
-    name = table_json["name"]["L"].getString();
-    JSON cols_json = table_json["cols"];
+    auto cols_arr = obj->getArray("cols");
     columns.clear();
-    for (const auto & col_json : cols_json)
+    for (size_t i = 0; i < cols_arr->size(); i++)
     {
+        auto col_json = cols_arr->getObject(i);
         ColumnInfo column_info(col_json);
         columns.emplace_back(column_info);
     }
-    state = static_cast<SchemaState>(table_json["state"].getInt());
-    pk_is_handle = table_json["pk_is_handle"].getBool();
-    comment = table_json["comment"].getString();
-    update_timestamp = table_json["update_timestamp"].getUInt();
-    is_partition_table = !table_json["partition"].isNull();
+
+    state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
+    pk_is_handle = obj->getValue<bool>("pk_is_handle");
+    comment = obj->getValue<String>("comment");
+    update_timestamp = obj->getValue<Timestamp>("update_timestamp");
+    auto partition_obj = obj->getObject("partition");
+    is_partition_table = !partition_obj.isNull();
     if (is_partition_table)
     {
-        if (table_json.has("belonging_table_id"))
-            belonging_table_id = table_json["belonging_table_id"].getInt();
-        partition.deserialize(table_json["partition"]);
+        if (obj->has("belonging_table_id"))
+            belonging_table_id = obj->getValue<TableID>("belonging_table_id");
+        partition.deserialize(partition_obj);
     }
-
-    JSON schema_json = json["schema_version"];
-    schema_version = schema_json.getInt();
 }
-catch (const JSONException & e)
+catch (const Poco::Exception & e)
 {
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (TableInfo): " + e.displayText() + ", json: " + json_str,

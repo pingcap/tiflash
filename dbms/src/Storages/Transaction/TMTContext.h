@@ -57,13 +57,14 @@ private:
     RegionTable region_table;
 
 private:
-    SchemaSyncerPtr schema_syncer;
     pingcap::pd::ClientPtr pd_client;
     pingcap::kv::RegionCachePtr region_cache;
     pingcap::kv::RpcClientPtr rpc_client;
 
     mutable std::mutex mutex;
     std::atomic_bool initialized = false;
+
+    SchemaSyncerPtr schema_syncer;
 };
 
 } // namespace DB

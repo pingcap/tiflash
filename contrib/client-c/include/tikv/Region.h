@@ -101,9 +101,9 @@ struct Region {
 using RegionPtr = std::shared_ptr<Region>;
 
 struct KeyLocation {
-    const RegionVerID & region;
-    const std::string & start_key;
-    const std::string & end_key;
+    RegionVerID region;
+    std::string start_key;
+    std::string end_key;
 
     KeyLocation(const RegionVerID & region_, const std::string & start_key_, const std::string & end_key_):
         region(region_), start_key(start_key_), end_key(end_key_) {}
@@ -133,8 +133,8 @@ public:
 
     void updateLeader(Backoffer & bo, const RegionVerID & region_id, uint64_t leader_store_id);
 
-    //KeyLocation locateKey(Backoffer & bo, std::string key);
-    //
+    KeyLocation locateKey(Backoffer & bo, std::string key);
+
     void dropRegion(const RegionVerID &);
 
     void dropStore(uint64_t failed_store_id);
@@ -159,11 +159,11 @@ private:
     std::string getStoreAddr(Backoffer & bo, uint64_t id);
     Store getStore(Backoffer & bo, uint64_t id);
 
-    //RegionPtr searchCachedRegion(std::string key);
+    RegionPtr searchCachedRegion(std::string key);
 
     void insertRegionToCache(RegionPtr region);
 
-//    std::map<std::string, RegionPtr> regions_map;
+    std::map<std::string, RegionPtr> regions_map;
 
     std::unordered_map<RegionVerID, RegionPtr> regions;
 

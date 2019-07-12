@@ -340,9 +340,10 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
 
 JsonSchemaSyncer::JsonSchemaSyncer() : log(&Logger::get("SchemaSyncer")) {}
 
-void JsonSchemaSyncer::syncSchemas(Context & /*context*/)
+bool JsonSchemaSyncer::syncSchemas(Context & /*context*/)
 {
     // Too lazy to implement, as the other "decent" schema syncer will do this anyway.
+    return false;
 }
 
 void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool force)

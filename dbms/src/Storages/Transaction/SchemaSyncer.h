@@ -19,7 +19,7 @@ public:
      * Synchronize all schemas between TiDB and CH.
      * @param context
      */
-    virtual void syncSchemas(Context & context) = 0;
+    virtual bool syncSchemas(Context & context) = 0;
 
     /**
      * Synchronize schema between TiDB and CH, to make sure the CH table is new enough to accept data from raft.
@@ -41,11 +41,11 @@ class JsonSchemaSyncer : public SchemaSyncer
 public:
     JsonSchemaSyncer();
 
-    void syncSchemas(Context & context) override;
+    bool syncSchemas(Context & context) override;
 
-    void syncSchema(TableID table_id, Context & context, bool force) override;
+    void syncSchema(TableID table_id, Context & context, bool force);
 
-    TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) override;
+    TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context);
 
 protected:
     virtual String getSchemaJson(TableID table_id, Context & context) = 0;

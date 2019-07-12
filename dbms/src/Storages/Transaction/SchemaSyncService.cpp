@@ -10,17 +10,15 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
     : context(context_), background_pool(context_.getBackgroundPool()), log(&Logger::get("SchemaSyncService"))
 {
     handle = background_pool.addTask([&, this] {
-        bool succeed = true;
         try
         {
-            context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+            return context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
         }
-        catch (const std::exception & e)
+        catch (const Exception & e)
         {
-            LOG_WARNING(log, "Schema sync failed by " << e.what());
-            succeed = false;
+            LOG_WARNING(log, "Schema sync failed by " << e.message());
         }
-        return succeed;
+        return false;
     });
 }
 

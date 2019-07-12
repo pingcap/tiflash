@@ -178,6 +178,23 @@ pdpb::RequestHeader * Client::requestHeader() {
     return header;
 }
 
+uint64_t Client::getTS() {
+    pdpb::TsoRequest request{};
+    pdpb::TsoResponse response{};
+    request.set_allocated_header(requestHeader());
+    request.set_count(1);
+
+    grpc::ClientContext context;
+
+    context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
+
+    auto stream = leaderStub()->Tso(&context);
+    stream->Write(request);
+    stream->Read(&response);
+    auto ts = response.timestamp();
+    return (ts.physical() << 18) + ts.logical();
+}
+
 uint64_t Client::getGCSafePoint() {
     pdpb::GetGCSafePointRequest request{};
     pdpb::GetGCSafePointResponse response{};
