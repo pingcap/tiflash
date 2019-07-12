@@ -1,8 +1,8 @@
 #pragma once
 
 #include <functional>
-#include <vector>
 #include <optional>
+#include <vector>
 
 #include <Common/PersistedContainer.h>
 #include <Core/Names.h>
@@ -169,7 +169,7 @@ private:
 
     bool shouldFlush(const InternalRegion & region) const;
 
-    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
+    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size, const bool try_persist = true);
 
     // For debug
     friend struct MockTiDBTable;

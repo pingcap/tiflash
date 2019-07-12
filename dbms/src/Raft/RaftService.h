@@ -27,6 +27,7 @@ public:
     ~RaftService() final;
 
     void addRegionToFlush(const Regions & regions);
+    void addRegionToFlush(const Region & region);
 
 private:
     grpc::Status ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream) override;

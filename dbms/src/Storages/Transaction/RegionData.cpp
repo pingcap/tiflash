@@ -193,6 +193,6 @@ RegionData::RegionData(RegionData && data)
     : write_cf(std::move(data.write_cf)), default_cf(std::move(data.default_cf)), lock_cf(std::move(data.lock_cf))
 {}
 
-UInt8 RegionData::getWriteType(const WriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
+UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
 
 } // namespace DB
