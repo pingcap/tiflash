@@ -142,11 +142,9 @@ size_t MergeTreeDataMerger::getMaxPartsSizeForMerge(size_t pool_size, size_t poo
 
     size_t free_entries = pool_size - pool_used;
 
-    size_t max_bytes_to_merge;
+    size_t max_bytes_to_merge = data.settings.max_bytes_to_merge_at_max_space_in_pool;
     if (data.context.getAllPath().size() > 1)
         max_bytes_to_merge = data.settings.max_bytes_to_merge_at_max_space_in_pool_for_multi_path;
-    else
-        max_bytes_to_merge = data.settings.max_bytes_to_merge_at_max_space_in_pool;
 
     size_t max_size = 0;
     if (free_entries >= data.settings.number_of_free_entries_in_pool_to_lower_max_size_of_merge)
