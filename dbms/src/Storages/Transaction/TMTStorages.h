@@ -24,13 +24,6 @@ public:
 
     void remove(TableID table_id);
 
-    String getDBName(DatabaseID id);
-
-    void setDBIDAndName(DatabaseID id, String name);
-
-    void removeDBID(DatabaseID id);
-
-    std::unordered_map<DatabaseID, String> databases;
 private:
     std::unordered_map<TableID, TMTStoragePtr> storages;
     mutable std::mutex mutex;

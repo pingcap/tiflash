@@ -193,13 +193,11 @@ void SchemaBuilder::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info) {
     interpreter.setForceRestoreData(false);
     interpreter.execute();
 
-    auto & tmt_context = context.getTMTContext();
-    tmt_context.getStorages().setDBIDAndName(db_info->id, db_info->name);
+    databases[db_info->id] = db_info->name;
 }
 
 void SchemaBuilder::applyDropSchema(DatabaseID schema_id) {
-    auto & tmt_context = context.getTMTContext();
-    auto database_name = tmt_context.getStorages().getDBName(schema_id);
+    auto database_name = databases[schema_id];
     if (database_name == "") {
         return;
     }
@@ -326,12 +324,12 @@ void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id) {
 }
 
 void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info) {
-    auto & tmt_context = context.getTMTContext();
-    auto database_name = tmt_context.getStorages().getDBName(db_info->id);
+    auto database_name = databases[db_info->id];
     if (database_name == "") {
         applyCreateSchemaImpl(db_info);
     }
     auto tables = getter.listTables(db_info->id);
+    auto & tmt_context = context.getTMTContext();
     for (auto table : tables) {
         auto storage = static_cast<StorageMergeTree * >(tmt_context.getStorages().get(table->id).get());
         if (storage == nullptr) {

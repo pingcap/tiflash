@@ -17,6 +17,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer {
 
     std::mutex schema_mutex;
 
+    std::unordered_map<DB::DatabaseID, String> databases;
+
     Logger * log;
 
     TiDBSchemaSyncer(pingcap::pd::ClientPtr pdClient_, pingcap::kv::RegionCachePtr regionCache_, pingcap::kv::RpcClientPtr rpcClient_)
@@ -61,7 +63,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer {
 
         LOG_DEBUG(log, "try load schema diffs.");
 
-        SchemaBuilder builder(getter, context);
+        SchemaBuilder builder(getter, context, databases);
 
         Int64 used_version = cur_version;
         std::vector<SchemaDiff> diffs;
@@ -85,16 +87,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer {
             LOG_DEBUG(log, "Load schema : " + db_info->name);
         }
 
-        SchemaBuilder builder(getter, context);
+        SchemaBuilder builder(getter, context, databases);
 
         std::set<TiDB::DatabaseID> db_ids;
         for (auto db : all_schema) {
             builder.updateDB(db);
             db_ids.insert(db->id);
         }
-        auto & tmt_context = context.getTMTContext();
-        const auto & dbs = tmt_context.getStorages().databases;
-        for (auto it = dbs.begin(); it != dbs.end(); it ++) {
+        for (auto it = databases.begin(); it != databases.end(); it ++) {
             if (db_ids.count(it -> first) == 0) {
                 builder.applyDropSchema(it -> first);
             }

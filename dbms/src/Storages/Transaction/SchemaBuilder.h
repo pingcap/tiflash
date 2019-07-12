@@ -10,9 +10,9 @@ struct SchemaBuilder {
 
     SchemaGetter & getter;
     Context & context;
-    //Log* log;
+    std::unordered_map<DB::DatabaseID, String> & databases;
 
-    SchemaBuilder(SchemaGetter & getter_, Context & context_): getter(getter_), context(context_){}
+    SchemaBuilder(SchemaGetter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> dbs_): getter(getter_), context(context_), databases(dbs_){}
 
     void applyDiff(const SchemaDiff & diff);
 

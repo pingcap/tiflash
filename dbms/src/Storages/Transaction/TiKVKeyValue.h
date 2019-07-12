@@ -41,18 +41,6 @@ public:
     size_t dataSize() const { return size(); }
     std::string toString() const { return *this; }
 
-    String prefixNext() const {
-        String new_str = *this;
-        for (int i = int(size()) ; i >= 0 ; i--) {
-            char & c = new_str[i-1];
-            c ++;
-            if (c != 0) {
-                return new_str;
-            }
-        }
-        return (*this) + "\0";
-    }
-
     // For debug
     std::string toHex() const
     {

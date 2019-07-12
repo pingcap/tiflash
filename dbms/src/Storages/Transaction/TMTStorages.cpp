@@ -50,25 +50,4 @@ void TMTStorages::remove(TableID table_id)
     storages.erase(it);
 }
 
-String TMTStorages::getDBName(DatabaseID id) {
-    std::lock_guard lock(mutex);
-
-    auto it = databases.find(id);
-    if (it == databases.end())
-        return "";
-    return it->second;
-}
-
-void TMTStorages::setDBIDAndName(DatabaseID id, String name) {
-    std::lock_guard lock(mutex);
-
-    databases[id] = name;
-}
-
-void TMTStorages::removeDBID(DatabaseID id) {
-    std::lock_guard lock(mutex);
-
-    databases.erase(id);
-}
-
 } // namespace DB
