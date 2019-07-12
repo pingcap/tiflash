@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include <Common/PersistedContainer.h>
@@ -167,7 +168,7 @@ private:
 
     bool shouldFlush(const InternalRegion & region) const;
 
-    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
+    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size, const bool try_persist = true);
 
     // For debug
     friend struct MockTiDBTable;
@@ -211,7 +212,7 @@ public:
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static void writeBlockByRegion(Context & context, TableID table_id, RegionID region_id, RegionDataReadInfoList & data_list_for_remove);
+    static void writeBlockByRegion(Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_for_remove);
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,

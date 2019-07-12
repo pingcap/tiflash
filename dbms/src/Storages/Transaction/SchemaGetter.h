@@ -1,7 +1,10 @@
 #pragma once
 
 #include<Storages/Transaction/TiDB.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include<tikv/Snapshot.h>
+#pragma GCC diagnostic pop
 
 namespace DB {
 

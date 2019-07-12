@@ -37,7 +37,7 @@ public:
     }
 
     const std::string & getStr() const { return *this; }
-    std::string & getStrMut() { return *this; }
+    std::string & getStr() { return *this; }
     size_t dataSize() const { return size(); }
     std::string toString() const { return *this; }
 
@@ -45,9 +45,13 @@ public:
     std::string toHex() const
     {
         std::stringstream ss;
-        ss << dataSize() << "[" << std::hex;
+        ss << "[" << std::hex;
         for (size_t i = 0; i < dataSize(); ++i)
-            ss << at(i) << ((i + 1 == dataSize()) ? "" : " ");
+        {
+            ss << Int32(UInt8(at(i)));
+            if (i + 1 != dataSize())
+                ss << ' ';
+        }
         ss << "]";
         return ss.str();
     }

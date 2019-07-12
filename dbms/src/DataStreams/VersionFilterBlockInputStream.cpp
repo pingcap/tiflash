@@ -25,13 +25,7 @@ Block VersionFilterBlockInputStream::readImpl()
         if (!block)
             return block;
 
-        if (!block.has(MutableSupport::version_column_name))
-        {
-            throw Exception(
-                "VersionFilterBlockInputStream: block without " + MutableSupport::version_column_name, ErrorCodes::LOGICAL_ERROR);
-        }
-
-        const ColumnWithTypeAndName & version_column = block.getByName(version_column_name);
+        const ColumnWithTypeAndName & version_column = block.getByPosition(version_column_index);
         const ColumnUInt64 * column = static_cast<const ColumnUInt64 *>(version_column.column.get());
 
         size_t rows = block.rows();
@@ -41,7 +35,7 @@ Block VersionFilterBlockInputStream::readImpl()
         const UInt64 * filter_start = nullptr;
 
         {
-            std::array<UInt8, STEP> step_data{};
+            alignas(SIMD_BYTES) std::array<UInt8, STEP> step_data{};
             const UInt64 * data_pos = data_start;
 
 #if __SSE2__

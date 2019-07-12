@@ -14,8 +14,8 @@ class RangesFilterBlockInputStream : public IProfilingBlockInputStream
 
 public:
     RangesFilterBlockInputStream(
-        const BlockInputStreamPtr & input_, const HandleRange<HandleType> & ranges_, const String & handle_col_name_)
-        : input(input_), ranges(ranges_), handle_col_name(handle_col_name_)
+        const BlockInputStreamPtr & input_, const HandleRange<HandleType> & ranges_, const size_t handle_column_index_)
+        : input(input_), ranges(ranges_), handle_column_index(handle_column_index_)
     {}
 
 protected:
@@ -34,7 +34,7 @@ protected:
 private:
     BlockInputStreamPtr input;
     const HandleRange<HandleType> ranges;
-    const String handle_col_name;
+    const size_t handle_column_index;
     Logger * log = &Logger::get("RangesFilterBlockInputStream");
 };
 

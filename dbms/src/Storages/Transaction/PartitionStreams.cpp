@@ -22,7 +22,7 @@ extern const int LOGICAL_ERROR;
 
 using BlockOption = std::optional<Block>;
 
-void RegionTable::writeBlockByRegion(Context & context, TableID table_id, RegionID region_id, RegionDataReadInfoList & data_list_to_remove)
+void RegionTable::writeBlockByRegion(Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove)
 {
     // TODO: Logging.
 
@@ -31,11 +31,6 @@ void RegionTable::writeBlockByRegion(Context & context, TableID table_id, Region
     /// Read raw KVs from region cache.
     RegionDataReadInfoList data_list_read;
     {
-        auto region = tmt.getKVStore()->getRegion(region_id);
-        // TODO: Need this checking?
-        if (!region || region->isPendingRemove())
-            return;
-
         auto scanner = region->createCommittedScanner(table_id);
         // Shortcut for empty region.
         if (!scanner->hasNext())
@@ -95,7 +90,7 @@ void RegionTable::writeBlockByRegion(Context & context, TableID table_id, Region
         // Failure won't be tolerated this time.
         // TODO: Enrich exception message.
         throw Exception(
-            "Write region " + std::to_string(region_id) + " to table " + std::to_string(table_id) + " failed", ErrorCodes::LOGICAL_ERROR);
+            "Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed", ErrorCodes::LOGICAL_ERROR);
 }
 
 std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockByRegion(const TiDB::TableInfo & table_info,

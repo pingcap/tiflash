@@ -39,7 +39,7 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/ReplacingSortedBlockInputStream.h>
 #include <DataStreams/SummingSortedBlockInputStream.h>
 #include <DataStreams/TMTSortedBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/TMTUnionBlockInputStream.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/VersionedCollapsingSortedBlockInputStream.h>
 #include <DataTypes/DataTypeDate.h>
@@ -168,16 +168,22 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 
     std::vector<RegionQueryInfo> regions_query_info = mvcc_query_info.regions_query_info;
-    Int64 special_region_index = -1;
+    ssize_t special_region_index = -1;
     RegionMap kvstore_region;
     Blocks region_block_data;
-    String handle_col_name;
+    const std::string handle_col_name = is_txn_engine ? data.getPrimarySortDescription()[0].column_name : "";
     size_t region_cnt = 0;
     std::vector<std::vector<RangesInDataParts>> region_group_range_parts;
     std::vector<std::vector<std::deque<size_t>>> region_group_mem_block;
 
     std::vector<std::vector<HandleRange<HandleID>>> region_group_handle_ranges;
     std::vector<std::vector<HandleRange<UInt64>>> region_group_u64_handle_ranges;
+
+    Names tmt_column_names_to_read;
+
+    // pk, version, delmark is always the first 3 columns.
+    // the index of column is constant after MergeTreeBlockInputStream is constructed. exception will be thrown if not found.
+    const size_t handle_column_index = 0, version_column_index = 1, delmark_column_index = 2;
 
     const auto func_throw_retry_region = [&]() {
         std::vector<RegionID> region_ids;
@@ -222,12 +228,26 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
 
+    if (is_txn_engine)
+    {
+        tmt_column_names_to_read = real_column_names;
+
+        // must extend mutable engine column.
+        extendMutableEngineColumnNames(tmt_column_names_to_read, handle_col_name);
+
+        if (tmt_column_names_to_read.size() < 3)
+            throw Exception("size of tmt_column_names_to_read < 3", ErrorCodes::LOGICAL_ERROR);
+
+        if (tmt_column_names_to_read[handle_column_index] != handle_col_name
+            || tmt_column_names_to_read[version_column_index] != MutableSupport::version_column_name
+            || tmt_column_names_to_read[delmark_column_index] != MutableSupport::delmark_column_name)
+            throw Exception("Wrong column order for txn engine, should not happen", ErrorCodes::LOGICAL_ERROR);
+    }
+
     if (!is_txn_engine)
         ;
     else if (!select.no_kvstore)
     {
-        handle_col_name = data.getPrimarySortDescription()[0].column_name;
-
         const auto pk_family_name = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
 
         if (std::strcmp(pk_family_name, TypeName<UInt64>::get()) == 0)
@@ -320,6 +340,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     }
                 }
             }
+
+            concurrent_num = std::max(1, std::min(concurrent_num, regions_query_info.size()));
         }
 
         region_group_range_parts.assign(concurrent_num, {});
@@ -332,52 +354,53 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         // for special region.
         region_block_data.resize(regions_query_info.size());
 
-        Names column_names_to_read = real_column_names;
-
-        extendMutableEngineColumnNames(column_names_to_read, data);
-
-        if (column_names_to_read.size() < 3)
-            throw Exception("size of column_names_to_read < 3", ErrorCodes::LOGICAL_ERROR);
-
         // get data block from region first.
 
         auto start_time = Clock::now();
 
-        size_t mem_region_num = regions_query_info.size();
-        ThreadPool pool(std::min(mem_region_num, concurrent_num));
+        const size_t mem_region_num = regions_query_info.size();
+        const size_t batch_size = mem_region_num / concurrent_num;
         std::atomic_bool need_retry = false;
 
-        for (size_t region_begin = 0, size = std::max(mem_region_num / concurrent_num, 1); region_begin < mem_region_num;
-             region_begin += size)
-        {
-            pool.schedule([&, region_begin, size] {
-                for (size_t region_index = region_begin, region_end = std::min(region_begin + size, mem_region_num);
-                     region_index < region_end; ++region_index)
+        const auto func_run_learner_read = [&](const size_t region_begin) {
+            const size_t region_end = std::min(region_begin + batch_size, mem_region_num);
+            for (size_t region_index = region_begin; region_index < region_end; ++region_index)
+            {
+                if (need_retry)
+                    return;
+
+                const RegionQueryInfo & region_query_info = regions_query_info[region_index];
+
+                auto [block, status] = RegionTable::getBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
+                    kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
+                    mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
+
+                if (status != RegionTable::OK)
                 {
-                    if (need_retry)
-                        return;
-
-                    const RegionQueryInfo & region_query_info = regions_query_info[region_index];
-
-                    auto [block, status] = RegionTable::getBlockByRegion(*data.table_info, data.getColumns(), column_names_to_read,
-                        kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
-                        mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
-
-                    if (status != RegionTable::OK)
-                    {
-                        LOG_WARNING(log,
-                            "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
-                                                          << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
-                                                          << region_query_info.range_in_table.second.toString() << ") , status "
-                                                          << RegionTable::RegionReadStatusString(status));
-                        need_retry = true;
-                    }
-                    else if (block)
-                        region_block_data[region_index] = std::move(*block);
+                    LOG_WARNING(log,
+                        "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
+                                                      << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
+                                                      << region_query_info.range_in_table.second.toString() << ") , status "
+                                                      << RegionTable::RegionReadStatusString(status));
+                    need_retry = true;
                 }
-            });
+                else if (block)
+                    region_block_data[region_index] = std::move(*block);
+            }
+        };
+
+        if (concurrent_num > 1)
+        {
+            ThreadPool pool(concurrent_num);
+            for (size_t region_begin = 0; region_begin < mem_region_num; region_begin += batch_size)
+                pool.schedule([&, region_begin] { func_run_learner_read(region_begin); });
+            pool.wait();
         }
-        pool.wait();
+        else
+        {
+            // use current thread to run learner read.
+            func_run_learner_read(0);
+        }
 
         if (need_retry)
             func_throw_retry_region();
@@ -754,17 +777,19 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
     BlockInputStreams res;
 
-    if (!is_txn_engine)
+    if (!is_txn_engine || select.raw_for_mutable)
         LOG_DEBUG(log,
             "Selected " << parts.size() << " parts, " << parts_with_ranges.size() << " parts by key, " << sum_marks
                         << " marks to read from " << sum_ranges << " ranges");
-    else if (!select.raw_for_mutable)
+    else
     {
         TMTContext & tmt = context.getTMTContext();
 
         auto safe_point = tmt.getPDClient()->getGCSafePoint();
         if (mvcc_query_info.read_tso < safe_point)
-            func_throw_retry_region();
+            throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
+                    + " is smaller than tidb gc safe point: " + toString(safe_point),
+                ErrorCodes::LOGICAL_ERROR);
 
         const size_t min_marks_for_seek = computeMinMarksForSeek(settings, data);
 
@@ -888,14 +913,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (sum_marks > max_marks_to_use_cache)
             use_uncompressed_cache = false;
 
-        // must extend mutable engine column.
-        extendMutableEngineColumnNames(column_names_to_read, data);
-
         if (select.raw_for_mutable)
         {
             res = spreadMarkRangesAmongStreams(std::move(parts_with_ranges),
                 num_streams,
-                column_names_to_read,
+                tmt_column_names_to_read,
                 max_block_size,
                 use_uncompressed_cache,
                 prewhere_actions,
@@ -918,42 +940,41 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         {
             const auto func_make_merge_tree_input = [&](const RangesInDataPart & part, const MarkRanges & mark_ranges) {
                 return std::make_shared<MergeTreeBlockInputStream>(data, part.data_part, max_block_size,
-                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, column_names_to_read,
+                    settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes, tmt_column_names_to_read,
                     mark_ranges, use_uncompressed_cache, prewhere_actions, prewhere_column, true, settings.min_bytes_to_use_direct_io,
                     settings.max_read_buffer_size, true, true, virt_column_names, part.part_index_in_query);
             };
 
             const auto func_make_version_filter_input = [&](const BlockInputStreamPtr & source_stream) {
-                return std::make_shared<VersionFilterBlockInputStream>(
-                    source_stream, MutableSupport::version_column_name, mvcc_query_info.read_tso);
+                return std::make_shared<VersionFilterBlockInputStream>(source_stream, version_column_index, mvcc_query_info.read_tso);
             };
 
             const auto func_make_range_filter_input
                 = [&](const BlockInputStreamPtr & source_stream, const HandleRange<Int64> & handle_ranges) {
-                      return std::make_shared<RangesFilterBlockInputStream<Int64>>(source_stream, handle_ranges, handle_col_name);
+                      return std::make_shared<RangesFilterBlockInputStream<Int64>>(source_stream, handle_ranges, handle_column_index);
                   };
 
             const auto func_make_uint64_range_filter_input
                 = [&](const BlockInputStreamPtr & source_stream, const HandleRange<UInt64> & handle_ranges) {
-                      return std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_ranges, handle_col_name);
+                      return std::make_shared<RangesFilterBlockInputStream<UInt64>>(source_stream, handle_ranges, handle_column_index);
                   };
 
+            auto func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::UNSPECIFIED>;
+            switch (pk_type)
+            {
+                case TMTPKType::UINT64:
+                    func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::UINT64>;
+                    break;
+                case TMTPKType::INT64:
+                    func_make_multi_way_merge_sort_input_impl = makeMultiWayMergeSortInput<TMTPKType::INT64>;
+                    break;
+                default:
+                    break;
+            }
+
             const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) -> BlockInputStreamPtr {
-                switch (pk_type)
-                {
-                    case TMTPKType::UINT64:
-                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UINT64>>(merging, data.getPrimarySortDescription(),
-                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
-
-                    case TMTPKType::INT64:
-                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::INT64>>(merging, data.getPrimarySortDescription(),
-                            MutableSupport::version_column_name, MutableSupport::delmark_column_name, DEFAULT_MERGE_BLOCK_SIZE);
-
-                    default:
-                        return std::make_shared<TMTSortedBlockInputStream<TMTPKType::UNSPECIFIED>>(merging,
-                            data.getPrimarySortDescription(), MutableSupport::version_column_name, MutableSupport::delmark_column_name,
-                            DEFAULT_MERGE_BLOCK_SIZE);
-                }
+                return func_make_multi_way_merge_sort_input_impl(
+                    merging, data.getPrimarySortDescription(), version_column_index, delmark_column_index, DEFAULT_MERGE_BLOCK_SIZE);
             };
 
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)
@@ -1084,7 +1105,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 }
 
                 if (!union_regions_stream.empty())
-                    res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
+                    res.emplace_back(std::make_shared<TMTUnionBlockInputStream>(std::move(union_regions_stream)));
             }
         }
         else

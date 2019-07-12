@@ -18,7 +18,7 @@ struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, 
         return *this;
     }
 
-    PKColumnIterator operator=(const PKColumnIterator & itr)
+    PKColumnIterator & operator=(const PKColumnIterator & itr)
     {
         pos = itr.pos;
         column = itr.column;
@@ -48,16 +48,8 @@ Block RangesFilterBlockInputStream<HandleType>::readImpl()
         if (!block)
             return block;
 
-        if (!block.has(handle_col_name))
-            throw Exception("RangesFilterBlockInputStream: block without " + handle_col_name, ErrorCodes::LOGICAL_ERROR);
-
-        const ColumnWithTypeAndName & handle_column = block.getByName(handle_col_name);
+        const ColumnWithTypeAndName & handle_column = block.getByPosition(handle_column_index);
         const auto * column = handle_column.column.get();
-        if (!column)
-        {
-            throw Exception(
-                "RangesFilterBlockInputStream: " + handle_col_name + " column should be type numeric", ErrorCodes::LOGICAL_ERROR);
-        }
 
         size_t rows = block.rows();
 

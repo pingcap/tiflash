@@ -3,6 +3,7 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <shared_mutex>
 #include <condition_variable>
 #include <kvproto/pdpb.grpc.pb.h>
 #include <common/Log.h>
@@ -72,9 +73,13 @@ private:
 
     std::unique_ptr<pdpb::PD::Stub> stub_ptr;
 
+    std::shared_mutex leader_mutex;
+
     std::mutex channel_map_mutex;
 
     std::mutex update_leader_mutex;
+
+    std::mutex gc_safepoint_mutex;
 
     std::unordered_map<std::string, std::shared_ptr<grpc::Channel> > channel_map;
 
@@ -90,7 +95,7 @@ private:
 
     std::condition_variable update_leader_cv;
 
-    bool check_leader;
+    std::atomic<bool> check_leader;
 
     Logger * log;
 

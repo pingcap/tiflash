@@ -49,12 +49,34 @@ metapb::Region readRegion(ReadBuffer & buf)
     region.mutable_region_epoch()->set_conf_ver(readBinary2<UInt64>(buf));
     region.mutable_region_epoch()->set_version(readBinary2<UInt64>(buf));
 
-    int peer_size = readBinary2<int>(buf);
-    for (int i = 0; i < peer_size; ++i)
+    Int32 peer_size = readBinary2<Int32>(buf);
+    for (Int32 i = 0; i < peer_size; ++i)
     {
         *(region.mutable_peers()->Add()) = readPeer(buf);
     }
     return region;
+}
+
+raft_serverpb::MergeState readMergeState(ReadBuffer & buf)
+{
+    raft_serverpb::MergeState merge_state;
+    *merge_state.mutable_target() = readRegion(buf);
+    merge_state.set_commit(readBinary2<UInt64>(buf));
+    merge_state.set_min_index(readBinary2<UInt64>(buf));
+    return merge_state;
+}
+
+raft_serverpb::RegionLocalState readRegionLocalState(ReadBuffer & buf)
+{
+    raft_serverpb::RegionLocalState region_state;
+    *region_state.mutable_region() = readRegion(buf);
+    region_state.set_state((raft_serverpb::PeerState)readBinary2<Int32>(buf));
+    bool has_merge_state = readBinary2<bool>(buf);
+    if (has_merge_state)
+    {
+        *region_state.mutable_merge_state() = readMergeState(buf);
+    }
+    return region_state;
 }
 
 size_t writeBinary2(const raft_serverpb::RaftApplyState & state, WriteBuffer & buf)
@@ -63,6 +85,32 @@ size_t writeBinary2(const raft_serverpb::RaftApplyState & state, WriteBuffer & b
     size += writeBinary2((UInt64)state.applied_index(), buf);
     size += writeBinary2((UInt64)state.truncated_state().index(), buf);
     size += writeBinary2((UInt64)state.truncated_state().term(), buf);
+    return size;
+}
+
+size_t writeBinary2(const raft_serverpb::MergeState & state, WriteBuffer & buf)
+{
+    size_t size = 0;
+    size += writeBinary2(state.target(), buf);
+    size += writeBinary2(state.commit(), buf);
+    size += writeBinary2(state.min_index(), buf);
+    return size;
+}
+
+size_t writeBinary2(const raft_serverpb::RegionLocalState & region_state, WriteBuffer & buf)
+{
+    size_t size = 0;
+    size += writeBinary2(region_state.region(), buf);
+    size += writeBinary2((Int32)region_state.state(), buf);
+
+    if (region_state.has_merge_state())
+    {
+        size += writeBinary2(true, buf);
+        size += writeBinary2(region_state.merge_state(), buf);
+    }
+    else
+        size += writeBinary2(false, buf);
+
     return size;
 }
 
@@ -82,11 +130,14 @@ bool operator==(const metapb::Peer & peer1, const metapb::Peer & peer2)
 
 bool operator==(const metapb::Region & region1, const metapb::Region & region2)
 {
-    if (region1.id() != region2.id())
+    if (region1.id() != region2.id() || region1.start_key() != region2.start_key() || region1.end_key() != region2.end_key())
+        return false;
+    if (region1.region_epoch().version() != region2.region_epoch().version()
+        || region1.region_epoch().conf_ver() != region2.region_epoch().conf_ver())
         return false;
     if (region1.peers_size() != region2.peers_size())
         return false;
-    for (int i = 0; i < region1.peers_size(); ++i)
+    for (Int32 i = 0; i < region1.peers_size(); ++i)
     {
         if (!(region1.peers(i) == region2.peers(i)))
             return false;
@@ -99,6 +150,16 @@ bool operator==(const raft_serverpb::RaftApplyState & state1, const raft_serverp
     return state1.applied_index() == state2.applied_index() //
         && state1.truncated_state().index() == state2.truncated_state().index()
         && state1.truncated_state().term() == state2.truncated_state().term();
+}
+
+bool operator==(const raft_serverpb::MergeState & state1, const raft_serverpb::MergeState & state2)
+{
+    return state1.min_index() == state2.min_index() && state1.commit() == state2.commit() && state1.target() == state2.target();
+}
+
+bool operator==(const raft_serverpb::RegionLocalState & state1, const raft_serverpb::RegionLocalState & state2)
+{
+    return state1.region() == state2.region() && state1.state() == state2.state() && state1.merge_state() == state2.merge_state();
 }
 
 } // namespace DB
