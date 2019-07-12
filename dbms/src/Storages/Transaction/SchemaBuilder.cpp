@@ -211,11 +211,11 @@ void SchemaBuilder::applyDropSchema(DatabaseID schema_id) {
     drop_interpreter.execute();
 }
 
-String createTableStmt(DBInfoPtr db_info, TableInfoPtr table_info)
+String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
 {
     NamesAndTypes columns;
     std::vector<String> pks;
-    for (const auto & column : table_info->columns)
+    for (const auto & column : table_info.columns)
     {
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(NameAndTypePair(column.name, type));
@@ -226,7 +226,7 @@ String createTableStmt(DBInfoPtr db_info, TableInfoPtr table_info)
         }
     }
 
-    if (pks.size() != 1 || !table_info->pk_is_handle)
+    if (pks.size() != 1 || !table_info.pk_is_handle)
     {
         columns.emplace_back(NameAndTypePair(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>()));
         pks.clear();
@@ -236,9 +236,9 @@ String createTableStmt(DBInfoPtr db_info, TableInfoPtr table_info)
     String stmt;
     WriteBufferFromString stmt_buf(stmt);
     writeString("CREATE TABLE ", stmt_buf);
-    writeBackQuotedString(db_info->name, stmt_buf);
+    writeBackQuotedString(db_info.name, stmt_buf);
     writeString(".", stmt_buf);
-    writeBackQuotedString(table_info->name, stmt_buf);
+    writeBackQuotedString(table_info.name, stmt_buf);
     writeString("(", stmt_buf);
     for (size_t i = 0; i < columns.size(); i++)
     {
@@ -256,14 +256,14 @@ String createTableStmt(DBInfoPtr db_info, TableInfoPtr table_info)
         writeBackQuotedString(pks[i], stmt_buf);
     }
     writeString("), 8192, '", stmt_buf);
-    writeString(table_info->serialize(true), stmt_buf);
+    writeString(table_info.serialize(true), stmt_buf);
     writeString("')", stmt_buf);
 
     return stmt;
 }
 
 void SchemaBuilder::applyCreatePhysicalTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info) {
-    String stmt = createTableStmt(db_info, table_info);
+    String stmt = createTableStmt(*db_info, *table_info);
 
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);

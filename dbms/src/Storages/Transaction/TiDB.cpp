@@ -149,9 +149,9 @@ try
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
         for (auto & elem : elems)
             elem_arr->add(elem.first);
-        tp_json->set("elems", elem_arr);
+        tp_json->set("Elems", elem_arr);
     } else {
-        tp_json->set("elems", Poco::Dynamic::Var());
+        tp_json->set("Elems", Poco::Dynamic::Var());
     }
     json->set("type", tp_json);
     json->set("state", static_cast<Int32>(state));
@@ -226,7 +226,8 @@ void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json) try
 {
     id = json->getValue<Int64>("id");
     name = json->getObject("name")->getValue<String>("L");
-    comment = json->getValue<String>("comment");
+    if (json->has("comment"))
+        comment = json->getValue<String>("comment");
 }
 catch (const Poco::Exception & e)
 {
@@ -312,9 +313,15 @@ try
     json->set("pk_is_handle", pk_is_handle);
     json->set("comment", comment);
     json->set("update_timestamp", update_timestamp);
-    json->set("belonging_table_id", belonging_table_id);
-    json->set("is_partition_sub_table", !(is_partition_table && belonging_table_id != -1));
-    json->set("partition", partition.getJSONObject());
+    if (is_partition_table) {
+        json->set("belonging_table_id", belonging_table_id);
+        json->set("partition", partition.getJSONObject());
+        if (belonging_table_id != -1) {
+            json->set("is_partition_sub_table", true);
+        }
+    } else {
+        json->set("partition", Poco::Dynamic::Var());
+    }
 
     json->stringify(buf);
 
@@ -388,6 +395,7 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
         ColumnInfo column_info(col_json);
         columns.emplace_back(column_info);
     }
+
     state = static_cast<SchemaState>(obj->getValue<Int32>("state"));
     pk_is_handle = obj->getValue<bool>("pk_is_handle");
     comment = obj->getValue<String>("comment");
