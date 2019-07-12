@@ -111,6 +111,8 @@ private:
 
     void init(const Names & required_result_column_names);
 
+    void alignStorageSchema(Int64 schema_version);
+
     void executeImpl(Pipeline & pipeline, const BlockInputStreamPtr & input, bool dry_run);
 
 

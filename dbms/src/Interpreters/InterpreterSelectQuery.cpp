@@ -34,7 +34,9 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <Storages/Transaction/TMTContext.h>
 
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
@@ -161,6 +163,9 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
     if (storage)
         table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
+    /// Make sure TMT storage schema qualifies the version specified by upper (TiDB or TiSpark).
+    alignStorageSchema(settings.schema_version);
+
     query_analyzer = std::make_unique<ExpressionAnalyzer>(
         query_ptr, context, storage, source_columns, required_result_column_names, subquery_depth, !only_analyze);
 
@@ -180,6 +185,29 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
             if (!context.tryGetExternalTable(it.first))
                 context.addExternalTable(it.first, it.second);
     }
+}
+
+
+void InterpreterSelectQuery::alignStorageSchema(Int64 schema_version)
+{
+    if (schema_version == DEFAULT_SCHEMA_VERSION || !storage)
+        return;
+
+    const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
+    if (!merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
+        return;
+
+    auto storage_schema_version = merge_tree->getTableInfo().schema_version;
+    if (storage_schema_version < schema_version)
+    {
+        LOG_TRACE(log, __PRETTY_FUNCTION__ << " storage schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", syncing schema.");
+        // TODO: Adapt to new schema syncer API, and use the lock-less one.
+        context.getTMTContext().getSchemaSyncer()->syncSchema(merge_tree->getTableInfo().id, context, true);
+    }
+
+    if (storage_schema_version > schema_version)
+        // TODO: Use SCHEMA_ERROR error code.
+        throw Exception("Storage schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(schema_version));
 }
 
 
