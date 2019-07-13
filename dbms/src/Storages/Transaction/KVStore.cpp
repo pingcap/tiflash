@@ -17,7 +17,7 @@ extern const int LOGICAL_ERROR;
 
 KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir), log(&Logger::get("KVStore")) {}
 
-void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove)
+void KVStore::restore(const RegionClientCreateFunc & region_client_create)
 {
     std::lock_guard<std::mutex> lock(mutex);
     LOG_INFO(log, "start to restore regions");
@@ -25,14 +25,16 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create, std::
     LOG_INFO(log, "restore regions done");
 
     // Remove regions whose state = Tombstone, those regions still exist because progress crash after persisted and before removal.
-    if (regions_to_remove != nullptr)
     {
+        std::vector<RegionID> regions_to_remove;
         for (auto & p : regions)
         {
             RegionPtr & region = p.second;
             if (region->isPendingRemove())
-                regions_to_remove->push_back(region->id());
+                regions_to_remove.push_back(region->id());
         }
+        for (const auto region_id : regions_to_remove)
+            removeRegion(region_id, nullptr);
     }
 }
 
@@ -137,6 +139,8 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             curr_region = it->second;
         }
 
+        auto region_persist_lock = curr_region->genPersistLock();
+
         if (header.destroy())
         {
             LOG_INFO(log, "Try to remove " << curr_region->toString() << " because of tombstone.");
@@ -162,7 +166,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
 
         const auto persist_region = [&](const RegionPtr & region) {
             LOG_INFO(log, "Start to persist " << region->toString(true) << ", cache size: " << region->dataSize() << " bytes");
-            region_persister.persist(region);
+            region_persister.persist(region, region_persist_lock);
             LOG_INFO(log, "Persist " << region->toString(false) << " done");
         };
 

@@ -250,7 +250,7 @@ size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase &
 }
 
 template <typename Trait>
-TableIDSet RegionCFDataBase<Trait>::getAllRecordTableID() const
+TableIDSet RegionCFDataBase<Trait>::getAllTables() const
 {
     TableIDSet tables;
     for (const auto & [table_id, map] : data)

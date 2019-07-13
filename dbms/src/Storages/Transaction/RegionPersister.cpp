@@ -17,33 +17,59 @@ void RegionPersister::drop(RegionID region_id)
     page_storage.write(wb);
 }
 
-void RegionPersister::persist(const RegionPtr & region)
+void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionWriteBuffer & region_write_buffer)
+{
+    auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
+
+    region_id = region.id();
+    std::tie(region_size, applied_index) = region.serialize(buffer);
+    if (unlikely(region_size > std::numeric_limits<UInt32>::max()))
+    {
+        LOG_ERROR(&Logger::get("RegionPersister"),
+            region.toString() << " with data info: " << region.dataInfo() << ", serialized size " << region_size
+                              << " is too big to persist");
+        throw Exception("Region is too big to persist", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void RegionPersister::persist(const RegionPtr & region, const RegionPersistLock & lock)
 {
     // Support only on thread persist.
-    std::lock_guard<std::mutex> lock(mutex);
-
     size_t dirty_flag = region->dirtyFlag();
-    doPersist(region);
+    {
+        RegionWriteBuffer region_buffer;
+        computeRegionWriteBuffer(*region, region_buffer);
+        doPersist(region_buffer, lock);
+    }
     region->markPersisted();
     region->decDirtyFlag(dirty_flag);
 }
 
-void RegionPersister::doPersist(const RegionPtr & region)
+void RegionPersister::persist(const RegionPtr & region)
 {
-    auto region_id = region->id();
-    UInt64 applied_index = region->getIndex();
+    // Support only on thread persist.
+    size_t dirty_flag = region->dirtyFlag();
+    {
+        RegionWriteBuffer region_buffer;
+        computeRegionWriteBuffer(*region, region_buffer);
+        doPersist(region_buffer, region->genPersistLock());
+    }
+    region->markPersisted();
+    region->decDirtyFlag(dirty_flag);
+}
+
+void RegionPersister::doPersist(RegionWriteBuffer & region_write_buffer, const RegionPersistLock &)
+{
+    auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
+
+    std::lock_guard<std::mutex> lock(mutex);
 
     auto cache = page_storage.getCache(region_id);
     if (cache.isValid() && cache.tag > applied_index)
     {
-        LOG_INFO(log, region->toString() << " have already persisted index: " << cache.tag);
+        LOG_DEBUG(log, "[region " << region_id << ", applied index " << applied_index << "] have already persisted index " << cache.tag);
         return;
     }
-
-    MemoryWriteBuffer buffer;
-    size_t region_size = region->serialize(buffer);
-    if (unlikely(region_size > std::numeric_limits<UInt32>::max()))
-        throw Exception("Region is too big to persist", ErrorCodes::LOGICAL_ERROR);
 
     WriteBatch wb;
     auto read_buf = buffer.tryGetReadBuffer();

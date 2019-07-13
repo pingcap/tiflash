@@ -21,7 +21,7 @@ class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(const std::string & data_dir);
-    void restore(const RegionClientCreateFunc & region_client_create, std::vector<RegionID> * regions_to_remove = nullptr);
+    void restore(const RegionClientCreateFunc & region_client_create);
 
     RegionPtr getRegion(RegionID region_id) const;
 
@@ -43,7 +43,7 @@ public:
 
     size_t regionSize() const;
 
-    void removeRegion(RegionID region_id, RegionTable * context);
+    void removeRegion(RegionID region_id, RegionTable * region_table);
 
     void updateRegionTableBySnapshot(RegionTable & region_table);
 

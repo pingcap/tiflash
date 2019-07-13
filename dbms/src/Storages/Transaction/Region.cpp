@@ -249,8 +249,6 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 
                 result.type = RaftCommandResult::Type::BatchSplit;
                 result.split_regions = std::move(split_regions);
-
-                is_dirty = true;
                 break;
             }
             case raft_cmdpb::AdminCmdType::CompactLog:
@@ -364,7 +362,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     return result;
 }
 
-size_t Region::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
 
@@ -374,7 +372,7 @@ size_t Region::serialize(WriteBuffer & buf) const
 
     total_size += data.serialize(buf);
 
-    return total_size;
+    return {total_size, meta.appliedIndex()};
 }
 
 RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create)
@@ -431,12 +429,14 @@ std::string Region::dataInfo() const
 
     std::stringstream ss;
     auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
+    ss << "[";
     if (write_size)
-        ss << "write cf: " << write_size << ", ";
+        ss << "write " << write_size << " ";
     if (lock_size)
-        ss << "lock cf: " << lock_size << ", ";
+        ss << "lock " << lock_size << " ";
     if (default_size)
-        ss << "default cf: " << default_size << ", ";
+        ss << "default " << default_size << " ";
+    ss << "]";
     return ss.str();
 }
 
@@ -509,10 +509,10 @@ void Region::assignRegion(Region && new_region)
 
 bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
 
-TableIDSet Region::getCommittedRecordTableID() const
+TableIDSet Region::getAllWriteCFTables() const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
-    return data.getCommittedRecordTableID();
+    return data.getAllWriteCFTables();
 }
 
 void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point)
@@ -546,7 +546,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
                     LOG_ERROR(log,
                         "[compareAndCompleteSnapshot] WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: "
                                                                                         << ori_del << " , current: " << is_deleted);
-                    throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
                 }
                 handle_map.erase(it);
             }
@@ -563,7 +563,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         std::ignore = ori_del;
 
         if (ori_ts >= safe_point)
-            throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
         std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
         TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
@@ -626,5 +626,7 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
     for (auto & [table_id, handle_map] : handle_maps)
         compareAndCompleteSnapshot(handle_map, table_id, safe_point);
 }
+
+RegionPersistLock Region::genPersistLock() const { return RegionPersistLock(persist_mutex); }
 
 } // namespace DB

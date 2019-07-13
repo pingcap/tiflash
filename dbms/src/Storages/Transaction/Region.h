@@ -16,6 +16,7 @@ using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
+class RegionPersistLock;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -111,7 +112,7 @@ public:
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
     std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
 
-    size_t serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
@@ -156,7 +157,7 @@ public:
 
     void assignRegion(Region && new_region);
 
-    TableIDSet getCommittedRecordTableID() const;
+    TableIDSet getAllWriteCFTables() const;
 
     using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
 
@@ -165,6 +166,8 @@ public:
     void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
 
     static ColumnFamilyType getCf(const std::string & cf);
+
+    RegionPersistLock genPersistLock() const;
 
 private:
     // Private methods no need to lock mutex, normally
@@ -199,7 +202,18 @@ private:
     // dirty_flag is used to present whether this region need to be persisted.
     std::atomic<size_t> dirty_flag = 1;
 
+    // because operation persist should be locked if not called in KVStore::onServiceCommand
+    mutable std::mutex persist_mutex;
+
     Logger * log;
+};
+
+/// Encapsulation of lock guard of persist mutex in Region
+class RegionPersistLock : private boost::noncopyable
+{
+    friend RegionPersistLock Region::genPersistLock() const;
+    RegionPersistLock(std::mutex & mutex_) : lock(mutex_) {}
+    std::lock_guard<std::mutex> lock;
 };
 
 } // namespace DB

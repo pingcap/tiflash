@@ -12,7 +12,8 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
-using RegionIndexMap = std::unordered_map<RegionID, UInt64>;
+
+class RegionPersistLock;
 
 class RegionPersister final : private boost::noncopyable
 {
@@ -23,11 +24,15 @@ public:
 
     void drop(RegionID region_id);
     void persist(const RegionPtr & region);
+    void persist(const RegionPtr & region, const RegionPersistLock & lock);
     void restore(RegionMap & regions, RegionClientCreateFunc * func = nullptr);
     bool gc();
 
+    using RegionWriteBuffer = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
+    static void computeRegionWriteBuffer(const Region & region, RegionWriteBuffer & region_write_buffer);
+
 private:
-    void doPersist(const RegionPtr & region);
+    void doPersist(RegionWriteBuffer & region_write_buffer, const RegionPersistLock & lock);
 
 private:
     PageStorage page_storage;

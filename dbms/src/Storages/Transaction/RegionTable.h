@@ -4,7 +4,6 @@
 #include <optional>
 #include <vector>
 
-#include <Common/PersistedContainer.h>
 #include <Core/Names.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/TiKVHandle.h>
@@ -36,7 +35,6 @@ class RegionTable : private boost::noncopyable
 public:
     struct InternalRegion
     {
-        InternalRegion() {}
         InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
         InternalRegion(const RegionID region_id_, const HandleRange<HandleID> & range_in_table_ = {0, 0})
             : region_id(region_id_), range_in_table(range_in_table_)
@@ -51,39 +49,13 @@ public:
         Timepoint last_flush_time = Clock::now();
     };
 
+    using InternalRegions = std::unordered_map<RegionID, InternalRegion>;
+
     struct Table
     {
-        Table(const std::string & parent_path, TableID table_id_) : table_id(table_id_), regions(parent_path + DB::toString(table_id))
-        {
-            regions.restore();
-        }
-
-        struct Write
-        {
-            void operator()(const RegionID k, const InternalRegion &, DB::WriteBuffer & buf) { writeIntBinary(k, buf); }
-        };
-
-        struct Read
-        {
-            std::pair<RegionID, InternalRegion> operator()(DB::ReadBuffer & buf)
-            {
-                RegionID region_id;
-                readIntBinary(region_id, buf);
-                return {region_id, InternalRegion(region_id)};
-            }
-        };
-
-        void persist() { regions.persist(); }
-
-        using InternalRegions = PersistedContainerMap<RegionID, InternalRegion, std::unordered_map, Write, Read>;
-
+        Table(const TableID table_id_) : table_id(table_id_) {}
         TableID table_id;
         InternalRegions regions;
-    };
-
-    struct RegionInfo
-    {
-        std::unordered_set<TableID> tables;
     };
 
     enum RegionReadStatus : UInt8
@@ -110,6 +82,7 @@ public:
         return "Unknown";
     };
 
+    using RegionInfo = std::unordered_set<TableID>;
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionInfoMap = std::unordered_map<RegionID, RegionInfo>;
 
@@ -157,15 +130,15 @@ private:
     Logger * log;
 
 private:
-    Table & getOrCreateTable(TableID table_id);
+    Table & getOrCreateTable(const TableID table_id);
     StoragePtr getOrCreateStorage(TableID table_id);
 
     InternalRegion & insertRegion(Table & table, const RegionPtr & region);
-    InternalRegion & getOrInsertRegion(TableID table_id, const RegionPtr & region, TableIDSet & table_to_persist);
+    InternalRegion & getOrInsertRegion(TableID table_id, const RegionPtr & region);
 
     /// This functional only shrink the table range of this region_id, range expand will (only) be done at flush.
     /// Note that region update range should not affect the data in storage.
-    void updateRegionRange(const RegionPtr & region, TableIDSet & table_to_persist);
+    void updateRegionRange(const RegionPtr & region);
 
     bool shouldFlush(const InternalRegion & region) const;
 
@@ -178,7 +151,7 @@ private:
 
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
-    void restore(std::function<RegionPtr(RegionID)> region_fetcher);
+    void restore();
 
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
@@ -204,7 +177,7 @@ public:
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
-    void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback);
+    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
 
     static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,

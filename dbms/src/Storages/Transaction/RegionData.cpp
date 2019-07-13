@@ -182,7 +182,7 @@ const RegionWriteCFData & RegionData::writeCF() const { return write_cf; }
 const RegionDefaultCFData & RegionData::defaultCF() const { return default_cf; }
 const RegionLockCFData & RegionData::lockCF() const { return lock_cf; }
 
-TableIDSet RegionData::getCommittedRecordTableID() const { return writeCF().getAllRecordTableID(); }
+TableIDSet RegionData::getAllWriteCFTables() const { return writeCF().getAllTables(); }
 
 bool RegionData::isEqual(const RegionData & r2) const
 {
