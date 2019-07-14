@@ -203,9 +203,9 @@ inline TiKVValue encodeLockCfValue(UInt8 lock_type, const String & primary, Time
     return internalEncodeLockCfValue(lock_type, primary, ts, ttl, nullptr);
 }
 
-using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64, std::unique_ptr<String>>;
+using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64, std::shared_ptr<TiKVValue>>;
 
-inline std::tuple<UInt8, String, UInt64, UInt64, std::unique_ptr<String>> decodeLockCfValue(const TiKVValue & value)
+inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
 {
     UInt8 lock_type;
     String primary;
@@ -237,10 +237,10 @@ inline std::tuple<UInt8, String, UInt64, UInt64, std::unique_ptr<String>> decode
     data += 1, len -= 1;
     assert(len == slen);
     (void)slen;
-    return std::make_tuple(lock_type, primary, ts, ttl, std::make_unique<String>(data, len));
+    return std::make_tuple(lock_type, primary, ts, ttl, std::make_shared<TiKVValue>(data, len));
 }
 
-using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::unique_ptr<String>>;
+using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<TiKVValue>>;
 
 inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
 {
@@ -262,7 +262,7 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
     data += 1, len -= 1;
     if (slen != len)
         throw Exception("unexpected eof.", ErrorCodes::LOGICAL_ERROR);
-    return std::make_tuple(write_type, ts, std::make_unique<String>(data, len));
+    return std::make_tuple(write_type, ts, std::make_shared<TiKVValue>(data, len));
 }
 
 

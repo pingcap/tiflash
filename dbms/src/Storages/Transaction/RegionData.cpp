@@ -71,7 +71,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id
             map.erase(data_it);
         }
         else
-            throw Exception(" key [" + key.toString() + "] not found in data cf when removing", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(" key [" + key->toString() + "] not found in data cf when removing", ErrorCodes::LOGICAL_ERROR);
     }
 
     cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
@@ -89,21 +89,21 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const
     const auto & [write_type, prewrite_ts, short_value] = decoded_val;
 
     if (!need_value)
-        return std::make_tuple(handle, write_type, ts, TiKVValue());
+        return std::make_tuple(handle, write_type, ts, nullptr);
 
     if (write_type != PutFlag)
-        return std::make_tuple(handle, write_type, ts, TiKVValue());
+        return std::make_tuple(handle, write_type, ts, nullptr);
 
     if (short_value)
-        return std::make_tuple(handle, write_type, ts, TiKVValue(*short_value));
+        return std::make_tuple(handle, write_type, ts, short_value);
 
     if (auto map_it = default_cf.getData().find(table_id); map_it != default_cf.getData().end())
     {
         const auto & map = map_it->second;
         if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
-            return std::make_tuple(handle, write_type, ts, RegionDefaultCFData::getTiKVValue(data_it->second));
+            return std::make_tuple(handle, write_type, ts, std::get<1>(data_it->second));
         else
-            throw Exception(" key [" + key.toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(" key [" + key->toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
     }
     else
         throw Exception(" table [" + toString(table_id) + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
@@ -125,7 +125,7 @@ LockInfoPtr RegionData::getLockInfo(TableID expected_table_id, Timestamp start_t
             if (lock_type == DelFlag || ts > start_ts)
                 continue;
 
-            return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(tikv_key), ttl});
+            return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(*tikv_key), ttl});
         }
 
         return nullptr;

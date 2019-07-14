@@ -7,13 +7,13 @@ namespace DB
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
 {
-    return std::get<0>(val);
+    return *std::get<0>(val);
 }
 
 template <typename Trait>
 const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 {
-    return std::get<1>(val);
+    return *std::get<1>(val);
 }
 
 template <typename Trait>
