@@ -153,7 +153,7 @@ MergeTreeData::MergeTreeData(
 
     auto path_exists = Poco::File(full_path).exists();
     /// Creating directories, if not exist.
-    for (String & path : context.getAllPath())
+    for (const String & path : context.getAllPath())
     {
         String candidate_path = getDataPartsPath(path);
         Poco::File(candidate_path).createDirectories();
