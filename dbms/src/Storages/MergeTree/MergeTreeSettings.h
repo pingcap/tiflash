@@ -30,7 +30,7 @@ struct MergeTreeSettings
      * in background pool (or entries in replication queue). */                                               \
     M(SettingUInt64, max_bytes_to_merge_at_max_space_in_pool, 150ULL * 1024 * 1024 * 1024)                    \
     M(SettingUInt64, max_bytes_to_merge_at_min_space_in_pool, 1024 * 1024)                                    \
-    M(SettingUInt64, max_bytes_to_merge_at_max_space_in_pool_for_multi_path, 50ULL * 1024 * 1024)             \
+    M(SettingUInt64, max_bytes_to_merge_at_max_space_in_pool_for_multi_path, 120ULL * 1024 * 1024)             \
                                                                                                               \
     /** How many tasks of merging parts are allowed simultaneously in ReplicatedMergeTree queue. */           \
     M(SettingUInt64, max_replicated_merges_in_queue, 16)                                                      \
