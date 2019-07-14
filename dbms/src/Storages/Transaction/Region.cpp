@@ -364,15 +364,22 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
-
     size_t total_size = writeBinary2(Region::CURRENT_VERSION, buf);
+    UInt64 applied_index = -1;
 
-    total_size += meta.serialize(buf);
+    {
+        std::shared_lock<std::shared_mutex> lock(mutex);
 
-    total_size += data.serialize(buf);
+        {
+            auto [size, index] = meta.serialize(buf);
+            total_size += size;
+            applied_index = index;
+        }
 
-    return {total_size, meta.appliedIndex()};
+        total_size += data.serialize(buf);
+    }
+
+    return {total_size, applied_index};
 }
 
 RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create)

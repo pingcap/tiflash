@@ -8,7 +8,7 @@
 namespace DB
 {
 
-size_t RegionMeta::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf) const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -17,7 +17,7 @@ size_t RegionMeta::serialize(WriteBuffer & buf) const
     size += writeBinary2(apply_state, buf);
     size += writeBinary2(applied_term, buf);
     size += writeBinary2(region_state, buf);
-    return size;
+    return {size, apply_state.applied_index()};
 }
 
 RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
