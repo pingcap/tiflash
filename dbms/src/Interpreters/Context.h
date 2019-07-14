@@ -141,7 +141,7 @@ public:
 
     ~Context();
 
-    std::vector<String> & getAllPath() const;
+    const std::vector<String> & getAllPath() const;
     String getPath() const;
     String getTemporaryPath() const;
     String getFlagsPath() const;

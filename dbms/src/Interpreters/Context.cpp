@@ -482,7 +482,7 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
     return it->second;
 }
 
-std::vector<String> & Context::getAllPath() const
+const std::vector<String> & Context::getAllPath() const
 {
     auto lock = getLock();
     return shared->paths;

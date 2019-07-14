@@ -142,17 +142,13 @@ size_t MergeTreeDataMerger::getMaxPartsSizeForMerge(size_t pool_size, size_t poo
 
     size_t free_entries = pool_size - pool_used;
 
-    size_t max_bytes_to_merge = data.settings.max_bytes_to_merge_at_max_space_in_pool;
-    if (data.context.getAllPath().size() > 1)
-        max_bytes_to_merge = data.settings.max_bytes_to_merge_at_max_space_in_pool_for_multi_path;
-
     size_t max_size = 0;
     if (free_entries >= data.settings.number_of_free_entries_in_pool_to_lower_max_size_of_merge)
-        max_size = max_bytes_to_merge;
+        max_size = data.settings.max_bytes_to_merge_at_max_space_in_pool;
     else
         max_size = interpolateExponential(
             data.settings.max_bytes_to_merge_at_min_space_in_pool,
-            max_bytes_to_merge,
+            data.settings.max_bytes_to_merge_at_max_space_in_pool,
             static_cast<double>(free_entries) / data.settings.number_of_free_entries_in_pool_to_lower_max_size_of_merge);
 
     size_t max_parts_size = max_size;
@@ -221,8 +217,7 @@ bool MergeTreeDataMerger::selectPartsToMerge(
     std::unique_ptr<IMergeSelector> merge_selector;
 
     SimpleMergeSelector::Settings merge_settings;
-    if (data.context.getAllPath().size() > 1)
-        merge_settings.base = 10;
+
     if (aggressive)
         merge_settings.base = 1;
 
