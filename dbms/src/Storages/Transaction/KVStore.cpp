@@ -198,6 +198,14 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             }
 
             {
+                if (region_table)
+                    region_table->splitRegion(curr_region, split_regions);
+
+                if (raft_ctx.context)
+                    raft_ctx.context->getRaftService().addRegionToFlush(split_regions);
+            }
+
+            {
                 // persist curr_region at last. if program crashed after split_region is persisted, curr_region can
                 // continue to complete split operation.
                 for (const auto & new_region : split_regions)
@@ -205,13 +213,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                 persist_region(curr_region);
             }
 
-            if (region_table)
-                region_table->splitRegion(curr_region, split_regions);
-
             report_sync_log();
-
-            if (raft_ctx.context)
-                raft_ctx.context->getRaftService().addRegionToFlush(split_regions);
         };
 
         const auto handle_update_table_ids = [&](const TableIDSet & table_ids) {

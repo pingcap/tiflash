@@ -97,10 +97,10 @@ void RegionTable::updateRegionRange(const RegionPtr & region)
         return;
 
     RegionInfo & region_info = it->second;
-    auto t_it = region_info.begin();
-    while (t_it != region_info.end())
+    auto region_table_it = region_info.begin();
+    while (region_table_it != region_info.end())
     {
-        auto table_id = *t_it;
+        auto table_id = *region_table_it;
 
         const auto handle_range = TiKVRange::getHandleRangeByTable(range, table_id);
 
@@ -116,13 +116,13 @@ void RegionTable::updateRegionRange(const RegionPtr & region)
             else
                 throw Exception("InternalRegion " + DB::toString(region_id) + " not found in table " + DB::toString(table_id),
                     ErrorCodes::LOGICAL_ERROR);
-            ++t_it;
+            ++region_table_it;
         }
         else
         {
             // remove from table mapping
             table.regions.erase(region_id);
-            t_it = region_info.erase(t_it);
+            region_table_it = region_info.erase(region_table_it);
         }
     }
 }
