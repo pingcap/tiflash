@@ -19,10 +19,10 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
         path_size_map[part->full_path_prefix] += part->bytes_on_disk;
     }
     String result;
-    size_t parts_size = 0;
+    size_t parts_size = INT32_MAX;
     for (auto element : path_size_map)
     {
-        if (element.second >= parts_size)
+        if (element.second <= parts_size)
         {
             result = element.first;
             parts_size = element.second;
