@@ -1,8 +1,7 @@
-#include <curl/curl.h>
-
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Databases/DatabaseOrdinary.h>
+#include <Debug/MockSchemaSyncer.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
@@ -28,110 +27,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
-
-class Curl final : public ext::singleton<Curl>
-{
-public:
-    String getTiDBTableInfoJson(TableID table_id, Context & context);
-    String getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context);
-
-private:
-    Curl();
-    ~Curl();
-
-    friend class ext::singleton<Curl>;
-};
-
-Curl::Curl()
-{
-    CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
-    if (code != CURLE_OK)
-        throw DB::Exception("CURL global init failed.", code);
-}
-
-Curl::~Curl() { curl_global_cleanup(); }
-
-String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
-{
-    auto & tidb_service = context.getTiDBService();
-
-    CURL * curl = curl_easy_init();
-
-    curl_easy_setopt(curl,
-        CURLOPT_URL,
-        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/db-table/" + toString(table_id)).c_str());
-
-    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
-        auto str = reinterpret_cast<String *>(result);
-        size_t real_size = size * nmemb;
-        str->append((const char *)buffer, real_size);
-        return real_size;
-    };
-    typedef size_t (*WriteFuncT)(void * buffer, size_t size, size_t nmemb, void * result);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (WriteFuncT)writeFunc);
-
-    String result;
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&result);
-
-    CURLcode code = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-
-    if (code != CURLE_OK)
-        throw DB::Exception("Get TiDB schema through HTTP failed.", code);
-
-    if (result.empty() || result[0] == '[')
-    {
-        result.clear();
-    }
-
-    return result;
-}
-
-String Curl::getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    auto & tidb_service = context.getTiDBService();
-
-    CURL * curl = curl_easy_init();
-
-    curl_easy_setopt(curl,
-        CURLOPT_URL,
-        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/schema/" + database_name + "/" + table_name)
-            .c_str());
-
-    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
-        auto str = reinterpret_cast<String *>(result);
-        size_t real_size = size * nmemb;
-        str->append((const char *)buffer, real_size);
-        return real_size;
-    };
-    typedef size_t (*WriteFuncT)(void * buffer, size_t size, size_t nmemb, void * result);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (WriteFuncT)writeFunc);
-
-    String result;
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&result);
-
-    CURLcode code = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-
-    if (code != CURLE_OK)
-        throw DB::Exception("Get TiDB schema through HTTP failed.", code);
-
-    if (result.empty() || result[0] == '[')
-    {
-        result.clear();
-    }
-
-    return result;
-}
-
-String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context) { return Curl::instance().getTiDBTableInfoJson(table_id, context); }
-
-String getTiDBTableInfoJsonByCurl(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    return Curl::instance().getTiDBTableInfoJson(database_name, table_name, context);
 }
 
 using TableInfo = TiDB::TableInfo;
@@ -338,26 +233,21 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
     return alter_commands;
 }
 
-JsonSchemaSyncer::JsonSchemaSyncer() : log(&Logger::get("SchemaSyncer")) {}
+MockSchemaSyncer::MockSchemaSyncer() : log(&Logger::get("MockSchemaSyncer")) {}
 
-bool JsonSchemaSyncer::syncSchemas(Context & /*context*/)
+bool MockSchemaSyncer::syncSchemas(Context & /*context*/)
 {
-    // Too lazy to implement, as the other "decent" schema syncer will do this anyway.
+    // Don't do full schema sync, we want to test schema sync timing in a fine-grained fashion.
     return false;
 }
 
-void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool force)
+void MockSchemaSyncer::syncSchema(TableID table_id, Context & context, bool force)
 {
     // Do nothing if table already exists unless forced,
     // so that we don't grab schema from TiDB, which is costly, on every syncSchema call.
     auto & tmt_context = context.getTMTContext();
     if (!force && tmt_context.getStorages().get(table_id))
         return;
-
-    if (ignored_tables.count(table_id))
-    {
-        return;
-    }
 
     /// Get table schema json from TiDB/TiKV.
     String table_info_json = getSchemaJson(table_id, context);
@@ -378,13 +268,6 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
 
     TableInfo table_info(table_info_json, false);
-
-    if (context.getTiDBService().ignoreDatabases().count(table_info.db_name))
-    {
-        ignored_tables.emplace(table_info.id);
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Added table " << table_id << " into ignored list.");
-        return;
-    }
 
     auto storage = tmt_context.getStorages().get(table_id);
 
@@ -479,44 +362,6 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
 
     // TODO: Apply schema changes to partition tables.
-}
-
-TableID JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    String table_info_json = getSchemaJsonByName(database_name, table_name, context);
-    if (table_info_json.empty())
-    {
-        LOG_WARNING(log,
-            __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name
-                                << "doesn't exist in TiDB, it may have been dropped.");
-        return InvalidTableID;
-    }
-
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name << " info json: " << table_info_json);
-
-    /// The JSON library does not support whitespace. We delete them. Inefficient.
-    /// TODO: This may mis-delete innocent spaces/newlines enclosed by quotes, consider using some lexical way.
-    /// Copy from TableInfo::deserialize
-    ReadBufferFromString in(table_info_json);
-    WriteBufferFromOwnString out;
-    while (!in.eof())
-    {
-        char c;
-        readChar(c, in);
-        if (!isspace(c))
-            writeChar(c, out);
-    }
-
-    JSON json(out.str());
-
-    return static_cast<TableID>(json["id"].getInt());
-}
-
-String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }
-
-String HttpJsonSchemaSyncer::getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    return getTiDBTableInfoJsonByCurl(database_name, table_name, context);
 }
 
 } // namespace DB

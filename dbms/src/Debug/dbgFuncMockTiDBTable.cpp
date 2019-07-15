@@ -1,3 +1,4 @@
+#include <Debug/MockSchemaSyncer.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -20,28 +21,6 @@ extern const int UNKNOWN_TABLE;
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
-
-void MockTiDBTable::dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 1)
-        throw Exception("Args not matched, should be: enable (true/false)", ErrorCodes::BAD_ARGUMENTS);
-
-    bool enabled = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value) == "true";
-
-    TMTContext & tmt = context.getTMTContext();
-    if (enabled)
-    {
-        tmt.setSchemaSyncer(std::make_shared<MockTiDB::MockSchemaSyncer>());
-    }
-    else
-    {
-        tmt.setSchemaSyncer(std::make_shared<HttpJsonSchemaSyncer>());
-    }
-
-    std::stringstream ss;
-    ss << "mock schema syncer " << (enabled ? "enabled" : "disabled");
-    output(ss.str());
-}
 
 void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {

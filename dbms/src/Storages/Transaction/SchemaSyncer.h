@@ -29,40 +29,8 @@ public:
      * @param context
      */
     virtual void syncSchema(TableID table_id, Context & context, bool force) = 0;
-
-    virtual TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
-
-/// Schema syncer implementation using schema described as Json, provided by TiDB or TiKV.
-class JsonSchemaSyncer : public SchemaSyncer
-{
-public:
-    JsonSchemaSyncer();
-
-    bool syncSchemas(Context & context) override;
-
-    void syncSchema(TableID table_id, Context & context, bool force) override;
-
-    TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context) override;
-
-protected:
-    virtual String getSchemaJson(TableID table_id, Context & context) = 0;
-    virtual String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) = 0;
-
-protected:
-    std::unordered_set<TableID> ignored_tables;
-
-    Logger * log;
-};
-
-/// Json-based schema syncer implementation fetching schema Json from TiDB via HTTP.
-class HttpJsonSchemaSyncer : public JsonSchemaSyncer
-{
-protected:
-    String getSchemaJson(TableID table_id, Context & context) override;
-    String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override;
-};
 
 } // namespace DB

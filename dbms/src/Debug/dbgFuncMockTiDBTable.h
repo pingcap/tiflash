@@ -11,10 +11,6 @@ class Context;
 // TiDB table test tool
 struct MockTiDBTable
 {
-    // Change whether to mock schema syncer.
-    // Usage:
-    //   ./storages-client.sh "DBGInvoke mock_schema_syncer(enabled)"
-    static void dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
     // Inject mocked TiDB table.
     // Usage:
