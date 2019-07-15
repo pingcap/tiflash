@@ -177,8 +177,8 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
-            if (raft_ctx.context)
-                raft_ctx.context->getRaftService().addRegionToFlush(*curr_region);
+            auto & raft_service = raft_ctx.context->getRaftService();
+            raft_service.addRegionToFlush(*curr_region);
 
             {
                 std::lock_guard<std::mutex> lock(mutex);
@@ -198,19 +198,18 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             }
 
             {
-                if (region_table)
-                    region_table->splitRegion(curr_region, split_regions);
-
-                if (raft_ctx.context)
-                    raft_ctx.context->getRaftService().addRegionToFlush(split_regions);
-            }
-
-            {
+                auto tables = region_table->getAllMappedTables(curr_region_id);
                 // persist curr_region at last. if program crashed after split_region is persisted, curr_region can
                 // continue to complete split operation.
                 for (const auto & new_region : split_regions)
+                {
                     persist_region(new_region);
+                    region_table->updateRegionForSplit(new_region, tables);
+                    raft_service.addRegionToFlush(*new_region);
+                }
+
                 persist_region(curr_region);
+                region_table->shrinkRegionRange(curr_region);
             }
 
             report_sync_log();

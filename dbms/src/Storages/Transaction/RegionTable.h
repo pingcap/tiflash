@@ -136,10 +136,6 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionPtr & region);
     InternalRegion & getOrInsertRegion(TableID table_id, const RegionPtr & region);
 
-    /// This functional only shrink the table range of this region_id, range expand will (only) be done at flush.
-    /// Note that region update range should not affect the data in storage.
-    void updateRegionRange(const RegionPtr & region);
-
     bool shouldFlush(const InternalRegion & region) const;
 
     void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size, const bool try_persist = true);
@@ -161,9 +157,11 @@ public:
     void applySnapshotRegion(const RegionPtr & region);
     void applySnapshotRegions(const std::unordered_map<RegionID, RegionPtr> & regions);
 
-    /// Manage data after region split into split_regions.
-    /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
-    void splitRegion(const RegionPtr & region, const std::vector<RegionPtr> & split_regions);
+    void updateRegionForSplit(const RegionPtr & split_region, const TableIDSet & tables);
+
+    /// This functional only shrink the table range of this region_id
+    void shrinkRegionRange(const RegionPtr & region);
+
     /// Remove a region from corresponding partitions.
     void removeRegion(const RegionPtr & region);
 
@@ -197,6 +195,8 @@ public:
         bool resolve_locks,
         Timestamp start_ts,
         RegionDataReadInfoList * data_list_for_remove = nullptr);
+
+    TableIDSet getAllMappedTables(const RegionID region_id) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

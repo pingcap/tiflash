@@ -86,8 +86,10 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const TableID table
     return insertRegion(table, region);
 }
 
-void RegionTable::updateRegionRange(const RegionPtr & region)
+void RegionTable::shrinkRegionRange(const RegionPtr & region)
 {
+    std::lock_guard<std::mutex> lock(mutex);
+
     auto region_id = region->id();
     const auto range = region->getRange();
 
@@ -325,42 +327,27 @@ void RegionTable::applySnapshotRegions(const RegionMap & region_map)
             if (cache_bytes)
                 internal_region.updated = true;
         }
-        updateRegionRange(region);
+        shrinkRegionRange(region);
     }
 }
 
-void RegionTable::splitRegion(const RegionPtr & kvstore_region, const std::vector<RegionPtr> & split_regions)
+void RegionTable::updateRegionForSplit(const RegionPtr & split_region, const TableIDSet & tables)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto region_id = kvstore_region->id();
-    auto it = regions.find(region_id);
-
-    if (it == regions.end())
-    {
-        // If kvstore_region doesn't exist, usually means it does not contain any data we interested. Just ignore it.
-        return;
-    }
-
-    RegionInfo & region_info = it->second;
-    for (const auto table_id : region_info)
+    for (const auto table_id : tables)
     {
         auto & table = getOrCreateTable(table_id);
 
-        for (const RegionPtr & split_region : split_regions)
-        {
-            const auto handle_range = split_region->getHandleRangeByTable(table_id);
+        const auto handle_range = split_region->getHandleRangeByTable(table_id);
 
-            if (handle_range.first >= handle_range.second)
-                continue;
+        if (handle_range.first >= handle_range.second)
+            continue;
 
-            auto & region = insertRegion(table, split_region);
-            region.must_flush = true;
-            region.cache_bytes = split_region->dataSize();
-        }
+        auto & region = insertRegion(table, split_region);
+        region.must_flush = true;
+        region.cache_bytes = split_region->dataSize();
     }
-
-    updateRegionRange(kvstore_region);
 }
 
 void RegionTable::removeRegion(const RegionPtr & region)
@@ -559,6 +546,16 @@ void RegionTable::mockDropRegionsInTable(TableID table_id)
 void RegionTable::setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_)
 {
     flush_thresholds.setFlushThresholds(flush_thresholds_);
+}
+
+TableIDSet RegionTable::getAllMappedTables(const RegionID region_id) const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    if (auto it = regions.find(region_id); it != regions.end())
+        return it->second;
+
+    return {};
 }
 
 } // namespace DB
