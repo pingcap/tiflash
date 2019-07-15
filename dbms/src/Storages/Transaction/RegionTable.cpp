@@ -335,12 +335,11 @@ void RegionTable::applySnapshotRegions(const RegionMap & region_map)
     }
 }
 
-void RegionTable::updateRegionForSplit(const Region & split_region, const Region & source_region)
+void RegionTable::updateRegionForSplit(const Region & split_region, const RegionID source_region)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto region_id = source_region.id();
-    auto it = regions.find(region_id);
+    auto it = regions.find(source_region);
 
     if (it == regions.end())
     {

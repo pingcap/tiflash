@@ -203,7 +203,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
                 for (const auto & new_region : split_regions)
                 {
                     persist_region(new_region);
-                    region_table->updateRegionForSplit(*new_region, *curr_region);
+                    region_table->updateRegionForSplit(*new_region, curr_region_id);
                     raft_service.addRegionToFlush(*new_region);
                 }
 

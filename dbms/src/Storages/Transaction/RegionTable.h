@@ -159,7 +159,7 @@ public:
     void applySnapshotRegion(const Region & region);
     void applySnapshotRegions(const RegionMap & regions);
 
-    void updateRegionForSplit(const Region & split_region, const Region & source_region);
+    void updateRegionForSplit(const Region & split_region, const RegionID source_region);
 
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
