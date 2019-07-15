@@ -42,7 +42,7 @@ public:
         log_buf << "/";
         log_buf << "/";
         LOG_DEBUG(log, log_buf.str());
-        return all_path[path_index] + "data/" + escapeForFileName(database) + "/" + escapeForFileName(table) + "/";
+        return all_path[path_index] + "data/";
     }
 
 private:

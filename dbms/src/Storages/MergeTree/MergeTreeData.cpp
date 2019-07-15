@@ -457,7 +457,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
                 continue;
 
             part_file_names.push_back(it.name());
-            part_file_parent_paths.push_back(data_path);
+            part_file_parent_paths.push_back(path);
         }
         LOG_DEBUG(log, "After loading data parts from path: " << data_path << " current part_file_names length: " << part_file_names.size());
     }

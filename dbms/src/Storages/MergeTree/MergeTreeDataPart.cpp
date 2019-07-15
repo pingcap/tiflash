@@ -229,10 +229,9 @@ String MergeTreeDataPart::getColumnNameWithMinumumCompressedSize() const
     return *minimum_size_column;
 }
 
-void MergeTreeDataPart::resetFullPathPrefix(const String & orig_database_name, const String & orig_table_name, const String & new_database_name, const String & new_table_name) const
+void MergeTreeDataPart::resetFullPathPrefix(const String & full_path_prefix) const
 {
-    full_path_prefix = full_path_prefix.replace(full_path_prefix.find(orig_database_name), orig_database_name.length(), new_database_name);
-    full_path_prefix = full_path_prefix.replace(full_path_prefix.find(orig_table_name), orig_table_name.length(), new_table_name);
+    this->full_path_prefix = full_path_prefix;
 }
 
 String MergeTreeDataPart::getFullPath() const
@@ -240,7 +239,7 @@ String MergeTreeDataPart::getFullPath() const
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. This is bug.", ErrorCodes::LOGICAL_ERROR);
 
-    return full_path_prefix + relative_path + "/";
+    return full_path_prefix + escapeForFileName(storage.database_name) + "/" + escapeForFileName(storage.table_name) + "/" + relative_path + "/";
 }
 
 String MergeTreeDataPart::getNameWithPrefix() const
@@ -334,8 +333,8 @@ void MergeTreeDataPart::remove() const
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. This is bug.", ErrorCodes::LOGICAL_ERROR);
 
-    String from = full_path_prefix + relative_path;
-    String to = full_path_prefix + "tmp_delete_" + name;
+    String from = full_path_prefix + storage.database_name + "/" + storage.table_name + "/" + relative_path;
+    String to = full_path_prefix + storage.database_name + "/" + storage.table_name + "/" + "tmp_delete_" + name;
 
     Poco::File from_dir{from};
     Poco::File to_dir{to};
@@ -417,7 +416,7 @@ void MergeTreeDataPart::renameAddPrefix(bool to_detached, const String & prefix)
             * This is done only in the case of `to_detached`, because it is assumed that in this case the exact name does not matter.
             * No more than 10 attempts are made so that there are not too many junk directories left.
             */
-        while (try_no < 10 && Poco::File(full_path_prefix + dst_name()).exists())
+        while (try_no < 10 && Poco::File(full_path_prefix + storage.database_name + "/" + storage.table_name + "/" + dst_name()).exists())
         {
             LOG_WARNING(storage.log, "Directory " << dst_name() << " (to detach to) is already exist."
                 " Will detach to directory with '_tryN' suffix.");

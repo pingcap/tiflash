@@ -72,7 +72,7 @@ struct MergeTreeDataPart
 
     String name;
     mutable String full_path_prefix;
-    void resetFullPathPrefix(const String & orig_database_name, const String & orig_table_name, const String & new_database_name, const String & new_table_name) const;
+    void resetFullPathPrefix(const String & full_path_prefix) const;
 
     MergeTreePartInfo info;
 
