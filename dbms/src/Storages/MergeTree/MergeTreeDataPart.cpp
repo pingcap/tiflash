@@ -231,8 +231,8 @@ String MergeTreeDataPart::getColumnNameWithMinumumCompressedSize() const
 
 void MergeTreeDataPart::resetFullPathPrefix(const String & orig_database_name, const String & orig_table_name, const String & new_database_name, const String & new_table_name) const
 {
-    full_path_prefix = full_path_prefix.replace(full_path_prefix.find(orig_database_name), 1, new_database_name);
-    full_path_prefix = full_path_prefix.replace(full_path_prefix.find(orig_table_name), 1, new_table_name);
+    full_path_prefix = full_path_prefix.replace(full_path_prefix.find(orig_database_name), orig_database_name.length(), new_database_name);
+    full_path_prefix = full_path_prefix.replace(full_path_prefix.find(orig_table_name), orig_table_name.length(), new_table_name);
 }
 
 String MergeTreeDataPart::getFullPath() const
