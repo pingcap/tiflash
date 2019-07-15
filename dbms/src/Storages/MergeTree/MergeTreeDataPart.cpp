@@ -369,7 +369,7 @@ void MergeTreeDataPart::remove() const
 void MergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_new_dir_if_exists) const
 {
     String from = getFullPath();
-    String to = full_path_prefix + storage.database_name + "/" + storage.table_name + new_relative_path + "/";
+    String to = full_path_prefix + storage.database_name + "/" + storage.table_name + "/" + new_relative_path + "/";
 
     Poco::File from_file(from);
     if (!from_file.exists())
