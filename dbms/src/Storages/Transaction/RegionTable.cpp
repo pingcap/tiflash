@@ -349,16 +349,14 @@ void RegionTable::updateRegionForSplit(const Region & split_region, const Region
 
     for (const auto table_id : it->second)
     {
-        auto & table = getOrCreateTable(table_id);
-
         const auto handle_range = split_region.getHandleRangeByTable(table_id);
 
         if (handle_range.first >= handle_range.second)
             continue;
 
-        auto & region = insertRegion(table, split_region);
-        region.must_flush = true;
-        region.cache_bytes = split_region.dataSize();
+        auto & internal_region = getOrInsertRegion(table_id, split_region);
+        internal_region.must_flush = true;
+        internal_region.cache_bytes = split_region.dataSize();
     }
 }
 
