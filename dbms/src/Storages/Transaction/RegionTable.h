@@ -29,6 +29,7 @@ using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 class Block;
 // for debug
 struct MockTiDBTable;
+using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 class RegionTable : private boost::noncopyable
 {
@@ -133,8 +134,8 @@ private:
     Table & getOrCreateTable(const TableID table_id);
     StoragePtr getOrCreateStorage(TableID table_id);
 
-    InternalRegion & insertRegion(Table & table, const RegionPtr & region);
-    InternalRegion & getOrInsertRegion(TableID table_id, const RegionPtr & region);
+    InternalRegion & insertRegion(Table & table, const Region & region);
+    InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
 
     bool shouldFlush(const InternalRegion & region) const;
 
@@ -144,7 +145,7 @@ private:
     friend struct MockTiDBTable;
 
     void mockDropRegionsInTable(TableID table_id);
-    void doShrinkRegionRange(const RegionPtr & region);
+    void doShrinkRegionRange(const Region & region);
 
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
@@ -153,18 +154,17 @@ public:
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
     /// After the region is updated (insert or delete KVs).
-    void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
+    void updateRegion(const Region & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
-    void applySnapshotRegion(const RegionPtr & region);
-    void applySnapshotRegions(const std::unordered_map<RegionID, RegionPtr> & regions);
+    void applySnapshotRegion(const Region & region);
+    void applySnapshotRegions(const RegionMap & regions);
 
-    void updateRegionForSplit(const RegionPtr & split_region, const TableIDSet & tables);
+    void updateRegionForSplit(const Region & split_region, const Region & source_region);
 
     /// This functional only shrink the table range of this region_id
-    void shrinkRegionRange(const RegionPtr & region);
+    void shrinkRegionRange(const Region & region);
 
-    /// Remove a region from corresponding partitions.
-    void removeRegion(const RegionPtr & region);
+    void removeRegion(const RegionID region_id);
 
     /// Try pick some regions and flush.
     /// Note that flush is organized by partition. i.e. if a regions is selected to be flushed, all regions belong to its partition will also flushed.

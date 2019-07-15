@@ -59,12 +59,12 @@ StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
     return storage;
 }
 
-RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const RegionPtr & region)
+RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
 {
-    auto region_id = region->id();
+    auto region_id = region.id();
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region->getHandleRangeByTable(table.table_id)));
+    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region.getHandleRangeByTable(table.table_id)));
     if (!ok)
         throw Exception(
             "[RegionTable::insertRegion] insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
@@ -76,26 +76,26 @@ RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Reg
     return it->second;
 }
 
-RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const TableID table_id, const RegionPtr & region)
+RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const TableID table_id, const Region & region)
 {
     auto & table = getOrCreateTable(table_id);
     auto & table_regions = table.regions;
-    if (auto it = table_regions.find(region->id()); it != table_regions.end())
+    if (auto it = table_regions.find(region.id()); it != table_regions.end())
         return it->second;
 
     return insertRegion(table, region);
 }
 
-void RegionTable::shrinkRegionRange(const RegionPtr & region)
+void RegionTable::shrinkRegionRange(const Region & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
     doShrinkRegionRange(region);
 }
 
-void RegionTable::doShrinkRegionRange(const RegionPtr & region)
+void RegionTable::doShrinkRegionRange(const Region & region)
 {
-    auto region_id = region->id();
-    const auto range = region->getRange();
+    auto region_id = region.id();
+    const auto range = region.getRange();
 
     auto it = regions.find(region_id);
     // if this region does not exist already, then nothing to shrink.
@@ -288,9 +288,9 @@ void RegionTable::restore()
     }
 }
 
-void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids)
+void RegionTable::updateRegion(const Region & region, const TableIDSet & relative_table_ids)
 {
-    size_t cache_bytes = region->dataSize();
+    size_t cache_bytes = region.dataSize();
 
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -302,10 +302,10 @@ void RegionTable::updateRegion(const RegionPtr & region, const TableIDSet & rela
     }
 }
 
-void RegionTable::applySnapshotRegion(const RegionPtr & region)
+void RegionTable::applySnapshotRegion(const Region & region)
 {
     // make operation about snapshot can only add mapping relations rather than delete.
-    auto table_ids = region->getAllWriteCFTables();
+    auto table_ids = region.getAllWriteCFTables();
     updateRegion(region, table_ids);
 }
 
@@ -326,40 +326,47 @@ void RegionTable::applySnapshotRegions(const RegionMap & region_map)
             if (handle_range.first >= handle_range.second)
                 continue;
 
-            auto & internal_region = getOrInsertRegion(table_id, region);
+            auto & internal_region = getOrInsertRegion(table_id, *region);
             internal_region.cache_bytes = cache_bytes;
             if (cache_bytes)
                 internal_region.updated = true;
         }
-        doShrinkRegionRange(region);
+        doShrinkRegionRange(*region);
     }
 }
 
-void RegionTable::updateRegionForSplit(const RegionPtr & split_region, const TableIDSet & tables)
+void RegionTable::updateRegionForSplit(const Region & split_region, const Region & source_region)
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    for (const auto table_id : tables)
+    auto region_id = source_region.id();
+    auto it = regions.find(region_id);
+
+    if (it == regions.end())
+    {
+        // If source_region doesn't exist, usually means it does not contain any data we interested. Just ignore it.
+        return;
+    }
+
+    for (const auto table_id : it->second)
     {
         auto & table = getOrCreateTable(table_id);
 
-        const auto handle_range = split_region->getHandleRangeByTable(table_id);
+        const auto handle_range = split_region.getHandleRangeByTable(table_id);
 
         if (handle_range.first >= handle_range.second)
             continue;
 
         auto & region = insertRegion(table, split_region);
         region.must_flush = true;
-        region.cache_bytes = split_region->dataSize();
+        region.cache_bytes = split_region.dataSize();
     }
 }
 
-void RegionTable::removeRegion(const RegionPtr & region)
+void RegionTable::removeRegion(const RegionID region_id)
 {
     std::unordered_set<TableID> tables;
     {
-        auto region_id = region->id();
-
         std::lock_guard<std::mutex> lock(mutex);
 
         auto it = regions.find(region_id);
@@ -527,16 +534,6 @@ std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const
 
 void RegionTable::mockDropRegionsInTable(TableID table_id)
 {
-    auto & kvstore = context.getTMTContext().getKVStore();
-    auto regions = getRegionsByTable(table_id);
-    {
-        for (auto && [region_id, _] : regions)
-        {
-            std::ignore = _;
-            kvstore->removeRegion(region_id, this);
-        }
-    };
-
     std::lock_guard<std::mutex> lock(mutex);
     tables.erase(table_id);
     Poco::File dir(parent_path + "tables/" + DB::toString(table_id));

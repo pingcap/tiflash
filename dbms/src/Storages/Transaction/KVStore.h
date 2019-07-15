@@ -16,6 +16,8 @@ struct RaftContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
+struct MockTiDBTable;
+
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
@@ -43,9 +45,11 @@ public:
 
     size_t regionSize() const;
 
-    void removeRegion(RegionID region_id, RegionTable * region_table);
-
     void updateRegionTableBySnapshot(RegionTable & region_table);
+
+private:
+    friend struct MockTiDBTable;
+    void removeRegion(const RegionID region_id, RegionTable * region_table);
 
 private:
     RegionPersister region_persister;

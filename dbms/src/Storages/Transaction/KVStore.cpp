@@ -100,7 +100,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table, const
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
     if (region_table)
-        region_table->applySnapshotRegion(new_region);
+        region_table->applySnapshotRegion(*new_region);
 
     return true;
 }
@@ -198,18 +198,17 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             }
 
             {
-                auto tables = region_table->getAllMappedTables(curr_region_id);
                 // persist curr_region at last. if program crashed after split_region is persisted, curr_region can
                 // continue to complete split operation.
                 for (const auto & new_region : split_regions)
                 {
                     persist_region(new_region);
-                    region_table->updateRegionForSplit(new_region, tables);
+                    region_table->updateRegionForSplit(*new_region, *curr_region);
                     raft_service.addRegionToFlush(*new_region);
                 }
 
                 persist_region(curr_region);
-                region_table->shrinkRegionRange(curr_region);
+                region_table->shrinkRegionRange(*curr_region);
             }
 
             report_sync_log();
@@ -217,7 +216,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
 
         const auto handle_update_table_ids = [&](const TableIDSet & table_ids) {
             if (region_table)
-                region_table->updateRegion(curr_region, table_ids);
+                region_table->updateRegion(*curr_region, table_ids);
 
             persist_and_sync();
         };
@@ -327,7 +326,7 @@ bool KVStore::tryPersist(const Seconds kvstore_try_persist_period, const Seconds
     return persist_job || gc_job;
 }
 
-void KVStore::removeRegion(RegionID region_id, RegionTable * region_table)
+void KVStore::removeRegion(const RegionID region_id, RegionTable * region_table)
 {
     LOG_INFO(log, "Start to remove [region " << region_id << "]");
 
@@ -342,7 +341,7 @@ void KVStore::removeRegion(RegionID region_id, RegionTable * region_table)
     region_persister.drop(region_id);
 
     if (region_table)
-        region_table->removeRegion(region);
+        region_table->removeRegion(region_id);
 
     LOG_INFO(log, "Remove [region " << region_id << "] done");
 }
