@@ -12,7 +12,7 @@ public:
 
     bool syncSchemas(Context & context) override;
 
-    void syncSchema(Context & context, TableID table_id, bool lock = true) override;
+    void syncSchema(Context & context, TableID table_id, bool) override;
 
     TableID getTableIdByName(const std::string & database_name, const std::string & table_name)
     {

@@ -28,7 +28,7 @@ public:
      * @param context
      * @param table_id
      */
-    virtual void syncSchema(Context & context, TableID table_id, bool lock = true) = 0;
+    virtual void syncSchema(Context & context, TableID table_id, bool lock) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

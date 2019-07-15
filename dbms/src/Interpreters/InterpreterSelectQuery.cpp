@@ -77,6 +77,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_COLUMNS;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
+    extern const int SCHEMA_VERSION_ERROR;
 }
 
 InterpreterSelectQuery::InterpreterSelectQuery(
@@ -193,7 +194,7 @@ void InterpreterSelectQuery::alignStorageSchema(Int64 schema_version)
     if (schema_version == DEFAULT_SCHEMA_VERSION || !storage)
         return;
 
-    const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
+    const auto merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
     if (!merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
         return;
 
@@ -201,13 +202,11 @@ void InterpreterSelectQuery::alignStorageSchema(Int64 schema_version)
     if (storage_schema_version < schema_version)
     {
         LOG_TRACE(log, __PRETTY_FUNCTION__ << " storage schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", syncing schema.");
-        // TODO: Adapt to new schema syncer API, and use the lock-less one.
-        context.getTMTContext().getSchemaSyncer()->syncSchema(context, merge_tree->getTableInfo().id);
+        context.getTMTContext().getSchemaSyncer()->syncSchema(context, merge_tree->getTableInfo().id, false);
     }
 
     if (storage_schema_version > schema_version)
-        // TODO: Use SCHEMA_ERROR error code.
-        throw Exception("Storage schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(schema_version));
+        throw Exception("Storage schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
 }
 
 
