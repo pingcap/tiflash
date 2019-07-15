@@ -71,8 +71,7 @@ struct MergeTreeDataPart
     MergeTreeData & storage;
 
     String name;
-    mutable String full_path_prefix;
-    void resetFullPathPrefix(const String & full_path_prefix) const;
+    String full_path_prefix;
 
     MergeTreePartInfo info;
 

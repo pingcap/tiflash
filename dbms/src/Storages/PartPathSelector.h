@@ -40,6 +40,7 @@ public:
         log_buf << "data/";
         log_buf << database;
         log_buf << "/";
+        log_buf << table;
         log_buf << "/";
         LOG_DEBUG(log, log_buf.str());
         return all_path[path_index] + "data/";
