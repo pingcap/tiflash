@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <Common/escapeForFileName.h>
 
 namespace DB
 {
@@ -41,7 +42,7 @@ public:
         log_buf << "/";
         log_buf << "/";
         LOG_DEBUG(log, log_buf.str());
-        return all_path[path_index] + "data/" + database + "/" + table + "/";
+        return all_path[path_index] + "data/" + escapeForFileName(database) + "/" + escapeForFileName(table) + "/";
     }
 
 private:

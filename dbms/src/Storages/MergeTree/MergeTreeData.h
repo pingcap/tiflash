@@ -344,7 +344,7 @@ public:
 
     String getFullPath() const { return full_path; }
 
-    String getDataPartsPath(const String& path) const { return path + "data/" + getDatabaseName() + "/" + getTableName() + "/"; }
+    String getDataPartsPath(const String& path) const { return path + "data/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name) + "/"; }
 
     String getLogName() const { return log_name; }
 

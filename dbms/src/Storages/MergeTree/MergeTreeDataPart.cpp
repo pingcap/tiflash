@@ -412,7 +412,7 @@ void MergeTreeDataPart::renameAddPrefix(bool to_detached, const String & prefix)
             * This is done only in the case of `to_detached`, because it is assumed that in this case the exact name does not matter.
             * No more than 10 attempts are made so that there are not too many junk directories left.
             */
-        while (try_no < 10 && Poco::File(storage.full_path + dst_name()).exists())
+        while (try_no < 10 && Poco::File(full_path_prefix + dst_name()).exists())
         {
             LOG_WARNING(storage.log, "Directory " << dst_name() << " (to detach to) is already exist."
                 " Will detach to directory with '_tryN' suffix.");

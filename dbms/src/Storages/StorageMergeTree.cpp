@@ -286,16 +286,29 @@ void StorageMergeTree::drop()
     data.dropAllData();
 }
 
-void StorageMergeTree::rename(const String & new_path_to_db, const String & /*new_database_name*/, const String & new_table_name)
+void StorageMergeTree::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
 {
     std::string new_full_path = new_path_to_db + escapeForFileName(new_table_name) + '/';
 
     data.setPath(new_full_path);
 
+    for (auto & path : context.getAllPath())
+    {
+        std::string orig_part_path = path + "data/" + escapeForFileName(data.database_name) + '/' + escapeForFileName(data.table_name) + '/';
+        std::string new_part_path = path + "data/" + escapeForFileName(new_database_name) + '/' + escapeForFileName(new_table_name) + '/';
+        if (Poco::File{new_part_path}.exists())
+            throw Exception{
+                    "Target path already exists: " + new_part_path,
+                    /// @todo existing target can also be a file, not directory
+                    ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+        Poco::File(orig_part_path).renameTo(new_part_path);
+    }
+    context.dropCaches();
+
     path = new_path_to_db;
     table_name = new_table_name;
     full_path = new_full_path;
-
+    data.database_name = new_database_name;
     /// NOTE: Logger names are not updated.
 }
 
