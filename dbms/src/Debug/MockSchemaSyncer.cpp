@@ -241,13 +241,9 @@ bool MockSchemaSyncer::syncSchemas(Context & /*context*/)
     return false;
 }
 
-void MockSchemaSyncer::syncSchema(TableID table_id, Context & context, bool force)
+void MockSchemaSyncer::syncSchema(Context & context, TableID table_id, bool /*lock*/)
 {
-    // Do nothing if table already exists unless forced,
-    // so that we don't grab schema from TiDB, which is costly, on every syncSchema call.
     auto & tmt_context = context.getTMTContext();
-    if (!force && tmt_context.getStorages().get(table_id))
-        return;
 
     /// Get table schema json from TiDB/TiKV.
     String table_info_json = getSchemaJson(table_id, context);

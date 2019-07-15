@@ -12,9 +12,9 @@ public:
 
     bool syncSchemas(Context & context) override;
 
-    void syncSchema(TableID table_id, Context & context, bool force) override;
+    void syncSchema(Context & context, TableID table_id, bool lock = true) override;
 
-    TableID getTableIdByName(const std::string & database_name, const std::string & table_name, Context & /*context*/)
+    TableID getTableIdByName(const std::string & database_name, const std::string & table_name)
     {
         return MockTiDB::instance().getTableIDByName(database_name, table_name);
     }

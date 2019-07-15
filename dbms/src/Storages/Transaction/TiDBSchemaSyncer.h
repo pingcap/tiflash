@@ -52,7 +52,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return true;
     }
 
-    void syncSchema(TableID, Context & context, bool) override { syncSchemas(context); }
+    void syncSchema(Context & context, TableID, bool) override { syncSchemas(context); }
 
     bool tryLoadSchemaDiffs(SchemaGetter & getter, Int64 version, Context & context)
     {

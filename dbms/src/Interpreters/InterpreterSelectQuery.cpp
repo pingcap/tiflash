@@ -202,7 +202,7 @@ void InterpreterSelectQuery::alignStorageSchema(Int64 schema_version)
     {
         LOG_TRACE(log, __PRETTY_FUNCTION__ << " storage schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", syncing schema.");
         // TODO: Adapt to new schema syncer API, and use the lock-less one.
-        context.getTMTContext().getSchemaSyncer()->syncSchema(merge_tree->getTableInfo().id, context, true);
+        context.getTMTContext().getSchemaSyncer()->syncSchema(context, merge_tree->getTableInfo().id);
     }
 
     if (storage_schema_version > schema_version)

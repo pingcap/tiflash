@@ -61,7 +61,7 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     if (!mock_schema_syncer)
         throw Exception("Debug function refresh_schema can only be used under mock schema syncer.");
 
-    TableID table_id = mock_schema_syncer->getTableIdByName(database_name, table_name, context);
+    TableID table_id = mock_schema_syncer->getTableIdByName(database_name, table_name);
     auto storage = tmt.getStorages().getByName(database_name, table_name);
 
     if (storage == nullptr && table_id == InvalidTableID)
@@ -76,7 +76,7 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
         // Table t was synced to CH already, then t was renamed (name changed) and truncated (ID changed).
         // Then this function was called with the new name given, the table will be synced to a new table.
         // User must manually call this function with the old name to remove the dangling table in CH.
-        mock_schema_syncer->syncSchema(table_id, context, true);
+        mock_schema_syncer->syncSchema(context, table_id);
 
         log(table_id);
 
@@ -87,7 +87,7 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     {
         // Table exists in CH, but does not exist in TiDB.
         // Just sync it using the storage's ID, syncer will then remove it.
-        mock_schema_syncer->syncSchema(storage->getTableInfo().id, context, true);
+        mock_schema_syncer->syncSchema(context, storage->getTableInfo().id);
 
         log(table_id);
 
@@ -99,8 +99,8 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
     {
         // Table in TiDB is not the old one, i.e. dropped/renamed then recreated.
         // Sync the old one in CH first, then sync the new one.
-        mock_schema_syncer->syncSchema(storage->getTableInfo().id, context, true);
-        mock_schema_syncer->syncSchema(table_id, context, true);
+        mock_schema_syncer->syncSchema(context, storage->getTableInfo().id);
+        mock_schema_syncer->syncSchema(context, table_id);
 
         log(table_id);
 
@@ -109,7 +109,7 @@ void dbgFuncRefreshSchema(Context & context, const ASTs & args, DBGInvoker::Prin
 
     // Table in TiDB is the same one as in CH.
     // Just sync it.
-    mock_schema_syncer->syncSchema(table_id, context, true);
+    mock_schema_syncer->syncSchema(context, table_id);
 
     log(table_id);
 }
