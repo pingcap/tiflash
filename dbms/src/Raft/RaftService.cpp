@@ -60,7 +60,7 @@ void RaftService::addRegionToFlush(const Region & region)
         std::lock_guard<std::mutex> lock(mutex);
         regions_to_flush.push(region.id());
     }
-    ssize_t index = round_index++;
+    size_t index = round_index++;
     region_flush_handles[index % region_flush_handles.size()]->wake();
 }
 
