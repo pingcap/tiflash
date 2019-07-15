@@ -305,8 +305,7 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
     }
     for (auto & part : data.getAllDataPartsVector())
     {
-        part->full_path_prefix = part->full_path_prefix.replace(part->full_path_prefix.find(data.database_name), 1, new_database_name);
-        part->full_path_prefix = part->full_path_prefix.replace(part->full_path_prefix.find(data.table_name), 1, new_table_name);
+        part->resetFullPathPrefix(data.database_name, data.table_name, new_database_name, new_table_name);
     }
     context.dropCaches();
 

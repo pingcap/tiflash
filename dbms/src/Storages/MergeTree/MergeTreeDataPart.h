@@ -71,7 +71,9 @@ struct MergeTreeDataPart
     MergeTreeData & storage;
 
     String name;
-    String full_path_prefix;
+    mutable String full_path_prefix;
+    void resetFullPathPrefix(const String & orig_database_name, const String & orig_table_name, const String & new_database_name, const String & new_table_name) const;
+
     MergeTreePartInfo info;
 
     /// A directory path (relative to storage's path) where part data is actually stored
