@@ -542,8 +542,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
               << " into " << TMP_PREFIX + future_part.name);
 
     String new_part_tmp_path = data.context.getPartPathSelector().getPathForPart(
-            data.getDatabaseName(),
-            data.getTableName(),
+            data,
             future_part.name) + data.database_name + "/" + data.table_name + "/" + TMP_PREFIX + future_part.name + "/";
     if (Poco::File(new_part_tmp_path).exists())
         throw Exception("Directory " + new_part_tmp_path + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);

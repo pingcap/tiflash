@@ -12,10 +12,12 @@
 
 namespace DB
 {
+class MergeTreeData;
+using String = std::string;
 class PartPathSelector
 {
 public:
-    PartPathSelector(const std::vector<std::string> & all_path) : all_path(all_path), log(&Logger::get("PartPathSelector"))
+    PartPathSelector(const std::vector<String> & all_path) : all_path(all_path), log(&Logger::get("PartPathSelector"))
     {
         if (all_path.empty())
         {
@@ -23,31 +25,10 @@ public:
         }
     }
 
-    const std::string getPathForPart(const std::string & database, const std::string & table, const std::string & part)
-    {
-        std::size_t path_index = std::hash<std::string>{}(database + "@" + table + "@" + part) % all_path.size();
-        std::stringstream log_buf;
-        log_buf << "database: ";
-        log_buf << database;
-        log_buf << " table: ";
-        log_buf << table;
-        log_buf << " part name: ";
-        log_buf << part;
-        log_buf << " path index: ";
-        log_buf << path_index;
-        log_buf << " path: ";
-        log_buf << all_path[path_index];
-        log_buf << "data/";
-        log_buf << database;
-        log_buf << "/";
-        log_buf << table;
-        log_buf << "/";
-        LOG_DEBUG(log, log_buf.str());
-        return all_path[path_index] + "data/";
-    }
+    const String getPathForPart(MergeTreeData & data, const String & part_name) const;
 
 private:
-    const std::vector<std::string> & all_path;
+    const std::vector<String> & all_path;
     Logger * log;
 };
 

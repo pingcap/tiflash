@@ -415,8 +415,7 @@ struct CurrentlyMergingPartsTagger
     {
         /// Assume mutex is already locked, because this method is called from mergeTask.
         reserved_space = DiskSpaceMonitor::reserve(storage->context.getPartPathSelector().getPathForPart(
-                storage->getDatabaseName(),
-                storage->getTableName(),
+                storage->data,
                 future_part.name
                 ), total_size); /// May throw.
         for (const auto & part : parts)
