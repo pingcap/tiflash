@@ -89,7 +89,11 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const TableID table
 void RegionTable::shrinkRegionRange(const RegionPtr & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
+    doShrinkRegionRange(region);
+}
 
+void RegionTable::doShrinkRegionRange(const RegionPtr & region)
+{
     auto region_id = region->id();
     const auto range = region->getRange();
 
@@ -327,7 +331,7 @@ void RegionTable::applySnapshotRegions(const RegionMap & region_map)
             if (cache_bytes)
                 internal_region.updated = true;
         }
-        shrinkRegionRange(region);
+        doShrinkRegionRange(region);
     }
 }
 

@@ -144,6 +144,7 @@ private:
     friend struct MockTiDBTable;
 
     void mockDropRegionsInTable(TableID table_id);
+    void doShrinkRegionRange(const RegionPtr & region);
 
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
