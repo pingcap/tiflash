@@ -54,12 +54,6 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
     LOG_INFO(log, "Raft service listening on [" << address << "]");
 }
 
-void RaftService::addRegionToFlush(const Regions & regions)
-{
-    for (auto & region : regions)
-        addRegionToFlush(*region);
-};
-
 void RaftService::addRegionToFlush(const Region & region)
 {
     {

@@ -26,7 +26,6 @@ public:
 
     ~RaftService() final;
 
-    void addRegionToFlush(const Regions & regions);
     void addRegionToFlush(const Region & region);
 
 private:
