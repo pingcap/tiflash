@@ -812,7 +812,6 @@ void MergeTreeData::dropAllData()
 
     LOG_TRACE(log, "dropAllData: removing data from filesystem.");
 
-
     for (const auto & path : context.getAllPath())
     {
         Poco::File(getDataPartsPath(path)).remove(true);
