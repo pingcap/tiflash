@@ -235,31 +235,36 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
 
 MockSchemaSyncer::MockSchemaSyncer() : log(&Logger::get("MockSchemaSyncer")) {}
 
-bool MockSchemaSyncer::syncSchemas(Context & /*context*/)
+bool MockSchemaSyncer::syncSchemas(Context & context)
 {
-    // Don't do full schema sync, we want to test schema sync timing in a fine-grained fashion.
-    return false;
+    std::unordered_map<TableID, MockTiDB::TablePtr> new_tables;
+    MockTiDB::instance().traverseTables([&](const auto & table) { new_tables.emplace(table->id(), table); });
+
+    for (auto [id, table] : tables)
+    {
+        if (new_tables.find(id) == new_tables.end())
+            dropTable(table->table_info.db_name, table->table_info.name, context);
+    }
+
+    for (auto [id, table] : new_tables)
+    {
+        std::ignore = id;
+        syncTable(context, table);
+    }
+
+    tables.swap(new_tables);
+
+    return true;
 }
 
-void MockSchemaSyncer::syncSchema(Context & context, TableID table_id, bool /*lock*/)
+void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
 {
     auto & tmt_context = context.getTMTContext();
 
-    /// Get table schema json from TiDB/TiKV.
-    String table_info_json = getSchemaJson(table_id, context);
-    if (table_info_json.empty())
-    {
-        /// Table dropped.
-        auto storage = tmt_context.getStorages().get(table_id);
-        if (storage == nullptr)
-        {
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << "doesn't exist in TiDB and doesn't exist in TMT, do nothing.");
-            return;
-        }
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << "doesn't exist in TiDB, dropping.");
-        dropTable(storage->getDatabaseName(), storage->getTableName(), context);
-        return;
-    }
+    /// Get table schema json.
+    auto table_id = table->id();
+
+    String table_info_json = table->table_info.serialize(false);
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
 
@@ -326,8 +331,7 @@ void MockSchemaSyncer::syncSchema(Context & context, TableID table_id, bool /*lo
     }
 
     /// Table existing, detect schema changes and apply.
-    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-    const TableInfo & orig_table_info = merge_tree->getTableInfo();
+    const TableInfo & orig_table_info = storage->getTableInfo();
     AlterCommands alter_commands = detectSchemaChanges(table_info, orig_table_info);
 
     std::stringstream ss;
@@ -345,15 +349,8 @@ void MockSchemaSyncer::syncSchema(Context & context, TableID table_id, bool /*lo
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
-    {
-        // Change internal TableInfo in TMT first.
-        // TODO: Ideally this should be done within alter function, however we are limited by the narrow alter interface, thus not truly atomic.
-        auto table_hard_lock = storage->lockStructureForAlter(__PRETTY_FUNCTION__);
-        merge_tree->setTableInfo(table_info);
-    }
-
     // Call storage alter to apply schema changes.
-    storage->alter(alter_commands, table_info.db_name, table_info.name, context);
+    storage->alterForTMT(alter_commands, table_info, context);
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
 

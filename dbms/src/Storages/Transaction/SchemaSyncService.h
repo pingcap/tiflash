@@ -28,4 +28,6 @@ private:
     Logger * log;
 };
 
+using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
+
 } // namespace DB
