@@ -413,7 +413,6 @@ struct CurrentlyMergingPartsTagger
         : parts(future_part.parts), storage(&storage_)
     {
         /// Assume mutex is already locked, because this method is called from mergeTask.
-        future_part.path = storage->context.getPartPathSelector().getPathForPart(storage->data, future_part.name);
         reserved_space = DiskSpaceMonitor::reserve(future_part.path, total_size); /// May throw.
         for (const auto & part : parts)
         {
@@ -455,6 +454,14 @@ bool StorageMergeTree::merge(
     auto structure_lock = lockStructure(true, __PRETTY_FUNCTION__);
 
     size_t disk_space = DiskSpaceMonitor::getUnreservedFreeSpace(full_path);
+    for (const auto & path : context.getAllPath())
+    {
+        size_t available_space = DiskSpaceMonitor::getUnreservedFreeSpace(path);
+        if (available_space <= disk_space)
+        {
+            disk_space = available_space;
+        }
+    }
 
     MergeTreeDataMerger::FuturePart future_part;
 
