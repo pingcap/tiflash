@@ -3,6 +3,7 @@
 #include <memory>
 #include <random>
 
+#include <IO/ReadBufferFromMemory.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
@@ -11,7 +12,6 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-#include <IO/ReadBufferFromMemory.h>
 #include <common/logger_useful.h>
 
 #include <IO/ReadBufferFromMemory.h>

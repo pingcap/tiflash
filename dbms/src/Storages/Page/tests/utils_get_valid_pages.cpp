@@ -5,7 +5,6 @@
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
-#include <Poco/Logger.h>
 
 #include <Storages/Page/PageStorage.h>
 
@@ -65,7 +64,7 @@ int main(int argc, char ** argv)
     DB::PageEntryMap valid_page_entries;
     for (auto & page_file : page_files)
     {
-        DB::PageEntryMap page_entries;
+        DB::PageEntryMap     page_entries;
         DB::PageIdAndEntries id_and_caches;
         const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries, false);
         printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
