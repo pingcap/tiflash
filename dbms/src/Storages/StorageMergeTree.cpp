@@ -385,9 +385,9 @@ void StorageMergeTree::alter(
 void StorageMergeTree::alterForTMT(
     const AlterCommands & params,
     const TiDB::TableInfo & table_info,
+    const String & database_name,
     const Context & context)
 {
-    const String & database_name = table_info.db_name;
     const String & table_name = table_info.name;
     /// NOTE: Here, as in ReplicatedMergeTree, you can do ALTER which does not block the writing of data for a long time.
     auto merge_blocker = merger.merges_blocker.cancel();
