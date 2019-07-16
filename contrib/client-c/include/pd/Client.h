@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <kvproto/pdpb.grpc.pb.h>
 #include <common/Log.h>
+#include <tikv/Backoff.h>
 #include "IClient.h"
 
 namespace pingcap{
@@ -26,6 +27,8 @@ class Client : public IClient {
     const std::chrono::microseconds loop_interval;
 
     const std::chrono::seconds update_leader_interval;
+
+    const size_t get_gc_safe_point_timeout; // ms
 
 public:
 

@@ -25,6 +25,7 @@ Client::Client(const std::vector<std::string> & addrs)
      pd_timeout(3),
      loop_interval(100),
      update_leader_interval(60),
+     get_gc_safe_point_timeout(20000),
      urls(addrsToUrls(addrs)),
      log(&Logger::get("pingcap.pd"))
 {
@@ -187,11 +188,12 @@ uint64_t Client::getGCSafePoint() {
     pdpb::GetGCSafePointRequest request{};
     pdpb::GetGCSafePointResponse response{};
     request.set_allocated_header(requestHeader());
-;
+
+    kv::Backoffer bo(get_gc_safe_point_timeout);
     ::grpc::Status status;
     std::string err_msg;
 
-    for (int i = 0; i < max_init_cluster_retries; i++) {
+    while (true) {
         grpc::ClientContext context;
 
         context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
@@ -202,10 +204,9 @@ uint64_t Client::getGCSafePoint() {
         err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
         check_leader.store(true);
-        usleep(100000);
-        // TODO retry outside.
+        bo.backoff(kv::BackoffType::boPDRPC, Exception(err_msg, status.error_code()));
     }
-    throw Exception(err_msg, status.error_code());
+
 }
 
 std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegion(std::string key) {
