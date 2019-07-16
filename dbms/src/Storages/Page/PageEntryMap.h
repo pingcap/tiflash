@@ -34,6 +34,8 @@ public:
                                 ErrorCodes::LOGICAL_ERROR);
         }
     }
+    inline const PageEntry & at(const PageId page_id) const { return const_cast<PageEntryMap *>(this)->at(page_id); }
+
     inline bool empty() const { return normal_pages.empty() && page_ref.empty(); }
 
     /** Update Page{page_id} / RefPage{page_id} entry. If it's a new page_id,
