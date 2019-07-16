@@ -23,6 +23,12 @@ struct MergeTreeDataPart
     using Checksums = MergeTreeDataPartChecksums;
     using Checksum = MergeTreeDataPartChecksums::Checksum;
 
+    MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_, const String & parent_path)
+            : storage(storage_), name(name_), info(info_), full_path_prefix(parent_path)
+    {
+
+    }
+
     MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_);
 
     MergeTreeDataPart(MergeTreeData & storage_, const String & name_);
@@ -71,9 +77,8 @@ struct MergeTreeDataPart
     MergeTreeData & storage;
 
     String name;
-    String full_path_prefix;
-
     MergeTreePartInfo info;
+    String full_path_prefix;
 
     /// A directory path (relative to storage's path) where part data is actually stored
     /// Examples: 'detached/tmp_fetch_<name>', 'tmp_<name>', '<name>'

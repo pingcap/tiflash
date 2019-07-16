@@ -133,13 +133,11 @@ void MergeTreeDataPart::MinMaxIndex::merge(const MinMaxIndex & other)
     }
 }
 
-
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_)
         : storage(storage_), name(name_), info(info_)
 {
     full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name);
 }
-
 
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_)
     : storage(storage_), name(name_), info(MergeTreePartInfo::fromPartName(name_, storage.format_version))

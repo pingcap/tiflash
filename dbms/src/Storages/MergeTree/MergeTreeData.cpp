@@ -478,10 +478,8 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
         if (!MergeTreePartInfo::tryParsePartName(file_name, &part_info, format_version))
             continue;
 
-        MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info);
-        part->full_path_prefix = parent_path;
+        MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info, parent_path);
         part->relative_path = file_name;
-
         bool broken = false;
 
         try
