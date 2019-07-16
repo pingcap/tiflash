@@ -479,17 +479,9 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             continue;
 
         MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info);
-
-        // part->full_path_prefix is the path calculated from part name
-        // parent_path is the path where the part is currently in
-        // if these two paths don't match, this part must be a level 0 part
-        if (part->full_path_prefix != parent_path)
-        {
-            LOG_DEBUG(log, "Part file: " << file_name << " is loaded from path " << parent_path);
-            part->full_path_prefix = parent_path;
-        }
-
+        part->full_path_prefix = parent_path;
         part->relative_path = file_name;
+
         bool broken = false;
 
         try

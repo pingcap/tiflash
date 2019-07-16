@@ -6,11 +6,11 @@ namespace DB
 const String PartPathSelector::getPathForPart(MergeTreeData & data, const String & part_name) const
 {
     std::unordered_map<String, size_t> path_size_map;
-    for (auto & path : all_path)
+    for (const auto & path : all_path)
     {
-        path_size_map.emplace(path + "data/", 0);
+        path_size_map.emplace(path, 0);
     }
-    for (auto & part : data.getDataPartsVector())
+    for (const auto & part : data.getDataPartsVector())
     {
         if (path_size_map.find(part->full_path_prefix) == path_size_map.end())
         {
@@ -18,7 +18,7 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
         }
         path_size_map[part->full_path_prefix] += part->bytes_on_disk;
     }
-    String result = all_path[0] + "data/";
+    String result = all_path[0];
     size_t parts_size = path_size_map[result];
     for (const auto & element : path_size_map)
     {
@@ -39,7 +39,6 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
     log_buf << part_name;
     log_buf << " path: ";
     log_buf << result;
-    log_buf << "data/";
 
     LOG_DEBUG(log, log_buf.str());
     return result;
