@@ -141,16 +141,28 @@ TEST(PageEntryMap_test, UpdateRefPageEntry)
     ASSERT_TRUE(map.empty());
 }
 
-TEST(PageEntryMap_test, AddIllegalRef)
+TEST(PageEntryMap_test, AddRefToNonExistPage)
 {
     PageEntryMap map;
     ASSERT_TRUE(map.empty());
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map.put(0, p0entry);
     ASSERT_FALSE(map.empty());
-    // if try to add ref
-    ASSERT_THROW({ map.ref(3, 2); }, DB::Exception);
-    ASSERT_FALSE(map.empty());
+    // if try to add ref to non-exist page
+    ASSERT_THROW({ map.ref<true>(3, 2); }, DB::Exception);
+    // if try to access to non exist page, we get an exception
+    ASSERT_THROW({ map.at(3); }, DB::Exception);
+
+    // accept add RefPage{3} to non-exist Page{2}
+    ASSERT_NO_THROW(map.ref<false>(3, 2));
+    // we can find iterator by RefPage's id
+    auto iter_to_non_exist_ref_page = map.find(3);
+    ASSERT_NE(iter_to_non_exist_ref_page, map.end());
+    ASSERT_EQ(iter_to_non_exist_ref_page.pageId(), 3UL);
+    // but if we want to access that non-exist Page, we get an exception
+    ASSERT_THROW({ iter_to_non_exist_ref_page.pageEntry(); }, DB::Exception);
+    // if try to access to non exist page, we get an exception
+    ASSERT_THROW({ map.at(3); }, DB::Exception);
 }
 
 TEST(PageEntryMap_test, PutDuplicateRef)

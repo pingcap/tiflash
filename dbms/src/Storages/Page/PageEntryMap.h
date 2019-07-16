@@ -20,8 +20,20 @@ class PageEntryMap
 public:
     PageEntryMap() = default;
 
-    inline PageEntry & at(const PageId page_id) { return normal_pages.at(resolveRefId(page_id)); }
-
+    inline PageEntry & at(const PageId page_id)
+    {
+        PageId normal_page_id = resolveRefId(page_id);
+        auto   iter           = normal_pages.find(normal_page_id);
+        if (likely(iter != normal_pages.end()))
+        {
+            return iter->second;
+        }
+        else
+        {
+            throw DB::Exception("Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+                                ErrorCodes::LOGICAL_ERROR);
+        }
+    }
     inline bool empty() const { return normal_pages.empty() && page_ref.empty(); }
 
     /** Update Page{page_id} / RefPage{page_id} entry. If it's a new page_id,
@@ -34,16 +46,18 @@ public:
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
      *  template must_exist = true ensure that corresponding Page must exist.
+     *            must_exist = false just ignore if that corresponding Page is not exist.
      */
-    template <bool must_exist = true>
+    template <bool must_exist = false>
     void del(PageId page_id);
 
     /** Bind RefPage{ref_id} to Page{page_id}.
      *  If page+id is a ref-id of RefPage, it will find corresponding Page
      *  and bind ref-id to that Page.
      *  template must_exist = true ensure that corresponding Page must exist.
+     *           must_exist = false if corresponding Page not exist, just add a record for RefPage{ref_id} -> Page{page_id}
      */
-    template <bool must_exist = true>
+    template <bool must_exist = false>
     void ref(PageId ref_id, PageId page_id);
 
     bool isRefExists(PageId ref_id, PageId page_id) const
@@ -113,9 +127,20 @@ public:
             _iter++;
             return tmp;
         }
-        inline PageId            pageId() const { return _iter->first; }
-        inline PageEntry &       pageEntry() { return _normal_pages[_iter->second]; }
-        inline const PageEntry & pageEntry() const { return _normal_pages[_iter->second]; }
+        inline PageId      pageId() const { return _iter->first; }
+        inline PageEntry & pageEntry()
+        {
+            auto iter = _normal_pages.find(_iter->second);
+            if (likely(iter != _normal_pages.end()))
+            {
+                return iter->second;
+            }
+            else
+            {
+                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
+                                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
 
     private:
         std::unordered_map<PageId, PageId>::iterator _iter;
@@ -146,7 +171,19 @@ public:
             return tmp;
         }
         inline PageId            pageId() const { return _iter->first; }
-        inline const PageEntry & pageEntry() const { return _normal_pages[_iter->second]; }
+        inline const PageEntry & pageEntry() const
+        {
+            auto iter = _normal_pages.find(_iter->second);
+            if (likely(iter != _normal_pages.end()))
+            {
+                return iter->second;
+            }
+            else
+            {
+                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
+                                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
 
     private:
         std::unordered_map<PageId, PageId>::const_iterator _iter;
@@ -234,6 +271,7 @@ void PageEntryMap::ref(const PageId ref_id, const PageId page_id)
     }
     else
     {
+        // The Page to be ref is not exist.
         if constexpr (must_exist)
         {
             throw Exception("Adding RefPage" + DB::toString(ref_id) + " to non-exist Page" + DB::toString(page_id),
@@ -243,7 +281,6 @@ void PageEntryMap::ref(const PageId ref_id, const PageId page_id)
         {
             // else accept dangling ref if we are writing to a tmp entry map.
             // like entry map of WriteBatch or Gc or AnalyzeMeta
-            // TODO: do we need add dangling ref records?
             page_ref[ref_id] = normal_page_id;
         }
     }

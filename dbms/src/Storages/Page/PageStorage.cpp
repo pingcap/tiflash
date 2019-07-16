@@ -86,7 +86,15 @@ PageEntry PageStorage::getEntry(PageId page_id)
     auto it = page_entry_map.find(page_id);
     if (it != page_entry_map.end())
     {
-        return it.pageEntry();
+        try
+        { // this may throw an exception if ref to non-exist page
+            return it.pageEntry();
+        }
+        catch (DB::Exception & e)
+        {
+            LOG_WARNING(log, e.message());
+            return {}; // return invalid PageEntry
+        }
     }
     else
     {
@@ -161,7 +169,7 @@ Page PageStorage::read(PageId page_id)
     auto it = page_entry_map.find(page_id);
     if (it == page_entry_map.end())
         throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-    const auto &     page_entry    = it.pageEntry();
+    const auto &     page_entry    = it.pageEntry(); // this may throw an exception if ref to non-exist page
     auto             file_id_level = page_entry.fileIdLevel();
     PageIdAndEntries to_read       = {{page_id, page_entry}};
     auto             file_reader   = getReader(file_id_level);
@@ -178,7 +186,7 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids)
         auto it = page_entry_map.find(page_id);
         if (it == page_entry_map.end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-        const auto & page_entry                  = it.pageEntry();
+        const auto & page_entry                  = it.pageEntry(); // this may throw an exception if ref to non-exist page
         auto         file_id_level               = page_entry.fileIdLevel();
         auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
         page_id_and_caches.emplace_back(page_id, page_entry);
@@ -209,7 +217,7 @@ void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handl
         auto it = page_entry_map.find(page_id);
         if (it == page_entry_map.end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-        const auto & page_entry                  = it.pageEntry();
+        const auto & page_entry                  = it.pageEntry(); // this may throw an exception if ref to non-exist page
         auto         file_id_level               = page_entry.fileIdLevel();
         auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
         page_id_and_caches.emplace_back(page_id, page_entry);
@@ -236,7 +244,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
         for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
         {
             const PageId      page_id    = iter.pageId();
-            const PageEntry & page_entry = iter.pageEntry();
+            const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
             file_and_pages[page_entry.fileIdLevel()].emplace_back(page_id);
         }
     }
@@ -260,7 +268,7 @@ void PageStorage::traversePageEntries( //
     for (auto iter = page_entry_map.cbegin(); iter != page_entry_map.cend(); ++iter)
     {
         const PageId      page_id    = iter.pageId();
-        const PageEntry & page_entry = iter.pageEntry();
+        const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
         acceptor(page_id, page_entry);
     }
 }
@@ -433,14 +441,22 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
                     {
                         continue;
                     }
-                    const auto & page_entry = it2.pageEntry();
-                    // This page is covered by newer file.
-                    if (page_entry.fileIdLevel() != file_id_level)
+                    try
                     {
-                        continue;
+                        const auto & page_entry = it2.pageEntry(); // this may throw an exception if ref to non-exist page
+                        // This page is covered by newer file.
+                        if (page_entry.fileIdLevel() != file_id_level)
+                        {
+                            continue;
+                        }
+                        page_id_and_entries.emplace_back(page_id, page_entry);
+                        num_successful_migrate_pages += 1;
                     }
-                    page_id_and_entries.emplace_back(page_id, page_entry);
-                    num_successful_migrate_pages += 1;
+                    catch (DB::Exception & e)
+                    {
+                        // ignore if it2 is a ref to non-exist page
+                        LOG_WARNING(log, "Ignore invalid RefPage while gcMigratePages: " + e.message());
+                    }
                 }
             }
 

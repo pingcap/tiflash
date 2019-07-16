@@ -541,5 +541,22 @@ TEST_F(PageStorageWith2Pages_test, PutCollapseDuplicatedRefPages)
     }
 }
 
+TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
+{
+    {
+        WriteBatch batch;
+        // RefPage3 -> non-exist Page999
+        batch.putRefPage(3, 999);
+        ASSERT_NO_THROW(storage->write(batch));
+    }
+
+    ASSERT_FALSE(storage->getEntry(3).isValid());
+    ASSERT_THROW(storage->read(3), DB::Exception);
+
+    // Invalid Pages is filtered after reopen PageStorage
+    ASSERT_NO_THROW(reopenWithConfig(config));
+    ASSERT_FALSE(storage->getEntry(3).isValid());
+}
+
 } // namespace tests
 } // namespace DB
