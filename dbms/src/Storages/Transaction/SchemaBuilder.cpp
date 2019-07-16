@@ -20,7 +20,7 @@ using DBInfo = TiDB::DBInfo;
 using TableInfoPtr = TiDB::TableInfoPtr;
 using DBInfoPtr = TiDB::DBInfoPtr;
 
-inline AlterCommands detectSchemaChanges(const TiDB::TableInfo & table_info, const TiDB::TableInfo & orig_table_info)
+inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & table_info, const TiDB::TableInfo & orig_table_info)
 {
     AlterCommands alter_commands;
 
@@ -39,8 +39,8 @@ inline AlterCommands detectSchemaChanges(const TiDB::TableInfo & table_info, con
             command.type = AlterCommand::ADD_COLUMN;
             command.column_name = column_info.name;
             command.data_type = getDataTypeByColumnInfo(column_info);
-            // TODO: support default value.
             // TODO: support after column.
+            LOG_DEBUG(log, "detect add column.");
         }
         else
         {
@@ -77,12 +77,12 @@ inline AlterCommands detectSchemaChanges(const TiDB::TableInfo & table_info, con
     return alter_commands;
 }
 
-void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, StorageMergeTree * storage)
+void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const String & db_name, StorageMergeTree * storage)
 {
     auto orig_table_info = storage->getTableInfo();
-    auto commands = detectSchemaChanges(*table_info, orig_table_info);
+    auto commands = detectSchemaChanges(log, *table_info, orig_table_info);
 
-    storage->alterForTMT(commands, *table_info, context);
+    storage->alterForTMT(commands, *table_info, db_name, context);
 
     if (table_info->is_partition_table)
     {
@@ -90,7 +90,7 @@ void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, StorageMe
         for (auto part_def : table_info->partition.definitions)
         {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
-            storage->alterForTMT(commands, *new_table_info, context);
+            storage->alterForTMT(commands, *new_table_info, db_name, context);
         }
     }
 }
@@ -103,9 +103,9 @@ void SchemaBuilder::applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
     auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_id).get());
     if (storage == nullptr)
     {
-        // TODO throw exception
+        throw Exception("miss table: " + std::to_string(table_id));
     }
-    applyAlterTableImpl(table_info, storage);
+    applyAlterTableImpl(table_info, dbInfo->name, storage);
 }
 
 void SchemaBuilder::applyDiff(const SchemaDiff & diff)
@@ -126,7 +126,7 @@ void SchemaBuilder::applyDiff(const SchemaDiff & diff)
     auto di = getter.getDatabase(diff.schema_id);
 
     if (di == nullptr)
-        throw Exception("miss database: ", std::to_string(diff.schema_id));
+        throw Exception("miss database: " + std::to_string(diff.schema_id));
 
     Int64 oldTableID = 0, newTableID = 0;
 
@@ -370,7 +370,7 @@ void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info)
         }
         else
         {
-            applyAlterTableImpl(table, storage);
+            applyAlterTableImpl(table, db_info->name, storage);
         }
     }
 }
