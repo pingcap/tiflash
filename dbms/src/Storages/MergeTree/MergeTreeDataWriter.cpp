@@ -186,7 +186,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
     else
         part_name = new_part_info.getPartName();
 
-    LOG_DEBUG(log, "Constructing new data part: " << part_name << " in memory.");
     MergeTreeData::MutableDataPartPtr new_data_part = std::make_shared<MergeTreeData::DataPart>(data, part_name, new_part_info);
     new_data_part->partition = std::move(partition);
     new_data_part->minmax_idx = std::move(minmax_idx);
@@ -195,7 +194,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
 
     /// The name could be non-unique in case of stale files from previous runs.
     String full_path = new_data_part->getFullPath();
-    LOG_DEBUG(log, "Data part: " << part_name << " will be in path " << full_path);
+    LOG_DEBUG(log, "Data part: " << new_data_part->relative_path << " will be in path " << full_path);
     Poco::File dir(full_path);
 
     if (dir.exists())

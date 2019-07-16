@@ -24,9 +24,8 @@ struct MergeTreeDataPart
     using Checksum = MergeTreeDataPartChecksums::Checksum;
 
     MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_, const String & parent_path)
-            : storage(storage_), name(name_), info(info_), full_path_prefix(parent_path)
+        : storage(storage_), name(name_), info(info_), full_path_prefix(parent_path)
     {
-
     }
 
     MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_);

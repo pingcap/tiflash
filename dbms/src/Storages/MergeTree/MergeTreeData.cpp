@@ -161,7 +161,6 @@ MergeTreeData::MergeTreeData(
     }
 
     String version_file_path = full_path + "format_version.txt";
-
     // When data path not exists, ignore the format_version check
     if (!attach || !path_exists)
     {
@@ -446,7 +445,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     Strings part_file_names;
     Strings part_file_parent_paths;
     Poco::DirectoryIterator end;
-    for (const String & path : context.getAllPath())
+    for (const auto & path : context.getAllPath())
     {
         String data_path = getDataPartsPath(path);
         LOG_DEBUG(log, "Loading data parts from path: " << data_path);
@@ -461,7 +460,6 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
         }
         LOG_DEBUG(log, "After loading data parts from path: " << data_path << " current part_file_names length: " << part_file_names.size());
     }
-
 
     DataPartsVector broken_parts_to_remove;
     DataPartsVector broken_parts_to_detach;
@@ -815,7 +813,7 @@ void MergeTreeData::dropAllData()
     LOG_TRACE(log, "dropAllData: removing data from filesystem.");
 
 
-    for (auto & path : context.getAllPath())
+    for (const auto & path : context.getAllPath())
     {
         Poco::File(getDataPartsPath(path)).remove(true);
     }
@@ -1964,7 +1962,7 @@ size_t MergeTreeData::getPartitionSize(const std::string & partition_id) const
 
     Poco::DirectoryIterator end;
 
-    for (const String & path : context.getAllPath())
+    for (const auto & path : context.getAllPath())
     {
         String parts_path = getDataPartsPath(path);
         for (Poco::DirectoryIterator it(parts_path); it != end; ++it)

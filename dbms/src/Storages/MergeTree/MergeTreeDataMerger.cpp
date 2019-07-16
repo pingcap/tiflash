@@ -217,7 +217,6 @@ bool MergeTreeDataMerger::selectPartsToMerge(
     std::unique_ptr<IMergeSelector> merge_selector;
 
     SimpleMergeSelector::Settings merge_settings;
-
     if (aggressive)
         merge_settings.base = 1;
 

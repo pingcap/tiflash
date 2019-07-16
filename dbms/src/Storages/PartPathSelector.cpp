@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/PartPathSelector.h>
+#include <common/likely.h>
 
 namespace DB
 {
@@ -12,7 +13,7 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
     }
     for (const auto & part : data.getDataPartsVector())
     {
-        if (path_size_map.find(part->full_path_prefix) == path_size_map.end())
+        if (unlikely(path_size_map.find(part->full_path_prefix) == path_size_map.end()))
         {
             throw Exception("Part " + part->relative_path + " got unexpected path " + part->full_path_prefix, ErrorCodes::LOGICAL_ERROR);
         }
@@ -39,7 +40,6 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
     log_buf << part_name;
     log_buf << " path: ";
     log_buf << result;
-
     LOG_DEBUG(log, log_buf.str());
     return result;
 }
