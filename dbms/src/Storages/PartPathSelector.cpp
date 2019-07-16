@@ -14,7 +14,7 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
     {
         if (path_size_map.find(part->full_path_prefix) == path_size_map.end())
         {
-            throw Exception("Part got unexpected path. This is bug.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Part " + part->relative_path + " got unexpected path " + part->full_path_prefix, ErrorCodes::LOGICAL_ERROR);
         }
         path_size_map[part->full_path_prefix] += part->bytes_on_disk;
     }
