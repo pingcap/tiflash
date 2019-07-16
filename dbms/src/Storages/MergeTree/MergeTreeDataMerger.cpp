@@ -540,9 +540,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
               << parts.front()->name << " to " << parts.back()->name
               << " into " << TMP_PREFIX + future_part.name);
 
-    String new_part_tmp_path = data.getDataPartsPath(data.context.getPartPathSelector().getPathForPart(
-            data,
-            future_part.name)) + TMP_PREFIX + future_part.name + "/";
+    String new_part_tmp_path = future_part.path + TMP_PREFIX + future_part.name + "/";
     if (Poco::File(new_part_tmp_path).exists())
         throw Exception("Directory " + new_part_tmp_path + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
 
@@ -570,7 +568,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             , data.merging_params, gathering_columns, gathering_column_names, merging_columns, merging_column_names);
 
     MergeTreeData::MutableDataPartPtr new_data_part = std::make_shared<MergeTreeData::DataPart>(
-            data, future_part.name, future_part.part_info);
+            data, future_part.name, future_part.part_info, future_part.path);
     new_data_part->partition.assign(future_part.getPartition());
     new_data_part->relative_path = TMP_PREFIX + future_part.name;
     new_data_part->is_temp = true;
