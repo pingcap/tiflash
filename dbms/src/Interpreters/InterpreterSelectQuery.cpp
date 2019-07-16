@@ -78,6 +78,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
     extern const int SCHEMA_VERSION_ERROR;
+    extern const int UNKNOWN_EXCEPTION;
 }
 
 InterpreterSelectQuery::InterpreterSelectQuery(
@@ -162,10 +163,7 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
     }
 
     if (storage)
-        table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-
-    /// Make sure TMT storage schema qualifies the version specified by upper (TiDB or TiSpark).
-    alignStorageSchema(settings.schema_version);
+        table_lock = alignStorageSchemaAndLock(settings.schema_version);
 
     query_analyzer = std::make_unique<ExpressionAnalyzer>(
         query_ptr, context, storage, source_columns, required_result_column_names, subquery_depth, !only_analyze);
@@ -189,24 +187,51 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 }
 
 
-void InterpreterSelectQuery::alignStorageSchema(Int64 schema_version)
+TableStructureReadLockPtr InterpreterSelectQuery::alignStorageSchemaAndLock(Int64 schema_version)
 {
-    if (schema_version == DEFAULT_SCHEMA_VERSION || !storage)
-        return;
-
+    /// Regular read lock for non-TMT or DEFAULT_SCHEMA_VERSION specified.
     const auto merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-    if (!merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
-        return;
+    if (schema_version == DEFAULT_SCHEMA_VERSION || !merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
+        return storage->lockStructure(false, __PRETTY_FUNCTION__);
 
-    auto storage_schema_version = merge_tree->getTableInfo().schema_version;
-    if (storage_schema_version < schema_version)
+    /// Lambda for schema version check under the read lock.
+    auto checkSchemaVersionAndLock = [&](bool schema_synced) -> std::tuple<TableStructureReadLockPtr, Int64> {
+        auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+
+        auto storage_schema_version = merge_tree->getTableInfo().schema_version;
+        if (storage_schema_version > schema_version)
+            throw Exception("Storage schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
+
+        if ((schema_synced && storage_schema_version <= schema_version) || (!schema_synced && storage_schema_version == schema_version))
+            return std::make_tuple(lock, storage_schema_version);
+
+        return std::make_tuple(nullptr, storage_schema_version);
+    };
+
+    /// Try check and lock once.
     {
-        LOG_TRACE(log, __PRETTY_FUNCTION__ << " storage schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", syncing schema.");
-        context.getTMTContext().getSchemaSyncer()->syncSchema(context, merge_tree->getTableInfo().id, false);
+        auto [lock, storage_schema_version] = checkSchemaVersionAndLock(false);
+        if (lock)
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << " storage schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", schema check OK, no syncing required.");
+            return lock;
+        }
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " storage schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", schema check not OK.");
     }
 
-    if (storage_schema_version > schema_version)
-        throw Exception("Storage schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
+    /// If first try failed, sync schema and check again.
+    {
+        context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+
+        auto [lock, storage_schema_version] = checkSchemaVersionAndLock(true);
+        if (lock)
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << " storage schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", schema check OK after syncing.");
+            return lock;
+        }
+
+        throw Exception("Shouldn't reach here", ErrorCodes::UNKNOWN_EXCEPTION);
+    }
 }
 
 
