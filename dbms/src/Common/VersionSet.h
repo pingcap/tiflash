@@ -121,7 +121,7 @@ public:
     {
         std::unique_lock read_lock(read_mutex);
         size_t sz = 0;
-        for (Version_t * v = placeholder_node.next; v != &placeholder_node; v = v->next)
+        for (Version_t * v = current; v != &placeholder_node; v = v->prev)
             sz += 1;
         return sz;
     }
