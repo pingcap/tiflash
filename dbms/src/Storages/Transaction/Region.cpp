@@ -447,13 +447,13 @@ std::string Region::dataInfo() const
     return ss.str();
 }
 
-void Region::markPersisted() { last_persist_time = Clock::now(); }
+void Region::markPersisted() const { last_persist_time = Clock::now(); }
 
 Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
 size_t Region::dirtyFlag() const { return dirty_flag; }
 
-void Region::decDirtyFlag(size_t x) { dirty_flag -= x; }
+void Region::decDirtyFlag(size_t x) const { dirty_flag -= x; }
 
 void Region::incDirtyFlag() { dirty_flag++; }
 

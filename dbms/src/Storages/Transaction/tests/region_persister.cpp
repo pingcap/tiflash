@@ -51,7 +51,7 @@ int main(int, char **)
         RegionMeta meta = createRegionMeta(888);
         auto path = dir_path + "meta.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        auto size = meta.serialize(write_buf);
+        auto size = std::get<0>(meta.serialize(write_buf));
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(size, (size_t)Poco::File(path).getSize(), suc);
@@ -69,7 +69,7 @@ int main(int, char **)
 
         auto path = dir_path + "region.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = region->serialize(write_buf);
+        size_t region_ser_size = std::get<0>(region->serialize(write_buf));
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(region_ser_size, (size_t)Poco::File(path).getSize(), suc);
@@ -130,7 +130,7 @@ int main(int, char **)
 
         auto path = dir_path + "region_state.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = region->serialize(write_buf);
+        size_t region_ser_size = std::get<0>(region->serialize(write_buf));
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(region_ser_size, (size_t)Poco::File(path).getSize(), suc);
@@ -167,7 +167,7 @@ int main(int, char **)
                 region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
                 region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-                persister.persist(region);
+                persister.persist(*region);
 
                 regions.emplace(region->id(), region);
             }
@@ -216,7 +216,7 @@ int main(int, char **)
             region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
             region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-            persister.persist(region);
+            persister.persist(*region);
 
             regions.emplace(region->id(), region);
         }

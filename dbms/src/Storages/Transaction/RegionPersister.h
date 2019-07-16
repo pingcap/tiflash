@@ -23,8 +23,8 @@ public:
     {}
 
     void drop(RegionID region_id);
-    void persist(const RegionPtr & region);
-    void persist(const RegionPtr & region, const RegionPersistLock & lock);
+    void persist(const Region & region);
+    void persist(const Region & region, const RegionPersistLock & lock);
     void restore(RegionMap & regions, RegionClientCreateFunc * func = nullptr);
     bool gc();
 
@@ -33,6 +33,7 @@ public:
 
 private:
     void doPersist(RegionWriteBuffer & region_write_buffer, const RegionPersistLock & lock);
+    void doPersist(const Region & region, const RegionPersistLock * lock);
 
 private:
     PageStorage page_storage;

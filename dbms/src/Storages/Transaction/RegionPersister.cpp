@@ -32,30 +32,25 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionWrit
     }
 }
 
-void RegionPersister::persist(const RegionPtr & region, const RegionPersistLock & lock)
-{
-    // Support only on thread persist.
-    size_t dirty_flag = region->dirtyFlag();
-    {
-        RegionWriteBuffer region_buffer;
-        computeRegionWriteBuffer(*region, region_buffer);
-        doPersist(region_buffer, lock);
-    }
-    region->markPersisted();
-    region->decDirtyFlag(dirty_flag);
-}
+void RegionPersister::persist(const Region & region, const RegionPersistLock & lock) { doPersist(region, &lock); }
 
-void RegionPersister::persist(const RegionPtr & region)
+void RegionPersister::persist(const Region & region) { doPersist(region, nullptr); }
+
+void RegionPersister::doPersist(const Region & region, const RegionPersistLock * lock)
 {
     // Support only on thread persist.
-    size_t dirty_flag = region->dirtyFlag();
-    {
-        RegionWriteBuffer region_buffer;
-        computeRegionWriteBuffer(*region, region_buffer);
-        doPersist(region_buffer, region->genPersistLock());
-    }
-    region->markPersisted();
-    region->decDirtyFlag(dirty_flag);
+    size_t dirty_flag = region.dirtyFlag();
+
+    RegionWriteBuffer region_buffer;
+    computeRegionWriteBuffer(region, region_buffer);
+
+    if (lock)
+        doPersist(region_buffer, *lock);
+    else
+        doPersist(region_buffer, region.genPersistLock());
+
+    region.markPersisted();
+    region.decDirtyFlag(dirty_flag);
 }
 
 void RegionPersister::doPersist(RegionWriteBuffer & region_write_buffer, const RegionPersistLock &)

@@ -342,7 +342,7 @@ int main(int, char **)
 
         kvstore2->restore([&](pingcap::kv::RegionVerID) -> pingcap::kv::RegionClientPtr {
             return nullptr;
-        }, nullptr);
+        });
 
         kvstore->traverseRegions([&](const RegionID region_id, const RegionPtr & region1){
             auto region2 = kvstore2->getRegion(region_id);
