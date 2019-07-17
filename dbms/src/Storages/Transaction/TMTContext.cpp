@@ -20,14 +20,8 @@ TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs
 
 void TMTContext::restore()
 {
-    std::vector<RegionID> regions_to_remove;
-
-    kvstore->restore(
-        [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); }, &regions_to_remove);
-    region_table.restore(std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1));
-    for (RegionID id : regions_to_remove)
-        kvstore->removeRegion(id, &region_table);
-
+    kvstore->restore([&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); });
+    region_table.restore();
     kvstore->updateRegionTableBySnapshot(region_table);
     initialized = true;
 }

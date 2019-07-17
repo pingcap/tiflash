@@ -265,18 +265,17 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         if (regions_query_info.empty())
         {
-            tmt.getRegionTable().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
-                for (const auto & [id, region] : regions)
-                {
-                    kvstore_region.emplace(id, region);
-                    if (region == nullptr)
-                        // maybe region is removed.
-                        regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
-                    else
-                        regions_query_info.push_back(
-                            {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
-                }
-            });
+            auto regions = tmt.getRegionTable().getRegionsByTable(data.table_info->id);
+            for (const auto & [id, region] : regions)
+            {
+                kvstore_region.emplace(id, region);
+                if (region == nullptr)
+                    // maybe region is removed.
+                    regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
+                else
+                    regions_query_info.push_back(
+                        {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
+            }
         }
 
         if (kvstore_region.size() != regions_query_info.size())

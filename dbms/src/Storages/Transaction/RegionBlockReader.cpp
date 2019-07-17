@@ -123,7 +123,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     /// optimize for only need handle, tso, delmark.
     if (ordered_columns.size() > 3)
     {
-        for (const auto & [handle, write_type, commit_ts, value] : data_list)
+        for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
             std::ignore = commit_ts;
             std::ignore = handle;
@@ -145,7 +145,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 }
             }
             else
-                row = RecordKVFormat::DecodeRow(value);
+                row = RecordKVFormat::DecodeRow(*value_ptr);
 
             if (row.size() == 1 && row[0].isNull())
             {
