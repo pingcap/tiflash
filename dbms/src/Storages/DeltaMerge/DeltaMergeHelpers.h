@@ -231,6 +231,25 @@ inline void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_colu
 #undef APPEND
 }
 
+inline void concat(Block & base, const Block & next)
+{
+    size_t next_rows = next.rows();
+    for (size_t i = 0; i < base.columns(); ++i)
+    {
+        auto & col     = base.getByPosition(i).column;
+        auto * col_raw = const_cast<IColumn *>(col.get());
+        col_raw->insertRangeFrom((*next.getByPosition(i).column), 0, next_rows);
+    }
+}
+
+inline size_t blockBytes(const Block & block)
+{
+    size_t bytes = 0;
+    for (auto & c : block)
+        bytes += c.column->byteSize();
+    return bytes;
+}
+
 inline Block createHeader(const ColumnDefines & col_defines)
 {
     Block header;

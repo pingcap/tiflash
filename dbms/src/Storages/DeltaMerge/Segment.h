@@ -14,8 +14,52 @@ namespace DM
 {
 
 class Segment;
-using SegmentPtr = std::shared_ptr<Segment>;
-using Segments   = std::vector<SegmentPtr>;
+using SegmentPtr  = std::shared_ptr<Segment>;
+using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
+using Segments    = std::vector<SegmentPtr>;
+
+struct DeltaValueSpace
+{
+    DeltaValueSpace(const ColumnDefine & handle_define, const ColumnDefines & column_defines, const Block & block)
+    {
+        columns.reserve(column_defines.size());
+        columns_ptr.reserve(column_defines.size());
+        for (const auto & c : column_defines)
+        {
+
+            auto & col = block.getByName(c.name).column;
+            columns.emplace_back(col);
+            columns_ptr.emplace_back(col.get());
+
+            if (c.name == handle_define.name)
+                handle_column = toColumnVectorDataPtr<Handle>(col);
+        }
+    }
+
+    inline void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
+    {
+        des.insertFrom(*(columns_ptr[column_index]), value_id);
+    }
+
+    inline Handle getHandle(size_t value_id) //
+    {
+        return (*handle_column)[value_id];
+    }
+
+    Columns                        columns;
+    ColumnRawPtrs                  columns_ptr;
+    PaddedPODArray<Handle> const * handle_column;
+};
+using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
+
+struct ReadSnapshot
+{
+    DeltaValueSpacePtr   delta_value_space;
+    DeltaIndex::Iterator index_begin;
+    DeltaIndex::Iterator index_end;
+
+    ColumnDefines read_columns;
+};
 
 /// A segment contains many rows of a table. A table is split into segments by succeeding ranges.
 ///
@@ -26,8 +70,7 @@ using Segments   = std::vector<SegmentPtr>;
 class Segment : private boost::noncopyable
 {
 public:
-    using SharedLock = std::shared_lock<std::shared_mutex>;
-    using Version    = UInt32;
+    using Version = UInt32;
     static const Version CURRENT_VERSION;
 
     static SegmentPtr newSegment(DMContext & context, const HandleRange & range_, PageId segment_id_, PageId next_segment_id_);
@@ -37,9 +80,7 @@ public:
 
     const HandleRange & getRange() { return range; }
 
-    void write(DMContext & dm_context, Block && block);
-
-    void deleteRange(DMContext & dm_context, const HandleRange & delete_range);
+    SegmentPtr write(DMContext & dm_context, BlockOrDelete && block_or_delete);
 
     BlockInputStreamPtr getInputStream(const DMContext &     dm_context,
                                        const ColumnDefines & columns_to_read,
@@ -49,9 +90,9 @@ public:
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 
-    SegmentPtr split(DMContext & dm_context);
+    SegmentPair split(DMContext & dm_context);
 
-    void merge(DMContext & dm_context, const SegmentPtr & other);
+    static SegmentPtr merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
 
     size_t getEstimatedRows();
 
@@ -78,7 +119,7 @@ public:
 
     void swap(Segment & other);
 
-    void check(DMContext & dm_context, const String & when, bool is_lock = true);
+    void check(DMContext & dm_context, const String & when);
 
     String simpleInfo() { return "{" + DB::toString(segment_id) + ":" + range.toString() + "}"; }
 
@@ -88,40 +129,64 @@ public:
             + ", range: " + range.toString() + "}";
     }
 
+    size_t delta_rows();
+    size_t delta_deletes();
+
 private:
+    std::pair<DiskValueSpacePtr, DeltaValueSpacePtr> getDeltaSnapshot(const DMContext & dm_context, const ColumnDefines & columns_to_read);
+    DeltaIndexPtr getDeltaIndexSnapshot(const DMContext & dm_context, const DiskValueSpacePtr & delta_snap);
+
     template <bool add_tag_column>
-    BlockInputStreamPtr getPlacedStream(const ColumnDefine &  handle,
-                                        const HandleRanges &  read_ranges,
-                                        const ColumnDefines & columns_to_read,
-                                        StoragePool &         storage_pool,
-                                        size_t                expected_block_size,
-                                        SharedLock &&         lock);
+    ReadSnapshot getReadSnapshot(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 
-    SegmentPtr doSplit(DMContext & dm_context, Handle split_point);
-    void       doMerge(DMContext & dm_context, const SegmentPtr & other);
+    template <bool add_tag_column>
+    static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
-    void reset(DMContext & dm_context, BlockInputStreamPtr & input_stream);
+    template <class IndexIterator = DeltaIndex::Iterator>
+    BlockInputStreamPtr getPlacedStream(const DMContext &          dm_context,
+                                        const HandleRanges &       read_ranges,
+                                        const ColumnDefines &      read_columns,
+                                        const DeltaValueSpacePtr & delta_value_space,
+                                        const IndexIterator &      delta_index_begin,
+                                        const IndexIterator &      delta_index_end,
+                                        size_t                     expected_block_size) const;
 
-    bool tryFlush(DMContext & dm_context, bool force = false);
-    /// Flush delta into stable.
-    void flush(DMContext & dm_context);
+    /// Split this segment into two.
+    /// Generates two new segment objects, the current object is not modified.
+    SegmentPair doSplit(DMContext & dm_context, const ReadSnapshot & snapshot, Handle split_point) const;
+    /// Merge this segment and the other into one.
+    /// Generates a new segment object, the current object is not modified.
+    static SegmentPtr doMerge(DMContext &          dm_context,
+                              const SegmentPtr &   left,
+                              const ReadSnapshot & left_snapshot,
+                              const SegmentPtr &   right,
+                              const ReadSnapshot & right_snapshot);
+    /// Reset the content of this segment.
+    /// Generates a new segment object, the current object is not modified.
+    SegmentPtr reset(DMContext & dm_context, BlockInputStreamPtr & input_stream) const;
+
+    bool shouldFlush(DMContext & dm_context, bool force = false);
+
+    /// Flush delta into stable. i.e. delta merge.
+    SegmentPtr flush(DMContext & dm_context);
     /// Make sure that all delta chunks have been placed.
-    void ensurePlace(const ColumnDefine & handle, StoragePool & storage);
+    DeltaIndexPtr
+    ensurePlace(const DMContext & dm_context, const DiskValueSpacePtr & to_place_delta, const DeltaValueSpacePtr & delta_value_space);
     /// Reference the inserts/updates by delta tree.
-    void placeUpsert(const ColumnDefine & handle, StoragePool & storage, Block && block);
+    void placeUpsert(const DMContext & dm_context, const DeltaValueSpacePtr & delta_value_space, Block && block);
     /// Reference the deletes by delta tree.
-    void placeDelete(const ColumnDefine & handle, StoragePool & storage, const HandleRange & delete_range);
+    void placeDelete(const DMContext & dm_context, const DeltaValueSpacePtr & delta_value_space, const HandleRange & delete_range);
 
-    Handle getSplitPoint(DMContext & dm_context);
+    Handle getSplitPoint(DMContext & dm_context, const ReadSnapshot & snapshot);
 
     size_t estimatedRows();
     size_t estimatedBytes();
 
 private:
-    UInt64      epoch; // After split/merge, epoch got increase by 1.
-    HandleRange range;
-    PageId      segment_id;
-    PageId      next_segment_id;
+    const UInt64      epoch; // After split/merge, epoch got increase by 1.
+    const HandleRange range;
+    const PageId      segment_id;
+    const PageId      next_segment_id;
 
     DiskValueSpace delta;
     DiskValueSpace stable;
@@ -130,7 +195,12 @@ private:
     size_t       placed_delta_rows    = 0;
     size_t       placed_delta_deletes = 0;
 
-    std::shared_mutex mutex;
+    // Used to synchronize between read threads and write thread.
+    // Write thread holds a unique lock, and read thread holds shared lock.
+    mutable std::shared_mutex read_write_mutex;
+    // Used to synchronize between read threads.
+    // Mainly to protect delta_tree updates between read threads.
+    mutable std::mutex read_read_mutex;
 
     Logger * log;
 };

@@ -522,6 +522,93 @@ public:
     UInt64     getRid() const { return leaf->sids[pos] + delta; }
 };
 
+template <size_t M, size_t F, size_t S, typename Allocator>
+class DTEntriesCopy : Allocator
+{
+    using LeafPtr = DTLeaf<M, F, S> *;
+
+    const size_t entry_count;
+    const Int64  delta;
+    UInt64 *     sids;
+    DTMutation * mutations;
+
+public:
+    DTEntriesCopy(LeafPtr left_leaf, size_t entry_count_, Int64 delta_)
+        : entry_count(entry_count_),
+          delta(delta_),
+          sids(reinterpret_cast<UInt64 *>(this->alloc(sizeof(UInt64) * entry_count))),
+          mutations(reinterpret_cast<DTMutation *>(this->alloc(sizeof(DTMutation) * entry_count)))
+    {
+        size_t offset = 0;
+        while (left_leaf)
+        {
+            std::move(left_leaf->sids, left_leaf->sids + left_leaf->count, sids + offset);
+            std::move(left_leaf->mutations, left_leaf->mutations + left_leaf->count, mutations + offset);
+
+            offset += left_leaf->count;
+            left_leaf = left_leaf->next;
+        }
+    }
+
+    ~DTEntriesCopy()
+    {
+        this->free(sids, sizeof(UInt64) * entry_count);
+        this->free(mutations, sizeof(DTMutation) * entry_count);
+    }
+
+    class Iterator
+    {
+    private:
+        std::shared_ptr<DTEntriesCopy> entries_holder; // Holds a reference, stop being freed.
+        DTEntriesCopy *                entries;
+
+        size_t index = 0;
+        Int64  delta;
+
+    public:
+        Iterator(const std::shared_ptr<DTEntriesCopy> & entries_, size_t index_, Int64 delta_)
+            : entries_holder(entries_), entries(entries_.get()), index(index_), delta(delta_)
+        {
+        }
+
+        bool operator==(const Iterator & rhs) const { return index == rhs.index; }
+        bool operator!=(const Iterator & rhs) const { return index != rhs.index; }
+
+        Iterator & operator++()
+        {
+            if (entries->mutations[index].type == DT_INS)
+                delta += 1;
+            else if (entries->mutations[index].type == DT_DEL)
+                delta -= entries->mutations[index].value;
+
+            ++index;
+
+            return *this;
+        }
+
+        Iterator & operator--()
+        {
+            --index;
+
+            if (entries->mutations[index].type == DT_INS)
+                delta -= 1;
+            else if (entries->mutations[index].type == DT_DEL)
+                delta += entries->mutations[index].value;
+
+            return *this;
+        }
+
+        Int64  getDelta() const { return delta; }
+        UInt16 getType() const { return entries->mutations[index].type; }
+        UInt64 getValue() const { return entries->mutations[index].value; }
+        UInt64 getSid() const { return entries->sids[index]; }
+        UInt64 getRid() const { return entries->sids[index] + delta; }
+    };
+
+    static Iterator begin(const std::shared_ptr<DTEntriesCopy> & entries) { return {entries, 0, 0}; }
+    static Iterator end(const std::shared_ptr<DTEntriesCopy> & entries) { return {entries, entries->entry_count, entries->delta}; }
+}; // namespace DM
+
 template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
 class DeltaTree
 {
@@ -723,6 +810,13 @@ public:
     {
         Int64 delta = isLeaf(root) ? as(Leaf, root)->getDelta() : as(Intern, root)->getDelta();
         return EntryIterator(right_leaf, right_leaf->count, delta);
+    }
+
+    template <typename CopyAllocator>
+    std::shared_ptr<DTEntriesCopy<M, F, S, CopyAllocator>> getEntriesCopy()
+    {
+        Int64 delta = isLeaf(root) ? as(Leaf, root)->getDelta() : as(Intern, root)->getDelta();
+        return std::make_shared<DTEntriesCopy<M, F, S, CopyAllocator>>(left_leaf, num_entries, delta);
     }
 
     EntryIterator sidLowerBound(UInt64 sid) const

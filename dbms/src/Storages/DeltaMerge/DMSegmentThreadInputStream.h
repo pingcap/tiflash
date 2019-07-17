@@ -21,7 +21,8 @@ public:
           header(createHeader(columns_to_read)),
           handle_name(handle_name_),
           handle_real_type(handle_real_type_),
-          context(context_)
+          context(context_),
+          log(&Logger::get("SegmentReadTaskPool"))
     {
     }
 
@@ -37,12 +38,13 @@ protected:
         {
             if (!cur_stream)
             {
-                cur_stream = task_pool->getTask();
+                std::tie(cur_segment_id, cur_stream) = task_pool->nextTask();
                 if (!cur_stream) // we are done.
                 {
                     done = true;
                     return {};
                 }
+                LOG_DEBUG(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
             }
 
             Block res = cur_stream->read();
@@ -56,6 +58,7 @@ protected:
             else
             {
                 cur_stream = {};
+                LOG_DEBUG(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
             }
         }
     }
@@ -85,6 +88,9 @@ private:
 
     bool                done = false;
     BlockInputStreamPtr cur_stream;
+    UInt64              cur_segment_id;
+
+    Logger * log;
 };
 
 } // namespace DM

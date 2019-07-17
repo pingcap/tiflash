@@ -84,15 +84,16 @@ private:
     }
 
     bool afterInsertOrDelete(const Context & db_context, const DB::Settings & db_settings);
-    bool checkSplitOrMerge(const SegmentPtr & segment, DMContext dm_context, size_t segment_rows_setting);
-    void split(DMContext & dm_context, SegmentPtr segment);
-    void merge(DMContext & dm_context, SegmentPtr left, SegmentPtr right);
+    bool shouldSplit(const SegmentPtr & segment, size_t segment_rows_setting);
+    bool shouldMerge(const SegmentPtr & left, const SegmentPtr & right, size_t segment_rows_setting);
+    void split(DMContext & dm_context, const SegmentPtr & segment);
+    void merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
 
-    void write_segment(DMContext &        dm_context, //
-                       const SegmentPtr & segment,
-                       const Block &      block,
-                       size_t             offset,
-                       size_t             limit);
+    SegmentPtr write_segment(DMContext &        dm_context, //
+                             const SegmentPtr & segment,
+                             const Block &      block,
+                             size_t             offset,
+                             size_t             limit);
 
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;

@@ -21,6 +21,7 @@
 namespace DB
 {
 using namespace DM;
+constexpr bool TEST_SPLIT = false;
 
 StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     const std::string & name_,
@@ -235,24 +236,57 @@ BlockInputStreams StorageDeltaMerge::read( //
     }
 
 
-    /// TODO Those code is used to test range read, should be removed later
-    size_t split_count = std::abs(random()) % 1000;
-    split_count = 0;
-
-    std::vector<Int64> splits(split_count);
     HandleRanges ranges;
-
-    for (size_t i = 0; i < split_count; ++i)
-        splits[i] = random();
-    std::sort(splits.begin(), splits.end());
-
-    Handle start = DB::DM::N_INF_HANDLE;
-    for (Int64 s : splits)
+    if (TEST_SPLIT)
     {
-        ranges.emplace_back(start, s);
-        start = s;
+        /// TODO Those code is used to test range read, should be removed later
+
+        size_t rate_base = 1000000;
+        Handle start = N_INF_HANDLE;
+        {
+            auto streams = store->readRaw(context, context.getSettingsRef(), {store->getHandle()}, 1);
+            auto stream = streams[0];
+            stream->readPrefix();
+
+            while (true)
+            {
+                Block block = stream->read();
+                if (!block)
+                    break;
+                auto & handle_data = DB::DM::getColumnVectorData<Handle>(block, 0);
+                for (size_t i = 0; i < handle_data.size(); ++i)
+                {
+                    if ((std::abs(random()) % rate_base) == 0)
+                    {
+                        ranges.emplace_back(start, handle_data[i]);
+                        start = handle_data[i];
+                    }
+                }
+            }
+
+            ranges.emplace_back(start, DB::DM::P_INF_HANDLE);
+
+            stream->readSuffix();
+        }
+
+        LOG_DEBUG(log, "Random split ranges: " + DB::toString(ranges.size()));
+
+        Handle prev = N_INF_HANDLE;
+        for (auto & r : ranges)
+        {
+            if (r.start != prev)
+                LOG_DEBUG(log, "illegal, expected " + DB::toString(prev) + ". got " + DB::toString(r.start));
+
+            prev = r.end;
+
+            if (r.start == r.end)
+                LOG_DEBUG(log, "range start and end are identical");
+        }
     }
-    ranges.emplace_back(start, DB::DM::P_INF_HANDLE);
+    else
+    {
+        ranges.emplace_back(DB::DM::HandleRange::newAll());
+    }
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
     if (select_query.raw_for_mutable)

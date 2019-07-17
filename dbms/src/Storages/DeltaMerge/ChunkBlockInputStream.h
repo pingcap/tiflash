@@ -45,11 +45,11 @@ public:
     void       skipNextBlock() { ++chunk_index; }
 
 private:
-    const Chunks & chunks;
-    size_t         chunk_index = 0;
-    ColumnDefines  read_columns;
-    PageStorage &  data_storage;
-    Block          header;
+    Chunks        chunks;
+    size_t        chunk_index = 0;
+    ColumnDefines read_columns;
+    PageStorage & data_storage;
+    Block         header;
 };
 
 using ChunkBlockInputStreamPtr = std::shared_ptr<ChunkBlockInputStream>;

@@ -32,6 +32,9 @@ class DeltaTree;
 template <size_t M, size_t F, size_t S>
 class DTEntryIterator;
 
+template <size_t M, size_t F, size_t S, typename TAllocator = Allocator<false>>
+class DTEntriesCopy;
+
 struct RefTuple;
 
 struct EmptyValueSpace
@@ -44,6 +47,8 @@ struct EmptyValueSpace
 using EntryIterator    = DTEntryIterator<DT_M, DT_F, DT_S>;
 using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
 using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
+using DeltaIndex       = DTEntriesCopy<DT_M, DT_F, DT_S>;
+using DeltaIndexPtr    = std::shared_ptr<DeltaIndex>;
 
 using Handle = Int64;
 using RowId  = UInt64;

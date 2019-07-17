@@ -37,6 +37,8 @@ class Chunk
 public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
+
+    Chunk() = default;
     Chunk(Handle handle_first_, Handle handle_last_) : handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false) {}
     explicit Chunk(const HandleRange & delete_range) : handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
     {
@@ -102,7 +104,11 @@ private:
 using Chunks    = std::vector<Chunk>;
 using GenPageId = std::function<PageId()>;
 
-void   serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, std::optional<Chunk> extra_chunk);
+void   serializeChunks(WriteBuffer &           buf,
+                       Chunks::const_iterator  begin,
+                       Chunks ::const_iterator end,
+                       const Chunk *           extra1 = nullptr,
+                       const Chunk *           extra2 = nullptr);
 Chunks deserializeChunks(ReadBuffer & buf);
 
 

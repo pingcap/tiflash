@@ -57,14 +57,22 @@ Chunk Chunk::deserialize(ReadBuffer & buf)
     return chunk;
 }
 
-void serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, std::optional<Chunk> extra_chunk)
+void serializeChunks(
+    WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, const Chunk * extra1, const Chunk * extra2)
 {
-    UInt64 size = extra_chunk.has_value() ? (UInt64)(end - begin) + 1 : (UInt64)(end - begin);
+    auto size = (UInt64)(end - begin);
+    if (extra1)
+        ++size;
+    if (extra2)
+        ++size;
     writeIntBinary(size, buf);
+
     for (; begin != end; ++begin)
         (*begin).serialize(buf);
-    if (extra_chunk)
-        extra_chunk->serialize(buf);
+    if (extra1)
+        extra1->serialize(buf);
+    if (extra2)
+        extra2->serialize(buf);
 }
 
 Chunks deserializeChunks(ReadBuffer & buf)

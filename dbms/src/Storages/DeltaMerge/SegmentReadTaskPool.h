@@ -30,17 +30,17 @@ public:
     using StreamCreator = std::function<BlockInputStreamPtr(const SegmentReadTask & task)>;
     SegmentReadTaskPool(SegmentReadTasks && tasks_, StreamCreator creator_) : tasks(std::move(tasks_)), creator(creator_) {}
 
-    BlockInputStreamPtr getTask()
+    std::pair<UInt64, BlockInputStreamPtr> nextTask()
     {
         SegmentReadTask * task;
         {
             std::lock_guard<std::mutex> lock(mutex);
 
             if (index == tasks.size())
-                return {};
+                return {0, {}};
             task = &(tasks[index++]);
         }
-        return creator(*task);
+        return {task->segment->segmentId(), creator(*task)};
     }
 
 private:

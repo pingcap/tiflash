@@ -19,7 +19,7 @@ namespace DM
 {
 
 // Note that the columns in stable input stream and value space must exactly the same, include the name, type, and id.
-template <class DeltaTree, class DeltaValueSpace>
+template <class DeltaValueSpace, class IndexIterator>
 class DeltaMergeBlockInputStream final : public IProfilingBlockInputStream
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
@@ -41,12 +41,10 @@ private:
     ssize_t stable_skip = 0;
 
     DeltaValueSpacePtr delta_value_space;
-    size_t             max_block_size;
+    IndexIterator      entry_it;
+    IndexIterator      entry_end;
 
-    SharedLock lock;
-
-    EntryIterator entry_it;
-    EntryIterator entry_end;
+    size_t max_block_size;
 
     Block  header;
     size_t num_columns;
@@ -64,23 +62,21 @@ public:
     DeltaMergeBlockInputStream(size_t                           handle_column_pos_,
                                const HandleRange &              handle_range_,
                                const ChunkBlockInputStreamPtr & stable_input_stream_,
-                               const DeltaTree &                delta_tree,
                                const DeltaValueSpacePtr &       delta_value_space_,
-                               size_t                           max_block_size_,
-                               SharedLock &&                    lock)
+                               IndexIterator                    index_begin,
+                               IndexIterator                    index_end,
+                               size_t                           max_block_size_)
         : handle_column_pos(handle_column_pos_),
           handle_range(handle_range_),
           stable_input_stream(stable_input_stream_),
           stable_input_stream_raw_ptr(stable_input_stream.get()),
           delta_value_space(delta_value_space_),
-          max_block_size(max_block_size_),
-          lock(std::move(lock))
+          entry_it(index_begin),
+          entry_end(index_end),
+          max_block_size(max_block_size_)
     {
         header      = stable_input_stream_raw_ptr->getHeader();
         num_columns = header.columns();
-
-        entry_it  = delta_tree.begin();
-        entry_end = delta_tree.end();
 
         if (entry_it == entry_end)
         {
