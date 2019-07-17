@@ -288,7 +288,8 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     auto dm_context = newDMContext(db_context, db_settings);
 
     auto stream_creator = [=](const SegmentReadTask & task) {
-        return task.segment->getInputStream(dm_context, columns_to_read, task.ranges, expected_block_size, max_version);
+        return task.segment->getInputStream(
+            dm_context, columns_to_read, task.ranges, max_version, std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
     };
 
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(std::move(tasks), stream_creator);
