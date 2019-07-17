@@ -3,6 +3,7 @@
 #include <Common/VersionDeltaSet.h>
 #include <Common/VersionSet.h>
 #include <Storages/Page/PageEntryMap.h>
+#include <Storages/Page/PageEntryMapBaseDelta.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
 
 namespace DB
@@ -12,27 +13,30 @@ class PageEntryMapView;
 class PageEntryMapDeltaBuilder;
 
 class PageEntryMapDeltaVersionSet : public ::DB::MVCC::VersionDeltaSet< //
-                                        PageEntryMap,
+                                        PageEntryMapBase,
                                         PageEntryMapDelta,
                                         PageEntryMapView,
                                         PageEntriesEdit,
                                         PageEntryMapDeltaBuilder>
 {
 public:
-    void gcApply(const PageEntriesEdit & edit) { (void)edit; }
+    std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
+
+    /// List all PageFile that are used by any version
+    std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 
 public:
     friend class PageEntryMapView;
     using BaseType
-        = ::DB::MVCC::VersionDeltaSet<PageEntryMap, PageEntryMapDelta, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>;
+        = ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapDelta, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>;
 };
 
 class PageEntryMapDeltaBuilder
 {
 public:
-    PageEntryMapDeltaBuilder(const PageEntryMapView * base_, //
-                             bool                     ignore_invalid_ref_ = false,
-                             Poco::Logger *           log_                = nullptr);
+    explicit PageEntryMapDeltaBuilder(const PageEntryMapView * base_, //
+                                      bool                     ignore_invalid_ref_ = false,
+                                      Poco::Logger *           log_                = nullptr);
 
     ~PageEntryMapDeltaBuilder();
 
@@ -40,17 +44,18 @@ public:
 
     void gcApply(const PageEntriesEdit & edit);
 
-    PageEntryMapDelta * build() { return v; }
+    std::shared_ptr<PageEntryMapDelta> build() { return v; }
 
-    static void mergeDeltaToBase(PageEntryMap * base, PageEntryMapDelta * delta);
+    static void mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> & base, const std::shared_ptr<PageEntryMapDelta> & delta);
 
-    static void mergeDeltas(PageEntryMapDeltaVersionSet::BaseType * vset);
+    static std::shared_ptr<PageEntryMapDelta> mergeDeltas(PageEntryMapDeltaVersionSet::BaseType *    vset,
+                                                          const std::shared_ptr<PageEntryMapDelta> & tail);
 
 private:
-    PageEntryMapView *  base;
-    PageEntryMapDelta * v;
-    bool                ignore_invalid_ref;
-    Poco::Logger *      log;
+    PageEntryMapView *                 base;
+    std::shared_ptr<PageEntryMapDelta> v;
+    bool                               ignore_invalid_ref;
+    Poco::Logger *                     log;
 };
 
 class PageEntryMapView
@@ -60,7 +65,7 @@ public:
     class const_iterator
     {
     public:
-        explicit const_iterator(PageEntryMap::const_iterator cit) : _iter(cit._iter), _normal_pages(cit._normal_pages) {}
+        explicit const_iterator(PageEntryMapBase::const_iterator cit) : _iter(cit._iter), _normal_pages(cit._normal_pages) {}
         explicit const_iterator(PageEntryMapDelta::const_iterator cit) : _iter(cit._iter), _normal_pages(cit._normal_pages) {}
 
         inline PageId            pageId() const { return _iter->first; }
@@ -87,8 +92,9 @@ public:
     };
 
 public:
-    PageEntryMapView(PageEntryMapDeltaVersionSet::BaseType * vset_, PageEntryMapDelta * tail_)
-        : ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDelta, PageEntryMapDeltaBuilder>(vset_, tail_)
+    PageEntryMapView(PageEntryMapDeltaVersionSet::BaseType * vset_, std::shared_ptr<PageEntryMapDelta> tail_)
+        : ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDelta, PageEntryMapDeltaBuilder>(vset_,
+                                                                                                                          std::move(tail_))
     {
     }
 
@@ -102,12 +108,12 @@ public:
 
     const_iterator end() const;
 
-    PageEntryMap::const_normal_page_iterator pages_cbegin() const;
+    PageEntryMapBase::const_normal_page_iterator pages_cbegin() const;
 
-    PageEntryMap::const_normal_page_iterator pages_cend() const;
+    PageEntryMapBase::const_normal_page_iterator pages_cend() const;
 
-    PageEntryMap::const_iterator cbegin() const;
-    PageEntryMap::const_iterator cend() const;
+    PageEntryMapBase::const_iterator cbegin() const;
+    PageEntryMapBase::const_iterator cend() const;
 
 private:
     PageId resolveRefId(PageId page_id) const;

@@ -1,9 +1,28 @@
 #include <Storages/Page/PageEntryMapDeltaVersionSet.h>
 
+#include <stack>
+
 #include <Storages/Page/PageEntryMapVersionSet.h>
 
 namespace DB
 {
+
+PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base_, bool ignore_invalid_ref_, Logger * log_)
+    : base(const_cast<PageEntryMapView *>(base_)), v(new PageEntryMapDelta), ignore_invalid_ref(ignore_invalid_ref_), log(log_)
+{
+#ifndef NDEBUG
+    if (ignore_invalid_ref)
+    {
+        assert(log != nullptr);
+    }
+#endif
+    base->incrRefCount();
+}
+
+PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder()
+{
+    base->decrRefCount();
+}
 
 void PageEntryMapDeltaBuilder::apply(const PageEntriesEdit & edit)
 {
@@ -34,9 +53,9 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
             continue;
         }
         // Gc only apply PUT for updating page entries
-        auto old_iter = v->find(rec.page_id);
+        auto old_iter = base->find(rec.page_id);
         // If the gc page have already been removed, just ignore it
-        if (old_iter == v->end())
+        if (old_iter == base->end())
         {
             continue;
         }
@@ -47,7 +66,7 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
             if (old_page_entry.fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
-                old_page_entry = rec.entry;
+                v->put(rec.page_id, rec.entry);
             }
             // else new page written by another thread, gc page is replaced. leave the page for next gc
         }
@@ -58,7 +77,9 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
     }
 }
 
-void PageEntryMapDeltaBuilder::mergeDeltaToBase(PageEntryMap * base, PageEntryMapDelta * delta)
+void PageEntryMapDeltaBuilder::mergeDeltaToBase( //
+    const std::shared_ptr<PageEntryMapBase> &  base,
+    const std::shared_ptr<PageEntryMapDelta> & delta)
 {
     // apply deletions
     for (auto pid : delta->page_deletions)
@@ -75,43 +96,35 @@ void PageEntryMapDeltaBuilder::mergeDeltaToBase(PageEntryMap * base, PageEntryMa
     delta->clear();
 }
 
-PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base_, bool ignore_invalid_ref_, Logger * log_)
-    : base(const_cast<PageEntryMapView *>(base_)), v(new PageEntryMapDelta), ignore_invalid_ref(ignore_invalid_ref_), log(log_)
+std::shared_ptr<PageEntryMapDelta> PageEntryMapDeltaBuilder::mergeDeltas( //
+    PageEntryMapDeltaVersionSet::BaseType *    vset,
+    const std::shared_ptr<PageEntryMapDelta> & tail)
 {
-#ifndef NDEBUG
-    if (ignore_invalid_ref)
+    (void)vset;
+    if (tail->prev == nullptr)
     {
-        assert(log != nullptr);
+        // Only one delta, do nothing
+        return nullptr;
     }
-#endif
-    base->incrRefCount();
-}
 
-PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder()
-{
-    base->decrRefCount();
-}
-
-void PageEntryMapDeltaBuilder::mergeDeltas(PageEntryMapDeltaVersionSet::BaseType * vset)
-{
-    auto                             q = vset->current;
-    std::vector<PageEntryMapDelta *> nodes_to_remove;
-    for (auto p = q->prev; p != &vset->placeholder_node; p = p->prev, q = q->prev)
+    std::stack<std::shared_ptr<PageEntryMapDelta>> nodes;
+    for (auto node = tail; node != nullptr; node = node->prev)
     {
-        if (p->ref_count > 1)
-            break;
-        // no readers on p, compact q -> p
-        p->merge(*q);
-        q->clear();
-        nodes_to_remove.emplace_back(q);
+        nodes.push(node);
     }
-    // remove unused node from version set
-    for (auto node : nodes_to_remove)
-        node->decrRefCount();
-    // update VersionSet's current node
-    vset->current = q;
+    auto tmp = std::make_shared<PageEntryMapDelta>();
+    // merge delta forward
+    while (!nodes.empty())
+    {
+        auto node = nodes.top();
+        nodes.pop();
+        tmp->merge(*node);
+    }
+
+    return tmp;
 }
 
+////  PageEntryMapView
 
 const PageEntry & PageEntryMapView::at(const PageId page_id) const
 {
@@ -130,7 +143,7 @@ const PageEntry & PageEntryMapView::at(const PageId page_id) const
 PageId PageEntryMapView::maxId() const
 {
     PageId max_id = 0;
-    for (const PageEntryMapDelta * node = tail; node != &vset->placeholder_node; node = node->prev)
+    for (auto node = tail; node != nullptr; node = node->prev)
     {
         max_id = std::max(max_id, node->maxId());
     }
@@ -141,7 +154,7 @@ PageId PageEntryMapView::maxId() const
 PageEntryMapView::const_iterator PageEntryMapView::find(PageId page_id) const
 {
     // begin search PageEntry from tail -> head
-    for (const PageEntryMapDelta * node = tail; node != &vset->placeholder_node; node = node->prev)
+    for (std::shared_ptr<const PageEntryMapDelta> node = tail; node != nullptr; node = node->prev)
     {
         // deleted in later version, then return not exist
         if (node->isDeleted(page_id))
@@ -154,18 +167,18 @@ PageEntryMapView::const_iterator PageEntryMapView::find(PageId page_id) const
             // if new ref find in this delta, turn to find ori_page_id in this VersionView
             return find(ori_page_id);
         }
-        auto iter = node->find(page_id);
+        PageEntryMapDelta::const_iterator iter = node->find(page_id);
         if (iter != node->end())
         {
             return const_iterator(iter);
         }
     }
-    return const_iterator(static_cast<const PageEntryMap *>(vset->base)->find(page_id));
+    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(vset->base)->find(page_id));
 }
 
 bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
 {
-    for (const PageEntryMapDelta * node = tail; node != &vset->placeholder_node; node = node->prev)
+    for (auto node = tail; node != nullptr; node = node->prev)
     {
         // `ref_id` or `page_id` has been deleted in later version, then return not exist
         if (node->isDeleted(ref_id) || node->isDeleted(page_id))
@@ -203,31 +216,69 @@ PageId PageEntryMapView::resolveRefId(PageId page_id) const
 
 PageEntryMapView::const_iterator PageEntryMapView::end() const
 {
-    return const_iterator(static_cast<const PageEntryMap *>(vset->base)->end());
+    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(vset->base)->end());
 }
 
-PageEntryMap::const_normal_page_iterator PageEntryMapView::pages_cbegin() const
+PageEntryMapBase::const_normal_page_iterator PageEntryMapView::pages_cbegin() const
 {
     return vset->base->pages_cbegin();
 }
 
-PageEntryMap::const_normal_page_iterator PageEntryMapView::pages_cend() const
+PageEntryMapBase::const_normal_page_iterator PageEntryMapView::pages_cend() const
 {
     // FIXME
     return vset->base->pages_cend();
 }
 
-PageEntryMap::const_iterator PageEntryMapView::cbegin() const
+PageEntryMapBase::const_iterator PageEntryMapView::cbegin() const
 {
     // FIXME
 
     return vset->base->cbegin();
 }
 
-PageEntryMap::const_iterator PageEntryMapView::cend() const
+PageEntryMapBase::const_iterator PageEntryMapView::cend() const
 {
     // FIXME
     return vset->base->cend();
+}
+
+////  PageEntryMapDeltaVersionSet
+
+std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(const PageEntriesEdit & edit)
+{
+
+    std::unique_lock lock(read_mutex);
+
+    // apply edit on base
+    std::shared_ptr<PageEntryMapDelta> v;
+    {
+        auto                     base_view = std::make_shared<PageEntryMapView>(this, current);
+        PageEntryMapDeltaBuilder builder(base_view.get());
+        builder.gcApply(edit);
+        v = builder.build();
+    }
+
+    this->appendVersion(std::move(v));
+
+    return listAllLiveFiles();
+}
+
+std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() const
+{
+    std::set<PageFileIdAndLevel> liveFiles;
+    for (auto v = current; v != nullptr; v = v->prev)
+    {
+        for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
+        {
+            liveFiles.insert(it->second.fileIdLevel());
+        }
+    }
+    for (auto it = base->pages_cbegin(); it != base->pages_cend(); ++it)
+    {
+        liveFiles.insert(it->second.fileIdLevel());
+    }
+    return liveFiles;
 }
 
 } // namespace DB

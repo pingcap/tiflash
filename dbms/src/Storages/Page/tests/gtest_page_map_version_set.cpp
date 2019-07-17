@@ -3,6 +3,10 @@
 
 #include <type_traits>
 
+#include <Poco/AutoPtr.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/PatternFormatter.h>
 #include <Storages/Page/PageEntryMapDeltaVersionSet.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
 
@@ -14,23 +18,45 @@ namespace tests
 template <typename T>
 class PageMapVersionSet_test : public ::testing::Test
 {
+public:
+    static void SetUpTestCase()
+    {
+        Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
+        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
+        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
+        Logger::root().setChannel(formatting_channel);
+        Logger::root().setLevel("trace");
+    }
 };
 
 TYPED_TEST_CASE_P(PageMapVersionSet_test);
 
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
 {
-    TypeParam       versions;
-    PageEntriesEdit edit;
-    edit.put(0, PageEntry{.checksum = 0x123});
-    versions.apply(edit);
+    TypeParam versions;
+    LOG_TRACE(&Logger::root(), "init      :" + versions.toDebugStringUnlocked());
+    {
+        PageEntriesEdit edit;
+        edit.put(0, PageEntry{.checksum = 0x123});
+        versions.apply(edit);
+    }
     // VersionSet, new version generate && old version removed at the same time
     // VersionDeltaSet, delta version merged
+    LOG_TRACE(&Logger::root(), "apply    A:" + versions.toDebugStringUnlocked());
     EXPECT_EQ(versions.size(), 1UL);
+    {
+        PageEntriesEdit edit;
+        edit.put(1, PageEntry{.checksum = 0x456});
+        versions.apply(edit);
+    }
+    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
     auto s2 = versions.getSnapshot();
     EXPECT_EQ(versions.size(), 1UL);
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
+    auto entry2 = s2->version()->at(1);
+    ASSERT_EQ(entry2.checksum, 0x456UL);
     s2.reset(); // release snapshot
     EXPECT_EQ(versions.size(), 1UL);
 }
@@ -40,39 +66,72 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     TypeParam versions;
     auto      s1 = versions.getSnapshot();
     EXPECT_EQ(versions.size(), 1UL);
-    PageEntriesEdit edit;
-    edit.put(0, PageEntry{.checksum = 0x123});
-    versions.apply(edit);
+    LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
+    {
+        PageEntriesEdit edit;
+        edit.put(0, PageEntry{.checksum = 0x123});
+        versions.apply(edit);
+    }
     EXPECT_EQ(versions.size(), 2UL); // former node is hold by s1, append new version
-    auto s2    = versions.getSnapshot();
+    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
+    auto s2 = versions.getSnapshot();
+    LOG_TRACE(&Logger::root(), "snapshot 2:" + versions.toDebugStringUnlocked());
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
+
     s2.reset();
-    EXPECT_EQ(versions.size(), 2UL);
+    LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugStringUnlocked());
+    // VersionSet, size is 2 since A is still hold by s1
+    // VersionDeltaSet, size is 1 since we do a compaction on delta
+    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+        EXPECT_EQ(versions.size(), 2UL);
+    else
+        EXPECT_EQ(versions.size(), 1UL);
+
     s1.reset();
+    LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugStringUnlocked());
     // VersionSet, old version removed from version set
     // VersionDeltaSet, delta version merged
     EXPECT_EQ(versions.size(), 1UL);
+
+    {
+        PageEntriesEdit edit;
+        edit.put(0, PageEntry{.checksum = 0x12});
+        versions.apply(edit);
+    }
+    LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugStringUnlocked());
+    // VersionSet, new version gen and old version remove at the same time
+    // VersionDeltaSet, C merge to delta
+    EXPECT_EQ(versions.size(), 1UL);
+    auto s3 = versions.getSnapshot();
+    entry   = s3->version()->at(0);
+    ASSERT_EQ(entry.checksum, 0x12UL);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, FormerSnapshotReleaseFirst)
+TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
 {
-    TypeParam       versions;
-    auto            s1 = versions.getSnapshot();
+    TypeParam versions;
+    auto      s1 = versions.getSnapshot();
+    LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
     PageEntriesEdit edit;
     edit.put(0, PageEntry{.checksum = 0x123});
     versions.apply(edit);
+    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
     auto s2    = versions.getSnapshot();
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
+
     s1.reset();
+    LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugStringUnlocked());
     // VersionSet, size decrease to 1 when s1 release
     // VersionDeltaSet, size is 2 since we can not do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
         EXPECT_EQ(versions.size(), 1UL);
     else
         EXPECT_EQ(versions.size(), 2UL);
+
     s2.reset();
+    LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugStringUnlocked());
     EXPECT_EQ(versions.size(), 1UL);
 }
 
@@ -239,7 +298,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
 REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            ApplyEdit,
                            ApplyEditWithReadLock,
-                           FormerSnapshotReleaseFirst,
+                           ApplyEditWithReadLock2,
                            Restore,
                            GcConcurrencyDelPage,
                            GcPageMove,

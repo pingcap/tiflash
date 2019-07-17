@@ -25,6 +25,9 @@ target_link_libraries(page_test_page_entry_map gtest_main page_storage)
 add_executable(page_test_page_file EXCLUDE_FROM_ALL gtest_page_file.cpp)
 target_link_libraries(page_test_page_file gtest_main page_storage)
 
+add_executable(page_test_version_set EXCLUDE_FROM_ALL gtest_page_map_version_set.cpp)
+target_link_libraries(page_test_version_set gtest_main page_storage)
+
 # non googletest
 add_executable(page_stress_page_storage stress_page_stroage.cpp)
 target_link_libraries(page_stress_page_storage page_storage)

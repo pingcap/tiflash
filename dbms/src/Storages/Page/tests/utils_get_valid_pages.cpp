@@ -64,7 +64,7 @@ int main(int argc, char ** argv)
     DB::PageEntryMapVersionSet versions;
     for (auto & page_file : page_files)
     {
-        DB::PageEntriesEdit edit;
+        DB::PageEntriesEdit  edit;
         DB::PageIdAndEntries id_and_caches;
         const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(edit);
 
