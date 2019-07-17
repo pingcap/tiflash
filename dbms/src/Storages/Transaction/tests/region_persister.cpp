@@ -1,5 +1,6 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Storages/Transaction/RegionManager.h>
 #include <ext/scope_guard.h>
 
 #include "region_helper.h"
@@ -147,6 +148,8 @@ int main(int, char **)
     };
 
     {
+        RegionManager region_manager;
+
         std::string path = dir_path + "broken_file";
         remove_dir(path);
         SCOPE_EXIT({ remove_dir(path); });
@@ -158,7 +161,7 @@ int main(int, char **)
             UInt64 diff = 0;
             PageStorage::Config config;
             config.file_roll_size = 128 * MB;
-            RegionPersister persister(path);
+            RegionPersister persister(path, region_manager);
             for (size_t i = 0; i < region_num; ++i)
             {
                 auto region = std::make_shared<Region>(createRegionMeta(i));
@@ -181,7 +184,7 @@ int main(int, char **)
         }
 
         {
-            RegionPersister persister(path);
+            RegionPersister persister(path, region_manager);
             persister.restore(new_regions);
             for (size_t i = 0; i < region_num; ++i)
             {
@@ -206,7 +209,8 @@ int main(int, char **)
         if (clean_up)
             remove_dir(path);
 
-        RegionPersister persister(path, config);
+        RegionManager region_manager;
+        RegionPersister persister(path, region_manager, config);
         RegionMap regions;
         for (int i = 0; i < region_num; ++i)
         {
