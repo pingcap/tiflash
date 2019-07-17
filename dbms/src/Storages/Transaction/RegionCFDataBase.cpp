@@ -7,13 +7,13 @@ namespace DB
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
 {
-    return std::get<0>(val);
+    return *std::get<0>(val);
 }
 
 template <typename Trait>
 const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 {
-    return std::get<1>(val);
+    return *std::get<1>(val);
 }
 
 template <typename Trait>
@@ -250,7 +250,7 @@ size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase &
 }
 
 template <typename Trait>
-TableIDSet RegionCFDataBase<Trait>::getAllRecordTableID() const
+TableIDSet RegionCFDataBase<Trait>::getAllTables() const
 {
     TableIDSet tables;
     for (const auto & [table_id, map] : data)

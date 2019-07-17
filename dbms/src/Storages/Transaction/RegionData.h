@@ -57,7 +57,7 @@ public:
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
 
-    TableIDSet getCommittedRecordTableID() const;
+    TableIDSet getAllWriteCFTables() const;
 
     RegionData() {}
 

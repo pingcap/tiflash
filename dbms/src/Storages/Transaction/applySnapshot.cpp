@@ -22,12 +22,10 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     Logger * log = &Logger::get(RegionSnapshotName);
 
     auto old_region = kvstore->getRegion(new_region->id());
-    std::optional<UInt64> expect_old_index;
 
     if (old_region)
     {
-        expect_old_index = old_region->getIndex();
-        if (*expect_old_index >= new_region->getIndex())
+        if (old_region->getIndex() >= new_region->getIndex())
         {
             LOG_WARNING(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
             return false;
@@ -82,7 +80,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     }
 
     // context may be null in test cases.
-    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr, expect_old_index);
+    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)

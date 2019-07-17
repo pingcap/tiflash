@@ -68,7 +68,7 @@ public:
 
     enginepb::CommandResponse toCommandResponse() const;
 
-    size_t serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
 
     static RegionMeta deserialize(ReadBuffer & buf);
 

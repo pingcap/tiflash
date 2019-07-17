@@ -332,15 +332,13 @@ Int64 concurrentRangeOperate(
 
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.getRegionTable().traverseRegionsByTable(table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & d) {
-            for (auto && [_, r] : d)
-            {
-                std::ignore = _;
-                if (r == nullptr)
-                    continue;
-                regions.push_back(r);
-            }
-        });
+        for (auto && [_, r] : tmt.getRegionTable().getRegionsByTable(table_info.id))
+        {
+            std::ignore = _;
+            if (r == nullptr)
+                continue;
+            regions.push_back(r);
+        }
     }
 
     std::shuffle(regions.begin(), regions.end(), std::default_random_engine());
