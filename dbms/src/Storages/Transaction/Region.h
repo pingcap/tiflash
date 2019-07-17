@@ -167,8 +167,6 @@ public:
 
     static ColumnFamilyType getCf(const std::string & cf);
 
-    RegionPersistLock genPersistLock() const;
-
 private:
     // Private methods no need to lock mutex, normally
 
@@ -202,18 +200,7 @@ private:
     // dirty_flag is used to present whether this region need to be persisted.
     mutable std::atomic<size_t> dirty_flag = 1;
 
-    // because operation persist should be locked if not called in KVStore::onServiceCommand
-    mutable std::mutex persist_mutex;
-
     Logger * log;
-};
-
-/// Encapsulation of lock guard of persist mutex in Region
-class RegionPersistLock : private boost::noncopyable
-{
-    friend RegionPersistLock Region::genPersistLock() const;
-    RegionPersistLock(std::mutex & mutex_) : lock(mutex_) {}
-    std::lock_guard<std::mutex> lock;
 };
 
 } // namespace DB

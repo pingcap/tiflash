@@ -1,5 +1,6 @@
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
 
 namespace DB
@@ -17,7 +18,7 @@ void RegionPersister::drop(RegionID region_id)
     page_storage.write(wb);
 }
 
-void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionWriteBuffer & region_write_buffer)
+void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 
@@ -32,28 +33,28 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionWrit
     }
 }
 
-void RegionPersister::persist(const Region & region, const RegionPersistLock & lock) { doPersist(region, &lock); }
+void RegionPersister::persist(const Region & region, const RegionTaskLock & lock) { doPersist(region, &lock); }
 
 void RegionPersister::persist(const Region & region) { doPersist(region, nullptr); }
 
-void RegionPersister::doPersist(const Region & region, const RegionPersistLock * lock)
+void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock)
 {
     // Support only on thread persist.
     size_t dirty_flag = region.dirtyFlag();
 
-    RegionWriteBuffer region_buffer;
+    RegionCacheWriteElement region_buffer;
     computeRegionWriteBuffer(region, region_buffer);
 
     if (lock)
         doPersist(region_buffer, *lock);
     else
-        doPersist(region_buffer, region.genPersistLock());
+        doPersist(region_buffer, region_manager.genRegionTaskLock(region.id()));
 
     region.markPersisted();
     region.decDirtyFlag(dirty_flag);
 }
 
-void RegionPersister::doPersist(RegionWriteBuffer & region_write_buffer, const RegionPersistLock &)
+void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock &)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 

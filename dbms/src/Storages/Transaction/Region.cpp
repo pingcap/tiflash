@@ -634,6 +634,4 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
         compareAndCompleteSnapshot(handle_map, table_id, safe_point);
 }
 
-RegionPersistLock Region::genPersistLock() const { return RegionPersistLock(persist_mutex); }
-
 } // namespace DB

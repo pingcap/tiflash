@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/Transaction/RegionClientCreate.h>
+#include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
 
 namespace DB
@@ -9,6 +10,9 @@ namespace DB
 // TODO move to Settings.h
 static const Seconds REGION_PERSIST_PERIOD(300);      // 5 minutes
 static const Seconds KVSTORE_TRY_PERSIST_PERIOD(180); // 3 minutes
+
+class KVStore;
+using KVStorePtr = std::shared_ptr<KVStore>;
 
 class RegionTable;
 struct RaftContext;
@@ -25,11 +29,11 @@ public:
     KVStore(const std::string & data_dir);
     void restore(const RegionClientCreateFunc & region_client_create);
 
-    RegionPtr getRegion(RegionID region_id) const;
+    RegionPtr getRegion(const RegionID region_id) const;
 
     void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, RegionTable * region_table, const std::optional<UInt64> expect_old_index = {});
+    bool onSnapshot(RegionPtr new_region, RegionTable * region_table);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & context);
 
@@ -51,11 +55,14 @@ private:
     friend struct MockTiDBTable;
     void removeRegion(const RegionID region_id, RegionTable * region_table);
 
-private:
-    RegionPersister region_persister;
-    RegionMap regions;
+    RegionMap & regions();
+    const RegionMap & regions() const;
+    std::mutex & mutex() const;
 
-    mutable std::mutex mutex;
+private:
+    RegionManager region_manager;
+
+    RegionPersister region_persister;
 
     std::atomic<Timepoint> last_try_persist_time = Clock::now();
 
@@ -64,7 +71,5 @@ private:
 
     Logger * log;
 };
-
-using KVStorePtr = std::shared_ptr<KVStore>;
 
 } // namespace DB
