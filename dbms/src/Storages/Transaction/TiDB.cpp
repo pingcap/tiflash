@@ -124,8 +124,50 @@ namespace TiDB
 using DB::ReadBufferFromString;
 using DB::WriteBuffer;
 using DB::WriteBufferFromOwnString;
+using DB::Field;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
+
+// TODO:: Refine Decimal Default Value !!
+// TODO:: Refine Enum Default Value !!
+// TODO:: Refine Date/Datatime/TimeStamp Defalut Value !!
+Field ColumnInfo::defaultValueToField() const {
+    auto & value = origin_default_value;
+    switch (tp) {
+        // Integer Type.
+        case TypeTiny:
+        case TypeShort:
+        case TypeLong:
+        case TypeLongLong:
+        case TypeInt24:
+            return value.convert<Int64>();
+        // Floating type.
+        case TypeFloat:
+        case TypeDouble:
+            return value.convert<double>();
+        case TypeTimestamp:
+            // FIXME: may be string
+            return value.convert<Int64>();
+        case TypeDate:
+        case TypeDatetime:
+        case TypeVarchar:
+        case TypeTinyBlob:
+        case TypeMediumBlob:
+        case TypeLongBlob:
+        case TypeBlob:
+        case TypeVarString:
+        case TypeString:
+            return value.convert<String>();
+        case TypeEnum:
+            // FIXME: may be int or string
+            return value.convert<String>();
+        case TypeNull:
+            return Field();
+        default:
+            throw Exception("Have not proccessed type: " + std::to_string(tp));
+    }
+    return Field();
+}
 
 Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
 {

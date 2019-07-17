@@ -186,8 +186,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
                 row.emplace_back(Field(column.id));
                 // Fill `zero` value if NOT NULL specified or else NULL.
-                // TODO: Need to consider default value.
-                row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
+                row.push_back(column.defaultValueToField());
             }
 
             // Remove values of non-existing columns, which could be data inserted (but not flushed) before DDLs that drop some columns.
