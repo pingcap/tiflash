@@ -34,13 +34,13 @@ RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const Reg
 
 LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
 
-TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::insert(const std::string & cf, TiKVKey key, TiKVValue value)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(cf, key, value);
+    return doInsert(cf, std::move(key), std::move(value));
 }
 
-TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
     std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
@@ -48,7 +48,7 @@ TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKV
         return InvalidTableID;
 
     auto type = getCf(cf);
-    return data.insert(type, key, raw_key, value);
+    return data.insert(type, std::move(key), raw_key, std::move(value));
 }
 
 TableID Region::remove(const std::string & cf, const TiKVKey & key)
@@ -195,9 +195,9 @@ void Region::execCompactLog(
     meta.execCompactLog(request, response, index, term);
 }
 
-RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
+RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
 {
-    auto & header = cmd.header();
+    const auto & header = cmd.header();
     UInt64 term = header.term();
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
@@ -275,7 +275,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 
         std::unique_lock<std::shared_mutex> lock(mutex);
 
-        for (const auto & req : cmd.requests())
+        for (auto && req : *cmd.mutable_requests())
         {
             auto type = req.cmd_type();
 
@@ -283,23 +283,23 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
             {
                 case raft_cmdpb::CmdType::Put:
                 {
-                    const auto & put = req.put();
+                    auto & put = *req.mutable_put();
 
-                    auto & key = put.key();
-                    auto & value = put.value();
+                    auto & key = *put.mutable_key();
+                    auto & value = *put.mutable_value();
 
-                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
-                    const auto & tikv_value = static_cast<const TiKVValue &>(value);
+                    auto & tikv_key = static_cast<TiKVKey &>(key);
+                    auto & tikv_value = static_cast<TiKVValue &>(value);
 
                     try
                     {
-                        table_id = doInsert(put.cf(), tikv_key, tikv_value);
+                        table_id = doInsert(put.cf(), std::move(tikv_key), std::move(tikv_value));
                     }
                     catch (Exception & e)
                     {
                         LOG_ERROR(log,
                             toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
-                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << put.cf());
+                                       << ", index: " << index << "], CF: " << put.cf());
                         e.rethrow();
                     }
 
@@ -325,7 +325,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     {
                         LOG_ERROR(log,
                             toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
-                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
+                                       << ", index: " << index << "], key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
                         e.rethrow();
                     }
 
@@ -577,7 +577,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
         TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
 
-        data.insert(Write, commit_key, raw_key, value);
+        data.insert(Write, std::move(commit_key), raw_key, std::move(value));
         ++deleted_gc_cnt;
     }
 

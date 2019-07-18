@@ -115,17 +115,17 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         if (!request.has_data())
             throw Exception("Failed to read snapshot data", ErrorCodes::LOGICAL_ERROR);
 
-        const auto & data = request.data();
-        const auto & cf_data = data.data();
+        auto & data = *request.mutable_data();
+        auto & cf_data = *data.mutable_data();
         for (auto it = cf_data.begin(); it != cf_data.end(); ++it)
         {
-            auto & key = it->key();
-            auto & value = it->value();
+            auto & key = *it->mutable_key();
+            auto & value = *it->mutable_value();
 
-            const auto & tikv_key = static_cast<const TiKVKey &>(key);
-            const auto & tikv_value = static_cast<const TiKVValue &>(value);
+            auto & tikv_key = static_cast<TiKVKey &>(key);
+            auto & tikv_value = static_cast<TiKVValue &>(value);
 
-            new_region->insert(data.cf(), tikv_key, tikv_value);
+            new_region->insert(data.cf(), std::move(tikv_key), std::move(tikv_value));
         }
     }
 
