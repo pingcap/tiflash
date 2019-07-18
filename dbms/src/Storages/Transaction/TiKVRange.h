@@ -62,10 +62,10 @@ inline Handle getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
     }
 }
 
-template <bool start, bool decoded = false>
+template <bool start>
 inline Handle getRangeHandle(const std::string & key, const TableID table_id)
 {
-    return getRangeHandle<start, decoded>(static_cast<const TiKVKey &>(key), table_id);
+    return getRangeHandle<start, true>(static_cast<const TiKVKey &>(key), table_id);
 }
 
 inline HandleRange<HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
