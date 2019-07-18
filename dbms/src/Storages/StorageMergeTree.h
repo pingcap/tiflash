@@ -81,6 +81,8 @@ public:
 
     void alterForTMT(const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context);
 
+    void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name, const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
+
     bool checkTableCanBeDropped() const override;
 
     const TableInfo & getTableInfo() const;
