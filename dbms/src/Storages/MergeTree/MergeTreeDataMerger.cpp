@@ -113,6 +113,7 @@ void MergeTreeDataMerger::FuturePart::assign(MergeTreeData::DataPartsVector part
     }
     else
         name = part_info.getPartName();
+    path = parts[0]->storage.context.getPartPathSelector().getPathForPart(parts[0]->storage, name);
 }
 
 MergeTreeDataMerger::MergeTreeDataMerger(MergeTreeData & data_, const BackgroundProcessingPool & pool_)
@@ -151,7 +152,16 @@ size_t MergeTreeDataMerger::getMaxPartsSizeForMerge(size_t pool_size, size_t poo
             data.settings.max_bytes_to_merge_at_max_space_in_pool,
             static_cast<double>(free_entries) / data.settings.number_of_free_entries_in_pool_to_lower_max_size_of_merge);
 
-    return std::min(max_size, static_cast<size_t>(DiskSpaceMonitor::getUnreservedFreeSpace(data.full_path) / DISK_USAGE_COEFFICIENT_TO_SELECT));
+    size_t max_parts_size = max_size;
+    for (auto & path : data.context.getAllPath())
+    {
+        auto s = static_cast<size_t>(DiskSpaceMonitor::getUnreservedFreeSpace(path) / DISK_USAGE_COEFFICIENT_TO_SELECT);
+        if (s < max_parts_size)
+        {
+            max_parts_size = s;
+        }
+    }
+    return max_parts_size;
 }
 
 
@@ -531,7 +541,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
               << parts.front()->name << " to " << parts.back()->name
               << " into " << TMP_PREFIX + future_part.name);
 
-    String new_part_tmp_path = data.getFullPath() + TMP_PREFIX + future_part.name + "/";
+    String new_part_tmp_path = data.getDataPartsPath(future_part.path) + TMP_PREFIX + future_part.name + "/";
     if (Poco::File(new_part_tmp_path).exists())
         throw Exception("Directory " + new_part_tmp_path + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
 
@@ -559,7 +569,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             , data.merging_params, gathering_columns, gathering_column_names, merging_columns, merging_column_names);
 
     MergeTreeData::MutableDataPartPtr new_data_part = std::make_shared<MergeTreeData::DataPart>(
-            data, future_part.name, future_part.part_info);
+            data, future_part.name, future_part.part_info, future_part.path);
     new_data_part->partition.assign(future_part.getPartition());
     new_data_part->relative_path = TMP_PREFIX + future_part.name;
     new_data_part->is_temp = true;

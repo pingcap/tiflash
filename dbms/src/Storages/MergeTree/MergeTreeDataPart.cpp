@@ -133,10 +133,16 @@ void MergeTreeDataPart::MinMaxIndex::merge(const MinMaxIndex & other)
     }
 }
 
+MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_)
+        : storage(storage_), name(name_), info(info_)
+{
+    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name);
+}
 
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_)
     : storage(storage_), name(name_), info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
 {
+    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name);
 }
 
 /// Takes into account the fact that several columns can e.g. share their .size substreams.
@@ -215,13 +221,12 @@ String MergeTreeDataPart::getColumnNameWithMinumumCompressedSize() const
     return *minimum_size_column;
 }
 
-
 String MergeTreeDataPart::getFullPath() const
 {
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. This is bug.", ErrorCodes::LOGICAL_ERROR);
 
-    return storage.full_path + relative_path + "/";
+    return storage.getDataPartsPath(full_path_prefix) + relative_path + "/";
 }
 
 String MergeTreeDataPart::getNameWithPrefix() const
@@ -315,8 +320,8 @@ void MergeTreeDataPart::remove() const
     if (relative_path.empty())
         throw Exception("Part relative_path cannot be empty. This is bug.", ErrorCodes::LOGICAL_ERROR);
 
-    String from = storage.full_path + relative_path;
-    String to = storage.full_path + "tmp_delete_" + name;
+    String from = storage.getDataPartsPath(full_path_prefix) + relative_path;
+    String to = storage.getDataPartsPath(full_path_prefix) + "tmp_delete_" + name;
 
     Poco::File from_dir{from};
     Poco::File to_dir{to};
@@ -356,7 +361,7 @@ void MergeTreeDataPart::remove() const
 void MergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_new_dir_if_exists) const
 {
     String from = getFullPath();
-    String to = storage.full_path + new_relative_path + "/";
+    String to = storage.getDataPartsPath(full_path_prefix) + new_relative_path + "/";
 
     Poco::File from_file(from);
     if (!from_file.exists())
@@ -386,7 +391,6 @@ void MergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_n
     relative_path = new_relative_path;
 }
 
-
 void MergeTreeDataPart::renameAddPrefix(bool to_detached, const String & prefix) const
 {
     unsigned try_no = 0;
@@ -399,7 +403,7 @@ void MergeTreeDataPart::renameAddPrefix(bool to_detached, const String & prefix)
             * This is done only in the case of `to_detached`, because it is assumed that in this case the exact name does not matter.
             * No more than 10 attempts are made so that there are not too many junk directories left.
             */
-        while (try_no < 10 && Poco::File(storage.full_path + dst_name()).exists())
+        while (try_no < 10 && Poco::File(storage.getDataPartsPath(full_path_prefix) + dst_name()).exists())
         {
             LOG_WARNING(storage.log, "Directory " << dst_name() << " (to detach to) is already exist."
                 " Will detach to directory with '_tryN' suffix.");

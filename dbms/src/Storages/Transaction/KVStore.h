@@ -35,7 +35,7 @@ public:
 
     bool onSnapshot(RegionPtr new_region, RegionTable * region_table);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
-    void onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & context);
+    void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
 
     // Send all regions status to remote TiKV.
     void report(RaftContext & context);

@@ -95,16 +95,16 @@ RaftService::~RaftService()
 
 grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream)
 {
-    RaftContext rctx(&db_context, grpc_context, stream);
+    RaftContext raft_contex(&db_context, grpc_context, stream);
 
     try
     {
-        kvstore->report(rctx);
+        kvstore->report(raft_contex);
 
-        enginepb::CommandRequestBatch request;
-        while (stream->Read(&request))
+        enginepb::CommandRequestBatch cmds;
+        while (stream->Read(&cmds))
         {
-            applyCommand(rctx, request);
+            kvstore->onServiceCommand(std::move(cmds), raft_contex);
         }
     }
     catch (...)
@@ -127,11 +127,6 @@ grpc::Status RaftService::ApplySnapshot(grpc::ServerContext *, CommandServerRead
         tryLogCurrentException(log, "gRPC ApplyCommandBatch on " + address + " error");
         return grpc::Status(grpc::StatusCode::UNKNOWN, "Runtime error, check theflash log for detail.");
     }
-}
-
-void RaftService::applyCommand(RaftContext & context, const enginepb::CommandRequestBatch & cmd)
-{
-    kvstore->onServiceCommand(cmd, context);
 }
 
 } // namespace DB
