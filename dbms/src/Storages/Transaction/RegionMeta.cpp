@@ -120,7 +120,7 @@ RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 RegionRange RegionMeta::getRange() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {TiKVKey(region_state.region().start_key()), TiKVKey(region_state.region().end_key())};
+    return {TiKVKey::copyFrom(region_state.region().start_key()), TiKVKey::copyFrom(region_state.region().end_key())};
 }
 
 std::string RegionMeta::toString(bool dump_status) const

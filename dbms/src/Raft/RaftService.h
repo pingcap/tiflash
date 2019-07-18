@@ -34,8 +34,6 @@ private:
     grpc::Status ApplySnapshot(
         grpc::ServerContext * grpc_context, CommandServerReader * reader, enginepb::SnapshotDone * response) override;
 
-    void applyCommand(RaftContext & context, const enginepb::CommandRequestBatch & cmd);
-
 private:
     std::string address;
 
