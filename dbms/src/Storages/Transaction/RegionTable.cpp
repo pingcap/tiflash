@@ -246,13 +246,12 @@ void RegionTable::removeTable(TableID table_id)
     auto & table = it->second;
 
     // Remove from region list.
-    for (const auto & region_info : table.regions.get())
+    for (const auto & region_info : table.regions)
     {
-        regions[region_info.first].tables.erase(table.table_id);
+        regions[region_info.first].erase(table.table_id);
     }
 
     // Remove from table map.
-    table.regions.drop();
     tables.erase(it);
 }
 
