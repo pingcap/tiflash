@@ -368,7 +368,7 @@ public:
     RaftService & getRaftService();
 
     void initializeSchemaSyncService();
-    SchemaSyncServicePtr getSchemaSyncService();
+    SchemaSyncServicePtr & getSchemaSyncService();
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

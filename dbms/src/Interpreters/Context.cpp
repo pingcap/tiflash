@@ -1433,11 +1433,9 @@ void Context::initializeSchemaSyncService()
     shared->schema_sync_service = std::make_shared<SchemaSyncService>(*this);
 }
 
-SchemaSyncServicePtr Context::getSchemaSyncService()
+SchemaSyncServicePtr & Context::getSchemaSyncService()
 {
     auto lock = getLock();
-    if (!shared->schema_sync_service)
-        throw Exception("Schema Sync Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
     return shared->schema_sync_service;
 }
 
