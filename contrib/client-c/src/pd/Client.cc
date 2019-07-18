@@ -3,6 +3,7 @@
 #include <grpcpp/security/credentials.h>
 #include <grpcpp/create_channel.h>
 #include <Poco/URI.h>
+#include <unistd.h>
 
 namespace pingcap {
 namespace pd {
@@ -79,12 +80,13 @@ pdpb::GetMembersResponse Client::getMembers(std::string url)
     if (!status.ok()) {
         std::string err_msg = "get member failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
-        throw Exception(err_msg, GRPCErrorCode);
+        return {};
     }
     return resp;
 }
 
 std::unique_ptr<pdpb::PD::Stub> Client::leaderStub() {
+    std::shared_lock lk(leader_mutex);
     auto cc = getOrCreateGRPCConn(leader);
     return pdpb::PD::NewStub(cc);
 }
@@ -107,6 +109,7 @@ void Client::initClusterID() {
 }
 
 void Client::updateLeader() {
+    std::unique_lock lk(leader_mutex);
     for (auto url: urls) {
         auto resp = getMembers(url);
         if (!resp.has_header() || resp.leader().client_urls_size() == 0)
@@ -149,7 +152,7 @@ void Client::leaderLoop() {
         bool should_update = false;
         std::unique_lock<std::mutex> lk(update_leader_mutex);
         auto now = std::chrono::system_clock::now();
-        if (update_leader_cv.wait_until(lk, now + loop_interval, [this](){return check_leader;})) {
+        if (update_leader_cv.wait_until(lk, now + loop_interval, [this](){return check_leader.load();})) {
             should_update = true;
         } else {
             if (work_threads_stop)
@@ -163,7 +166,7 @@ void Client::leaderLoop() {
         }
         if (should_update) {
             try {
-                check_leader = false;
+                check_leader.store(false);
                 updateLeader();
             } catch (Exception & e) {
                 log->error(e.displayText());
@@ -179,21 +182,30 @@ pdpb::RequestHeader * Client::requestHeader() {
 }
 
 uint64_t Client::getGCSafePoint() {
+    std::lock_guard<std::mutex> lk(gc_safepoint_mutex);
+
     pdpb::GetGCSafePointRequest request{};
     pdpb::GetGCSafePointResponse response{};
     request.set_allocated_header(requestHeader());
 ;
-    grpc::ClientContext context;
+    ::grpc::Status status;
+    std::string err_msg;
 
-    context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
+    for (int i = 0; i < max_init_cluster_retries; i++) {
+        grpc::ClientContext context;
 
-    auto status = leaderStub()->GetGCSafePoint(&context, request, &response);
-    if (!status.ok()) {
-        std::string err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
+        context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
+
+        auto status = leaderStub()->GetGCSafePoint(&context, request, &response);
+        if (status.ok())
+            return response.safe_point();
+        err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
-        throw Exception(err_msg, GRPCErrorCode);
+        check_leader.store(true);
+        usleep(100000);
+        // TODO retry outside.
     }
-    return response.safe_point();
+    throw Exception(err_msg, status.error_code());
 }
 
 std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegion(std::string key) {
@@ -211,6 +223,7 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
     if (!status.ok()) {
         std::string err_msg = ("get region failed: " + std::to_string(status.error_code()) + " : " + status.error_message());
         log->error(err_msg);
+        check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
     }
 
@@ -236,6 +249,7 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
     if (!status.ok()) {
         std::string err_msg = ("get region by id failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
         log->error(err_msg);
+        check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
     }
 
@@ -261,6 +275,7 @@ metapb::Store Client::getStore(uint64_t store_id) {
     if (!status.ok()) {
         std::string err_msg = ("get store failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
         log->error(err_msg);
+        check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
     }
     return response.store();

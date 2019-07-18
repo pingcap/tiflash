@@ -39,7 +39,7 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/ReplacingSortedBlockInputStream.h>
 #include <DataStreams/SummingSortedBlockInputStream.h>
 #include <DataStreams/TMTSortedBlockInputStream.h>
-#include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/TMTUnionBlockInputStream.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>
 #include <DataStreams/VersionedCollapsingSortedBlockInputStream.h>
 #include <DataTypes/DataTypeDate.h>
@@ -265,18 +265,17 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
         if (regions_query_info.empty())
         {
-            tmt.getRegionTable().traverseRegionsByTable(data.table_info->id, [&](std::vector<std::pair<RegionID, RegionPtr>> & regions) {
-                for (const auto & [id, region] : regions)
-                {
-                    kvstore_region.emplace(id, region);
-                    if (region == nullptr)
-                        // maybe region is removed.
-                        regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
-                    else
-                        regions_query_info.push_back(
-                            {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
-                }
-            });
+            auto regions = tmt.getRegionTable().getRegionsByTable(data.table_info->id);
+            for (const auto & [id, region] : regions)
+            {
+                kvstore_region.emplace(id, region);
+                if (region == nullptr)
+                    // maybe region is removed.
+                    regions_query_info.push_back({id, InvalidRegionVersion, InvalidRegionVersion, {0, 0}});
+                else
+                    regions_query_info.push_back(
+                        {id, region->version(), region->confVer(), region->getHandleRangeByTable(data.table_info->id)});
+            }
         }
 
         if (kvstore_region.size() != regions_query_info.size())
@@ -1106,7 +1105,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 }
 
                 if (!union_regions_stream.empty())
-                    res.emplace_back(std::make_shared<UnionBlockInputStream<>>(union_regions_stream, nullptr, 1));
+                    res.emplace_back(std::make_shared<TMTUnionBlockInputStream>(std::move(union_regions_stream)));
             }
         }
         else

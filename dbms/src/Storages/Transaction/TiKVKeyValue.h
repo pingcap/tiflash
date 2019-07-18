@@ -22,6 +22,7 @@ public:
     explicit StringObject(const Base & str_) : Base(str_) {}
     StringObject(StringObject && obj) : Base((Base &&) obj) {}
     StringObject(const StringObject & obj) : Base(obj) {}
+    StringObject(const char * str, const size_t len) : Base(str, len) {}
     StringObject & operator=(const StringObject & a)
     {
         if (this == &a)

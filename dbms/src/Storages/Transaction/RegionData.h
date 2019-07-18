@@ -57,14 +57,14 @@ public:
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
 
-    TableIDSet getCommittedRecordTableID() const;
+    TableIDSet getAllWriteCFTables() const;
 
     RegionData() {}
 
     RegionData(RegionData && data);
 
 public:
-    static UInt8 getWriteType(const WriteCFIter & write_it);
+    static UInt8 getWriteType(const ConstWriteCFIter & write_it);
 
 private:
     RegionWriteCFData write_cf;

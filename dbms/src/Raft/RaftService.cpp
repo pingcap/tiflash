@@ -54,18 +54,15 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
     LOG_INFO(log, "Raft service listening on [" << address << "]");
 }
 
-void RaftService::addRegionToFlush(const Regions & regions)
+void RaftService::addRegionToFlush(const Region & region)
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
-        for (auto & region : regions)
-            regions_to_flush.push(region->id());
+        regions_to_flush.push(region.id());
     }
-    for (size_t i = 0; i < region_flush_handles.size(); ++i)
-    {
-        region_flush_handles[i]->wake();
-    }
-};
+    size_t index = round_index++;
+    region_flush_handles[index % region_flush_handles.size()]->wake();
+}
 
 RaftService::~RaftService()
 {
@@ -89,7 +86,10 @@ RaftService::~RaftService()
         }
     }
 
-    grpc_server->Shutdown();
+    // wait 5 seconds for pending rpcs to gracefully stop
+    gpr_timespec deadline{5, 0, GPR_TIMESPAN};
+    LOG_DEBUG(log, "Begin to shutting down grpc server");
+    grpc_server->Shutdown(deadline);
     grpc_server->Wait();
 }
 

@@ -22,12 +22,10 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     Logger * log = &Logger::get(RegionSnapshotName);
 
     auto old_region = kvstore->getRegion(new_region->id());
-    std::optional<UInt64> expect_old_index;
 
     if (old_region)
     {
-        expect_old_index = old_region->getIndex();
-        if (*expect_old_index >= new_region->getIndex())
+        if (old_region->getIndex() >= new_region->getIndex())
         {
             LOG_WARNING(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
             return false;
@@ -38,6 +36,9 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     {
         auto & tmt = context->getTMTContext();
         Timestamp safe_point = tmt.getPDClient()->getGCSafePoint();
+
+        if (old_region)
+            new_region->compareAndCompleteSnapshot(safe_point, *old_region);
 
         for (auto [table_id, storage] : tmt.getStorages().getAllStorage())
         {
@@ -79,7 +80,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     }
 
     // context may be null in test cases.
-    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr, expect_old_index);
+    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)
@@ -105,7 +106,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         }
         return nullptr;
     };
-    auto new_region = std::make_shared<Region>(meta, region_client_create);
+    auto new_region = std::make_shared<Region>(std::move(meta), region_client_create);
 
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
@@ -128,10 +129,8 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         }
     }
 
-    {
-        if (new_region->isPeerRemoved())
-            new_region->setPendingRemove();
-    }
+    if (new_region->isPeerRemoved())
+        throw Exception("[applySnapshot] region is removed, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     bool status = applySnapshot(kvstore, new_region, context);
 
