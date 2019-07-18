@@ -284,16 +284,31 @@ void StorageMergeTree::drop()
     data.dropAllData();
 }
 
-void StorageMergeTree::rename(const String & new_path_to_db, const String & /*new_database_name*/, const String & new_table_name)
+void StorageMergeTree::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
 {
     std::string new_full_path = new_path_to_db + escapeForFileName(new_table_name) + '/';
 
     data.setPath(new_full_path);
 
+    for (auto & path : context.getAllPath())
+    {
+        std::string orig_parts_path = path + "data/" + escapeForFileName(data.database_name) + '/' + escapeForFileName(data.table_name) + '/';
+        std::string new_parts_path = path + "data/" + escapeForFileName(new_database_name) + '/' + escapeForFileName(new_table_name) + '/';
+        if (Poco::File{new_parts_path}.exists())
+            throw Exception{
+                    "Target path already exists: " + new_parts_path,
+                    /// @todo existing target can also be a file, not directory
+                    ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+        Poco::File(orig_parts_path).renameTo(new_parts_path);
+    }
+    context.dropCaches();
     path = new_path_to_db;
     table_name = new_table_name;
+    database_name = new_database_name;
     full_path = new_full_path;
 
+    data.table_name = new_table_name;
+    data.database_name = new_database_name;
     /// NOTE: Logger names are not updated.
 }
 
@@ -392,11 +407,11 @@ struct CurrentlyMergingPartsTagger
 
     CurrentlyMergingPartsTagger() = default;
 
-    CurrentlyMergingPartsTagger(const MergeTreeData::DataPartsVector & parts_, size_t total_size, StorageMergeTree & storage_)
-        : parts(parts_), storage(&storage_)
+    CurrentlyMergingPartsTagger(const MergeTreeDataMerger::FuturePart & future_part, size_t total_size, StorageMergeTree & storage_)
+        : parts(future_part.parts), storage(&storage_)
     {
         /// Assume mutex is already locked, because this method is called from mergeTask.
-        reserved_space = DiskSpaceMonitor::reserve(storage->full_path, total_size); /// May throw.
+        reserved_space = DiskSpaceMonitor::reserve(future_part.path, total_size); /// May throw.
         for (const auto & part : parts)
         {
             if (storage->currently_merging.count(part))
@@ -437,6 +452,14 @@ bool StorageMergeTree::merge(
     auto structure_lock = lockStructure(true, __PRETTY_FUNCTION__);
 
     size_t disk_space = DiskSpaceMonitor::getUnreservedFreeSpace(full_path);
+    for (const auto & path : context.getAllPath())
+    {
+        size_t available_space = DiskSpaceMonitor::getUnreservedFreeSpace(path);
+        if (available_space <= disk_space)
+        {
+            disk_space = available_space;
+        }
+    }
 
     MergeTreeDataMerger::FuturePart future_part;
 
@@ -467,7 +490,7 @@ bool StorageMergeTree::merge(
         if (!selected)
             return false;
 
-        merging_tagger.emplace(future_part.parts, MergeTreeDataMerger::estimateDiskSpaceForMerge(future_part.parts), *this);
+        merging_tagger.emplace(future_part, MergeTreeDataMerger::estimateDiskSpaceForMerge(future_part.parts), *this);
     }
 
     MergeList::EntryPtr merge_entry = context.getMergeList().insert(database_name, table_name, future_part.name, future_part.parts);
