@@ -97,6 +97,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             builder.updateDB(db);
             db_ids.insert(db->id);
         }
+        // Drop databases;
         for (auto it = databases.begin(); it != databases.end(); it++)
         {
             if (db_ids.count(it->first) == 0)

@@ -350,7 +350,7 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
     // Call storage alter to apply schema changes.
-    storage->alterForTMT(alter_commands, table_info, context);
+    storage->alterForTMT(alter_commands, table_info, table->table_info.db_name, context);
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
 

@@ -26,7 +26,6 @@ public:
 
     ~RaftService() final;
 
-    void addRegionToFlush(const Regions & regions);
     void addRegionToFlush(const Region & region);
 
 private:
@@ -55,6 +54,7 @@ private:
     BackgroundProcessingPool::TaskHandle persist_handle;
     BackgroundProcessingPool::TaskHandle table_flush_handle;
     std::array<BackgroundProcessingPool::TaskHandle, 3> region_flush_handles;
+    std::atomic<size_t> round_index = 0;
 };
 
 } // namespace DB

@@ -65,7 +65,7 @@ struct RegionCFDataBase
 
     Data & getDataMut();
 
-    TableIDSet getAllRecordTableID() const;
+    TableIDSet getAllTables() const;
 
 private:
     static bool shouldIgnoreInsert(const Value & value);

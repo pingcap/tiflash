@@ -11,11 +11,15 @@ struct SchemaBuilder
 {
 
     SchemaGetter & getter;
+
     Context & context;
+
     std::unordered_map<DB::DatabaseID, String> & databases;
 
+    Logger * log;
+
     SchemaBuilder(SchemaGetter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> & dbs_)
-        : getter(getter_), context(context_), databases(dbs_)
+        : getter(getter_), context(context_), databases(dbs_), log(&Logger::get("SchemaBuilder"))
     {}
 
     void applyDiff(const SchemaDiff & diff);
@@ -36,7 +40,7 @@ private:
 
     void applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id);
 
-    void applyAlterTableImpl(TiDB::TableInfoPtr table_info, StorageMergeTree * storage);
+    void applyAlterTableImpl(TiDB::TableInfoPtr table_info, const String & db_name, StorageMergeTree * storage);
 
     //void applyAddPartition(TiDB::DBInfoPtr dbInfo, Int64 table_id);
 

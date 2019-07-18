@@ -1,5 +1,6 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
+#include <Storages/Transaction/RegionManager.h>
 #include <ext/scope_guard.h>
 
 #include "region_helper.h"
@@ -51,7 +52,7 @@ int main(int, char **)
         RegionMeta meta = createRegionMeta(888);
         auto path = dir_path + "meta.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        auto size = meta.serialize(write_buf);
+        auto size = std::get<0>(meta.serialize(write_buf));
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(size, (size_t)Poco::File(path).getSize(), suc);
@@ -69,7 +70,7 @@ int main(int, char **)
 
         auto path = dir_path + "region.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = region->serialize(write_buf);
+        size_t region_ser_size = std::get<0>(region->serialize(write_buf));
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(region_ser_size, (size_t)Poco::File(path).getSize(), suc);
@@ -130,7 +131,7 @@ int main(int, char **)
 
         auto path = dir_path + "region_state.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = region->serialize(write_buf);
+        size_t region_ser_size = std::get<0>(region->serialize(write_buf));
         write_buf.next();
 
         ASSERT_CHECK_EQUAL(region_ser_size, (size_t)Poco::File(path).getSize(), suc);
@@ -147,6 +148,8 @@ int main(int, char **)
     };
 
     {
+        RegionManager region_manager;
+
         std::string path = dir_path + "broken_file";
         remove_dir(path);
         SCOPE_EXIT({ remove_dir(path); });
@@ -158,7 +161,7 @@ int main(int, char **)
             UInt64 diff = 0;
             PageStorage::Config config;
             config.file_roll_size = 128 * MB;
-            RegionPersister persister(path);
+            RegionPersister persister(path, region_manager);
             for (size_t i = 0; i < region_num; ++i)
             {
                 auto region = std::make_shared<Region>(createRegionMeta(i));
@@ -167,7 +170,7 @@ int main(int, char **)
                 region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
                 region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-                persister.persist(region);
+                persister.persist(*region);
 
                 regions.emplace(region->id(), region);
             }
@@ -181,7 +184,7 @@ int main(int, char **)
         }
 
         {
-            RegionPersister persister(path);
+            RegionPersister persister(path, region_manager);
             persister.restore(new_regions);
             for (size_t i = 0; i < region_num; ++i)
             {
@@ -206,7 +209,8 @@ int main(int, char **)
         if (clean_up)
             remove_dir(path);
 
-        RegionPersister persister(path, config);
+        RegionManager region_manager;
+        RegionPersister persister(path, region_manager, config);
         RegionMap regions;
         for (int i = 0; i < region_num; ++i)
         {
@@ -216,7 +220,7 @@ int main(int, char **)
             region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
             region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-            persister.persist(region);
+            persister.persist(*region);
 
             regions.emplace(region->id(), region);
         }
