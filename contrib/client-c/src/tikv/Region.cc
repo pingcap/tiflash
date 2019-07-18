@@ -70,7 +70,7 @@ RegionPtr RegionCache::loadRegionByID(Backoffer & bo, uint64_t region_id) {
             }
             return region;
         } catch (const Exception & e) {
-            bo.backoff(boPDRPC, e);
+            bo.backoff(common::boPDRPC, e);
         }
     }
 }
@@ -103,7 +103,7 @@ RegionPtr RegionCache::loadRegion(Backoffer & bo, std::string key) {
             }
             return region;
         } catch (const Exception & e) {
-            bo.backoff(boPDRPC, e);
+            bo.backoff(common::boPDRPC, e);
         }
     }
 }
@@ -114,7 +114,7 @@ metapb::Store RegionCache::loadStore(Backoffer & bo, uint64_t id) {
             const auto & store = pdClient->getStore(id);
             return store;
         } catch (Exception & e) {
-            bo.backoff(boPDRPC, e);
+            bo.backoff(common::boPDRPC, e);
         }
     }
 }

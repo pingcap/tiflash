@@ -3,7 +3,7 @@ set(kvClient_sources)
 list(APPEND kvClient_sources pd/Client.cc)
 list(APPEND kvClient_sources tikv/Region.cc)
 list(APPEND kvClient_sources tikv/RegionClient.cc)
-list(APPEND kvClient_sources tikv/Backoff.cc)
+list(APPEND kvClient_sources common/Backoff.cc)
 list(APPEND kvClient_sources tikv/Rpc.cc)
 
 set(kvClient_INCLUDE_DIR ${kvClient_SOURCE_DIR}/include)

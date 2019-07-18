@@ -189,7 +189,7 @@ uint64_t Client::getGCSafePoint() {
     pdpb::GetGCSafePointResponse response{};
     request.set_allocated_header(requestHeader());
 
-    kv::Backoffer bo(get_gc_safe_point_timeout);
+    common::Backoffer bo(get_gc_safe_point_timeout);
     ::grpc::Status status;
     std::string err_msg;
 
@@ -204,7 +204,7 @@ uint64_t Client::getGCSafePoint() {
         err_msg = "get safe point failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
         check_leader.store(true);
-        bo.backoff(kv::BackoffType::boPDRPC, Exception(err_msg, status.error_code()));
+        bo.backoff(common::BackoffType::boPDRPC, Exception(err_msg, status.error_code()));
     }
 
 }

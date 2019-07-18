@@ -9,7 +9,7 @@
 #include <common/CltException.h>
 
 namespace pingcap {
-namespace kv {
+namespace common {
 
 enum Jitter {
     NoJitter = 1,

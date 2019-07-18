@@ -1,8 +1,8 @@
-#include <tikv/Backoff.h>
+#include <common/Backoff.h>
 #include <common/CltException.h>
 
 namespace pingcap {
-namespace kv {
+namespace common {
 
 BackoffPtr newBackoff(BackoffType tp) {
     switch(tp) {

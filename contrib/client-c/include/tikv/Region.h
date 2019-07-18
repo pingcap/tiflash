@@ -6,7 +6,7 @@
 #include <pd/Client.h>
 #include <pd/MockPDClient.h>
 #include <kvproto/metapb.pb.h>
-#include <tikv/Backoff.h>
+#include <common/Backoff.h>
 #include <common/Log.h>
 #include <kvproto/errorpb.pb.h>
 
@@ -123,6 +123,7 @@ struct RPCContext {
 };
 
 using RPCContextPtr = std::shared_ptr<RPCContext>;
+using Backoffer = common::Backoffer;
 
 class RegionCache {
 public:

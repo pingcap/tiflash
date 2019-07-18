@@ -2,7 +2,7 @@
 
 #include<tikv/Rpc.h>
 #include<tikv/Region.h>
-#include<tikv/Backoff.h>
+#include<common/Backoff.h>
 
 namespace pingcap {
 namespace kv {
@@ -19,7 +19,7 @@ struct RegionClient {
 
     int64_t getReadIndex() {
         auto request = new kvrpcpb::ReadIndexRequest();
-        Backoffer bo(readIndexMaxBackoff);
+        Backoffer bo(common::readIndexMaxBackoff);
         auto rpc_call = std::make_shared<RpcCall<kvrpcpb::ReadIndexRequest>>(request);
         sendReqToRegion(bo, rpc_call, true);
         return rpc_call -> getResp() -> read_index();
@@ -57,10 +57,10 @@ struct RegionClient {
             auto not_leader = err.not_leader();
             if (not_leader.has_leader()) {
                 cache -> updateLeader(bo, rpc_ctx->region, not_leader.leader().store_id());
-                bo.backoff(boUpdateLeader, Exception("not leader"));
+                bo.backoff(common::boUpdateLeader, Exception("not leader"));
             } else {
                 cache -> dropRegion(rpc_ctx->region);
-                bo.backoff(boRegionMiss, Exception("not leader"));
+                bo.backoff(common::boRegionMiss, Exception("not leader"));
             }
             return;
         }
@@ -76,7 +76,7 @@ struct RegionClient {
         }
 
         if (err.has_server_is_busy()) {
-            bo.backoff(boServerBusy, Exception("server busy"));
+            bo.backoff(common::boServerBusy, Exception("server busy"));
             return;
         }
 
@@ -93,12 +93,12 @@ struct RegionClient {
 
     void onGetLearnerFail(Backoffer & bo, const Exception & e) {
         log -> error("error found, retrying. The error msg is: "+ e.message());
-        bo.backoff(boTiKVRPC, e);
+        bo.backoff(common::boTiKVRPC, e);
     }
 
     void onSendFail(Backoffer & bo, const Exception & e, RPCContextPtr rpc_ctx) {
         cache->dropStoreOnSendReqFail(rpc_ctx, e);
-        bo.backoff(boTiKVRPC, e);
+        bo.backoff(common::boTiKVRPC, e);
     }
 };
 
