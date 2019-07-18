@@ -13,6 +13,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/ClientInfo.h>
 #include <IO/CompressionSettings.h>
+#include <Storages/PartPathSelector.h>
 
 
 namespace Poco
@@ -142,11 +143,13 @@ public:
 
     ~Context();
 
+    const std::vector<String> & getAllPath() const;
     String getPath() const;
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
 
+    void setAllPath(const std::vector<String> & paths);
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
@@ -364,6 +367,9 @@ public:
                           const std::string & kvstore_path,
                           const std::string & region_mapping_path);
     RaftService & getRaftService();
+
+    void initializePartPathSelector(const std::vector<std::string> & all_path);
+    PartPathSelector & getPartPathSelector();
 
     void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
     TiDBService & getTiDBService();

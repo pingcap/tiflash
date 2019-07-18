@@ -26,6 +26,8 @@
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/PartPathSelector.h>
+#include <Storages/CompressionSettingsSelector.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
@@ -115,7 +117,8 @@ struct ContextShared
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
 
-    String path;                                            /// Path to the data directory, with a slash at the end.
+    std::vector<String> paths;                              /// Path to all candidate data directory
+    String path;                                            /// Path to the primary data directory, with a slash at the end.
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
     String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
@@ -154,6 +157,7 @@ struct ContextShared
     RaftServicePtr raft_service;                            /// Raft service instance.
     TiDBServicePtr tidb_service;                            /// TiDB service instance.
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
+    PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -481,6 +485,11 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
     return it->second;
 }
 
+const std::vector<String> & Context::getAllPath() const
+{
+    auto lock = getLock();
+    return shared->paths;
+}
 
 String Context::getPath() const
 {
@@ -504,6 +513,12 @@ String Context::getUserFilesPath() const
 {
     auto lock = getLock();
     return shared->user_files_path;
+}
+
+void Context::setAllPath(const std::vector<String> & paths_)
+{
+    auto lock = getLock();
+    shared->paths = paths_;
 }
 
 void Context::setPath(const String & path)
@@ -1416,6 +1431,22 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
+}
+
+void Context::initializePartPathSelector(const std::vector<std::string> & all_path)
+{
+    auto lock = getLock();
+    if (shared->part_path_selector_ptr)
+        throw Exception("PartPathSelector instance has already existed", ErrorCodes::LOGICAL_ERROR);
+    shared->part_path_selector_ptr = std::make_shared<PartPathSelector>(all_path);
+}
+
+PartPathSelector & Context::getPartPathSelector()
+{
+    auto lock = getLock();
+    if (!shared->part_path_selector_ptr)
+        throw Exception("PartPathSelector is not initialized.", ErrorCodes::LOGICAL_ERROR);
+    return *shared->part_path_selector_ptr;
 }
 
 RaftService & Context::getRaftService()
