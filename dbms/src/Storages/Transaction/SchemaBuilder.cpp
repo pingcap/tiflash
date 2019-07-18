@@ -361,6 +361,22 @@ void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info)
     }
     auto tables = getter.listTables(db_info->id);
     auto & tmt_context = context.getTMTContext();
+
+    std::set<TableID> table_ids;
+
+    for (auto table : tables)
+        table_ids.insert(table->id);
+
+    auto storage_map = tmt_context.getStorages().getAllStorage();
+    for (auto it = storage_map.begin(); it != storage_map.end(); it++) {
+        auto storage = it->second;
+        if(storage->getDatabaseName() == db_info->name && table_ids.count(storage->getTableInfo().id) == 0) {
+            // Drop Table
+            applyDropTableImpl(db_info->name, storage->getTableName());
+            LOG_DEBUG(log, "Table " + db_info->name + "." + storage->getTableName() + " is dropped during schema all schemas");
+        }
+    }
+
     for (auto table : tables)
     {
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table->id).get());
@@ -373,6 +389,7 @@ void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info)
             applyAlterTableImpl(table, db_info->name, storage);
         }
     }
+
 }
 
 // end namespace
