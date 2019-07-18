@@ -40,13 +40,13 @@ public:
 
     ~PageEntryMapDeltaBuilder();
 
-    void apply(const PageEntriesEdit & edit);
+    void apply(PageEntriesEdit & edit);
 
     void gcApply(const PageEntriesEdit & edit);
 
     std::shared_ptr<PageEntryMapDelta> build() { return v; }
 
-    static void mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> & base, const std::shared_ptr<PageEntryMapDelta> & delta);
+    static void mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> & base, std::shared_ptr<PageEntryMapDelta> && delta);
 
     static std::shared_ptr<PageEntryMapDelta> mergeDeltas(PageEntryMapDeltaVersionSet::BaseType *    vset,
                                                           const std::shared_ptr<PageEntryMapDelta> & tail);
@@ -97,6 +97,7 @@ public:
                                                                                                                           std::move(tail_))
     {
     }
+    PageEntryMapView(): PageEntryMapView(nullptr, nullptr) {}
 
     const PageEntry & at(const PageId page_id) const;
 
@@ -115,7 +116,6 @@ public:
     PageEntryMapBase::const_iterator cbegin() const;
     PageEntryMapBase::const_iterator cend() const;
 
-private:
     PageId resolveRefId(PageId page_id) const;
 };
 

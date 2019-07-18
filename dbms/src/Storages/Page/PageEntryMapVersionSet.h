@@ -57,6 +57,7 @@ public:
     using EditRecords = std::vector<EditRecord>;
     static_assert(std::is_trivially_copyable_v<EditRecord>);
 
+    EditRecords &       getRecords() { return records; }
     const EditRecords & getRecords() const { return records; }
 
 private:
@@ -81,9 +82,9 @@ public:
 class PageEntryMapBuilder
 {
 public:
-    PageEntryMapBuilder(const PageEntryMap * base_, //
-                        bool                 ignore_invalid_ref_ = false,
-                        Poco::Logger *       log_                = nullptr)
+    explicit PageEntryMapBuilder(const PageEntryMap * base_, //
+                                 bool                 ignore_invalid_ref_ = false,
+                                 Poco::Logger *       log_                = nullptr)
         : base(const_cast<PageEntryMap *>(base_)),
           v(new PageEntryMap), //
           ignore_invalid_ref(ignore_invalid_ref_),

@@ -24,22 +24,28 @@ PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder()
     base->decrRefCount();
 }
 
-void PageEntryMapDeltaBuilder::apply(const PageEntriesEdit & edit)
+void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
 {
-    (void)base;
-    for (const auto & rec : edit.getRecords())
+    for (auto && rec : edit.getRecords())
     {
         switch (rec.type)
         {
         case WriteBatch::WriteType::PUT:
-            v->put(rec.page_id, rec.entry);
+        {
+            const PageId normal_page_id = base->resolveRefId(rec.page_id);
+            v->put(normal_page_id, rec.entry);
             break;
+        }
         case WriteBatch::WriteType::DEL:
             v->del<false>(rec.page_id);
             break;
         case WriteBatch::WriteType::REF:
-            v->ref<false>(rec.page_id, rec.ori_page_id);
+        {
+            // Shorten ref-path in case there is RefPage to RefPage
+            const PageId normal_page_id = base->resolveRefId(rec.ori_page_id);
+            v->ref<false>(rec.page_id, normal_page_id);
             break;
+        }
         }
     }
 }
@@ -78,16 +84,16 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
 }
 
 void PageEntryMapDeltaBuilder::mergeDeltaToBase( //
-    const std::shared_ptr<PageEntryMapBase> &  base,
-    const std::shared_ptr<PageEntryMapDelta> & delta)
+    const std::shared_ptr<PageEntryMapBase> & base,
+    std::shared_ptr<PageEntryMapDelta> &&     delta)
 {
     // apply deletions
     for (auto pid : delta->page_deletions)
         base->del(pid);
 
-    // apply new pages
+    // apply new pages. Note should not auto gen ref
     for (auto && iter : delta->normal_pages)
-        base->put(iter.first, iter.second);
+        base->put(iter.first, iter.second, false);
 
     // apply new ref
     for (auto && ref_pair : delta->page_ref)
@@ -181,7 +187,7 @@ bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         // `ref_id` or `page_id` has been deleted in later version, then return not exist
-        if (node->isDeleted(ref_id) || node->isDeleted(page_id))
+        if (node->isDeleted(ref_id))
         {
             return false;
         }
@@ -209,9 +215,19 @@ bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
 
 PageId PageEntryMapView::resolveRefId(PageId page_id) const
 {
-    // FIXME
-    page_id = vset->base->resolveRefId(page_id);
-    return page_id;
+    for (auto node = tail; node != nullptr; node = node->prev)
+    {
+        if (node->isDeleted(page_id))
+        {
+            return false;
+        }
+        auto [is_ref, ori_ref_id] = node->isRefId(page_id);
+        if (is_ref)
+        {
+            return ori_ref_id;
+        }
+    }
+    return vset->base->resolveRefId(page_id);
 }
 
 PageEntryMapView::const_iterator PageEntryMapView::end() const

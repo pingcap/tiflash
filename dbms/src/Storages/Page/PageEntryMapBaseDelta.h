@@ -67,7 +67,7 @@ public:
      *  If page_id is a ref-id of RefPage, it will find corresponding Page
      *  and update that Page, all other RefPages reference to that Page get updated.
      */
-    void put(PageId page_id, const PageEntry & entry);
+    void put(PageId page_id, const PageEntry & entry, bool auto_gen_ref = true);
 
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
@@ -318,7 +318,7 @@ using PageEntryMapBase  = PageEntryMapBaseDelta_t<true>;
 using PageEntryMapDelta = PageEntryMapBaseDelta_t<false>;
 
 template <bool is_base>
-void PageEntryMapBaseDelta_t<is_base>::put(const PageId page_id, const PageEntry & entry)
+void PageEntryMapBaseDelta_t<is_base>::put(const PageId page_id, const PageEntry & entry, bool auto_gen_ref)
 {
     if constexpr (!is_base)
     {
@@ -339,8 +339,11 @@ void PageEntryMapBaseDelta_t<is_base>::put(const PageId page_id, const PageEntry
         normal_pages[normal_page_id]     = entry;
         normal_pages[normal_page_id].ref = page_ref_count;
     }
-    // add a RefPage to Page
-    page_ref.emplace(page_id, normal_page_id);
+    if (auto_gen_ref)
+    {
+        // add a RefPage to Page
+        page_ref.emplace(page_id, normal_page_id);
+    }
     max_page_id = std::max(max_page_id, page_id);
 }
 

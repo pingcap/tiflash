@@ -23,9 +23,9 @@ protected:
         map = builder.build();
     }
 
-    void TearDown() override { delete map; }
+    void TearDown() override {}
 
-    PageEntryMapDelta * map;
+    std::shared_ptr<PageEntryMapDelta> map;
 
 private:
     PageEntryMapDeltaVersionSet versions;
@@ -247,6 +247,60 @@ TEST_F(PageEntryMapDelta_test, ReBindRef)
     map->del(1);
     ASSERT_EQ(map->at(0).checksum, entry1.checksum);
     map->del(0);
+}
+
+TEST(PageEntryMapDeltaBuilder_test, DeltaAddRef)
+{
+    std::shared_ptr<PageEntryMapBase>  base  = std::make_shared<PageEntryMapBase>();
+    std::shared_ptr<PageEntryMapDelta> delta = std::make_shared<PageEntryMapDelta>();
+
+    base->put(0, PageEntry{.checksum = 0x123});
+    base->ref(2, 0);
+
+    delta->ref(3, 2);
+
+    PageEntryMapDeltaBuilder::mergeDeltaToBase(base, std::move(delta));
+
+    auto iter = base->find(3);
+    ASSERT_NE(iter, base->end());
+    const auto entry = iter.pageEntry();
+    ASSERT_EQ(entry.checksum, 0x123UL);
+}
+
+TEST(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
+{
+    std::shared_ptr<PageEntryMapBase>  base  = std::make_shared<PageEntryMapBase>();
+    std::shared_ptr<PageEntryMapDelta> delta = std::make_shared<PageEntryMapDelta>();
+
+    delta->put(2, PageEntry{.checksum = 0x123});
+    delta->ref(3, 2);
+    delta->del(2);
+
+    PageEntryMapDeltaBuilder::mergeDeltaToBase(base, std::move(delta));
+
+    auto iter = base->find(2);
+    ASSERT_EQ(iter, base->end());
+
+    auto iter2 = base->find(3);
+    ASSERT_NE(iter2, base->end());
+    ASSERT_EQ(iter2.pageEntry().checksum, 0x123UL);
+}
+
+TEST(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
+{
+    std::shared_ptr<PageEntryMapBase>  base  = std::make_shared<PageEntryMapBase>();
+    std::shared_ptr<PageEntryMapDelta> delta = std::make_shared<PageEntryMapDelta>();
+
+    base->put(2, PageEntry{.checksum = 0x1});
+
+    delta->del(2);
+    delta->put(2, PageEntry{.checksum = 0x123});
+
+    PageEntryMapDeltaBuilder::mergeDeltaToBase(base, std::move(delta));
+
+    auto iter = base->find(2);
+    ASSERT_NE(iter, base->end());
+    ASSERT_EQ(iter.pageEntry().checksum, 0x123UL);
 }
 
 } // namespace tests
