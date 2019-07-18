@@ -35,9 +35,9 @@ struct RegionCFDataBase
 
     static const TiKVValue & getTiKVValue(const Value & val);
 
-    TableID insert(const TiKVKey & key, const TiKVValue & value);
+    TableID insert(TiKVKey && key, TiKVValue && value);
     TableID insert(const TableID table_id, std::pair<Key, Value> && kv_pair);
-    TableID insert(const TiKVKey & key, const TiKVValue & value, const String & raw_key);
+    TableID insert(TiKVKey && key, TiKVValue && value, const String & raw_key);
 
     static size_t calcTiKVKeyValueSize(const Value & value);
 

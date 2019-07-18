@@ -19,10 +19,11 @@ public:
 
     StringObject() = default;
     explicit StringObject(Base && str_) : Base(std::move(str_)) {}
-    explicit StringObject(const Base & str_) : Base(str_) {}
     StringObject(StringObject && obj) : Base((Base &&) obj) {}
-    StringObject(const StringObject & obj) : Base(obj) {}
     StringObject(const char * str, const size_t len) : Base(str, len) {}
+
+    static StringObject copyFrom(const Base & str) { return StringObject(str); }
+
     StringObject & operator=(const StringObject & a)
     {
         if (this == &a)
@@ -62,6 +63,10 @@ public:
     size_t serialize(WriteBuffer & buf) const { return writeBinary2((const Base &)*this, buf); }
 
     static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
+
+private:
+    StringObject(const Base & str_) : Base(str_) {}
+    StringObject(const StringObject & obj) = delete;
 };
 
 using TiKVKey = StringObject<true>;

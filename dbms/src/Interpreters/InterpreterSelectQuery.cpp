@@ -698,8 +698,9 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 info.conf_version = epoch.conf_ver();
 
                 auto table_id = static_cast<StorageMergeTree*>(storage.get()) -> getTableInfo().id;
-                auto start_key = TiKVRange::getRangeHandle<true, true>(TiKVKey(region.start_key()), table_id);
-                auto end_key = TiKVRange::getRangeHandle<false, true>(TiKVKey(region.end_key()), table_id);
+
+                auto start_key = TiKVRange::getRangeHandle<true>(region.start_key(), table_id);
+                auto end_key = TiKVRange::getRangeHandle<false>(region.end_key(), table_id);
                 info.range_in_table = HandleRange<HandleID>(start_key, end_key);
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }

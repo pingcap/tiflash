@@ -16,7 +16,6 @@ using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
-class RegionPersistLock;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -104,10 +103,10 @@ public:
         : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
-    TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
+    TableID insert(const std::string & cf, TiKVKey key, TiKVValue value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    RaftCommandResult onCommand(const enginepb::CommandRequest & cmd);
+    RaftCommandResult onCommand(enginepb::CommandRequest && cmd);
 
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
     std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
@@ -168,9 +167,11 @@ public:
     static ColumnFamilyType getCf(const std::string & cf);
 
 private:
+    Region() = delete;
+
     // Private methods no need to lock mutex, normally
 
-    TableID doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
+    TableID doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
 
     RegionDataReadInfo readDataByWriteIt(
