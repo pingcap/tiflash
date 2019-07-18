@@ -27,7 +27,6 @@
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/PartPathSelector.h>
-#include <Storages/CompressionSettingsSelector.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
