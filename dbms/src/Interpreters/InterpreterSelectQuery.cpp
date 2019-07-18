@@ -189,9 +189,9 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 
 TableStructureReadLockPtr InterpreterSelectQuery::alignStorageSchemaAndLock(Int64 schema_version)
 {
-    /// Regular read lock for non-TMT or DEFAULT_SCHEMA_VERSION specified.
+    /// Regular read lock for non-TMT or schema version unspecified.
     const auto merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-    if (schema_version == DEFAULT_SCHEMA_VERSION || !merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
+    if (schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION || !merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
         return storage->lockStructure(false, __PRETTY_FUNCTION__);
 
     /// Lambda for schema version check under the read lock.
