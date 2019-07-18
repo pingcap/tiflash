@@ -17,7 +17,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <TiDB/TiDBService.h>
 #include <common/JSON.h>
 
 

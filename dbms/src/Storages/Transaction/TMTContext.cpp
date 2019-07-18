@@ -1,3 +1,4 @@
+#include <Debug/MockSchemaSyncer.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -9,14 +10,18 @@ namespace DB
 {
 
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-    const std::string & learner_value, const std::string & kvstore_path, const std::string & region_mapping_path)
+    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
+    const std::string & region_mapping_path)
     : kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context, region_mapping_path),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key, learner_value)),
       rpc_client(std::make_shared<pingcap::kv::RpcClient>()),
-      schema_syncer(std::make_shared<TiDBSchemaSyncer>(pd_client, region_cache, rpc_client))
+      ignore_databases(ignore_databases_),
+      schema_syncer(addrs.size() == 0
+              ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<MockSchemaSyncer>())
+              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer>(pd_client, region_cache, rpc_client)))
 {}
 
 void TMTContext::restore()
