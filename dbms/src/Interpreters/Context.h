@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 
 #include <common/MultiVersion.h>
 #include <Core/Types.h>
@@ -361,12 +362,10 @@ public:
     void createTMTContext(const std::vector<std::string> & pd_addrs,
                           const std::string & learner_key,
                           const std::string & learner_value,
+                          const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
                           const std::string & region_mapping_path);
     RaftService & getRaftService();
-
-    void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
-    TiDBService & getTiDBService();
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr getSchemaSyncService();

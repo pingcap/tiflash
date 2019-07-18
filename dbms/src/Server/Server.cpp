@@ -314,6 +314,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::vector<std::string> pd_addrs;
     std::string learner_key;
     std::string learner_value;
+    std::unordered_set<std::string> ignore_databases;
     std::string kvstore_path = path + "kvstore/";
     std::string region_mapping_path = path + "regmap/";
 
@@ -354,23 +355,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             learner_value = "engine";
         }
 
-        if (config().has("raft.kvstore_path"))
-        {
-            kvstore_path = config().getString("raft.kvstore_path");
-        }
-
-        if (config().has("raft.regmap"))
-        {
-            region_mapping_path = config().getString("raft.regmap");
-        }
-    }
-    // TODO: Remove this config once decent schema syncer is done.
-    if (config().has("tidb"))
-    {
-        String service_ip = config().getString("tidb.service_ip");
-        String status_port = config().getString("tidb.status_port");
-        std::unordered_set<std::string> ignore_databases;
-        if (config().has("tidb.ignore_databases"))
+        if (config().has("raft.ignore_databases"))
         {
             String ignore_dbs = config().getString("tidb.ignore_databases");
             Poco::StringTokenizer string_tokens(ignore_dbs, ",");
@@ -382,12 +367,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             LOG_INFO(log, "Found ignore databases:\n" << ss.str());
         }
-        global_context->initializeTiDBService(service_ip, status_port, ignore_databases);
+
+        if (config().has("raft.kvstore_path"))
+        {
+            kvstore_path = config().getString("raft.kvstore_path");
+        }
+
+        if (config().has("raft.regmap"))
+        {
+            region_mapping_path = config().getString("raft.regmap");
+        }
     }
 
     {
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
     }
 
     /// Then, load remaining databases

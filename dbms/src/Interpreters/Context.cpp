@@ -51,7 +51,6 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Raft/RaftService.h>
-#include <TiDB/TiDBService.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -152,7 +151,6 @@ struct ContextShared
 
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
     RaftServicePtr raft_service;                            /// Raft service instance.
-    TiDBServicePtr tidb_service;                            /// TiDB service instance.
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -1409,13 +1407,14 @@ void Context::shutdownRaftService()
 void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & learner_key,
                                const std::string & learner_value,
+                               const std::unordered_set<std::string> & ignore_databases,
                                const std::string & kvstore_path,
                                const std::string & region_mapping_path)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
 }
 
 RaftService & Context::getRaftService()
@@ -1424,22 +1423,6 @@ RaftService & Context::getRaftService()
     if (!shared->raft_service)
         throw Exception("Raft Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
     return *shared->raft_service;
-}
-
-void Context::initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases)
-{
-    auto lock = getLock();
-    if (shared->tidb_service)
-        throw Exception("TiDB Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->tidb_service = std::make_shared<TiDBService>(service_ip, status_port, ignore_databases);
-}
-
-TiDBService & Context::getTiDBService()
-{
-    auto lock = getLock();
-    if (!shared->tidb_service)
-        throw Exception("TiDB Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->tidb_service;
 }
 
 void Context::initializeSchemaSyncService()
