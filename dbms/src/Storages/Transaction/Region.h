@@ -16,6 +16,7 @@ using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
+class RegionPersistLock;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -97,16 +98,10 @@ public:
     };
 
 public:
-    explicit Region(RegionMeta && meta_) : meta(std::move(meta_)), client(nullptr), log(&Logger::get(log_name)) {}
+    explicit Region(RegionMeta meta_) : meta(std::move(meta_)), client(nullptr), log(&Logger::get(log_name)) {}
 
-    explicit Region(const RegionMeta & meta_) : meta(meta_), client(nullptr), log(&Logger::get(log_name)) {}
-
-    explicit Region(RegionMeta && meta_, const RegionClientCreateFunc & region_client_create)
+    explicit Region(RegionMeta meta_, const RegionClientCreateFunc & region_client_create)
         : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
-    {}
-
-    explicit Region(const RegionMeta & meta_, const RegionClientCreateFunc & region_client_create)
-        : meta(meta_), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
     TableID insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value);
@@ -117,7 +112,7 @@ public:
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
     std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
 
-    size_t serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
@@ -134,10 +129,10 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markPersisted();
+    void markPersisted() const;
     Timepoint lastPersistTime() const;
     size_t dirtyFlag() const;
-    void decDirtyFlag(size_t x);
+    void decDirtyFlag(size_t x) const;
     void incDirtyFlag();
 
     friend bool operator==(const Region & region1, const Region & region2)
@@ -162,12 +157,13 @@ public:
 
     void assignRegion(Region && new_region);
 
-    TableIDSet getCommittedRecordTableID() const;
+    TableIDSet getAllWriteCFTables() const;
 
     using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
 
     /// only can be used for applying snapshot. only can be called by single thread.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
+    void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
 
     static ColumnFamilyType getCf(const std::string & cf);
 
@@ -183,9 +179,13 @@ private:
 
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
 
-    RegionPtr splitInto(const RegionMeta & meta);
-    Regions execBatchSplit(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    RegionPtr splitInto(RegionMeta meta);
+    Regions execBatchSplit(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execChangePeer(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execCompactLog(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 
 private:
     RegionData data;
@@ -195,10 +195,10 @@ private:
 
     pingcap::kv::RegionClientPtr client;
 
-    std::atomic<Timepoint> last_persist_time = Clock::now();
+    mutable std::atomic<Timepoint> last_persist_time = Clock::now();
 
     // dirty_flag is used to present whether this region need to be persisted.
-    std::atomic<size_t> dirty_flag = 1;
+    mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
 };
