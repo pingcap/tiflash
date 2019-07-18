@@ -20,15 +20,6 @@ public:
      * @param context
      */
     virtual bool syncSchemas(Context & context) = 0;
-
-    /**
-     * Synchronize schema between TiDB and CH, to make sure the CH table is new enough to accept data from raft.
-     * Should be stateless.
-     * Nevertheless, the implementations may assume that the storage is appropriately locked, thus still not thread-safe.
-     * @param context
-     * @param table_id
-     */
-    virtual void syncSchema(Context & context, TableID table_id, bool lock) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

@@ -62,10 +62,6 @@ public:
     using TablePtr = std::shared_ptr<Table>;
 
 public:
-    String getSchemaJson(TableID table_id);
-
-    TableID getTableIDByName(const std::string & database_name, const std::string & table_name);
-
     TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns);
 
     TableID newPartition(const String & database_name, const String & table_name, const String & partition_name);
@@ -79,6 +75,8 @@ public:
     void modifyColumnInTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
 
     TablePtr getTableByName(const String & database_name, const String & table_name);
+
+    void traverseTables(std::function<void(TablePtr)> f);
 
 private:
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
