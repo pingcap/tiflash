@@ -118,13 +118,32 @@ int Server::main(const std::vector<std::string> & /*args*/)
         config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
     }
 
-    std::string path = getCanonicalPath(config().getString("path"));
+    String paths = config().getString("path");
+    std::vector<String> all_path;
+    Poco::trimInPlace(paths);
+    if (paths.empty())
+        throw Exception("path configuration parameter is empty");
+    Poco::StringTokenizer string_tokens(paths, ";");
+    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    {
+        all_path.push_back(getCanonicalPath(std::string(*it)));
+        LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+    }
+    global_context->setAllPath(all_path);
+    {
+        global_context->initializePartPathSelector(global_context->getAllPath());
+    }
+
+    std::string path = global_context->getAllPath()[0];
     std::string default_database = config().getString("default_database", "default");
 
     global_context->setPath(path);
 
     /// Create directories for 'path' and for default database, if not exist.
-    Poco::File(path + "data/" + default_database).createDirectories();
+    for (const String & candidate_path : global_context->getAllPath())
+    {
+        Poco::File(candidate_path + "data/" + default_database).createDirectories();
+    }
     Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};
