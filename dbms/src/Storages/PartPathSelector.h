@@ -4,7 +4,6 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <common/logger_useful.h>
-#include <ctype.h>
 #include <ext/scope_guard.h>
 #include <map>
 #include <string>
