@@ -9,6 +9,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserRenameQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -121,14 +122,26 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     }
 
     TMTContext & tmt = context.getTMTContext();
+    auto & kvstore = tmt.getKVStore();
+    auto & region_table = tmt.getRegionTable();
+
     if (table->isPartitionTable() && drop_regions)
     {
         auto partition_ids = table->getPartitionIDs();
-        std::for_each(partition_ids.begin(), partition_ids.end(),
-            [&](TableID partition_id) { tmt.getRegionTable().mockDropRegionsInTable(partition_id); });
+        std::for_each(partition_ids.begin(), partition_ids.end(), [&](TableID partition_id) {
+            for (auto & e : region_table.getRegionsByTable(partition_id))
+                kvstore->removeRegion(e.first, &region_table);
+
+            region_table.mockDropRegionsInTable(partition_id);
+        });
     }
+
     if (drop_regions)
-        tmt.getRegionTable().mockDropRegionsInTable(table_id);
+    {
+        for (auto & e : region_table.getRegionsByTable(table_id))
+            kvstore->removeRegion(e.first, &region_table);
+        region_table.mockDropRegionsInTable(table_id);
+    }
 
     MockTiDB::instance().dropTable(database_name, table_name);
 

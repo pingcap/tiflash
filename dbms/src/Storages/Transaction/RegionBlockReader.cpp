@@ -131,7 +131,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     // optimize for only need handle, tso, delmark.
     if (column_names_to_read.size() > 3)
     {
-        for (const auto & [handle, write_type, commit_ts, value] : data_list)
+        for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
             std::ignore = handle;
 
@@ -156,7 +156,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 }
             }
             else
-                row = RecordKVFormat::DecodeRow(value);
+                row = RecordKVFormat::DecodeRow(*value_ptr);
 
             if (row.size() == 1 && row[0].isNull())
             {

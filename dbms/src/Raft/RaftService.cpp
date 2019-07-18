@@ -54,26 +54,14 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
     LOG_INFO(log, "Raft service listening on [" << address << "]");
 }
 
-void RaftService::addRegionToFlush(const Regions & regions)
-{
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        for (auto & region : regions)
-            regions_to_flush.push(region->id());
-    }
-    for (size_t i = 0; i < region_flush_handles.size(); ++i)
-    {
-        region_flush_handles[i]->wake();
-    }
-};
-
 void RaftService::addRegionToFlush(const Region & region)
 {
     {
         std::lock_guard<std::mutex> lock(mutex);
         regions_to_flush.push(region.id());
     }
-    region_flush_handles[0]->wake();
+    size_t index = round_index++;
+    region_flush_handles[index % region_flush_handles.size()]->wake();
 }
 
 RaftService::~RaftService()

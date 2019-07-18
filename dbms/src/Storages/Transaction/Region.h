@@ -16,6 +16,7 @@ using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
+class RegionPersistLock;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -111,7 +112,7 @@ public:
     std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
     std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
 
-    size_t serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
@@ -128,10 +129,10 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markPersisted();
+    void markPersisted() const;
     Timepoint lastPersistTime() const;
     size_t dirtyFlag() const;
-    void decDirtyFlag(size_t x);
+    void decDirtyFlag(size_t x) const;
     void incDirtyFlag();
 
     friend bool operator==(const Region & region1, const Region & region2)
@@ -156,7 +157,7 @@ public:
 
     void assignRegion(Region && new_region);
 
-    TableIDSet getCommittedRecordTableID() const;
+    TableIDSet getAllWriteCFTables() const;
 
     using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
 
@@ -194,10 +195,10 @@ private:
 
     pingcap::kv::RegionClientPtr client;
 
-    std::atomic<Timepoint> last_persist_time = Clock::now();
+    mutable std::atomic<Timepoint> last_persist_time = Clock::now();
 
     // dirty_flag is used to present whether this region need to be persisted.
-    std::atomic<size_t> dirty_flag = 1;
+    mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
 };
