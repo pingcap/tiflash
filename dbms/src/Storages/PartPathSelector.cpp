@@ -31,16 +31,7 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
         LOG_DEBUG(log, "Path " << element.first << " size is " << element.second << " bytes.");
     }
 
-    std::stringstream log_buf;
-    log_buf << "database: ";
-    log_buf << data.getDatabaseName();
-    log_buf << " table: ";
-    log_buf << data.getTableName();
-    log_buf << " part name: ";
-    log_buf << part_name;
-    log_buf << " path: ";
-    log_buf << result;
-    LOG_DEBUG(log, log_buf.str());
+    LOG_DEBUG(log, "database: " << data.getDatabaseName() << " table: " << data.getTableName() << " part name: " << part_name << " path: " << result);
     return result;
 }
 } // namespace DB
