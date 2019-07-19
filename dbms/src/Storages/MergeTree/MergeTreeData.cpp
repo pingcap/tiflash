@@ -153,9 +153,12 @@ MergeTreeData::MergeTreeData(
 
     auto path_exists = Poco::File(full_path).exists();
     /// Creating directories, if not exist.
-    Poco::File(full_path).createDirectories();
-
-    Poco::File(full_path + "detached").createDirectory();
+    for (const String & path : context.getAllPath())
+    {
+        String candidate_path = getDataPartsPath(path);
+        Poco::File(candidate_path).createDirectories();
+        Poco::File(candidate_path + "detached").createDirectory();
+    }
 
     String version_file_path = full_path + "format_version.txt";
     // When data path not exists, ignore the format_version check
@@ -440,14 +443,22 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     LOG_DEBUG(log, "Loading data parts");
 
     Strings part_file_names;
+    Strings part_file_parent_paths;
     Poco::DirectoryIterator end;
-    for (Poco::DirectoryIterator it(full_path); it != end; ++it)
+    for (const auto & path : context.getAllPath())
     {
-        /// Skip temporary directories.
-        if (startsWith(it.name(), "tmp"))
-            continue;
+        String data_path = getDataPartsPath(path);
+        LOG_DEBUG(log, "Loading data parts from path: " << data_path);
+        for (Poco::DirectoryIterator it(data_path); it != end; ++it)
+        {
+            /// Skip temporary directories.
+            if (startsWith(it.name(), "tmp"))
+                continue;
 
-        part_file_names.push_back(it.name());
+            part_file_names.push_back(it.name());
+            part_file_parent_paths.push_back(path);
+        }
+        LOG_DEBUG(log, "After loading data parts from path: " << data_path << " current part_file_names length: " << part_file_names.size());
     }
 
     DataPartsVector broken_parts_to_remove;
@@ -457,13 +468,15 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     std::lock_guard<std::mutex> lock(data_parts_mutex);
     data_parts_indexes.clear();
 
-    for (const String & file_name : part_file_names)
+    for (size_t i = 0; i < part_file_names.size(); i++)
     {
+        const String & file_name = part_file_names[i];
+        const String & parent_path = part_file_parent_paths[i];
         MergeTreePartInfo part_info;
         if (!MergeTreePartInfo::tryParsePartName(file_name, &part_info, format_version))
             continue;
 
-        MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info);
+        MutableDataPartPtr part = std::make_shared<DataPart>(*this, file_name, part_info, parent_path);
         part->relative_path = file_name;
         bool broken = false;
 
@@ -494,7 +507,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             if (part->info.level == 0)
             {
                 /// It is impossible to restore level 0 parts.
-                LOG_ERROR(log, "Considering to remove broken part " << full_path + file_name << " because it's impossible to repair.");
+                LOG_ERROR(log, "Considering to remove broken part " << part->getFullPath() << " because it's impossible to repair.");
                 broken_parts_to_remove.push_back(part);
             }
             else
@@ -504,7 +517,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
                 /// delete it.
                 int contained_parts = 0;
 
-                LOG_ERROR(log, "Part " << full_path + file_name << " is broken. Looking for parts to replace it.");
+                LOG_ERROR(log, "Part " << part->getFullPath() << " is broken. Looking for parts to replace it.");
 
                 for (const String & contained_name : part_file_names)
                 {
@@ -517,19 +530,19 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
                     if (part->info.contains(contained_part_info))
                     {
-                        LOG_ERROR(log, "Found part " << full_path + contained_name);
+                        LOG_ERROR(log, "Found part " << part->getFullPath() << contained_name);
                         ++contained_parts;
                     }
                 }
 
                 if (contained_parts >= 2)
                 {
-                    LOG_ERROR(log, "Considering to remove broken part " << full_path + file_name << " because it covers at least 2 other parts");
+                    LOG_ERROR(log, "Considering to remove broken part " << part->getFullPath() << " because it covers at least 2 other parts");
                     broken_parts_to_remove.push_back(part);
                 }
                 else
                 {
-                    LOG_ERROR(log, "Detaching broken part " << full_path + file_name
+                    LOG_ERROR(log, "Detaching broken part " << part->getFullPath()
                         << " because it covers less than 2 parts. You need to resolve this manually");
                     broken_parts_to_detach.push_back(part);
                     ++suspicious_broken_parts;
@@ -539,7 +552,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
             continue;
         }
 
-        part->modification_time = Poco::File(full_path + file_name).getLastModified().epochTime();
+        part->modification_time = Poco::File(part->getFullPath()).getLastModified().epochTime();
         /// Assume that all parts are Committed, covered parts will be detected and marked as Outdated later
         part->state = DataPartState::Committed;
 
@@ -640,24 +653,28 @@ void MergeTreeData::clearOldTemporaryDirectories(ssize_t custom_directories_life
         : current_time - settings.temporary_directories_lifetime.totalSeconds();
 
     /// Delete temporary directories older than a day.
-    Poco::DirectoryIterator end;
-    for (Poco::DirectoryIterator it{full_path}; it != end; ++it)
+    for (auto & path : context.getAllPath())
     {
-        if (startsWith(it.name(), "tmp"))
+        Poco::DirectoryIterator end;
+        String storage_path = getDataPartsPath(path);
+        for (Poco::DirectoryIterator it{storage_path}; it != end; ++it)
         {
-            Poco::File tmp_dir(full_path + it.name());
+            if (startsWith(it.name(), "tmp"))
+            {
+                Poco::File tmp_dir(storage_path + it.name());
 
-            try
-            {
-                if (tmp_dir.isDirectory() && isOldPartDirectory(tmp_dir, deadline))
+                try
                 {
-                    LOG_WARNING(log, "Removing temporary directory " << full_path << it.name());
-                    Poco::File(full_path + it.name()).remove(true);
+                    if (tmp_dir.isDirectory() && isOldPartDirectory(tmp_dir, deadline))
+                    {
+                        LOG_WARNING(log, "Removing temporary directory " << storage_path << it.name());
+                        Poco::File(storage_path + it.name()).remove(true);
+                    }
                 }
-            }
-            catch (const Poco::FileNotFoundException &)
-            {
-                /// If the file is already deleted, do nothing.
+                catch (const Poco::FileNotFoundException &)
+                {
+                    /// If the file is already deleted, do nothing.
+                }
             }
         }
     }
@@ -777,15 +794,6 @@ void MergeTreeData::clearOldPartsFromFilesystem()
 
 void MergeTreeData::setPath(const String & new_full_path)
 {
-    if (Poco::File{new_full_path}.exists())
-        throw Exception{
-            "Target path already exists: " + new_full_path,
-            /// @todo existing target can also be a file, not directory
-            ErrorCodes::DIRECTORY_ALREADY_EXISTS};
-
-    Poco::File(full_path).renameTo(new_full_path);
-
-    context.dropCaches();
     full_path = new_full_path;
 }
 
@@ -804,7 +812,10 @@ void MergeTreeData::dropAllData()
 
     LOG_TRACE(log, "dropAllData: removing data from filesystem.");
 
-    Poco::File(full_path).remove(true);
+    for (const auto & path : context.getAllPath())
+    {
+        Poco::File(getDataPartsPath(path)).remove(true);
+    }
 
     LOG_TRACE(log, "dropAllData: done.");
 }
@@ -1141,7 +1152,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
         exception_message
             << ") need to be "
             << (forbidden_because_of_modify ? "modified" : "removed")
-            << " in part " << part->name << " of table at " << full_path << ". Aborting just in case."
+            << " in part " << part->name << " of table at " << part->getFullPath() << ". Aborting just in case."
             << " If it is not an error, you could increase merge_tree/"
             << (forbidden_because_of_modify ? "max_files_to_modify_in_alter_columns" : "max_files_to_remove_in_alter_columns")
             << " parameter in configuration file (current value: "
@@ -1194,7 +1205,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
         if (prev_position_of_existing_column == -1)
             throw Exception("No common columns while modifying primary key", ErrorCodes::BAD_ARGUMENTS);
 
-        String index_tmp_path = full_path + part->name + "/primary.idx.tmp";
+        String index_tmp_path = part->getFullPath() + "primary.idx.tmp";
         WriteBufferFromFile index_file(index_tmp_path);
         HashingWriteBuffer index_stream(index_file);
 
@@ -1235,7 +1246,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
           *  temporary column name ('converting_column_name') created in 'createConvertExpression' method
           *  will have old name of shared offsets for arrays.
           */
-        MergedColumnOnlyOutputStream out(*this, in.getHeader(), full_path + part->name + '/', true /* sync */, compression_settings, true /* skip_offsets */);
+        MergedColumnOnlyOutputStream out(*this, in.getHeader(), part->getFullPath(), true /* sync */, compression_settings, true /* skip_offsets */);
 
         in.readPrefix();
         out.writePrefix();
@@ -1267,7 +1278,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     if (!part->checksums.empty())
     {
         transaction->new_checksums = new_checksums;
-        WriteBufferFromFile checksums_file(full_path + part->name + "/checksums.txt.tmp", 4096);
+        WriteBufferFromFile checksums_file(part->getFullPath() + "checksums.txt.tmp", 4096);
         new_checksums.write(checksums_file);
         transaction->rename_map["checksums.txt.tmp"] = "checksums.txt";
     }
@@ -1275,7 +1286,7 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     /// Write the new column list to the temporary file.
     {
         transaction->new_columns = new_columns.filter(part->columns.getNames());
-        WriteBufferFromFile columns_file(full_path + part->name + "/columns.txt.tmp", 4096);
+        WriteBufferFromFile columns_file(part->getFullPath() + "columns.txt.tmp", 4096);
         transaction->new_columns.writeText(columns_file);
         transaction->rename_map["columns.txt.tmp"] = "columns.txt";
     }
@@ -1291,7 +1302,7 @@ void MergeTreeData::AlterDataPartTransaction::commit()
     {
         std::unique_lock<std::shared_mutex> lock(data_part->columns_lock);
 
-        String path = data_part->storage.full_path + data_part->name + "/";
+        String path = data_part->getFullPath();
 
         /// NOTE: checking that a file exists before renaming or deleting it
         /// is justified by the fact that, when converting an ordinary column
@@ -1950,19 +1961,23 @@ size_t MergeTreeData::getPartitionSize(const std::string & partition_id) const
 
     Poco::DirectoryIterator end;
 
-    for (Poco::DirectoryIterator it(full_path); it != end; ++it)
+    for (const auto & path : context.getAllPath())
     {
-        MergeTreePartInfo part_info;
-        if (!MergeTreePartInfo::tryParsePartName(it.name(), &part_info, format_version))
-            continue;
-        if (part_info.partition_id != partition_id)
-            continue;
-
-        const auto part_path = it.path().absolute().toString();
-        for (Poco::DirectoryIterator it2(part_path); it2 != end; ++it2)
+        String parts_path = getDataPartsPath(path);
+        for (Poco::DirectoryIterator it(parts_path); it != end; ++it)
         {
-            const auto part_file_path = it2.path().absolute().toString();
-            size += Poco::File(part_file_path).getSize();
+            MergeTreePartInfo part_info;
+            if (!MergeTreePartInfo::tryParsePartName(it.name(), &part_info, format_version))
+                continue;
+            if (part_info.partition_id != partition_id)
+                continue;
+
+            const auto part_path = it.path().absolute().toString();
+            for (Poco::DirectoryIterator it2(part_path); it2 != end; ++it2)
+            {
+                const auto part_file_path = it2.path().absolute().toString();
+                size += Poco::File(part_file_path).getSize();
+            }
         }
     }
 

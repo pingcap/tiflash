@@ -145,7 +145,7 @@ int main(int, char **)
                                                                            RecordKVFormat::genKey(table_id, 1).getStr(),
                                                                            RecordKVFormat::genKey(table_id, 100).getStr());
 
-        kvstore->onServiceCommand(cmds, context);
+        kvstore->onServiceCommand(std::move(cmds), context);
     }
 
     {
@@ -186,7 +186,7 @@ int main(int, char **)
             *(splits.mutable_regions()->Add()) = region2;
         }
 
-        kvstore->onServiceCommand(cmds, context);
+        kvstore->onServiceCommand(std::move(cmds), context);
     }
 
     {// snapshot
@@ -246,7 +246,7 @@ int main(int, char **)
                 *(splits.mutable_regions()->Add()) = region2;
             }
 
-            kvstore->onServiceCommand(cmds, context);
+            kvstore->onServiceCommand(std::move(cmds), context);
         }
     }
 
@@ -289,7 +289,7 @@ int main(int, char **)
             req.mutable_delete_()->set_key(RecordKVFormat::genKey(table_id, 1, 4).getStr());
         }
 
-        kvstore->onServiceCommand(cmds, context);
+        kvstore->onServiceCommand(std::move(cmds), context);
     }
 
     {
@@ -309,7 +309,7 @@ int main(int, char **)
         req.set_cmd_type(raft_cmdpb::AdminCmdType::ComputeHash);
         resp.set_cmd_type(raft_cmdpb::AdminCmdType::ComputeHash);
 
-        kvstore->onServiceCommand(cmds, context);
+        kvstore->onServiceCommand(std::move(cmds), context);
     }
 
     if (false) // It cause panic!
@@ -332,7 +332,7 @@ int main(int, char **)
         verify_req.set_index(index - 2);
         verify_req.set_hash("fake hash");
 
-        kvstore->onServiceCommand(cmds, context);
+        kvstore->onServiceCommand(std::move(cmds), context);
     }
 
     {
@@ -378,7 +378,7 @@ int main(int, char **)
         change_peer.set_change_type(eraftpb::ConfChangeType::RemoveNode);
         *(change_peer.mutable_peer()) = createPeer(1, true);
 
-        kvstore->onServiceCommand(cmds, context);
+        kvstore->onServiceCommand(std::move(cmds), context);
 
         ASSERT_CHECK_EQUAL(2, kvstore->regionSize(), suc);
 

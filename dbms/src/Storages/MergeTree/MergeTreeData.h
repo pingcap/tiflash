@@ -344,6 +344,8 @@ public:
 
     String getFullPath() const { return full_path; }
 
+    String getDataPartsPath(const String& path) const { return path + "data/" + escapeForFileName(database_name) + "/" + escapeForFileName(table_name) + "/"; }
+
     String getLogName() const { return log_name; }
 
     /// Returns a copy of the list so that the caller shouldn't worry about locks.

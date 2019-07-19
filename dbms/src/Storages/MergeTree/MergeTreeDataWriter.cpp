@@ -194,6 +194,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
 
     /// The name could be non-unique in case of stale files from previous runs.
     String full_path = new_data_part->getFullPath();
+    LOG_DEBUG(log, "Data part: " << new_data_part->relative_path << " will be in path " << full_path);
     Poco::File dir(full_path);
 
     if (dir.exists())
