@@ -121,19 +121,21 @@ std::function<void(WriteBuffer &)> Struct(const T &... fields)
 namespace TiDB
 {
 
+using DB::Field;
 using DB::ReadBufferFromString;
 using DB::WriteBuffer;
 using DB::WriteBufferFromOwnString;
-using DB::Field;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
 // TODO:: Refine Decimal Default Value !!
 // TODO:: Refine Enum Default Value !!
 // TODO:: Refine Date/Datatime/TimeStamp Defalut Value !!
-Field ColumnInfo::defaultValueToField() const {
+Field ColumnInfo::defaultValueToField() const
+{
     auto & value = origin_default_value;
-    switch (tp) {
+    switch (tp)
+    {
         // Integer Type.
         case TypeTiny:
         case TypeShort:
@@ -333,7 +335,7 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Parse TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
-TableInfo::TableInfo(const String & table_info_json, bool escaped) { deserialize(table_info_json, escaped); }
+TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
 String TableInfo::serialize(bool escaped) const try
 {
@@ -409,7 +411,7 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
-void TableInfo::deserialize(const String & json_str, bool escaped) try
+void TableInfo::deserialize(const String & json_str) try
 {
     if (json_str.empty())
     {
@@ -417,20 +419,9 @@ void TableInfo::deserialize(const String & json_str, bool escaped) try
         return;
     }
 
-    String unescaped_json_str;
-    if (escaped)
-    {
-        ReadBufferFromString buf(json_str);
-        readEscapedString(unescaped_json_str, buf);
-    }
-    else
-    {
-        unescaped_json_str = json_str;
-    }
-
     Poco::JSON::Parser parser;
 
-    Poco::Dynamic::Var result = parser.parse(unescaped_json_str);
+    Poco::Dynamic::Var result = parser.parse(json_str);
 
     auto obj = result.extract<Poco::JSON::Object::Ptr>();
     id = obj->getValue<Int64>("id");

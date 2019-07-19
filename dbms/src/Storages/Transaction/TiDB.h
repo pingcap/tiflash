@@ -236,11 +236,11 @@ struct TableInfo
 
     TableInfo(const TableInfo &) = default;
 
-    TableInfo(const String & table_info_json, bool escaped);
+    TableInfo(const String & table_info_json);
 
     String serialize(bool escaped) const;
 
-    void deserialize(const String & json_str, bool escaped);
+    void deserialize(const String & json_str);
 
     DatabaseID db_id = -1;
     String db_name;

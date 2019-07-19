@@ -28,12 +28,11 @@ struct Case
 
     void verifyTableInfo() const
     {
-
         DBInfo db_info(db_info_json);
-        TableInfo table_info1(table_info_json, false);
+        TableInfo table_info1(table_info_json);
         table_info1.manglePartitionTableIfNeeded(table_or_partition_id);
         auto json1 = table_info1.serialize(false);
-        TableInfo table_info2(json1, false);
+        TableInfo table_info2(json1);
         auto json2 = table_info2.serialize(false);
         if (json1 != json2)
         {
@@ -51,8 +50,8 @@ struct Case
         ASTExpressionList & ast_arguments = typeid_cast<ASTExpressionList &>(*(ast_create_query.storage->engine->arguments));
         ASTLiteral & ast_literal = typeid_cast<ASTLiteral &>(*(ast_arguments.children.back()));
         json1 = safeGet<String>(ast_literal.value);
-        table_info1.deserialize(json1, true);
-        json2 = table_info1.serialize(true);
+        table_info1.deserialize(json1);
+        json2 = table_info1.serialize(false);
         if (json1 != json2)
         {
             throw Exception("Table info escaped serde mismatch:\n" + json1 + "\n" + json2);
@@ -63,8 +62,13 @@ struct Case
 int main(int, char **)
 try
 {
-    auto cases =
-    {
+    auto cases = {
+        Case{
+            2049,
+            R"json({"id":1939,"db_name":{"O":"customer","L":"customer"},"charset":"utf8mb4","collate":"utf8mb4_bin","state":5})json",
+            R"json({"id":2049,"name":{"O":"customerdebt","L":"customerdebt"},"cols":[{"id":1,"name":{"O":"id","L":"id"},"offset":0,"origin_default":null,"default":null,"type":{"Tp":8,"Flag":515,"Flen":20,"Decimal":0},"state":5,"comment":"i\"d"}],"state":5,"pk_is_handle":true,"comment":"负债信息","update_timestamp":404545295996944390,"partition":null})json",
+            R"stmt(CREATE TABLE `customer`.`customerdebt`(`id` Int64) Engine = TxnMergeTree((`id`), 8192, '{"cols":[{"comment":"i\\"d","default":null,"id":1,"name":{"L":"id","O":"id"},"offset":0,"origin_default":null,"state":5,"type":{"Decimal":0,"Elems":null,"Flag":515,"Flen":20,"Tp":8}}],"comment":"\\u8D1F\\u503A\\u4FE1\\u606F","id":2049,"name":{"L":"customerdebt","O":"customerdebt"},"partition":null,"pk_is_handle":true,"state":5,"update_timestamp":404545295996944390}'))stmt"
+        },
         Case
         {
             31,
