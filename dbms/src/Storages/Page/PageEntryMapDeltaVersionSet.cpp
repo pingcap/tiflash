@@ -8,7 +8,7 @@ namespace DB
 {
 
 PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base_, bool ignore_invalid_ref_, Logger * log_)
-    : base(const_cast<PageEntryMapView *>(base_)), v(new PageEntryMapDelta), ignore_invalid_ref(ignore_invalid_ref_), log(log_)
+    : base(const_cast<PageEntryMapView *>(base_)), v(PageEntryMapDelta::createDelta()), ignore_invalid_ref(ignore_invalid_ref_), log(log_)
 {
 #ifndef NDEBUG
     if (ignore_invalid_ref)
@@ -16,12 +16,10 @@ PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base
         assert(log != nullptr);
     }
 #endif
-    base->incrRefCount();
 }
 
 PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder()
 {
-    base->decrRefCount();
 }
 
 void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
@@ -85,7 +83,7 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
 
 void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
     const std::shared_ptr<PageEntryMapBase> & base,
-    std::shared_ptr<PageEntryMapDelta> &&     delta)
+    const std::shared_ptr<PageEntryMapDelta> &     delta)
 {
     // apply deletions
     for (auto pid : delta->page_deletions)
@@ -104,9 +102,10 @@ void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
 
 std::shared_ptr<PageEntryMapBase> PageEntryMapDeltaBuilder::mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> &old_base, std::shared_ptr<PageEntryMapDelta> &delta)
 {
-    std::shared_ptr<PageEntryMapBase> base = std::make_shared<PageEntryMapBase>();
+    std::shared_ptr<PageEntryMapBase> base = PageEntryMapBase::createBase();
     base->copyEntries(*old_base);
     mergeDeltaToBaseInplace(base, delta);
+    return base;
 }
 
 std::shared_ptr<PageEntryMapDelta> PageEntryMapDeltaBuilder::mergeDeltas( //
@@ -121,11 +120,14 @@ std::shared_ptr<PageEntryMapDelta> PageEntryMapDeltaBuilder::mergeDeltas( //
     }
 
     std::stack<std::shared_ptr<PageEntryMapDelta>> nodes;
+    auto tmp = PageEntryMapDelta::createDelta();
     for (auto node = tail; node != nullptr; node = node->prev)
     {
-        nodes.push(node);
+        if (node->isBase())
+            tmp->prev = node;
+        else
+            nodes.push(node);
     }
-    auto tmp = std::make_shared<PageEntryMapDelta>();
     // merge delta forward
     while (!nodes.empty())
     {
@@ -160,14 +162,14 @@ PageId PageEntryMapView::maxId() const
     {
         max_id = std::max(max_id, node->maxId());
     }
-    max_id = std::max(max_id, vset->base->maxId());
     return max_id;
 }
 
 PageEntryMapView::const_iterator PageEntryMapView::find(PageId page_id) const
 {
     // begin search PageEntry from tail -> head
-    for (std::shared_ptr<const PageEntryMapDelta> node = tail; node != nullptr; node = node->prev)
+    std::shared_ptr<const PageEntryMapDelta> node;
+    for (node = tail; node != nullptr; node = node->prev)
     {
         // deleted in later version, then return not exist
         if (node->isDeleted(page_id))
@@ -181,17 +183,20 @@ PageEntryMapView::const_iterator PageEntryMapView::find(PageId page_id) const
             return find(ori_page_id);
         }
         PageEntryMapDelta::const_iterator iter = node->find(page_id);
-        if (iter != node->end())
+        if (iter != node->end() || node->isBase())
         {
             return const_iterator(iter);
         }
     }
-    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(vset->base)->find(page_id));
+    assert(false);
+    // should not call here
+    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(node)->find(page_id));
 }
 
 bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
 {
-    for (auto node = tail; node != nullptr; node = node->prev)
+    auto node = tail;
+    for (; node != nullptr; node = node->prev)
     {
         // `ref_id` or `page_id` has been deleted in later version, then return not exist
         if (node->isDeleted(ref_id))
@@ -217,12 +222,13 @@ bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
             page_id = ori_page_id;
         }
     }
-    return vset->base->isRefExists(ref_id, page_id);
+    return node->isRefExists(ref_id, page_id);
 }
 
 PageId PageEntryMapView::resolveRefId(PageId page_id) const
 {
-    for (auto node = tail; node != nullptr; node = node->prev)
+    auto node = tail;
+    for (; node != nullptr; node = node->prev)
     {
         if (node->isDeleted(page_id))
         {
@@ -233,37 +239,43 @@ PageId PageEntryMapView::resolveRefId(PageId page_id) const
         {
             return ori_ref_id;
         }
+        if (node->isBase())
+        {
+            return page_id;
+        }
     }
-    return vset->base->resolveRefId(page_id);
+    assert(false);
+    // should not call here
+    return 0;
 }
 
 PageEntryMapView::const_iterator PageEntryMapView::end() const
 {
-    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(vset->base)->end());
+    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(vset->current)->end());
 }
 
 PageEntryMapBase::const_normal_page_iterator PageEntryMapView::pages_cbegin() const
 {
-    return vset->base->pages_cbegin();
+    return vset->current->pages_cbegin();
 }
 
 PageEntryMapBase::const_normal_page_iterator PageEntryMapView::pages_cend() const
 {
     // FIXME
-    return vset->base->pages_cend();
+    return vset->current->pages_cend();
 }
 
 PageEntryMapBase::const_iterator PageEntryMapView::cbegin() const
 {
     // FIXME
 
-    return vset->base->cbegin();
+    return vset->current->cbegin();
 }
 
 PageEntryMapBase::const_iterator PageEntryMapView::cend() const
 {
     // FIXME
-    return vset->base->cend();
+    return vset->current->cend();
 }
 
 ////  PageEntryMapDeltaVersionSet
@@ -296,10 +308,6 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() con
         {
             liveFiles.insert(it->second.fileIdLevel());
         }
-    }
-    for (auto it = base->pages_cbegin(); it != base->pages_cend(); ++it)
-    {
-        liveFiles.insert(it->second.fileIdLevel());
     }
     return liveFiles;
 }

@@ -249,11 +249,25 @@ TEST_F(PageEntryMapDelta_test, ReBindRef)
     map->del(0);
 }
 
-TEST(PageEntryMapDeltaBuilder_test, DeltaAddRef)
+class PageEntryMapDeltaBuilder_test: public ::testing::Test
 {
-    std::shared_ptr<PageEntryMapBase>  base  = std::make_shared<PageEntryMapBase>();
-    std::shared_ptr<PageEntryMapDelta> delta = std::make_shared<PageEntryMapDelta>();
+public:
 
+    void SetUp() override
+    {
+        base = PageEntryMapBase::createBase();
+        delta = PageEntryMapDelta::createDelta();
+    }
+
+    void TearDown() override {}
+
+protected:
+    std::shared_ptr<PageEntryMapBase>  base;
+    std::shared_ptr<PageEntryMapDelta> delta;
+};
+
+TEST_F(PageEntryMapDeltaBuilder_test, DeltaAddRef)
+{
     base->put(0, PageEntry{.checksum = 0x123});
     base->ref(2, 0);
 
@@ -267,16 +281,13 @@ TEST(PageEntryMapDeltaBuilder_test, DeltaAddRef)
     ASSERT_EQ(entry.checksum, 0x123UL);
 }
 
-TEST(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
+TEST_F(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
 {
-    std::shared_ptr<PageEntryMapBase>  base  = std::make_shared<PageEntryMapBase>();
-    std::shared_ptr<PageEntryMapDelta> delta = std::make_shared<PageEntryMapDelta>();
-
     delta->put(2, PageEntry{.checksum = 0x123});
     delta->ref(3, 2);
     delta->del(2);
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, std::move(delta));
+    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, delta);
 
     auto iter = base->find(2);
     ASSERT_EQ(iter, base->end());
@@ -286,17 +297,14 @@ TEST(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
     ASSERT_EQ(iter2.pageEntry().checksum, 0x123UL);
 }
 
-TEST(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
+TEST_F(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
 {
-    std::shared_ptr<PageEntryMapBase>  base  = std::make_shared<PageEntryMapBase>();
-    std::shared_ptr<PageEntryMapDelta> delta = std::make_shared<PageEntryMapDelta>();
-
     base->put(2, PageEntry{.checksum = 0x1});
 
     delta->del(2);
     delta->put(2, PageEntry{.checksum = 0x123});
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, std::move(delta));
+    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, delta);
 
     auto iter = base->find(2);
     ASSERT_NE(iter, base->end());

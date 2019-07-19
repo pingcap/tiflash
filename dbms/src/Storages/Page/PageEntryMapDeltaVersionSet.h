@@ -46,7 +46,7 @@ public:
 
     std::shared_ptr<PageEntryMapDelta> build() { return v; }
 
-    static void mergeDeltaToBaseInplace(const std::shared_ptr<PageEntryMapBase> & base, std::shared_ptr<PageEntryMapDelta> && delta);
+    static void mergeDeltaToBaseInplace(const std::shared_ptr<PageEntryMapBase> & base, const std::shared_ptr<PageEntryMapDelta> & delta);
     static std::shared_ptr<PageEntryMapBase> mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> &old_base, std::shared_ptr<PageEntryMapDelta> &delta);
 
     static std::shared_ptr<PageEntryMapDelta> mergeDeltas(PageEntryMapDeltaVersionSet::BaseType *    vset,
@@ -67,7 +67,6 @@ public:
     {
     public:
         explicit const_iterator(PageEntryMapBase::const_iterator cit) : _iter(cit._iter), _normal_pages(cit._normal_pages) {}
-        explicit const_iterator(PageEntryMapDelta::const_iterator cit) : _iter(cit._iter), _normal_pages(cit._normal_pages) {}
 
         inline PageId            pageId() const { return _iter->first; }
         inline const PageEntry & pageEntry() const
@@ -98,7 +97,6 @@ public:
                                                                                                                           std::move(tail_))
     {
     }
-    PageEntryMapView(): PageEntryMapView(nullptr, nullptr) {}
 
     const PageEntry & at(const PageId page_id) const;
 

@@ -2,9 +2,11 @@
 
 #include <stdint.h>
 #include <cassert>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <stack>
+#include <unordered_set>
 
 #include <Common/VersionSet.h>
 #include <IO/WriteHelpers.h>
@@ -21,8 +23,8 @@ public:
     std::shared_ptr<T> prev;
 
 public:
-    explicit MultiVersionDeltaCountable(T * self) : prev(nullptr) { (void)self; }
-    virtual ~MultiVersionDeltaCountable() {}
+    explicit MultiVersionDeltaCountable() : prev(nullptr) {}
+    virtual ~MultiVersionDeltaCountable() = default;
 };
 
 template <typename VersionSet_t, typename VersionDelta_t, typename Builder_t>
@@ -35,29 +37,32 @@ public:
 public:
     VersionViewBase(VersionSet_t * vset_, std::shared_ptr<VersionDelta_t> tail_) : vset(vset_), tail(std::move(tail_)) {}
 
-    void incrRefCount() {}
-
-    void decrRefCount(std::shared_mutex & mutex)
+    void release()
     {
-        std::unique_lock lock(mutex);
+        if (tail == nullptr)
+            return;
         // do compact on delta
         std::shared_ptr<VersionDelta_t> tmp = Builder_t::mergeDeltas(vset, tail);
         if (tmp != nullptr)
         {
-            // replace nodes (head, tail] -> tmp
-            tmp->prev = nullptr; // TODO tmp->prev = base
-            vset->current = tmp;
-
             // rebase vset->current on `this->tail` to base on `tmp`
             vset->rebase(tail, tmp);
+
+            // replace nodes (head, tail] -> tmp
+            vset->current = tmp;
             // release tail ref on this view, replace with tmp
-            tail.reset(tmp);
+            tail = tmp;
+            tmp.reset();
         }
         // TODO do compact on base
         if (true)
         {
-            typename VersionSet_t::VersionBasePtr new_base = Builder_t::mergeDeltaToBase(vset->base, tail);
-            // vset->rebase(vset->base, new_base);
+            auto old_base = tail->prev;
+            if (old_base != nullptr)
+            {
+                typename VersionSet_t::VersionBasePtr new_base = Builder_t::mergeDeltaToBase(old_base, tail);
+                vset->rebase(old_base, new_base);
+            }
         }
     }
 };
@@ -78,20 +83,20 @@ public:
 
 public:
     VersionDeltaSet()
-        : base(std::move(std::make_shared<VersionBase_t>())), current(nullptr), snapshots(std::move(std::make_shared<Snapshot>()))
-    {
-        // add ref count of VersionBase
-        // append a init version to link
-        appendVersion(std::move(std::make_shared<VersionDelta_t>()));
-    }
+        : current(std::move(VersionBaseType::createBase())), snapshots(std::move(std::make_shared<Snapshot>(this, nullptr, &read_mutex)))
+    {}
 
-    virtual ~VersionDeltaSet() = default;
+    virtual ~VersionDeltaSet()
+    {
+        assert(snapshots->prev == snapshots.get());
+        current.reset();
+    }
 
     void restore(std::shared_ptr<VersionDelta_t> && v)
     {
         std::unique_lock read_lock(read_mutex);
-        assert(base->empty());
-        Builder_t::mergeDeltaToBaseInplace(base, std::move(v));
+        assert(current->empty());
+        Builder_t::mergeDeltaToBaseInplace(current, std::move(v));
     }
 
     void apply(VersionEdit_t & edit)
@@ -110,11 +115,11 @@ public:
 
         if (current.use_count() == 1)
         {
-            if (current->empty() && base.use_count() == 1)
+            if (current->isBase() && current.use_count() == 1)
             {
                 // merge new delta to base version
                 std::cerr << "merge to base" << std::endl;
-                Builder_t::mergeDeltaToBaseInplace(base, std::move(v));
+                Builder_t::mergeDeltaToBaseInplace(current, std::move(v));
             }
             else
             {
@@ -146,10 +151,6 @@ public:
     std::string toDebugStringUnlocked() const
     {
         std::string s;
-        s += "B:{\"rc\":";
-        s += DB::toString(base.use_count());
-        s += "},";
-        s += "D:";
         bool is_first = true;
         std::stack<std::shared_ptr<VersionDelta_t>> deltas;
         for (auto v = current; v != nullptr; v = v->prev)
@@ -172,26 +173,23 @@ public:
 public:
     class Snapshot
     {
-    private:
+    public:
         VersionView_t view;
         std::shared_mutex * mutex;
 
         Snapshot * prev;
         Snapshot * next;
 
-    private:
-        Snapshot() : view(), mutex(nullptr), prev(this), next(this) {}
+    public:
         Snapshot(VersionDeltaSet * vset_, std::shared_ptr<VersionDelta_t> tail_, //
             std::shared_mutex * mutex_)
-            : view(vset_, std::move(tail_)), mutex(mutex_)
-        {
-            view.incrRefCount();
-        }
+            : view(vset_, std::move(tail_)), mutex(mutex_), prev(this), next(this)
+        {}
 
-    public:
         ~Snapshot()
         {
-            view.decrRefCount(*mutex);
+            std::unique_lock lock(*mutex);
+            view.release();
             // Remove from linked list
             prev->next = next;
             next->prev = prev;
@@ -218,11 +216,9 @@ public:
     }
 
 public:
-    std::shared_ptr<VersionBase_t> base;
+    mutable std::shared_mutex read_mutex;
     std::shared_ptr<VersionDelta_t> current;
     SnapshotPtr snapshots;
-
-    mutable std::shared_mutex read_mutex;
 
 protected:
     void appendVersion(std::shared_ptr<VersionDelta_t> && v)
@@ -241,9 +237,11 @@ protected:
     /// caller should ensure old_base is in VersionSet's link
     /// \param old_base
     /// \param new_base
-    void rebase(const std::shared_ptr<VersionDelta_t> &old_base, const std::shared_ptr<VersionDelta_t> &new_base)
+    void rebase(const std::shared_ptr<VersionDelta_t> & old_base, const std::shared_ptr<VersionDelta_t> & new_base)
     {
         assert(old_base != nullptr);
+        if (old_base == current)
+            return;
         auto q = current, p = current->prev;
         while (p != nullptr && p != old_base)
         {
