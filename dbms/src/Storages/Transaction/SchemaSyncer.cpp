@@ -337,7 +337,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
 
-    TableInfo table_info(table_info_json, false);
+    TableInfo table_info(table_info_json);
 
     if (context.getTiDBService().ignoreDatabases().count(table_info.db_name))
     {
