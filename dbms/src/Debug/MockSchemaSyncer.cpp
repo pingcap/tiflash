@@ -236,6 +236,8 @@ MockSchemaSyncer::MockSchemaSyncer() : log(&Logger::get("MockSchemaSyncer")) {}
 
 bool MockSchemaSyncer::syncSchemas(Context & context)
 {
+    std::lock_guard<std::mutex> lock(schema_mutex);
+
     std::unordered_map<TableID, MockTiDB::TablePtr> new_tables;
     MockTiDB::instance().traverseTables([&](const auto & table) { new_tables.emplace(table->id(), table); });
 
