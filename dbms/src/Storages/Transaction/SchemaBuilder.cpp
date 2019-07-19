@@ -4,10 +4,10 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Parsers/ASTLiteral.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -37,7 +37,8 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
             command.type = AlterCommand::ADD_COLUMN;
             command.column_name = column_info.name;
             command.data_type = getDataTypeByColumnInfo(column_info);
-            if (!column_info.origin_default_value.isEmpty()) {
+            if (!column_info.origin_default_value.isEmpty())
+            {
                 LOG_DEBUG(log, "add default value for column: " + column_info.name);
                 command.default_expression = ASTPtr(new ASTLiteral(column_info.defaultValueToField()));
             }
@@ -92,14 +93,13 @@ void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const Str
         for (auto part_def : table_info->partition.definitions)
         {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
-            storage->alterForTMT(commands, *new_table_info, db_name, context);
+            storage->alterForTMT(commands, new_table_info, db_name, context);
         }
     }
 }
 
 void SchemaBuilder::applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
 {
-
     auto table_info = getter.getTableInfo(dbInfo->id, table_id);
     auto & tmt_context = context.getTMTContext();
     auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_id).get());
@@ -279,16 +279,16 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
     return stmt;
 }
 
-void SchemaBuilder::applyCreatePhysicalTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info)
+void SchemaBuilder::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info)
 {
-    String stmt = createTableStmt(*db_info, *table_info);
+    String stmt = createTableStmt(db_info, table_info);
 
     ParserCreateQuery parser;
-    ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info->name, 0);
+    ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info.name, 0);
 
     ASTCreateQuery * ast_create_query = typeid_cast<ASTCreateQuery *>(ast.get());
     ast_create_query->attach = true;
-    ast_create_query->database = db_info->name;
+    ast_create_query->database = db_info.name;
 
     InterpreterCreateQuery interpreter(ast, context);
     interpreter.setInternal(true);
@@ -305,17 +305,17 @@ void SchemaBuilder::applyCreateTable(TiDB::DBInfoPtr db_info, Int64 table_id)
         // this table is dropped.
         return;
     }
-    applyCreateTableImpl(db_info, table_info);
+    applyCreateTableImpl(*db_info, *table_info);
 }
 
-void SchemaBuilder::applyCreateTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info)
+void SchemaBuilder::applyCreateTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info)
 {
-    if (table_info->is_partition_table)
+    if (table_info.is_partition_table)
     {
         // create partition table.
-        for (auto part_def : table_info->partition.definitions)
+        for (auto part_def : table_info.partition.definitions)
         {
-            auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
+            auto new_table_info = table_info.producePartitionTableInfo(part_def.id);
             applyCreatePhysicalTableImpl(db_info, new_table_info);
         }
     }
@@ -347,7 +347,7 @@ void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
         for (auto part_def : table_info.partition.definitions)
         {
             auto new_table_info = table_info.producePartitionTableInfo(part_def.id);
-            applyDropTableImpl(database_name, new_table_info->name);
+            applyDropTableImpl(database_name, new_table_info.name);
         }
     }
     // and drop logic table.
@@ -370,9 +370,11 @@ void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info)
         table_ids.insert(table->id);
 
     auto storage_map = tmt_context.getStorages().getAllStorage();
-    for (auto it = storage_map.begin(); it != storage_map.end(); it++) {
+    for (auto it = storage_map.begin(); it != storage_map.end(); it++)
+    {
         auto storage = it->second;
-        if(storage->getDatabaseName() == db_info->name && table_ids.count(storage->getTableInfo().id) == 0) {
+        if (storage->getDatabaseName() == db_info->name && table_ids.count(storage->getTableInfo().id) == 0)
+        {
             // Drop Table
             applyDropTableImpl(db_info->name, storage->getTableName());
             LOG_DEBUG(log, "Table " + db_info->name + "." + storage->getTableName() + " is dropped during schema all schemas");
@@ -391,7 +393,6 @@ void SchemaBuilder::updateDB(TiDB::DBInfoPtr db_info)
             applyAlterTableImpl(table, db_info->name, storage);
         }
     }
-
 }
 
 // end namespace

@@ -33,7 +33,6 @@ private:
 
     void applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
 
-
     void applyCreateTable(TiDB::DBInfoPtr dbInfo, Int64 table_id);
 
     void applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id);
@@ -46,12 +45,11 @@ private:
 
     //void applyDropPartition(TiDB::DBInfoPtr dbInfo, Int64 table_id);
 
-    void applyCreatePhysicalTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info);
+    void applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info);
 
-    void applyCreateTableImpl(TiDB::DBInfoPtr db_info, TiDB::TableInfoPtr table_info);
+    void applyCreateTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info);
 
     void applyDropTableImpl(const String &, const String &);
 };
-bool applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
 
 } // namespace DB

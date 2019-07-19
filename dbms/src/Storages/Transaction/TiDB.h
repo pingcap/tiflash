@@ -263,7 +263,7 @@ struct TableInfo
 
     ColumnID getColumnID(const String & name) const;
 
-    TableInfoPtr producePartitionTableInfo(TableID table_or_partition_id) const
+    TableInfo producePartitionTableInfo(TableID table_or_partition_id) const
     {
         //
         // Some sanity checks for partition table.
@@ -280,43 +280,14 @@ struct TableInfo
                 DB::ErrorCodes::LOGICAL_ERROR);
 
         // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
-        TableInfoPtr new_table = std::make_shared<TableInfo>(*this);
-        new_table->belonging_table_id = id;
-        new_table->id = table_or_partition_id;
+        TableInfo new_table = *this;
+        new_table.belonging_table_id = id;
+        new_table.id = table_or_partition_id;
 
         // Mangle the table name by appending partition name.
-        new_table->name += "_" + std::to_string(table_or_partition_id);
+        new_table.name += "_" + std::to_string(table_or_partition_id);
 
         return new_table;
-    }
-
-    bool manglePartitionTableIfNeeded(TableID table_or_partition_id)
-    {
-        if (id == table_or_partition_id)
-            // Non-partition table.
-            return false;
-
-        // Some sanity checks for partition table.
-        if (unlikely(!(is_partition_table && partition.enable)))
-            throw Exception("Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id)
-                    + " but it's not a partition table",
-                DB::ErrorCodes::LOGICAL_ERROR);
-
-        if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) {
-                return d.id == table_or_partition_id;
-            }) == partition.definitions.end()))
-            throw Exception(
-                "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id),
-                DB::ErrorCodes::LOGICAL_ERROR);
-
-        // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
-        belonging_table_id = id;
-        id = table_or_partition_id;
-
-        // Mangle the table name by appending partition name.
-        name += "_" + std::to_string(table_or_partition_id);
-
-        return true;
     }
 };
 
