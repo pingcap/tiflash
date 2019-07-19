@@ -170,6 +170,7 @@ struct ColumnInfo
 #undef M
 
     CodecFlag getCodecFlag() const;
+    DB::Field defaultValueToField() const;
 };
 
 enum PartitionType
