@@ -1,5 +1,5 @@
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(1, 2330)
 => DBGInvoke mock_schema_syncer('true')
@@ -32,5 +32,5 @@
 │   80004 │
 └─────────┘
 
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
