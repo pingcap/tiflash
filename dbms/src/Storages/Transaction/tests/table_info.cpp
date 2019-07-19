@@ -58,7 +58,7 @@ struct Case
     }
 };
 
-int main(int, char **) try
+int main(int, char **)
 {
     auto cases = {
         Case{
@@ -94,9 +94,4 @@ int main(int, char **) try
     }
 
     return 0;
-}
-catch (const DB::Exception & e)
-{
-    std::cerr << e.message();
-    throw e;
 }
