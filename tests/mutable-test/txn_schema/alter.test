@@ -7,6 +7,8 @@
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 => DBGInvoke __mock_schema_syncer('true')
 
+=> DBGInvoke __enable_schema_sync_service('false')
+
 # Sync add column by checking missing column in CH when flushing.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
 => DBGInvoke __refresh_schemas()

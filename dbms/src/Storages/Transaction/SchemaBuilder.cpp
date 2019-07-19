@@ -7,6 +7,7 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/ASTLiteral.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -15,10 +16,7 @@
 namespace DB
 {
 
-using TableInfo = TiDB::TableInfo;
-using DBInfo = TiDB::DBInfo;
-using TableInfoPtr = TiDB::TableInfoPtr;
-using DBInfoPtr = TiDB::DBInfoPtr;
+using namespace TiDB;
 
 inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & table_info, const TiDB::TableInfo & orig_table_info)
 {
@@ -39,6 +37,10 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
             command.type = AlterCommand::ADD_COLUMN;
             command.column_name = column_info.name;
             command.data_type = getDataTypeByColumnInfo(column_info);
+            if (!column_info.origin_default_value.isEmpty()) {
+                LOG_DEBUG(log, "add default value for column: " + column_info.name);
+                command.default_expression = ASTPtr(new ASTLiteral(column_info.defaultValueToField()));
+            }
             // TODO: support after column.
             LOG_DEBUG(log, "detect add column.");
         }
