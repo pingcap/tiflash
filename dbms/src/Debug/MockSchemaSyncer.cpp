@@ -261,13 +261,8 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
     auto & tmt_context = context.getTMTContext();
 
     /// Get table schema json.
-    auto table_id = table->id();
-
-    String table_info_json = table->table_info.serialize(false);
-
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
-
-    TableInfo table_info(table_info_json, false);
+    TableInfo table_info = table->table_info;
+    auto table_id = table_info.id;
 
     auto storage = tmt_context.getStorages().get(table_id);
 

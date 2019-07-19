@@ -371,7 +371,7 @@ public:
     RaftService & getRaftService();
 
     void initializeSchemaSyncService();
-    SchemaSyncServicePtr getSchemaSyncService();
+    SchemaSyncServicePtr & getSchemaSyncService();
 
     void initializePartPathSelector(const std::vector<std::string> & all_path);
     PartPathSelector & getPartPathSelector();

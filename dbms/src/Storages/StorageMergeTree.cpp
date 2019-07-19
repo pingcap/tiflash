@@ -319,6 +319,25 @@ void StorageMergeTree::alter(
     const String & table_name,
     const Context & context)
 {
+    alterInternal(params, database_name, table_name, std::nullopt, context);
+}
+
+void StorageMergeTree::alterForTMT(
+    const AlterCommands & params,
+    const TiDB::TableInfo & table_info,
+    const String & database_name,
+    const Context & context)
+{
+    alterInternal(params, database_name, table_info.name, std::optional<std::reference_wrapper<const TableInfo>>(table_info), context);
+}
+
+void StorageMergeTree::alterInternal(
+    const AlterCommands & params,
+    const String & database_name,
+    const String & table_name,
+    const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info,
+    const Context & context)
+{
     /// NOTE: Here, as in ReplicatedMergeTree, you can do ALTER which does not block the writing of data for a long time.
     auto merge_blocker = merger.merges_blocker.cancel();
 
@@ -379,6 +398,8 @@ void StorageMergeTree::alter(
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
     setColumns(std::move(new_columns));
+    if (table_info)
+        setTableInfo(table_info->get());
 
     if (primary_key_is_modified)
     {
@@ -395,40 +416,6 @@ void StorageMergeTree::alter(
 
     if (primary_key_is_modified)
         data.loadDataParts(false);
-}
-
-void StorageMergeTree::alterForTMT(
-    const AlterCommands & params,
-    const TiDB::TableInfo & table_info,
-    const String & database_name,
-    const Context & context)
-{
-    const String & table_name = table_info.name;
-    /// NOTE: Here, as in ReplicatedMergeTree, you can do ALTER which does not block the writing of data for a long time.
-    auto merge_blocker = merger.merges_blocker.cancel();
-
-    auto table_soft_lock = lockDataForAlter(__PRETTY_FUNCTION__);
-
-    data.checkAlter(params);
-
-    auto new_columns = data.getColumns();
-    params.apply(new_columns);
-
-//    std::vector<MergeTreeData::AlterDataPartTransactionPtr> transactions;
-
-    auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
-
-    IDatabase::ASTModifier storage_modifier = [this] (IAST & ast)
-    {
-        auto & storage_ast = typeid_cast<ASTStorage &>(ast);
-
-        auto literal = std::make_shared<ASTLiteral>(Field(data.table_info->serialize(true)));
-        typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
-    };
-
-    context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
-    setTableInfo(table_info);
-    setColumns(std::move(new_columns));
 }
 
 /// While exists, marks parts as 'currently_merging' and reserves free space on filesystem.

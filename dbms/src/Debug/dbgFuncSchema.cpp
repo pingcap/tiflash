@@ -24,9 +24,15 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
     bool enable = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value) == "true";
 
     if (enable)
-        context.initializeSchemaSyncService();
+    {
+        if (!context.getSchemaSyncService())
+            context.initializeSchemaSyncService();
+    }
     else
-        context.getSchemaSyncService().reset();
+    {
+        if (context.getSchemaSyncService())
+            context.getSchemaSyncService().reset();
+    }
 
     std::stringstream ss;
     ss << "schema sync service " << (enable ? "enabled" : "disabled");
