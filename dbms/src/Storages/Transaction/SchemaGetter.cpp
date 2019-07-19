@@ -203,7 +203,7 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String table_info_json = TxnStructure::HGet(snap, db_key, table_key);
     if (table_info_json == "")
         return nullptr;
-    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json, false);
+    TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json);
     return table_info;
 }
 
@@ -245,7 +245,7 @@ std::vector<TiDB::TableInfoPtr> SchemaGetter::listTables(DatabaseID db_id)
             continue;
         }
         const String & json = kv_pair.second;
-        auto table_info = std::make_shared<TiDB::TableInfo>(json, false);
+        auto table_info = std::make_shared<TiDB::TableInfo>(json);
 
         res.push_back(table_info);
     }
