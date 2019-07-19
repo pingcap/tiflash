@@ -259,7 +259,7 @@ TEST(PageEntryMapDeltaBuilder_test, DeltaAddRef)
 
     delta->ref(3, 2);
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBase(base, std::move(delta));
+    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, std::move(delta));
 
     auto iter = base->find(3);
     ASSERT_NE(iter, base->end());
@@ -276,7 +276,7 @@ TEST(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
     delta->ref(3, 2);
     delta->del(2);
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBase(base, std::move(delta));
+    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, std::move(delta));
 
     auto iter = base->find(2);
     ASSERT_EQ(iter, base->end());
@@ -296,7 +296,7 @@ TEST(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
     delta->del(2);
     delta->put(2, PageEntry{.checksum = 0x123});
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBase(base, std::move(delta));
+    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, std::move(delta));
 
     auto iter = base->find(2);
     ASSERT_NE(iter, base->end());

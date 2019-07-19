@@ -30,7 +30,7 @@ struct VersionViewBase
 {
 public:
     VersionSet_t * vset;
-    std::shared_ptr<VersionDelta_t> tail;
+    typename VersionSet_t::VersionDeltaPtr tail;
 
 public:
     VersionViewBase(VersionSet_t * vset_, std::shared_ptr<VersionDelta_t> tail_) : vset(vset_), tail(std::move(tail_)) {}
@@ -40,23 +40,25 @@ public:
     void decrRefCount(std::shared_mutex & mutex)
     {
         std::unique_lock lock(mutex);
-        decrRefCount();
-    }
-
-    void decrRefCount()
-    {
         // do compact on delta
-        auto tmp = Builder_t::mergeDeltas(vset, tail);
+        std::shared_ptr<VersionDelta_t> tmp = Builder_t::mergeDeltas(vset, tail);
         if (tmp != nullptr)
         {
             // replace nodes (head, tail] -> tmp
-            tmp->prev = nullptr;
+            tmp->prev = nullptr; // TODO tmp->prev = base
             vset->current = tmp;
 
+            // rebase vset->current on `this->tail` to base on `tmp`
+            vset->rebase(tail, tmp);
             // release tail ref on this view, replace with tmp
             tail.reset(tmp);
         }
         // TODO do compact on base
+        if (true)
+        {
+            typename VersionSet_t::VersionBasePtr new_base = Builder_t::mergeDeltaToBase(vset->base, tail);
+            // vset->rebase(vset->base, new_base);
+        }
     }
 };
 
@@ -69,6 +71,10 @@ class VersionDeltaSet
 {
 public:
     using BuilderType = Builder_t;
+    using VersionBaseType = VersionBase_t;
+    using VersionBasePtr = std::shared_ptr<VersionBaseType>;
+    using VersionDeltaType = VersionDelta_t;
+    using VersionDeltaPtr = std::shared_ptr<VersionDeltaType>;
 
 public:
     VersionDeltaSet()
@@ -85,7 +91,7 @@ public:
     {
         std::unique_lock read_lock(read_mutex);
         assert(base->empty());
-        Builder_t::mergeDeltaToBase(base, std::move(v));
+        Builder_t::mergeDeltaToBaseInplace(base, std::move(v));
     }
 
     void apply(VersionEdit_t & edit)
@@ -108,7 +114,7 @@ public:
             {
                 // merge new delta to base version
                 std::cerr << "merge to base" << std::endl;
-                Builder_t::mergeDeltaToBase(base, std::move(v));
+                Builder_t::mergeDeltaToBaseInplace(base, std::move(v));
             }
             else
             {
@@ -225,6 +231,29 @@ protected:
         // Append to linked list
         v->prev = current;
         current = v;
+    }
+
+protected:
+    template <typename VS_t, typename VD_t, typename B_t>
+    friend struct VersionViewBase;
+
+    ///
+    /// caller should ensure old_base is in VersionSet's link
+    /// \param old_base
+    /// \param new_base
+    void rebase(const std::shared_ptr<VersionDelta_t> &old_base, const std::shared_ptr<VersionDelta_t> &new_base)
+    {
+        assert(old_base != nullptr);
+        auto q = current, p = current->prev;
+        while (p != nullptr && p != old_base)
+        {
+            q = p;
+            p = q->prev;
+        }
+        // p must point to `old_base` now
+        assert(p == old_base);
+        // rebase q on `new_base`
+        q->prev = new_base;
     }
 };
 

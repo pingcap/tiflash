@@ -83,7 +83,7 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
     }
 }
 
-void PageEntryMapDeltaBuilder::mergeDeltaToBase( //
+void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
     const std::shared_ptr<PageEntryMapBase> & base,
     std::shared_ptr<PageEntryMapDelta> &&     delta)
 {
@@ -100,6 +100,13 @@ void PageEntryMapDeltaBuilder::mergeDeltaToBase( //
         base->ref(ref_pair.first, ref_pair.second);
 
     delta->clear();
+}
+
+std::shared_ptr<PageEntryMapBase> PageEntryMapDeltaBuilder::mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> &old_base, std::shared_ptr<PageEntryMapDelta> &delta)
+{
+    std::shared_ptr<PageEntryMapBase> base = std::make_shared<PageEntryMapBase>();
+    base->copyEntries(*old_base);
+    mergeDeltaToBaseInplace(base, delta);
 }
 
 std::shared_ptr<PageEntryMapDelta> PageEntryMapDeltaBuilder::mergeDeltas( //

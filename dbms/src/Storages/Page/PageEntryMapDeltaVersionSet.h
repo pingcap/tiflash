@@ -46,7 +46,8 @@ public:
 
     std::shared_ptr<PageEntryMapDelta> build() { return v; }
 
-    static void mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> & base, std::shared_ptr<PageEntryMapDelta> && delta);
+    static void mergeDeltaToBaseInplace(const std::shared_ptr<PageEntryMapBase> & base, std::shared_ptr<PageEntryMapDelta> && delta);
+    static std::shared_ptr<PageEntryMapBase> mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> &old_base, std::shared_ptr<PageEntryMapDelta> &delta);
 
     static std::shared_ptr<PageEntryMapDelta> mergeDeltas(PageEntryMapDeltaVersionSet::BaseType *    vset,
                                                           const std::shared_ptr<PageEntryMapDelta> & tail);
