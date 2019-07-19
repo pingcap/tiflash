@@ -236,6 +236,8 @@ MockSchemaSyncer::MockSchemaSyncer() : log(&Logger::get("MockSchemaSyncer")) {}
 
 bool MockSchemaSyncer::syncSchemas(Context & context)
 {
+    std::lock_guard<std::mutex> lock(schema_mutex);
+
     std::unordered_map<TableID, MockTiDB::TablePtr> new_tables;
     MockTiDB::instance().traverseTables([&](const auto & table) { new_tables.emplace(table->id(), table); });
 
@@ -261,7 +263,7 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
     auto & tmt_context = context.getTMTContext();
 
     /// Get table schema json.
-    TableInfo table_info = table->table_info;
+    const TableInfo & table_info = table->table_info;
     auto table_id = table_info.id;
 
     auto storage = tmt_context.getStorages().get(table_id);
@@ -278,17 +280,16 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
         auto create_table_internal = [&]() {
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Creating table " << table_info.name);
             createTable(table_info, context);
-            auto logical_storage = std::static_pointer_cast<StorageMergeTree>(context.getTable(table_info.db_name, table_info.name));
-            context.getTMTContext().getStorages().put(logical_storage);
 
-            /// Mangle for partition table.
-            bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
-            if (is_partition_table && !context.isTableExist(table_info.db_name, table_info.name))
+            /// Create sub-table for partitions if any.
+            if (table_info.is_partition_table)
             {
-                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
-                createTable(table_info, context);
-                auto physical_storage = std::static_pointer_cast<StorageMergeTree>(context.getTable(table_info.db_name, table_info.name));
-                context.getTMTContext().getStorages().put(physical_storage);
+                // create partition table.
+                for (auto part_def : table_info.partition.definitions)
+                {
+                    auto part_table_info = table_info.producePartitionTableInfo(part_def.id);
+                    createTable(*part_table_info, context);
+                }
             }
         };
 
@@ -343,12 +344,15 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
-    // Call storage alter to apply schema changes.
-    storage->alterForTMT(alter_commands, table_info, table->table_info.db_name, context);
+    if (!alter_commands.empty())
+    {
+        // Call storage alter to apply schema changes.
+        storage->alterForTMT(alter_commands, table_info, table->table_info.db_name, context);
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
 
-    // TODO: Apply schema changes to partition tables.
+        // TODO: Apply schema changes to partition tables.
+    }
 }
 
 } // namespace DB

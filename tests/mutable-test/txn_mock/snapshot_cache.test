@@ -1,5 +1,5 @@
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
 => DBGInvoke mock_schema_syncer('true')
 ┌─mock_schema_syncer("true")─┐
 │ mock schema syncer enabled │
@@ -54,5 +54,5 @@
 │    19 │           2 │
 │    20 │           4 │
 └───────┴─────────────┘
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test

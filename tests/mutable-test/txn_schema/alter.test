@@ -1,4 +1,6 @@
 # Preparation.
+=> DBGInvoke __enable_schema_sync_service('false')
+
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
 
@@ -134,3 +136,4 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
+=> DBGInvoke __enable_schema_sync_service('true')

@@ -19,6 +19,8 @@ protected:
 
     Logger * log;
 
+    std::mutex schema_mutex;
+
     std::unordered_map<TableID, MockTiDB::TablePtr> tables;
 };
 
