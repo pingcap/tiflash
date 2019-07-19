@@ -678,8 +678,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             if (ast && ast->value.getType() == Field::Types::String)
             {
                 auto table_info_json = safeGet<String>(ast->value);
-                // TODO: examine if this unescaping is necessary.
-                table_info.deserialize(table_info_json, true);
+                table_info.deserialize(table_info_json);
             }
             else
                 throw Exception(

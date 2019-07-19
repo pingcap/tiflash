@@ -26,10 +26,10 @@ struct Case
 
     void verifyTableInfo() const
     {
-        TableInfo table_info1(table_info_json, false);
+        TableInfo table_info1(table_info_json);
         table_info1.manglePartitionTableIfNeeded(table_or_partition_id);
         auto json1 = table_info1.serialize(false);
-        TableInfo table_info2(json1, false);
+        TableInfo table_info2(json1);
         auto json2 = table_info2.serialize(false);
         if (json1 != json2)
         {
@@ -49,8 +49,8 @@ struct Case
             &ast_arguments = typeid_cast<ASTExpressionList &>(*(ast_create_query.storage->engine->arguments));
         ASTLiteral &ast_literal = typeid_cast<ASTLiteral &>(*(ast_arguments.children.back()));
         json1 = safeGet<String>(ast_literal.value);
-        table_info1.deserialize(json1, true);
-        json2 = table_info1.serialize(true);
+        table_info1.deserialize(json1);
+        json2 = table_info1.serialize(false);
         if (json1 != json2)
         {
             throw Exception("Table info escaped serde mismatch:\n" + json1 + "\n" + json2);
@@ -58,13 +58,13 @@ struct Case
     }
 };
 
-int main(int, char **)
+int main(int, char **) try
 {
     auto cases = {
         Case{
-            31,
-            R"json({"db_info":{"id":1,"db_name":{"O":"db1","L":"db1"},"charset":"utf8mb4","collate":"utf8mb4_bin","state":5},"table_info":{"id":31,"name":{"O":"simple_t","L":"simple_t"},"charset":"","collate":"","cols":[{"id":1,"name":{"O":"i","L":"i"},"offset":0,"origin_default":null,"default":null,"generated_expr_string":"","generated_stored":false,"dependences":null,"type":{"Tp":3,"Flag":0,"Flen":11,"Decimal":0,"Charset":"binary","Collate":"binary","Elems":null},"state":5,"comment":""}],"index_info":null,"fk_info":null,"state":5,"pk_is_handle":false,"comment":"","auto_inc_id":0,"max_col_id":1,"max_idx_id":0,"update_timestamp":404545295996944390,"ShardRowIDBits":0,"partition":null},"schema_version":100})json",
-            R"stmt(CREATE TABLE `db1`.`simple_t`(`i` Nullable(Int32), `_tidb_rowid` Int64) Engine = TxnMergeTree((`_tidb_rowid`), 8192, '{"db_info":{"id":1,"db_name":{"O":"db1","L":"db1"}},"table_info":{"id":31,"name":{"O":"simple_t","L":"simple_t"},"cols":[{"id":1,"name":{"O":"i","L":"i"},"offset":0,"origin_default":null,"default":null,"type":{"Tp":3,"Flag":0,"Flen":11,"Decimal":0},"state":5,"comment":""}],"state":5,"pk_is_handle":false,"comment":"","partition":null},"schema_version":100}'))stmt"
+            2049,
+            R"json({"db_info":{"id":1939,"db_name":{"O":"customer","L":"customer"}},"table_info":{"id":2049,"name":{"O":"customerdebt","L":"customerdebt"},"cols":[{"id":1,"name":{"O":"id","L":"id"},"offset":0,"origin_default":null,"default":null,"type":{"Tp":8,"Flag":515,"Flen":20,"Decimal":0},"state":5,"comment":"i\"d"}],"state":5,"pk_is_handle":true,"comment":"负债信息","partition":null},"schema_version":1529})json",
+            R"stmt(CREATE TABLE `customer`.`customerdebt`(`id` Int64) Engine = TxnMergeTree((`id`), 8192, '{"db_info":{"id":1939,"db_name":{"O":"customer","L":"customer"}},"table_info":{"id":2049,"name":{"O":"customerdebt","L":"customerdebt"},"cols":[{"id":1,"name":{"O":"id","L":"id"},"offset":0,"origin_default":null,"default":null,"type":{"Tp":8,"Flag":515,"Flen":20,"Decimal":0},"state":5,"comment":"i\\"d"}],"state":5,"pk_is_handle":true,"comment":"负债信息","partition":null},"schema_version":1529}'))stmt"
         },
         Case{
             33,
@@ -94,4 +94,9 @@ int main(int, char **)
     }
 
     return 0;
+}
+catch (const DB::Exception & e)
+{
+    std::cerr << e.message();
+    throw e;
 }
