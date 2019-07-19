@@ -97,6 +97,10 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
     if (checkDataType<DataTypeUInt64>(nested_type))
         column_info.tp = TiDB::TypeLongLong;
 
+    // Default value.
+    // TODO: Parse default value and set flag properly.
+    column_info.setNoDefaultValueFlag();
+
     return column_info;
 }
 
