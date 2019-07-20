@@ -288,7 +288,7 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
                 for (auto part_def : table_info.partition.definitions)
                 {
                     auto part_table_info = table_info.producePartitionTableInfo(part_def.id);
-                    createTable(*part_table_info, context);
+                    createTable(part_table_info, context);
                 }
             }
         };

@@ -29,8 +29,8 @@ struct Case
     void verifyTableInfo() const
     {
         DBInfo db_info(db_info_json);
-        TableInfo table_info1(table_info_json);
-        table_info1.manglePartitionTableIfNeeded(table_or_partition_id);
+        TableInfo tmp(table_info_json);
+        TableInfo table_info1 = tmp.producePartitionTableInfo(table_or_partition_id);
         auto json1 = table_info1.serialize(false);
         TableInfo table_info2(json1);
         auto json2 = table_info2.serialize(false);
@@ -59,8 +59,7 @@ struct Case
     }
 };
 
-int main(int, char **)
-try
+int main(int, char **) try
 {
     auto cases = {
         Case{
@@ -113,6 +112,7 @@ try
 
     return 0;
 }
-catch (const Poco::Exception & e) {
-    std::cout<<e.displayText()<<std::endl;
+catch (const Poco::Exception & e)
+{
+    std::cerr << e.displayText() << std::endl;
 }
