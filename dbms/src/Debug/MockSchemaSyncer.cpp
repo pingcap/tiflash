@@ -328,24 +328,22 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
     /// Table existing, detect schema changes and apply.
     const TableInfo & orig_table_info = storage->getTableInfo();
     AlterCommands alter_commands = detectSchemaChanges(table_info, orig_table_info);
-
-    std::stringstream ss;
-    ss << "Detected schema changes: ";
-    for (const auto & command : alter_commands)
-    {
-        // TODO: Other command types.
-        if (command.type == AlterCommand::ADD_COLUMN)
-            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-        else if (command.type == AlterCommand::DROP_COLUMN)
-            ss << "DROP COLUMN " << command.column_name << ", ";
-        else if (command.type == AlterCommand::MODIFY_COLUMN)
-            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-    }
-
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
-
     if (!alter_commands.empty())
     {
+        std::stringstream ss;
+        ss << "Detected schema changes: ";
+        for (const auto & command : alter_commands)
+        {
+            // TODO: Other command types.
+            if (command.type == AlterCommand::ADD_COLUMN)
+                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::DROP_COLUMN)
+                ss << "DROP COLUMN " << command.column_name << ", ";
+            else if (command.type == AlterCommand::MODIFY_COLUMN)
+                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+        }
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
+
         // Call storage alter to apply schema changes.
         storage->alterForTMT(alter_commands, table_info, table->table_info.db_name, context);
 
