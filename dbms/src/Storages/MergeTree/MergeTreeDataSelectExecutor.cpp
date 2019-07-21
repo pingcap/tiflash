@@ -53,6 +53,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
+#include <Storages/MergeTree/TMTDataPartProperty.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -146,6 +147,18 @@ static RelativeSize convertAbsoluteSampleSizeToRelative(const ASTPtr & node, siz
 
     auto absolute_sample_size = node_sample.ratio.numerator / node_sample.ratio.denominator;
     return std::min(RelativeSize(1), RelativeSize(absolute_sample_size) / RelativeSize(approx_total_rows));
+}
+
+TMTPKType getTMTPKType(const IDataType & rhs)
+{
+    static const DataTypeInt64 & dataTypeInt64 = {};
+    static const DataTypeUInt64 & dataTypeUInt64 = {};
+
+    if (rhs.equals(dataTypeInt64))
+        return TMTPKType::INT64;
+    else if (rhs.equals(dataTypeUInt64))
+        return TMTPKType::UINT64;
+    return TMTPKType::UNSPECIFIED;
 }
 
 BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_to_return,
@@ -248,12 +261,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         ;
     else if (!select.no_kvstore)
     {
-        const auto pk_family_name = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
-
-        if (std::strcmp(pk_family_name, TypeName<UInt64>::get()) == 0)
-            pk_type = TMTPKType::UINT64;
-        else if (std::strcmp(pk_family_name, TypeName<Int64>::get()) == 0)
-            pk_type = TMTPKType::INT64;
+        pk_type = getTMTPKType(*data.primary_key_data_types[0]);
 
         TMTContext & tmt = context.getTMTContext();
 
@@ -1044,7 +1052,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                         for (const RangesInDataPart & part : parts_with_ranges)
                         {
-                            MarkRanges mark_ranges = markRangesFromRegionRange<UInt64>(part.data_part->index, handle_range.first,
+                            MarkRanges mark_ranges = markRangesFromRegionRange<UInt64>(*part.data_part, handle_range.first,
                                 handle_range.second, part.ranges, computeMinMarksForSeek(settings, data), settings);
 
                             if (mark_ranges.empty())

@@ -2,6 +2,7 @@
 
 #include <Columns/ColumnsNumber.h>
 #include <Core/SortCursor.h>
+#include <Core/TMTPKType.h>
 
 namespace DB
 {
@@ -13,13 +14,6 @@ union TMTCmpOptimizedRes
 };
 
 static_assert(sizeof(TMTCmpOptimizedRes) == 4);
-
-enum TMTPKType
-{
-    INT64,
-    UINT64,
-    UNSPECIFIED,
-};
 
 /// type of pk column will be int64, uint64 and others(int32, int8, uint32 ...).
 /// type of version column is uint64.
