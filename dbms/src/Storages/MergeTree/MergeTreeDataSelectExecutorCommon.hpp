@@ -61,7 +61,7 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
             UInt64 tmp = data_part.tmt_property->max_pk.get<UInt64>();
             index_right_handle = static_cast<TargetType>(tmp);
         }
-        if (handle_begin >= index_right_handle)
+        if (handle_begin > index_right_handle)
             return {};
     }
 
