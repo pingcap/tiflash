@@ -6,7 +6,12 @@ namespace DB
 {
 
 class MergeTreeData;
-struct MergeTreeDataPart;
+
+enum TMTDataPartPropertyType : UInt64
+{
+    END,
+    MIN_MAX_PK,
+};
 
 struct TMTDataPartProperty
 {

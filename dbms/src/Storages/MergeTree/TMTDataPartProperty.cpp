@@ -10,14 +10,29 @@ static ReadBufferFromFile openForReading(const String & path)
     return ReadBufferFromFile(path, std::min(static_cast<Poco::File::FileSize>(DBMS_DEFAULT_BUFFER_SIZE), Poco::File(path).getSize()));
 }
 
+static const String TMTDataPartPropertyFileName = "tmt.prop";
+
 void TMTDataPartProperty::load(const MergeTreeData & storage, const String & part_path)
 {
+    String file_name = part_path + TMTDataPartPropertyFileName;
+    ReadBufferFromFile file = openForReading(file_name);
+    UInt64 tmt_type;
+    const DataTypePtr & type = storage.primary_key_data_types[0];
+    for (bool over = false; !over;)
     {
-        String file_name = part_path + "tmt.prop";
-        ReadBufferFromFile file = openForReading(file_name);
-        const DataTypePtr & type = storage.primary_key_data_types[0];
-        type->deserializeBinary(min_pk, file);
-        type->deserializeBinary(max_pk, file);
+        readBinary(tmt_type, file);
+        switch ((TMTDataPartPropertyType)tmt_type)
+        {
+            case MIN_MAX_PK:
+                type->deserializeBinary(min_pk, file);
+                type->deserializeBinary(max_pk, file);
+                break;
+            case END:
+                over = true;
+                break;
+            default:
+                throw Exception("[TMTDataPartProperty::load] got invalid type: " + DB::toString(tmt_type), ErrorCodes::LOGICAL_ERROR);
+        }
     }
     initialized = true;
 }
@@ -27,18 +42,21 @@ void TMTDataPartProperty::store(const MergeTreeData & storage, const String & pa
     if (!initialized)
         throw Exception(
             "Attempt to store uninitialized TMT property for part " + part_path + ". This is a bug.", ErrorCodes::LOGICAL_ERROR);
-    {
-        String file_name = "tmt.prop";
-        const DataTypePtr & type = storage.primary_key_data_types[0];
 
-        WriteBufferFromFile out(part_path + file_name);
-        HashingWriteBuffer out_hashing(out);
-        type->serializeBinary(min_pk, out_hashing);
-        type->serializeBinary(max_pk, out_hashing);
-        out_hashing.next();
-        checksums.files[file_name].file_size = out_hashing.count();
-        checksums.files[file_name].file_hash = out_hashing.getHash();
-    }
+    const String & file_name = TMTDataPartPropertyFileName;
+
+    const DataTypePtr & type = storage.primary_key_data_types[0];
+
+    WriteBufferFromFile out(part_path + file_name);
+    HashingWriteBuffer out_hashing(out);
+
+    writeBinary<UInt64>(MIN_MAX_PK, out_hashing);
+    type->serializeBinary(min_pk, out_hashing);
+    type->serializeBinary(max_pk, out_hashing);
+    writeBinary<UInt64>(END, out_hashing);
+    out_hashing.next();
+    checksums.files[file_name].file_size = out_hashing.count();
+    checksums.files[file_name].file_hash = out_hashing.getHash();
 }
 
 void TMTDataPartProperty::update(const Block & block, const std::string & pk_name)
