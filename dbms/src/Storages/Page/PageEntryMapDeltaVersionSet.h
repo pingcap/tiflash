@@ -14,15 +14,13 @@ class PageEntryMapDeltaBuilder;
 
 class PageEntryMapDeltaVersionSet : public ::DB::MVCC::VersionDeltaSet< //
                                         PageEntryMapBase,
-                                        PageEntryMapDelta,
                                         PageEntryMapView,
                                         PageEntriesEdit,
                                         PageEntryMapDeltaBuilder>
 {
 public:
     PageEntryMapDeltaVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
-        : ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapDelta, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>(
-            config_)
+        : ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>(config_)
     {
     }
 
@@ -34,8 +32,10 @@ public:
 
 public:
     friend class PageEntryMapView;
-    using BaseType
-        = ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapDelta, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>;
+    using BaseType    = ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>;
+    using BuilderType = BaseType::BuilderType;
+    using VersionType = BaseType::VersionType;
+    using VersionPtr  = BaseType::VersionPtr;
 };
 
 class PageEntryMapDeltaBuilder
@@ -51,26 +51,27 @@ public:
 
     void gcApply(const PageEntriesEdit & edit);
 
-    std::shared_ptr<PageEntryMapDelta> build() { return v; }
+    PageEntryMapDeltaVersionSet::VersionPtr build() { return v; }
 
-    static void mergeDeltaToBaseInplace(const std::shared_ptr<PageEntryMapBase> & base, const std::shared_ptr<PageEntryMapDelta> & delta);
-    static std::shared_ptr<PageEntryMapBase> compactDeltaAndBase(const std::shared_ptr<PageEntryMapBase> & old_base,
-                                                                 std::shared_ptr<PageEntryMapDelta> &      delta);
+    static void                                    mergeDeltaToBaseInplace(const PageEntryMapDeltaVersionSet::VersionPtr & base,
+                                                                           const PageEntryMapDeltaVersionSet::VersionPtr & delta);
+    static PageEntryMapDeltaVersionSet::VersionPtr compactDeltaAndBase(const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
+                                                                       PageEntryMapDeltaVersionSet::VersionPtr &       delta);
 
-    static std::shared_ptr<PageEntryMapDelta> compactDeltas(PageEntryMapDeltaVersionSet::BaseType *    vset,
-                                                            const std::shared_ptr<PageEntryMapDelta> & tail);
+    static PageEntryMapDeltaVersionSet::VersionPtr compactDeltas(PageEntryMapDeltaVersionSet::BaseType *         vset,
+                                                                 const PageEntryMapDeltaVersionSet::VersionPtr & tail);
 
-    static bool needCompactToBase(const PageEntryMapDeltaVersionSet::BaseType * vset, const std::shared_ptr<PageEntryMapDelta> & delta);
+    static bool needCompactToBase(const PageEntryMapDeltaVersionSet::BaseType *   vset,
+                                  const PageEntryMapDeltaVersionSet::VersionPtr & delta);
 
 private:
-    PageEntryMapView *                 base;
-    std::shared_ptr<PageEntryMapDelta> v;
-    bool                               ignore_invalid_ref;
-    Poco::Logger *                     log;
+    PageEntryMapView *                      base;
+    PageEntryMapDeltaVersionSet::VersionPtr v;
+    bool                                    ignore_invalid_ref;
+    Poco::Logger *                          log;
 };
 
-class PageEntryMapView
-    : public ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDelta, PageEntryMapDeltaBuilder>
+class PageEntryMapView : public ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDeltaBuilder>
 {
 public:
     class const_iterator
@@ -102,9 +103,8 @@ public:
     };
 
 public:
-    PageEntryMapView(PageEntryMapDeltaVersionSet::BaseType * vset_, std::shared_ptr<PageEntryMapDelta> tail_)
-        : ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDelta, PageEntryMapDeltaBuilder>(vset_,
-                                                                                                                          std::move(tail_))
+    PageEntryMapView(PageEntryMapDeltaVersionSet::BaseType * vset_, PageEntryMapDeltaVersionSet::VersionPtr tail_)
+        : ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDeltaBuilder>(vset_, std::move(tail_))
     {
     }
 

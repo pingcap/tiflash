@@ -181,7 +181,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         edit.put(1, PageEntry{.checksum = 0xff});
         versions.apply(edit);
     }
-    LOG_TRACE(&Logger::root(), "apply   C:" + versions.toDebugStringUnlocked());
+    LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugStringUnlocked());
     auto s3   = versions.getSnapshot();
     entry = s3->version()->at(1);
     ASSERT_EQ(entry.checksum, 0xFFUL);

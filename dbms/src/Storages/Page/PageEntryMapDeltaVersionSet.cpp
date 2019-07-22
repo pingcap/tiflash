@@ -80,8 +80,8 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
 }
 
 void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
-    const std::shared_ptr<PageEntryMapBase> &  base,
-    const std::shared_ptr<PageEntryMapDelta> & delta)
+    const PageEntryMapDeltaVersionSet::VersionPtr & base,
+    const PageEntryMapDeltaVersionSet::VersionPtr & delta)
 {
     // apply deletions
     for (auto pid : delta->page_deletions)
@@ -98,18 +98,19 @@ void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
     delta->clear();
 }
 
-std::shared_ptr<PageEntryMapBase> PageEntryMapDeltaBuilder::compactDeltaAndBase(const std::shared_ptr<PageEntryMapBase> & old_base,
-                                                                                std::shared_ptr<PageEntryMapDelta> &      delta)
+PageEntryMapDeltaVersionSet::VersionPtr
+PageEntryMapDeltaBuilder::compactDeltaAndBase(const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
+                                              PageEntryMapDeltaVersionSet::VersionPtr &       delta)
 {
-    std::shared_ptr<PageEntryMapBase> base = PageEntryMapBase::createBase();
+    PageEntryMapDeltaVersionSet::VersionPtr base = PageEntryMapBase::createBase();
     base->copyEntries(*old_base);
     mergeDeltaToBaseInplace(base, delta);
     return base;
 }
 
-std::shared_ptr<PageEntryMapDelta> PageEntryMapDeltaBuilder::compactDeltas( //
-    PageEntryMapDeltaVersionSet::BaseType *    vset,
-    const std::shared_ptr<PageEntryMapDelta> & tail)
+PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas( //
+    PageEntryMapDeltaVersionSet::BaseType *         vset,
+    const PageEntryMapDeltaVersionSet::VersionPtr & tail)
 {
     (void)vset;
     if (tail->prev == nullptr || tail->prev->isBase())
@@ -118,8 +119,8 @@ std::shared_ptr<PageEntryMapDelta> PageEntryMapDeltaBuilder::compactDeltas( //
         return nullptr;
     }
 
-    std::stack<std::shared_ptr<PageEntryMapDelta>> nodes;
-    auto                                           tmp = PageEntryMapDelta::createDelta();
+    std::stack<PageEntryMapDeltaVersionSet::VersionPtr> nodes;
+    auto                                                tmp = PageEntryMapDelta::createDelta();
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         if (node->isBase())
@@ -138,11 +139,12 @@ std::shared_ptr<PageEntryMapDelta> PageEntryMapDeltaBuilder::compactDeltas( //
     return tmp;
 }
 
-bool PageEntryMapDeltaBuilder::needCompactToBase(const PageEntryMapDeltaVersionSet::BaseType *vset,const std::shared_ptr<PageEntryMapDelta> & delta)
+bool PageEntryMapDeltaBuilder::needCompactToBase(const PageEntryMapDeltaVersionSet::BaseType *   vset,
+                                                 const PageEntryMapDeltaVersionSet::VersionPtr & delta)
 {
     assert(!delta->isBase());
     return delta->numDeletions() >= vset->config.compact_hint_delta_deletions //
-           || delta->numEntries() >= vset->config.compact_hint_delta_entries;
+        || delta->numEntries() >= vset->config.compact_hint_delta_entries;
 }
 
 ////  PageEntryMapView
@@ -292,7 +294,7 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(const PageEntr
     std::unique_lock lock(read_mutex);
 
     // apply edit on base
-    std::shared_ptr<PageEntryMapDelta> v;
+    PageEntryMapDeltaVersionSet::VersionPtr v;
     {
         auto                     base_view = std::make_shared<PageEntryMapView>(this, current);
         PageEntryMapDeltaBuilder builder(base_view.get());

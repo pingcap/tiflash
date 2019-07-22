@@ -23,7 +23,7 @@ extern const int LOGICAL_ERROR;
 class PageEntryMapBaseDelta_t : public ::DB::MVCC::MultiVersionDeltaCountable<PageEntryMapBaseDelta_t>
 {
 public:
-    PageEntryMapBaseDelta_t(bool is_base_)
+    explicit PageEntryMapBaseDelta_t(bool is_base_)
         : ::DB::MVCC::MultiVersionDeltaCountable<PageEntryMapBaseDelta_t>(),
           normal_pages(),
           page_ref(),
@@ -32,7 +32,7 @@ public:
           page_deletions()
     {
     }
-
+public:
     static std::shared_ptr<PageEntryMapBaseDelta_t> createBase()
     {
         return std::make_shared<PageEntryMapBaseDelta_t>(true);
@@ -355,9 +355,9 @@ public:
     }
 
     friend class PageEntryMapVersionSet;
-    template <typename Version_t, typename VersionEdit_t, typename Builder_t>
+    template <typename V_t, typename VE_t, typename B_t>
     friend class ::DB::MVCC::VersionSet;
-    template <typename VersionBase_t, typename VersionDelta_t, typename VersionView_t, typename VersionEdit_t, typename Builder_t>
+    template <typename V_t, typename VV_t, typename VE_t, typename B_t>
     friend class ::DB::MVCC::VersionDeltaSet;
     friend class PageEntryMapBuilder;
     friend class PageEntryMapDeltaBuilder;

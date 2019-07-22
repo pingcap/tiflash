@@ -27,22 +27,22 @@ public:
     virtual ~MultiVersionDeltaCountable() = default;
 };
 
-template <typename VersionSet_t, typename VersionDelta_t, typename Builder_t>
+template <typename VersionSet_t, typename Builder_t>
 struct VersionViewBase
 {
 public:
     VersionSet_t * vset;
-    typename VersionSet_t::VersionDeltaPtr tail;
+    typename VersionSet_t::VersionPtr tail;
 
 public:
-    VersionViewBase(VersionSet_t * vset_, std::shared_ptr<VersionDelta_t> tail_) : vset(vset_), tail(std::move(tail_)) {}
+    VersionViewBase(VersionSet_t * vset_, typename VersionSet_t::VersionPtr tail_) : vset(vset_), tail(std::move(tail_)) {}
 
     void release()
     {
         if (tail == nullptr || tail->isBase())
             return;
         // do compact on delta
-        std::shared_ptr<VersionDelta_t> tmp = Builder_t::compactDeltas(vset, tail);
+        typename VersionSet_t::VersionPtr tmp = Builder_t::compactDeltas(vset, tail);
         if (tmp != nullptr)
         {
             // rebase vset->current on `this->tail` to base on `tmp`
@@ -58,7 +58,7 @@ public:
             auto old_base = tail->prev;
             if (old_base != nullptr)
             {
-                typename VersionSet_t::VersionBasePtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
+                typename VersionSet_t::VersionPtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
                 // replace nodes [head, tail] -> new_base
                 vset->rebase(tail, new_base);
             }
@@ -68,21 +68,19 @@ public:
 
 
 template <                                           //
-    typename VersionBase_t, typename VersionDelta_t, //
+    typename Version_t, //
     typename VersionView_t,                          //
     typename VersionEdit_t, typename Builder_t>
 class VersionDeltaSet
 {
 public:
     using BuilderType = Builder_t;
-    using VersionBaseType = VersionBase_t;
-    using VersionBasePtr = std::shared_ptr<VersionBaseType>;
-    using VersionDeltaType = VersionDelta_t;
-    using VersionDeltaPtr = std::shared_ptr<VersionDeltaType>;
+    using VersionType = Version_t;
+    using VersionPtr = std::shared_ptr<VersionType>;
 
 public:
     explicit VersionDeltaSet(const ::DB::MVCC::VersionSetConfig &config_ = ::DB::MVCC::VersionSetConfig())
-        : current(std::move(VersionBaseType::createBase())),                            //
+        : current(std::move(VersionType::createBase())),                            //
           snapshots(std::move(std::make_shared<Snapshot>(this, nullptr, &read_mutex))), //
           config(config_)
     {}
@@ -93,11 +91,15 @@ public:
         current.reset();
     }
 
-    void restore(std::shared_ptr<VersionDelta_t> && v)
+    void restore(VersionPtr && v)
     {
         std::unique_lock read_lock(read_mutex);
+        // check should only call when there is nothing
         assert(current->empty());
-        Builder_t::mergeDeltaToBaseInplace(current, std::move(v));
+        assert(current->isBase());
+        assert(current->prev == nullptr);
+        current.swap(v);
+        v.reset();
     }
 
     void apply(VersionEdit_t & edit)
@@ -106,7 +108,7 @@ public:
 
         // TODO if no readers, we could not generate a view?
         // apply edit base on base_view
-        std::shared_ptr<VersionDelta_t> v;
+        VersionPtr v;
         {
             auto base_view = std::make_shared<VersionView_t>(this, current);
             Builder_t builder(base_view.get());
@@ -147,7 +149,7 @@ public:
         Snapshot * next;
 
     public:
-        Snapshot(VersionDeltaSet * vset_, std::shared_ptr<VersionDelta_t> tail_, //
+        Snapshot(VersionDeltaSet * vset_, VersionPtr tail_, //
             std::shared_mutex * mutex_)
             : view(vset_, std::move(tail_)), mutex(mutex_), prev(this), next(this)
         {}
@@ -163,7 +165,7 @@ public:
 
         const VersionView_t * version() const { return &view; }
 
-        template <typename VB_t, typename VD_t, typename VV_t, typename VE_t, typename B_t>
+        template <typename V_t, typename VV_t, typename VE_t, typename B_t>
         friend class VersionDeltaSet;
     };
     using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -184,12 +186,12 @@ public:
 
 public:
     mutable std::shared_mutex read_mutex;
-    std::shared_ptr<VersionDelta_t> current;
+    VersionPtr current;
     SnapshotPtr snapshots;
     ::DB::MVCC::VersionSetConfig config;
 
 protected:
-    template <typename VS_t, typename VD_t, typename B_t>
+    template <typename VS_t, typename B_t>
     friend struct VersionViewBase;
 
     /// Rebase all successor Version of Version{`old_base`} onto Version{`new_base`}.
@@ -204,7 +206,7 @@ protected:
     /// │             (current,old_base) │     (current, new_base)           │
     /// └────────────────────────────────┴───────────────────────────────────┘
     /// caller should ensure old_base is in VersionSet's link
-    void rebase(const std::shared_ptr<VersionDelta_t> & old_base, const std::shared_ptr<VersionDelta_t> & new_base)
+    void rebase(const VersionPtr & old_base, const VersionPtr & new_base)
     {
         assert(old_base != nullptr);
         if (old_base == current)
@@ -224,7 +226,7 @@ protected:
         q->prev = new_base;
     }
 
-    void appendVersion(std::shared_ptr<VersionDelta_t> &&v)
+    void appendVersion(VersionPtr &&v)
     {
         assert(v != current);
         // Append to linked list
@@ -253,7 +255,7 @@ public:
     {
         std::string s;
         bool is_first = true;
-        std::stack<std::shared_ptr<VersionDelta_t>> deltas;
+        std::stack<VersionPtr> deltas;
         for (auto v = current; v != nullptr; v = v->prev)
         {
             deltas.emplace(v);
