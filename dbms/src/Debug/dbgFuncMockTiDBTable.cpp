@@ -246,4 +246,19 @@ void MockTiDBTable::dbgFuncRenameTiDBTable(Context & /*context*/, const ASTs & a
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncTruncateTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    MockTiDB::instance().truncateTable(database_name, table_name);
+
+    std::stringstream ss;
+    ss << "truncated table " << database_name << "." << table_name;
+    output(ss.str());
+}
+
 } // namespace DB

@@ -238,6 +238,19 @@ void MockTiDB::renameTable(const String & database_name, const String & table_na
     tables_by_name.emplace(new_qualified_name, new_table);
 }
 
+void MockTiDB::truncateTable(const String & database_name, const String & table_name)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+
+    TableID old_table_id = table->table_info.id;
+    table->table_info.id += 1000; // Just big enough is OK.
+
+    tables_by_id.erase(old_table_id);
+    tables_by_id.emplace(table->id(), table);
+}
+
 TablePtr MockTiDB::getTableByName(const String & database_name, const String & table_name)
 {
     std::lock_guard lock(tables_mutex);

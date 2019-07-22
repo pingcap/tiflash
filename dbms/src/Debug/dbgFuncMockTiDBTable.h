@@ -53,6 +53,11 @@ struct MockTiDBTable
     // Usage:
     //   ./storages-client.sh "DBGInvoke rename_tidb_table(database_name, table_name, new_table)"
     static void dbgFuncRenameTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+    // Truncate a TiDB table.
+    // Usage:
+    //   ./storages-client.sh "DBGInvoke truncate_tidb_table(database_name, table_name)"
+    static void dbgFuncTruncateTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output);
 };
 
 } // namespace DB
