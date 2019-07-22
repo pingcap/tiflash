@@ -255,8 +255,7 @@ String TableInfo::serialize(bool escaped) const try
         json->set("partition", Poco::Dynamic::Var());
     }
 
-    if (schema_version != -1)
-        json->set("schema_version", schema_version);
+    json->set("schema_version", schema_version);
 
     json->stringify(buf);
 
