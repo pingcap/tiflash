@@ -7,7 +7,7 @@ namespace DB
 
 class MergeTreeData;
 
-enum TMTDataPartPropertyType : UInt64
+enum TMTDataPartPropertyType : UInt32
 {
     END,
     MIN_MAX_PK,

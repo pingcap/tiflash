@@ -16,7 +16,7 @@ void TMTDataPartProperty::load(const MergeTreeData & storage, const String & par
 {
     String file_name = part_path + TMTDataPartPropertyFileName;
     ReadBufferFromFile file = openForReading(file_name);
-    UInt64 tmt_type;
+    UInt32 tmt_type;
     const DataTypePtr & type = storage.primary_key_data_types[0];
     for (bool over = false; !over;)
     {
@@ -50,10 +50,10 @@ void TMTDataPartProperty::store(const MergeTreeData & storage, const String & pa
     WriteBufferFromFile out(part_path + file_name);
     HashingWriteBuffer out_hashing(out);
 
-    writeBinary<UInt64>(MIN_MAX_PK, out_hashing);
+    writeBinary<UInt32>(MIN_MAX_PK, out_hashing);
     type->serializeBinary(min_pk, out_hashing);
     type->serializeBinary(max_pk, out_hashing);
-    writeBinary<UInt64>(END, out_hashing);
+    writeBinary<UInt32>(END, out_hashing);
     out_hashing.next();
     checksums.files[file_name].file_size = out_hashing.count();
     checksums.files[file_name].file_hash = out_hashing.getHash();
