@@ -255,6 +255,9 @@ String TableInfo::serialize(bool escaped) const try
         json->set("partition", Poco::Dynamic::Var());
     }
 
+    if (schema_version != -1)
+        json->set("schema_version", schema_version);
+
     json->stringify(buf);
 
     if (!escaped)
@@ -328,6 +331,9 @@ void TableInfo::deserialize(const String & json_str) try
         if (obj->has("belonging_table_id"))
             belonging_table_id = obj->getValue<TableID>("belonging_table_id");
         partition.deserialize(partition_obj);
+    }
+    if (obj->has("schema_version")) {
+        schema_version = obj->getValue<Int64>("schema_version");
     }
 }
 catch (const Poco::Exception & e)

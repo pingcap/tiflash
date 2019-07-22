@@ -82,6 +82,7 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
 
 void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const String & db_name, StorageMergeTree * storage)
 {
+    table_info->schema_version = target_version;
     auto orig_table_info = storage->getTableInfo();
     auto commands = detectSchemaChanges(log, *table_info, orig_table_info);
 
@@ -308,8 +309,9 @@ void SchemaBuilder::applyCreateTable(TiDB::DBInfoPtr db_info, Int64 table_id)
     applyCreateTableImpl(*db_info, *table_info);
 }
 
-void SchemaBuilder::applyCreateTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info)
+void SchemaBuilder::applyCreateTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info)
 {
+    table_info.schema_version = target_version;
     if (table_info.is_partition_table)
     {
         // create partition table.

@@ -16,10 +16,12 @@ struct SchemaBuilder
 
     std::unordered_map<DB::DatabaseID, String> & databases;
 
+    Int64 target_version;
+
     Logger * log;
 
-    SchemaBuilder(SchemaGetter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> & dbs_)
-        : getter(getter_), context(context_), databases(dbs_), log(&Logger::get("SchemaBuilder"))
+    SchemaBuilder(SchemaGetter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> & dbs_, Int64 version)
+        : getter(getter_), context(context_), databases(dbs_), target_version(version), log(&Logger::get("SchemaBuilder"))
     {}
 
     void applyDiff(const SchemaDiff & diff);
@@ -47,7 +49,7 @@ private:
 
     void applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info);
 
-    void applyCreateTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info);
+    void applyCreateTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info);
 
     void applyDropTableImpl(const String &, const String &);
 };
