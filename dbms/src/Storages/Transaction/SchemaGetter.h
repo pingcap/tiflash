@@ -6,6 +6,8 @@
 #include <tikv/Snapshot.h>
 #pragma GCC diagnostic pop
 
+#include <common/logger_useful.h>
+
 namespace DB
 {
 
@@ -57,9 +59,10 @@ struct SchemaGetter
 {
     pingcap::kv::Snapshot snap;
 
+    Logger * log;
 
     SchemaGetter(pingcap::kv::RegionCachePtr regionCachePtr_, pingcap::kv::RpcClientPtr rpcClientPtr_, UInt64 tso_)
-        : snap(regionCachePtr_, rpcClientPtr_, tso_)
+        : snap(regionCachePtr_, rpcClientPtr_, tso_), log(&Logger::get("SchemaGetter"))
     {}
 
     Int64 getVersion();
