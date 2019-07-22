@@ -40,6 +40,7 @@ DBGInvoker::DBGInvoker()
     regFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
     regFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
     regFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
+    regFunc("rename_tidb_table", MockTiDBTable::dbgFuncRenameTiDBTable);
 
     regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 

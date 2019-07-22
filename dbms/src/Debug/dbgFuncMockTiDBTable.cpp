@@ -230,4 +230,20 @@ void MockTiDBTable::dbgFuncModifyColumnInTiDBTable(DB::Context & context, const 
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncRenameTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, new-table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    const String & new_table_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+
+    MockTiDB::instance().renameTable(database_name, table_name, new_table_name);
+
+    std::stringstream ss;
+    ss << "renamed table " << database_name << "." << table_name << " to " << database_name << "." << new_table_name;
+    output(ss.str());
+}
+
 } // namespace DB
