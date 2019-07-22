@@ -62,9 +62,9 @@ public:
     using TablePtr = std::shared_ptr<Table>;
 
 public:
-    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns);
+    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso);
 
-    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name);
+    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
 
     void dropTable(const String & database_name, const String & table_name);
 
