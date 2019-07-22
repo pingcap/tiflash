@@ -118,6 +118,12 @@ private:
 class PageEntryMapVersionSet : public ::DB::MVCC::VersionSet<PageEntryMap, PageEntriesEdit, PageEntryMapBuilder>
 {
 public:
+    explicit PageEntryMapVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
+        : ::DB::MVCC::VersionSet<PageEntryMap, PageEntriesEdit, PageEntryMapBuilder>(config_)
+    {
+    }
+
+public:
     using SnapshotPtr = ::DB::MVCC::VersionSet<PageEntryMap, PageEntriesEdit, PageEntryMapBuilder>::SnapshotPtr;
 
     /// `gcApply` only accept PageEntry's `PUT` changes and will discard changes if PageEntry is invalid

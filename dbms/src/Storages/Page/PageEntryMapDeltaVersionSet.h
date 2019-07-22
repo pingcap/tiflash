@@ -20,6 +20,13 @@ class PageEntryMapDeltaVersionSet : public ::DB::MVCC::VersionDeltaSet< //
                                         PageEntryMapDeltaBuilder>
 {
 public:
+    PageEntryMapDeltaVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
+        : ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapDelta, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>(
+            config_)
+    {
+    }
+
+public:
     std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
 
     /// List all PageFile that are used by any version
@@ -47,10 +54,13 @@ public:
     std::shared_ptr<PageEntryMapDelta> build() { return v; }
 
     static void mergeDeltaToBaseInplace(const std::shared_ptr<PageEntryMapBase> & base, const std::shared_ptr<PageEntryMapDelta> & delta);
-    static std::shared_ptr<PageEntryMapBase> mergeDeltaToBase(const std::shared_ptr<PageEntryMapBase> &old_base, std::shared_ptr<PageEntryMapDelta> &delta);
+    static std::shared_ptr<PageEntryMapBase> compactDeltaAndBase(const std::shared_ptr<PageEntryMapBase> & old_base,
+                                                                 std::shared_ptr<PageEntryMapDelta> &      delta);
 
-    static std::shared_ptr<PageEntryMapDelta> mergeDeltas(PageEntryMapDeltaVersionSet::BaseType *    vset,
-                                                          const std::shared_ptr<PageEntryMapDelta> & tail);
+    static std::shared_ptr<PageEntryMapDelta> compactDeltas(PageEntryMapDeltaVersionSet::BaseType *    vset,
+                                                            const std::shared_ptr<PageEntryMapDelta> & tail);
+
+    static bool needCompactToBase(const PageEntryMapDeltaVersionSet::BaseType * vset, const std::shared_ptr<PageEntryMapDelta> & delta);
 
 private:
     PageEntryMapView *                 base;

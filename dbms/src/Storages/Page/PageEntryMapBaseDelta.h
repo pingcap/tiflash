@@ -178,6 +178,15 @@ public:
         }
     }
 
+    size_t numDeletions() const {
+        assert(!isBase()); // should only call by delta
+        return page_deletions.size();
+    }
+
+    size_t numEntries() const
+    {
+        return page_ref.size();
+    }
 
 private:
     PageId resolveRefId(PageId page_id) const

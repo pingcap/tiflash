@@ -39,29 +39,28 @@ public:
 
     void release()
     {
-        if (tail == nullptr)
+        if (tail == nullptr || tail->isBase())
             return;
         // do compact on delta
-        std::shared_ptr<VersionDelta_t> tmp = Builder_t::mergeDeltas(vset, tail);
+        std::shared_ptr<VersionDelta_t> tmp = Builder_t::compactDeltas(vset, tail);
         if (tmp != nullptr)
         {
             // rebase vset->current on `this->tail` to base on `tmp`
             vset->rebase(tail, tmp);
-
-            // replace nodes (head, tail] -> tmp
-            vset->current = tmp;
             // release tail ref on this view, replace with tmp
             tail = tmp;
             tmp.reset();
         }
-        // TODO do compact on base
-        if (true)
+        // do compact on base
+        bool is_compact_delta_to_base = Builder_t::needCompactToBase(vset, tail);
+        if (is_compact_delta_to_base)
         {
             auto old_base = tail->prev;
             if (old_base != nullptr)
             {
-                typename VersionSet_t::VersionBasePtr new_base = Builder_t::mergeDeltaToBase(old_base, tail);
-                vset->rebase(old_base, new_base);
+                typename VersionSet_t::VersionBasePtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
+                // replace nodes [head, tail] -> new_base
+                vset->rebase(tail, new_base);
             }
         }
     }
@@ -82,13 +81,15 @@ public:
     using VersionDeltaPtr = std::shared_ptr<VersionDeltaType>;
 
 public:
-    VersionDeltaSet()
-        : current(std::move(VersionBaseType::createBase())), snapshots(std::move(std::make_shared<Snapshot>(this, nullptr, &read_mutex)))
+    explicit VersionDeltaSet(const ::DB::MVCC::VersionSetConfig &config_ = ::DB::MVCC::VersionSetConfig())
+        : current(std::move(VersionBaseType::createBase())),                            //
+          snapshots(std::move(std::make_shared<Snapshot>(this, nullptr, &read_mutex))), //
+          config(config_)
     {}
 
     virtual ~VersionDeltaSet()
     {
-        assert(snapshots->prev == snapshots.get());
+        assert(snapshots->prev == snapshots.get());  // snapshot list is empty
         current.reset();
     }
 
@@ -103,7 +104,7 @@ public:
     {
         std::unique_lock read_lock(read_mutex);
 
-        // TODO if no readers, we should not generate a view
+        // TODO if no readers, we could not generate a view?
         // apply edit base on base_view
         std::shared_ptr<VersionDelta_t> v;
         {
@@ -134,43 +135,8 @@ public:
         }
     }
 
-    size_t size() const
-    {
-        std::unique_lock read_lock(read_mutex);
-        return sizeUnlocked();
-    }
-
-    size_t sizeUnlocked() const
-    {
-        size_t sz = 0;
-        for (auto v = current; v != nullptr; v = v->prev)
-            sz += 1;
-        return sz;
-    }
-
-    std::string toDebugStringUnlocked() const
-    {
-        std::string s;
-        bool is_first = true;
-        std::stack<std::shared_ptr<VersionDelta_t>> deltas;
-        for (auto v = current; v != nullptr; v = v->prev)
-        {
-            deltas.emplace(v);
-        }
-        while (!deltas.empty())
-        {
-            auto v = deltas.top();
-            deltas.pop();
-            s += is_first ? "" : "->";
-            is_first = false;
-            s += "{\"rc\":";
-            s += DB::toString(v.use_count() - 1);
-            s += '}';
-        }
-        return s;
-    }
-
 public:
+    /// Snapshot
     class Snapshot
     {
     public:
@@ -205,7 +171,8 @@ public:
     /// Create a snapshot for current version
     SnapshotPtr getSnapshot()
     {
-        std::shared_lock<std::shared_mutex> lock(read_mutex);
+        // acquire for unique_lock since we need to add all snapshots to link list
+        std::unique_lock<std::shared_mutex> lock(read_mutex);
         auto s = std::make_shared<Snapshot>(this, current, &read_mutex);
         // Register snapshot to VersionSet
         s->prev = snapshots->prev;
@@ -219,29 +186,32 @@ public:
     mutable std::shared_mutex read_mutex;
     std::shared_ptr<VersionDelta_t> current;
     SnapshotPtr snapshots;
-
-protected:
-    void appendVersion(std::shared_ptr<VersionDelta_t> && v)
-    {
-        assert(v != current);
-        // Append to linked list
-        v->prev = current;
-        current = v;
-    }
+    ::DB::MVCC::VersionSetConfig config;
 
 protected:
     template <typename VS_t, typename VD_t, typename B_t>
     friend struct VersionViewBase;
 
-    ///
+    /// Rebase all successor Version of Version{`old_base`} onto Version{`new_base`}.
+    /// Specially, if no successor version of Version{`old_base`}, which
+    /// means `current`==`old_base`, replace `current` with `new_base`.
+    /// Examples:
+    /// ┌────────────────────────────────┬───────────────────────────────────┐
+    /// │ Va    <-   Vb  <-    Vc        │      Vd     <-   Vc               │
+    /// │       (old_base)  (current)    │   (new_base)    (current)         │
+    /// ├────────────────────────────────┼───────────────────────────────────┤
+    /// │ Va    <- Vb    <-    Vc        │           Vd                      │
+    /// │             (current,old_base) │     (current, new_base)           │
+    /// └────────────────────────────────┴───────────────────────────────────┘
     /// caller should ensure old_base is in VersionSet's link
-    /// \param old_base
-    /// \param new_base
     void rebase(const std::shared_ptr<VersionDelta_t> & old_base, const std::shared_ptr<VersionDelta_t> & new_base)
     {
         assert(old_base != nullptr);
         if (old_base == current)
+        {
+            current = new_base;
             return;
+        }
         auto q = current, p = current->prev;
         while (p != nullptr && p != old_base)
         {
@@ -253,6 +223,55 @@ protected:
         // rebase q on `new_base`
         q->prev = new_base;
     }
+
+    void appendVersion(std::shared_ptr<VersionDelta_t> &&v)
+    {
+        assert(v != current);
+        // Append to linked list
+        v->prev = current;
+        current = v;
+    }
+
+public:
+    /// Some helper functions
+
+    size_t size() const
+    {
+        std::unique_lock read_lock(read_mutex);
+        return sizeUnlocked();
+    }
+
+    size_t sizeUnlocked() const
+    {
+        size_t sz = 0;
+        for (auto v = current; v != nullptr; v = v->prev)
+            sz += 1;
+        return sz;
+    }
+
+    std::string toDebugStringUnlocked() const
+    {
+        std::string s;
+        bool is_first = true;
+        std::stack<std::shared_ptr<VersionDelta_t>> deltas;
+        for (auto v = current; v != nullptr; v = v->prev)
+        {
+            deltas.emplace(v);
+        }
+        while (!deltas.empty())
+        {
+            auto v = deltas.top();
+            deltas.pop();
+            s += is_first ? "" : "<-";
+            is_first = false;
+            s += "{\"rc\":";
+            s += DB::toString(v.use_count() - 1);
+            s += ",\"addr\":", s += DB::pToString(v.get());
+            s += '}';
+        }
+        return s;
+    }
+
 };
 
 } // namespace MVCC

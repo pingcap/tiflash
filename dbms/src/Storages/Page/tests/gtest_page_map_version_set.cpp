@@ -27,14 +27,25 @@ public:
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Logger::root().setChannel(formatting_channel);
         Logger::root().setLevel("trace");
+
     }
+
+public:
+    void SetUp() override
+    {
+        config_.compact_hint_delta_entries = 1;
+        config_.compact_hint_delta_deletions = 1;
+    }
+
+protected:
+    ::DB::MVCC::VersionSetConfig config_;
 };
 
 TYPED_TEST_CASE_P(PageMapVersionSet_test);
 
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
 {
-    TypeParam versions;
+    TypeParam versions(this->config_);
     LOG_TRACE(&Logger::root(), "init      :" + versions.toDebugStringUnlocked());
     {
         PageEntriesEdit edit;
@@ -61,9 +72,11 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
     EXPECT_EQ(versions.size(), 1UL);
 }
 
+/// Generate two different snapshot(s1, s2) with apply new edits.
+/// s2 released first, then release s1
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
 {
-    TypeParam versions;
+    TypeParam versions(this->config_);
     auto      s1 = versions.getSnapshot();
     EXPECT_EQ(versions.size(), 1UL);
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
@@ -74,15 +87,18 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     }
     EXPECT_EQ(versions.size(), 2UL); // former node is hold by s1, append new version
     LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
+
+    // Get snapshot for checking edit is success
     auto s2 = versions.getSnapshot();
     LOG_TRACE(&Logger::root(), "snapshot 2:" + versions.toDebugStringUnlocked());
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
 
+    // Release snapshot2
     s2.reset();
     LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugStringUnlocked());
-    // VersionSet, size is 2 since A is still hold by s1
-    // VersionDeltaSet, size is 1 since we do a compaction on delta
+    /// For VersionSet, size is 2 since A is still hold by s1
+    /// For VersionDeltaSet, size is 1 since we do a compaction on delta
     if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
         EXPECT_EQ(versions.size(), 2UL);
     else
@@ -94,23 +110,31 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     // VersionDeltaSet, delta version merged
     EXPECT_EQ(versions.size(), 1UL);
 
+    // Ensure that after old snapshot released, new snapshot get the same content
+    auto s3 = versions.getSnapshot();
+    entry   = s3->version()->at(0);
+    ASSERT_EQ(entry.checksum, 0x123UL);
+    s3.reset();
+
     {
         PageEntriesEdit edit;
-        edit.put(0, PageEntry{.checksum = 0x12});
+        edit.put(0, PageEntry{.checksum = 0x456});
         versions.apply(edit);
     }
     LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugStringUnlocked());
     // VersionSet, new version gen and old version remove at the same time
     // VersionDeltaSet, C merge to delta
     EXPECT_EQ(versions.size(), 1UL);
-    auto s3 = versions.getSnapshot();
-    entry   = s3->version()->at(0);
-    ASSERT_EQ(entry.checksum, 0x12UL);
+    auto s4 = versions.getSnapshot();
+    entry   = s4->version()->at(0);
+    ASSERT_EQ(entry.checksum, 0x456UL);
 }
 
+/// Generate two different snapshot(s1, s2) with apply new edits.
+/// s1 released first, then release s2
 TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
 {
-    TypeParam versions;
+    TypeParam versions(this->config_);
     auto      s1 = versions.getSnapshot();
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
     PageEntriesEdit edit;
@@ -135,9 +159,57 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
     EXPECT_EQ(versions.size(), 1UL);
 }
 
+/// Generate two different snapshot(s1, s2) with apply new edits.
+/// s1 released first, then release s2
+TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
+{
+    TypeParam versions(this->config_);
+    auto      s1 = versions.getSnapshot();
+    LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
+    {
+        PageEntriesEdit edit;
+        edit.put(0, PageEntry{.checksum = 0x123});
+        versions.apply(edit);
+    }
+    LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
+    auto s2    = versions.getSnapshot();
+    auto entry = s2->version()->at(0);
+    ASSERT_EQ(entry.checksum, 0x123UL);
+
+    {
+        PageEntriesEdit edit;
+        edit.put(1, PageEntry{.checksum = 0xff});
+        versions.apply(edit);
+    }
+    LOG_TRACE(&Logger::root(), "apply   C:" + versions.toDebugStringUnlocked());
+    auto s3   = versions.getSnapshot();
+    entry = s3->version()->at(1);
+    ASSERT_EQ(entry.checksum, 0xFFUL);
+
+    s1.reset();
+    LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugStringUnlocked());
+    // VersionSet, size decrease to 2 when s1 release
+    // VersionDeltaSet, size is 3 since we can not do a compaction on delta
+    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+        EXPECT_EQ(versions.size(), 2UL);
+    else
+        EXPECT_EQ(versions.size(), 3UL);
+
+    s2.reset();
+    LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugStringUnlocked());
+    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+        EXPECT_EQ(versions.size(), 1UL);
+    else
+        EXPECT_EQ(versions.size(), 2UL);
+
+    s3.reset();
+    LOG_TRACE(&Logger::root(), "rel snap 3:" + versions.toDebugStringUnlocked());
+    EXPECT_EQ(versions.size(), 1UL);
+}
+
 TYPED_TEST_P(PageMapVersionSet_test, Restore)
 {
-    TypeParam versions;
+    TypeParam versions(this->config_);
     {
         auto s1 = versions.getSnapshot();
 
@@ -157,7 +229,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
 {
     PageId    pid = 0;
-    TypeParam versions;
+    TypeParam versions(this->config_);
     // Page0 is in PageFile{2, 0} at first
     {
         PageEntriesEdit init_edit;
@@ -200,7 +272,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
     EXPECT_PagePos_LT({5, 1}, {6, 1});
     EXPECT_PagePos_LT({5, 2}, {6, 1});
 
-    TypeParam versions;
+    TypeParam versions(this->config_);
 
     const PageId pid = 0;
     const PageId ref_pid = 1;
@@ -238,7 +310,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
 {
     const PageId pid = 0;
-    TypeParam    versions;
+    TypeParam    versions(this->config_);
 
 
     // gc move Page0 -> PageFile{5,1}
@@ -269,7 +341,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
 
 TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
 {
-    TypeParam versions;
+    TypeParam versions(this->config_);
     ASSERT_EQ(versions.size(), 1UL);
     {
         PageEntriesEdit init_edit;
@@ -299,6 +371,7 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            ApplyEdit,
                            ApplyEditWithReadLock,
                            ApplyEditWithReadLock2,
+                           ApplyEditWithReadLock3,
                            Restore,
                            GcConcurrencyDelPage,
                            GcPageMove,

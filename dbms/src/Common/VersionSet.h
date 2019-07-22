@@ -12,6 +12,13 @@ namespace DB
 namespace MVCC
 {
 
+/// Config
+struct VersionSetConfig
+{
+    size_t compact_hint_delta_deletions = 5000;
+    size_t compact_hint_delta_entries = 200 * 1000;
+};
+
 template <typename T>
 struct MultiVersionCountable
 {
@@ -86,8 +93,9 @@ public:
     using BuilderType = Builder_t;
 
 public:
-    VersionSet() : placeholder_node(), current(nullptr)
+    explicit VersionSet(const VersionSetConfig &config_ = VersionSetConfig()) : placeholder_node(), current(nullptr)
     {
+        (void)config_; // just ignore config
         // append a init version to link
         appendVersion(new Version_t);
     }
