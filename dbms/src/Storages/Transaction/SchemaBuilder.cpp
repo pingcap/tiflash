@@ -144,7 +144,7 @@ void SchemaBuilder::applyDiff(const SchemaDiff & diff)
         case SchemaActionDropTable:
         case SchemaActionDropView:
         {
-            oldTableID = diff.old_table_id;
+            oldTableID = diff.table_id;
             break;
         }
         case SchemaActionTruncateTable:
@@ -180,12 +180,12 @@ void SchemaBuilder::applyDiff(const SchemaDiff & diff)
 
     if (oldTableID)
     {
-        applyDropTable(di, diff.table_id);
+        applyDropTable(di, oldTableID);
     }
 
     if (newTableID)
     {
-        applyCreateTable(di, diff.table_id);
+        applyCreateTable(di, newTableID);
     }
 }
 
@@ -332,7 +332,6 @@ void SchemaBuilder::applyDropTableImpl(const String & database_name, const Strin
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
     drop_query->table = table_name;
-    drop_query->if_exists = true;
     ASTPtr ast_drop_query = drop_query;
     InterpreterDropQuery drop_interpreter(ast_drop_query, context);
     drop_interpreter.execute();
@@ -340,9 +339,15 @@ void SchemaBuilder::applyDropTableImpl(const String & database_name, const Strin
 
 void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
 {
+    LOG_INFO(log, "try to drop table id : " + std::to_string(table_id));
     String database_name = dbInfo->name;
     auto & tmt_context = context.getTMTContext();
-    const auto & table_info = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_id).get())->getTableInfo();
+    auto storage_to_drop = tmt_context.getStorages().get(table_id).get();
+    if (storage_to_drop == nullptr) {
+        LOG_DEBUG(log, "table id " + std::to_string(table_id) + " in db " + database_name + " is not existed.");
+        return;
+    }
+    const auto & table_info = static_cast<StorageMergeTree *>(storage_to_drop)->getTableInfo();
     if (table_info.is_partition_table)
     {
         // drop all partition tables.
