@@ -188,6 +188,7 @@ TiDB::DBInfoPtr SchemaGetter::getDatabase(DatabaseID db_id)
     if (json == "")
         return nullptr;
 
+    LOG_DEBUG(log, "Get DB Info from TiKV : " + json);
     auto db_info = std::make_shared<TiDB::DBInfo>(json);
     return db_info;
 }
@@ -203,6 +204,7 @@ TiDB::TableInfoPtr SchemaGetter::getTableInfo(DatabaseID db_id, TableID table_id
     String table_info_json = TxnStructure::HGet(snap, db_key, table_key);
     if (table_info_json == "")
         return nullptr;
+    LOG_DEBUG(log, "Get Table Info from TiKV : " + table_info_json);
     TiDB::TableInfoPtr table_info = std::make_shared<TiDB::TableInfo>(table_info_json);
     return table_info;
 }
