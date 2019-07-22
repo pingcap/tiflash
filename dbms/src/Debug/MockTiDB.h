@@ -74,6 +74,10 @@ public:
 
     void modifyColumnInTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
 
+    void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
+
+    void truncateTable(const String & database_name, const String & table_name);
+
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
     void traverseTables(std::function<void(TablePtr)> f);

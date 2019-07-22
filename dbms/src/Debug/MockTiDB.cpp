@@ -221,6 +221,36 @@ void MockTiDB::modifyColumnInTable(const String & database_name, const String & 
     it->tp = column_info.tp;
 }
 
+void MockTiDB::renameTable(const String & database_name, const String & table_name, const String & new_table_name)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    String qualified_name = database_name + "." + table_name;
+    String new_qualified_name = database_name + "." + new_table_name;
+
+    TableInfo new_table_info = table->table_info;
+    new_table_info.name = new_table_name;
+    auto new_table = std::make_shared<Table>(database_name, new_table_name, std::move(new_table_info));
+
+    tables_by_id[new_table->table_info.id] = new_table;
+    tables_by_name.erase(qualified_name);
+    tables_by_name.emplace(new_qualified_name, new_table);
+}
+
+void MockTiDB::truncateTable(const String & database_name, const String & table_name)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+
+    TableID old_table_id = table->table_info.id;
+    table->table_info.id += 1000; // Just big enough is OK.
+
+    tables_by_id.erase(old_table_id);
+    tables_by_id.emplace(table->id(), table);
+}
+
 TablePtr MockTiDB::getTableByName(const String & database_name, const String & table_name)
 {
     std::lock_guard lock(tables_mutex);
