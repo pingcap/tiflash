@@ -15,6 +15,9 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 Field ColumnInfo::defaultValueToField() const
 {
     auto & value = origin_default_value;
+    if (value.isEmpty()) {
+        return Field();
+    }
     switch (tp)
     {
         // Integer Type.
