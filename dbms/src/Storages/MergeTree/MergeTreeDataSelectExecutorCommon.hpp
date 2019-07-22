@@ -113,7 +113,7 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
 }
 
 template <typename TargetType>
-static inline void computeHandleRenges(std::vector<std::deque<size_t>> & block_data,
+static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_data,
     std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
     std::vector<RangesInDataParts> & region_group_range_parts,
     std::vector<DB::HandleRange<TargetType>> & region_group_handle_ranges,

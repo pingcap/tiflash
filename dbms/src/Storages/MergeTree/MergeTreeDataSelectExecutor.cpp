@@ -864,7 +864,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 std::sort(handle_ranges.begin(), handle_ranges.end(),
                     [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
 
-                computeHandleRenges<UInt64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<UInt64>(region_group_mem_block[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_u64_handle_ranges[thread_idx],
@@ -888,7 +888,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 // handle_ranges is sorted.
 
-                computeHandleRenges<Int64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<Int64>(region_group_mem_block[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_handle_ranges[thread_idx],
