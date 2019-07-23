@@ -135,6 +135,7 @@ private:
 
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
+    InternalRegion & insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id);
 
     bool shouldFlush(const InternalRegion & region) const;
 
@@ -184,19 +185,23 @@ public:
     /// Will trigger schema sync on read error for only once,
     /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
-    static void writeBlockByRegion(Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_for_remove);
+    static void writeBlockByRegion(
+        Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log);
+
+    using BlockOption = std::optional<Block>;
 
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
     /// we directly ask readRegionBlock to perform a read with the given start_ts and force_decode being true.
-    static std::tuple<std::optional<Block>, RegionReadStatus> getBlockByRegion(const TiDB::TableInfo & table_info,
+    static std::tuple<BlockOption, RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & column_names_to_read,
         const RegionPtr & region,
         RegionVersion region_version,
         RegionVersion conf_version,
         bool resolve_locks,
-        Timestamp start_ts);
+        Timestamp start_ts,
+        Logger * log);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
 };

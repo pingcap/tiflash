@@ -42,10 +42,16 @@ RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
 
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
 {
-    auto region_id = region.id();
+    const auto range = region.getRange();
+    return insertRegion(table, range.first, range.second, region.id());
+}
+
+RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id)
+{
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region.getHandleRangeByTable(table.table_id)));
+    auto [it, ok]
+        = table_regions.emplace(region_id, InternalRegion(region_id, TiKVRange::getHandleRangeByTable(start, end, table.table_id)));
     if (!ok)
         throw Exception(
             "[RegionTable::insertRegion] insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
@@ -152,7 +158,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
     /// Write region data into corresponding storage.
     RegionDataReadInfoList data_list_to_remove;
     {
-        writeBlockByRegion(context, table_id, region, data_list_to_remove);
+        writeBlockByRegion(context, table_id, region, data_list_to_remove, log);
     }
 
     /// Remove data in region.
@@ -298,7 +304,6 @@ void RegionTable::applySnapshotRegions(const RegionMap & region_map)
             if (cache_bytes)
                 internal_region.updated = true;
         }
-        doShrinkRegionRange(*region);
     }
 }
 
@@ -336,7 +341,7 @@ void RegionTable::removeRegion(const RegionID region_id)
         auto it = regions.find(region_id);
         if (it == regions.end())
         {
-            LOG_WARNING(log, "RegionTable::removeRegion: region " << region_id << " does not exist.");
+            LOG_WARNING(log, "[removeRegion] region " << region_id << " does not exist.");
             return;
         }
         RegionInfo & region_info = it->second;
@@ -412,7 +417,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
     if (!status)
         return;
 
-    flushRegion(table_id, region_id, cache_bytes);
+    flushRegion(table_id, region_id, cache_bytes, false);
 
     func_update_region([&](InternalRegion & region) -> bool {
         region.pause_flush = false;
@@ -438,7 +443,7 @@ bool RegionTable::tryFlushRegions()
         });
     }
 
-    for (auto && [id, cache_bytes] : to_flush)
+    for (auto & [id, cache_bytes] : to_flush)
         flushRegion(id.first, id.second, cache_bytes);
 
     { // Now reset status information.

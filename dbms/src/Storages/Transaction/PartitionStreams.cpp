@@ -22,15 +22,17 @@ extern const int LOGICAL_ERROR;
 
 using BlockOption = std::optional<Block>;
 
-void RegionTable::writeBlockByRegion(Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove)
+void RegionTable::writeBlockByRegion(
+    Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
 {
-    // TODO: Logging.
-
     const auto & tmt = context.getTMTContext();
+
+    UInt64 region_read_cost = -1, region_decode_cost = -1, write_part_cost = -1;
 
     /// Read raw KVs from region cache.
     RegionDataReadInfoList data_list_read;
     {
+        auto start_time = Clock::now();
         auto scanner = region->createCommittedScanner(table_id);
         // Shortcut for empty region.
         if (!scanner->hasNext())
@@ -39,6 +41,7 @@ void RegionTable::writeBlockByRegion(Context & context, TableID table_id, Region
         {
             data_list_read.emplace_back(scanner->next());
         } while (scanner->hasNext());
+        region_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
     }
 
 
@@ -60,6 +63,7 @@ void RegionTable::writeBlockByRegion(Context & context, TableID table_id, Region
         auto lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
 
         /// Read region data as block.
+        auto start_time = Clock::now();
         auto [block, ok] = readRegionBlock(storage->getTableInfo(),
             storage->getColumns(),
             storage->getColumns().getNamesOfPhysical(),
@@ -68,10 +72,13 @@ void RegionTable::writeBlockByRegion(Context & context, TableID table_id, Region
             force_decode);
         if (!ok)
             return false;
+        region_decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
         /// Write block into storage.
+        start_time = Clock::now();
         TxnMergeTreeBlockOutputStream output(*storage);
         output.write(block);
+        write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
         /// Move read data to outer to remove.
         data_list_to_remove = std::move(data_list_read);
@@ -91,27 +98,34 @@ void RegionTable::writeBlockByRegion(Context & context, TableID table_id, Region
         // TODO: Enrich exception message.
         throw Exception("Write region " + std::to_string(region->id()) + " to table " + std::to_string(table_id) + " failed",
             ErrorCodes::LOGICAL_ERROR);
+
+    LOG_TRACE(log,
+        __PRETTY_FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region read " << region_read_cost
+                            << ", region decode " << region_decode_cost << ", write part " << write_part_cost << "] ms");
 }
 
-std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::getBlockByRegion(const TiDB::TableInfo & table_info,
+std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
     const RegionPtr & region,
     RegionVersion region_version,
     RegionVersion conf_version,
     bool resolve_locks,
-    Timestamp start_ts)
+    Timestamp start_ts,
+    Logger * log)
 {
-    // TODO: Logging.
-
     if (!region)
         return {BlockOption{}, NOT_FOUND};
+
+    UInt64 wait_index_cost = -1, region_read_cost = -1, region_decode_cost = -1;
 
     auto scanner = region->createCommittedScanner(table_info.id);
 
     /// Blocking learner read.
     {
+        auto start_time = Clock::now();
         region->waitIndex(region->learnerRead());
+        wait_index_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
     }
 
     /// Some sanity checks for region meta.
@@ -145,18 +159,26 @@ std::tuple<std::optional<Block>, RegionTable::RegionReadStatus> RegionTable::get
             return {BlockOption{}, OK};
         // Tiny optimization for queries that need only handle, tso, delmark.
         bool need_value = column_names_to_read.size() != 3;
+        auto start_time = Clock::now();
         do
         {
             data_list_read.emplace_back(scanner->next(need_value));
         } while (scanner->hasNext());
+        region_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
     }
 
     /// Read region data as block.
+    auto start_time = Clock::now();
     auto [block, ok] = readRegionBlock(table_info, columns, column_names_to_read, data_list_read, start_ts, true);
+    region_decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
     if (!ok)
         // TODO: Enrich exception message.
         throw Exception("Read region " + std::to_string(region->id()) + " of table " + std::to_string(table_info.id) + " failed",
             ErrorCodes::LOGICAL_ERROR);
+
+    LOG_TRACE(log,
+        __PRETTY_FUNCTION__ << ": table " << table_info.id << ", region " << region->id() << ", cost [wait index " << wait_index_cost
+                            << ", region read " << region_read_cost << ", region decode " << region_decode_cost << "] ms");
 
     return {block, OK};
 }
