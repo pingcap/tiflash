@@ -18,7 +18,18 @@ namespace DB
 
 using namespace TiDB;
 
-inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & table_info, const TiDB::TableInfo & orig_table_info)
+inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
+{
+    command.column_name = column_info.name;
+    command.data_type = getDataTypeByColumnInfo(column_info);
+    if (!column_info.origin_default_value.isEmpty())
+    {
+        LOG_DEBUG(log, "add default value for column: " + column_info.name);
+        command.default_expression = ASTPtr(new ASTLiteral(column_info.defaultValueToField()));
+    }
+}
+
+inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
     AlterCommands alter_commands;
 
@@ -34,16 +45,9 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
         if (orig_column_info == orig_table_info.columns.end())
         {
             // New column.
-            command.type = AlterCommand::ADD_COLUMN;
-            command.column_name = column_info.name;
-            command.data_type = getDataTypeByColumnInfo(column_info);
-            if (!column_info.origin_default_value.isEmpty())
-            {
-                LOG_DEBUG(log, "add default value for column: " + column_info.name);
-                command.default_expression = ASTPtr(new ASTLiteral(column_info.defaultValueToField()));
-            }
             // TODO: support after column.
-            LOG_DEBUG(log, "detect add column.");
+            command.type = AlterCommand::ADD_COLUMN;
+            setAlterCommandColumn(log, command, column_info);
         }
         else
         {
@@ -77,6 +81,30 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
         alter_commands.emplace_back(std::move(command));
     }
 
+    /// Detect type changed columns.
+    for (const auto & orig_column_info : orig_table_info.columns)
+    {
+        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+            // TODO: Check primary key.
+            return column_info_.id == orig_column_info.id && column_info_.tp != orig_column_info.tp;
+        });
+
+        AlterCommand command;
+        if (column_info == table_info.columns.end())
+        {
+            // Column unchanged.
+            continue;
+        }
+        else
+        {
+            // Type changed column.
+            command.type = AlterCommand::MODIFY_COLUMN;
+            setAlterCommandColumn(log, command, *column_info);
+        }
+
+        alter_commands.emplace_back(std::move(command));
+    }
+
     return alter_commands;
 }
 
@@ -84,9 +112,24 @@ void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const Str
 {
     table_info->schema_version = target_version;
     auto orig_table_info = storage->getTableInfo();
-    auto commands = detectSchemaChanges(log, *table_info, orig_table_info);
+    auto alter_commands = detectSchemaChanges(log, *table_info, orig_table_info);
 
-    storage->alterForTMT(commands, *table_info, db_name, context);
+    std::stringstream ss;
+    ss << "Detected schema changes: ";
+    for (const auto & command : alter_commands)
+    {
+        // TODO: Other command types.
+        if (command.type == AlterCommand::ADD_COLUMN)
+            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+        else if (command.type == AlterCommand::DROP_COLUMN)
+            ss << "DROP COLUMN " << command.column_name << ", ";
+        else if (command.type == AlterCommand::MODIFY_COLUMN)
+            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+    }
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
+
+    // Call storage alter to apply schema changes.
+    storage->alterForTMT(alter_commands, *table_info, db_name, context);
 
     if (table_info->is_partition_table)
     {
@@ -94,9 +137,11 @@ void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const Str
         for (auto part_def : table_info->partition.definitions)
         {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
-            storage->alterForTMT(commands, new_table_info, db_name, context);
+            storage->alterForTMT(alter_commands, new_table_info, db_name, context);
         }
     }
+
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
 }
 
 void SchemaBuilder::applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
@@ -343,7 +388,8 @@ void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
     String database_name = dbInfo->name;
     auto & tmt_context = context.getTMTContext();
     auto storage_to_drop = tmt_context.getStorages().get(table_id).get();
-    if (storage_to_drop == nullptr) {
+    if (storage_to_drop == nullptr)
+    {
         LOG_DEBUG(log, "table id " + std::to_string(table_id) + " in db " + database_name + " is not existed.");
         return;
     }
