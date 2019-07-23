@@ -223,7 +223,8 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
         versions.restore(builder.build());
     }
     auto s = versions.getSnapshot();
-    ASSERT_EQ(s->version()->find(1), s->version()->end());
+    auto entry = s->version()->find(1);
+    ASSERT_EQ(entry, nullptr);
 }
 
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
@@ -253,8 +254,8 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
 
     // Page0 don't update to page_map
     auto       snapshot = versions.getSnapshot();
-    const auto iter     = snapshot->version()->find(pid);
-    ASSERT_EQ(iter, snapshot->version()->end());
+    auto entry     = snapshot->version()->find(pid);
+    ASSERT_EQ(entry, nullptr);
 }
 
 #pragma clang diagnostic push
@@ -361,10 +362,11 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
     ASSERT_EQ(versions.size(), 2UL); // previous version is hold by `s1`, list size grow to 2
 
     auto s2 = versions.getSnapshot();
-    ASSERT_NE(s2->version()->find(0), s2->version()->end());
-    PageEntry p0 = s2->version()->at(0);
-    ASSERT_EQ(p0.checksum, 0x456UL); // entry is updated in snapshot 2
-    ASSERT_EQ(s2->version()->find(1), s2->version()->end());
+    auto p0 = s2->version()->find(0);
+    ASSERT_NE(p0, nullptr);
+    ASSERT_EQ(p0->checksum, 0x456UL); // entry is updated in snapshot 2
+    auto p1 = s2->version()->find(1);
+    ASSERT_EQ(p1, nullptr);
 }
 
 REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,

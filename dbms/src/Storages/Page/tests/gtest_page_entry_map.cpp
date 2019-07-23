@@ -81,7 +81,7 @@ TEST_F(PageEntryMap_test, UpdatePageEntry)
     ASSERT_EQ(map->at(page_id).checksum, entry1.checksum);
 
     map->del(page_id);
-    ASSERT_EQ(map->find(page_id), map->end());
+    ASSERT_EQ(map->find_old(page_id), map->end());
     ASSERT_TRUE(map->empty());
 }
 
@@ -91,7 +91,7 @@ TEST_F(PageEntryMap_test, PutDel)
     map->put(0, p0entry);
     ASSERT_FALSE(map->empty());
     {
-        ASSERT_NE(map->find(0), map->end());
+        ASSERT_NE(map->find_old(0), map->end());
         const PageEntry & entry = map->at(0);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -101,7 +101,7 @@ TEST_F(PageEntryMap_test, PutDel)
     map->ref(2, 0);
     ASSERT_FALSE(map->empty());
     {
-        ASSERT_NE(map->find(2), map->end());
+        ASSERT_NE(map->find_old(2), map->end());
         const PageEntry & entry = map->at(2);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -111,11 +111,11 @@ TEST_F(PageEntryMap_test, PutDel)
     // remove RefPage0
     map->del(0);
     // now RefPage0 removed
-    ASSERT_EQ(map->find(0), map->end());
+    ASSERT_EQ(map->find_old(0), map->end());
     {
         // RefPage2 exist
-        ASSERT_NE(map->find(2), map->end());
-        const PageEntry & entry = map->find(2).pageEntry();
+        ASSERT_NE(map->find_old(2), map->end());
+        const PageEntry & entry = map->at(2);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
         EXPECT_EQ(entry.checksum, p0entry.checksum);
@@ -123,8 +123,8 @@ TEST_F(PageEntryMap_test, PutDel)
 
     // remove RefPage2
     map->del(2);
-    ASSERT_EQ(map->find(0), map->end());
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find_old(0), map->end());
+    ASSERT_EQ(map->find_old(2), map->end());
 
     ASSERT_TRUE(map->empty());
 }
@@ -135,11 +135,11 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
     const PageId    ref_id  = 1; // RefPage1 -> Page0
     const PageEntry entry0{.checksum = 0x123};
     map->put(page_id, entry0);
-    ASSERT_NE(map->find(page_id), map->end());
+    ASSERT_NE(map->find_old(page_id), map->end());
     ASSERT_EQ(map->at(page_id).checksum, entry0.checksum);
 
     map->ref(ref_id, page_id);
-    ASSERT_NE(map->find(ref_id), map->end());
+    ASSERT_NE(map->find_old(ref_id), map->end());
     ASSERT_EQ(map->at(ref_id).checksum, entry0.checksum);
 
     // update on Page0, both Page0 and RefPage1 entry get update
@@ -156,12 +156,12 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
 
     // delete pages
     map->del(page_id);
-    ASSERT_EQ(map->find(page_id), map->end());
-    ASSERT_NE(map->find(ref_id), map->end());
+    ASSERT_EQ(map->find_old(page_id), map->end());
+    ASSERT_NE(map->find_old(ref_id), map->end());
     ASSERT_FALSE(map->empty());
 
     map->del(ref_id);
-    ASSERT_EQ(map->find(ref_id), map->end());
+    ASSERT_EQ(map->find_old(ref_id), map->end());
     ASSERT_TRUE(map->empty());
 }
 
@@ -195,7 +195,7 @@ TEST_F(PageEntryMap_test, AddRefToNonExistPage)
     // accept add RefPage{3} to non-exist Page{2}
     ASSERT_NO_THROW(map->ref<false>(3, 2));
     // we can find iterator by RefPage's id
-    auto iter_to_non_exist_ref_page = map->find(3);
+    auto iter_to_non_exist_ref_page = map->find_old(3);
     ASSERT_NE(iter_to_non_exist_ref_page, map->end());
     ASSERT_EQ(iter_to_non_exist_ref_page.pageId(), 3UL);
     // but if we want to access that non-exist Page, we get an exception
@@ -217,7 +217,7 @@ TEST_F(PageEntryMap_test, PutDuplicateRef)
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 
     map->del(0);
-    ASSERT_EQ(map->find(0), map->end());
+    ASSERT_EQ(map->find_old(0), map->end());
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 }
 
@@ -231,7 +231,7 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // add RefPage3 -> RefPage2 -> Page0
     map->ref(3, 2);
     {
-        ASSERT_NE(map->find(3), map->end());
+        ASSERT_NE(map->find_old(3), map->end());
         const PageEntry & entry = map->at(3);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -241,19 +241,19 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // remove RefPage2
     map->del(2);
     // now RefPage2 removed
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find_old(2), map->end());
     {
         // RefPage0 exist
-        ASSERT_NE(map->find(0), map->end());
-        const PageEntry & entry = map->find(0).pageEntry();
+        ASSERT_NE(map->find_old(0), map->end());
+        const PageEntry & entry = map->at(0);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
         EXPECT_EQ(entry.checksum, p0entry.checksum);
     }
     {
         // RefPage3 exist
-        ASSERT_NE(map->find(3), map->end());
-        const PageEntry & entry = map->find(3).pageEntry();
+        ASSERT_NE(map->find_old(3), map->end());
+        const PageEntry & entry = map->at(3);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
         EXPECT_EQ(entry.checksum, p0entry.checksum);
@@ -262,12 +262,12 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // remove RefPage0
     map->del(0);
     // now RefPage0 is removed
-    ASSERT_EQ(map->find(0), map->end());
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find_old(0), map->end());
+    ASSERT_EQ(map->find_old(2), map->end());
     {
         // RefPage3 exist
-        ASSERT_NE(map->find(3), map->end());
-        const PageEntry & entry = map->find(3).pageEntry();
+        ASSERT_NE(map->find_old(3), map->end());
+        const PageEntry & entry = map->at(3);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
         EXPECT_EQ(entry.checksum, p0entry.checksum);
@@ -276,9 +276,9 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // remove RefPage3
     map->del(3);
     // now RefPage3 is removed
-    ASSERT_EQ(map->find(3), map->end());
-    ASSERT_EQ(map->find(0), map->end());
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find_old(3), map->end());
+    ASSERT_EQ(map->find_old(0), map->end());
+    ASSERT_EQ(map->find_old(2), map->end());
 
     ASSERT_TRUE(map->empty());
 }

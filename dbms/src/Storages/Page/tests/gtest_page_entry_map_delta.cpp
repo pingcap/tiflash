@@ -60,7 +60,7 @@ TEST_F(PageEntryMapDelta_test, UpdatePageEntry)
     ASSERT_EQ(map->at(page_id).checksum, entry1.checksum);
 
     map->del(page_id);
-    ASSERT_EQ(map->find(page_id), map->end());
+    ASSERT_EQ(map->find(page_id), nullptr);
 }
 
 TEST_F(PageEntryMapDelta_test, PutDel)
@@ -69,7 +69,7 @@ TEST_F(PageEntryMapDelta_test, PutDel)
     map->put(0, p0entry);
     ASSERT_FALSE(map->empty());
     {
-        ASSERT_NE(map->find(0), map->end());
+        ASSERT_NE(map->find(0), nullptr);
         const PageEntry & entry = map->at(0);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -79,7 +79,7 @@ TEST_F(PageEntryMapDelta_test, PutDel)
     map->ref(2, 0);
     ASSERT_FALSE(map->empty());
     {
-        ASSERT_NE(map->find(2), map->end());
+        ASSERT_NE(map->find(2), nullptr);
         const PageEntry & entry = map->at(2);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -89,20 +89,20 @@ TEST_F(PageEntryMapDelta_test, PutDel)
     // remove RefPage0
     map->del(0);
     // now RefPage0 removed
-    ASSERT_EQ(map->find(0), map->end());
+    ASSERT_EQ(map->find(0), nullptr);
     {
         // RefPage2 exist
-        ASSERT_NE(map->find(2), map->end());
-        const PageEntry & entry = map->find(2).pageEntry();
-        EXPECT_EQ(entry.file_id, p0entry.file_id);
-        EXPECT_EQ(entry.level, p0entry.level);
-        EXPECT_EQ(entry.checksum, p0entry.checksum);
+        auto entry = map->find(2);
+        ASSERT_NE(entry, nullptr);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->level, p0entry.level);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
     }
 
     // remove RefPage2
     map->del(2);
-    ASSERT_EQ(map->find(0), map->end());
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find(0), nullptr);
+    ASSERT_EQ(map->find(2), nullptr);
 }
 
 TEST_F(PageEntryMapDelta_test, UpdateRefPageEntry)
@@ -111,11 +111,11 @@ TEST_F(PageEntryMapDelta_test, UpdateRefPageEntry)
     const PageId    ref_id  = 1; // RefPage1 -> Page0
     const PageEntry entry0{.checksum = 0x123};
     map->put(page_id, entry0);
-    ASSERT_NE(map->find(page_id), map->end());
+    ASSERT_NE(map->find(page_id), nullptr);
     ASSERT_EQ(map->at(page_id).checksum, entry0.checksum);
 
     map->ref(ref_id, page_id);
-    ASSERT_NE(map->find(ref_id), map->end());
+    ASSERT_NE(map->find(ref_id), nullptr);
     ASSERT_EQ(map->at(ref_id).checksum, entry0.checksum);
 
     // update on Page0, both Page0 and RefPage1 entry get update
@@ -132,12 +132,12 @@ TEST_F(PageEntryMapDelta_test, UpdateRefPageEntry)
 
     // delete pages
     map->del(page_id);
-    ASSERT_EQ(map->find(page_id), map->end());
-    ASSERT_NE(map->find(ref_id), map->end());
+    ASSERT_EQ(map->find(page_id), nullptr);
+    ASSERT_NE(map->find(ref_id), nullptr);
     ASSERT_FALSE(map->empty());
 
     map->del(ref_id);
-    ASSERT_EQ(map->find(ref_id), map->end());
+    ASSERT_EQ(map->find(ref_id), nullptr);
 }
 
 TEST_F(PageEntryMapDelta_test, AddRefToNonExistPage)
@@ -166,7 +166,7 @@ TEST_F(PageEntryMapDelta_test, PutDuplicateRef)
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 
     map->del(0);
-    ASSERT_EQ(map->find(0), map->end());
+    ASSERT_EQ(map->find(0), nullptr);
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 }
 
@@ -180,7 +180,7 @@ TEST_F(PageEntryMapDelta_test, PutRefOnRef)
     // add RefPage3 -> RefPage2 -> Page0
     map->ref(3, 2);
     {
-        ASSERT_NE(map->find(3), map->end());
+        ASSERT_NE(map->find(3), nullptr);
         const PageEntry & entry = map->at(3);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -190,44 +190,44 @@ TEST_F(PageEntryMapDelta_test, PutRefOnRef)
     // remove RefPage2
     map->del(2);
     // now RefPage2 removed
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find(2), nullptr);
     {
         // RefPage0 exist
-        ASSERT_NE(map->find(0), map->end());
-        const PageEntry & entry = map->find(0).pageEntry();
-        EXPECT_EQ(entry.file_id, p0entry.file_id);
-        EXPECT_EQ(entry.level, p0entry.level);
-        EXPECT_EQ(entry.checksum, p0entry.checksum);
+        auto entry = map->find(0);
+        ASSERT_NE(entry, nullptr);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->level, p0entry.level);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
     }
     {
         // RefPage3 exist
-        ASSERT_NE(map->find(3), map->end());
-        const PageEntry & entry = map->find(3).pageEntry();
-        EXPECT_EQ(entry.file_id, p0entry.file_id);
-        EXPECT_EQ(entry.level, p0entry.level);
-        EXPECT_EQ(entry.checksum, p0entry.checksum);
+        auto entry = map->find(3);
+        ASSERT_NE(entry, nullptr);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->level, p0entry.level);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
     }
 
     // remove RefPage0
     map->del(0);
     // now RefPage0 is removed
-    ASSERT_EQ(map->find(0), map->end());
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find(0), nullptr);
+    ASSERT_EQ(map->find(2), nullptr);
     {
         // RefPage3 exist
-        ASSERT_NE(map->find(3), map->end());
-        const PageEntry & entry = map->find(3).pageEntry();
-        EXPECT_EQ(entry.file_id, p0entry.file_id);
-        EXPECT_EQ(entry.level, p0entry.level);
-        EXPECT_EQ(entry.checksum, p0entry.checksum);
+        auto entry = map->find(3);
+        ASSERT_NE(entry, nullptr);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->level, p0entry.level);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
     }
 
     // remove RefPage3
     map->del(3);
     // now RefPage3 is removed
-    ASSERT_EQ(map->find(3), map->end());
-    ASSERT_EQ(map->find(0), map->end());
-    ASSERT_EQ(map->find(2), map->end());
+    ASSERT_EQ(map->find(3), nullptr);
+    ASSERT_EQ(map->find(0), nullptr);
+    ASSERT_EQ(map->find(2), nullptr);
 }
 
 TEST_F(PageEntryMapDelta_test, ReBindRef)
@@ -275,10 +275,9 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaAddRef)
 
     PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, std::move(delta));
 
-    auto iter = base->find(3);
-    ASSERT_NE(iter, base->end());
-    const auto entry = iter.pageEntry();
-    ASSERT_EQ(entry.checksum, 0x123UL);
+    auto entry = base->find(3);
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(entry->checksum, 0x123UL);
 }
 
 TEST_F(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
@@ -289,12 +288,12 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
 
     PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, delta);
 
-    auto iter = base->find(2);
-    ASSERT_EQ(iter, base->end());
+    auto entry2 = base->find(2);
+    ASSERT_EQ(entry2, nullptr);
 
-    auto iter2 = base->find(3);
-    ASSERT_NE(iter2, base->end());
-    ASSERT_EQ(iter2.pageEntry().checksum, 0x123UL);
+    auto entry3 = base->find(3);
+    ASSERT_NE(entry3, nullptr);
+    ASSERT_EQ(entry3->checksum, 0x123UL);
 }
 
 TEST_F(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
@@ -306,9 +305,9 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
 
     PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, delta);
 
-    auto iter = base->find(2);
-    ASSERT_NE(iter, base->end());
-    ASSERT_EQ(iter.pageEntry().checksum, 0x123UL);
+    auto entry = base->find(2);
+    ASSERT_NE(entry, nullptr);
+    ASSERT_EQ(entry->checksum, 0x123UL);
 }
 
 } // namespace tests

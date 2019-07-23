@@ -55,17 +55,14 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
             continue;
         }
         // Gc only apply PUT for updating page entries
-        auto old_iter = base->find(rec.page_id);
-        // If the gc page have already been removed, just ignore it
-        if (old_iter == base->end())
-        {
-            continue;
-        }
         try
         {
-            auto & old_page_entry = old_iter.pageEntry(); // this may throw an exception if ref to non-exist page
+            auto old_page_entry = base->find(rec.page_id);  // this may throw an exception if ref to non-exist page
+            // If the gc page have already been removed, just ignore it
+            if (old_page_entry == nullptr)
+                continue;
             // In case of page being updated during GC process.
-            if (old_page_entry.fileIdLevel() < rec.entry.fileIdLevel())
+            if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
                 v->put(rec.page_id, rec.entry);
@@ -151,16 +148,11 @@ bool PageEntryMapDeltaBuilder::needCompactToBase(const PageEntryMapDeltaVersionS
 
 const PageEntry & PageEntryMapView::at(const PageId page_id) const
 {
-    auto iter = this->find(page_id);
-    if (likely(iter != end()))
-    {
-        return iter.pageEntry();
-    }
-    else
-    {
-        static PageEntry invalid_entry;
-        return invalid_entry;
-    }
+    auto entry = this->find(page_id);
+    if (entry == nullptr)
+        throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]",
+                            ErrorCodes::LOGICAL_ERROR);
+    return *entry;
 }
 
 PageId PageEntryMapView::maxId() const
@@ -173,16 +165,17 @@ PageId PageEntryMapView::maxId() const
     return max_id;
 }
 
-PageEntryMapView::const_iterator PageEntryMapView::find(PageId page_id) const
+// TODO return <bool, PageEntryPtr>
+const PageEntry* PageEntryMapView::find(PageId page_id) const
 {
     // begin search PageEntry from tail -> head
     std::shared_ptr<const PageEntryMapDelta> node;
-    for (node = tail; node != nullptr; node = node->prev)
+    for (node = tail; !node->isBase(); node = node->prev)
     {
         // deleted in later version, then return not exist
         if (node->isDeleted(page_id))
         {
-            return this->end();
+            return nullptr;
         }
         auto [is_ref, ori_page_id] = node->isRefId(page_id);
         if (is_ref)
@@ -190,21 +183,20 @@ PageEntryMapView::const_iterator PageEntryMapView::find(PageId page_id) const
             // if new ref find in this delta, turn to find ori_page_id in this VersionView
             return find(ori_page_id);
         }
-        PageEntryMapDelta::const_iterator iter = node->find(page_id);
-        if (iter != node->end() || node->isBase())
+        const PageEntry *entry = node->find(page_id);
+        if (entry != nullptr)
         {
-            return const_iterator(iter);
+            return entry;
         }
     }
-    assert(false);
-    // should not call here
-    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(node)->find(page_id));
+    assert(node->isBase());
+    return node->find(page_id);
 }
 
 bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
 {
     auto node = tail;
-    for (; node != nullptr; node = node->prev)
+    for (; !node->isBase(); node = node->prev)
     {
         // `ref_id` or `page_id` has been deleted in later version, then return not exist
         if (node->isDeleted(ref_id))
@@ -257,33 +249,52 @@ PageId PageEntryMapView::resolveRefId(PageId page_id) const
     return 0;
 }
 
-PageEntryMapView::const_iterator PageEntryMapView::end() const
+std::set<PageId> PageEntryMapView::validPageIds() const
 {
-    return const_iterator(std::static_pointer_cast<const PageEntryMapBase>(vset->current)->end());
+    std::vector<std::shared_ptr<PageEntryMapBase>> link_nodes;
+    for (auto node = vset->current; node != nullptr; node = node->prev)
+    {
+        link_nodes.emplace_back(node);
+    }
+    // Get valid pages, from link-list's head to tail
+    std::set<PageId> valid_pages;
+    for (auto node_iter = link_nodes.rbegin(); node_iter != link_nodes.rend(); node_iter++)
+    {
+        if (!(*node_iter)->isBase())
+        {
+            for (auto deleted_id : (*node_iter)->page_deletions)
+                valid_pages.erase(deleted_id);
+        }
+        for (auto ref_pairs : (*node_iter)->page_ref)
+        {
+            valid_pages.insert(ref_pairs.first);
+        }
+    }
+    return valid_pages;
 }
 
-PageEntryMapBase::const_normal_page_iterator PageEntryMapView::pages_cbegin() const
+std::set<PageId> PageEntryMapView::validNormalPageIds() const
 {
-    return vset->current->pages_cbegin();
-}
-
-PageEntryMapBase::const_normal_page_iterator PageEntryMapView::pages_cend() const
-{
-    // FIXME
-    return vset->current->pages_cend();
-}
-
-PageEntryMapBase::const_iterator PageEntryMapView::cbegin() const
-{
-    // FIXME
-
-    return vset->current->cbegin();
-}
-
-PageEntryMapBase::const_iterator PageEntryMapView::cend() const
-{
-    // FIXME
-    return vset->current->cend();
+    std::vector<std::shared_ptr<PageEntryMapBase>> link_nodes;
+    for (auto node = vset->current; node != nullptr; node = node->prev)
+    {
+        link_nodes.emplace_back(node);
+    }
+    // Get valid normal pages, from link-list's head to tail
+    std::set<PageId> valid_normal_pages;
+    for (auto node_iter = link_nodes.rbegin(); node_iter != link_nodes.rend(); node_iter++)
+    {
+        if (!(*node_iter)->isBase())
+        {
+            for (auto deleted_id : (*node_iter)->page_deletions)
+                valid_normal_pages.erase(deleted_id);
+        }
+        for (auto ref_pairs : (*node_iter)->normal_pages)
+        {
+            valid_normal_pages.insert(ref_pairs.first);
+        }
+    }
+    return valid_normal_pages;
 }
 
 ////  PageEntryMapDeltaVersionSet

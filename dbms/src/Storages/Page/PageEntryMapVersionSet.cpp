@@ -75,7 +75,7 @@ void PageEntryMapBuilder::gcApply(const PageEntriesEdit & edit)
             continue;
         }
         // Gc only apply PUT for updating page entries
-        auto old_iter = v->find(rec.page_id);
+        auto old_iter = v->find_old(rec.page_id);
         // If the gc page have already been removed, just ignore it
         if (old_iter == v->end())
         {

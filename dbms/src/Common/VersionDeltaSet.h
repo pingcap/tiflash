@@ -98,8 +98,10 @@ public:
         assert(current->empty());
         assert(current->isBase());
         assert(current->prev == nullptr);
+        v->is_base = true;
         current.swap(v);
         v.reset();
+        assert(current->isBase());
     }
 
     void apply(VersionEdit_t & edit)

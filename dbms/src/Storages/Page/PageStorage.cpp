@@ -62,7 +62,11 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
     auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
     // recover current version from files
     auto                                snapshot = version_set.getSnapshot();
-    PageEntryMapVersionSet::BuilderType builder(snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
+#ifdef DELTA_VERSION_SET
+    typename PageEntryMapDeltaVersionSet::BuilderType builder(snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
+#else
+    typename PageEntryMapVersionSet::BuilderType builder(snapshot->version(), true, log);
+#endif
     for (auto & page_file : page_files)
     {
         PageEntriesEdit edit;
@@ -92,7 +96,22 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
         snapshot = this->getSnapshot();
     }
 
-    auto it = snapshot->version()->find(page_id);
+#ifdef DELTA_VERSION_SET
+    try
+    { // this may throw an exception if ref to non-exist page
+        auto entry = snapshot->version()->find(page_id);
+        if (entry != nullptr)
+            return *entry; // A copy of PageEntry
+        else
+            return INVALID_PAGE_ENTRY;
+    }
+    catch (DB::Exception & e)
+    {
+        LOG_WARNING(log, e.message());
+        return INVALID_PAGE_ENTRY; // return invalid PageEntry
+    }
+#else
+    auto it = snapshot->version()->find_old(page_id);
     if (it != snapshot->version()->end())
     {
         try
@@ -102,13 +121,14 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
         catch (DB::Exception & e)
         {
             LOG_WARNING(log, e.message());
-            return {}; // return invalid PageEntry
+            return INVALID_PAGE_ENTRY; // return invalid PageEntry
         }
     }
     else
     {
-        return {};
+        return INVALID_PAGE_ENTRY;
     }
+#endif
 }
 
 PageFile::Writer & PageStorage::getWriter()
@@ -166,12 +186,20 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
         snapshot = this->getSnapshot();
     }
 
-    auto it = snapshot->version()->find(page_id);
+#ifdef DELTA_VERSION_SET
+    auto page_entry = snapshot->version()->find(page_id);
+    if (page_entry == nullptr)
+        throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+    const auto       file_id_level = page_entry->fileIdLevel();
+    PageIdAndEntries to_read       = {{page_id, *page_entry}};
+#else
+    auto it = snapshot->version()->find_old(page_id);
     if (it == snapshot->version()->end())
         throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
     const auto &     page_entry    = it.pageEntry(); // this may throw an exception if ref to non-exist page
     const auto       file_id_level = page_entry.fileIdLevel();
     PageIdAndEntries to_read       = {{page_id, page_entry}};
+#endif
     auto             file_reader   = getReader(file_id_level);
     return file_reader->read(to_read)[page_id];
 }
@@ -186,13 +214,22 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto it = snapshot->version()->find(page_id);
+#ifdef DELTA_VERSION_SET
+        auto page_entry = snapshot->version()->find(page_id);
+        if (page_entry == nullptr)
+            throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+        auto         file_id_level               = page_entry->fileIdLevel();
+        auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
+        page_id_and_caches.emplace_back(page_id, *page_entry);
+#else
+        auto it = snapshot->version()->find_old(page_id);
         if (it == snapshot->version()->end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         const auto & page_entry                  = it.pageEntry(); // this may throw an exception if ref to non-exist page
         auto         file_id_level               = page_entry.fileIdLevel();
         auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
         page_id_and_caches.emplace_back(page_id, page_entry);
+#endif
         if (file_reader == nullptr)
             file_reader = getReader(file_id_level);
     }
@@ -220,13 +257,22 @@ void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handl
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto it = snapshot->version()->find(page_id);
+#ifdef DELTA_VERSION_SET
+        auto page_entry = snapshot->version()->find(page_id);
+        if (page_entry == nullptr)
+            throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+        auto         file_id_level               = page_entry->fileIdLevel();
+        auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
+        page_id_and_caches.emplace_back(page_id, *page_entry);
+#else
+        auto it = snapshot->version()->find_old(page_id);
         if (it == snapshot->version()->end())
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         const auto & page_entry                  = it.pageEntry(); // this may throw an exception if ref to non-exist page
         auto         file_id_level               = page_entry.fileIdLevel();
         auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
         page_id_and_caches.emplace_back(page_id, page_entry);
+#endif
         if (file_reader == nullptr)
             file_reader = getReader(file_id_level);
     }
@@ -249,6 +295,17 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
     }
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
+#ifdef DELTA_VERSION_SET
+    {
+        auto valid_pages_ids = snapshot->version()->validPageIds();
+        for (auto page_id : valid_pages_ids)
+        {
+            auto page_entry = snapshot->version()->find(page_id);
+            assert(page_entry != nullptr);
+            file_and_pages[page_entry->fileIdLevel()].emplace_back(page_id);
+        }
+    }
+#else
     {
         for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
         {
@@ -257,6 +314,7 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
             file_and_pages[page_entry.fileIdLevel()].emplace_back(page_id);
         }
     }
+#endif
 
     for (const auto & p : file_and_pages)
     {
@@ -278,12 +336,22 @@ void PageStorage::traversePageEntries( //
     }
 
     // traverse over all Pages or RefPages
+#ifdef DELTA_VERSION_SET
+    auto valid_pages_ids = snapshot->version()->validPageIds();
+    for (auto page_id : valid_pages_ids)
+    {
+        auto page_entry = snapshot->version()->find(page_id);
+        assert(page_entry != nullptr);
+        acceptor(page_id, *page_entry);
+    }
+#else
     for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
     {
         const PageId      page_id    = iter.pageId();
         const PageEntry & page_entry = iter.pageEntry(); // this may throw an exception if ref to non-exist page
         acceptor(page_id, page_entry);
     }
+#endif
 }
 
 
@@ -316,13 +384,23 @@ bool PageStorage::gc()
         std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>> file_valid_pages;
         {
             // Only scan over normal Pages, excluding RefPages
+#ifdef DELTA_VERSION_SET
+            auto valid_normal_page_ids = snapshot->version()->validNormalPageIds();
+            for (auto page_id : valid_normal_page_ids)
+            {
+                auto page_entry = snapshot->version()->find(page_id);
+                assert(page_entry != nullptr);
+                auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry->fileIdLevel()];
+                valid_size += page_entry->size;
+#else
             for (auto iter = snapshot->version()->pages_cbegin(); iter != snapshot->version()->pages_cend(); ++iter)
             {
                 const PageId      page_id                    = iter->first;
                 const PageEntry & page_entry                 = iter->second;
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry.fileIdLevel()];
                 valid_size += page_entry.size;
-                valid_page_ids_in_file.push_back(page_id);
+#endif
+                valid_page_ids_in_file.emplace_back(page_id);
             }
         }
 
@@ -466,7 +544,20 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                 const auto &page_ids = it->second.second;
                 for (auto page_id : page_ids)
                 {
-                    auto it2 = current->find(page_id);
+#ifdef DELTA_VERSION_SET
+                    try
+                    {
+                        auto page_entry = current->find(page_id);
+                        if (page_entry == nullptr)
+                            continue;
+                        // This page is covered by newer file.
+                        if (page_entry->fileIdLevel() != file_id_level)
+                        {
+                            continue;
+                        }
+                        page_id_and_entries.emplace_back(page_id, *page_entry);
+#else
+                    auto it2 = current->find_old(page_id);
                     // This page is already removed.
                     if (it2 == current->end())
                     {
@@ -481,6 +572,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                             continue;
                         }
                         page_id_and_entries.emplace_back(page_id, page_entry);
+#endif
                         num_successful_migrate_pages += 1;
                     }
                     catch (DB::Exception &e)

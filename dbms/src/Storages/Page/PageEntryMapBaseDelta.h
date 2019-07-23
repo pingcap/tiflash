@@ -315,8 +315,23 @@ public:
     inline const_iterator cend() const { return const_iterator(page_ref.cend(), normal_pages); }
     inline const_iterator cbegin() const { return const_iterator(page_ref.cbegin(), normal_pages); }
 
-    inline iterator       find(const PageId page_id) { return iterator(page_ref.find(page_id), normal_pages); }
-    inline const_iterator find(const PageId page_id) const { return const_iterator(page_ref.find(page_id), normal_pages); }
+    inline iterator       find_old(const PageId page_id) { return iterator(page_ref.find(page_id), normal_pages); }
+    inline const_iterator find_old(const PageId page_id) const { return const_iterator(page_ref.find(page_id), normal_pages); }
+
+    inline const PageEntry * find(const PageId page_id) const
+    {
+        auto ref_iter = page_ref.find(page_id);
+        if (ref_iter == page_ref.end())
+            return nullptr;
+        else
+        {
+            auto normal_iter = normal_pages.find(ref_iter->second);
+            if (normal_iter == normal_pages.end())
+                return nullptr;
+            else
+                return &normal_iter->second;
+        }
+    }
 
     using normal_page_iterator       = std::unordered_map<PageId, PageEntry>::iterator;
     using const_normal_page_iterator = std::unordered_map<PageId, PageEntry>::const_iterator;

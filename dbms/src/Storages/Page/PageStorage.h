@@ -10,11 +10,14 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/PageEntryMapDeltaVersionSet.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace DB
 {
+
+//#define DELTA_VERSION_SET
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
@@ -53,7 +56,11 @@ public:
 
     void write(const WriteBatch & write_batch);
 
+#ifdef DELTA_VERSION_SET
+    using SnapshotPtr = PageEntryMapDeltaVersionSet::SnapshotPtr;
+#else
     using SnapshotPtr = PageEntryMapVersionSet::SnapshotPtr;
+#endif
     SnapshotPtr getSnapshot();
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = nullptr);
@@ -85,7 +92,11 @@ private:
     String storage_path;
     Config config;
 
+#ifdef DELTA_VERSION_SET
+    PageEntryMapDeltaVersionSet version_set;
+#else
     PageEntryMapVersionSet version_set;
+#endif
 
     PageFile  write_file;
     WriterPtr write_file_writer;

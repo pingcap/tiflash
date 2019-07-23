@@ -19,7 +19,7 @@ class PageEntryMapDeltaVersionSet : public ::DB::MVCC::VersionDeltaSet< //
                                         PageEntryMapDeltaBuilder>
 {
 public:
-    PageEntryMapDeltaVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
+    explicit PageEntryMapDeltaVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
         : ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>(config_)
     {
     }
@@ -74,35 +74,6 @@ private:
 class PageEntryMapView : public ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDeltaBuilder>
 {
 public:
-    class const_iterator
-    {
-    public:
-        explicit const_iterator(PageEntryMapBase::const_iterator cit) : _iter(cit._iter), _normal_pages(cit._normal_pages) {}
-
-        inline PageId            pageId() const { return _iter->first; }
-        inline const PageEntry & pageEntry() const
-        {
-            auto iter = _normal_pages.find(_iter->second);
-            if (likely(iter != _normal_pages.end()))
-            {
-                return iter->second;
-            }
-            else
-            {
-                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
-                                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-
-        bool operator==(const const_iterator & rhs) const { return _iter == rhs._iter; }
-        bool operator!=(const const_iterator & rhs) const { return _iter != rhs._iter; }
-
-    private:
-        std::unordered_map<PageId, PageId>::const_iterator _iter;
-        std::unordered_map<PageId, PageEntry> &            _normal_pages;
-    };
-
-public:
     PageEntryMapView(PageEntryMapDeltaVersionSet::BaseType * vset_, PageEntryMapDeltaVersionSet::VersionPtr tail_)
         : ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDeltaBuilder>(vset_, std::move(tail_))
     {
@@ -112,18 +83,13 @@ public:
 
     PageId maxId() const;
 
-    const_iterator find(PageId page_id) const;
+    const PageEntry* find(PageId page_id) const;
 
     bool isRefExists(PageId ref_id, PageId page_id) const;
 
-    const_iterator end() const;
+    std::set<PageId> validPageIds() const;
 
-    PageEntryMapBase::const_normal_page_iterator pages_cbegin() const;
-
-    PageEntryMapBase::const_normal_page_iterator pages_cend() const;
-
-    PageEntryMapBase::const_iterator cbegin() const;
-    PageEntryMapBase::const_iterator cend() const;
+    std::set<PageId> validNormalPageIds() const;
 
     PageId resolveRefId(PageId page_id) const;
 };
