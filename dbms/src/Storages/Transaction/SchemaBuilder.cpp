@@ -18,7 +18,17 @@ namespace DB
 
 using namespace TiDB;
 
-inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & table_info, const TiDB::TableInfo & orig_table_info)
+inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info) {
+    command.column_name = column_info.name;
+    command.data_type = getDataTypeByColumnInfo(column_info);
+    if (!column_info.origin_default_value.isEmpty())
+    {
+        LOG_DEBUG(log, "add default value for column: " + column_info.name);
+        command.default_expression = ASTPtr(new ASTLiteral(column_info.defaultValueToField()));
+    }
+}
+
+inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
     AlterCommands alter_commands;
 
@@ -34,16 +44,10 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
         if (orig_column_info == orig_table_info.columns.end())
         {
             // New column.
-            command.type = AlterCommand::ADD_COLUMN;
-            command.column_name = column_info.name;
-            command.data_type = getDataTypeByColumnInfo(column_info);
-            if (!column_info.origin_default_value.isEmpty())
-            {
-                LOG_DEBUG(log, "add default value for column: " + column_info.name);
-                command.default_expression = ASTPtr(new ASTLiteral(column_info.defaultValueToField()));
-            }
             // TODO: support after column.
             LOG_DEBUG(log, "detect add column.");
+            command.type = AlterCommand::ADD_COLUMN;
+            setAlterCommandColumn(log, command, column_info);
         }
         else
         {
@@ -67,6 +71,7 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
             // Dropped column.
             command.type = AlterCommand::DROP_COLUMN;
             command.column_name = orig_column_info.name;
+            LOG_DEBUG(log, "detect drop column.");
         }
         else
         {
@@ -76,6 +81,33 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TiDB::TableInfo & t
 
         alter_commands.emplace_back(std::move(command));
     }
+
+    /// Detect type changed columns.
+    for (const auto & orig_column_info : orig_table_info.columns)
+    {
+        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+            // TODO: Check primary key.
+            return column_info_.id == orig_column_info.id && column_info_.tp != orig_column_info.tp;
+        });
+
+        AlterCommand command;
+        if (column_info == table_info.columns.end())
+        {
+            // Column unchanged.
+            continue;
+        }
+        else
+        {
+            // Type changed column.
+            command.type = AlterCommand::MODIFY_COLUMN;
+            setAlterCommandColumn(log, command, *column_info);
+        }
+
+        LOG_DEBUG(log, "detect modify column.");
+        alter_commands.emplace_back(std::move(command));
+    }
+
+    LOG_DEBUG(log, "the size of alter commands is " + std::to_string(alter_commands.size()));
 
     return alter_commands;
 }
