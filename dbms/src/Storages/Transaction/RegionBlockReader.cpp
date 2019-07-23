@@ -222,7 +222,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
 
                     if (tp == "Nullable(DateTime)" || tp == "DateTime")
                     {
-                        time_t datetime;
+                        time_t datetime = 0;
                         if (unlikely(year == 0))
                             datetime = 0;
                         else
@@ -233,7 +233,13 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                                         + std::to_string(day) + ".",
                                     ErrorCodes::LOGICAL_ERROR);
                             }
-                            datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+                            try {
+                                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+                            } catch (const std::exception & e) {
+                                auto log = &Logger::get("RegionBlockReader");
+                                LOG_ERROR(log, String("decoding datetime meets error: ") + e.what() + " \n the original data is : " + std::to_string(packed) + " and ymdhms is " + std::to_string(year) + " " + std::to_string(month) + " " + std::to_string(day) + " " + std::to_string(hour) + " " + std::to_string(minute) + " " + std::to_string(second) + ".");
+                                // FIXME: then insert a zero value. This is not reasonable.
+                            }
                         }
                         it->second.first->insert(static_cast<Int64>(datetime));
                     }
