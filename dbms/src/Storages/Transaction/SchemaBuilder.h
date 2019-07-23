@@ -52,6 +52,10 @@ private:
     void applyCreateTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info);
 
     void applyDropTableImpl(const String &, const String &);
+
+    void applyRenameTable(TiDB::DBInfoPtr db_info, TiDB::DatabaseID old_db_id, TiDB::TableID table_id);
+
+    void applyRenameTableImpl(const String & old_db, const String & new_db, const String & old_table, const String & new_table);
 };
 
 } // namespace DB
