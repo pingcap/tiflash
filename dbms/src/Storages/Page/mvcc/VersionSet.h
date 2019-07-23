@@ -16,7 +16,7 @@ namespace MVCC
 struct VersionSetConfig
 {
     size_t compact_hint_delta_deletions = 5000;
-    size_t compact_hint_delta_entries = 200 * 1000;
+    size_t compact_hint_delta_entries   = 200 * 1000;
 };
 
 template <typename T>
@@ -24,8 +24,8 @@ struct MultiVersionCountable
 {
 public:
     std::atomic<uint32_t> ref_count;
-    T * next;
-    T * prev;
+    T *                   next;
+    T *                   prev;
 
 public:
     explicit MultiVersionCountable(T * self) : ref_count(0), next(self), prev(self) {}
@@ -93,7 +93,7 @@ public:
     using BuilderType = Builder_t;
 
 public:
-    explicit VersionSet(const VersionSetConfig &config_ = VersionSetConfig()) : placeholder_node(), current(nullptr)
+    explicit VersionSet(const VersionSetConfig & config_ = VersionSetConfig()) : placeholder_node(), current(nullptr)
     {
         (void)config_; // just ignore config
         // append a init version to link
@@ -131,7 +131,7 @@ public:
     size_t size() const
     {
         std::unique_lock read_lock(read_mutex);
-        size_t sz = 0;
+        size_t           sz = 0;
         for (Version_t * v = current; v != &placeholder_node; v = v->prev)
             sz += 1;
         return sz;
@@ -156,7 +156,7 @@ public:
     class Snapshot
     {
     private:
-        Version_t * v;             // particular version
+        Version_t *         v;     // particular version
         std::shared_mutex * mutex; // mutex to be used when freeing version
 
     public:
@@ -180,8 +180,8 @@ public:
     }
 
 protected:
-    Version_t placeholder_node; // Head of circular double-linked list of all versions
-    Version_t * current;        // current version; current == placeholder_node.prev
+    Version_t   placeholder_node; // Head of circular double-linked list of all versions
+    Version_t * current;          // current version; current == placeholder_node.prev
 
     mutable std::shared_mutex read_mutex;
 
@@ -199,8 +199,8 @@ protected:
         current->incrRefCount();
 
         // Append to linked list
-        current->prev = placeholder_node.prev;
-        current->next = &placeholder_node;
+        current->prev       = placeholder_node.prev;
+        current->next       = &placeholder_node;
         current->prev->next = current;
         current->next->prev = current;
     }

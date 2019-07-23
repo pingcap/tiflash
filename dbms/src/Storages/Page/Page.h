@@ -45,8 +45,6 @@ struct PageEntry
 };
 static_assert(std::is_trivially_copyable_v<PageEntry>);
 
-static const PageEntry INVALID_PAGE_ENTRY;
-
 using PageIdAndEntry   = std::pair<PageId, PageEntry>;
 using PageIdAndEntries = std::vector<PageIdAndEntry>;
 

@@ -8,8 +8,8 @@
 #include <stack>
 #include <unordered_set>
 
-#include <Common/VersionSet.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/mvcc/VersionSet.h>
 
 namespace DB
 {
@@ -31,7 +31,7 @@ template <typename VersionSet_t, typename Builder_t>
 struct VersionViewBase
 {
 public:
-    VersionSet_t * vset;
+    VersionSet_t *                    vset;
     typename VersionSet_t::VersionPtr tail;
 
 public:
@@ -67,27 +67,29 @@ public:
 };
 
 
-template <                                           //
-    typename Version_t, //
-    typename VersionView_t,                          //
-    typename VersionEdit_t, typename Builder_t>
+template <                  //
+    typename Version_t,     //
+    typename VersionView_t, //
+    typename VersionEdit_t,
+    typename Builder_t>
 class VersionDeltaSet
 {
 public:
     using BuilderType = Builder_t;
     using VersionType = Version_t;
-    using VersionPtr = std::shared_ptr<VersionType>;
+    using VersionPtr  = std::shared_ptr<VersionType>;
 
 public:
-    explicit VersionDeltaSet(const ::DB::MVCC::VersionSetConfig &config_ = ::DB::MVCC::VersionSetConfig())
-        : current(std::move(VersionType::createBase())),                            //
+    explicit VersionDeltaSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
+        : current(std::move(VersionType::createBase())),                                //
           snapshots(std::move(std::make_shared<Snapshot>(this, nullptr, &read_mutex))), //
           config(config_)
-    {}
+    {
+    }
 
     virtual ~VersionDeltaSet()
     {
-        assert(snapshots->prev == snapshots.get());  // snapshot list is empty
+        assert(snapshots->prev == snapshots.get()); // snapshot list is empty
         current.reset();
     }
 
@@ -112,7 +114,7 @@ public:
         // apply edit base on base_view
         VersionPtr v;
         {
-            auto base_view = std::make_shared<VersionView_t>(this, current);
+            auto      base_view = std::make_shared<VersionView_t>(this, current);
             Builder_t builder(base_view.get());
             builder.apply(edit);
             v = builder.build();
@@ -144,17 +146,19 @@ public:
     class Snapshot
     {
     public:
-        VersionView_t view;
+        VersionView_t       view;
         std::shared_mutex * mutex;
 
         Snapshot * prev;
         Snapshot * next;
 
     public:
-        Snapshot(VersionDeltaSet * vset_, VersionPtr tail_, //
-            std::shared_mutex * mutex_)
+        Snapshot(VersionDeltaSet *   vset_,
+                 VersionPtr          tail_, //
+                 std::shared_mutex * mutex_)
             : view(vset_, std::move(tail_)), mutex(mutex_), prev(this), next(this)
-        {}
+        {
+        }
 
         ~Snapshot()
         {
@@ -177,19 +181,19 @@ public:
     {
         // acquire for unique_lock since we need to add all snapshots to link list
         std::unique_lock<std::shared_mutex> lock(read_mutex);
-        auto s = std::make_shared<Snapshot>(this, current, &read_mutex);
+        auto                                s = std::make_shared<Snapshot>(this, current, &read_mutex);
         // Register snapshot to VersionSet
-        s->prev = snapshots->prev;
-        s->next = snapshots.get();
+        s->prev               = snapshots->prev;
+        s->next               = snapshots.get();
         snapshots->prev->next = s.get();
-        snapshots->prev = s.get();
+        snapshots->prev       = s.get();
         return s;
     }
 
 public:
-    mutable std::shared_mutex read_mutex;
-    VersionPtr current;
-    SnapshotPtr snapshots;
+    mutable std::shared_mutex    read_mutex;
+    VersionPtr                   current;
+    SnapshotPtr                  snapshots;
     ::DB::MVCC::VersionSetConfig config;
 
 protected:
@@ -228,7 +232,7 @@ protected:
         q->prev = new_base;
     }
 
-    void appendVersion(VersionPtr &&v)
+    void appendVersion(VersionPtr && v)
     {
         assert(v != current);
         // Append to linked list
@@ -255,8 +259,8 @@ public:
 
     std::string toDebugStringUnlocked() const
     {
-        std::string s;
-        bool is_first = true;
+        std::string            s;
+        bool                   is_first = true;
         std::stack<VersionPtr> deltas;
         for (auto v = current; v != nullptr; v = v->prev)
         {
@@ -275,7 +279,6 @@ public:
         }
         return s;
     }
-
 };
 
 } // namespace MVCC

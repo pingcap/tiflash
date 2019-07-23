@@ -8,7 +8,10 @@ namespace DB
 {
 
 PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base_, bool ignore_invalid_ref_, Logger * log_)
-    : base(const_cast<PageEntryMapView *>(base_)), v(PageEntryMapDelta::createDelta()), ignore_invalid_ref(ignore_invalid_ref_), log(log_)
+    : base(const_cast<PageEntryMapView *>(base_)),
+      v(PageEntryMapDeltaVersionSet::VersionType::createDelta()),
+      ignore_invalid_ref(ignore_invalid_ref_),
+      log(log_)
 {
 #ifndef NDEBUG
     if (ignore_invalid_ref)
@@ -18,7 +21,7 @@ PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base
 #endif
 }
 
-PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder() {}
+PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder() = default;
 
 void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
 {
@@ -57,7 +60,7 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
         // Gc only apply PUT for updating page entries
         try
         {
-            auto old_page_entry = base->find(rec.page_id);  // this may throw an exception if ref to non-exist page
+            auto old_page_entry = base->find(rec.page_id); // this may throw an exception if ref to non-exist page
             // If the gc page have already been removed, just ignore it
             if (old_page_entry == nullptr)
                 continue;
@@ -117,7 +120,7 @@ PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas(
     }
 
     std::stack<PageEntryMapDeltaVersionSet::VersionPtr> nodes;
-    auto                                                tmp = PageEntryMapDelta::createDelta();
+    auto                                                tmp = PageEntryMapDeltaVersionSet::VersionType::createDelta();
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         if (node->isBase())
@@ -150,8 +153,7 @@ const PageEntry & PageEntryMapView::at(const PageId page_id) const
 {
     auto entry = this->find(page_id);
     if (entry == nullptr)
-        throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]",
-                            ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]", ErrorCodes::LOGICAL_ERROR);
     return *entry;
 }
 
@@ -165,11 +167,10 @@ PageId PageEntryMapView::maxId() const
     return max_id;
 }
 
-// TODO return <bool, PageEntryPtr>
-const PageEntry* PageEntryMapView::find(PageId page_id) const
+const PageEntry * PageEntryMapView::find(PageId page_id) const
 {
     // begin search PageEntry from tail -> head
-    std::shared_ptr<const PageEntryMapDelta> node;
+    PageEntryMapDeltaVersionSet::VersionPtr node;
     for (node = tail; !node->isBase(); node = node->prev)
     {
         // deleted in later version, then return not exist
@@ -183,7 +184,7 @@ const PageEntry* PageEntryMapView::find(PageId page_id) const
             // if new ref find in this delta, turn to find ori_page_id in this VersionView
             return find(ori_page_id);
         }
-        const PageEntry *entry = node->find(page_id);
+        const PageEntry * entry = node->find(page_id);
         if (entry != nullptr)
         {
             return entry;

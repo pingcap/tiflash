@@ -8,7 +8,6 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
 #include <Storages/Page/WriteBatch.h>
 

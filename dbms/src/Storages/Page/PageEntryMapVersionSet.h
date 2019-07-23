@@ -3,14 +3,15 @@
 #include <set>
 #include <vector>
 
-#include <Common/VersionSet.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/Page/mvcc/VersionSet.h>
 
 namespace DB
 {
 
+/// Page Entries change to apply to version set.
 class PageEntriesEdit
 {
 public:
@@ -130,6 +131,7 @@ public:
     /// append new version to version-list
     std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
 
+private:
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 };

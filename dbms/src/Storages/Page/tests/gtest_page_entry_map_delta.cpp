@@ -1,6 +1,5 @@
 #include "gtest/gtest.h"
 
-#include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/PageEntryMapDeltaVersionSet.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
 
@@ -25,7 +24,7 @@ protected:
 
     void TearDown() override {}
 
-    std::shared_ptr<PageEntryMapDelta> map;
+    PageEntryMapDeltaVersionSet::VersionPtr map;
 
 private:
     PageEntryMapDeltaVersionSet versions;
@@ -249,21 +248,20 @@ TEST_F(PageEntryMapDelta_test, ReBindRef)
     map->del(0);
 }
 
-class PageEntryMapDeltaBuilder_test: public ::testing::Test
+class PageEntryMapDeltaBuilder_test : public ::testing::Test
 {
 public:
-
     void SetUp() override
     {
-        base = PageEntryMapBase::createBase();
-        delta = PageEntryMapDelta::createDelta();
+        base  = PageEntryMapBase::createBase();
+        delta = PageEntryMapBase::createDelta();
     }
 
     void TearDown() override {}
 
 protected:
-    std::shared_ptr<PageEntryMapBase>  base;
-    std::shared_ptr<PageEntryMapDelta> delta;
+    std::shared_ptr<PageEntryMapBase> base;
+    std::shared_ptr<PageEntryMapBase> delta;
 };
 
 TEST_F(PageEntryMapDeltaBuilder_test, DeltaAddRef)

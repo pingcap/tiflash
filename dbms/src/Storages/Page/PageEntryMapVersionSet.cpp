@@ -74,21 +74,18 @@ void PageEntryMapBuilder::gcApply(const PageEntriesEdit & edit)
         {
             continue;
         }
-        // Gc only apply PUT for updating page entries
-        auto old_iter = v->find_old(rec.page_id);
-        // If the gc page have already been removed, just ignore it
-        if (old_iter == v->end())
-        {
-            continue;
-        }
         try
         {
-            auto & old_page_entry = old_iter.pageEntry(); // this may throw an exception if ref to non-exist page
+            // Gc only apply PUT for updating page entries
+            auto old_page_entry = v->find(rec.page_id);
+            // If the gc page have already been removed, just ignore it
+            if (old_page_entry == nullptr)
+                continue;
             // In case of page being updated during GC process.
-            if (old_page_entry.fileIdLevel() < rec.entry.fileIdLevel())
+            if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
-                old_page_entry = rec.entry;
+                v->put(rec.page_id, rec.entry, false);
             }
             // else new page written by another thread, gc page is replaced. leave the page for next gc
         }

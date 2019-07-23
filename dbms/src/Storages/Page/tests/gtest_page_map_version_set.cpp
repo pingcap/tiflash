@@ -27,13 +27,12 @@ public:
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Logger::root().setChannel(formatting_channel);
         Logger::root().setLevel("trace");
-
     }
 
 public:
     void SetUp() override
     {
-        config_.compact_hint_delta_entries = 1;
+        config_.compact_hint_delta_entries   = 1;
         config_.compact_hint_delta_deletions = 1;
     }
 
@@ -182,8 +181,8 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
         versions.apply(edit);
     }
     LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugStringUnlocked());
-    auto s3   = versions.getSnapshot();
-    entry = s3->version()->at(1);
+    auto s3 = versions.getSnapshot();
+    entry   = s3->version()->at(1);
     ASSERT_EQ(entry.checksum, 0xFFUL);
 
     s1.reset();
@@ -222,7 +221,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
         builder.apply(edit);
         versions.restore(builder.build());
     }
-    auto s = versions.getSnapshot();
+    auto s     = versions.getSnapshot();
     auto entry = s->version()->find(1);
     ASSERT_EQ(entry, nullptr);
 }
@@ -253,8 +252,8 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
     versions.gcApply(gc_edit);
 
     // Page0 don't update to page_map
-    auto       snapshot = versions.getSnapshot();
-    auto entry     = snapshot->version()->find(pid);
+    auto snapshot = versions.getSnapshot();
+    auto entry    = snapshot->version()->find(pid);
     ASSERT_EQ(entry, nullptr);
 }
 

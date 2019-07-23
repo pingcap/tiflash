@@ -1,10 +1,9 @@
 #pragma once
 
-#include <Common/VersionDeltaSet.h>
-#include <Common/VersionSet.h>
 #include <Storages/Page/PageEntryMap.h>
-#include <Storages/Page/PageEntryMapBaseDelta.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/mvcc/VersionDeltaSet.h>
+#include <Storages/Page/mvcc/VersionSet.h>
 
 namespace DB
 {
@@ -27,6 +26,7 @@ public:
 public:
     std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
 
+private:
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 
@@ -79,11 +79,11 @@ public:
     {
     }
 
-    const PageEntry & at(const PageId page_id) const;
+    const PageEntry & at(PageId page_id) const;
 
     PageId maxId() const;
 
-    const PageEntry* find(PageId page_id) const;
+    const PageEntry * find(PageId page_id) const;
 
     bool isRefExists(PageId ref_id, PageId page_id) const;
 
