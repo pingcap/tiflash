@@ -39,8 +39,7 @@ public:
     }
 
     const std::string & getStr() const { return *this; }
-    std::string & getStr() { return *this; }
-    size_t dataSize() const { return size(); }
+    size_t dataSize() const { return Base::size(); }
     std::string toString() const { return *this; }
 
     // For debug
@@ -67,6 +66,7 @@ public:
 private:
     StringObject(const Base & str_) : Base(str_) {}
     StringObject(const StringObject & obj) = delete;
+    size_t size() const = delete;
 };
 
 using TiKVKey = StringObject<true>;

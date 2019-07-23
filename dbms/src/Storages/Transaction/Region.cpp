@@ -486,9 +486,9 @@ void Region::waitIndex(UInt64 index)
     {
         if (!meta.checkIndex(index))
         {
-            LOG_DEBUG(log, "Region " << id() << " need to wait learner index: " << index);
+            LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
             meta.waitIndex(index);
-            LOG_DEBUG(log, "Region " << id() << " wait learner index " << index << " done");
+            LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
         }
     }
 }

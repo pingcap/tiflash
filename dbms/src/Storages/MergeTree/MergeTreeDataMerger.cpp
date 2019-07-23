@@ -29,7 +29,7 @@
 #include <Common/SimpleIncrement.h>
 #include <Common/interpolate.h>
 #include <Common/typeid_cast.h>
-
+#include <Storages/MergeTree/TMTDataPartProperty.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -671,16 +671,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
 
-            bool pk_is_uint64 = false;
+            const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
 
             const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
-
-            {
-                const auto pk_type = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
-
-                if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-                    pk_is_uint64 = true;
-            }
 
             std::vector<HandleRange<HandleID>> ranges;
             tmt.getRegionTable().traverseInternalRegionsByTable(
@@ -853,6 +846,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
 
     for (const auto & part : parts)
         new_data_part->minmax_idx.merge(part->minmax_idx);
+
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        for (const auto & part : parts)
+            new_data_part->tmt_property->merge(*part->tmt_property);
+    }
 
     /// Print overall profiling info. NOTE: it may duplicates previous messages
     {

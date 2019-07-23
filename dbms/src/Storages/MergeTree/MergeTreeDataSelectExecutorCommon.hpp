@@ -44,7 +44,7 @@ static inline size_t computeMinMarksForSeek(const Settings & settings, const Mer
 }
 
 template <typename TargetType>
-static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart::Index & index,
+static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart & data_part,
     const TiKVHandle::Handle<TargetType> & handle_begin,
     const TiKVHandle::Handle<TargetType> & handle_end,
     const MarkRanges & ori_mark_ranges,
@@ -53,6 +53,19 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
 {
     if (handle_end <= handle_begin)
         return {};
+
+    if (data_part.tmt_property->initialized)
+    {
+        TiKVHandle::Handle<TargetType> index_right_handle;
+        {
+            UInt64 tmp = data_part.tmt_property->max_pk.get<UInt64>();
+            index_right_handle = static_cast<TargetType>(tmp);
+        }
+        if (handle_begin > index_right_handle)
+            return {};
+    }
+
+    const auto & index = data_part.index;
 
     MarkRanges res;
 
@@ -100,7 +113,7 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
 }
 
 template <typename TargetType>
-static inline void computeHandleRenges(std::vector<std::deque<size_t>> & block_data,
+static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_data,
     std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
     std::vector<RangesInDataParts> & region_group_range_parts,
     std::vector<DB::HandleRange<TargetType>> & region_group_handle_ranges,
@@ -139,7 +152,7 @@ static inline void computeHandleRenges(std::vector<std::deque<size_t>> & block_d
         for (const RangesInDataPart & ranges : parts_with_ranges)
         {
             MarkRanges mark_ranges = markRangesFromRegionRange<TargetType>(
-                ranges.data_part->index, handle_range.first.first, handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
+                *ranges.data_part, handle_range.first.first, handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
 
             if (mark_ranges.empty())
                 continue;
