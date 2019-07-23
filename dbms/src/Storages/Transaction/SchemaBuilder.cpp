@@ -18,7 +18,8 @@ namespace DB
 
 using namespace TiDB;
 
-inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info) {
+inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
+{
     command.column_name = column_info.name;
     command.data_type = getDataTypeByColumnInfo(column_info);
     if (!column_info.origin_default_value.isEmpty())
@@ -131,7 +132,9 @@ void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const Str
 
         // Call storage alter to apply schema changes.
         storage->alterForTMT(alter_commands, *table_info, db_name, context);
-    } else {
+    }
+    else
+    {
         storage->setTableInfo(*table_info);
     }
 
@@ -392,7 +395,8 @@ void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
     String database_name = dbInfo->name;
     auto & tmt_context = context.getTMTContext();
     auto storage_to_drop = tmt_context.getStorages().get(table_id).get();
-    if (storage_to_drop == nullptr) {
+    if (storage_to_drop == nullptr)
+    {
         LOG_DEBUG(log, "table id " + std::to_string(table_id) + " in db " + database_name + " is not existed.");
         return;
     }
