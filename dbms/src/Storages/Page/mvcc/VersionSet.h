@@ -19,6 +19,7 @@ struct VersionSetConfig
     size_t compact_hint_delta_entries   = 200 * 1000;
 };
 
+/// Base type for VersionType of VersionSet
 template <typename T>
 struct MultiVersionCountable
 {

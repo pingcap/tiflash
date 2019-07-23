@@ -15,7 +15,7 @@ namespace DB
 {
 namespace MVCC
 {
-
+/// Base type for VersionType of VersionDeltaSet
 template <typename T>
 struct MultiVersionDeltaCountable
 {
@@ -27,6 +27,19 @@ public:
     virtual ~MultiVersionDeltaCountable() = default;
 };
 
+/// Base component for Snapshot of VersionDeltaSet.
+/// When view release, it will do compact on version-list
+///
+/// \tparam VersionSet_t
+///   members required:
+///       config
+///   functions required:
+///       void rebase(const VersionPtr & old_base, const VersionPtr & new_base)
+/// \tparam Builder_t
+///   functions required:
+///       VersionPtr compactDeltas(const VersionPtr &tail);
+///       bool needCompactToBase(const VersionSetConfig *config, const VersionPtr &delta)
+///       VersionPtr compactDeltaAndBase(const VersionPtr &old_base, const VersionPtr &delta)
 template <typename VersionSet_t, typename Builder_t>
 struct VersionViewBase
 {
@@ -42,7 +55,7 @@ public:
         if (tail == nullptr || tail->isBase())
             return;
         // do compact on delta
-        typename VersionSet_t::VersionPtr tmp = Builder_t::compactDeltas(vset, tail);
+        typename VersionSet_t::VersionPtr tmp = Builder_t::compactDeltas(tail);
         if (tmp != nullptr)
         {
             // rebase vset->current on `this->tail` to base on `tmp`
@@ -52,16 +65,14 @@ public:
             tmp.reset();
         }
         // do compact on base
-        bool is_compact_delta_to_base = Builder_t::needCompactToBase(vset, tail);
+        bool is_compact_delta_to_base = Builder_t::needCompactToBase(vset->config, tail);
         if (is_compact_delta_to_base)
         {
             auto old_base = tail->prev;
-            if (old_base != nullptr)
-            {
-                typename VersionSet_t::VersionPtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
-                // replace nodes [head, tail] -> new_base
-                vset->rebase(tail, new_base);
-            }
+            assert(old_base != nullptr);
+            typename VersionSet_t::VersionPtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
+            // replace nodes [head, tail] -> new_base
+            vset->rebase(tail, new_base);
         }
     }
 };

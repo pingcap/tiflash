@@ -7,6 +7,42 @@
 namespace DB
 {
 
+////  PageEntryMapDeltaVersionSet
+
+std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(const PageEntriesEdit & edit)
+{
+
+    std::unique_lock lock(read_mutex);
+
+    // apply edit on base
+    PageEntryMapDeltaVersionSet::VersionPtr v;
+    {
+        auto                     base_view = std::make_shared<PageEntryMapView>(this, current);
+        PageEntryMapDeltaBuilder builder(base_view.get());
+        builder.gcApply(edit);
+        v = builder.build();
+    }
+
+    this->appendVersion(std::move(v));
+
+    return listAllLiveFiles();
+}
+
+std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() const
+{
+    std::set<PageFileIdAndLevel> liveFiles;
+    for (auto v = current; v != nullptr; v = v->prev)
+    {
+        for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
+        {
+            liveFiles.insert(it->second.fileIdLevel());
+        }
+    }
+    return liveFiles;
+}
+
+////  PageEntryMapDeltaBuilder
+
 PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base_, bool ignore_invalid_ref_, Logger * log_)
     : base(const_cast<PageEntryMapView *>(base_)),
       v(PageEntryMapDeltaVersionSet::VersionType::createDelta()),
@@ -63,7 +99,9 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
             auto old_page_entry = base->find(rec.page_id); // this may throw an exception if ref to non-exist page
             // If the gc page have already been removed, just ignore it
             if (old_page_entry == nullptr)
+            {
                 continue;
+            }
             // In case of page being updated during GC process.
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
@@ -85,15 +123,21 @@ void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
 {
     // apply deletions
     for (auto pid : delta->page_deletions)
+    {
         base->del(pid);
+    }
 
     // apply new pages. Note should not auto gen ref
     for (auto && iter : delta->normal_pages)
+    {
         base->put(iter.first, iter.second, false);
+    }
 
     // apply new ref
     for (auto && ref_pair : delta->page_ref)
+    {
         base->ref(ref_pair.first, ref_pair.second);
+    }
 
     delta->clear();
 }
@@ -108,25 +152,28 @@ PageEntryMapDeltaBuilder::compactDeltaAndBase(const PageEntryMapDeltaVersionSet:
     return base;
 }
 
-PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas( //
-    PageEntryMapDeltaVersionSet::BaseType *         vset,
-    const PageEntryMapDeltaVersionSet::VersionPtr & tail)
+PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas(const PageEntryMapDeltaVersionSet::VersionPtr & tail)
 {
-    (void)vset;
     if (tail->prev == nullptr || tail->prev->isBase())
     {
         // Only one delta, do nothing
         return nullptr;
     }
 
+    auto tmp = PageEntryMapDeltaVersionSet::VersionType::createDelta();
+
     std::stack<PageEntryMapDeltaVersionSet::VersionPtr> nodes;
-    auto                                                tmp = PageEntryMapDeltaVersionSet::VersionType::createDelta();
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         if (node->isBase())
+        {
+            // link `tmp` to `base` version
             tmp->prev = node;
+        }
         else
+        {
             nodes.push(node);
+        }
     }
     // merge delta forward
     while (!nodes.empty())
@@ -139,23 +186,15 @@ PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas(
     return tmp;
 }
 
-bool PageEntryMapDeltaBuilder::needCompactToBase(const PageEntryMapDeltaVersionSet::BaseType *   vset,
+bool PageEntryMapDeltaBuilder::needCompactToBase(const ::DB::MVCC::VersionSetConfig &            config,
                                                  const PageEntryMapDeltaVersionSet::VersionPtr & delta)
 {
     assert(!delta->isBase());
-    return delta->numDeletions() >= vset->config.compact_hint_delta_deletions //
-        || delta->numEntries() >= vset->config.compact_hint_delta_entries;
+    return delta->numDeletions() >= config.compact_hint_delta_deletions //
+        || delta->numEntries() >= config.compact_hint_delta_entries;
 }
 
 ////  PageEntryMapView
-
-const PageEntry & PageEntryMapView::at(const PageId page_id) const
-{
-    auto entry = this->find(page_id);
-    if (entry == nullptr)
-        throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]", ErrorCodes::LOGICAL_ERROR);
-    return *entry;
-}
 
 PageId PageEntryMapView::maxId() const
 {
@@ -165,6 +204,16 @@ PageId PageEntryMapView::maxId() const
         max_id = std::max(max_id, node->maxId());
     }
     return max_id;
+}
+
+const PageEntry & PageEntryMapView::at(const PageId page_id) const
+{
+    auto entry = this->find(page_id);
+    if (entry == nullptr)
+    {
+        throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]", ErrorCodes::LOGICAL_ERROR);
+    }
+    return *entry;
 }
 
 const PageEntry * PageEntryMapView::find(PageId page_id) const
@@ -223,13 +272,13 @@ bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
             page_id = ori_page_id;
         }
     }
+    assert(node->isBase());
     return node->isRefExists(ref_id, page_id);
 }
 
 PageId PageEntryMapView::resolveRefId(PageId page_id) const
 {
-    auto node = tail;
-    for (; node != nullptr; node = node->prev)
+    for (auto node = tail; node != nullptr; node = node->prev)
     {
         if (node->isDeleted(page_id))
         {
@@ -264,7 +313,9 @@ std::set<PageId> PageEntryMapView::validPageIds() const
         if (!(*node_iter)->isBase())
         {
             for (auto deleted_id : (*node_iter)->page_deletions)
+            {
                 valid_pages.erase(deleted_id);
+            }
         }
         for (auto ref_pairs : (*node_iter)->page_ref)
         {
@@ -288,7 +339,9 @@ std::set<PageId> PageEntryMapView::validNormalPageIds() const
         if (!(*node_iter)->isBase())
         {
             for (auto deleted_id : (*node_iter)->page_deletions)
+            {
                 valid_normal_pages.erase(deleted_id);
+            }
         }
         for (auto ref_pairs : (*node_iter)->normal_pages)
         {
@@ -296,40 +349,6 @@ std::set<PageId> PageEntryMapView::validNormalPageIds() const
         }
     }
     return valid_normal_pages;
-}
-
-////  PageEntryMapDeltaVersionSet
-
-std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(const PageEntriesEdit & edit)
-{
-
-    std::unique_lock lock(read_mutex);
-
-    // apply edit on base
-    PageEntryMapDeltaVersionSet::VersionPtr v;
-    {
-        auto                     base_view = std::make_shared<PageEntryMapView>(this, current);
-        PageEntryMapDeltaBuilder builder(base_view.get());
-        builder.gcApply(edit);
-        v = builder.build();
-    }
-
-    this->appendVersion(std::move(v));
-
-    return listAllLiveFiles();
-}
-
-std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() const
-{
-    std::set<PageFileIdAndLevel> liveFiles;
-    for (auto v = current; v != nullptr; v = v->prev)
-    {
-        for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
-        {
-            liveFiles.insert(it->second.fileIdLevel());
-        }
-    }
-    return liveFiles;
 }
 
 } // namespace DB
