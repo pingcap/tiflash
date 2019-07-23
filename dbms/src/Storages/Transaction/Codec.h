@@ -103,11 +103,7 @@ inline UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 
 inline UInt32 decodeUInt32(size_t & cursor, const String & raw_value)
 {
-    UInt32 res =
-            ((unsigned char)(raw_value[cursor + 3]) << 24) +
-            ((unsigned char)(raw_value[cursor + 2]) << 16) +
-            ((unsigned char)(raw_value[cursor + 1]) << 8) +
-            ((unsigned char)(raw_value[cursor + 0]) << 0);
+    UInt32 res = *(reinterpret_cast<const UInt32 *>(raw_value.data() + cursor));
     cursor += 4;
 
     return res;
@@ -115,10 +111,11 @@ inline UInt32 decodeUInt32(size_t & cursor, const String & raw_value)
 
 
 inline String DecodeJson(size_t &cursor, const String &raw_value) {
-    raw_value[cursor++]; // type
+    raw_value[cursor++]; // JSON Root element type
     decodeUInt32(cursor, raw_value); // elementCount
     size_t size = decodeUInt32(cursor, raw_value);
     cursor += (size < 8 ? 0 : (size - 8));
+
     return String();
 }
 
