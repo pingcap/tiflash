@@ -101,6 +101,27 @@ inline UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
     throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
 }
 
+inline UInt32 decodeUInt32(size_t & cursor, const String & raw_value)
+{
+    UInt32 res =
+            ((unsigned char)(raw_value[cursor + 3]) << 24) +
+            ((unsigned char)(raw_value[cursor + 2]) << 16) +
+            ((unsigned char)(raw_value[cursor + 1]) << 8) +
+            ((unsigned char)(raw_value[cursor + 0]) << 0);
+    cursor += 4;
+
+    return res;
+}
+
+
+inline String DecodeJson(size_t &cursor, const String &raw_value) {
+    raw_value[cursor++]; // type
+    decodeUInt32(cursor, raw_value);
+    size_t size = decodeUInt32(cursor, raw_value);
+    cursor += (size - 8);
+    return String();
+}
+
 inline Int64 DecodeVarInt(size_t & cursor, const String & raw_value)
 {
     UInt64 v = DecodeVarUInt(cursor, raw_value);
@@ -115,6 +136,7 @@ inline String DecodeCompactBytes(size_t & cursor, const String & raw_value)
     cursor += size;
     return res;
 }
+
 
 inline Int8 getWords(PrecType prec, ScaleType scale)
 {
@@ -236,6 +258,8 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
             throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDecimal:
             return DecodeDecimal(cursor, raw_value);
+        case TiDB::CodecFlagJson:
+            return DecodeJson(cursor, raw_value);
         default:
             throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }
