@@ -114,29 +114,22 @@ void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const Str
     auto orig_table_info = storage->getTableInfo();
     auto alter_commands = detectSchemaChanges(log, *table_info, orig_table_info);
 
-    if (!alter_commands.empty())
+    std::stringstream ss;
+    ss << "Detected schema changes: ";
+    for (const auto & command : alter_commands)
     {
-        std::stringstream ss;
-        ss << "Detected schema changes: ";
-        for (const auto & command : alter_commands)
-        {
-            // TODO: Other command types.
-            if (command.type == AlterCommand::ADD_COLUMN)
-                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-            else if (command.type == AlterCommand::DROP_COLUMN)
-                ss << "DROP COLUMN " << command.column_name << ", ";
-            else if (command.type == AlterCommand::MODIFY_COLUMN)
-                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-        }
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
+        // TODO: Other command types.
+        if (command.type == AlterCommand::ADD_COLUMN)
+            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+        else if (command.type == AlterCommand::DROP_COLUMN)
+            ss << "DROP COLUMN " << command.column_name << ", ";
+        else if (command.type == AlterCommand::MODIFY_COLUMN)
+            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+    }
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
-        // Call storage alter to apply schema changes.
-        storage->alterForTMT(alter_commands, *table_info, db_name, context);
-    }
-    else
-    {
-        storage->setTableInfo(*table_info);
-    }
+    // Call storage alter to apply schema changes.
+    storage->alterForTMT(alter_commands, *table_info, db_name, context);
 
     if (table_info->is_partition_table)
     {
