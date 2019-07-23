@@ -1,5 +1,6 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
+#include <Core/TMTPKType.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Storages/ColumnsDescription.h>
@@ -75,9 +76,9 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         column_map[handle_col_id].first->reserve(data_list.size());
     }
 
-    bool pk_is_uint64 = false;
+    const bool pk_is_uint64 = getTMTPKType(*column_map[handle_col_id].second.type) == TMTPKType::UINT64;
 
-    if (typeid_cast<const DataTypeUInt64 *>(column_map[handle_col_id].second.type.get()))
+    if (pk_is_uint64)
     {
         size_t ori_size = data_list.size();
         std::ignore = ori_size;

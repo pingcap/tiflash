@@ -53,6 +53,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
+#include <Storages/MergeTree/TMTDataPartProperty.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -146,6 +147,18 @@ static RelativeSize convertAbsoluteSampleSizeToRelative(const ASTPtr & node, siz
 
     auto absolute_sample_size = node_sample.ratio.numerator / node_sample.ratio.denominator;
     return std::min(RelativeSize(1), RelativeSize(absolute_sample_size) / RelativeSize(approx_total_rows));
+}
+
+TMTPKType getTMTPKType(const IDataType & rhs)
+{
+    static const DataTypeInt64 & dataTypeInt64 = {};
+    static const DataTypeUInt64 & dataTypeUInt64 = {};
+
+    if (rhs.equals(dataTypeInt64))
+        return TMTPKType::INT64;
+    else if (rhs.equals(dataTypeUInt64))
+        return TMTPKType::UINT64;
+    return TMTPKType::UNSPECIFIED;
 }
 
 BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_to_return,
@@ -248,12 +261,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         ;
     else if (!select.no_kvstore)
     {
-        const auto pk_family_name = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
-
-        if (std::strcmp(pk_family_name, TypeName<UInt64>::get()) == 0)
-            pk_type = TMTPKType::UINT64;
-        else if (std::strcmp(pk_family_name, TypeName<Int64>::get()) == 0)
-            pk_type = TMTPKType::INT64;
+        pk_type = getTMTPKType(*data.primary_key_data_types[0]);
 
         TMTContext & tmt = context.getTMTContext();
 
@@ -370,9 +378,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                auto [block, status] = RegionTable::getBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
+                auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
                     kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
-                    mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
+                    mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, log);
 
                 if (status != RegionTable::OK)
                 {
@@ -855,7 +863,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 std::sort(handle_ranges.begin(), handle_ranges.end(),
                     [](const UInt64RangeElement & a, const UInt64RangeElement & b) { return a.first < b.first; });
 
-                computeHandleRenges<UInt64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<UInt64>(region_group_mem_block[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_u64_handle_ranges[thread_idx],
@@ -879,7 +887,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 // handle_ranges is sorted.
 
-                computeHandleRenges<Int64>(region_group_mem_block[thread_idx],
+                computeHandleRanges<Int64>(region_group_mem_block[thread_idx],
                     handle_ranges,
                     region_group_range_parts[thread_idx],
                     region_group_handle_ranges[thread_idx],
@@ -1043,7 +1051,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                         for (const RangesInDataPart & part : parts_with_ranges)
                         {
-                            MarkRanges mark_ranges = markRangesFromRegionRange<UInt64>(part.data_part->index, handle_range.first,
+                            MarkRanges mark_ranges = markRangesFromRegionRange<UInt64>(*part.data_part, handle_range.first,
                                 handle_range.second, part.ranges, computeMinMarksForSeek(settings, data), settings);
 
                             if (mark_ranges.empty())

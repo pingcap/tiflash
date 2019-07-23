@@ -30,7 +30,7 @@
 │    1204 │
 └─────────┘
 
-=> selraw nokvstore count(*) from default.test
+=> selraw nokvstore count(*) from default.test " --schema_version "100
 ┌─count()─┐
 │       0 │
 └─────────┘
