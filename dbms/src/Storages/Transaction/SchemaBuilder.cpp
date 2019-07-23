@@ -2,9 +2,11 @@
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
+#include <Interpreters/InterpreterRenameQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/parseQuery.h>
@@ -86,6 +88,7 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
     {
         const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
             // TODO: Check primary key.
+            // TODO: Support Rename Column;
             return column_info_.id == orig_column_info.id && column_info_.tp != orig_column_info.tp;
         });
 
@@ -201,11 +204,14 @@ void SchemaBuilder::applyDiff(const SchemaDiff & diff)
         case SchemaActionAddColumn:
         case SchemaActionDropColumn:
         case SchemaActionModifyColumn:
-        case SchemaActionRenameTable:
         case SchemaActionSetDefaultValue:
         {
             applyAlterTable(di, diff.table_id);
             break;
+        }
+        case SchemaActionRenameTable:
+        {
+            applyRenameTable(di, diff.old_schema_id, diff.table_id);
         }
         case SchemaActionAddTablePartition:
         {
@@ -232,6 +238,66 @@ void SchemaBuilder::applyDiff(const SchemaDiff & diff)
     {
         applyCreateTable(di, newTableID);
     }
+}
+
+void SchemaBuilder::applyRenameTable(DBInfoPtr db_info, DatabaseID old_db_id, TableID table_id)
+{
+    DBInfoPtr old_db_info;
+    if (db_info->id == old_db_id)
+    {
+        old_db_info = db_info;
+    }
+    else
+    {
+        auto db = getter.getDatabase(old_db_id);
+        if (db == nullptr)
+        {
+            throw Exception("miss old db id " + std::to_string(old_db_id));
+        }
+        old_db_info = db;
+    }
+
+    auto table_info = getter.getTableInfo(db_info->id, table_id);
+    if (table_info == nullptr)
+    {
+        throw Exception("miss old table id in TiKV " + std::to_string(table_id));
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto storage_to_rename = tmt_context.getStorages().get(table_id).get();
+    if (storage_to_rename == nullptr)
+    {
+        throw Exception("miss old table id in Flash " + std::to_string(table_id));
+    }
+
+    applyRenameTableImpl(old_db_info->name, db_info->name, storage_to_rename->getTableName(), table_info->name);
+}
+
+void SchemaBuilder::applyRenameTableImpl(const String & old_db, const String & new_db, const String & old_table, const String & new_table)
+{
+    if (old_db == new_db && old_table == new_table)
+    {
+        LOG_INFO(log, "The " + old_db + "." + old_table + " has been renamed, nothing needs to do");
+        return;
+    }
+
+    auto rename = std::make_shared<ASTRenameQuery>();
+
+    ASTRenameQuery::Table from;
+    from.database = old_db;
+    from.table = old_table;
+
+    ASTRenameQuery::Table to;
+    to.database = new_db;
+    to.table = new_table;
+
+    ASTRenameQuery::Element elem;
+    elem.from = from;
+    elem.to = to;
+
+    rename->elements.emplace_back(elem);
+
+    InterpreterRenameQuery(rename, context).execute();
 }
 
 bool SchemaBuilder::applyCreateSchema(DatabaseID schema_id)
