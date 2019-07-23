@@ -41,15 +41,16 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
         throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
     ColumnsDescription columns
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+    auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns);
+    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso);
 
     std::stringstream ss;
     ss << "mock table #" << table_id;
     output(ss.str());
 }
 
-void MockTiDBTable::dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3)
         throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
@@ -57,8 +58,9 @@ void MockTiDBTable::dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGIn
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     const String & partition_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+    auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID partition_id = MockTiDB::instance().newPartition(database_name, table_name, partition_name);
+    TableID partition_id = MockTiDB::instance().newPartition(database_name, table_name, partition_name, tso);
 
     std::stringstream ss;
     ss << "mock partition #" << partition_id;

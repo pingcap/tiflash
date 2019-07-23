@@ -104,7 +104,7 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
     return column_info;
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -133,6 +133,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
 
     table_info.pk_is_handle = false;
     table_info.comment = "Mocked.";
+    table_info.update_timestamp = tso;
 
     auto table = std::make_shared<Table>(database_name, table_name, std::move(table_info));
     tables_by_id.emplace(table->table_info.id, table);
@@ -141,7 +142,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     return table->table_info.id;
 }
 
-TableID MockTiDB::newPartition(const String & database_name, const String & table_name, const String & partition_name)
+TableID MockTiDB::newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -162,6 +163,7 @@ TableID MockTiDB::newPartition(const String & database_name, const String & tabl
     partition_def.id = partition_id;
     partition_def.name = partition_name;
     table_info.partition.definitions.emplace_back(partition_def);
+    table_info.update_timestamp = tso;
 
     // Map the same table object with partition ID as key, so mock schema syncer behaves the same as TiDB,
     // i.e. gives the table info by partition ID.
