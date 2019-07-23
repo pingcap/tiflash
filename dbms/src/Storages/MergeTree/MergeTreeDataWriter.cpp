@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
+#include <Storages/MergeTree/TMTDataPartProperty.h>
 #include <Common/escapeForFileName.h>
 #include <Common/HashTable/HashMap.h>
 #include <Interpreters/AggregationCommon.h>
@@ -162,7 +163,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
     Int64 temp_index = data.insert_increment.get();
 
     MergeTreeDataPart::MinMaxIndex minmax_idx;
+    TMTDataPartProperty tmt_prop;
+
     minmax_idx.update(block, data.minmax_idx_columns);
+
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        tmt_prop.update(block, data.getPrimarySortDescription()[0].column_name);
 
     MergeTreePartition partition(std::move(block_with_partition.partition));
 
@@ -189,6 +195,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(BlockWithPa
     MergeTreeData::MutableDataPartPtr new_data_part = std::make_shared<MergeTreeData::DataPart>(data, part_name, new_part_info);
     new_data_part->partition = std::move(partition);
     new_data_part->minmax_idx = std::move(minmax_idx);
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        *new_data_part->tmt_property = std::move(tmt_prop);
     new_data_part->relative_path = TMP_PREFIX + part_name;
     new_data_part->is_temp = true;
 
