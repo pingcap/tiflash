@@ -542,7 +542,6 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
             {
                 if (rec.type == WriteBatch::WriteType::REF && current->isRefExists(rec.page_id, rec.ori_page_id))
                 {
-
                     batch.putRefPage(rec.page_id, rec.ori_page_id);
                     num_valid_ref_pages += 1;
                 }

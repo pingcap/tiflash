@@ -11,19 +11,26 @@ namespace DB
 
 std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(const PageEntriesEdit & edit)
 {
-
     std::unique_lock lock(read_mutex);
 
-    // apply edit on base
-    PageEntryMapDeltaVersionSet::VersionPtr v;
+    if (current.use_count() == 1)
     {
-        auto                     base_view = std::make_shared<PageEntryMapView>(this, current);
-        PageEntryMapDeltaBuilder builder(base_view.get());
-        builder.gcApply(edit);
-        v = builder.build();
+        // If no readers, we could directly merge edits
+        BuilderType::gcApplyInplace(current, edit);
     }
+    else
+    {
+        // apply edit on base
+        PageEntryMapDeltaVersionSet::VersionPtr v;
+        {
+            auto                     base_view = std::make_shared<PageEntryMapView>(this, current);
+            PageEntryMapDeltaBuilder builder(base_view.get());
+            builder.gcApply(edit);
+            v = builder.build();
+        }
 
-    this->appendVersion(std::move(v));
+        this->appendVersion(std::move(v));
+    }
 
     return listAllLiveFiles();
 }
@@ -85,6 +92,26 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
     }
 }
 
+void PageEntryMapDeltaBuilder::applyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit)
+{
+    for (auto && rec : edit.getRecords())
+    {
+        switch (rec.type)
+        {
+        case WriteBatch::WriteType::PUT:
+            current->put(rec.page_id, rec.entry);
+            break;
+        case WriteBatch::WriteType::DEL:
+            current->del(rec.page_id);
+            break;
+        case WriteBatch::WriteType::REF:
+            // Shorten ref-path in case there is RefPage to RefPage
+            current->ref(rec.page_id, rec.ori_page_id);
+            break;
+        }
+    }
+}
+
 void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
 {
     for (const auto & rec : edit.getRecords())
@@ -117,10 +144,44 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
     }
 }
 
-void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
-    const PageEntryMapDeltaVersionSet::VersionPtr & base,
-    const PageEntryMapDeltaVersionSet::VersionPtr & delta)
+void PageEntryMapDeltaBuilder::gcApplyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit)
 {
+    for (const auto & rec : edit.getRecords())
+    {
+        if (rec.type != WriteBatch::WriteType::PUT)
+        {
+            continue;
+        }
+        // Gc only apply PUT for updating page entries
+        try
+        {
+            auto old_page_entry = current->find(rec.page_id); // this may throw an exception if ref to non-exist page
+            // If the gc page have already been removed, just ignore it
+            if (old_page_entry == nullptr)
+            {
+                continue;
+            }
+            // In case of page being updated during GC process.
+            if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
+            {
+                // no new page write to `page_entry_map`, replace it with gc page
+                current->put(rec.page_id, rec.entry);
+            }
+            // else new page written by another thread, gc page is replaced. leave the page for next gc
+        }
+        catch (DB::Exception & e)
+        {
+            // just ignore and continue
+        }
+    }
+}
+
+PageEntryMapDeltaVersionSet::VersionPtr
+PageEntryMapDeltaBuilder::compactDeltaAndBase(const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
+                                              PageEntryMapDeltaVersionSet::VersionPtr &       delta)
+{
+    PageEntryMapDeltaVersionSet::VersionPtr base = PageEntryMapBase::createBase();
+    base->copyEntries(*old_base);
     // apply deletions
     for (auto pid : delta->page_deletions)
     {
@@ -140,15 +201,6 @@ void PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace( //
     }
 
     delta->clear();
-}
-
-PageEntryMapDeltaVersionSet::VersionPtr
-PageEntryMapDeltaBuilder::compactDeltaAndBase(const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
-                                              PageEntryMapDeltaVersionSet::VersionPtr &       delta)
-{
-    PageEntryMapDeltaVersionSet::VersionPtr base = PageEntryMapBase::createBase();
-    base->copyEntries(*old_base);
-    mergeDeltaToBaseInplace(base, delta);
     return base;
 }
 
@@ -184,14 +236,6 @@ PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas(
     }
 
     return tmp;
-}
-
-bool PageEntryMapDeltaBuilder::needCompactToBase(const ::DB::MVCC::VersionSetConfig &            config,
-                                                 const PageEntryMapDeltaVersionSet::VersionPtr & delta)
-{
-    assert(!delta->isBase());
-    return delta->numDeletions() >= config.compact_hint_delta_deletions //
-        || delta->numEntries() >= config.compact_hint_delta_entries;
 }
 
 ////  PageEntryMapView

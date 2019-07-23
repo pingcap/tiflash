@@ -52,18 +52,28 @@ public:
 
     PageEntryMapDeltaVersionSet::VersionPtr build() { return v; }
 
-    static void mergeDeltaToBaseInplace(const PageEntryMapDeltaVersionSet::VersionPtr & base,
-                                        const PageEntryMapDeltaVersionSet::VersionPtr & delta);
+    static void applyInplace( //
+        const PageEntryMapDeltaVersionSet::VersionPtr & current,
+        const PageEntriesEdit &                         edit);
+
+    static void gcApplyInplace(//
+        const PageEntryMapDeltaVersionSet::VersionPtr & current,
+        const PageEntriesEdit & edit);
 
     // Functions used when view release and do compact on version-list
 
     static PageEntryMapDeltaVersionSet::VersionPtr //
     compactDeltas(const PageEntryMapDeltaVersionSet::VersionPtr & tail);
 
-    static bool        //
+    inline static bool //
     needCompactToBase( //
         const ::DB::MVCC::VersionSetConfig &            config,
-        const PageEntryMapDeltaVersionSet::VersionPtr & delta);
+        const PageEntryMapDeltaVersionSet::VersionPtr & delta)
+    {
+        assert(!delta->isBase());
+        return delta->numDeletions() >= config.compact_hint_delta_deletions //
+            || delta->numEntries() >= config.compact_hint_delta_entries;
+    }
 
     static PageEntryMapDeltaVersionSet::VersionPtr //
     compactDeltaAndBase(                           //

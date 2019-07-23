@@ -78,9 +78,9 @@ public:
 };
 
 
-template <                  //
-    typename Version_t,     //
-    typename VersionView_t, //
+template < //
+    typename Version_t,
+    typename VersionView_t,
     typename VersionEdit_t,
     typename Builder_t>
 class VersionDeltaSet
@@ -121,33 +121,22 @@ public:
     {
         std::unique_lock read_lock(read_mutex);
 
-        // TODO if no readers, we could not generate a view?
-        // apply edit base on base_view
-        VersionPtr v;
-        {
-            auto      base_view = std::make_shared<VersionView_t>(this, current);
-            Builder_t builder(base_view.get());
-            builder.apply(edit);
-            v = builder.build();
-        }
-
         if (current.use_count() == 1)
         {
-            if (current->isBase() && current.use_count() == 1)
-            {
-                // merge new delta to base version
-                std::cerr << "merge to base" << std::endl;
-                Builder_t::mergeDeltaToBaseInplace(current, std::move(v));
-            }
-            else
-            {
-                // merge new delta to current version
-                std::cerr << "merge to prev delta" << std::endl;
-                current->merge(*v);
-            }
+            // If no readers, we could directly merge edits.
+            BuilderType::applyInplace(current, edit);
         }
         else
         {
+            // There are reader(s) on current, generate new delta version and append to version-list
+            VersionPtr v;
+            {
+                auto      base_view = std::make_shared<VersionView_t>(this, current);
+                Builder_t builder(base_view.get());
+                builder.apply(edit);
+                v = builder.build();
+            }
+
             appendVersion(std::move(v));
         }
     }
