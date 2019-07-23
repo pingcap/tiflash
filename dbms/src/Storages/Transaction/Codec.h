@@ -116,9 +116,9 @@ inline UInt32 decodeUInt32(size_t & cursor, const String & raw_value)
 
 inline String DecodeJson(size_t &cursor, const String &raw_value) {
     raw_value[cursor++]; // type
-    decodeUInt32(cursor, raw_value);
+    decodeUInt32(cursor, raw_value); // elementCount
     size_t size = decodeUInt32(cursor, raw_value);
-    cursor += (size - 8);
+    cursor += (size < 8 ? 0 : (size - 8));
     return String();
 }
 
