@@ -1,6 +1,8 @@
 t> create table test.t(s varchar(256), i int);
 t> insert into test.t values('Hello world', 666);
 
+#SLEEP 3
+
 => select * from test.t
 ┌─s───────────┬───i─┬─_tidb_rowid─┐
 │ Hello world │ 666 │           1 │

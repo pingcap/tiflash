@@ -2,11 +2,13 @@
 
 import os
 import sys
+import time
 
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
 CMD_PREFIX_TIDB = 't> '
 RETURN_PREFIX = '#RETURN'
+SLEEP_PREFIX = '#SLEEP '
 TODO_PREFIX = '#TODO'
 COMMENT_PREFIX = '#'
 UNFINISHED_1_PREFIX = '\t'
@@ -142,6 +144,8 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
                     cached += ' '
                 cached += line
                 continue
+            if line.startswith(SLEEP_PREFIX):
+                time.sleep(float(line[len(SLEEP_PREFIX):]))
             if line.startswith(CMD_PREFIX_TIDB):
                 executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
             if cached != None and not matcher.on_line(cached):
