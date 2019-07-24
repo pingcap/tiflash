@@ -212,6 +212,23 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     return Decimal(value, prec, frac);
 }
 
+inline UInt32 decodeUInt32(size_t & cursor, const String & raw_value)
+{
+    UInt32 res = *(reinterpret_cast<const UInt32 *>(raw_value.data() + cursor));
+    cursor += 4;
+    return res;
+}
+
+inline String DecodeJson(size_t &cursor, const String &raw_value)
+{
+    raw_value[cursor++]; // JSON Root element type
+    decodeUInt32(cursor, raw_value); // elementCount
+    size_t size = decodeUInt32(cursor, raw_value);
+    cursor += (size < 8 ? 0 : (size - 8));
+
+    return String();
+}
+
 inline Field DecodeDatum(size_t & cursor, const String & raw_value)
 {
     switch (raw_value[cursor++])
@@ -236,6 +253,8 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
             throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDecimal:
             return DecodeDecimal(cursor, raw_value);
+        case TiDB::CodecFlagJson:
+            return DecodeJson(cursor, raw_value);
         default:
             throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }
