@@ -40,15 +40,26 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() con
     // Iterate all snapshot to collect all PageFile in used.
     for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
     {
-        for (auto v = s->version()->tail; v != nullptr; v = v->prev)
+        collectLiveFilesFromVersionList(s->version()->tail, liveFiles);
+    }
+    // Iterate over `current`
+    collectLiveFilesFromVersionList(current, liveFiles);
+    return liveFiles;
+}
+
+void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList(VersionPtr v, std::set<PageFileIdAndLevel> &liveFiles) const
+{
+    for (; v != nullptr; v = v->prev)
+    {
+        for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
         {
-            for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
+            // ignore if it is a tombstone entry
+            if (it->second.ref != 0)
             {
                 liveFiles.insert(it->second.fileIdLevel());
             }
         }
     }
-    return liveFiles;
 }
 
 ////  PageEntryMapDeltaBuilder
@@ -104,9 +115,9 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
         }
         case WriteBatch::WriteType::DEL:
         {
+            const PageId normal_page_id = base->resolveRefId(rec.page_id);
             v->ref_deletions.insert(rec.page_id);
             v->page_ref.erase(rec.page_id);
-            const PageId normal_page_id = base->resolveRefId(rec.page_id);
             this->decreasePageRef(normal_page_id);
             break;
         }
@@ -417,7 +428,7 @@ PageId PageEntryMapView::resolveRefId(PageId page_id) const
     {
         if (node->isDeleted(page_id))
         {
-            return false;
+            return page_id;
         }
         auto [is_ref, ori_ref_id] = node->isRefId(page_id);
         if (is_ref)

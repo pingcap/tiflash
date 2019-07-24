@@ -34,6 +34,9 @@ public:
 
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
+
+private:
+    void collectLiveFilesFromVersionList(VersionPtr tail, std::set<PageFileIdAndLevel> &liveFiles) const;
 };
 
 class PageEntryMapDeltaBuilder

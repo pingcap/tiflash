@@ -129,19 +129,6 @@ public:
         current.reset();
     }
 
-    void restore(VersionPtr && v)
-    {
-        std::unique_lock read_lock(read_mutex);
-        // check should only call when there is nothing
-        assert(current->empty());
-        assert(current->isBase());
-        assert(current->prev == nullptr);
-        v->is_base = true;
-        current.swap(v);
-        v.reset();
-        assert(current->isBase());
-    }
-
     void apply(VersionEdit_t & edit)
     {
         std::unique_lock read_lock(read_mutex);
