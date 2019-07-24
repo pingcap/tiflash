@@ -8,7 +8,7 @@ CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
 CMD_PREFIX_TIDB = 't> '
 RETURN_PREFIX = '#RETURN'
-SLEEP_PREFIX = '#SLEEP '
+SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
 COMMENT_PREFIX = '#'
 UNFINISHED_1_PREFIX = '\t'
@@ -100,15 +100,20 @@ def matched(outputs, matches, fuzz):
         return True
 
 class Matcher:
-    def __init__(self, executor, fuzz):
+    def __init__(self, executor, executor_tidb, fuzz):
         self.executor = executor
+        self.executor_tidb = executor_tidb
         self.fuzz = fuzz
         self.query = None
         self.outputs = None
         self.matches = []
 
     def on_line(self, line):
-        if line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
+        if line.startswith(SLEEP_PREFIX):
+            time.sleep(float(line[len(SLEEP_PREFIX):]))
+        elif line.startswith(CMD_PREFIX_TIDB):
+            self.executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
+        elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
             if self.outputs != None and not matched(self.outputs, self.matches, self.fuzz):
                 return False
             self.query = line[len(CMD_PREFIX):]
@@ -128,12 +133,10 @@ class Matcher:
 def parse_exe_match(path, executor, executor_tidb, fuzz):
     todos = []
     with open(path) as file:
-        matcher = Matcher(executor, fuzz)
+        matcher = Matcher(executor, executor_tidb, fuzz)
         cached = None
         for origin in file:
             line = origin.strip()
-            if line.startswith(SLEEP_PREFIX):
-                time.sleep(float(line[len(SLEEP_PREFIX):]))
             if line.startswith(RETURN_PREFIX):
                 break
             if line.startswith(TODO_PREFIX):
@@ -145,9 +148,6 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
                 if cached[-1] == ',':
                     cached += ' '
                 cached += line
-                continue
-            if line.startswith(CMD_PREFIX_TIDB):
-                executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
                 continue
             if cached != None and not matcher.on_line(cached):
                 return False, matcher, todos
