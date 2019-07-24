@@ -85,7 +85,7 @@ void RegionTable::writeBlockByRegion(
         /// Write block into storage.
         start_time = Clock::now();
         TxnMergeTreeBlockOutputStream output(*storage);
-        output.write(block);
+        output.write(std::move(block));
         write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
         /// Move read data to outer to remove.
@@ -198,7 +198,7 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
         __PRETTY_FUNCTION__ << ": table " << table_info.id << ", region " << region->id() << ", cost [wait index " << wait_index_cost
                             << ", region read " << region_read_cost << ", region decode " << region_decode_cost << "] ms");
 
-    return {block, OK};
+    return {std::move(block), OK};
 }
 
 } // namespace DB

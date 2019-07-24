@@ -336,7 +336,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         }
     }
 
-    return std::make_tuple(block, true);
+    return std::make_tuple(std::move(block), true);
 }
 
 } // namespace DB
