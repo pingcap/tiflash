@@ -73,7 +73,7 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
         {
         case WriteBatch::WriteType::PUT:
         {
-            v->page_deletions.erase(rec.page_id);
+            v->ref_deletions.erase(rec.page_id);
             const PageId normal_page_id = base->resolveRefId(rec.page_id);
             bool is_ref_exist = base->isRefExists(rec.page_id, normal_page_id);
             if (!is_ref_exist)
@@ -99,7 +99,7 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
         }
         case WriteBatch::WriteType::DEL:
         {
-            v->page_deletions.insert(rec.page_id);
+            v->ref_deletions.insert(rec.page_id);
             v->page_ref.erase(rec.page_id);
             const PageId normal_page_id = base->resolveRefId(rec.page_id);
             this->decreasePageRef(normal_page_id);
@@ -107,7 +107,7 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
         }
         case WriteBatch::WriteType::REF:
         {
-            v->page_deletions.insert(rec.page_id);
+            v->ref_deletions.erase(rec.page_id);
             // Shorten ref-path in case there is RefPage to RefPage
             const PageId normal_page_id = base->resolveRefId(rec.ori_page_id);
             auto old_entry = base->findNormalPageEntry(normal_page_id);
@@ -225,24 +225,9 @@ PageEntryMapDeltaBuilder::compactDeltaAndBase(const PageEntryMapDeltaVersionSet:
 {
     PageEntryMapDeltaVersionSet::VersionPtr base = PageEntryMapBase::createBase();
     base->copyEntries(*old_base);
-    // apply deletions
-    for (auto pid : delta->page_deletions)
-    {
-        base->del(pid);
-    }
-
-    // apply new pages. Note should not auto gen ref
-    for (auto && iter : delta->normal_pages)
-    {
-        base->put(iter.first, iter.second, false);
-    }
-
-    // apply new ref
-    for (auto && ref_pair : delta->page_ref)
-    {
-        base->ref(ref_pair.first, ref_pair.second);
-    }
-
+    // apply delta edits
+    delta->prev = base;
+    base->merge(*delta);
     delta->clear();
     return base;
 }
@@ -441,7 +426,7 @@ std::set<PageId> PageEntryMapView::validPageIds() const
     {
         if (!(*node_iter)->isBase())
         {
-            for (auto deleted_id : (*node_iter)->page_deletions)
+            for (auto deleted_id : (*node_iter)->ref_deletions)
             {
                 valid_pages.erase(deleted_id);
             }
@@ -467,7 +452,7 @@ std::set<PageId> PageEntryMapView::validNormalPageIds() const
     {
         if (!(*node_iter)->isBase())
         {
-            for (auto deleted_id : (*node_iter)->page_deletions)
+            for (auto deleted_id : (*node_iter)->ref_deletions)
             {
                 valid_normal_pages.erase(deleted_id);
             }

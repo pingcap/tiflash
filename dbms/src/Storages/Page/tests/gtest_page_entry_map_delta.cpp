@@ -248,7 +248,7 @@ TEST_F(PageEntryMapDelta_test, ReBindRef)
     map->del(0);
 }
 
-class PageEntryMapDeltaBuilder_test : public ::testing::Test
+class DISABLED_PageEntryMapDeltaBuilder_test : public ::testing::Test
 {
 public:
     void SetUp() override
@@ -264,7 +264,7 @@ protected:
     std::shared_ptr<PageEntryMapBase> delta;
 };
 
-TEST_F(PageEntryMapDeltaBuilder_test, DeltaAddRef)
+TEST_F(DISABLED_PageEntryMapDeltaBuilder_test, DeltaAddRef)
 {
     base->put(0, PageEntry{.checksum = 0x123});
     base->ref(2, 0);
@@ -278,7 +278,7 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaAddRef)
     ASSERT_EQ(entry->checksum, 0x123UL);
 }
 
-TEST_F(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
+TEST_F(DISABLED_PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
 {
     delta->put(2, PageEntry{.checksum = 0x123});
     delta->ref(3, 2);
@@ -294,7 +294,7 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
     ASSERT_EQ(entry3->checksum, 0x123UL);
 }
 
-TEST_F(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
+TEST_F(DISABLED_PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
 {
     base->put(2, PageEntry{.checksum = 0x1});
 

@@ -25,7 +25,7 @@ template <typename T>
 class PageEntryMapBaseDelta_t
 {
 public:
-    explicit PageEntryMapBaseDelta_t(bool is_base_) : normal_pages(), page_ref(), max_page_id(0), is_base(is_base_), page_deletions() {}
+    explicit PageEntryMapBaseDelta_t(bool is_base_) : normal_pages(), page_ref(), ref_deletions(), max_page_id(0), is_base(is_base_) {}
 
 public:
     static std::shared_ptr<T> createBase() { return std::make_shared<T>(true); }
@@ -59,7 +59,7 @@ public:
         }
         else
         {
-            return normal_pages.empty() && page_ref.empty() && page_deletions.empty();
+            return normal_pages.empty() && page_ref.empty() && ref_deletions.empty();
         }
     }
 
@@ -70,10 +70,7 @@ public:
      */
     void put(PageId page_id, const PageEntry & entry, bool auto_gen_ref = true)
     {
-        if (!is_base)
-        {
-            page_deletions.erase(page_id);
-        }
+        assert(is_base); // can only call by base
         const PageId normal_page_id = resolveRefId(page_id);
 
         // update ref-pairs
@@ -147,38 +144,24 @@ public:
         return {ref_pair->second != page_id, ref_pair->second};
     }
 
-    bool isDeleted(PageId page_id) const { return page_deletions.count(page_id) > 0; }
+    bool isDeleted(PageId page_id) const { return ref_deletions.count(page_id) > 0; }
 
     inline void clear()
     {
         page_ref.clear();
         normal_pages.clear();
         max_page_id = 0;
-        page_deletions.clear();
+        ref_deletions.clear();
     }
 
     size_t size() const { return page_ref.size(); }
 
     PageId maxId() const { return max_page_id; }
 
-    void merge(PageEntryMapBaseDelta_t & rhs)
-    {
-        if (!is_base)
-        {
-            for (auto it : rhs.page_deletions)
-                this->del<false>(it);
-            for (auto it : rhs.page_ref)
-                this->page_ref[it.first] = it.second;
-            for (auto it : rhs.normal_pages)
-                this->normal_pages[it.first] = it.second;
-            this->max_page_id = std::max(this->max_page_id, rhs.max_page_id);
-        }
-    }
-
     size_t numDeletions() const
     {
         assert(!isBase()); // should only call by delta
-        return page_deletions.size();
+        return ref_deletions.size();
     }
 
     size_t numRefEntries() const { return page_ref.size(); }
@@ -209,7 +192,7 @@ private:
         page_ref       = rhs.page_ref;
         normal_pages   = rhs.normal_pages;
         max_page_id    = rhs.max_page_id;
-        page_deletions = rhs.page_deletions;
+        ref_deletions = rhs.ref_deletions;
     }
 
 public:
@@ -330,16 +313,14 @@ public:
     inline const_normal_page_iterator pages_cbegin() const { return normal_pages.cbegin(); }
     inline const_normal_page_iterator pages_cend() const { return normal_pages.cend(); }
 
-private:
+protected:
     std::unordered_map<PageId, PageEntry> normal_pages;
     std::unordered_map<PageId, PageId>    page_ref; // RefPageId -> PageId
+    // RefPageId deletions
+    std::unordered_set<PageId> ref_deletions;
 
     PageId max_page_id;
     bool   is_base;
-
-    // deletions
-    std::unordered_set<PageId> page_deletions;
-
 
 public:
     // no copying allowed
@@ -355,7 +336,7 @@ public:
             page_ref.swap(rhs.page_ref);
             max_page_id = rhs.max_page_id;
             is_base     = rhs.is_base;
-            page_deletions.swap(rhs.page_deletions);
+            ref_deletions.swap(rhs.ref_deletions);
         }
         return *this;
     }
@@ -374,10 +355,7 @@ template <typename T>
 template <bool must_exist>
 void PageEntryMapBaseDelta_t<T>::del(PageId page_id)
 {
-    if (!is_base)
-    {
-        page_deletions.insert(page_id);
-    }
+    assert(is_base); // can only call by base
     // Note: must resolve ref-id before erasing entry in `page_ref`
     const PageId normal_page_id = resolveRefId(page_id);
     page_ref.erase(page_id);
@@ -390,10 +368,7 @@ template <typename T>
 template <bool must_exist>
 void PageEntryMapBaseDelta_t<T>::ref(const PageId ref_id, const PageId page_id)
 {
-    if (!is_base)
-    {
-        page_deletions.erase(page_id);
-    }
+    assert(is_base); // can only call by base
     // if `page_id` is a ref-id, collapse the ref-path to actual PageId
     // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
     const PageId normal_page_id = resolveRefId(page_id);
@@ -468,6 +443,38 @@ public:
     explicit PageEntryMapBase(bool is_base_) : PageEntryMapBaseDelta_t(is_base_), ::DB::MVCC::MultiVersionDeltaCountable<PageEntryMapBase>()
     {
     }
+
+    void merge(PageEntryMapBase& rhs)
+    {
+        assert(!rhs.isBase()); // rhs must be delta
+        assert(this == rhs.prev.get());
+        for (auto page_id : rhs.ref_deletions)
+        {
+            page_ref.erase(page_id);
+            if (!is_base)
+            {
+                ref_deletions.insert(page_id);
+            }
+        }
+        for (auto it : rhs.page_ref)
+        {
+            page_ref[it.first] = it.second;
+        }
+        for (auto it : rhs.normal_pages)
+        {
+            if (it.second.ref == 0 && is_base)
+            {
+                // A tombstone of normal page, delete this page
+                normal_pages.erase(it.first);
+            }
+            else
+            {
+                normal_pages[it.first] = it.second;
+            }
+        }
+        max_page_id = std::max(max_page_id, rhs.max_page_id);
+    }
+
 };
 
 } // namespace DB
