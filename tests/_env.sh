@@ -14,6 +14,9 @@ export storage_server_config="../../running/config/config.xml"
 # Server address for connecting
 export storage_server="127.0.0.1"
 
+# Server port for connecting
+export storage_port="9000"
+
 # Default database for scripts
 export storage_db="default"
 

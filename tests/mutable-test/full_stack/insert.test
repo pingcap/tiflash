@@ -6,4 +6,3 @@ t> insert into test.t values('Hello world', 666);
 │ Hello world │ 666 │           1 │
 └─────────────┴─────┴─────────────┘
 
-    
