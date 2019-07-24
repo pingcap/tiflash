@@ -25,12 +25,12 @@
 │    1204 │
 └─────────┘
 
-=> selraw count(*) from default.test " --schema_version "100
+=> selraw count(*) from default.test
 ┌─count()─┐
 │    1204 │
 └─────────┘
 
-=> selraw nokvstore count(*) from default.test " --schema_version "100
+=> selraw nokvstore count(*) from default.test
 ┌─count()─┐
 │       0 │
 └─────────┘
