@@ -377,6 +377,13 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
     ASSERT_EQ(s4->version()->find(2), nullptr);
     ASSERT_EQ(s4->version()->at(3).checksum, 0xffUL);
     s4.reset();
+    ASSERT_EQ(s3->version()->at(2).checksum, 0xffUL);
+    ASSERT_EQ(s3->version()->at(3).checksum, 0xffUL);
+    s3.reset();
+
+    auto s5 = versions.getSnapshot();
+    ASSERT_EQ(s5->version()->find(2), nullptr);
+    ASSERT_EQ(s5->version()->at(3).checksum, 0xffUL);
 }
 
 TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)

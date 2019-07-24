@@ -30,7 +30,7 @@ public:
     }
 
 public:
-    std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
+    std::set<PageFileIdAndLevel> gcApply(PageEntriesEdit & edit);
 
 private:
     /// List all PageFile that are used by any version
@@ -48,7 +48,7 @@ public:
 
     void apply(PageEntriesEdit & edit);
 
-    void gcApply(const PageEntriesEdit & edit);
+    void gcApply(PageEntriesEdit & edit);
 
     static void applyInplace( //
         const PageEntryMapDeltaVersionSet::VersionPtr & current,
