@@ -118,7 +118,7 @@ void SchemaBuilder::applyAlterTableImpl(TiDB::TableInfoPtr table_info, const Str
     auto alter_commands = detectSchemaChanges(log, *table_info, orig_table_info);
 
     std::stringstream ss;
-    ss << "Detected schema changes: "<<db_name<<"."<<table_info->name<<"\n";
+    ss << "Detected schema changes: " << db_name << "." << table_info->name << "\n";
     for (const auto & command : alter_commands)
     {
         // TODO: Other command types.
