@@ -141,6 +141,23 @@ TEST(PageEntryMap_test, UpdateRefPageEntry)
     ASSERT_TRUE(map.empty());
 }
 
+TEST(PageEntryMap_test, UpdateRefPageEntry2)
+{
+    PageEntryMap map;
+    const PageEntry entry0{.checksum = 0xf};
+    map.put(0, entry0);
+    map.ref(1, 0);
+    map.del(0);
+    ASSERT_EQ(map.find(0), map.end());
+    ASSERT_EQ(map.at(1).checksum, 0xfUL);
+
+    // update Page0, both Page0 and RefPage1 got update
+    const PageEntry entry1{.checksum = 0x1};
+    map.put(0, entry1);
+    ASSERT_EQ(map.at(0).checksum, 0x1UL);
+    ASSERT_EQ(map.at(1).checksum, 0x1UL);
+}
+
 TEST(PageEntryMap_test, AddRefToNonExistPage)
 {
     PageEntryMap map;
