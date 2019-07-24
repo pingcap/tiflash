@@ -119,9 +119,7 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
 
     UInt64 wait_index_cost = -1, region_read_cost = -1, region_decode_cost = -1;
 
-    auto scanner = region->createCommittedScanner(table_info.id);
-
-    /// Blocking learner read.
+    /// Blocking learner read. Note that learner read must be performed ahead of data read, otherwise the desired index will be blocked by the lock of data read.
     {
         auto start_time = Clock::now();
         region->waitIndex(region->learnerRead());
@@ -137,34 +135,38 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
             return {BlockOption{}, VERSION_ERROR};
     }
 
-    /// Deal with locks.
-    {
-        if (resolve_locks)
-        {
-            LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
-            if (lock_info)
-            {
-                LockInfos lock_infos;
-                lock_infos.emplace_back(std::move(lock_info));
-                throw LockException(std::move(lock_infos));
-            }
-        }
-    }
-
-    /// Read raw KVs from region cache.
     RegionDataReadInfoList data_list_read;
     {
-        // Shortcut for empty region.
-        if (!scanner->hasNext())
-            return {BlockOption{}, OK};
-        // Tiny optimization for queries that need only handle, tso, delmark.
-        bool need_value = column_names_to_read.size() != 3;
-        auto start_time = Clock::now();
-        do
+        auto scanner = region->createCommittedScanner(table_info.id);
+
+        /// Deal with locks.
         {
-            data_list_read.emplace_back(scanner->next(need_value));
-        } while (scanner->hasNext());
-        region_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+            if (resolve_locks)
+            {
+                LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
+                if (lock_info)
+                {
+                    LockInfos lock_infos;
+                    lock_infos.emplace_back(std::move(lock_info));
+                    throw LockException(std::move(lock_infos));
+                }
+            }
+        }
+
+        /// Read raw KVs from region cache.
+        {
+            // Shortcut for empty region.
+            if (!scanner->hasNext())
+                return {BlockOption{}, OK};
+            // Tiny optimization for queries that need only handle, tso, delmark.
+            bool need_value = column_names_to_read.size() != 3;
+            auto start_time = Clock::now();
+            do
+            {
+                data_list_read.emplace_back(scanner->next(need_value));
+            } while (scanner->hasNext());
+            region_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        }
     }
 
     /// Read region data as block.
