@@ -131,7 +131,6 @@ public:
     /// append new version to version-list
     std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
 
-private:
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 };

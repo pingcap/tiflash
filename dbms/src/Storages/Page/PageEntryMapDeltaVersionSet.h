@@ -32,7 +32,6 @@ public:
 public:
     std::set<PageFileIdAndLevel> gcApply(PageEntriesEdit & edit);
 
-private:
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 };

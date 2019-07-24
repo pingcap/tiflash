@@ -35,12 +35,17 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(PageEntriesEdi
 
 std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() const
 {
+    // Note read_mutex must be hold.
     std::set<PageFileIdAndLevel> liveFiles;
-    for (auto v = current; v != nullptr; v = v->prev)
+    // Iterate all snapshot to collect all PageFile in used.
+    for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
     {
-        for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
+        for (auto v = s->version()->tail; v != nullptr; v = v->prev)
         {
-            liveFiles.insert(it->second.fileIdLevel());
+            for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
+            {
+                liveFiles.insert(it->second.fileIdLevel());
+            }
         }
     }
     return liveFiles;

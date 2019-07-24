@@ -57,28 +57,48 @@ public:
     // use vset's `rebase` to concat them.
     void release()
     {
-        if (tail == nullptr || tail->isBase())
-            return;
-        // do compact on delta
-        typename VersionSet_t::VersionPtr tmp = Builder_t::compactDeltas(tail);
-        if (tmp != nullptr)
+        do
         {
-            // rebase vset->current on `this->tail` to base on `tmp`
-            vset->rebase(tail, tmp);
-            // release tail ref on this view, replace with tmp
-            tail = tmp;
-            tmp.reset();
-        }
-        // do compact on base
-        bool is_compact_delta_to_base = Builder_t::needCompactToBase(vset->config, tail);
-        if (is_compact_delta_to_base)
+            if (tail == nullptr || tail->isBase())
+                break;
+            // If we can not found tail from `current` version-list, then other view has already
+            // do compaction on `tail` version, and we can just free that version
+            if (!isInCurrentVersionList())
+                break;
+            // do compact on delta
+            typename VersionSet_t::VersionPtr tmp = Builder_t::compactDeltas(tail);
+            if (tmp != nullptr)
+            {
+                // rebase vset->current on `this->tail` to base on `tmp`
+                vset->rebase(tail, tmp);
+                // release tail ref on this view, replace with tmp
+                tail = tmp;
+                tmp.reset();
+            }
+            // do compact on base
+            bool is_compact_delta_to_base = Builder_t::needCompactToBase(vset->config, tail);
+            if (is_compact_delta_to_base)
+            {
+                auto old_base = tail->prev;
+                assert(old_base != nullptr);
+                typename VersionSet_t::VersionPtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
+                // replace nodes [head, tail] -> new_base
+                vset->rebase(tail, new_base);
+            }
+        } while (0);
+        vset = nullptr;
+        tail.reset();
+    }
+
+private:
+    bool isInCurrentVersionList() const
+    {
+        for (auto node = vset->current; node != nullptr; node = node->prev)
         {
-            auto old_base = tail->prev;
-            assert(old_base != nullptr);
-            typename VersionSet_t::VersionPtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
-            // replace nodes [head, tail] -> new_base
-            vset->rebase(tail, new_base);
+            if (node == tail)
+                return true;
         }
+        return false;
     }
 };
 

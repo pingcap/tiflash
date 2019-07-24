@@ -440,6 +440,49 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
     ASSERT_EQ(p1, nullptr);
 }
 
+TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
+{
+    TypeParam versions(this->config_);
+
+    {
+        PageEntriesEdit edit;
+        edit.put(0, PageEntry{.file_id = 1, .level = 0});
+        edit.put(1, PageEntry{.file_id = 2, .level = 0});
+        edit.put(2, PageEntry{.file_id = 3, .level = 0});
+        versions.apply(edit);
+    }
+    auto s1 = versions.getSnapshot();
+    {
+        PageEntriesEdit edit;
+        edit.del(0);
+        edit.put(3, PageEntry{.file_id = 3, .level = 1});
+        versions.apply(edit);
+    }
+    auto s2 = versions.getSnapshot();
+    {
+        PageEntriesEdit edit;
+        edit.del(3);
+        versions.apply(edit);
+    }
+    auto s3 = versions.getSnapshot();
+    s3.reset();// do compact on version-list, and
+    auto livefiles = versions.listAllLiveFiles();
+    ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL);
+    ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL);
+    ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL);
+    ASSERT_EQ(livefiles.count(std::make_pair(3, 1)), 1UL);
+
+    s1.reset();
+    ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL);
+    ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL);
+    ASSERT_EQ(livefiles.count(std::make_pair(3, 1)), 1UL);
+
+    s2.reset();
+    ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL);
+    ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL);
+    ASSERT_EQ(livefiles.count(std::make_pair(3, 1)), 1UL);
+}
+
 REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            ApplyEdit,
                            ApplyEditWithReadLock,
@@ -451,7 +494,9 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            GcConcurrencySetPage,
                            UpdateOnRefPage,
                            UpdateOnRefPage2,
-                           Snapshot);
+                           Snapshot,
+                           LiveFiles
+                           );
 
 using VersionSetTypes = ::testing::Types<PageEntryMapVersionSet, PageEntryMapDeltaVersionSet>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);

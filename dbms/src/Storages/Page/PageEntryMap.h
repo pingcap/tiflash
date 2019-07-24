@@ -447,7 +447,6 @@ public:
     void merge(PageEntryMapBase& rhs)
     {
         assert(!rhs.isBase()); // rhs must be delta
-        assert(this == rhs.prev.get());
         for (auto page_id : rhs.ref_deletions)
         {
             page_ref.erase(page_id);
