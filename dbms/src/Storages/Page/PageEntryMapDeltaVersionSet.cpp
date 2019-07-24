@@ -120,12 +120,23 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
                         break;
                     this->decreasePageRef(old_normal_id);
                 }
+                v->page_ref[rec.page_id] = normal_page_id;
+                // increase entry's ref-count
+                auto new_entry = *old_entry;
+                new_entry.ref += 1;
+                v->normal_pages[rec.page_id] = new_entry;
             }
-            v->page_ref[rec.page_id] = normal_page_id;
-            // increase entry's ref-count
-            auto new_entry = *old_entry;
-            new_entry.ref += 1;
-            v->normal_pages[rec.page_id] = new_entry;
+            else
+            {
+                if (ignore_invalid_ref)
+                {
+                    LOG_WARNING(log, "Ignore invalid RefPage while opening PageStorage: RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id));
+                }
+                else
+                {
+                    v->page_ref[rec.page_id] = normal_page_id;
+                }
+            }
             v->max_page_id = std::max(v->max_page_id, rec.page_id);
             break;
         }
@@ -328,7 +339,12 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
 
     auto entry = findNormalPageEntry(normal_page_id);
     // RefPage exists, but normal Page do NOT exist. Should NOT call here
-    assert(entry != nullptr);
+    if (entry == nullptr)
+    {
+        throw DB::Exception(
+                "Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+                ErrorCodes::LOGICAL_ERROR);
+    }
     return entry;
 }
 

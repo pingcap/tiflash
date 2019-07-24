@@ -28,7 +28,7 @@ public:
 };
 
 /// Base component for Snapshot of VersionDeltaSet.
-/// When view release, it will do compact on version-list
+/// When view `release()` called, it will do compact on version-list
 ///
 /// \tparam VersionSet_t
 ///   members required:
@@ -50,6 +50,11 @@ public:
 public:
     VersionViewBase(VersionSet_t * vset_, typename VersionSet_t::VersionPtr tail_) : vset(vset_), tail(std::move(tail_)) {}
 
+    // Just let the reference of `tail` go
+    virtual ~VersionViewBase() {}
+
+    // Do compaction on version-list [head, tail]. If there some versions after tail,
+    // use vset's `rebase` to concat them.
     void release()
     {
         if (tail == nullptr || tail->isBase())
@@ -134,7 +139,7 @@ public:
                 VersionPtr v = VersionType::createDelta();
                 appendVersion(std::move(v));
             }
-            // Make a view from head to new version, then apply edits on current.
+            // Make a view from head to new version, then apply edits on `current`.
             auto      view = std::make_shared<VersionView_t>(this, current);
             Builder_t builder(view.get());
             builder.apply(edit);
@@ -142,7 +147,9 @@ public:
     }
 
 public:
-    /// Snapshot
+    /// Snapshot.
+    /// When snapshot object is free, it will call `view.release()` to compact VersionList,
+    /// and remove itself from VersionSet's snapshots list.
     class Snapshot
     {
     public:
@@ -176,7 +183,8 @@ public:
     };
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-    /// Create a snapshot for current version
+    /// Create a snapshot for current version.
+    /// call `snapshot.reset()` or let `snapshot` gone if you don't need it anymore.
     SnapshotPtr getSnapshot()
     {
         // acquire for unique_lock since we need to add all snapshots to link list
@@ -200,18 +208,21 @@ protected:
     template <typename VS_t, typename B_t>
     friend struct VersionViewBase;
 
-    /// Rebase all successor Version of Version{`old_base`} onto Version{`new_base`}.
+    /// Use after do compact on VersionList, rebase all
+    /// successor Version of Version{`old_base`} onto Version{`new_base`}.
     /// Specially, if no successor version of Version{`old_base`}, which
     /// means `current`==`old_base`, replace `current` with `new_base`.
     /// Examples:
     /// ┌────────────────────────────────┬───────────────────────────────────┐
+    /// │         Before rebase          │           After rebase            │
+    /// ├────────────────────────────────┼───────────────────────────────────┤
     /// │ Va    <-   Vb  <-    Vc        │      Vd     <-   Vc               │
     /// │       (old_base)  (current)    │   (new_base)    (current)         │
     /// ├────────────────────────────────┼───────────────────────────────────┤
     /// │ Va    <- Vb    <-    Vc        │           Vd                      │
     /// │             (current,old_base) │     (current, new_base)           │
     /// └────────────────────────────────┴───────────────────────────────────┘
-    /// caller should ensure old_base is in VersionSet's link
+    /// Caller should ensure old_base is in VersionSet's link
     void rebase(const VersionPtr & old_base, const VersionPtr & new_base)
     {
         assert(old_base != nullptr);
@@ -220,6 +231,7 @@ protected:
             current = new_base;
             return;
         }
+
         auto q = current, p = current->prev;
         while (p != nullptr && p != old_base)
         {

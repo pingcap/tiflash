@@ -16,7 +16,7 @@
 namespace DB
 {
 
-//#define DELTA_VERSION_SET
+#define DELTA_VERSION_SET
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId

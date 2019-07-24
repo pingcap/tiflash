@@ -83,7 +83,9 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
         // apply edit to new version
         builder.apply(edit);
     }
+#ifndef DELTA_VERSION_SET
     version_set.restore(builder.build());
+#endif
 }
 
 PageId PageStorage::getMaxId()
