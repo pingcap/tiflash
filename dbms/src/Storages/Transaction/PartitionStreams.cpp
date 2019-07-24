@@ -147,7 +147,7 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
             if (region->isPendingRemove())
                 return {BlockOption{}, PENDING_REMOVE};
 
-            if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
+            if (region->version() != region_version || region->confVer() != conf_version)
                 return {BlockOption{}, VERSION_ERROR};
         }
 
