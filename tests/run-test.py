@@ -148,6 +148,7 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
                 continue
             if line.startswith(CMD_PREFIX_TIDB):
                 executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
+                continue
             if cached != None and not matcher.on_line(cached):
                 return False, matcher, todos
             cached = line
