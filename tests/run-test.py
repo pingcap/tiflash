@@ -152,8 +152,8 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
         return True, matcher, todos
 
 def run():
-    if len(sys.argv) != 4:
-        print 'usage: <bin> database-client-cmd test-file-path fuzz-check'
+    if len(sys.argv) != 5:
+        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd'
         sys.exit(1)
 
     dbc = sys.argv[1]
