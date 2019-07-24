@@ -669,7 +669,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             {
                 // Merger will get the 'structure_lock' of current storage. But syncer also need this lock when bootstraping.
                 // If merging is applied before schema syncing, the tmt context has not been inited and this may cause dead lock.
-                throw Exception("TMTContext is not initialized, throw exception");
+                throw Exception("TMTContext is not initialized, throw exception", ErrorCodes::LOGICAL_ERROR);
             }
 
             const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
