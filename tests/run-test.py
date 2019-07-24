@@ -132,6 +132,8 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
         cached = None
         for origin in file:
             line = origin.strip()
+            if line.startswith(SLEEP_PREFIX):
+                time.sleep(float(line[len(SLEEP_PREFIX):]))
             if line.startswith(RETURN_PREFIX):
                 break
             if line.startswith(TODO_PREFIX):
@@ -144,8 +146,6 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
                     cached += ' '
                 cached += line
                 continue
-            if line.startswith(SLEEP_PREFIX):
-                time.sleep(float(line[len(SLEEP_PREFIX):]))
             if line.startswith(CMD_PREFIX_TIDB):
                 executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
             if cached != None and not matcher.on_line(cached):
