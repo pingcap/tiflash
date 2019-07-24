@@ -103,7 +103,7 @@ class PageEntryMapView : public PageEntryMapViewBaseType
 {
 public:
     PageEntryMapView(PageEntryMapDeltaVersionSet::BaseType * vset_, PageEntryMapDeltaVersionSet::VersionPtr tail_)
-        : PageEntryMapViewBaseType(vset_, std::move(tail_))
+            : PageEntryMapViewBaseType(vset_, std::move(tail_))
     {
     }
 
