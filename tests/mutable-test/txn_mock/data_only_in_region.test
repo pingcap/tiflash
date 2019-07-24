@@ -20,12 +20,12 @@
 │ wrote 1200 row to default.test with raft commands │
 └───────────────────────────────────────────────────┘
 
-=> select count(*) from default.test
+=> select count(*) from default.test " --schema_version "100
 ┌─count()─┐
 │    1204 │
 └─────────┘
 
-=> selraw count(*) from default.test
+=> selraw count(*) from default.test " --schema_version "100
 ┌─count()─┐
 │    1204 │
 └─────────┘
