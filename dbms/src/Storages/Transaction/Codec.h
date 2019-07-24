@@ -5,6 +5,7 @@
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <IO/Endian.h>
+#include <Storages/Transaction/JSONCodec.h>
 
 namespace DB
 {
@@ -210,23 +211,6 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     if (mask)
         value = -value;
     return Decimal(value, prec, frac);
-}
-
-inline UInt32 decodeUInt32(size_t & cursor, const String & raw_value)
-{
-    UInt32 res = *(reinterpret_cast<const UInt32 *>(raw_value.data() + cursor));
-    cursor += 4;
-    return res;
-}
-
-inline String DecodeJson(size_t &cursor, const String &raw_value)
-{
-    raw_value[cursor++]; // JSON Root element type
-    decodeUInt32(cursor, raw_value); // elementCount
-    size_t size = decodeUInt32(cursor, raw_value);
-    cursor += (size < 8 ? 0 : (size - 8));
-
-    return String();
 }
 
 inline Field DecodeDatum(size_t & cursor, const String & raw_value)
