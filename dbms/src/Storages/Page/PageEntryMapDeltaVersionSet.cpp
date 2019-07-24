@@ -64,9 +64,9 @@ void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList(VersionPtr v, 
 
 ////  PageEntryMapDeltaBuilder
 
-PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base_, bool ignore_invalid_ref_, Logger * log_)
-    : base(const_cast<PageEntryMapView *>(base_)),
-      v(base->tail),
+PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * view_, bool ignore_invalid_ref_, Logger * log_)
+    : view(const_cast<PageEntryMapView *>(view_)),
+      v(view->tail),
       ignore_invalid_ref(ignore_invalid_ref_),
       log(log_)
 {
@@ -88,76 +88,99 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
         switch (rec.type)
         {
         case WriteBatch::WriteType::PUT:
-        {
-            v->ref_deletions.erase(rec.page_id);
-            const PageId normal_page_id = base->resolveRefId(rec.page_id);
-            bool is_ref_exist = base->isRefExists(rec.page_id, normal_page_id);
-            if (!is_ref_exist)
-            {
-                v->page_ref.emplace(rec.page_id, normal_page_id);
-            }
-
-            auto old_entry = base->findNormalPageEntry(normal_page_id);
-            assert(!is_ref_exist || (is_ref_exist && old_entry != nullptr));
-            if (old_entry == nullptr)
-            {
-                rec.entry.ref = 1;
-                v->normal_pages[normal_page_id] = rec.entry;
-            }
-            else
-            {
-                rec.entry.ref = old_entry->ref + !is_ref_exist;
-                v->normal_pages[normal_page_id] = rec.entry;
-            }
-
-            v->max_page_id = std::max(v->max_page_id, rec.page_id);
+            this->applyPut(rec);
             break;
-        }
         case WriteBatch::WriteType::DEL:
-        {
-            const PageId normal_page_id = base->resolveRefId(rec.page_id);
-            v->ref_deletions.insert(rec.page_id);
-            v->page_ref.erase(rec.page_id);
-            this->decreasePageRef(normal_page_id);
+            this->applyDel(rec);
             break;
-        }
         case WriteBatch::WriteType::REF:
-        {
-            v->ref_deletions.erase(rec.page_id);
-            // Shorten ref-path in case there is RefPage to RefPage
-            const PageId normal_page_id = base->resolveRefId(rec.ori_page_id);
-            auto old_entry = base->findNormalPageEntry(normal_page_id);
-            if (likely(old_entry != nullptr))
-            {
-                auto [is_ref_id, old_normal_id] = base->isRefId(rec.page_id);
-                if (unlikely(is_ref_id))
-                {
-                    if (old_normal_id == normal_page_id)
-                        break;
-                    this->decreasePageRef(old_normal_id);
-                }
-                v->page_ref[rec.page_id] = normal_page_id;
-                // increase entry's ref-count
-                auto new_entry = *old_entry;
-                new_entry.ref += 1;
-                v->normal_pages[rec.page_id] = new_entry;
-            }
-            else
-            {
-                if (ignore_invalid_ref)
-                {
-                    LOG_WARNING(log, "Ignore invalid RefPage while opening PageStorage: RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id));
-                }
-                else
-                {
-                    v->page_ref[rec.page_id] = normal_page_id;
-                }
-            }
-            v->max_page_id = std::max(v->max_page_id, rec.page_id);
+            this->applyRef(rec);
             break;
-        }
         }
     }
+}
+
+void PageEntryMapDeltaBuilder::applyPut(PageEntriesEdit::EditRecord &rec)
+{
+    assert(rec.type == WriteBatch::WriteType::PUT);
+    v->ref_deletions.erase(rec.page_id);
+    const PageId normal_page_id = view->resolveRefId(rec.page_id);
+
+    // update ref-pairs
+    bool is_ref_exist = view->isRefExists(rec.page_id, normal_page_id);
+    if (!is_ref_exist)
+    {
+        v->page_ref.emplace(rec.page_id, normal_page_id);
+    }
+
+    // update normal page's entry
+    auto old_entry = view->findNormalPageEntry(normal_page_id);
+    assert(!is_ref_exist || (is_ref_exist && old_entry != nullptr));
+    if (old_entry == nullptr)
+    {
+        // Page{normal_page_id} not exist
+        rec.entry.ref = 1;
+        v->normal_pages[normal_page_id] = rec.entry;
+    }
+    else
+    {
+        // replace ori Page{normal_page_id}'s entry but inherit ref-counting
+        rec.entry.ref = old_entry->ref + !is_ref_exist;
+        v->normal_pages[normal_page_id] = rec.entry;
+    }
+
+    v->max_page_id = std::max(v->max_page_id, rec.page_id);
+}
+
+void PageEntryMapDeltaBuilder::applyDel(PageEntriesEdit::EditRecord &rec)
+{
+    assert(rec.type == WriteBatch::WriteType::DEL);
+    const PageId normal_page_id = view->resolveRefId(rec.page_id);
+    v->ref_deletions.insert(rec.page_id);
+    v->page_ref.erase(rec.page_id);
+    this->decreasePageRef(normal_page_id);
+}
+
+void PageEntryMapDeltaBuilder::applyRef(PageEntriesEdit::EditRecord &rec)
+{
+    assert(rec.type == WriteBatch::WriteType::REF);
+    v->ref_deletions.erase(rec.page_id);
+    // if `page_id` is a ref-id, collapse the ref-path to actual PageId
+    // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
+    const PageId normal_page_id = view->resolveRefId(rec.ori_page_id);
+    auto old_entry = view->findNormalPageEntry(normal_page_id);
+    if (likely(old_entry != nullptr))
+    {
+        // if RefPage{ref_id} already exist, release that ref first
+        auto [is_ref_id, old_normal_id] = view->isRefId(rec.page_id);
+        if (unlikely(is_ref_id))
+        {
+            // if RefPage{ref-id} -> Page{normal_page_id} already exists, just ignore
+            if (old_normal_id == normal_page_id)
+                return;
+            this->decreasePageRef(old_normal_id);
+        }
+        v->page_ref[rec.page_id] = normal_page_id;
+        // increase entry's ref-count
+        auto new_entry = *old_entry;
+        new_entry.ref += 1;
+        v->normal_pages[rec.page_id] = new_entry;
+    }
+    else
+    {
+        // The Page to be ref is not exist.
+        if (ignore_invalid_ref)
+        {
+            LOG_WARNING(log, "Ignore invalid RefPage while opening PageStorage: RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id));
+        }
+        else
+        {
+            // accept dangling ref if we are writing to a tmp entry map.
+            // like entry map of WriteBatch or Gc or AnalyzeMeta
+            v->page_ref[rec.page_id] = normal_page_id;
+        }
+    }
+    v->max_page_id = std::max(v->max_page_id, rec.page_id);
 }
 
 void PageEntryMapDeltaBuilder::applyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit)
@@ -192,7 +215,7 @@ void PageEntryMapDeltaBuilder::gcApply(PageEntriesEdit & edit)
         // Gc only apply PUT for updating page entries
         try
         {
-            auto old_page_entry = base->find(rec.page_id); // this may throw an exception if ref to non-exist page
+            auto old_page_entry = view->find(rec.page_id); // this may throw an exception if ref to non-exist page
             // If the gc page have already been removed, just ignore it
             if (old_page_entry == nullptr)
             {
@@ -214,9 +237,9 @@ void PageEntryMapDeltaBuilder::gcApply(PageEntriesEdit & edit)
     }
 }
 
-void PageEntryMapDeltaBuilder::gcApplyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit)
+void PageEntryMapDeltaBuilder::gcApplyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, PageEntriesEdit & edit)
 {
-    for (const auto & rec : edit.getRecords())
+    for (auto & rec : edit.getRecords())
     {
         if (rec.type != WriteBatch::WriteType::PUT)
         {
@@ -235,7 +258,8 @@ void PageEntryMapDeltaBuilder::gcApplyInplace(const PageEntryMapDeltaVersionSet:
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
-                current->put(rec.page_id, rec.entry, false);
+                rec.entry.ref = old_page_entry->ref;
+                current->normal_pages[rec.page_id] = rec.entry;
             }
             // else new page written by another thread, gc page is replaced. leave the page for next gc
         }
@@ -295,7 +319,7 @@ PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas(
 
 void PageEntryMapDeltaBuilder::decreasePageRef(const PageId page_id)
 {
-    auto old_entry = base->findNormalPageEntry(page_id);
+    auto old_entry = view->findNormalPageEntry(page_id);
     if (old_entry != nullptr)
     {
         auto entry = *old_entry;
@@ -306,26 +330,6 @@ void PageEntryMapDeltaBuilder::decreasePageRef(const PageId page_id)
 }
 
 ////  PageEntryMapView
-
-PageId PageEntryMapView::maxId() const
-{
-    PageId max_id = 0;
-    for (auto node = tail; node != nullptr; node = node->prev)
-    {
-        max_id = std::max(max_id, node->maxId());
-    }
-    return max_id;
-}
-
-const PageEntry & PageEntryMapView::at(const PageId page_id) const
-{
-    auto entry = this->find(page_id);
-    if (entry == nullptr)
-    {
-        throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]", ErrorCodes::LOGICAL_ERROR);
-    }
-    return *entry;
-}
 
 const PageEntry * PageEntryMapView::find(PageId page_id) const
 {
@@ -362,6 +366,16 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
                 ErrorCodes::LOGICAL_ERROR);
     }
     return entry;
+}
+
+const PageEntry & PageEntryMapView::at(const PageId page_id) const
+{
+    auto entry = this->find(page_id);
+    if (entry == nullptr)
+    {
+        throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]", ErrorCodes::LOGICAL_ERROR);
+    }
+    return *entry;
 }
 
 const PageEntry * PageEntryMapView::findNormalPageEntry(PageId page_id) const
@@ -410,7 +424,7 @@ bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
     return node->isRefExists(ref_id, page_id);
 }
 
-std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id)
+std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id) const
 {
     auto node = tail;
     for (; !node->isBase(); node = node->prev)
@@ -424,25 +438,8 @@ std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id)
 
 PageId PageEntryMapView::resolveRefId(PageId page_id) const
 {
-    for (auto node = tail; node != nullptr; node = node->prev)
-    {
-        if (node->isDeleted(page_id))
-        {
-            return page_id;
-        }
-        auto [is_ref, ori_ref_id] = node->isRefId(page_id);
-        if (is_ref)
-        {
-            return ori_ref_id;
-        }
-        if (node->isBase())
-        {
-            return page_id;
-        }
-    }
-    assert(false);
-    // should not call here
-    return 0;
+    auto [is_ref, normal_page_id] = isRefId(page_id);
+    return is_ref ? normal_page_id : page_id;
 }
 
 std::set<PageId> PageEntryMapView::validPageIds() const
@@ -496,5 +493,16 @@ std::set<PageId> PageEntryMapView::validNormalPageIds() const
     }
     return valid_normal_pages;
 }
+
+PageId PageEntryMapView::maxId() const
+{
+    PageId max_id = 0;
+    for (auto node = tail; node != nullptr; node = node->prev)
+    {
+        max_id = std::max(max_id, node->maxId());
+    }
+    return max_id;
+}
+
 
 } // namespace DB

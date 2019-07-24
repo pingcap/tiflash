@@ -105,7 +105,7 @@ public:
 
     void apply(const PageEntriesEdit & edit);
 
-    void gcApply(const PageEntriesEdit & edit);
+    void gcApply(PageEntriesEdit & edit);
 
     PageEntryMap * build() { return v; }
 
@@ -129,7 +129,7 @@ public:
 
     /// `gcApply` only accept PageEntry's `PUT` changes and will discard changes if PageEntry is invalid
     /// append new version to version-list
-    std::set<PageFileIdAndLevel> gcApply(const PageEntriesEdit & edit);
+    std::set<PageFileIdAndLevel> gcApply(PageEntriesEdit & edit);
 
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;

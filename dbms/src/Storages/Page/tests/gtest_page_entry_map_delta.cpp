@@ -32,18 +32,15 @@ private:
 
 TEST_F(PageEntryMapDelta_test, Empty)
 {
-    ASSERT_TRUE(map->empty());
     ASSERT_EQ(map->maxId(), 0UL);
 
     // add some Pages, RefPages
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
     map->ref(1, 0);
-    ASSERT_FALSE(map->empty());
     ASSERT_EQ(map->maxId(), 1UL);
 
     map->clear();
-    ASSERT_TRUE(map->empty());
     ASSERT_EQ(map->maxId(), 0UL);
 }
 
@@ -66,7 +63,6 @@ TEST_F(PageEntryMapDelta_test, PutDel)
 {
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
-    ASSERT_FALSE(map->empty());
     {
         ASSERT_NE(map->find(0), nullptr);
         const PageEntry & entry = map->at(0);
@@ -76,7 +72,6 @@ TEST_F(PageEntryMapDelta_test, PutDel)
     }
     // add RefPage2 -> Page0
     map->ref(2, 0);
-    ASSERT_FALSE(map->empty());
     {
         ASSERT_NE(map->find(2), nullptr);
         const PageEntry & entry = map->at(2);
@@ -133,24 +128,23 @@ TEST_F(PageEntryMapDelta_test, UpdateRefPageEntry)
     map->del(page_id);
     ASSERT_EQ(map->find(page_id), nullptr);
     ASSERT_NE(map->find(ref_id), nullptr);
-    ASSERT_FALSE(map->empty());
 
     map->del(ref_id);
     ASSERT_EQ(map->find(ref_id), nullptr);
 }
 
+#if 0
 TEST_F(PageEntryMapDelta_test, AddRefToNonExistPage)
 {
-    ASSERT_TRUE(map->empty());
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
-    ASSERT_FALSE(map->empty());
     // if try to add ref
     map->ref(3, 2);
     auto [is_ref, ori_page_id] = map->isRefId(3);
     ASSERT_TRUE(is_ref);
     ASSERT_EQ(ori_page_id, 2UL);
 }
+#endif
 
 TEST_F(PageEntryMapDelta_test, PutDuplicateRef)
 {

@@ -58,7 +58,7 @@ public:
 
     static void gcApplyInplace(//
         const PageEntryMapDeltaVersionSet::VersionPtr & current,
-        const PageEntriesEdit & edit);
+        PageEntriesEdit & edit);
 
     // Functions used when view release and do compact on version-list
 
@@ -83,10 +83,15 @@ public:
 
 private:
 
+    // Read old state from `view` and apply new entry to `v`
+
+    void applyPut(PageEntriesEdit::EditRecord &record);
+    void applyDel(PageEntriesEdit::EditRecord &record);
+    void applyRef(PageEntriesEdit::EditRecord &record);
     void decreasePageRef(PageId page_id);
 
 private:
-    PageEntryMapView *                      base;
+    PageEntryMapView *                      view;
     PageEntryMapDeltaVersionSet::VersionPtr v;
     bool                                    ignore_invalid_ref;
     Poco::Logger *                          log;
@@ -102,17 +107,11 @@ public:
     {
     }
 
-    PageId maxId() const;
+    const PageEntry * find(PageId page_id) const;
 
     const PageEntry & at(PageId page_id) const;
 
-    const PageEntry * find(PageId page_id) const;
-
     bool isRefExists(PageId ref_id, PageId page_id) const;
-
-    std::pair<bool, PageId> isRefId(PageId page_id);
-
-    PageId resolveRefId(PageId page_id) const;
 
     // For iterate over all pages
     std::set<PageId> validPageIds() const;
@@ -120,8 +119,14 @@ public:
     // For iterate over all normal pages
     std::set<PageId> validNormalPageIds() const;
 
+    PageId maxId() const;
+
 private:
     const PageEntry * findNormalPageEntry(PageId page_id) const;
+
+    std::pair<bool, PageId> isRefId(PageId page_id) const;
+
+    PageId resolveRefId(PageId page_id) const;
 
     friend class PageEntryMapDeltaBuilder;
 };

@@ -3,7 +3,7 @@
 namespace DB
 {
 
-std::set<PageFileIdAndLevel> PageEntryMapVersionSet::gcApply(const PageEntriesEdit & edit)
+std::set<PageFileIdAndLevel> PageEntryMapVersionSet::gcApply(PageEntriesEdit & edit)
 {
     std::unique_lock lock(read_mutex);
 
@@ -66,9 +66,9 @@ void PageEntryMapBuilder::apply(const PageEntriesEdit & edit)
     }
 }
 
-void PageEntryMapBuilder::gcApply(const PageEntriesEdit & edit)
+void PageEntryMapBuilder::gcApply(PageEntriesEdit & edit)
 {
-    for (const auto & rec : edit.getRecords())
+    for (auto & rec : edit.getRecords())
     {
         if (rec.type != WriteBatch::WriteType::PUT)
         {
@@ -85,7 +85,8 @@ void PageEntryMapBuilder::gcApply(const PageEntriesEdit & edit)
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
-                v->put(rec.page_id, rec.entry, false);
+                rec.entry.ref = old_page_entry->ref;
+                v->normal_pages[rec.page_id] = rec.entry;
             }
             // else new page written by another thread, gc page is replaced. leave the page for next gc
         }

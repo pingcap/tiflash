@@ -31,14 +31,12 @@ private:
 
 TEST_F(PageEntryMap_test, Empty)
 {
-    ASSERT_TRUE(map->empty());
     size_t item_count = 0;
     for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
     {
         item_count += 1;
     }
     ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->size(), 0UL);
     ASSERT_EQ(map->maxId(), 0UL);
 
 
@@ -46,25 +44,21 @@ TEST_F(PageEntryMap_test, Empty)
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
     map->ref(1, 0);
-    ASSERT_FALSE(map->empty());
     item_count = 0;
     for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
     {
         item_count += 1;
     }
     ASSERT_EQ(item_count, 2UL);
-    ASSERT_EQ(map->size(), 2UL);
     ASSERT_EQ(map->maxId(), 1UL);
 
     map->clear();
-    ASSERT_TRUE(map->empty());
     item_count = 0;
     for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
     {
         item_count += 1;
     }
     ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->size(), 0UL);
     ASSERT_EQ(map->maxId(), 0UL);
 }
 
@@ -81,14 +75,12 @@ TEST_F(PageEntryMap_test, UpdatePageEntry)
 
     map->del(page_id);
     ASSERT_EQ(map->find(page_id), nullptr);
-    ASSERT_TRUE(map->empty());
 }
 
 TEST_F(PageEntryMap_test, PutDel)
 {
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
-    ASSERT_FALSE(map->empty());
     {
         ASSERT_NE(map->find(0), nullptr);
         const PageEntry & entry = map->at(0);
@@ -98,7 +90,6 @@ TEST_F(PageEntryMap_test, PutDel)
     }
     // add RefPage2 -> Page0
     map->ref(2, 0);
-    ASSERT_FALSE(map->empty());
     {
         ASSERT_NE(map->find(2), nullptr);
         const PageEntry & entry = map->at(2);
@@ -125,7 +116,6 @@ TEST_F(PageEntryMap_test, PutDel)
     ASSERT_EQ(map->find(0), nullptr);
     ASSERT_EQ(map->find(2), nullptr);
 
-    ASSERT_TRUE(map->empty());
 }
 
 TEST_F(PageEntryMap_test, UpdateRefPageEntry)
@@ -157,11 +147,9 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
     map->del(page_id);
     ASSERT_EQ(map->find(page_id), nullptr);
     ASSERT_NE(map->find(ref_id), nullptr);
-    ASSERT_FALSE(map->empty());
 
     map->del(ref_id);
     ASSERT_EQ(map->find(ref_id), nullptr);
-    ASSERT_TRUE(map->empty());
 }
 
 TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
@@ -182,10 +170,8 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
 
 TEST_F(PageEntryMap_test, AddRefToNonExistPage)
 {
-    ASSERT_TRUE(map->empty());
     PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
     map->put(0, p0entry);
-    ASSERT_FALSE(map->empty());
     // if try to add ref to non-exist page
     ASSERT_THROW({ map->ref<true>(3, 2); }, DB::Exception);
     // if try to access to non exist page, we get an exception
@@ -278,7 +264,6 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     ASSERT_EQ(map->find(0), nullptr);
     ASSERT_EQ(map->find(2), nullptr);
 
-    ASSERT_TRUE(map->empty());
 }
 
 TEST_F(PageEntryMap_test, ReBindRef)
@@ -298,7 +283,6 @@ TEST_F(PageEntryMap_test, ReBindRef)
     map->del(1);
     ASSERT_EQ(map->at(0).checksum, entry1.checksum);
     map->del(0);
-    ASSERT_TRUE(map->empty());
 }
 
 TEST_F(PageEntryMap_test, Scan)
@@ -333,20 +317,13 @@ TEST_F(PageEntryMap_test, Scan)
     ASSERT_EQ(page_ids.size(), 4UL);
 
     // clear all mapping
-    ASSERT_FALSE(map->empty());
     map->clear();
-    ASSERT_TRUE(map->empty());
     page_ids.clear();
     for (auto iter = map->cbegin(); iter != map->cend(); ++iter)
     {
         page_ids.insert(iter.pageId());
     }
     ASSERT_TRUE(page_ids.empty());
-}
-
-TEST(PageEntriesEdit_test, size)
-{
-    fprintf(stderr, "entry:%zu,edit:%zu\n", sizeof(PageEntry), sizeof(PageEntriesEdit::EditRecord));
 }
 
 } // namespace tests
