@@ -5,6 +5,7 @@ import sys
 
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
+CMD_PREFIX_TIDB = 't> '
 RETURN_PREFIX = '#RETURN'
 TODO_PREFIX = '#TODO'
 COMMENT_PREFIX = '#'
@@ -18,6 +19,10 @@ class Executor:
     def exe(self, cmd):
         return os.popen((self.dbc + ' "' + cmd + '" 2>&1').strip()).readlines()
 
+def parse_line(line):
+    words = [w.strip() for w in line.split("│") if w.strip() != ""]
+    return '@'.join(words)
+
 def parse_table_parts(lines, fuzz):
     parts = set()
     if not fuzz:
@@ -27,12 +32,13 @@ def parse_table_parts(lines, fuzz):
                 if len(curr) != 0:
                     parts.add('\n'.join(curr))
                     curr = []
-            curr.append(line)
+            curr.append(parse_line(line))
         if len(curr) != 0:
             parts.add('\n'.join(curr))
     else:
         for line in lines:
             if not line.startswith('┌') and not line.startswith('└'):
+                line = parse_line(line)
                 if line in parts:
                     line += '-extra'
                 parts.add(line)
@@ -117,7 +123,7 @@ class Matcher:
             return False
         return True
 
-def parse_exe_match(path, executor, fuzz):
+def parse_exe_match(path, executor, executor_tidb, fuzz):
     todos = []
     with open(path) as file:
         matcher = Matcher(executor, fuzz)
@@ -136,6 +142,8 @@ def parse_exe_match(path, executor, fuzz):
                     cached += ' '
                 cached += line
                 continue
+            if line.startswith(CMD_PREFIX_TIDB):
+                executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
             if cached != None and not matcher.on_line(cached):
                 return False, matcher, todos
             cached = line
@@ -151,8 +159,9 @@ def run():
     dbc = sys.argv[1]
     path = sys.argv[2]
     fuzz = (sys.argv[3] == 'true')
+    tidbc = sys.argv[4]
 
-    matched, matcher, todos = parse_exe_match(path, Executor(dbc), fuzz)
+    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(tidbc), fuzz)
 
     def display(lines):
         if len(lines) == 0:

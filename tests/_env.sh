@@ -17,6 +17,12 @@ export storage_server="127.0.0.1"
 # Default database for scripts
 export storage_db="default"
 
+# TiDB address
+export tidb_server="127.0.0.1"
+
+# TiDB port
+export tidb_port="4000"
+
 # Setup running env vars
 source ../../_vars.sh
 setup_dylib_path
