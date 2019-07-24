@@ -121,23 +121,23 @@ public:
     {
         std::unique_lock read_lock(read_mutex);
 
-        if (current.use_count() == 1)
+        if (current.use_count() == 1 && current->isBase())
         {
             // If no readers, we could directly merge edits.
             BuilderType::applyInplace(current, edit);
         }
         else
         {
-            // There are reader(s) on current, generate new delta version and append to version-list
-            VersionPtr v;
+            if (current.use_count() != 1)
             {
-                auto      base_view = std::make_shared<VersionView_t>(this, current);
-                Builder_t builder(base_view.get());
-                builder.apply(edit);
-                v = builder.build();
+                // There are reader(s) on current, generate new delta version and append to version-list
+                VersionPtr v = VersionType::createDelta();
+                appendVersion(std::move(v));
             }
-
-            appendVersion(std::move(v));
+            // Make a view from head to new version, then apply edits on current.
+            auto      view = std::make_shared<VersionView_t>(this, current);
+            Builder_t builder(view.get());
+            builder.apply(edit);
         }
     }
 

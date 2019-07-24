@@ -219,7 +219,6 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
         edit.del(1);
 
         builder.apply(edit);
-        versions.restore(builder.build());
     }
     auto s     = versions.getSnapshot();
     auto entry = s->version()->find(1);
@@ -339,6 +338,72 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
     ASSERT_EQ(entry.level, 0U);
 }
 
+TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
+{
+    TypeParam versions(this->config_);
+    {
+        PageEntriesEdit edit;
+        edit.put(2, PageEntry{.checksum = 0xf});
+        edit.ref(3, 2);
+        versions.apply(edit);
+    }
+    auto s1 = versions.getSnapshot();
+    ASSERT_EQ(s1->version()->at(2).checksum, 0xfUL);
+    ASSERT_EQ(s1->version()->at(3).checksum, 0xfUL);
+
+    // Update RefPage3, both Page2 and RefPage3 got updated.
+    {
+        PageEntriesEdit edit;
+        edit.put(3, PageEntry{.checksum = 0xff});
+        versions.apply(edit);
+    }
+    auto s2 = versions.getSnapshot();
+    ASSERT_EQ(s2->version()->at(3).checksum, 0xffUL);
+    ASSERT_EQ(s2->version()->at(2).checksum, 0xffUL);
+    s2.reset();
+    s1.reset();
+    auto s3 = versions.getSnapshot();
+    ASSERT_EQ(s3->version()->at(3).checksum, 0xffUL);
+    ASSERT_EQ(s3->version()->at(2).checksum, 0xffUL);
+    //s3.reset();
+
+    // Del Page2, RefPage3 still there
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        versions.apply(edit);
+    }
+    auto s4 = versions.getSnapshot();
+    ASSERT_EQ(s4->version()->find(2), nullptr);
+    ASSERT_EQ(s4->version()->at(3).checksum, 0xffUL);
+    s4.reset();
+}
+
+TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
+{
+    TypeParam versions(this->config_);
+    {
+        PageEntriesEdit edit;
+        edit.put(2, PageEntry{.checksum = 0xf});
+        edit.ref(3, 2);
+        edit.del(2);
+        versions.apply(edit);
+    }
+    auto s1 = versions.getSnapshot();
+    ASSERT_EQ(s1->version()->find(2), nullptr);
+    ASSERT_EQ(s1->version()->at(3).checksum, 0xfUL);
+
+    {
+        PageEntriesEdit edit;
+        edit.put(2, PageEntry{.checksum = 0x9});
+        edit.del(2);
+        versions.apply(edit);
+    }
+    auto s2 = versions.getSnapshot();
+    ASSERT_EQ(s2->version()->find(2), nullptr);
+    ASSERT_EQ(s2->version()->at(3).checksum, 0x9UL);
+}
+
 TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
 {
     TypeParam versions(this->config_);
@@ -377,6 +442,8 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            GcConcurrencyDelPage,
                            GcPageMove,
                            GcConcurrencySetPage,
+                           UpdateOnRefPage,
+                           UpdateOnRefPage2,
                            Snapshot);
 
 using VersionSetTypes = ::testing::Types<PageEntryMapVersionSet, PageEntryMapDeltaVersionSet>;

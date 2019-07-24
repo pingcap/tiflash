@@ -13,23 +13,21 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(const PageEntr
 {
     std::unique_lock lock(read_mutex);
 
-    if (current.use_count() == 1)
+    if (current.use_count() == 1 && current->isBase())
     {
         // If no readers, we could directly merge edits
         BuilderType::gcApplyInplace(current, edit);
     }
     else
     {
-        // apply edit on base
-        PageEntryMapDeltaVersionSet::VersionPtr v;
+        if (current.use_count() != 1)
         {
-            auto                     base_view = std::make_shared<PageEntryMapView>(this, current);
-            PageEntryMapDeltaBuilder builder(base_view.get());
-            builder.gcApply(edit);
-            v = builder.build();
+            VersionPtr v = VersionType::createDelta();
+            appendVersion(std::move(v));
         }
-
-        this->appendVersion(std::move(v));
+        auto                     view = std::make_shared<PageEntryMapView>(this, current);
+        PageEntryMapDeltaBuilder builder(view.get());
+        builder.gcApply(edit);
     }
 
     return listAllLiveFiles();
@@ -52,7 +50,7 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() con
 
 PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base_, bool ignore_invalid_ref_, Logger * log_)
     : base(const_cast<PageEntryMapView *>(base_)),
-      v(PageEntryMapDeltaVersionSet::VersionType::createDelta()),
+      v(base->tail),
       ignore_invalid_ref(ignore_invalid_ref_),
       log(log_)
 {
@@ -66,6 +64,7 @@ PageEntryMapDeltaBuilder::PageEntryMapDeltaBuilder(const PageEntryMapView * base
 
 PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder() = default;
 
+/// Apply edits and generate new delta
 void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
 {
     for (auto && rec : edit.getRecords())
@@ -74,18 +73,60 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
         {
         case WriteBatch::WriteType::PUT:
         {
+            v->page_deletions.erase(rec.page_id);
             const PageId normal_page_id = base->resolveRefId(rec.page_id);
-            v->put(normal_page_id, rec.entry);
+            bool is_ref_exist = base->isRefExists(rec.page_id, normal_page_id);
+            if (!is_ref_exist)
+            {
+                v->page_ref.emplace(rec.page_id, normal_page_id);
+            }
+
+            auto old_entry = base->findNormalPageEntry(normal_page_id);
+            assert(!is_ref_exist || (is_ref_exist && old_entry != nullptr));
+            if (old_entry == nullptr)
+            {
+                rec.entry.ref = 1;
+                v->normal_pages[normal_page_id] = rec.entry;
+            }
+            else
+            {
+                rec.entry.ref = old_entry->ref + !is_ref_exist;
+                v->normal_pages[normal_page_id] = rec.entry;
+            }
+
+            v->max_page_id = std::max(v->max_page_id, rec.page_id);
             break;
         }
         case WriteBatch::WriteType::DEL:
-            v->del<false>(rec.page_id);
+        {
+            v->page_deletions.insert(rec.page_id);
+            v->page_ref.erase(rec.page_id);
+            const PageId normal_page_id = base->resolveRefId(rec.page_id);
+            this->decreasePageRef(normal_page_id);
             break;
+        }
         case WriteBatch::WriteType::REF:
         {
+            v->page_deletions.insert(rec.page_id);
             // Shorten ref-path in case there is RefPage to RefPage
             const PageId normal_page_id = base->resolveRefId(rec.ori_page_id);
-            v->ref<false>(rec.page_id, normal_page_id);
+            auto old_entry = base->findNormalPageEntry(normal_page_id);
+            if (likely(old_entry != nullptr))
+            {
+                auto [is_ref_id, old_normal_id] = base->isRefId(rec.page_id);
+                if (unlikely(is_ref_id))
+                {
+                    if (old_normal_id == normal_page_id)
+                        break;
+                    this->decreasePageRef(old_normal_id);
+                }
+            }
+            v->page_ref[rec.page_id] = normal_page_id;
+            // increase entry's ref-count
+            auto new_entry = *old_entry;
+            new_entry.ref += 1;
+            v->normal_pages[rec.page_id] = new_entry;
+            v->max_page_id = std::max(v->max_page_id, rec.page_id);
             break;
         }
         }
@@ -94,6 +135,7 @@ void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
 
 void PageEntryMapDeltaBuilder::applyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit)
 {
+    assert(current->isBase());
     for (auto && rec : edit.getRecords())
     {
         switch (rec.type)
@@ -133,7 +175,7 @@ void PageEntryMapDeltaBuilder::gcApply(const PageEntriesEdit & edit)
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
-                v->put(rec.page_id, rec.entry);
+                v->put(rec.page_id, rec.entry, false);
             }
             // else new page written by another thread, gc page is replaced. leave the page for next gc
         }
@@ -165,7 +207,7 @@ void PageEntryMapDeltaBuilder::gcApplyInplace(const PageEntryMapDeltaVersionSet:
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
                 // no new page write to `page_entry_map`, replace it with gc page
-                current->put(rec.page_id, rec.entry);
+                current->put(rec.page_id, rec.entry, false);
             }
             // else new page written by another thread, gc page is replaced. leave the page for next gc
         }
@@ -238,6 +280,18 @@ PageEntryMapDeltaVersionSet::VersionPtr PageEntryMapDeltaBuilder::compactDeltas(
     return tmp;
 }
 
+void PageEntryMapDeltaBuilder::decreasePageRef(const PageId page_id)
+{
+    auto old_entry = base->findNormalPageEntry(page_id);
+    if (old_entry != nullptr)
+    {
+        auto entry = *old_entry;
+        entry.ref = old_entry->ref <= 1? 0: old_entry->ref - 1;
+        // keep an entry of ref-count == 0, so that we can delete this entry when merged to base
+        v->normal_pages[page_id] = entry;
+    }
+}
+
 ////  PageEntryMapView
 
 PageId PageEntryMapView::maxId() const
@@ -262,29 +316,47 @@ const PageEntry & PageEntryMapView::at(const PageId page_id) const
 
 const PageEntry * PageEntryMapView::find(PageId page_id) const
 {
-    // begin search PageEntry from tail -> head
-    PageEntryMapDeltaVersionSet::VersionPtr node;
-    for (node = tail; !node->isBase(); node = node->prev)
+    // First we find ref-pairs to get the normal page id
+    bool found = false;
+    PageId normal_page_id = 0;
+    for (auto node = tail; node != nullptr; node = node->prev)
     {
-        // deleted in later version, then return not exist
         if (node->isDeleted(page_id))
         {
             return nullptr;
         }
-        auto [is_ref, ori_page_id] = node->isRefId(page_id);
-        if (is_ref)
+
+        auto iter = node->page_ref.find(page_id);
+        if (iter != node->page_ref.end())
         {
             // if new ref find in this delta, turn to find ori_page_id in this VersionView
-            return find(ori_page_id);
-        }
-        const PageEntry * entry = node->find(page_id);
-        if (entry != nullptr)
-        {
-            return entry;
+            found = true;
+            normal_page_id = iter->second;
+            break;
         }
     }
-    assert(node->isBase());
-    return node->find(page_id);
+    if (!found)
+    {
+        return nullptr;
+    }
+
+    auto entry = findNormalPageEntry(normal_page_id);
+    // RefPage exists, but normal Page do NOT exist. Should NOT call here
+    assert(entry != nullptr);
+    return entry;
+}
+
+const PageEntry * PageEntryMapView::findNormalPageEntry(PageId page_id) const
+{
+    for (auto node = tail; node != nullptr; node = node->prev)
+    {
+        auto iter = node->normal_pages.find(page_id);
+        if (iter != node->normal_pages.end())
+        {
+            return &iter->second;
+        }
+    }
+    return nullptr;
 }
 
 bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
@@ -318,6 +390,18 @@ bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
     }
     assert(node->isBase());
     return node->isRefExists(ref_id, page_id);
+}
+
+std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id)
+{
+    auto node = tail;
+    for (; !node->isBase(); node = node->prev)
+    {
+        auto [is_ref, ori_id] = node->isRefId(page_id);
+        if (is_ref)
+            return {is_ref, ori_id};
+    }
+    return node->isRefId(page_id);
 }
 
 PageId PageEntryMapView::resolveRefId(PageId page_id) const

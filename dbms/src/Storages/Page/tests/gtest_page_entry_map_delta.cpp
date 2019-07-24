@@ -19,7 +19,7 @@ protected:
         // Generate an empty PageEntryMap for each test
         auto                     snapshot = versions.getSnapshot();
         PageEntryMapDeltaBuilder builder(snapshot->version());
-        map = builder.build();
+        map = snapshot->version()->tail;
     }
 
     void TearDown() override {}
@@ -271,7 +271,7 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaAddRef)
 
     delta->ref(3, 2);
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, std::move(delta));
+    base = PageEntryMapDeltaBuilder::compactDeltaAndBase(base, delta);
 
     auto entry = base->find(3);
     ASSERT_NE(entry, nullptr);
@@ -284,7 +284,7 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaPutThenDel)
     delta->ref(3, 2);
     delta->del(2);
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, delta);
+    base = PageEntryMapDeltaBuilder::compactDeltaAndBase(base, delta);
 
     auto entry2 = base->find(2);
     ASSERT_EQ(entry2, nullptr);
@@ -301,7 +301,7 @@ TEST_F(PageEntryMapDeltaBuilder_test, DeltaDelThenPut)
     delta->del(2);
     delta->put(2, PageEntry{.checksum = 0x123});
 
-    PageEntryMapDeltaBuilder::mergeDeltaToBaseInplace(base, delta);
+    base = PageEntryMapDeltaBuilder::compactDeltaAndBase(base, delta);
 
     auto entry = base->find(2);
     ASSERT_NE(entry, nullptr);

@@ -85,6 +85,7 @@ public:
             is_new_ref_pair_inserted = res.second;
         }
 
+        // update normal page's entry
         auto         ori_iter       = normal_pages.find(normal_page_id);
         if (ori_iter == normal_pages.end())
         {
@@ -100,6 +101,7 @@ public:
             normal_pages[normal_page_id].ref = page_ref_count + is_new_ref_pair_inserted;
         }
 
+        // update max_page_id
         max_page_id = std::max(max_page_id, page_id);
     }
 
@@ -179,7 +181,9 @@ public:
         return page_deletions.size();
     }
 
-    size_t numEntries() const { return page_ref.size(); }
+    size_t numRefEntries() const { return page_ref.size(); }
+
+    size_t numNormalEntries() const { return normal_pages.size(); }
 
 private:
     PageId resolveRefId(PageId page_id) const
@@ -438,9 +442,9 @@ void PageEntryMapBaseDelta_t<T>::decreasePageRef(const PageId page_id)
     }
     if (iter != normal_pages.end())
     {
-        auto & cache = iter->second;
-        cache.ref -= 1;
-        if (cache.ref == 0)
+        auto & entry = iter->second;
+        entry.ref -= 1;
+        if (entry.ref == 0)
         {
             normal_pages.erase(iter);
         }

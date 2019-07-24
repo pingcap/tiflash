@@ -50,8 +50,6 @@ public:
 
     void gcApply(const PageEntriesEdit & edit);
 
-    PageEntryMapDeltaVersionSet::VersionPtr build() { return v; }
-
     static void applyInplace( //
         const PageEntryMapDeltaVersionSet::VersionPtr & current,
         const PageEntriesEdit &                         edit);
@@ -72,13 +70,18 @@ public:
     {
         assert(!delta->isBase());
         return delta->numDeletions() >= config.compact_hint_delta_deletions //
-            || delta->numEntries() >= config.compact_hint_delta_entries;
+            || delta->numRefEntries() >= config.compact_hint_delta_entries
+            || delta->numNormalEntries() >= config.compact_hint_delta_entries;
     }
 
     static PageEntryMapDeltaVersionSet::VersionPtr //
     compactDeltaAndBase(                           //
         const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
         PageEntryMapDeltaVersionSet::VersionPtr &       delta);
+
+private:
+
+    void decreasePageRef(PageId page_id);
 
 private:
     PageEntryMapView *                      base;
@@ -105,6 +108,8 @@ public:
 
     bool isRefExists(PageId ref_id, PageId page_id) const;
 
+    std::pair<bool, PageId> isRefId(PageId page_id);
+
     PageId resolveRefId(PageId page_id) const;
 
     // For iterate over all pages
@@ -112,6 +117,11 @@ public:
 
     // For iterate over all normal pages
     std::set<PageId> validNormalPageIds() const;
+
+private:
+    const PageEntry * findNormalPageEntry(PageId page_id) const;
+
+    friend class PageEntryMapDeltaBuilder;
 };
 
 } // namespace DB
