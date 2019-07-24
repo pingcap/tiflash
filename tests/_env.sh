@@ -26,6 +26,9 @@ export tidb_server="127.0.0.1"
 # TiDB port
 export tidb_port="4000"
 
+# TiDB default database
+export tidb_db="test"
+
 # Setup running env vars
 source ../../_vars.sh
 setup_dylib_path
