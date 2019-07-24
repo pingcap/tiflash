@@ -71,41 +71,21 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
         LOG_DEBUG(log, "end load schema diffs.");
-        for (const auto & diff : diffs)
-        {
-            builder.applyDiff(diff);
+        try {
+            for (const auto & diff : diffs)
+            {
+                builder.applyDiff(diff);
+            }
+        } catch (Exception & e) {
+            LOG_ERROR(log, "apply diff meets exception : " + e.displayText());
+            return false;
         }
         return true;
     }
 
-    bool loadAllSchema(SchemaGetter & getter, Int64 version, Context & context)
-    {
-        LOG_DEBUG(log, "try load all schemas.");
-
-        std::vector<TiDB::DBInfoPtr> all_schema = getter.listDBs();
-
-        for (auto db_info : all_schema)
-        {
-            LOG_DEBUG(log, "Load schema : " + db_info->name);
-        }
-
+    void loadAllSchema(SchemaGetter & getter, Int64 version, Context & context) {
         SchemaBuilder builder(getter, context, databases, version);
-
-        std::set<TiDB::DatabaseID> db_ids;
-        for (auto db : all_schema)
-        {
-            builder.updateDB(db);
-            db_ids.insert(db->id);
-        }
-        // Drop databases;
-        for (auto it = databases.begin(); it != databases.end(); it++)
-        {
-            if (db_ids.count(it->first) == 0)
-            {
-                builder.applyDropSchema(it->first);
-            }
-        }
-        return true;
+        builder.syncAllSchema();
     }
 };
 

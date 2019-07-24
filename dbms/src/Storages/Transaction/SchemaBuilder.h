@@ -26,9 +26,11 @@ struct SchemaBuilder
 
     void applyDiff(const SchemaDiff & diff);
 
-    void updateDB(TiDB::DBInfoPtr db_info);
-
     void applyDropSchema(DatabaseID schema_id);
+
+    void syncAllSchema();
+
+    void applyRenameTableImpl(const String & old_db, const String & new_db, const String & old_table, const String & new_table);
 
 private:
     bool applyCreateSchema(DatabaseID schema_id);
@@ -55,7 +57,12 @@ private:
 
     void applyRenameTable(TiDB::DBInfoPtr db_info, TiDB::DatabaseID old_db_id, TiDB::TableID table_id);
 
-    void applyRenameTableImpl(const String & old_db, const String & new_db, const String & old_table, const String & new_table);
+
+    void createTables(std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> table_dbs);
+
+    void alterAndRenameTables(std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> table_dbs);
+
+    void dropInvalidTables(std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> table_dbs);
 };
 
 } // namespace DB
