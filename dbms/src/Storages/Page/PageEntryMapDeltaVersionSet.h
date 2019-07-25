@@ -36,7 +36,7 @@ public:
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 
 private:
-    void collectLiveFilesFromVersionList(VersionPtr tail, std::set<PageFileIdAndLevel> &liveFiles) const;
+    void collectLiveFilesFromVersionList(VersionPtr tail, std::set<VersionPtr> &visited, std::set<PageFileIdAndLevel> &liveFiles) const;
 };
 
 class PageEntryMapDeltaBuilder
@@ -50,7 +50,10 @@ public:
 
     void apply(PageEntriesEdit & edit);
 
-    void gcApply(PageEntriesEdit & edit);
+    void gcApply(PageEntriesEdit & edit)
+    {
+        PageEntryMapBuilder::gcApplyTemplate(view, edit, v);
+    }
 
     static void applyInplace( //
         const PageEntryMapDeltaVersionSet::VersionPtr & current,
@@ -58,7 +61,12 @@ public:
 
     static void gcApplyInplace(//
         const PageEntryMapDeltaVersionSet::VersionPtr & current,
-        PageEntriesEdit & edit);
+        PageEntriesEdit & edit)
+    {
+        assert(current->isBase());
+        assert(current.use_count() == 1);
+        PageEntryMapBuilder::gcApplyTemplate(current, edit, current);
+    }
 
     // Functions used when view release and do compact on version-list
 

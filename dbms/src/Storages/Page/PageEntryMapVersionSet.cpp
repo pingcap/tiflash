@@ -66,34 +66,6 @@ void PageEntryMapBuilder::apply(const PageEntriesEdit & edit)
     }
 }
 
-void PageEntryMapBuilder::gcApply(PageEntriesEdit & edit)
-{
-    for (auto & rec : edit.getRecords())
-    {
-        if (rec.type != WriteBatch::WriteType::PUT)
-            continue;
-        // Gc only apply PUT for updating page entries
-        try
-        {
-            auto old_page_entry = v->find(rec.page_id);
-            // If the gc page have already been removed, just ignore it
-            if (old_page_entry == nullptr)
-                continue;
-            // In case of page being updated during GC process.
-            if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
-            {
-                // no new page write to `page_entry_map`, replace it with gc page
-                rec.entry.ref = old_page_entry->ref;
-                v->normal_pages[rec.page_id] = rec.entry;
-            }
-            // else new page written by another thread, gc page is replaced. leave the page for next gc
-        }
-        catch (DB::Exception & e)
-        {
-            // just ignore and continue
-        }
-    }
-}
 
 
 } // namespace DB

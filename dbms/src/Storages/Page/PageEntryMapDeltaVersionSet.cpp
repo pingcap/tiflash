@@ -37,20 +37,24 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() con
 {
     // Note read_mutex must be hold.
     std::set<PageFileIdAndLevel> liveFiles;
+    std::set<VersionPtr> visitedVersions; // avoid to access same version multiple time
     // Iterate all snapshot to collect all PageFile in used.
     for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
     {
-        collectLiveFilesFromVersionList(s->version()->tail, liveFiles);
+        collectLiveFilesFromVersionList(s->version()->tail, visitedVersions, liveFiles);
     }
     // Iterate over `current`
-    collectLiveFilesFromVersionList(current, liveFiles);
+    collectLiveFilesFromVersionList(current, visitedVersions, liveFiles);
     return liveFiles;
 }
 
-void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList(VersionPtr v, std::set<PageFileIdAndLevel> &liveFiles) const
+void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList(VersionPtr v, std::set<VersionPtr> &visited, std::set<PageFileIdAndLevel> &liveFiles) const
 {
     for (; v != nullptr; v = v->prev)
     {
+        // If this version has been visited, all previous version has been collected.
+        if (visited.count(v) > 0)
+            break;
         for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
         {
             // ignore if it is a tombstone entry
@@ -59,6 +63,7 @@ void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList(VersionPtr v, 
                 liveFiles.insert(it->second.fileIdLevel());
             }
         }
+        visited.insert(v);
     }
 }
 
@@ -186,6 +191,7 @@ void PageEntryMapDeltaBuilder::applyRef(PageEntriesEdit::EditRecord &rec)
 void PageEntryMapDeltaBuilder::applyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit)
 {
     assert(current->isBase());
+    assert(current.use_count() == 1);
     for (auto && rec : edit.getRecords())
     {
         switch (rec.type)
@@ -200,64 +206,6 @@ void PageEntryMapDeltaBuilder::applyInplace(const PageEntryMapDeltaVersionSet::V
             // Shorten ref-path in case there is RefPage to RefPage
             current->ref(rec.page_id, rec.ori_page_id);
             break;
-        }
-    }
-}
-
-void PageEntryMapDeltaBuilder::gcApply(PageEntriesEdit & edit)
-{
-    for (auto & rec : edit.getRecords())
-    {
-        if (rec.type != WriteBatch::WriteType::PUT)
-            continue;
-        // Gc only apply PUT for updating page entries
-        try
-        {
-            auto old_page_entry = view->find(rec.page_id); // this may throw an exception if ref to non-exist page
-            // If the gc page have already been removed, just ignore it
-            if (old_page_entry == nullptr)
-                continue;
-            // In case of page being updated during GC process.
-            if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
-            {
-                // no new page write to `page_entry_map`, replace it with gc page
-                rec.entry.ref = old_page_entry->ref;
-                v->normal_pages[rec.page_id] = rec.entry;
-            }
-            // else new page written by another thread, gc page is replaced. leave the page for next gc
-        }
-        catch (DB::Exception & e)
-        {
-            // just ignore and continue
-        }
-    }
-}
-
-void PageEntryMapDeltaBuilder::gcApplyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, PageEntriesEdit & edit)
-{
-    for (auto & rec : edit.getRecords())
-    {
-        if (rec.type != WriteBatch::WriteType::PUT)
-            continue;
-        // Gc only apply PUT for updating page entries
-        try
-        {
-            auto old_page_entry = current->find(rec.page_id); // this may throw an exception if ref to non-exist page
-            // If the gc page have already been removed, just ignore it
-            if (old_page_entry == nullptr)
-                continue;
-            // In case of page being updated during GC process.
-            if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
-            {
-                // no new page write to `page_entry_map`, replace it with gc page
-                rec.entry.ref = old_page_entry->ref;
-                current->normal_pages[rec.page_id] = rec.entry;
-            }
-            // else new page written by another thread, gc page is replaced. leave the page for next gc
-        }
-        catch (DB::Exception & e)
-        {
-            // just ignore and continue
         }
     }
 }
