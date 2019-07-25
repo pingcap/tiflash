@@ -542,9 +542,12 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
             WriteBatch batch;
             for (const auto &rec : legacy_edit.getRecords())
             {
-                if (rec.type == WriteBatch::WriteType::REF && current->isRefExists(rec.page_id, rec.ori_page_id))
+                // Get `normal_page_id` from memory's `page_entry_map`. Note: can not get `normal_page_id` from disk,
+                // if it is a record of RefPage to another RefPage, the later ref-id is resolve to the actual `normal_page_id`.
+                auto [is_ref, normal_page_id] = current->isRefId(rec.page_id);
+                if (is_ref)
                 {
-                    batch.putRefPage(rec.page_id, rec.ori_page_id);
+                    batch.putRefPage(rec.page_id, normal_page_id);
                     num_valid_ref_pages += 1;
                 }
             }

@@ -119,6 +119,8 @@ public:
 
     const PageEntry & at(PageId page_id) const;
 
+    std::pair<bool, PageId> isRefId(PageId page_id) const;
+
     bool isRefExists(PageId ref_id, PageId page_id) const;
 
     // For iterate over all pages
@@ -131,8 +133,6 @@ public:
 
 private:
     const PageEntry * findNormalPageEntry(PageId page_id) const;
-
-    std::pair<bool, PageId> isRefId(PageId page_id) const;
 
     PageId resolveRefId(PageId page_id) const;
 
