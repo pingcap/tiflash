@@ -512,9 +512,9 @@ void PageStorage::gcUpdatePageMap(const PageEntryMap & gc_pages_map)
 {
     for (auto iter = gc_pages_map.pages_cbegin(); iter != gc_pages_map.pages_cend(); ++iter)
     {
-        const PageId      page_id    = iter->first;
-        const PageEntry & page_entry = iter->second;
-        auto              current    = page_entry_map.find(page_id);
+        const PageId page_id        = iter->first;
+        PageEntry    new_page_entry = iter->second;
+        auto         current        = page_entry_map.find(page_id);
         // if the gc page have already been remove, just ignore it
         if (current == page_entry_map.end())
         {
@@ -522,10 +522,11 @@ void PageStorage::gcUpdatePageMap(const PageEntryMap & gc_pages_map)
         }
         auto & old_page_entry = current.pageEntry();
         // In case of page being updated during GC process.
-        if (old_page_entry.fileIdLevel() < page_entry.fileIdLevel())
+        if (old_page_entry.fileIdLevel() < new_page_entry.fileIdLevel())
         {
             // no new page write to `page_entry_map`, replace it with gc page
-            old_page_entry = page_entry;
+            new_page_entry.ref = old_page_entry.ref;
+            old_page_entry = new_page_entry;
         }
         // else new page written by another thread, gc page is replaced. leave the page for next gc
     }

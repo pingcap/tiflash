@@ -247,12 +247,15 @@ TEST_F(PageStorage_test, GcPageMove)
     EXPECT_PagePos_LT({5, 2}, {6, 1});
 
     const PageId pid = 0;
-    // old Page0 is in PageFile{5, 0}
+    const PageId ref_pid = 1;
+    // old Page0 is in PageFile{5, 0}, ref_count = 2
     storage->page_entry_map.put(pid,
                                 PageEntry{
                                     .file_id = 5,
                                     .level   = 0,
+                                    .ref     = 2,
                                 });
+    storage->page_entry_map.ref(ref_pid, pid);
     // gc move Page0 -> PageFile{5,1}
     PageEntryMap map;
     map.put(pid,
@@ -261,11 +264,20 @@ TEST_F(PageStorage_test, GcPageMove)
                 .level   = 1,
             });
     storage->gcUpdatePageMap(map);
+
     // page_map get updated
-    const PageEntry entry = storage->getEntry(pid);
+    PageEntry entry = storage->getEntry(pid);
     ASSERT_TRUE(entry.isValid());
     ASSERT_EQ(entry.file_id, 5u);
     ASSERT_EQ(entry.level, 1u);
+    ASSERT_EQ(entry.ref, 2u);
+
+    // RefPage got update at the same time
+    entry = storage->getEntry(ref_pid);
+    ASSERT_TRUE(entry.isValid());
+    ASSERT_EQ(entry.file_id, 5u);
+    ASSERT_EQ(entry.level, 1u);
+    ASSERT_EQ(entry.ref, 2u);
 }
 
 TEST_F(PageStorage_test, GcConcurrencySetPage)
