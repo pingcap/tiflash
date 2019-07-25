@@ -20,7 +20,7 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
         auto iter = node->page_ref.find(page_id);
         if (iter != node->page_ref.end())
         {
-            // if new ref find in this delta, turn to find ori_page_id in this VersionView
+            // if ref-id find in this delta, turn to find  in this VersionView
             found = true;
             normal_page_id = iter->second;
             break;
@@ -28,6 +28,7 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
     }
     if (!found)
     {
+        // The page have been deleted.
         return nullptr;
     }
 
@@ -67,6 +68,7 @@ const PageEntry * PageEntryMapView::findNormalPageEntry(PageId page_id) const
 
 bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
 {
+    // TODO merge code with isRefId
     auto node = tail;
     for (; !node->isBase(); node = node->prev)
     {
