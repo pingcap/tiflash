@@ -50,6 +50,7 @@ public:
         Write w = {WriteType::DEL, page_id, 0, {}, 0, 0};
         writes.emplace_back(w);
     }
+
     const Writes & getWrites() const { return writes; }
 
     size_t putWriteCount() const

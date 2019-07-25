@@ -62,6 +62,16 @@ public:
     template <bool must_exist = false>
     void ref(PageId ref_id, PageId page_id);
 
+    std::pair<bool, PageId> isRefId(PageId page_id) const
+    {
+        auto ref_pair = page_ref.find(page_id);
+        if (ref_pair == page_ref.end())
+        {
+            return {false, 0UL};
+        }
+        return {ref_pair->second != page_id, ref_pair->second};
+    }
+
     bool isRefExists(PageId ref_id, PageId page_id) const
     {
         const PageId normal_page_id = resolveRefId(page_id);

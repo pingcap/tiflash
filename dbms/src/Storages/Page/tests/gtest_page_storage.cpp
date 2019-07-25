@@ -305,6 +305,37 @@ TEST_F(PageStorage_test, GcConcurrencySetPage)
     ASSERT_EQ(entry.level, 0u);
 }
 
+TEST_F(PageStorage_test, GcMoveRefPage)
+{
+    const size_t buf_sz = 256;
+    char         c_buff[buf_sz];
+
+    {
+        WriteBatch batch;
+        memset(c_buff, 0xf, buf_sz);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buf_sz);
+        batch.putRefPage(2, 1);
+        batch.putRefPage(3, 2);
+
+        batch.delPage(2);
+
+        storage->write(batch);
+    }
+
+    PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
+    PageStorage::GcLivesPages livesPages{ {id_and_lvl, {buf_sz, {1,}}}};
+    PageStorage::GcCandidates candidates{ id_and_lvl, };
+    PageEntryMap gc_file_page_entry_map = storage->gcMigratePages(livesPages, candidates);
+
+    // After migrate, RefPage 3 -> 1 is still valid
+    ASSERT_TRUE(gc_file_page_entry_map.isRefExists(3, 1));
+
+    // reopen PageStorage, RefPage 3 -> 1 is still valid
+    storage = reopenWithConfig(config);
+    ASSERT_TRUE(storage->page_entry_map.isRefExists(3, 1));
+}
+
 /**
  * PageStorage tests with predefine Page1 && Page2
  */

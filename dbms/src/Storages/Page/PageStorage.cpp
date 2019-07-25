@@ -483,9 +483,12 @@ PageEntryMap PageStorage::gcMigratePages(const GcLivesPages & file_valid_pages, 
             WriteBatch batch;
             for (auto iter = legacy_entries.ref_pairs_cbegin(); iter != legacy_entries.ref_pairs_cend(); ++iter)
             {
-                if (page_entry_map.isRefExists(iter->first, iter->second))
+                // Get `normal_page_id` from memory's `page_entry_map`. Note: can not get `normal_page_id` from disk,
+                // if it is a record of RefPage to another RefPage, the later ref-id is resolve to the actual `normal_page_id`.
+                auto [is_ref, normal_page_id] = page_entry_map.isRefId(iter->first);
+                if (is_ref)
                 {
-                    batch.putRefPage(iter->first, iter->second);
+                    batch.putRefPage(iter->first, normal_page_id);
                     num_valid_ref_pages += 1;
                 }
             }
