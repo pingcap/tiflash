@@ -133,7 +133,7 @@ public:
 
     void updateLeader(Backoffer & bo, const RegionVerID & region_id, uint64_t leader_store_id);
 
-    KeyLocation locateKey(Backoffer & bo, std::string key);
+    KeyLocation locateKey(Backoffer & bo, const std::string & key);
 
     void dropRegion(const RegionVerID &);
 
@@ -159,7 +159,7 @@ private:
     std::string getStoreAddr(Backoffer & bo, uint64_t id);
     Store getStore(Backoffer & bo, uint64_t id);
 
-    RegionPtr searchCachedRegion(std::string key);
+    RegionPtr searchCachedRegion(const std::string & key);
 
     void insertRegionToCache(RegionPtr region);
 

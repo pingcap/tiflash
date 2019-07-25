@@ -41,7 +41,7 @@ RegionPtr RegionCache::getCachedRegion(Backoffer & bo, const RegionVerID & id) {
     return it->second;
 }
 
-KeyLocation RegionCache::locateKey(Backoffer & bo, std::string key) {
+KeyLocation RegionCache::locateKey(Backoffer & bo, const std::string & key) {
     RegionPtr region = searchCachedRegion(key);
     if (region != nullptr) {
         return KeyLocation (region -> verID() , region -> startKey(), region -> endKey());
@@ -149,7 +149,7 @@ std::string RegionCache::getStoreAddr(Backoffer & bo, uint64_t id) {
     return reloadStore(bo, id).addr;
 }
 
-RegionPtr RegionCache::searchCachedRegion(std::string key) {
+RegionPtr RegionCache::searchCachedRegion(const std::string & key) {
     auto it = regions_map.upper_bound(key);
     if (it != regions_map.end() && it->second->contains(key)) {
         return it->second;

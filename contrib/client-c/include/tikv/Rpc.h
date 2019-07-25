@@ -39,7 +39,7 @@ struct RpcTypeTraits<kvrpcpb::ReadIndexRequest> {
     using RequestType = kvrpcpb::ReadIndexRequest;
     using ResultType = kvrpcpb::ReadIndexResponse;
 
-    static std::string err_msg() {
+    static const char* err_msg() {
         return "Read Index Failed";
     }
 
@@ -53,7 +53,7 @@ struct RpcTypeTraits<kvrpcpb::GetRequest> {
     using RequestType = kvrpcpb::GetRequest;
     using ResultType = kvrpcpb::GetResponse;
 
-    static std::string err_msg() {
+    static const char* err_msg() {
         return "Kv Get Failed";
     }
 
@@ -67,7 +67,7 @@ struct RpcTypeTraits<kvrpcpb::ScanRequest> {
     using RequestType = kvrpcpb::ScanRequest;
     using ResultType = kvrpcpb::ScanResponse;
 
-    static std::string err_msg() {
+    static const char* err_msg() {
         return "Kv Scan Failed";
     }
 
@@ -118,7 +118,7 @@ public:
         context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(20));
         auto status = Trait::doRPCCall(&context, std::move(stub), *req, resp);
         if (!status.ok()) {
-            std::string err_msg = Trait::err_msg() + std::to_string(status.error_code()) + ": " + status.error_message();
+            std::string err_msg = std::string(Trait::err_msg()) + std::to_string(status.error_code()) + ": " + status.error_message();
             log->error(err_msg);
             throw Exception(err_msg, GRPCErrorCode);
         }
