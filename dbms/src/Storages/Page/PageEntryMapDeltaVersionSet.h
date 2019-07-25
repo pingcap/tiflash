@@ -121,8 +121,6 @@ public:
 
     std::pair<bool, PageId> isRefId(PageId page_id) const;
 
-    bool isRefExists(PageId ref_id, PageId page_id) const;
-
     // For iterate over all pages
     std::set<PageId> validPageIds() const;
 

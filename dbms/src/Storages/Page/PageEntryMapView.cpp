@@ -66,40 +66,6 @@ const PageEntry * PageEntryMapView::findNormalPageEntry(PageId page_id) const
     return nullptr;
 }
 
-bool PageEntryMapView::isRefExists(PageId ref_id, PageId page_id) const
-{
-    // TODO merge code with isRefId
-    auto node = tail;
-    for (; !node->isBase(); node = node->prev)
-    {
-        // `ref_id` or `page_id` has been deleted in later version, then return not exist
-        if (node->isDeleted(ref_id))
-        {
-            return false;
-        }
-        auto [is_ref, ori_ref_id] = node->isRefId(ref_id);
-        if (is_ref)
-        {
-            // if `ref_id` find in this delta
-            // find ref pair in this delta
-            if (ori_ref_id == page_id)
-            {
-                return true;
-            }
-            // turn to find if `ori_page_id` -> `page_id` is exists
-            ref_id = ori_ref_id;
-        }
-        auto [is_page_id_ref, ori_page_id] = node->isRefId(page_id);
-        if (is_page_id_ref)
-        {
-            // turn to find if `ref_id` -> `ori_page_id` is exists
-            page_id = ori_page_id;
-        }
-    }
-    assert(node->isBase());
-    return node->isRefExists(ref_id, page_id);
-}
-
 std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id) const
 {
     auto node = tail;

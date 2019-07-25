@@ -112,7 +112,8 @@ void PageEntryMapDeltaBuilder::applyPut(PageEntriesEdit::EditRecord &rec)
     const PageId normal_page_id = view->resolveRefId(rec.page_id);
 
     // update ref-pairs
-    bool is_ref_exist = view->isRefExists(rec.page_id, normal_page_id);
+    auto [is_ref, ref_normal_id] = view->isRefId(rec.page_id);
+    auto is_ref_exist = (is_ref && ref_normal_id == normal_page_id);
     if (!is_ref_exist)
     {
         v->page_ref.emplace(rec.page_id, normal_page_id);

@@ -108,21 +108,6 @@ public:
         return {ref_pair->second != page_id, ref_pair->second};
     }
 
-    bool isRefExists(PageId ref_id, PageId page_id) const
-    {
-        const PageId normal_page_id = resolveRefId(page_id);
-        const auto   ref_pair       = page_ref.find(ref_id);
-        if (ref_pair != page_ref.end())
-        {
-            return ref_pair->second == normal_page_id;
-        }
-        else
-        {
-            // ref_id not exists.
-            return false;
-        }
-    }
-
     inline void clear()
     {
         page_ref.clear();

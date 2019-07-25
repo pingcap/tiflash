@@ -313,7 +313,9 @@ TEST_F(PageStorage_test, GcMoveRefPage)
     // reopen PageStorage, RefPage 3 -> 1 is still valid
     storage = reopenWithConfig(config);
     auto s1 = storage->getSnapshot();
-    ASSERT_TRUE(s1->version()->isRefExists(3, 1));
+    auto [is_ref, normal_page_id] = s1->version()->isRefId(3);
+    ASSERT_TRUE(is_ref);
+    ASSERT_EQ(normal_page_id, 1UL);
 }
 
 /**
