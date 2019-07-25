@@ -341,6 +341,19 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                 case raft_cmdpb::CmdType::ReadIndex:
                     LOG_WARNING(log, toString(false) << " skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
                     break;
+                case raft_cmdpb::CmdType::DeleteRange:
+                {
+                    const auto & delete_range = req.delete_range();
+                    const auto & cf = delete_range.cf();
+                    const auto & start = static_cast<const TiKVKey &>(delete_range.start_key());
+                    const auto & end = static_cast<const TiKVKey &>(delete_range.end_key());
+
+                    LOG_WARNING(log,
+                        toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
+                                        << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
+                    doDeleteRange(cf, start, end);
+                    break;
+                }
                 default:
                 {
                     throw Exception(
@@ -632,6 +645,12 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
 
     for (auto & [table_id, handle_map] : handle_maps)
         compareAndCompleteSnapshot(handle_map, table_id, safe_point);
+}
+
+void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, const TiKVKey & end_key)
+{
+    auto type = getCf(cf);
+    return data.deleteRange(type, start_key, end_key);
 }
 
 } // namespace DB

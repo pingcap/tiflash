@@ -173,6 +173,7 @@ private:
 
     TableID doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
+    void doDeleteRange(const std::string & cf, const TiKVKey & start_key, const TiKVKey & end_key);
 
     RegionDataReadInfo readDataByWriteIt(
         const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
