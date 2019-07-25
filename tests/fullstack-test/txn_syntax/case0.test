@@ -5,7 +5,7 @@ t> insert into test.simple(a0, a1) values('hello world2', '1000000000')
 t> insert into test.simple(a0, a1) values('hello world3', '100000')
 t> insert into test.simple(a0, a1) values('hello world4', '348912734')
 
-SLEEP 1
+SLEEP 5
 
 >> select a0, a1 from test.simple
 ┌─a0───────────┬─a1─────────┐
@@ -15,30 +15,30 @@ SLEEP 1
 │ hello world4 │ 348912734  │
 └──────────────┴────────────┘
 
-t> update test.simple set a0='hpvssbhtrntvmxwz', a1='46' where a0 = 'hpvssbhtrntvmxwz'
-t> update test.simple set a0='wezpneeyrboaemre', a1='8' where a0 = 'wezpneeyrboaemre'
-t> update test.simple set a0='reoyrfllrjglgccf', a1='83' where a0 = 'reoyrfllrjglgccf'
-t> update test.simple set a0='csnlgygswrovixwm', a1='39' where a0 = 'csnlgygswrovixwm'
+t> update test.simple set a0='nzsfqrognjkhpjoz', a1='78' where a0 = 'nzsfqrognjkhpjoz'
+t> update test.simple set a0='xhovmflpibujsquv', a1='3' where a0 = 'xhovmflpibujsquv'
+t> update test.simple set a0='pdkfogtdeidfamgu', a1='66' where a0 = 'pdkfogtdeidfamgu'
+t> update test.simple set a0='ejmmmrqwfvjuwvcs', a1='31' where a0 = 'ejmmmrqwfvjuwvcs'
 
-SLEEP 1
+SLEEP 5
 
 >> select a0, a1 from test.simple
 ┌─a0───────────────┬─a1─┐
-│ hpvssbhtrntvmxwz │ 46 │
-│ wezpneeyrboaemre │ 8  │
-│ reoyrfllrjglgccf │ 83 │
-│ csnlgygswrovixwm │ 39 │
+│ nzsfqrognjkhpjoz │ 78 │
+│ xhovmflpibujsquv │ 3  │
+│ pdkfogtdeidfamgu │ 66 │
+│ ejmmmrqwfvjuwvcs │ 31 │
 └──────────────────┴────┘
 
-t> delete from test.simple where a0 = 'hpvssbhtrntvmxwz'
-t> delete from test.simple where a0 = 'reoyrfllrjglgccf'
+t> delete from test.simple where a0 = 'nzsfqrognjkhpjoz'
+t> delete from test.simple where a0 = 'pdkfogtdeidfamgu'
 
-SLEEP 1
+SLEEP 5
 
 >> select a0, a1 from test.simple
 ┌─a0───────────────┬─a1─┐
-│ wezpneeyrboaemre │ 8  │
-│ csnlgygswrovixwm │ 39 │
+│ ejmmmrqwfvjuwvcs │ 31 │
+│ xhovmflpibujsquv │ 3  │
 └──────────────────┴────┘
 
 t> drop table if exists test.simple
