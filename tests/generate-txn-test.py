@@ -17,11 +17,11 @@ sample_data = [
 
 extra = ["default null", "not null", ""]
 
-drop_stmt = Template("t> drop table if exists $database.$table\n")
-create_stmt = Template("t> create table $database.$table($schema)\n")
-insert_stmt = Template("t> insert into $database.$table($columns) values($data)\n")
-update_stmt = Template("t> update $database.$table set $exprs $condition\n")
-delete_stmt = Template("t> delete from $database.$table $condition\n")
+drop_stmt = Template("mysql> drop table if exists $database.$table\n")
+create_stmt = Template("mysql> create table $database.$table($schema)\n")
+insert_stmt = Template("mysql> insert into $database.$table($columns) values($data)\n")
+update_stmt = Template("mysql> update $database.$table set $exprs $condition\n")
+delete_stmt = Template("mysql> delete from $database.$table $condition\n")
 select_stmt = Template(">> select $columns from $database.$table\n")
 sleep_string = "\nSLEEP 5\n\n"
 

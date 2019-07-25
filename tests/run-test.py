@@ -6,7 +6,7 @@ import time
 
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
-CMD_PREFIX_TIDB = 't> '
+CMD_PREFIX_TIDB = 'mysql> '
 RETURN_PREFIX = '#RETURN'
 SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
