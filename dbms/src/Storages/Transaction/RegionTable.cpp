@@ -23,8 +23,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
     if (it == tables.end())
     {
         // Load persisted info.
-        if (getOrCreateStorage(table_id) == nullptr)
-            throw Exception("Get or create storage fail", ErrorCodes::LOGICAL_ERROR);
+        getOrCreateStorage(table_id);
 
         std::tie(it, std::ignore) = tables.emplace(table_id, Table(table_id));
 
@@ -187,6 +186,16 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         // Ignore such data.
         LOG_WARNING(log,
             __PRETTY_FUNCTION__ << ": Not flushing table_id: " << table_id << ", region_id: " << region_id << " as storage doesn't exist.");
+
+        {
+            auto scanner = region->createCommittedScanner(table_id);
+
+            if (!region->isPeerRemoved())
+            {
+                while (scanner->hasNext())
+                    data_list.emplace_back(scanner->next(false));
+            }
+        }
     }
     else
     {
