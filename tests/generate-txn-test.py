@@ -23,7 +23,7 @@ insert_stmt = Template("t> insert into $database.$table($columns) values($data)\
 update_stmt = Template("t> update $database.$table set $exprs $condition\n")
 delete_stmt = Template("t> delete from $database.$table $condition\n")
 select_stmt = Template(">> select $columns from $database.$table\n")
-sleep_string = "\nSLEEP 1\n\n"
+sleep_string = "\nSLEEP 5\n\n"
 
 
 INSERT = "insert"
