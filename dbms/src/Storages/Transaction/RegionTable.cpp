@@ -196,6 +196,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
                     data_list.emplace_back(scanner->next(false));
             }
         }
+        mem_read_cost = write_part_cost = 0;
     }
     else
     {
