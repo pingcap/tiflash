@@ -348,7 +348,7 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                     const auto & start = static_cast<const TiKVKey &>(delete_range.start_key());
                     const auto & end = static_cast<const TiKVKey &>(delete_range.end_key());
 
-                    LOG_WARNING(log,
+                    LOG_INFO(log,
                         toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
                                         << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
                     doDeleteRange(cf, start, end);
