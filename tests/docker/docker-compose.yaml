@@ -18,3 +18,94 @@ services:
     command:
       - --config-file
       - /config.xml
+  pd0:
+    image: hub.pingcap.net/tiflash/pd:190508
+    ports:
+      - "2379:2379"
+    volumes:
+      - ./config/pd.toml:/pd.toml:ro
+      - ./data/pd0:/data
+      - ./log/pd0:/log
+    command:
+      - --name=pd0
+      - --client-urls=http://0.0.0.0:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-client-urls=http://pd0:2379
+      - --advertise-peer-urls=http://pd0:2380
+      - --initial-cluster=pd0=http://pd0:2380
+      - --config=/pd.toml
+      - --data-dir=/data
+      - --log-file=/log/pd.log
+    restart: on-failure
+  tikv0:
+    image: hub.pingcap.net/tiflash/tikv-leader:190508
+    ports:
+      - "20160:20160"
+    volumes:
+      - ./config/tikv.toml:/tikv.toml:ro
+      - ./data/tikv0:/data
+      - ./log/tikv0:/log
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv0:20160
+      - --pd=pd0:2379
+      - --config=/tikv.toml
+      - --data-dir=/data
+      - --log-file=/log/tikv.log
+    depends_on:
+      - "pd0"
+    restart: on-failure
+  tidb0:
+    image: pingcap/tidb:latest
+    ports:
+      - "4000:4000"
+      - "10080:10080"
+    volumes:
+      - ./config/tidb.toml:/tidb.toml:ro
+      - ./log/tidb0:/log
+    command:
+      - --store=tikv
+      - --path=pd0:2379
+      - --config=/tidb.toml
+      - --log-file=/log/tidb.log
+    depends_on:
+      - "tikv0"
+    restart: on-failure
+  tiflash0:
+    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
+    ports:
+      - "3930:3930"
+      - "9000:9000"
+      - "8123:8123"
+      - "9009:9009"
+    volumes:
+      - ./config/tiflash.xml:/config.xml:ro
+      - ./config/tiflash-users.xml:/users.xml:ro
+      - ./data/tiflash0:/data
+      - ./log/tiflash0:/log
+    command:
+      - --config-file
+      - /config.xml
+    depends_on:
+      - "tidb0"
+    restart: on-failure
+  tikv-learner0:
+    image: hub.pingcap.net/tiflash/tikv-learner:190508
+    ports:
+      - "20170:20170"
+    volumes:
+      - ./config/tikv-learner.toml:/tikv.toml:ro
+      - ./data/tikv-learner0:/data
+      - ./log/tikv-learner0:/log
+    command:
+      - --addr=0.0.0.0:20170
+      - --advertise-addr=tikv-learner0:20170
+      - --pd=pd0:2379
+      - --config=/tikv.toml
+      - --data-dir=/data
+      - --log-file=/log/tikv.log
+    depends_on:
+      - "tikv0"
+      - "tiflash0"
+    restart: on-failure
+
