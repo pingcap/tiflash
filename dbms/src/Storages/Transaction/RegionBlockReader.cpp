@@ -1,4 +1,5 @@
 #include <Columns/ColumnsNumber.h>
+#include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
@@ -68,12 +69,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
         column_map[handle_col_id].first->reserve(data_list.size());
     }
 
-    bool pk_is_uint64 = false;
-
-    const auto pk_type = column_map[handle_col_id].second.type->getFamilyName();
-
-    if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-        pk_is_uint64 = true;
+    const bool pk_is_uint64 = getTMTPKType(*column_map[handle_col_id].second.type) == TMTPKType::UINT64;
 
     if (pk_is_uint64)
     {

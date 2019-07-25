@@ -25,9 +25,6 @@ static const size_t ENC_GROUP_SIZE = 8;
 static const UInt8 ENC_MARKER = static_cast<UInt8>(0xff);
 static const char ENC_ASC_PADDING[ENC_GROUP_SIZE] = {0};
 
-static const size_t KEY_SIZE_WITHOUT_TS = ((1 + 8 + 2 + 8)/ENC_GROUP_SIZE+1)*(ENC_GROUP_SIZE+1);
-
-
 template<typename T>
 T DecodeInt(size_t & cursor, const String & raw_value)
 {

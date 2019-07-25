@@ -16,6 +16,7 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/MergeTree/MergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/TMTDataPartProperty.h>
 
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -133,15 +134,26 @@ void MergeTreeDataPart::MinMaxIndex::merge(const MinMaxIndex & other)
     }
 }
 
+MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_, const String & parent_path)
+        : storage(storage_), name(name_), info(info_), full_path_prefix(parent_path)
+{
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        tmt_property = std::make_unique<TMTDataPartProperty>();
+}
+
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_)
         : storage(storage_), name(name_), info(info_)
 {
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        tmt_property = std::make_unique<TMTDataPartProperty>();
     full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name);
 }
 
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_)
-    : storage(storage_), name(name_), info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
+        : storage(storage_), name(name_), info(MergeTreePartInfo::fromPartName(name_, storage.format_version))
 {
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        tmt_property = std::make_unique<TMTDataPartProperty>();
     full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name);
 }
 
@@ -497,7 +509,11 @@ void MergeTreeDataPart::loadPartitionAndMinMaxIndex()
         String full_path = getFullPath();
         partition = MergeTreePartition(partition_name);
         if (!isEmpty())
+        {
             minmax_idx.load(storage, full_path);
+            if (storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
+                tmt_property->load(storage, full_path);
+        }
     }
     else if (storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
     {
