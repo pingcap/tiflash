@@ -15,30 +15,30 @@ SLEEP 5
 │ hello world4 │ 348912734  │
 └──────────────┴────────────┘
 
-t> update test.simple set a0='nzsfqrognjkhpjoz', a1='78' where a0 = 'nzsfqrognjkhpjoz'
-t> update test.simple set a0='xhovmflpibujsquv', a1='3' where a0 = 'xhovmflpibujsquv'
-t> update test.simple set a0='pdkfogtdeidfamgu', a1='66' where a0 = 'pdkfogtdeidfamgu'
-t> update test.simple set a0='ejmmmrqwfvjuwvcs', a1='31' where a0 = 'ejmmmrqwfvjuwvcs'
+t> update test.simple set a0='pexdqwlekfyegpqt', a1='53' where a0 = 'hello world'
+t> update test.simple set a0='vxlskrufnczqhbhk', a1='99' where a0 = 'hello world2'
+t> update test.simple set a0='ayrjltxinwcxqabv', a1='24' where a0 = 'hello world3'
+t> update test.simple set a0='ksjjdhghvcjwbluy', a1='46' where a0 = 'hello world4'
 
 SLEEP 5
 
 >> select a0, a1 from test.simple
 ┌─a0───────────────┬─a1─┐
-│ nzsfqrognjkhpjoz │ 78 │
-│ xhovmflpibujsquv │ 3  │
-│ pdkfogtdeidfamgu │ 66 │
-│ ejmmmrqwfvjuwvcs │ 31 │
+│ pexdqwlekfyegpqt │ 53 │
+│ vxlskrufnczqhbhk │ 99 │
+│ ayrjltxinwcxqabv │ 24 │
+│ ksjjdhghvcjwbluy │ 46 │
 └──────────────────┴────┘
 
-t> delete from test.simple where a0 = 'nzsfqrognjkhpjoz'
-t> delete from test.simple where a0 = 'pdkfogtdeidfamgu'
+t> delete from test.simple where a0 = 'ayrjltxinwcxqabv'
+t> delete from test.simple where a0 = 'ksjjdhghvcjwbluy'
 
 SLEEP 5
 
 >> select a0, a1 from test.simple
 ┌─a0───────────────┬─a1─┐
-│ ejmmmrqwfvjuwvcs │ 31 │
-│ xhovmflpibujsquv │ 3  │
+│ pexdqwlekfyegpqt │ 53 │
+│ vxlskrufnczqhbhk │ 99 │
 └──────────────────┴────┘
 
 t> drop table if exists test.simple

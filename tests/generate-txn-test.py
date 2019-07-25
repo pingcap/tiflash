@@ -178,10 +178,10 @@ def generate_cases(database, table, types, sample_data, dir):
                         exprs = []
                         for i in range(len(types)):
                             ele = generate_data(types[i])
+                            if column_names[i] == primary_key:
+                                condition = "where " + primary_key + " = " + repr(data_point[i])
                             data_point[i] = ele
                             exprs.append(column_names[i] + "=" + repr(ele))
-                            if column_names[i] == primary_key:
-                                condition = "where " + primary_key + " = " + repr(ele)
                         file.write(update_stmt.substitute({"database": database,
                                                            "table": table,
                                                            "exprs": ", ".join(exprs),
