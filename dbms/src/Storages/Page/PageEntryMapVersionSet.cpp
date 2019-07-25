@@ -71,12 +71,10 @@ void PageEntryMapBuilder::gcApply(PageEntriesEdit & edit)
     for (auto & rec : edit.getRecords())
     {
         if (rec.type != WriteBatch::WriteType::PUT)
-        {
             continue;
-        }
+        // Gc only apply PUT for updating page entries
         try
         {
-            // Gc only apply PUT for updating page entries
             auto old_page_entry = v->find(rec.page_id);
             // If the gc page have already been removed, just ignore it
             if (old_page_entry == nullptr)

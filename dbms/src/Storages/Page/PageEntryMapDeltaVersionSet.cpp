@@ -209,18 +209,14 @@ void PageEntryMapDeltaBuilder::gcApply(PageEntriesEdit & edit)
     for (auto & rec : edit.getRecords())
     {
         if (rec.type != WriteBatch::WriteType::PUT)
-        {
             continue;
-        }
         // Gc only apply PUT for updating page entries
         try
         {
             auto old_page_entry = view->find(rec.page_id); // this may throw an exception if ref to non-exist page
             // If the gc page have already been removed, just ignore it
             if (old_page_entry == nullptr)
-            {
                 continue;
-            }
             // In case of page being updated during GC process.
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
@@ -242,18 +238,14 @@ void PageEntryMapDeltaBuilder::gcApplyInplace(const PageEntryMapDeltaVersionSet:
     for (auto & rec : edit.getRecords())
     {
         if (rec.type != WriteBatch::WriteType::PUT)
-        {
             continue;
-        }
         // Gc only apply PUT for updating page entries
         try
         {
             auto old_page_entry = current->find(rec.page_id); // this may throw an exception if ref to non-exist page
             // If the gc page have already been removed, just ignore it
             if (old_page_entry == nullptr)
-            {
                 continue;
-            }
             // In case of page being updated during GC process.
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
