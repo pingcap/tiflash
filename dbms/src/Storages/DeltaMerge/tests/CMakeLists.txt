@@ -35,7 +35,7 @@ add_executable(dm_test_disk_value_space gtest_dm_disk_value_space.cpp)
 target_link_libraries(dm_test_disk_value_space dbms gtest_main clickhouse_functions)
 
 add_executable(dm_test_merge_block_stream gtest_dm_delta_merge_block_stream.cpp)
-target_link_libraries(dm_test_merge_block_stream dbms gtest_main)
+target_link_libraries(dm_test_merge_block_stream dbms gtest_main clickhouse_functions)
 
 add_executable(dm_test_delta_tree gtest_dm_delta_tree.cpp)
 target_link_libraries(dm_test_delta_tree dbms gtest_main)

@@ -21,6 +21,7 @@
 namespace DB
 {
 using namespace DM;
+
 constexpr bool TEST_SPLIT = false;
 
 StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,

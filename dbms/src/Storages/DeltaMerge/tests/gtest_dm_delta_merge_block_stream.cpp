@@ -27,6 +27,8 @@ namespace DM
 namespace tests
 {
 
+using namespace Dummy;
+
 class DummyDeltaMergeBlockInputStream_test : public ::testing::Test
 {
 public:

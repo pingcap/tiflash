@@ -23,7 +23,7 @@ namespace DM
 struct BlockOrDelete
 {
     BlockOrDelete(Block && block_) : block(block_) {}
-    BlockOrDelete(HandleRange && delete_range_) : delete_range(delete_range_) {}
+    BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
 
     Block       block;
     HandleRange delete_range;
