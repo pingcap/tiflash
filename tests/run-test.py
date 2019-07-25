@@ -23,7 +23,7 @@ class Executor:
 
 def parse_line(line):
     words = [w.strip() for w in line.split("│") if w.strip() != ""]
-    return '@'.join(words)
+    return tuple(words)
 
 def parse_table_parts(lines, fuzz):
     parts = set()

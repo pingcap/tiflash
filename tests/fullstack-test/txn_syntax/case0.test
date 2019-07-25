@@ -1,0 +1,44 @@
+t> drop table if exists test.simple
+t> create table test.simple(a0 varchar(16), a1 int, primary key (a0))
+t> insert into test.simple(a0, a1) values('hello world', '23892384')
+t> insert into test.simple(a0, a1) values('hello world2', '1000000000')
+t> insert into test.simple(a0, a1) values('hello world3', '100000')
+t> insert into test.simple(a0, a1) values('hello world4', '348912734')
+
+SLEEP 1
+
+>> select a0, a1 from test.simple
+┌─a0───────────┬─a1─────────┐
+│ hello world  │ 23892384   │
+│ hello world2 │ 1000000000 │
+│ hello world3 │ 100000     │
+│ hello world4 │ 348912734  │
+└──────────────┴────────────┘
+
+t> update test.simple set a0='hpvssbhtrntvmxwz', a1='46' where a0 = 'hpvssbhtrntvmxwz'
+t> update test.simple set a0='wezpneeyrboaemre', a1='8' where a0 = 'wezpneeyrboaemre'
+t> update test.simple set a0='reoyrfllrjglgccf', a1='83' where a0 = 'reoyrfllrjglgccf'
+t> update test.simple set a0='csnlgygswrovixwm', a1='39' where a0 = 'csnlgygswrovixwm'
+
+SLEEP 1
+
+>> select a0, a1 from test.simple
+┌─a0───────────────┬─a1─┐
+│ hpvssbhtrntvmxwz │ 46 │
+│ wezpneeyrboaemre │ 8  │
+│ reoyrfllrjglgccf │ 83 │
+│ csnlgygswrovixwm │ 39 │
+└──────────────────┴────┘
+
+t> delete from test.simple where a0 = 'hpvssbhtrntvmxwz'
+t> delete from test.simple where a0 = 'reoyrfllrjglgccf'
+
+SLEEP 1
+
+>> select a0, a1 from test.simple
+┌─a0───────────────┬─a1─┐
+│ wezpneeyrboaemre │ 8  │
+│ csnlgygswrovixwm │ 39 │
+└──────────────────┴────┘
+
+t> drop table if exists test.simple

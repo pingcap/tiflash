@@ -152,4 +152,6 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
+python generate-txn-test.py "$tidb_db" "$tidb_table"
+
 run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"

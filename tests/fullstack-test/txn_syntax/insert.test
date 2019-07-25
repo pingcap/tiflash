@@ -1,8 +1,8 @@
 t> drop table if exists test.t
-t> create table test.t(s varchar(256), i int);
-t> insert into test.t values('Hello world', 666);
+t> create table test.t(s varchar(256), i int)
+t> insert into test.t values('Hello world', 666)
 
-#SLEEP 5
+SLEEP 1
 
 => select s, i from test.t
 ┌─s───────────┬───i─┐
