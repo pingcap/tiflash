@@ -126,7 +126,7 @@ TEST(PageEntryMap_test, UpdateRefPageEntry)
 
     // update on RefPage1, both Page0 and RefPage1 entry get update
     const PageEntry entry2{.checksum = 0x789};
-    map.put(page_id, entry2);
+    map.put(ref_id, entry2);
     ASSERT_EQ(map.at(page_id).checksum, entry2.checksum);
     ASSERT_EQ(map.at(ref_id).checksum, entry2.checksum);
 
