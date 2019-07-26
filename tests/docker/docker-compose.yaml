@@ -74,7 +74,7 @@ services:
     restart: on-failure
   # tiflash0 image is for tests under fullstack-test directory
   tiflash0:
-    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
+    image: tiflash-with-mysql-client0
     ports:
       - "3930:3930"
       - "9000:9000"
@@ -85,6 +85,8 @@ services:
       - ./config/tiflash-users.xml:/users.xml:ro
       - ./data/tiflash0:/data
       - ./log/tiflash0:/log
+      - ..:/tests
+      - ./_env.sh:/tests/_env.sh
     command:
       - --config-file
       - /config.xml
