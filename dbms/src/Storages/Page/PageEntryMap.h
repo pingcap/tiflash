@@ -93,13 +93,6 @@ public:
 
     std::pair<bool, PageId> isRefId(PageId page_id) const
     {
-        if (!is_base)
-        {
-            if (ref_deletions.count(page_id) > 0)
-            {
-                return {false, 0UL};
-            }
-        }
         auto ref_pair = page_ref.find(page_id);
         if (ref_pair == page_ref.end())
         {

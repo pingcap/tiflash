@@ -20,7 +20,6 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
         auto iter = node->page_ref.find(page_id);
         if (iter != node->page_ref.end())
         {
-            // if ref-id find in this delta, turn to find  in this VersionView
             found = true;
             normal_page_id = iter->second;
             break;
@@ -71,9 +70,11 @@ std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id) const
     auto node = tail;
     for (; !node->isBase(); node = node->prev)
     {
-        auto [is_ref, ori_id] = node->isRefId(page_id);
-        if (is_ref)
-            return {is_ref, ori_id};
+        if (node->ref_deletions.count(page_id) > 0)
+            return {false, 0};
+        auto iter = node->page_ref.find(page_id);
+        if (iter != node->page_ref.end())
+            return {true, iter->second};
     }
     return node->isRefId(page_id);
 }

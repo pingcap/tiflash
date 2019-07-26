@@ -109,13 +109,11 @@ void PageEntryMapDeltaBuilder::applyPut(PageEntriesEdit::EditRecord &rec)
 {
     assert(rec.type == WriteBatch::WriteType::PUT);
     v->ref_deletions.erase(rec.page_id);
-    const PageId normal_page_id = view->resolveRefId(rec.page_id);
 
-    // update ref-pairs
-    auto [is_ref, ref_normal_id] = view->isRefId(rec.page_id);
-    auto is_ref_exist = (is_ref && ref_normal_id == normal_page_id);
+    auto [is_ref_exist, normal_page_id] = view->isRefId(rec.page_id);
     if (!is_ref_exist)
     {
+        // if ref not exist, add new ref-pair
         v->page_ref.emplace(rec.page_id, normal_page_id);
     }
 

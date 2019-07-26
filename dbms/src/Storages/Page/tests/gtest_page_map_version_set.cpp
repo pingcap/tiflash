@@ -411,6 +411,32 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
     ASSERT_EQ(s2->version()->at(3).checksum, 0x9UL);
 }
 
+TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
+{
+    TypeParam versions(this->config_);
+    {
+        PageEntriesEdit edit;
+        edit.put(1, PageEntry{.checksum = 0xf});
+        edit.ref(2, 1);
+        versions.apply(edit);
+    }
+    auto s1 = versions.getSnapshot();
+    bool is_ref;
+    PageId normal_page_id;
+    std::tie(is_ref, normal_page_id) = s1->version()->isRefId(2);
+    ASSERT_TRUE(is_ref);
+    ASSERT_EQ(normal_page_id, 1UL);
+
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        versions.apply(edit);
+    }
+    auto s2 = versions.getSnapshot();
+    std::tie(is_ref, normal_page_id) = s2->version()->isRefId(2);
+    ASSERT_FALSE(is_ref);
+}
+
 TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
 {
     TypeParam versions(this->config_);
@@ -498,6 +524,7 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            GcConcurrencySetPage,
                            UpdateOnRefPage,
                            UpdateOnRefPage2,
+                           IsRefId,
                            Snapshot,
                            LiveFiles
                            );
