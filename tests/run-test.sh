@@ -143,7 +143,7 @@ if [ -z "$regenerate_fullstack_test" ]; then
 	regenerate_fullstack_test="false"
 fi
 
-"$storage_bin" client --host="$storage_server" --port "$storage_port" --query="create database if not exists $storage_db"
+"$storage_bin" client --host="$storage_server" --port="$storage_port" --query="create database if not exists $storage_db"
 if [ $? != 0 ]; then
 	echo "create database '"$storage_db"' failed" >&2
 	exit 1

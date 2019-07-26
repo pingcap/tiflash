@@ -1,9 +1,9 @@
-t> drop table if exists test.simple
-t> create table test.simple(a0 varchar(16), a1 int, primary key (a0))
-t> insert into test.simple(a0, a1) values('hello world', '23892384')
-t> insert into test.simple(a0, a1) values('hello world2', '1000000000')
-t> insert into test.simple(a0, a1) values('hello world3', '100000')
-t> insert into test.simple(a0, a1) values('hello world4', '348912734')
+mysql> drop table if exists test.simple
+mysql> create table test.simple(a0 varchar(16), a1 int, primary key (a0))
+mysql> insert into test.simple(a0, a1) values('hello world', '23892384')
+mysql> insert into test.simple(a0, a1) values('hello world2', '1000000000')
+mysql> insert into test.simple(a0, a1) values('hello world3', '100000')
+mysql> insert into test.simple(a0, a1) values('hello world4', '348912734')
 
 SLEEP 5
 
@@ -15,30 +15,30 @@ SLEEP 5
 │ hello world4 │ 348912734  │
 └──────────────┴────────────┘
 
-t> update test.simple set a0='pexdqwlekfyegpqt', a1='53' where a0 = 'hello world'
-t> update test.simple set a0='vxlskrufnczqhbhk', a1='99' where a0 = 'hello world2'
-t> update test.simple set a0='ayrjltxinwcxqabv', a1='24' where a0 = 'hello world3'
-t> update test.simple set a0='ksjjdhghvcjwbluy', a1='46' where a0 = 'hello world4'
+mysql> update test.simple set a0='mhzfopfonmsqekrm', a1='99' where a0 = 'hello world'
+mysql> update test.simple set a0='kpiednhemxnqoxgc', a1='31' where a0 = 'hello world2'
+mysql> update test.simple set a0='cbmopedohuiurgdv', a1='60' where a0 = 'hello world3'
+mysql> update test.simple set a0='oulifvnwutswvekh', a1='79' where a0 = 'hello world4'
 
 SLEEP 5
 
 >> select a0, a1 from test.simple
 ┌─a0───────────────┬─a1─┐
-│ pexdqwlekfyegpqt │ 53 │
-│ vxlskrufnczqhbhk │ 99 │
-│ ayrjltxinwcxqabv │ 24 │
-│ ksjjdhghvcjwbluy │ 46 │
+│ mhzfopfonmsqekrm │ 99 │
+│ kpiednhemxnqoxgc │ 31 │
+│ cbmopedohuiurgdv │ 60 │
+│ oulifvnwutswvekh │ 79 │
 └──────────────────┴────┘
 
-t> delete from test.simple where a0 = 'ayrjltxinwcxqabv'
-t> delete from test.simple where a0 = 'ksjjdhghvcjwbluy'
+mysql> delete from test.simple where a0 = 'mhzfopfonmsqekrm'
+mysql> delete from test.simple where a0 = 'kpiednhemxnqoxgc'
 
 SLEEP 5
 
 >> select a0, a1 from test.simple
 ┌─a0───────────────┬─a1─┐
-│ pexdqwlekfyegpqt │ 53 │
-│ vxlskrufnczqhbhk │ 99 │
+│ oulifvnwutswvekh │ 79 │
+│ cbmopedohuiurgdv │ 60 │
 └──────────────────┴────┘
 
-t> drop table if exists test.simple
+mysql> drop table if exists test.simple
