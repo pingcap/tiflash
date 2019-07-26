@@ -1,6 +1,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Common/Decimal.h>
 
 namespace TiDB
 {
@@ -10,7 +11,6 @@ using DB::WriteBufferFromOwnString;
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
 // TODO:: Refine Decimal Default Value !!
-// TODO:: Refine Enum Default Value !!
 // TODO:: Refine Date/Datatime/TimeStamp Defalut Value !!
 Field ColumnInfo::defaultValueToField() const
 {
@@ -31,11 +31,13 @@ Field ColumnInfo::defaultValueToField() const
         case TypeFloat:
         case TypeDouble:
             return value.convert<double>();
-        case TypeTimestamp:
-            // FIXME: may be string
-            return value.convert<Int64>();
         case TypeDate:
         case TypeDatetime:
+        case TypeTimestamp:
+        case TypeTime:
+        case TypeYear:
+            // TODO:: Process Datetime Family
+            return value.convert<String>();
         case TypeVarchar:
         case TypeTinyBlob:
         case TypeMediumBlob:
@@ -45,14 +47,28 @@ Field ColumnInfo::defaultValueToField() const
         case TypeString:
             return value.convert<String>();
         case TypeEnum:
-            // FIXME: may be int or string
-            return value.convert<String>();
+            return getEnumIndex(value.convert<String>());
         case TypeNull:
             return Field();
+        case TypeDecimal:
+        case TypeNewDecimal:
+        // TODO : Consider Bit / binary literal / Set / Duration.
         default:
             throw Exception("Have not proccessed type: " + std::to_string(tp));
     }
     return Field();
+}
+
+// FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
+Int64 ColumnInfo::getEnumIndex(const String & default_str) const 
+{
+    for (const auto & elem: elems) {
+        if (elem.first == default_str) {
+            return elem.second;
+        }
+    }
+    int num = std::stoi(default_str);
+    return num;
 }
 
 Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try

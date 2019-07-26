@@ -55,7 +55,7 @@ using DB::Timestamp;
     M(Bit, 16, CompactBytes, UInt64, false)          \
     M(JSON, 0xf5, Json, String, false)               \
     M(NewDecimal, 0xf6, Decimal, Decimal, false)     \
-    M(Enum, 0xf7, CompactBytes, Enum16, false)       \
+    M(Enum, 0xf7, VarUInt, Enum16, false)       \
     M(Set, 0xf8, CompactBytes, String, false)        \
     M(TinyBlob, 0xf9, CompactBytes, String, false)   \
     M(MediumBlob, 0xfa, CompactBytes, String, false) \
@@ -171,6 +171,7 @@ struct ColumnInfo
 
     CodecFlag getCodecFlag() const;
     DB::Field defaultValueToField() const;
+    Int64 getEnumIndex(const String &) const;
 };
 
 enum PartitionType
