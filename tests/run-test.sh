@@ -103,12 +103,12 @@ function run_path()
 set -e
 
 target="$1"
-fuzz="$2"
-skip_raw_test="$3"
-debug="$4"
-continue_on_error="$5"
-dbc="$6"
-regenerate_fullstack_test="$7"
+fullstack="$2"
+fuzz="$3"
+skip_raw_test="$4"
+debug="$5"
+continue_on_error="$6"
+dbc="$7"
 
 source ./_env.sh
 
@@ -139,8 +139,8 @@ if [ -z "$continue_on_error" ]; then
 	continue_on_error="false"
 fi
 
-if [ -z "$regenerate_fullstack_test" ]; then
-	regenerate_fullstack_test="false"
+if [ -z "fullstack" ]; then
+	fullstack="false"
 fi
 
 "$storage_bin" client --host="$storage_server" --port="$storage_port" --query="create database if not exists $storage_db"
@@ -151,12 +151,12 @@ fi
 
 tidbc="mysql -u root -P $tidb_port -h $tidb_server -e"
 
-$tidbc "create database if not exists $tidb_db"
-if [ $? != 0 ]; then
-	echo "create database '"$tidb_db"' failed" >&2
-	exit 1
-fi
-if [[ "$regenerate_fullstack_test" = "true" ]]; then
+if [[ "fullstack" = "true" ]]; then
+    $tidbc "create database if not exists $tidb_db"
+    if [ $? != 0 ]; then
+        echo "create database '"$tidb_db"' failed" >&2
+        exit 1
+    fi
     python generate-txn-test.py "$tidb_db" "$tidb_table"
 fi
 

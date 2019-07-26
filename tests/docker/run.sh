@@ -16,6 +16,6 @@ docker-compose down
 
 docker-compose up -d --scale tics0=0
 
-docker-compose exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test'
+docker-compose exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test true'
 
 docker-compose down
