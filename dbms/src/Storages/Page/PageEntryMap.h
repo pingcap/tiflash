@@ -91,7 +91,7 @@ public:
     }
     inline const PageEntry & at(const PageId page_id) const { return const_cast<PageEntryMapBaseDelta_t *>(this)->at(page_id); }
 
-    std::pair<bool, PageId> isRefId(PageId page_id) const
+    inline std::pair<bool, PageId> isRefId(PageId page_id) const
     {
         auto ref_pair = page_ref.find(page_id);
         if (ref_pair == page_ref.end())
@@ -234,7 +234,7 @@ private:
 
     size_t numNormalEntries() const { return normal_pages.size(); }
 
-    bool isDeleted(PageId page_id) const { return ref_deletions.count(page_id) > 0; }
+    inline bool isDeleted(PageId page_id) const { return ref_deletions.count(page_id) > 0; }
 
     PageId resolveRefId(PageId page_id) const
     {
