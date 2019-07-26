@@ -1,6 +1,7 @@
 version: '2.3'
 
 services:
+  # tics0 image is for tests under mutable-test directory
   tics0:
     image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     ports:
@@ -71,6 +72,7 @@ services:
     depends_on:
       - "tikv0"
     restart: on-failure
+  # tiflash0 image is for tests under fullstack-test directory
   tiflash0:
     image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     ports:
