@@ -114,6 +114,7 @@ void PageEntryMapDeltaBuilder::applyPut(PageEntriesEdit::EditRecord &rec)
     if (!is_ref_exist)
     {
         // if ref not exist, add new ref-pair
+        normal_page_id = rec.page_id;
         v->page_ref.emplace(rec.page_id, normal_page_id);
     }
 
