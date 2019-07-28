@@ -151,8 +151,9 @@ fi
 
 tidbc="mysql -u root -P $tidb_port -h $tidb_server -e"
 
-if [[ "fullstack" = "true" ]]; then
-    $tidbc "create database if not exists $tidb_db"
+if [ "$fullstack" = true ]; then
+    mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
+    sleep 10
     if [ $? != 0 ]; then
         echo "create database '"$tidb_db"' failed" >&2
         exit 1
