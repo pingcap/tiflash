@@ -1,4 +1,5 @@
 mysql> create table if not exists test.t(s varchar(256), i int)
+mysql> delete * from test.t
 mysql> insert into test.t values('Hello world', 666)
 
 SLEEP 5
@@ -8,3 +9,4 @@ SLEEP 5
 │ Hello world │ 666 │
 └─────────────┴─────┘
 
+mysql> delete * from test.t
