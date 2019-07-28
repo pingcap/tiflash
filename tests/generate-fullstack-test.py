@@ -16,7 +16,7 @@ insert_stmt = Template("mysql> insert into $database.$table($columns) values($da
 update_stmt = Template("mysql> update $database.$table set $exprs $condition\n")
 delete_stmt = Template("mysql> delete from $database.$table $condition\n")
 select_stmt = Template(">> select $columns from $database.$table\n")
-sleep_string = "\nSLEEP 8\n\n"
+sleep_string = "\nSLEEP 5\n\n"
 
 
 INSERT = "insert"
@@ -202,6 +202,7 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
                                                            "condition": condition}))
                     case_data = new_case_data
                 if op == SELECT:
+                    file.write(sleep_string)
                     file.write(select_stmt.substitute({"columns": ", ".join(column_names),
                                                        "database": database,
                                                        "table": table}))

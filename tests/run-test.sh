@@ -157,7 +157,7 @@ if [[ "fullstack" = "true" ]]; then
         echo "create database '"$tidb_db"' failed" >&2
         exit 1
     fi
-    python generate-txn-test.py "$tidb_db" "$tidb_table"
+    #python generate-txn-test.py "$tidb_db" "$tidb_table"
 fi
 
 run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"
