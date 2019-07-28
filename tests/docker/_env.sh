@@ -13,7 +13,7 @@ export storage_port="9000"
 export storage_db="default"
 
 # TiDB address
-export tidb_server="127.0.0.1"
+export tidb_server="tidb0"
 
 # TiDB port
 export tidb_port="4000"
