@@ -205,7 +205,6 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
                                                            "condition": condition}))
                     case_data = new_case_data
                 if op == SELECT:
-                    file.write(sleep_string)
                     file.write(select_stmt.substitute({"columns": ", ".join(column_names),
                                                        "database": database,
                                                        "table": table}))
