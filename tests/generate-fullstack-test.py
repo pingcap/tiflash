@@ -261,7 +261,7 @@ def run():
 
     primary_key_candidates = ["tinyint", "smallint", "mediumint", "int", "bigint",
              "unsigned tinyint", "unsigned smallint", "unsigned mediumint", "unsigned int", "unsigned bigint", ]
-    types = ["decimal(1, 0)", "decimal(5, 2)", "decimal(65, 0)", "decimal(65, 30)",
+    types = ["decimal(1, 0)", "decimal(5, 2)", "decimal(65, 0)",
              "varchar(20)", "char(10)",
              "date", "datetime", "timestamp", ]
     min_values = {
