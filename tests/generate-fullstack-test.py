@@ -171,7 +171,7 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
                         file.write(insert_stmt.substitute({"database": database,
                                                            "table": table,
                                                            "columns": ", ".join(column_names),
-                                                           "data": ", ".join([repr(d) for d in case_data[k]])}))
+                                                           "data": ", ".join([repr(d) if d != "null" else d for d in case_data[k]])}))
                 if op == UPDATE:
                     for data_point in case_data:
                         condition = ""
@@ -182,7 +182,10 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
                                 continue
                             ele = generate_data(types[i], types, sample_data)
                             data_point[i] = ele
-                            exprs.append(column_names[i] + "=" + repr(ele))
+                            value = repr(data_point[i])
+                            if data_point[i] == "null":
+                                value = data_point[i]
+                            exprs.append(column_names[i] + "=" + value)
                         file.write(update_stmt.substitute({"database": database,
                                                            "table": table,
                                                            "exprs": ", ".join(exprs),
@@ -244,7 +247,7 @@ def generate_data_for_types(types, sample_data, allow_empty=True, no_duplicate=F
                     samples = sample_data[name]
                     cur.append(str(random.choice(samples)))
                 elif allow_empty:
-                    cur.append("")
+                    cur.append("null")
                 else:
                     raise Exception("type without valid data_sample: ", name)
             result.append(cur)
