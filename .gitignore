@@ -242,3 +242,6 @@ build_docker
 docker/builder/tics
 tests/docker/data
 tests/docker/log
+tests/fullstack-test/dml/dml_gen/*
+tests/mutable-test/mutable_dedup/skipping.visual.test/*
+tests/mutable-test/mutable_dedup/small_parts.visual.test/*

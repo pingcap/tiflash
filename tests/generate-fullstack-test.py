@@ -7,15 +7,7 @@ import string
 import re
 import copy
 
-types = ["varchar(16)", "int", ]
-sample_data = [
-    ["hello world", "23892384", ],
-    ["hello world2", "1000000000", ],
-    ["hello world3", "100000", ],
-    ["hello world4", "348912734", ],
-]
 
-extra = ["default null", "not null", ""]
 
 drop_stmt = Template("mysql> drop table if exists $database.$table\n")
 create_stmt = Template("mysql> create table $database.$table($schema)\n")
@@ -23,17 +15,13 @@ insert_stmt = Template("mysql> insert into $database.$table($columns) values($da
 update_stmt = Template("mysql> update $database.$table set $exprs $condition\n")
 delete_stmt = Template("mysql> delete from $database.$table $condition\n")
 select_stmt = Template(">> select $columns from $database.$table\n")
-sleep_string = "\nSLEEP 5\n\n"
+sleep_string = "\nSLEEP 8\n\n"
 
 
 INSERT = "insert"
 UPDATE = "update"
 DELETE = "delete"
 SELECT = "select"
-
-TEST_CASES = [
-    [INSERT, SELECT, UPDATE, SELECT, DELETE, SELECT],
-]
 
 
 def generate_column_name(types):
@@ -44,12 +32,15 @@ def generate_column_name(types):
     return names
 
 
-def generate_schema(names, types):
+def generate_schema(names, types, primary_key_type):
     columns = []
+    primary_key_name = ""
     for (name, t) in zip(names, types):
+        if t == primary_key_type:
+            primary_key_name = name
         columns.append(name + " " + t)
-    columns.append("primary key (" + names[0] + ")")
-    return ", ".join(columns), names[0]
+    columns.append("primary key (" + primary_key_name + ")")
+    return ", ".join(columns)
 
 
 def random_string(n):
@@ -57,7 +48,7 @@ def random_string(n):
     return ''.join(random.choice(letters) for i in range(int(n)))
 
 
-def generate_data(type_name):
+def generate_data(type_name, types, sample_data):
     if type_name.startswith("varchar"):
         lengths = re.findall(r"\d+", type_name)
         if len(lengths) < 1:
@@ -66,6 +57,8 @@ def generate_data(type_name):
             return random_string(lengths[0])
     elif "int" in type_name:
         return str(random.randint(0, 100))
+    else:
+        return str(sample_data[random.choice(range(len(sample_data)))][types.index(type_name)])
 
 
 def generate_exprs(names, values):
@@ -76,6 +69,11 @@ def generate_exprs(names, values):
 
 
 def generate_result(names, dataset):
+    dataset = copy.deepcopy(dataset)
+    for data_point in dataset:
+        for i in range(len(data_point)):
+            if data_point[i] == "":
+                data_point[i] = "\N"
     left_top_corner = "┌"
     right_top_corner = "┐"
     left_bottom_corner = "└"
@@ -155,15 +153,16 @@ def generate_result(names, dataset):
     return "\n".join(lines)
 
 
-def generate_cases(database, table, types, sample_data, dir):
-    column_names = generate_column_name(types)
-    schema, primary_key = generate_schema(column_names, types)
-    for i, case in enumerate(TEST_CASES):
+def generate_cases_inner(database, table, column_names, types, sample_data,
+                         schema, primary_key_type, test_cases,  parent_dir):
+    primary_key = column_names[len(column_names) - 1]
+    for num, case in enumerate(test_cases):
         case_data = copy.deepcopy(sample_data)
-        path = dir + "case" + str(i) + ".test"
+        path = parent_dir + primary_key_type.replace(" ", "_") + "_case" + str(num) + ".test"
         with open(path, "w") as file:
             file.write(drop_stmt.substitute({"database": database, "table": table}))
             file.write(create_stmt.substitute({"database": database, "table": table, "schema": schema}))
+            file.write(sleep_string)
 
             for op in case:
                 if op == INSERT:
@@ -177,9 +176,10 @@ def generate_cases(database, table, types, sample_data, dir):
                         condition = ""
                         exprs = []
                         for i in range(len(types)):
-                            ele = generate_data(types[i])
                             if column_names[i] == primary_key:
                                 condition = "where " + primary_key + " = " + repr(data_point[i])
+                                continue
+                            ele = generate_data(types[i], types, sample_data)
                             data_point[i] = ele
                             exprs.append(column_names[i] + "=" + repr(ele))
                         file.write(update_stmt.substitute({"database": database,
@@ -201,13 +201,52 @@ def generate_cases(database, table, types, sample_data, dir):
                                                            "condition": condition}))
                     case_data = new_case_data
                 if op == SELECT:
-                    file.write(sleep_string)
                     file.write(select_stmt.substitute({"columns": ", ".join(column_names),
                                                        "database": database,
                                                        "table": table}))
                     file.write(generate_result(column_names, case_data) + "\n\n")
 
             file.write(drop_stmt.substitute({"database": database, "table": table}))
+
+
+def generate_cases(database, table, types, sample_data,
+                   primary_key_candidates, primary_key_sample_data, test_cases,  parent_dir):
+    for i, primary_key_type in enumerate(primary_key_candidates):
+        case_types = copy.deepcopy(types)
+        case_types.append(primary_key_type)
+        column_names = generate_column_name(case_types)
+        schema = generate_schema(column_names, case_types, primary_key_type)
+        case_sample_data = copy.deepcopy(sample_data)
+        for j in range(len(case_sample_data)):
+            case_sample_data[j].append(primary_key_sample_data[j][i])
+        generate_cases_inner(database, table, column_names, case_types, case_sample_data,
+                             schema, primary_key_type, test_cases, parent_dir)
+
+
+def generate_data_for_types(types, sample_data, allow_empty=True, no_duplicate=False, result_len=1):
+    result = []
+    if no_duplicate:
+        for name in types:
+            if len(sample_data[name]) < result_len:
+                raise Exception("not enough data sample for type: ", name)
+        for i in range(result_len):
+            cur = []
+            for name in types:
+                cur.append(str(sample_data[name][i]))
+            result.append(cur)
+    else:
+        for _ in range(result_len):
+            cur = []
+            for name in types:
+                if name in sample_data:
+                    samples = sample_data[name]
+                    cur.append(str(random.choice(samples)))
+                elif allow_empty:
+                    cur.append("")
+                else:
+                    raise Exception("type without valid data_sample: ", name)
+            result.append(cur)
+    return result
 
 
 def run():
@@ -218,7 +257,88 @@ def run():
     database = sys.argv[1]
     table = sys.argv[2]
 
-    generate_cases(database, table, types, sample_data, "./fullstack-test/txn_syntax/")
+    primary_key_candidates = ["tinyint", "smallint", "mediumint", "int", "bigint",
+             "unsigned tinyint", "unsigned smallint", "unsigned mediumint", "unsigned int", "unsigned bigint", ]
+    types = ["decimal(1, 0)", "decimal(5, 2)", "decimal(65, 0)", "decimal(65, 30)",
+             "varchar(20)", "char(10)",
+             "date", "datetime", "timestamp", ]
+    min_values = {
+        "tinyint": [-(1 << 7), ],
+        "smallint": [-(1 << 15), ],
+        "mediumint": [-(1 << 23), ],
+        "int": [-(1 << 31), ],
+        "bigint": [-(1 << 63), ],
+        "unsigned tinyint": [0, ],
+        "unsigned smallint": [0, ],
+        "unsigned mediumint": [0, ],
+        "unsigned int": [0, ],
+        "unsigned bigint": [0, ],
+        "decimal(1, 0)": [-9, ],
+        "decimal(5, 2)": [-999.99, ],
+        "decimal(65, 0)": [-(pow(10, 65) - 1), ],
+        "decimal(65, 30)":[-99999999999999999999999999999999999.999999999999999999999999999999, ],
+    }
+    max_values = {
+        "tinyint": [(1 << 7) - 1, ],
+        "smallint": [(1 << 15) - 1, ],
+        "mediumint": [(1 << 23) - 1, ],
+        "int": [(1 << 31) - 1, ],
+        "bigint": [(1 << 63) - 1, ],
+        "unsigned tinyint": [(1 << 8) - 1, ],
+        "unsigned smallint": [(1 << 16) - 1, ],
+        "unsigned mediumint": [(1 << 24) - 1, ],
+        "unsigned int": [(1 << 32) - 1, ],
+        "unsigned bigint": [(1 << 64) - 1, ],
+        "decimal(1, 0)": [9, ],
+        "decimal(5, 2)": [999.99, ],
+        "decimal(65, 0)": [pow(10, 65) - 1, ],
+        "decimal(65, 30)": [99999999999999999999999999999999999.999999999999999999999999999999, ],
+    }
+    data_sample = {
+        "tinyint": [8, 9, 10, 11, 12, 13, 14],
+        "smallint": [8, 9, 10, 11, 12, 13, 14],
+        "mediumint": [8, 9, 10, 11, 12, 13, 14],
+        "int": [8, 9, 10, 11, 12, 13, 14],
+        "bigint": [8, 9, 10, 11, 12, 13, 14],
+        "unsigned tinyint": [8, 9, 10, 11, 12, 13, 14],
+        "unsigned smallint": [8, 9, 10, 11, 12, 13, 14],
+        "unsigned mediumint": [8, 9, 10, 11, 12, 13, 14],
+        "unsigned int": [8, 9, 10, 11, 12, 13, 14],
+        "unsigned bigint": [8, 9, 10, 11, 12, 13, 14],
+        "decimal(1, 0)": [7, 3],
+        "decimal(5, 2)": [3.45, 5.71],
+        "decimal(65, 0)": [11, ],
+        "decimal(65, 30)": [11, ],
+        "varchar(20)": ["hello world", "hello world2", "hello world3", "hello world4", ],
+        "char(10)": ["a" * 10, "b" * 10, ],
+        "date": ["2000-00-00", "2019-10-10"],
+        "datetime": ["2000-00-00 00:00:00", "2019-10-10 00:00:00"],
+        "timestamp": ["2000-00-00 00:00:00", "2019-10-10 00:00:00"],
+    }
+
+    data_sample_num = 7
+    primary_key_data = []
+    for d in generate_data_for_types(primary_key_candidates, min_values, False, True, 1):
+        primary_key_data.append(d)
+    for d in generate_data_for_types(primary_key_candidates, max_values, False, True, 1):
+        primary_key_data.append(d)
+    for d in generate_data_for_types(primary_key_candidates, data_sample, False, True, data_sample_num - 2):
+        primary_key_data.append(d)
+    data = []
+    for d in generate_data_for_types(types, min_values, True, False, 1):
+        data.append(d)
+    for d in generate_data_for_types(types, max_values, True, False, 1):
+        data.append(d)
+    for d in generate_data_for_types(types, data_sample, True, False, data_sample_num - 2):
+        data.append(d)
+
+    dml_test_cases = [
+        [INSERT, SELECT, UPDATE, SELECT, ],
+        [INSERT, SELECT, UPDATE, SELECT, DELETE, SELECT],
+        [INSERT, SELECT, UPDATE, SELECT, UPDATE, SELECT, DELETE, SELECT],
+        [INSERT, SELECT, UPDATE, SELECT, UPDATE, SELECT, UPDATE, SELECT, DELETE, SELECT],
+    ]
+    generate_cases(database, table, types, data, primary_key_candidates, primary_key_data, dml_test_cases, "./fullstack-test/dml/dml_gen/")
 
 
 def main():
