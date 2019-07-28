@@ -6,7 +6,8 @@ import random
 import string
 import re
 import copy
-
+import os
+import errno
 
 
 drop_stmt = Template("mysql> drop table if exists $database.$table\n")
@@ -338,7 +339,14 @@ def run():
         [INSERT, SELECT, UPDATE, SELECT, UPDATE, SELECT, DELETE, SELECT],
         [INSERT, SELECT, UPDATE, SELECT, UPDATE, SELECT, UPDATE, SELECT, DELETE, SELECT],
     ]
-    generate_cases(database, table, types, data, primary_key_candidates, primary_key_data, dml_test_cases, "./fullstack-test/dml/dml_gen/")
+    parent_dir = "./fullstack-test/dml/dml_gen/"
+    directory = os.path.dirname(parent_dir)
+    try:
+        os.makedirs(directory)
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+    generate_cases(database, table, types, data, primary_key_candidates, primary_key_data, dml_test_cases, parent_dir)
 
 
 def main():
