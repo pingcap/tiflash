@@ -262,7 +262,7 @@ def run():
     table = sys.argv[2]
 
     primary_key_candidates = ["tinyint", "smallint", "mediumint", "int", "bigint",
-             "tinyint unsigned", "smallint unsigned", "mediumint  unsigned", "int unsigned", "bigint unsigned", ]
+             "tinyint unsigned", "smallint unsigned", "mediumint unsigned", "int unsigned", "bigint unsigned", ]
     types = ["decimal(1, 0)", "decimal(5, 2)", "decimal(65, 0)",
              "varchar(20)", "char(10)",
              "date", "datetime", "timestamp", ]
