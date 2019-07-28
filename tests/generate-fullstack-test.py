@@ -73,7 +73,7 @@ def generate_result(names, dataset):
     dataset = copy.deepcopy(dataset)
     for data_point in dataset:
         for i in range(len(data_point)):
-            if data_point[i] == "":
+            if data_point[i] == "null":
                 data_point[i] = "\N"
     left_top_corner = "┌"
     right_top_corner = "┐"
@@ -316,9 +316,9 @@ def run():
         "decimal(65, 30)": [11, ],
         "varchar(20)": ["hello world", "hello world2", "hello world3", "hello world4", ],
         "char(10)": ["a" * 10, "b" * 10, ],
-        "date": ["2000-00-00", "2019-10-10"],
-        "datetime": ["2000-00-00 00:00:00", "2019-10-10 00:00:00"],
-        "timestamp": ["2000-00-00 00:00:00", "2019-10-10 00:00:00"],
+        "date": ["2000-01-01", "2019-10-10"],
+        "datetime": ["2000-01-01 00:00:00", "2019-10-10 00:00:00"],
+        "timestamp": ["2000-01-01 00:00:00", "2019-10-10 00:00:00"],
     }
 
     data_sample_num = 7
