@@ -13,7 +13,7 @@
 [server]
 labels = { zone = "engine" }
 # Linux
-engine-addr = "192.168.65.2:3930"
+engine-addr = "tiflash0:3930"
 # Mac (seemingly)
 # engine-addr = "192.168.65.2:3930"
 
