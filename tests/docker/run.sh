@@ -16,7 +16,11 @@ docker build -t tiflash-with-mysql-client0 .
 
 docker-compose up -d --scale tics0=0 --scale tiflash0=0 --scale tikv-learner0=0
 
-sleep 20
+sleep 10
+
+docker-compose up -d --scale tics0=0 --scale tikv-learner0=0
+
+sleep 5
 
 docker-compose up -d --scale tics0=0
 
