@@ -88,6 +88,7 @@ PageEntryMapDeltaBuilder::~PageEntryMapDeltaBuilder() = default;
 /// Apply edits and generate new delta
 void PageEntryMapDeltaBuilder::apply(PageEntriesEdit & edit)
 {
+    assert(!v->isBase());
     for (auto && rec : edit.getRecords())
     {
         switch (rec.type)

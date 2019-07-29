@@ -21,7 +21,7 @@ void Usage(const char * prog)
 void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
     printf("\tpid:%9lld\t\t"
-           "%llu\t%u\t%u\t%9llu\t%llu\t%016llx\n",
+           "%9llu\t%9u\t%9u\t%9llu\t%9llu\t%016llx\n",
            pid, //
            entry.file_id,
            entry.level,
@@ -61,7 +61,8 @@ int main(int argc, char ** argv)
     }
     auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
 
-    DB::PageEntryMapVersionSet versions;
+    //DB::PageEntryMapVersionSet versions;
+    DB::PageEntryMapDeltaVersionSet versions;
     for (auto & page_file : page_files)
     {
         DB::PageEntriesEdit  edit;
@@ -106,15 +107,22 @@ int main(int argc, char ** argv)
 
     if (mode == MODE_DUMP_VALID_ENTRIES)
     {
-        DB::PageEntryMap * valid_page_entries = versions.currentMap();
-        printf("Valid page entries: %zu\n", valid_page_entries->size());
-        for (auto iter = valid_page_entries->cbegin(); iter != valid_page_entries->cend(); ++iter)
+        auto snapshot = versions.getSnapshot();
+        auto page_ids = snapshot->version()->validPageIds();
+        for (auto page_id : page_ids)
+        {
+            const DB::PageEntry * entry = snapshot->version()->find(page_id);
+            printPageEntry(page_id, *entry);
+        }
+#if 0
+        //printf("Valid page entries: %zu\n", valid_page_entries->size());
+        for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
         {
             const DB::PageId      pid   = iter.pageId();
             const DB::PageEntry & entry = iter.pageEntry();
             printPageEntry(pid, entry);
         }
+#endif
     }
-
     return 0;
 }

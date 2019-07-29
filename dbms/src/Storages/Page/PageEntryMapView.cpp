@@ -129,9 +129,10 @@ std::set<PageId> PageEntryMapView::validNormalPageIds() const
                 valid_normal_pages.erase(deleted_id);
             }
         }
-        for (auto ref_pairs : (*node_iter)->normal_pages)
+        for (auto &[page_id, entry]: (*node_iter)->normal_pages)
         {
-            valid_normal_pages.insert(ref_pairs.first);
+            if (entry.ref != 0)
+                valid_normal_pages.insert(page_id);
         }
     }
     return valid_normal_pages;

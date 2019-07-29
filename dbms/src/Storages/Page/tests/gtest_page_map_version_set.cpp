@@ -209,20 +209,66 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
 TYPED_TEST_P(PageMapVersionSet_test, Restore)
 {
     TypeParam versions(this->config_);
+    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
     {
         auto s1 = versions.getSnapshot();
 
         typename TypeParam::BuilderType builder(s1->version(), true, &Poco::Logger::root());
 
-        PageEntriesEdit edit;
-        edit.put(1, PageEntry{.checksum = 123});
-        edit.del(1);
-
-        builder.apply(edit);
+        {
+            PageEntriesEdit edit;
+            edit.put(1, PageEntry{.checksum = 1});
+            edit.del(1);
+            edit.put(2, PageEntry{.checksum = 2});
+            edit.put(3, PageEntry{.checksum = 3});
+            builder.apply(edit);
+        }
+        {
+            PageEntriesEdit edit;
+            edit.del(2);
+            builder.apply(edit);
+        }
+        versions.restore(builder.build());
     }
-    auto s     = versions.getSnapshot();
+    else
+    {
+        {
+            PageEntriesEdit edit;
+            edit.put(1, PageEntry{.checksum = 1});
+            edit.del(1);
+            edit.put(2, PageEntry{.checksum = 2});
+            edit.put(3, PageEntry{.checksum = 3});
+            versions.apply(edit);
+        }
+        {
+            PageEntriesEdit edit;
+            edit.del(2);
+            versions.apply(edit);
+        }
+    }
+
+    auto s = versions.getSnapshot();
     auto entry = s->version()->find(1);
     ASSERT_EQ(entry, nullptr);
+    auto entry2 = s->version()->find(2);
+    ASSERT_EQ(entry2, nullptr);
+    auto entry3 = s->version()->find(3);
+    ASSERT_NE(entry3, nullptr);
+    ASSERT_EQ(entry3->checksum, 3UL);
+
+    std::set<PageId> valid_normal_page_ids;
+    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+    {
+        for (auto iter = s->version()->pages_cbegin(); iter != s->version()->pages_cend(); iter++)
+            valid_normal_page_ids.insert(iter->first);
+    }
+    else
+    {
+        valid_normal_page_ids = s->version()->validNormalPageIds();
+    }
+    ASSERT_EQ(valid_normal_page_ids.count(1), 0UL);
+    ASSERT_EQ(valid_normal_page_ids.count(2), 0UL);
+    ASSERT_EQ(valid_normal_page_ids.count(3), 1UL);
 }
 
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)

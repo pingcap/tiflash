@@ -61,15 +61,25 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
     /// page_files are in ascending ordered by (file_id, level).
     auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
     // recover current version from files
-    auto snapshot = version_set.getSnapshot();
 
 #ifdef DELTA_VERSION_SET
-    typename PageEntryMapDeltaVersionSet::BuilderType builder(
-        snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
+    for (auto & page_file : page_files)
+    {
+        PageEntriesEdit edit;
+        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
+
+        // Only level 0 is writable.
+        if (page_file.getLevel() == 0)
+        {
+            write_file = page_file;
+        }
+        // apply edit to new version
+        version_set.apply(edit);
+    }
 #else
+    auto snapshot = version_set.getSnapshot();
     typename PageEntryMapVersionSet::BuilderType builder(
         snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
-#endif
     for (auto & page_file : page_files)
     {
         PageEntriesEdit edit;
@@ -83,7 +93,6 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
         // apply edit to new version
         builder.apply(edit);
     }
-#ifndef DELTA_VERSION_SET
     version_set.restore(builder.build());
 #endif
 }
@@ -345,7 +354,10 @@ bool PageStorage::gc()
             for (auto page_id : valid_normal_page_ids)
             {
                 auto page_entry = snapshot->version()->find(page_id);
-                assert(page_entry != nullptr);
+                if (unlikely(page_entry == nullptr))
+                {
+                    throw Exception("PageStorage GC: Normal Page " + DB::toString(page_id) + " not found, vset: " + PageEntryMapDeltaVersionSet::versionToDebugString(snapshot->version()->tail), ErrorCodes::LOGICAL_ERROR);
+                }
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry->fileIdLevel()];
                 valid_size += page_entry->size;
 #else

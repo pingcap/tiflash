@@ -278,10 +278,16 @@ public:
 
     std::string toDebugStringUnlocked() const
     {
+        return versionToDebugString(current);
+    }
+
+    static
+    std::string versionToDebugString(VersionPtr tail)
+    {
         std::string            s;
         bool                   is_first = true;
         std::stack<VersionPtr> deltas;
-        for (auto v = current; v != nullptr; v = v->prev)
+        for (auto v = tail; v != nullptr; v = v->prev)
         {
             deltas.emplace(v);
         }
