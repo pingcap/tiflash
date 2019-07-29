@@ -61,10 +61,16 @@ StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
 
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
 {
-    auto region_id = region.id();
+    const auto range = region.getRange();
+    return insertRegion(table, range.first, range.second, region.id());
+}
+
+RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id)
+{
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region.getHandleRangeByTable(table.table_id)));
+    auto [it, ok]
+        = table_regions.emplace(region_id, InternalRegion(region_id, TiKVRange::getHandleRangeByTable(start, end, table.table_id)));
     if (!ok)
         throw Exception(
             "[RegionTable::insertRegion] insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
@@ -172,6 +178,8 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] original " << region->dataSize() << " bytes");
 
+    UInt64 mem_read_cost = -1, write_part_cost = -1;
+
     RegionDataReadInfoList data_list;
     if (storage == nullptr)
     {
@@ -193,7 +201,9 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         if (names.size() < 3)
             throw Exception("[flushRegion] size of merge tree columns < 3, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-        auto [block, status] = getBlockInputStreamByRegion(table_id, region, table_info, columns, names, data_list);
+        auto start_time = Clock::now();
+
+        auto block = getBlockInputStreamByRegion(table_id, region, table_info, columns, names, data_list);
         if (!block)
         {
             // no data in region for table. update cache size.
@@ -201,10 +211,13 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
             return;
         }
 
-        std::ignore = status;
+        mem_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        start_time = Clock::now();
 
         TxnMergeTreeBlockOutputStream output(*merge_tree);
-        output.write(*block);
+        output.write(std::move(*block));
+
+        write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
     }
 
     // remove data in region
@@ -237,7 +250,9 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
                 region->incDirtyFlag();
         }
 
-        LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] after flush " << cache_size << " bytes");
+        LOG_DEBUG(log,
+            "[flushRegion] table " << table_id << ", [region " << region_id << "] after flush " << cache_size << " bytes, cost [mem read "
+                                   << mem_read_cost << ", write part " << write_part_cost << "] ms");
     }
 }
 
@@ -331,7 +346,6 @@ void RegionTable::applySnapshotRegions(const RegionMap & region_map)
             if (cache_bytes)
                 internal_region.updated = true;
         }
-        doShrinkRegionRange(*region);
     }
 }
 

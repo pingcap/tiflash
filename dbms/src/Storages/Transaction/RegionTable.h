@@ -136,6 +136,7 @@ private:
 
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
+    InternalRegion & insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id);
 
     bool shouldFlush(const InternalRegion & region) const;
 
@@ -178,14 +179,15 @@ public:
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
 
-    static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
+    using BlockOption = std::optional<Block>;
+    BlockOption getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
         RegionDataReadInfoList & data_list_for_remove);
 
-    static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
+    static std::tuple<BlockOption, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
         const RegionVersion region_version,
         const RegionVersion conf_version,
@@ -195,7 +197,8 @@ public:
         bool learner_read,
         bool resolve_locks,
         Timestamp start_ts,
-        RegionDataReadInfoList * data_list_for_remove = nullptr);
+        RegionDataReadInfoList * data_list_for_remove = nullptr,
+        Logger * log = nullptr);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
 };

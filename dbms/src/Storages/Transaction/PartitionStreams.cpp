@@ -10,16 +10,14 @@
 namespace DB
 {
 
-using BlockOption = std::optional<Block>;
-
-std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
+RegionTable::BlockOption RegionTable::getBlockInputStreamByRegion(TableID table_id,
     RegionPtr region,
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & ordered_columns,
     RegionDataReadInfoList & data_list_for_remove)
 {
-    return getBlockInputStreamByRegion(table_id,
+    return std::get<0>(getBlockInputStreamByRegion(table_id,
         region,
         InvalidRegionVersion,
         InvalidRegionVersion,
@@ -29,10 +27,11 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
         false,
         false,
         0,
-        &data_list_for_remove);
+        &data_list_for_remove,
+        log));
 }
 
-std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
+std::tuple<RegionTable::BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
     RegionPtr region,
     const RegionVersion region_version,
     const RegionVersion conf_version,
@@ -42,7 +41,8 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
     bool learner_read,
     bool resolve_locks,
     Timestamp start_ts,
-    RegionDataReadInfoList * data_list_for_remove)
+    RegionDataReadInfoList * data_list_for_remove,
+    Logger * log)
 {
     if (!region)
         return {BlockOption{}, NOT_FOUND};
@@ -62,6 +62,8 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
 
         if (ordered_columns->size() == 3)
             need_value = false;
+
+        auto start_time = Clock::now();
 
         {
             auto scanner = region->createCommittedScanner(table_id);
@@ -92,12 +94,24 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInpu
             } while (scanner->hasNext());
         }
 
+        const auto scan_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        start_time = Clock::now();
+
         auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, data_list);
+
+        auto compute_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+
+        if (log)
+        {
+            LOG_TRACE(log,
+                region->toString(false) << " read " << data_list.size() << " rows, cost [scan " << scan_cost << ", compute " << compute_cost
+                                        << "] ms");
+        }
 
         if (data_list_for_remove)
             *data_list_for_remove = std::move(data_list);
 
-        return {block, OK};
+        return {std::move(block), OK};
     }
 }
 
