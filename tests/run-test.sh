@@ -149,7 +149,7 @@ if [ $? != 0 ]; then
 	exit 1
 fi
 
-tidbc="mysql -u root -P $tidb_port -h $tidb_server -e"
+mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
 
 if [ "$fullstack" = true ]; then
     mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
@@ -161,4 +161,4 @@ if [ "$fullstack" = true ]; then
     python generate-fullstack-test.py "$tidb_db" "$tidb_table"
 fi
 
-run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"
+run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"

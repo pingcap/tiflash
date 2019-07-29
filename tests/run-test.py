@@ -164,9 +164,9 @@ def run():
     dbc = sys.argv[1]
     path = sys.argv[2]
     fuzz = (sys.argv[3] == 'true')
-    tidbc = sys.argv[4]
+    mysql_client = sys.argv[4]
 
-    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(tidbc), fuzz)
+    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), fuzz)
 
     def display(lines):
         if len(lines) == 0:
