@@ -187,18 +187,16 @@ public:
         const Names & ordered_columns,
         RegionDataReadInfoList & data_list_for_remove);
 
-    static std::tuple<BlockOption, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
+    static std::tuple<BlockOption, RegionTable::RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
         const RegionVersion region_version,
         const RegionVersion conf_version,
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
-        bool learner_read,
         bool resolve_locks,
         Timestamp start_ts,
-        RegionDataReadInfoList * data_list_for_remove = nullptr,
-        Logger * log = nullptr);
+        DB::HandleRange<HandleID> & range);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
 };

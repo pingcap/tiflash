@@ -634,4 +634,10 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
         compareAndCompleteSnapshot(handle_map, table_id, safe_point);
 }
 
+
+std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRangeByTable() const
+{
+    return meta.dumpVersionRangeByTable();
+}
+
 } // namespace DB

@@ -5,6 +5,7 @@
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRange.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -17,18 +18,42 @@ RegionTable::BlockOption RegionTable::getBlockInputStreamByRegion(TableID table_
     const Names & ordered_columns,
     RegionDataReadInfoList & data_list_for_remove)
 {
-    return std::get<0>(getBlockInputStreamByRegion(table_id,
-        region,
-        InvalidRegionVersion,
-        InvalidRegionVersion,
-        table_info,
-        columns,
-        ordered_columns,
-        false,
-        false,
-        0,
-        &data_list_for_remove,
-        log));
+    if (!region)
+        throw Exception("Region is nullptr, should not happen", ErrorCodes::LOGICAL_ERROR);
+
+    bool need_value = true;
+
+    if (ordered_columns.size() == 3)
+        need_value = false;
+
+    auto start_time = Clock::now();
+
+    {
+        auto scanner = region->createCommittedScanner(table_id);
+
+        if (region->isPendingRemove())
+            return BlockOption{};
+
+        if (!scanner->hasNext())
+            return BlockOption{};
+
+        do
+        {
+            data_list_for_remove.emplace_back(scanner->next(need_value));
+        } while (scanner->hasNext());
+    }
+
+    const auto scan_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+    start_time = Clock::now();
+
+    auto block = RegionBlockRead(table_info, columns, ordered_columns, data_list_for_remove);
+
+    auto compute_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+
+    LOG_TRACE(log,
+        region->toString(false) << " read " << data_list_for_remove.size() << " rows, cost [scan " << scan_cost << ", compute "
+                                << compute_cost << "] ms");
+    return block;
 }
 
 std::tuple<RegionTable::BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
@@ -38,81 +63,54 @@ std::tuple<RegionTable::BlockOption, RegionTable::RegionReadStatus> RegionTable:
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & ordered_columns,
-    bool learner_read,
     bool resolve_locks,
     Timestamp start_ts,
-    RegionDataReadInfoList * data_list_for_remove,
-    Logger * log)
+    DB::HandleRange<HandleID> & handle_range)
 {
     if (!region)
-        return {BlockOption{}, NOT_FOUND};
+        throw Exception("Region is nullptr, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-    if (learner_read)
-        region->waitIndex(region->learnerRead());
+    RegionDataReadInfoList data_list;
+    bool need_value = true;
 
-    auto schema_fetcher = [&](TableID) {
-        return std::make_tuple<const TiDB::TableInfo *, const ColumnsDescription *, const Names *>(&table_info, &columns, &ordered_columns);
-    };
+    if (ordered_columns.size() == 3)
+        need_value = false;
 
     {
-        RegionDataReadInfoList data_list;
-        const auto [table_info, columns, ordered_columns] = schema_fetcher(table_id);
+        auto scanner = region->createCommittedScanner(table_id);
 
-        bool need_value = true;
+        if (region->isPendingRemove())
+            return {BlockOption{}, PENDING_REMOVE};
 
-        if (ordered_columns->size() == 3)
-            need_value = false;
+        const auto & [version, conf_ver, key_range] = region->dumpVersionRangeByTable();
+        if (version != region_version || conf_ver != conf_version)
+            return {BlockOption{}, VERSION_ERROR};
 
-        auto start_time = Clock::now();
+        handle_range = TiKVRange::getHandleRangeByTable(key_range, table_id);
 
+        if (resolve_locks)
         {
-            auto scanner = region->createCommittedScanner(table_id);
-
-            if (region->isPendingRemove())
-                return {BlockOption{}, PENDING_REMOVE};
-
-            if (region_version != InvalidRegionVersion && (region->version() != region_version || region->confVer() != conf_version))
-                return {BlockOption{}, VERSION_ERROR};
-
-            if (resolve_locks)
+            LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
+            if (lock_info)
             {
-                LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
-                if (lock_info)
-                {
-                    LockInfos lock_infos;
-                    lock_infos.emplace_back(std::move(lock_info));
-                    throw LockException(std::move(lock_infos));
-                }
+                LockInfos lock_infos;
+                lock_infos.emplace_back(std::move(lock_info));
+                throw LockException(std::move(lock_infos));
             }
-
-            if (!scanner->hasNext())
-                return {BlockOption{}, OK};
-
-            do
-            {
-                data_list.emplace_back(scanner->next(need_value));
-            } while (scanner->hasNext());
         }
 
-        const auto scan_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        start_time = Clock::now();
+        if (!scanner->hasNext())
+            return {BlockOption{}, OK};
 
-        auto block = RegionBlockRead(*table_info, *columns, *ordered_columns, data_list);
-
-        auto compute_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-
-        if (log)
+        do
         {
-            LOG_TRACE(log,
-                region->toString(false) << " read " << data_list.size() << " rows, cost [scan " << scan_cost << ", compute " << compute_cost
-                                        << "] ms");
-        }
-
-        if (data_list_for_remove)
-            *data_list_for_remove = std::move(data_list);
-
-        return {std::move(block), OK};
+            data_list.emplace_back(scanner->next(need_value));
+        } while (scanner->hasNext());
     }
+
+    auto block = RegionBlockRead(table_info, columns, ordered_columns, data_list);
+
+    return {std::move(block), OK};
 }
 
 } // namespace DB
