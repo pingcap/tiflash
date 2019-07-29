@@ -157,6 +157,7 @@ def generate_result(names, dataset):
 def generate_cases_inner(database, table, column_names, types, sample_data,
                          schema, primary_key_type, test_cases,  parent_dir):
     primary_key = column_names[len(column_names) - 1]
+    first_insert = True
     for num, case in enumerate(test_cases):
         case_data = copy.deepcopy(sample_data)
         path = parent_dir + primary_key_type.replace(" ", "_") + "_case" + str(num) + ".test"
@@ -172,6 +173,9 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
                                                            "table": table,
                                                            "columns": ", ".join(column_names),
                                                            "data": ", ".join([repr(d) if d != "null" else d for d in case_data[k]])}))
+                    if first_insert:
+                        file.write(sleep_string)
+                        first_insert = False
                 if op == UPDATE:
                     for data_point in case_data:
                         condition = ""
