@@ -1,0 +1,31 @@
+[readpool.storage]
+[readpool.coprocessor]
+[server]
+labels = { zone = 'engine' }
+engine-addr = ':3930'
+[storage]
+[pd]
+[metric]
+[raftstore]
+raftdb-path = 
+sync-log = true
+max-leader-missing-duration = '22s'
+abnormal-leader-missing-duration = '21s'
+peer-stale-state-check-interval = '20s'
+[coprocessor]
+[rocksdb]
+wal-dir = ''
+[rocksdb.defaultcf]
+block-cache-size = '10GB'
+[rocksdb.lockcf]
+block-cache-size = '4GB'
+[rocksdb.writecf]
+block-cache-size = '4GB'
+[raftdb]
+[raftdb.defaultcf]
+block-cache-size = '1GB'
+[security]
+ca-path = ''
+cert-path = ''
+key-path = ''
+[import]
