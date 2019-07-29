@@ -1,6 +1,0 @@
-[readpool.storage]
-
-[readpool.coprocessor]
-
-[server]
-labels = { zone = 'engine' }

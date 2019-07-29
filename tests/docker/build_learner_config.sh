@@ -22,7 +22,7 @@ echo "" >> ./config/tikv-learner.toml
 echo "[metric]" >> ./config/tikv-learner.toml
 echo "" >> ./config/tikv-learner.toml
 echo "[raftstore]" >> ./config/tikv-learner.toml
-echo "raftdb-path = """ >> ./config/tikv-learner.toml
+echo "raftdb-path = ''" >> ./config/tikv-learner.toml
 echo "sync-log = true" >> ./config/tikv-learner.toml
 echo "max-leader-missing-duration = '22s'" >> ./config/tikv-learner.toml
 echo "abnormal-leader-missing-duration = '21s'" >> ./config/tikv-learner.toml
