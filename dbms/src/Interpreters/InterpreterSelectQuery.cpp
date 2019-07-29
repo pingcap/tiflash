@@ -675,7 +675,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         query_info.mvcc_query_info->resolve_locks = settings.resolve_locks;
         query_info.mvcc_query_info->read_tso = settings.read_tso;
 
-        String request_str = settings.regions;
+        const String & request_str = settings.regions;
 
         if (request_str.size() > 0)
         {
@@ -699,6 +699,8 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
 
+            if (!query_info.mvcc_query_info->regions_query_info.size())
+                throw Exception("[InterpreterSelectQuery::executeFetchColumns] no region query", ErrorCodes::LOGICAL_ERROR);
             query_info.mvcc_query_info->concurrent = 0.0;
         }
 

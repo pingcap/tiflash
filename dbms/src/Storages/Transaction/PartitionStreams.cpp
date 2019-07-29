@@ -11,7 +11,7 @@
 namespace DB
 {
 
-RegionTable::BlockOption RegionTable::getBlockInputStreamByRegion(TableID table_id,
+Block RegionTable::getBlockInputStreamByRegion(TableID table_id,
     RegionPtr region,
     const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
@@ -21,21 +21,17 @@ RegionTable::BlockOption RegionTable::getBlockInputStreamByRegion(TableID table_
     if (!region)
         throw Exception("Region is nullptr, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-    bool need_value = true;
-
-    if (ordered_columns.size() == 3)
-        need_value = false;
+    bool need_value = ordered_columns.size() != 3;
 
     auto start_time = Clock::now();
-
     {
         auto scanner = region->createCommittedScanner(table_id);
 
         if (region->isPendingRemove())
-            return BlockOption{};
+            return {};
 
         if (!scanner->hasNext())
-            return BlockOption{};
+            return {};
 
         do
         {
@@ -56,7 +52,7 @@ RegionTable::BlockOption RegionTable::getBlockInputStreamByRegion(TableID table_
     return block;
 }
 
-std::tuple<RegionTable::BlockOption, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
+std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::getBlockInputStreamByRegion(TableID table_id,
     RegionPtr region,
     const RegionVersion region_version,
     const RegionVersion conf_version,
@@ -71,20 +67,18 @@ std::tuple<RegionTable::BlockOption, RegionTable::RegionReadStatus> RegionTable:
         throw Exception("Region is nullptr, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     RegionDataReadInfoList data_list;
-    bool need_value = true;
 
-    if (ordered_columns.size() == 3)
-        need_value = false;
+    bool need_value = ordered_columns.size() != 3;
 
     {
         auto scanner = region->createCommittedScanner(table_id);
 
         if (region->isPendingRemove())
-            return {BlockOption{}, PENDING_REMOVE};
+            return {{}, PENDING_REMOVE};
 
         const auto & [version, conf_ver, key_range] = region->dumpVersionRangeByTable();
         if (version != region_version || conf_ver != conf_version)
-            return {BlockOption{}, VERSION_ERROR};
+            return {{}, VERSION_ERROR};
 
         handle_range = TiKVRange::getHandleRangeByTable(key_range, table_id);
 
@@ -100,7 +94,7 @@ std::tuple<RegionTable::BlockOption, RegionTable::RegionReadStatus> RegionTable:
         }
 
         if (!scanner->hasNext())
-            return {BlockOption{}, OK};
+            return {{}, OK};
 
         do
         {
@@ -110,7 +104,7 @@ std::tuple<RegionTable::BlockOption, RegionTable::RegionReadStatus> RegionTable:
 
     auto block = RegionBlockRead(table_info, columns, ordered_columns, data_list);
 
-    return {std::move(block), OK};
+    return std::make_tuple(std::move(block), OK);
 }
 
 } // namespace DB

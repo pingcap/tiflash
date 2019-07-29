@@ -179,15 +179,14 @@ public:
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
 
-    using BlockOption = std::optional<Block>;
-    BlockOption getBlockInputStreamByRegion(TableID table_id,
+    Block getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
         const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & ordered_columns,
         RegionDataReadInfoList & data_list_for_remove);
 
-    static std::tuple<BlockOption, RegionTable::RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
+    static std::tuple<Block, RegionTable::RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
         const RegionVersion region_version,
         const RegionVersion conf_version,

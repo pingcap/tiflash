@@ -215,7 +215,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
         start_time = Clock::now();
 
         TxnMergeTreeBlockOutputStream output(*merge_tree);
-        output.write(std::move(*block));
+        output.write(std::move(block));
 
         write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
     }

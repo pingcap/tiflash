@@ -298,6 +298,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (regions_executor_data.empty())
         {
             auto regions = tmt.getRegionTable().getRegionsByTable(data.table_info->id);
+            regions_executor_data.reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
                 if (region == nullptr)
@@ -306,6 +307,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             }
         }
 
+        // check region is not null and store region map.
         for (const auto & query_info : regions_executor_data)
         {
             auto region = kvstore->getRegion(query_info.info.region_id);
@@ -357,7 +359,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         need_retry = true;
                     }
                     else if (block)
-                        regions_executor_data[region_index].region_block_data = std::move(*block);
+                        regions_executor_data[region_index].region_block_data = std::move(block);
                 }
             };
 
