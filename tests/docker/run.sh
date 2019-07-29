@@ -6,6 +6,8 @@ docker-compose down
 
 rm -rf ./data ./log
 
+./build_learner_config.sh
+
 docker build -t tiflash-with-mysql-client0 .
 
 docker-compose up -d --scale tics0=0 --scale tiflash0=0 --scale tikv-learner0=0
