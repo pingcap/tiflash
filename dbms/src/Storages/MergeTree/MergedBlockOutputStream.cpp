@@ -6,7 +6,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/MemoryTracker.h>
 #include <Poco/File.h>
-
+#include <Storages/MergeTree/TMTDataPartProperty.h>
 
 namespace DB
 {
@@ -392,6 +392,12 @@ void MergedBlockOutputStream::writeSuffixAndFinalizePart(
         new_part->partition.store(storage, part_path, checksums);
         if (new_part->minmax_idx.initialized)
             new_part->minmax_idx.store(storage, part_path, checksums);
+
+        if (storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
+        {
+            if (new_part->tmt_property->initialized)
+                new_part->tmt_property->store(storage, part_path, checksums);
+        }
 
         WriteBufferFromFile count_out(part_path + "count.txt", 4096);
         HashingWriteBuffer count_out_hashing(count_out);

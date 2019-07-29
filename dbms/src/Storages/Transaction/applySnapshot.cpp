@@ -1,3 +1,4 @@
+#include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -51,14 +52,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
                 auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                 auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
 
-                bool pk_is_uint64 = false;
-                {
-                    std::string handle_col_name = merge_tree->getData().getPrimarySortDescription()[0].column_name;
-                    const auto pk_type = merge_tree->getColumns().getPhysical(handle_col_name).type->getFamilyName();
-
-                    if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-                        pk_is_uint64 = true;
-                }
+                const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
 
                 if (pk_is_uint64)
                 {
