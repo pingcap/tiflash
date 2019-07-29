@@ -74,11 +74,11 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::getBlockInputStrea
         auto scanner = region->createCommittedScanner(table_id);
 
         if (region->isPendingRemove())
-            return {{}, PENDING_REMOVE};
+            return {Block(), PENDING_REMOVE};
 
         const auto & [version, conf_ver, key_range] = region->dumpVersionRangeByTable();
         if (version != region_version || conf_ver != conf_version)
-            return {{}, VERSION_ERROR};
+            return {Block(), VERSION_ERROR};
 
         handle_range = TiKVRange::getHandleRangeByTable(key_range, table_id);
 
@@ -94,7 +94,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::getBlockInputStrea
         }
 
         if (!scanner->hasNext())
-            return {{}, OK};
+            return {Block(), OK};
 
         do
         {
