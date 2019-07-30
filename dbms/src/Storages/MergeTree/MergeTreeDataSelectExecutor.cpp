@@ -176,7 +176,7 @@ struct RegionExecutorData
         block = std::move(data.block);
         return *this;
     }
-
+    RegionExecutorData(const RegionExecutorData &) = delete;
     RegionExecutorData(RegionExecutorData && data) : info(std::move(data.info)), block(std::move(data.block)) {}
     bool operator<(const RegionExecutorData & o) const { return info < o.info; }
 };
@@ -432,8 +432,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             "Store special region " << regions_executor_data[i].info.region_id << " first"
                                                     << ", handle range [" << regions_executor_data[i].info.range_in_table.first.toString()
                                                     << ", " << regions_executor_data[i].info.range_in_table.second.toString() << ")");
-                        regions_executor_data.emplace_back(std::move(regions_executor_data[i]));
+                        auto tmp = std::move(regions_executor_data[i]);
                         regions_executor_data.erase(regions_executor_data.begin() + i);
+                        regions_executor_data.emplace_back(std::move(tmp));
 
                         // important step, we need to get all data from memory
                         region_cnt = regions_executor_data.size() - 1;
