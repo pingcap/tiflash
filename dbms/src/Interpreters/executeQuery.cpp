@@ -23,6 +23,11 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/IQueryInfo.h>
+#include <tipb/expression.pb.h>
+#include <tipb/select.pb.h>
+#include <Interpreters/StringQueryInfo.h>
+#include <Interpreters/DagQueryInfo.h>
 
 
 namespace ProfileEvents
@@ -132,10 +137,8 @@ static void onExceptionBeforeStart(const String & query, Context & context, time
 
 
 static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
-    const char * begin,
-    const char * end,
+    IQueryInfo & queryInfo,
     Context & context,
-    bool internal,
     QueryProcessingStage::Enum stage)
 {
     ProfileEvents::increment(ProfileEvents::Query);
@@ -145,31 +148,24 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     const Settings & settings = context.getSettingsRef();
 
-    ParserQuery parser(end);
     ASTPtr ast;
-    size_t query_size;
+    String query;
 
     /// Don't limit the size of internal queries.
     size_t max_query_size = 0;
-    if (!internal)
+    if (!queryInfo.isInternalQuery())
         max_query_size = settings.max_query_size;
 
     try
     {
-        /// TODO Parser should fail early when max_query_size limit is reached.
-        ast = parseQuery(parser, begin, end, "", max_query_size);
-
-        /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
-        if (!(begin <= ast->range.first && ast->range.second <= end))
-            throw Exception("Unexpected behavior: AST chars range is not inside source range", ErrorCodes::LOGICAL_ERROR);
-        query_size = ast->range.second - begin;
+        std::tie(query, ast) = queryInfo.parse(max_query_size);
     }
     catch (...)
     {
-        if (!internal)
+        if (!queryInfo.isInternalQuery())
         {
             /// Anyway log the query.
-            String query = String(begin, begin + std::min(end - begin, static_cast<ptrdiff_t>(max_query_size)));
+            String q = queryInfo.get_query_ignore_error(max_query_size);
             logQuery(query.substr(0, settings.log_queries_cut_to_length), context);
             onExceptionBeforeStart(query, context, current_time);
         }
@@ -177,12 +173,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         throw;
     }
 
-    String query(begin, query_size);
     BlockIO res;
 
     try
     {
-        if (!internal)
+        if (!queryInfo.isInternalQuery())
             logQuery(query.substr(0, settings.log_queries_cut_to_length), context);
 
         /// Check the limits.
@@ -195,7 +190,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Put query to process list. But don't put SHOW PROCESSLIST query itself.
         ProcessList::EntryPtr process_list_entry;
-        if (!internal && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
+        if (!queryInfo.isInternalQuery() && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
         {
             process_list_entry = context.getProcessList().insert(
                 query,
@@ -206,7 +201,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             context.setProcessListElement(&process_list_entry->get());
         }
 
-        auto interpreter = InterpreterFactory::get(ast, context, stage);
+        auto interpreter = queryInfo.getInterpreter(context, stage);
         res = interpreter->execute();
 
         /// Delayed initialization of query streams (required for KILL QUERY purposes)
@@ -258,7 +253,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             elem.client_info = context.getClientInfo();
 
-            bool log_queries = settings.log_queries && !internal;
+            bool log_queries = settings.log_queries && !queryInfo.isInternalQuery();
 
             /// Log into system table start of query execution, if need.
             if (log_queries)
@@ -363,7 +358,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             };
 
-            if (!internal && res.in)
+            if (!queryInfo.isInternalQuery() && res.in)
             {
                 std::stringstream log_str;
                 log_str << "Query pipeline:\n";
@@ -374,7 +369,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
     catch (...)
     {
-        if (!internal)
+        if (!queryInfo.isInternalQuery())
             onExceptionBeforeStart(query, context, current_time);
 
         throw;
@@ -391,10 +386,17 @@ BlockIO executeQuery(
     QueryProcessingStage::Enum stage)
 {
     BlockIO streams;
-    std::tie(std::ignore, streams) = executeQueryImpl(query.data(), query.data() + query.size(), context, internal, stage);
+    StringQueryInfo queryInfo(query.data(), query.data() + query.size(), internal);
+    std::tie(std::ignore, streams) = executeQueryImpl(queryInfo, context, stage);
     return streams;
 }
 
+BlockIO executeQuery(const tipb::DAGRequest & dag_request, CoprocessorContext & context, QueryProcessingStage::Enum stage) {
+    BlockIO streams;
+    DagQueryInfo queryInfo(dag_request, context);
+    std::tie(std::ignore, streams) = executeQueryImpl(queryInfo, context.ch_context, stage);
+    return streams;
+}
 
 void executeQuery(
     ReadBuffer & istr,
@@ -432,7 +434,8 @@ void executeQuery(
     ASTPtr ast;
     BlockIO streams;
 
-    std::tie(ast, streams) = executeQueryImpl(begin, end, context, false, QueryProcessingStage::Complete);
+    StringQueryInfo queryInfo(begin, end, false);
+    std::tie(ast, streams) = executeQueryImpl(queryInfo, context, QueryProcessingStage::Complete);
 
     try
     {

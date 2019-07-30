@@ -2,6 +2,8 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <tipb/select.pb.h>
+#include <Coprocessor/CoprocessorHandler.h>
 
 
 namespace DB
@@ -38,5 +40,7 @@ BlockIO executeQuery(
     bool internal = false,    /// If true, this query is caused by another query and thus needn't be registered in the ProcessList.
     QueryProcessingStage::Enum stage = QueryProcessingStage::Complete    /// To which stage the query must be executed.
     );
+
+BlockIO executeQuery(const tipb::DAGRequest & dag_request, CoprocessorContext & context, QueryProcessingStage::Enum stage);
 
 }

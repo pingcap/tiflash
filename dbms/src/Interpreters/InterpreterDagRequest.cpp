@@ -1,5 +1,5 @@
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/InterpreterDagRequestV2.h>
+#include <Interpreters/InterpreterDagRequest.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -9,7 +9,7 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
-#include "CoprocessorBuilderUtils.h"
+#include <Interpreters/CoprocessorBuilderUtils.h>
 
 namespace DB {
 
@@ -18,7 +18,7 @@ namespace DB {
         extern const int TOO_MANY_COLUMNS;
     }
 
-    InterpreterDagRequestV2::InterpreterDagRequestV2(CoprocessorContext & context_, tipb::DAGRequest & dag_request_)
+    InterpreterDagRequest::InterpreterDagRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request_)
     : context(context_), dag_request(dag_request_) {
         for(const tipb::Executor & executor : dag_request.executors()) {
             switch (executor.tp()) {
@@ -40,7 +40,7 @@ namespace DB {
         }
     }
 
-    bool InterpreterDagRequestV2::buildTSPlan(const tipb::TableScan & ts, Pipeline & pipeline) {
+    bool InterpreterDagRequest::buildTSPlan(const tipb::TableScan & ts, Pipeline & pipeline) {
         if(!ts.has_table_id()) {
             // do not have table id
             return false;
@@ -158,7 +158,7 @@ namespace DB {
     }
 
     //todo return the error message
-    bool InterpreterDagRequestV2::buildPlan(const tipb::Executor & executor, Pipeline & pipeline) {
+    bool InterpreterDagRequest::buildPlan(const tipb::Executor & executor, Pipeline & pipeline) {
         switch (executor.tp()) {
             case tipb::ExecType::TypeTableScan:
                 return buildTSPlan(executor.tbl_scan(), pipeline);
@@ -177,7 +177,7 @@ namespace DB {
         }
     }
 
-    BlockIO InterpreterDagRequestV2::execute() {
+    BlockIO InterpreterDagRequest::execute() {
         Pipeline pipeline;
         for(const tipb::Executor & executor : dag_request.executors()) {
             if(!buildPlan(executor, pipeline)) {
@@ -198,7 +198,7 @@ namespace DB {
         res.in = final_stream;
         return res;
     }
-    InterpreterDagRequestV2::~InterpreterDagRequestV2() {
+    InterpreterDagRequest::~InterpreterDagRequest() {
 
     }
 }

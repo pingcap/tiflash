@@ -8,8 +8,9 @@
 #include <DataStreams/TidbCopBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <Interpreters/executeQuery.h>
-#include <Interpreters/InterpreterDagRequestV1.h>
-#include <Interpreters/InterpreterDagRequestV2.h>
+#include <Interpreters/InterpreterDagRequest.h>
+#include <Interpreters/DagStringConverter.h>
+#include <Interpreters/StringQueryInfo.h>
 
 namespace DB
 {
@@ -29,12 +30,11 @@ CoprocessorHandler::~CoprocessorHandler()
 BlockIO CoprocessorHandler::buildCHPlan() {
     String builder_version = context.ch_context.getSettings().coprocessor_plan_builder_version;
     if(builder_version == "v1") {
-        InterpreterDagRequestV1 builder(context, dag_request);
-        return builder.execute();
+        DagStringConverter converter(context, dag_request);
+        String query = converter.buildSqlString();
+        return executeQuery(query, context.ch_context, false, QueryProcessingStage::Complete);
     } else if (builder_version == "v2"){
-        //throw Exception("coprocessor plan builder version v2 is not supported yet");
-        InterpreterDagRequestV2 builder(context, dag_request);
-        return builder.execute();
+        return executeQuery(dag_request, context, QueryProcessingStage::Complete);
     } else {
         throw Exception("coprocessor plan builder version should be set to v1 or v2");
     }

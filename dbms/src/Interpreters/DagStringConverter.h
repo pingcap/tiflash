@@ -11,18 +11,14 @@
 
 namespace DB {
 
-/** build ch plan from dag request: dag executors -> query_string -> ch plan
-  */
-class InterpreterDagRequestV1 {
+class DagStringConverter {
 public:
-    InterpreterDagRequestV1(CoprocessorContext & context_, tipb::DAGRequest & dag_request_);
+    DagStringConverter(CoprocessorContext & context_, tipb::DAGRequest & dag_request_);
 
-    ~InterpreterDagRequestV1();
+    ~DagStringConverter() = default;
 
-    BlockIO execute();
-
-private:
     String buildSqlString();
+private:
     bool buildTSString(const tipb::TableScan & ts, std::stringstream & ss);
     String exprToString(const tipb::Expr & expr, bool &succ);
     bool buildSelString(const tipb::Selection & sel, std::stringstream & ss);

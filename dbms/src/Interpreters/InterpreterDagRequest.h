@@ -8,24 +8,25 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Coprocessor/CoprocessorHandler.h>
-#include "CoprocessorBuilderUtils.h"
-#include "ExpressionActions.h"
+#include <Interpreters/CoprocessorBuilderUtils.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/IInterpreter.h>
 
 namespace DB {
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
-class InterpreterDagRequestV2 {
+class InterpreterDagRequest : public IInterpreter {
 public:
-    InterpreterDagRequestV2(CoprocessorContext & context_, tipb::DAGRequest & dag_request);
+    InterpreterDagRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request);
 
-    ~InterpreterDagRequestV2();
+    ~InterpreterDagRequest();
 
     BlockIO execute();
 
 private:
     CoprocessorContext & context;
-    tipb::DAGRequest & dag_request;
+    const tipb::DAGRequest & dag_request;
     NamesWithAliases final_project;
     bool has_where;
     bool has_agg;

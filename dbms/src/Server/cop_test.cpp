@@ -70,7 +70,8 @@ grpc::Status rpcTest() {
     dagRequest.add_output_offsets(1);
     dagRequest.add_output_offsets(0);
     dagRequest.add_output_offsets(1);
-    /*executor = dagRequest.add_executors();
+    /*
+    executor = dagRequest.add_executors();
     executor->set_tp(tipb::ExecType::TypeSelection);
     tipb::Selection *selection = executor->mutable_selection();
     tipb::Expr *expr = selection->add_conditions();
@@ -86,7 +87,7 @@ grpc::Status rpcTest() {
     ss.str("");
     DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(289,ss);
     value->set_val(std::string(ss.str()));
-     */
+    */
 
 
     // construct a coprocessor request

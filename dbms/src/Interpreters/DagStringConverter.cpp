@@ -1,5 +1,5 @@
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/InterpreterDagRequestV1.h>
+#include <Interpreters/DagStringConverter.h>
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/CoprocessorBuilderUtils.h>
@@ -11,7 +11,7 @@
 
 namespace DB {
 
-    bool InterpreterDagRequestV1::buildTSString(const tipb::TableScan & ts, std::stringstream & ss) {
+    bool DagStringConverter::buildTSString(const tipb::TableScan & ts, std::stringstream & ss) {
         TableID id;
         if(ts.has_table_id()) {
             id = ts.table_id();
@@ -46,7 +46,7 @@ namespace DB {
         return true;
     }
 
-    String InterpreterDagRequestV1::exprToString(const tipb::Expr & expr, bool &succ) {
+    String DagStringConverter::exprToString(const tipb::Expr & expr, bool &succ) {
         std::stringstream ss;
         succ = true;
         size_t cursor = 1;
@@ -125,7 +125,7 @@ namespace DB {
         }
     }
 
-    bool InterpreterDagRequestV1::buildSelString(const tipb::Selection & sel, std::stringstream & ss) {
+    bool DagStringConverter::buildSelString(const tipb::Selection & sel, std::stringstream & ss) {
         bool first = true;
         for(const tipb::Expr & expr : sel.conditions()) {
             bool  succ = true;
@@ -144,13 +144,13 @@ namespace DB {
         return true;
     }
 
-    bool InterpreterDagRequestV1::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) {
+    bool DagStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) {
         ss << "LIMIT " << limit.limit() << " ";
         return true;
     }
 
     //todo return the error message
-    bool InterpreterDagRequestV1::buildString(const tipb::Executor & executor, std::stringstream & ss) {
+    bool DagStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss) {
         switch (executor.tp()) {
             case tipb::ExecType::TypeTableScan:
                 return buildTSString(executor.tbl_scan(), ss);
@@ -176,17 +176,12 @@ namespace DB {
         // currently, project is not pushed so always return false
         return false;
     }
-    InterpreterDagRequestV1::InterpreterDagRequestV1(CoprocessorContext & context_, tipb::DAGRequest & dag_request_)
+    DagStringConverter::DagStringConverter(CoprocessorContext & context_, tipb::DAGRequest & dag_request_)
     : context(context_), dag_request(dag_request_) {
         afterAgg = false;
     }
 
-    BlockIO InterpreterDagRequestV1::execute() {
-        String query = buildSqlString();
-        return executeQuery(query, context.ch_context, false, QueryProcessingStage::Complete);
-    }
-
-    String InterpreterDagRequestV1::buildSqlString() {
+    String DagStringConverter::buildSqlString() {
         std::stringstream query_buf;
         std::stringstream project;
         for(const tipb::Executor & executor : dag_request.executors()) {
@@ -211,7 +206,4 @@ namespace DB {
         return project.str() + query_buf.str();
     }
 
-    InterpreterDagRequestV1::~InterpreterDagRequestV1() {
-
-    }
 }
