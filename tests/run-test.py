@@ -2,10 +2,13 @@
 
 import os
 import sys
+import time
 
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
+CMD_PREFIX_TIDB = 'mysql> '
 RETURN_PREFIX = '#RETURN'
+SLEEP_PREFIX = 'SLEEP '
 TODO_PREFIX = '#TODO'
 COMMENT_PREFIX = '#'
 UNFINISHED_1_PREFIX = '\t'
@@ -18,6 +21,10 @@ class Executor:
     def exe(self, cmd):
         return os.popen((self.dbc + ' "' + cmd + '" 2>&1').strip()).readlines()
 
+def parse_line(line):
+    words = [w.strip() for w in line.split("│") if w.strip() != ""]
+    return "@".join(words)
+
 def parse_table_parts(lines, fuzz):
     parts = set()
     if not fuzz:
@@ -27,12 +34,13 @@ def parse_table_parts(lines, fuzz):
                 if len(curr) != 0:
                     parts.add('\n'.join(curr))
                     curr = []
-            curr.append(line)
+            curr.append(parse_line(line))
         if len(curr) != 0:
             parts.add('\n'.join(curr))
     else:
         for line in lines:
             if not line.startswith('┌') and not line.startswith('└'):
+                line = parse_line(line)
                 if line in parts:
                     line += '-extra'
                 parts.add(line)
@@ -92,15 +100,20 @@ def matched(outputs, matches, fuzz):
         return True
 
 class Matcher:
-    def __init__(self, executor, fuzz):
+    def __init__(self, executor, executor_tidb, fuzz):
         self.executor = executor
+        self.executor_tidb = executor_tidb
         self.fuzz = fuzz
         self.query = None
         self.outputs = None
         self.matches = []
 
     def on_line(self, line):
-        if line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
+        if line.startswith(SLEEP_PREFIX):
+            time.sleep(float(line[len(SLEEP_PREFIX):]))
+        elif line.startswith(CMD_PREFIX_TIDB):
+            self.executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
+        elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
             if self.outputs != None and not matched(self.outputs, self.matches, self.fuzz):
                 return False
             self.query = line[len(CMD_PREFIX):]
@@ -117,10 +130,10 @@ class Matcher:
             return False
         return True
 
-def parse_exe_match(path, executor, fuzz):
+def parse_exe_match(path, executor, executor_tidb, fuzz):
     todos = []
     with open(path) as file:
-        matcher = Matcher(executor, fuzz)
+        matcher = Matcher(executor, executor_tidb, fuzz)
         cached = None
         for origin in file:
             line = origin.strip()
@@ -144,15 +157,16 @@ def parse_exe_match(path, executor, fuzz):
         return True, matcher, todos
 
 def run():
-    if len(sys.argv) != 4:
-        print 'usage: <bin> database-client-cmd test-file-path fuzz-check'
+    if len(sys.argv) != 5:
+        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd'
         sys.exit(1)
 
     dbc = sys.argv[1]
     path = sys.argv[2]
     fuzz = (sys.argv[3] == 'true')
+    mysql_client = sys.argv[4]
 
-    matched, matcher, todos = parse_exe_match(path, Executor(dbc), fuzz)
+    matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), fuzz)
 
     def display(lines):
         if len(lines) == 0:
