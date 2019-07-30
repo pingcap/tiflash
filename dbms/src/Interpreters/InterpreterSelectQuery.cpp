@@ -699,7 +699,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
 
-            if (!query_info.mvcc_query_info->regions_query_info.size())
+            if (query_info.mvcc_query_info->regions_query_info.empty())
                 throw Exception("[InterpreterSelectQuery::executeFetchColumns] no region query", ErrorCodes::LOGICAL_ERROR);
             query_info.mvcc_query_info->concurrent = 0.0;
         }
