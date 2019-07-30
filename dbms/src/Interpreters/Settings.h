@@ -29,6 +29,8 @@ struct Settings
     M(SettingString, regions, "", "the region need to be read.") \
     M(SettingBool, resolve_locks, false, "tmt read tso.") \
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.") \
+    M(SettingInt64, records_per_chunk, DEFAULT_RECORDS_PER_CHUNK, "default chunk size for coprocessor.") \
+    M(SettingString, coprocessor_plan_builder_version, "v1", "how to build ch plan in coprocessor handler, v1 means build the plan based on string, v2 means build the plan based on cop executor") \
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value and no less than the volume of data for one mark.") \
     M(SettingUInt64, max_compress_block_size, DEFAULT_MAX_COMPRESS_BLOCK_SIZE, "The maximum size of blocks of uncompressed data before compressing for writing to a table.") \
     M(SettingUInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading") \

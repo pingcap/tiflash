@@ -11,4 +11,6 @@ using ColumnInfo = TiDB::ColumnInfo;
 
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info);
 
+TiDB::CodecFlag getCodecFlagByDataType(const DataTypePtr & dataTypePtr);
+
 }

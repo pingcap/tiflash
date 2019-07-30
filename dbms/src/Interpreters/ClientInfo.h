@@ -24,6 +24,7 @@ public:
     {
         TCP = 1,
         HTTP = 2,
+        GRPC = 2,
     };
 
     enum class HTTPMethod : UInt8

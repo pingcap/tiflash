@@ -37,3 +37,7 @@
 [submodule "contrib/kvproto"]
 	path = contrib/kvproto
 	url = https://github.com/pingcap/kvproto.git
+[submodule "contrib/tipb"]
+	path = contrib/tipb
+	url = https://github.com/pingcap/tipb.git
+	branch = tipb_cpp

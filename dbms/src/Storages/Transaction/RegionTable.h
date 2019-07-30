@@ -177,6 +177,7 @@ public:
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
+    RegionPtr getRegionById(const TableID table_id, const RegionID region_id);
 
     static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,

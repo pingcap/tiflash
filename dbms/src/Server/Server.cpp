@@ -37,6 +37,7 @@
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
+#include "FlashService.h"
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
@@ -427,6 +428,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Shutting down raft service.");
         global_context->shutdownRaftService();
         LOG_INFO(log, "Shutted down raft service.");
+    });
+
+    FlashServicePtr flash_service = nullptr;
+    if(config().has("flash")) {
+        String flash_service_addr = config().getString("flash.service_addr");
+        flash_service = std::make_shared<FlashService>(flash_service_addr, *this);
+    }
+
+    SCOPE_EXIT({
+        if (flash_service != nullptr) {
+            LOG_INFO(log, "Shutting down flash service.");
+            flash_service.reset();
+            LOG_INFO(log, "Shutted down flash service.");
+        }
     });
 
     {
