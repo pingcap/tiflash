@@ -146,6 +146,8 @@ public:
 
     RegionVersion version() const;
     RegionVersion confVer() const;
+
+    /// version, conf_version, range
     std::tuple<RegionVersion, RegionVersion, RegionRange> dumpVersionRangeByTable() const;
 
     HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;

@@ -186,7 +186,7 @@ public:
         const Names & ordered_columns,
         RegionDataReadInfoList & data_list_for_remove);
 
-    static std::tuple<Block, RegionTable::RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
+    static std::tuple<Block, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
         RegionPtr region,
         const RegionVersion region_version,
         const RegionVersion conf_version,
