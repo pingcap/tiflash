@@ -207,7 +207,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
 
         const auto merge_tree = dynamic_cast<const StorageMergeTree *>(storage_.get());
         if (!merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
-            throw Exception("Specifying schema_version for non-TMT storage: " + storage->getName() + ", table: " + qualified_name + " is not allowed", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Specifying schema_version for non-TMT storage: " + storage_->getName() + ", table: " + qualified_name + " is not allowed", ErrorCodes::LOGICAL_ERROR);
 
         /// Lock storage.
         auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
