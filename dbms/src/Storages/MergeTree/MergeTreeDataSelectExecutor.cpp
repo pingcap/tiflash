@@ -294,7 +294,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
         if (!tmt.isInitialized())
             throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-        // only for test, because regions_query_info should never be empty if query is from tidb or tispark.
+        // only for test, because regions_executor_data should never be empty if query is from tidb or tispark.
         if (regions_executor_data.empty())
         {
             auto regions = tmt.getRegionTable().getRegionsByTable(data.table_info->id);
