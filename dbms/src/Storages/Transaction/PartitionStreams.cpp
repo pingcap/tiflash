@@ -33,6 +33,8 @@ Block RegionTable::getBlockInputStreamByRegion(TableID table_id,
         if (!scanner->hasNext())
             return {};
 
+        data_list_for_remove.reserve(scanner->writeMapSize());
+
         do
         {
             data_list_for_remove.emplace_back(scanner->next(need_value));
@@ -95,6 +97,8 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::getBlockInputStrea
 
         if (!scanner->hasNext())
             return {Block(), OK};
+
+        data_list.reserve(scanner->writeMapSize());
 
         do
         {

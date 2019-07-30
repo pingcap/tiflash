@@ -42,6 +42,40 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
     }
 }
 
+inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
+{
+    // resort the data_list
+    // if the order in int64 is like -3 -1 0 1 2 3, the real order in uint64 is 0 1 2 3 -3 -1
+    if (data_list.size() > 2)
+    {
+        bool need_check = false;
+        {
+            const auto h1 = std::get<0>(data_list.front());
+            const auto h2 = std::get<0>(data_list.back());
+            if ((h1 ^ h2) & RecordKVFormat::SIGN_MARK)
+                need_check = true;
+        }
+
+        if (need_check)
+        {
+            auto it = data_list.begin();
+            for (; it != data_list.end();)
+            {
+                const auto handle = std::get<0>(*it);
+
+                if (handle & RecordKVFormat::SIGN_MARK)
+                    ++it;
+                else
+                    break;
+            }
+
+            std::reverse(it, data_list.end());
+            std::reverse(data_list.begin(), it);
+            std::reverse(data_list.begin(), data_list.end());
+        }
+    }
+}
+
 Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns,
     RegionDataReadInfoList & data_list)
 {
@@ -72,25 +106,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
     const bool pk_is_uint64 = getTMTPKType(*column_map[handle_col_id].second.type) == TMTPKType::UINT64;
 
     if (pk_is_uint64)
-    {
-        size_t ori_size = data_list.size();
-        std::ignore = ori_size;
-
-        // resort the data_list;
-        auto it = data_list.begin();
-        for (; it != data_list.end();)
-        {
-            const auto handle = std::get<0>(*it);
-
-            if (handle & RecordKVFormat::SIGN_MARK)
-                ++it;
-            else
-                break;
-        }
-        data_list.splice(data_list.end(), data_list, data_list.begin(), it);
-
-        assert(ori_size == data_list.size());
-    }
+        ReorderRegionDataReadList(data_list);
 
     const auto & date_lut = DateLUT::instance();
 
