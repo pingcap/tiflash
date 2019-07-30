@@ -164,7 +164,7 @@ TMTPKType getTMTPKType(const IDataType & rhs)
 struct RegionExecutorData
 {
     RegionQueryInfo info;
-    Block block_data;
+    Block block;
 
     RegionExecutorData() = default;
     RegionExecutorData(const RegionQueryInfo & info_) : info(info_) {}
@@ -173,11 +173,11 @@ struct RegionExecutorData
         if (&data == this)
             return *this;
         info = std::move(data.info);
-        block_data = std::move(data.block_data);
+        block = std::move(data.block);
         return *this;
     }
 
-    RegionExecutorData(RegionExecutorData && data) : info(std::move(data.info)), block_data(std::move(data.block_data)) {}
+    RegionExecutorData(RegionExecutorData && data) : info(std::move(data.info)), block(std::move(data.block)) {}
     bool operator<(const RegionExecutorData & o) const { return info < o.info; }
 };
 
@@ -359,7 +359,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         need_retry = true;
                     }
                     else if (block)
-                        regions_executor_data[region_index].block_data = std::move(block);
+                        regions_executor_data[region_index].block = std::move(block);
                 }
             };
 
@@ -893,7 +893,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         throw Exception("split for uint64 handle should be only 1 ranges", ErrorCodes::LOGICAL_ERROR);
 
                     handle_ranges.emplace_back(new_range[0], region_index);
-                    mem_rows += regions_executor_data[region_index].block_data.rows();
+                    mem_rows += regions_executor_data[region_index].block.rows();
                 }
 
                 // the order of uint64 is different with int64.
@@ -919,7 +919,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                      ++region_index)
                 {
                     handle_ranges.emplace_back(regions_executor_data[region_index].info.range_in_table, region_index);
-                    mem_rows += regions_executor_data[region_index].block_data.rows();
+                    mem_rows += regions_executor_data[region_index].block.rows();
                 }
 
                 // handle_ranges is sorted.
@@ -973,7 +973,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 BlocksList blocks;
                 for (auto & executor_data : regions_executor_data)
                 {
-                    auto & block = executor_data.block_data;
+                    auto & block = executor_data.block;
                     if (block)
                         blocks.emplace_back(std::move(block));
                 }
@@ -1055,8 +1055,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         BlocksList blocks;
                         for (size_t idx : block_indexes)
                         {
-                            if (regions_executor_data[idx].block_data)
-                                blocks.emplace_back(std::move(regions_executor_data[idx].block_data));
+                            if (regions_executor_data[idx].block)
+                                blocks.emplace_back(std::move(regions_executor_data[idx].block));
                         }
 
                         if (!blocks.empty())
@@ -1125,13 +1125,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             "[PK_IS_UINT64] special region "
                                 << special_region_info.info.region_id << ", split range into " << n << ": " << ss.str() << ", "
                                 << region_sum_marks << " marks to read from " << region_sum_ranges << " ranges, read "
-                                << regions_executor_data[special_region_index].block_data.rows() << " rows from memory");
+                                << regions_executor_data[special_region_index].block.rows() << " rows from memory");
                     }
 
                     {
                         BlocksList blocks;
-                        if (regions_executor_data[special_region_index].block_data)
-                            blocks.emplace_back(std::move(regions_executor_data[special_region_index].block_data));
+                        if (regions_executor_data[special_region_index].block)
+                            blocks.emplace_back(std::move(regions_executor_data[special_region_index].block));
 
                         if (!blocks.empty())
                         {
