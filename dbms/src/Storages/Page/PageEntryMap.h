@@ -112,103 +112,6 @@ public:
     PageId maxId() const { return max_page_id; }
 
 public:
-    /// Iterator definition. Used for scan over all RefPages / NormalPages
-
-    class iterator
-    {
-    public:
-        iterator(const std::unordered_map<PageId, PageId>::iterator & iter, std::unordered_map<PageId, PageEntry> & normal_pages)
-            : _iter(iter), _normal_pages(normal_pages)
-        {
-        }
-        bool operator==(const iterator & rhs) const { return _iter == rhs._iter; }
-        bool operator!=(const iterator & rhs) const { return _iter != rhs._iter; }
-        // prefix incr
-        inline iterator & operator++()
-        {
-            _iter++;
-            return *this;
-        }
-        // suffix incr
-        inline const iterator operator++(int)
-        {
-            iterator tmp(*this);
-            _iter++;
-            return tmp;
-        }
-        inline PageId      pageId() const { return _iter->first; }
-        inline PageEntry & pageEntry()
-        {
-            auto iter = _normal_pages.find(_iter->second);
-            if (likely(iter != _normal_pages.end()))
-            {
-                return iter->second;
-            }
-            else
-            {
-                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
-                                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-
-    private:
-        std::unordered_map<PageId, PageId>::iterator _iter;
-        std::unordered_map<PageId, PageEntry> &      _normal_pages;
-        friend class PageEntryMapView;
-    };
-
-    class const_iterator
-    {
-    public:
-        const_iterator(const std::unordered_map<PageId, PageId>::const_iterator & iter,
-                       const std::unordered_map<PageId, PageEntry> &              normal_pages)
-            : _iter(iter), _normal_pages(const_cast<std::unordered_map<PageId, PageEntry> &>(normal_pages))
-        {
-        }
-        bool operator==(const const_iterator & rhs) const { return _iter == rhs._iter; }
-        bool operator!=(const const_iterator & rhs) const { return _iter != rhs._iter; }
-        // prefix incr
-        inline const_iterator & operator++()
-        {
-            _iter++;
-            return *this;
-        }
-        // suffix incr
-        inline const const_iterator operator++(int)
-        {
-            const_iterator tmp(*this);
-            _iter++;
-            return tmp;
-        }
-        inline PageId            pageId() const { return _iter->first; }
-        inline const PageEntry & pageEntry() const
-        {
-            auto iter = _normal_pages.find(_iter->second);
-            if (likely(iter != _normal_pages.end()))
-            {
-                return iter->second;
-            }
-            else
-            {
-                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
-                                    ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-
-    private:
-        std::unordered_map<PageId, PageId>::const_iterator _iter;
-        std::unordered_map<PageId, PageEntry> &            _normal_pages;
-        friend class PageEntryMapView;
-    };
-
-public:
-    /// functions return iterator
-
-    // read only scan
-    inline const_iterator cend() const { return const_iterator(page_ref.cend(), normal_pages); }
-    inline const_iterator cbegin() const { return const_iterator(page_ref.cbegin(), normal_pages); }
-
-    using normal_page_iterator       = std::unordered_map<PageId, PageEntry>::iterator;
     using const_normal_page_iterator = std::unordered_map<PageId, PageEntry>::const_iterator;
     // only scan over normal Pages, excluding RefPages
     inline const_normal_page_iterator pages_cbegin() const { return normal_pages.cbegin(); }
@@ -234,7 +137,7 @@ private:
 
     size_t numNormalEntries() const { return normal_pages.size(); }
 
-    inline bool isDeleted(PageId page_id) const { return ref_deletions.count(page_id) > 0; }
+    inline bool isRefDeleted(PageId page_id) const { return ref_deletions.count(page_id) > 0; }
 
     PageId resolveRefId(PageId page_id) const
     {
@@ -397,6 +300,103 @@ public:
     {
         (void)is_base_;
     }
+
+public:
+    /// Iterator definition. Used for scan over all RefPages / NormalPages
+
+    class iterator
+    {
+    public:
+        iterator(const std::unordered_map<PageId, PageId>::iterator & iter, std::unordered_map<PageId, PageEntry> & normal_pages)
+                : _iter(iter), _normal_pages(normal_pages)
+        {
+        }
+        bool operator==(const iterator & rhs) const { return _iter == rhs._iter; }
+        bool operator!=(const iterator & rhs) const { return _iter != rhs._iter; }
+        // prefix incr
+        inline iterator & operator++()
+        {
+            _iter++;
+            return *this;
+        }
+        // suffix incr
+        inline const iterator operator++(int)
+        {
+            iterator tmp(*this);
+            _iter++;
+            return tmp;
+        }
+        inline PageId      pageId() const { return _iter->first; }
+        inline PageEntry & pageEntry()
+        {
+            auto iter = _normal_pages.find(_iter->second);
+            if (likely(iter != _normal_pages.end()))
+            {
+                return iter->second;
+            }
+            else
+            {
+                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
+                                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+
+    private:
+        std::unordered_map<PageId, PageId>::iterator _iter;
+        std::unordered_map<PageId, PageEntry> &      _normal_pages;
+        friend class PageEntryMapView;
+    };
+
+    class const_iterator
+    {
+    public:
+        const_iterator(const std::unordered_map<PageId, PageId>::const_iterator & iter,
+                       const std::unordered_map<PageId, PageEntry> &              normal_pages)
+                : _iter(iter), _normal_pages(const_cast<std::unordered_map<PageId, PageEntry> &>(normal_pages))
+        {
+        }
+        bool operator==(const const_iterator & rhs) const { return _iter == rhs._iter; }
+        bool operator!=(const const_iterator & rhs) const { return _iter != rhs._iter; }
+        // prefix incr
+        inline const_iterator & operator++()
+        {
+            _iter++;
+            return *this;
+        }
+        // suffix incr
+        inline const const_iterator operator++(int)
+        {
+            const_iterator tmp(*this);
+            _iter++;
+            return tmp;
+        }
+        inline PageId            pageId() const { return _iter->first; }
+        inline const PageEntry & pageEntry() const
+        {
+            auto iter = _normal_pages.find(_iter->second);
+            if (likely(iter != _normal_pages.end()))
+            {
+                return iter->second;
+            }
+            else
+            {
+                throw DB::Exception("Accessing RefPage" + DB::toString(_iter->first) + " to non-exist Page" + DB::toString(_iter->second),
+                                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+
+    private:
+        std::unordered_map<PageId, PageId>::const_iterator _iter;
+        std::unordered_map<PageId, PageEntry> &            _normal_pages;
+        friend class PageEntryMapView;
+    };
+
+public:
+
+    // Iterator to scan over all ref/normal pages (read only)
+    inline const_iterator cend() const { return const_iterator(page_ref.cend(), normal_pages); }
+    inline const_iterator cbegin() const { return const_iterator(page_ref.cbegin(), normal_pages); }
+
 };
 
 /// For PageEntryMapDeltaVersionSet

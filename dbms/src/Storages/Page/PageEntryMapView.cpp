@@ -12,7 +12,7 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
     PageId normal_page_id = 0;
     for (auto node = tail; node != nullptr; node = node->prev)
     {
-        if (node->isDeleted(page_id))
+        if (node->isRefDeleted(page_id))
         {
             return nullptr;
         }
