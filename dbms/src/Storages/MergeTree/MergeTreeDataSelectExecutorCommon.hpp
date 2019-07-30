@@ -18,22 +18,24 @@ static inline void extendMutableEngineColumnNames(Names & column_names_to_read, 
 /// make pk, version, delmark is always the first 3 columns, maybe some sample column will be added later.
 static inline void extendMutableEngineColumnNames(Names & column_names_to_read, const std::string & handle_col_name)
 {
-    // use std::set to make order same.
-    std::set<std::string> names;
+    std::set<std::string> reserved_names;
+    reserved_names.insert(handle_col_name);
+    reserved_names.insert(MutableSupport::version_column_name);
+    reserved_names.insert(MutableSupport::delmark_column_name);
+    Names org_names;
 
-    for (auto & name : column_names_to_read)
-        names.emplace(std::move(name));
+    for (auto & name : column_names_to_read) {
+        if(reserved_names.count(name) == 0) {
+            org_names.emplace_back(std::move(name));
+        }
+    }
     column_names_to_read.clear();
 
     column_names_to_read.push_back(handle_col_name);
     column_names_to_read.push_back(MutableSupport::version_column_name);
     column_names_to_read.push_back(MutableSupport::delmark_column_name);
 
-    names.erase(MutableSupport::version_column_name);
-    names.erase(MutableSupport::delmark_column_name);
-    names.erase(handle_col_name);
-
-    for (auto & name : names)
+    for (auto & name : org_names)
         column_names_to_read.emplace_back(std::move(name));
 }
 

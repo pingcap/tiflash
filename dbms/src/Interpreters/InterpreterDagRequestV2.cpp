@@ -8,6 +8,7 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
 #include "CoprocessorBuilderUtils.h"
 
 namespace DB {
@@ -19,7 +20,24 @@ namespace DB {
 
     InterpreterDagRequestV2::InterpreterDagRequestV2(CoprocessorContext & context_, tipb::DAGRequest & dag_request_)
     : context(context_), dag_request(dag_request_) {
-        (void)dag_request;
+        for(const tipb::Executor & executor : dag_request.executors()) {
+            switch (executor.tp()) {
+                case tipb::ExecType::TypeSelection:
+                    has_where = true;
+                    break;
+                case tipb::ExecType::TypeStreamAgg:
+                case tipb::ExecType::TypeAggregation:
+                    has_agg = true;
+                    break;
+                case tipb::ExecType::TypeTopN:
+                    has_orderby = true;
+                case tipb::ExecType::TypeLimit:
+                    has_limit = true;
+                    break;
+                default:
+                    break;
+            }
+        }
     }
 
     bool InterpreterDagRequestV2::buildTSPlan(const tipb::TableScan & ts, Pipeline & pipeline) {
@@ -58,6 +76,19 @@ namespace DB {
             // no column selected, must be something wrong
             return false;
         }
+
+        if(!has_agg) {
+            // if the dag request does not contain agg, then the final output is
+            // based on the output of table scan
+            for (auto i : dag_request.output_offsets()) {
+                if (i < 0 || i >= required_columns.size()) {
+                    // array index out of bound
+                    return false;
+                }
+                // do not have alias
+                final_project.emplace_back(required_columns[i], "");
+            }
+        }
         // todo handle alias column
         const Settings & settings = context.ch_context.getSettingsRef();
 
@@ -78,6 +109,7 @@ namespace DB {
         //todo support index in
         SelectQueryInfo query_info;
         query_info.query = std::make_unique<ASTSelectQuery>();
+        ((ASTSelectQuery*)query_info.query.get())->is_fake_sel = true;
         query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
         query_info.mvcc_query_info->resolve_locks = true;
         query_info.mvcc_query_info->read_tso = settings.read_tso;
@@ -152,7 +184,19 @@ namespace DB {
                 return BlockIO();
             }
         }
-        return BlockIO();
+        // add final project
+        auto stream_before_project = pipeline.firstStream();
+        auto columns = stream_before_project->getHeader();
+        NamesAndTypesList input_column;
+        for(auto column : columns.getColumnsWithTypeAndName()) {
+            input_column.emplace_back(column.name, column.type);
+        }
+        ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.ch_context.getSettingsRef());
+        project->add(ExpressionAction::project(final_project));
+        auto final_stream = std::make_shared<ExpressionBlockInputStream>(stream_before_project, project);
+        BlockIO res;
+        res.in = final_stream;
+        return res;
     }
     InterpreterDagRequestV2::~InterpreterDagRequestV2() {
 

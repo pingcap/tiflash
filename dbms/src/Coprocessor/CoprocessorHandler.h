@@ -32,7 +32,6 @@ public:
     bool execute();
 
 private:
-    String buildSqlString();
     BlockIO buildCHPlan();
     const coprocessor::Request *cop_request;
     coprocessor::Response *cop_response;

@@ -9,6 +9,7 @@
 #include <DataStreams/BlockIO.h>
 #include <Coprocessor/CoprocessorHandler.h>
 #include "CoprocessorBuilderUtils.h"
+#include "ExpressionActions.h"
 
 namespace DB {
 
@@ -25,6 +26,11 @@ public:
 private:
     CoprocessorContext & context;
     tipb::DAGRequest & dag_request;
+    NamesWithAliases final_project;
+    bool has_where;
+    bool has_agg;
+    bool has_orderby;
+    bool has_limit;
     struct Pipeline
     {
         BlockInputStreams streams;

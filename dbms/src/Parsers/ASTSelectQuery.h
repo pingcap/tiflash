@@ -20,6 +20,7 @@ public:
 
     ASTPtr clone() const override;
 
+    bool is_fake_sel = false;
     bool raw_for_mutable = false;
     bool distinct = false;
     bool no_kvstore = false;
