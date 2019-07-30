@@ -7,12 +7,12 @@ function run_file()
 	local continue_on_error="$3"
 	local fuzz="$4"
 	local skip_raw_test="$5"
-	local tidbc="$6"
+	local mysql_client="$6"
 
 	local ext=${path##*.}
 
 	if [ "$ext" == "test" ]; then
-		python run-test.py "$dbc" "$path" "$fuzz" "$tidbc"
+		python run-test.py "$dbc" "$path" "$fuzz" "$mysql_client"
 	else
 		if [ "$ext" == "visual" ]; then
 			python run-test-gen-from-visual.py "$path" "$skip_raw_test"
@@ -20,7 +20,7 @@ function run_file()
 				echo "Generate test files failed: $file" >&2
 				exit 1
 			fi
-			run_dir "$dbc" "$path.test" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"
+			run_dir "$dbc" "$path.test" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
 		fi
 	fi
 
@@ -41,7 +41,7 @@ function run_dir()
 	local continue_on_error="$3"
 	local fuzz="$4"
 	local skip_raw_test="$5"
-	local tidbc="$6"
+	local mysql_client="$6"
 
 	find "$path" -maxdepth 1 -name "*.visual" -type f | sort | while read file; do
 		if [ -f "$file" ]; then
@@ -60,7 +60,7 @@ function run_dir()
 
 	find "$path" -maxdepth 1 -name "*.test" -type f | sort | while read file; do
 		if [ -f "$file" ]; then
-			run_file "$dbc" "$file" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"
+			run_file "$dbc" "$file" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
 		fi
 	done
 
@@ -70,7 +70,7 @@ function run_dir()
 
 	find "$path" -maxdepth 1 -type d | sort -r | while read dir; do
 		if [ -d "$dir" ] && [ "$dir" != "$path" ]; then
-			run_dir "$dbc" "$dir" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"
+			run_dir "$dbc" "$dir" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
 		fi
 	done
 
@@ -86,13 +86,13 @@ function run_path()
 	local continue_on_error="$3"
 	local fuzz="$4"
 	local skip_raw_test="$5"
-	local tidbc="$6"
+	local mysql_client="$6"
 
 	if [ -f "$path" ]; then
-		run_file "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"
+		run_file "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
 	else
 		if [ -d "$path" ]; then
-			run_dir "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$tidbc"
+			run_dir "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
 		else
 			echo "error: $path not file nor dir." >&2
 			exit 1
