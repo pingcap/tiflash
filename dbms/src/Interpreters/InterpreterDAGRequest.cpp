@@ -1,5 +1,5 @@
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/InterpreterDagRequest.h>
+#include <Interpreters/InterpreterDAGRequest.h>
 #include <Storages/Transaction/Types.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -25,7 +25,7 @@ namespace DB {
         index = value;
     }
 
-    InterpreterDagRequest::InterpreterDagRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request_)
+    InterpreterDAGRequest::InterpreterDAGRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request_)
     : context(context_), dag_request(dag_request_) {
         for(int i = 0; i < dag_request.executors_size(); i++) {
             switch (dag_request.executors(i).tp()) {
@@ -50,12 +50,12 @@ namespace DB {
         }
     }
 
-    bool InterpreterDagRequest::buildSelPlan(const tipb::Selection & , Pipeline & ) {
+    bool InterpreterDAGRequest::buildSelPlan(const tipb::Selection & , Pipeline & ) {
         return false;
     }
 
     // the flow is the same as executeFetchcolumns
-    bool InterpreterDagRequest::buildTSPlan(const tipb::TableScan & ts, Pipeline & pipeline) {
+    bool InterpreterDAGRequest::buildTSPlan(const tipb::TableScan & ts, Pipeline & pipeline) {
         if(!ts.has_table_id()) {
             // do not have table id
             return false;
@@ -173,7 +173,7 @@ namespace DB {
     }
 
     //todo return the error message
-    bool InterpreterDagRequest::buildPlan(Pipeline & pipeline) {
+    bool InterpreterDAGRequest::buildPlan(Pipeline & pipeline) {
         // step 1. build table scan
         if(!buildTSPlan(dag_request.executors(ts_index).tbl_scan(), pipeline)) {
             return false;
@@ -199,7 +199,7 @@ namespace DB {
         return true;
     }
 
-    BlockIO InterpreterDagRequest::execute() {
+    BlockIO InterpreterDAGRequest::execute() {
         Pipeline pipeline;
         buildPlan(pipeline);
         // add final project

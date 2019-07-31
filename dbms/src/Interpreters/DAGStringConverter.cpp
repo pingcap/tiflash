@@ -1,5 +1,5 @@
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/DagStringConverter.h>
+#include <Interpreters/DAGStringConverter.h>
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/CoprocessorBuilderUtils.h>
@@ -11,7 +11,7 @@
 
 namespace DB {
 
-    bool DagStringConverter::buildTSString(const tipb::TableScan & ts, std::stringstream & ss) {
+    bool DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringstream & ss) {
         TableID id;
         if(ts.has_table_id()) {
             id = ts.table_id();
@@ -46,7 +46,7 @@ namespace DB {
         return true;
     }
 
-    String DagStringConverter::exprToString(const tipb::Expr & expr, bool &succ) {
+    String DAGStringConverter::exprToString(const tipb::Expr & expr, bool &succ) {
         std::stringstream ss;
         succ = true;
         size_t cursor = 1;
@@ -125,7 +125,7 @@ namespace DB {
         }
     }
 
-    bool DagStringConverter::buildSelString(const tipb::Selection & sel, std::stringstream & ss) {
+    bool DAGStringConverter::buildSelString(const tipb::Selection & sel, std::stringstream & ss) {
         bool first = true;
         for(const tipb::Expr & expr : sel.conditions()) {
             bool  succ = true;
@@ -144,13 +144,13 @@ namespace DB {
         return true;
     }
 
-    bool DagStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) {
+    bool DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) {
         ss << "LIMIT " << limit.limit() << " ";
         return true;
     }
 
     //todo return the error message
-    bool DagStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss) {
+    bool DAGStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss) {
         switch (executor.tp()) {
             case tipb::ExecType::TypeTableScan:
                 return buildTSString(executor.tbl_scan(), ss);
@@ -176,12 +176,12 @@ namespace DB {
         // currently, project is not pushed so always return false
         return false;
     }
-    DagStringConverter::DagStringConverter(CoprocessorContext & context_, tipb::DAGRequest & dag_request_)
+    DAGStringConverter::DAGStringConverter(CoprocessorContext & context_, tipb::DAGRequest & dag_request_)
     : context(context_), dag_request(dag_request_) {
         afterAgg = false;
     }
 
-    String DagStringConverter::buildSqlString() {
+    String DAGStringConverter::buildSqlString() {
         std::stringstream query_buf;
         std::stringstream project;
         for(const tipb::Executor & executor : dag_request.executors()) {

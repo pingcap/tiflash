@@ -16,11 +16,11 @@ namespace DB {
 
 /** build ch plan from dag request: dag executors -> ch plan
   */
-class InterpreterDagRequest : public IInterpreter {
+class InterpreterDAGRequest : public IInterpreter {
 public:
-    InterpreterDagRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request);
+    InterpreterDAGRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request);
 
-    ~InterpreterDagRequest() = default;
+    ~InterpreterDAGRequest() = default;
 
     BlockIO execute();
 

@@ -27,7 +27,7 @@
 #include <tipb/expression.pb.h>
 #include <tipb/select.pb.h>
 #include <Interpreters/StringQueryInfo.h>
-#include <Interpreters/DagQueryInfo.h>
+#include <Interpreters/DAGQueryInfo.h>
 
 
 namespace ProfileEvents
@@ -393,7 +393,7 @@ BlockIO executeQuery(
 
 BlockIO executeQuery(const tipb::DAGRequest & dag_request, CoprocessorContext & context, QueryProcessingStage::Enum stage) {
     BlockIO streams;
-    DagQueryInfo queryInfo(dag_request, context);
+    DAGQueryInfo queryInfo(dag_request, context);
     std::tie(std::ignore, streams) = executeQueryImpl(queryInfo, context.ch_context, stage);
     return streams;
 }

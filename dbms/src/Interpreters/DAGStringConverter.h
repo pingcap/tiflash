@@ -11,11 +11,11 @@
 
 namespace DB {
 
-class DagStringConverter {
+class DAGStringConverter {
 public:
-    DagStringConverter(CoprocessorContext & context_, tipb::DAGRequest & dag_request_);
+    DAGStringConverter(CoprocessorContext & context_, tipb::DAGRequest & dag_request_);
 
-    ~DagStringConverter() = default;
+    ~DAGStringConverter() = default;
 
     String buildSqlString();
 private:

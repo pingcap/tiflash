@@ -8,8 +8,8 @@
 #include <DataStreams/TidbCopBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <Interpreters/executeQuery.h>
-#include <Interpreters/InterpreterDagRequest.h>
-#include <Interpreters/DagStringConverter.h>
+#include <Interpreters/InterpreterDAGRequest.h>
+#include <Interpreters/DAGStringConverter.h>
 #include <Interpreters/StringQueryInfo.h>
 
 namespace DB
@@ -30,7 +30,7 @@ CoprocessorHandler::~CoprocessorHandler()
 BlockIO CoprocessorHandler::buildCHPlan() {
     String builder_version = context.ch_context.getSettings().coprocessor_plan_builder_version;
     if(builder_version == "v1") {
-        DagStringConverter converter(context, dag_request);
+        DAGStringConverter converter(context, dag_request);
         String query = converter.buildSqlString();
         if(query.empty()) {
             return BlockIO();

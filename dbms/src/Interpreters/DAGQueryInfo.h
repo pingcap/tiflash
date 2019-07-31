@@ -10,13 +10,13 @@
 namespace DB
 {
 
-/** IQueryInfo interface for different source of queries.
+/** DAGQueryInfo for query represented by DAG request.
   */
-class DagQueryInfo : public IQueryInfo
+class DAGQueryInfo : public IQueryInfo
 {
 public:
 
-    DagQueryInfo(const tipb::DAGRequest & dag_request, CoprocessorContext & coprocessorContext_);
+    DAGQueryInfo(const tipb::DAGRequest & dag_request, CoprocessorContext & coprocessorContext_);
     bool isInternalQuery() { return false;};
     virtual std::tuple<std::string, ASTPtr> parse(size_t max_query_size);
     virtual String get_query_ignore_error(size_t max_query_size);

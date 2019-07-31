@@ -9,7 +9,7 @@
 namespace DB
 {
 
-/** IQueryInfo interface for different source of queries.
+/** StringQueryInfo for query represented by string.
   */
 class StringQueryInfo : public IQueryInfo
 {
