@@ -170,6 +170,7 @@ struct ColumnInfo
 #undef M
 
     CodecFlag getCodecFlag() const;
+    DB::Decimal getDecimalDefaultValue(const String & str) const;
     DB::Field defaultValueToField() const;
     Int64 getEnumIndex(const String &) const;
 };

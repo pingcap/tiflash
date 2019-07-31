@@ -10,7 +10,15 @@ using DB::WriteBufferFromOwnString;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-// TODO:: Refine Decimal Default Value !!
+DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const {
+    DB::ReadBufferFromString buffer(str);
+    DB::Decimal result;
+    result.precision = flen;
+    result.scale = decimal;
+    DB::readDecimalText(result, buffer);
+    return result;
+}
+
 // TODO:: Refine Date/Datatime/TimeStamp Defalut Value !!
 Field ColumnInfo::defaultValueToField() const
 {
@@ -52,6 +60,7 @@ Field ColumnInfo::defaultValueToField() const
             return Field();
         case TypeDecimal:
         case TypeNewDecimal:
+            return getDecimalDefaultValue(value.convert<String>());
         // TODO : Consider Bit / binary literal / Set / Duration.
         default:
             throw Exception("Have not proccessed type: " + std::to_string(tp));
