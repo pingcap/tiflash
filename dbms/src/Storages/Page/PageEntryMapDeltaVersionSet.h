@@ -36,9 +36,9 @@ public:
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 
-    VersionPtr compactDeltas(const VersionPtr & tail) override;
+    VersionPtr compactDeltas(const VersionPtr & tail) const override;
 
-    VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) override;
+    VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) const override;
 
 private:
     void collectLiveFilesFromVersionList(VersionPtr tail, std::set<VersionPtr> & visited, std::set<PageFileIdAndLevel> & liveFiles) const;

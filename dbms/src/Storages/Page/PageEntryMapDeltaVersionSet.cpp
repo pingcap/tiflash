@@ -79,7 +79,7 @@ void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList( //
 PageEntryMapDeltaVersionSet::VersionPtr           //
 PageEntryMapDeltaVersionSet::compactDeltaAndBase( //
     const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
-    PageEntryMapDeltaVersionSet::VersionPtr &       delta)
+    PageEntryMapDeltaVersionSet::VersionPtr &       delta) const
 {
     PageEntryMapDeltaVersionSet::VersionPtr base = PageEntryMapBase::createBase();
     base->copyEntries(*old_base);
@@ -90,8 +90,9 @@ PageEntryMapDeltaVersionSet::compactDeltaAndBase( //
     return base;
 }
 
-PageEntryMapDeltaVersionSet::VersionPtr //
-PageEntryMapDeltaVersionSet::compactDeltas(const PageEntryMapDeltaVersionSet::VersionPtr & tail)
+PageEntryMapDeltaVersionSet::VersionPtr     //
+PageEntryMapDeltaVersionSet::compactDeltas( //
+    const PageEntryMapDeltaVersionSet::VersionPtr & tail) const
 {
     if (tail->prev == nullptr || tail->prev->isBase())
     {

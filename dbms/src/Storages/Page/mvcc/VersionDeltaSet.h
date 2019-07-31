@@ -30,8 +30,8 @@ public:
 
 /// \tparam TVersion         -- Single version on version-list. Require for a `prev` member, see `MultiVersionDeltaCountable`
 /// \tparam TVersionView     -- A view to see a list of versions as a single version
-/// \tparam TVersionEdit     -- Edit to apply to version set for generating new version
-/// \tparam TEditAcceptor    --
+/// \tparam TVersionEdit     -- Changes to apply to version set for generating new version
+/// \tparam TEditAcceptor    -- Accept a read view and apply edits to new version
 template < //
     typename TVersion,
     typename TVersionView,
@@ -100,9 +100,9 @@ public:
 
         ~Snapshot()
         {
+            vset->compactOnDeltaRelease(view.transferTailVersionOwn());
+            // Remove snapshot from linked list
             std::unique_lock lock = vset->acquireForLock();
-            vset->compactOnDeltaRelease(view.transferTailVersionOwn(), lock);
-            // Remove from linked list
             prev->next = next;
             next->prev = prev;
         }
@@ -140,6 +140,13 @@ protected:
     }
 
 protected:
+
+    enum class RebaseResult
+    {
+        SUCCESS,
+        INVALID_VERSION,
+    };
+
     /// Use after do compact on VersionList, rebase all
     /// successor Version of Version{`old_base`} onto Version{`new_base`}.
     /// Specially, if no successor version of Version{`old_base`}, which
@@ -155,13 +162,19 @@ protected:
     /// │             (current,old_base) │     (current, new_base)           │
     /// └────────────────────────────────┴───────────────────────────────────┘
     /// Caller should ensure old_base is in VersionSet's link
-    void rebase(const VersionPtr & old_base, const VersionPtr & new_base)
+    RebaseResult rebase(const VersionPtr & old_base, const VersionPtr & new_base)
     {
         assert(old_base != nullptr);
+        std::unique_lock lock(read_mutex);
+        // Should check `old_base` is valid
+        if (!isValidVersion(old_base))
+        {
+            return RebaseResult::INVALID_VERSION;
+        }
         if (old_base == current)
         {
             current = new_base;
-            return;
+            return RebaseResult::SUCCESS;
         }
 
         auto q = current, p = current->prev;
@@ -174,6 +187,7 @@ protected:
         assert(p == old_base);
         // rebase q on `new_base`
         q->prev = new_base;
+        return RebaseResult::SUCCESS;
     }
 
     std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_mutex); }
@@ -193,9 +207,8 @@ protected:
 
     // If `tail` is in current
     // Do compaction on version-list [head, tail]. If there some versions after tail, use vset's `rebase` to concat them.
-    void compactOnDeltaRelease(VersionPtr && tail, std::unique_lock<std::shared_mutex> & lock)
+    void compactOnDeltaRelease(VersionPtr && tail)
     {
-        (void)lock; // TODO reduce lock range
         do
         {
             if (tail == nullptr || tail->isBase())
@@ -209,11 +222,15 @@ protected:
                 break;
             }
             // do compact on delta
-            VersionPtr tmp = compactDeltas(tail);
+            VersionPtr tmp = compactDeltas(tail); // Note: May be compacted by different threads
             if (tmp != nullptr)
             {
                 // rebase vset->current on `this->tail` to base on `tmp`
-                this->rebase(tail, tmp);
+                if (this->rebase(tail, tmp) == RebaseResult::INVALID_VERSION)
+                {
+                    // Another thread may have done compaction and rebase, then we just release `tail`
+                    break;
+                }
                 // release tail ref on this view, replace with tmp
                 tail = tmp;
                 tmp.reset();
@@ -225,15 +242,19 @@ protected:
                 assert(old_base != nullptr);
                 VersionPtr new_base = compactDeltaAndBase(old_base, tail);
                 // replace nodes [head, tail] -> new_base
-                this->rebase(tail, new_base);
+                if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
+                {
+                    // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
+                    break;
+                }
             }
         } while (false);
         tail.reset();
     }
 
-    virtual VersionPtr compactDeltas(const VersionPtr & tail) = 0;
+    virtual VersionPtr compactDeltas(const VersionPtr & tail) const = 0;
 
-    virtual VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) = 0;
+    virtual VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) const = 0;
 
 public:
     /// Some helper functions
