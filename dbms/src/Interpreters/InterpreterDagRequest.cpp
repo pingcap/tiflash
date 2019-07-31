@@ -18,28 +18,43 @@ namespace DB {
         extern const int TOO_MANY_COLUMNS;
     }
 
+    static void assignOrThrowException(Int32 & index, Int32 value, String name) {
+        if(index != -1) {
+            throw Exception("Duplicated " + name + " in DAG request");
+        }
+        index = value;
+    }
+
     InterpreterDagRequest::InterpreterDagRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request_)
     : context(context_), dag_request(dag_request_) {
-        for(const tipb::Executor & executor : dag_request.executors()) {
-            switch (executor.tp()) {
+        for(int i = 0; i < dag_request.executors_size(); i++) {
+            switch (dag_request.executors(i).tp()) {
+                case tipb::ExecType::TypeTableScan:
+                    assignOrThrowException(ts_index, i, "TableScan");
+                    break;
                 case tipb::ExecType::TypeSelection:
-                    has_where = true;
+                    assignOrThrowException(sel_index, i, "Selection");
                     break;
                 case tipb::ExecType::TypeStreamAgg:
                 case tipb::ExecType::TypeAggregation:
-                    has_agg = true;
+                    assignOrThrowException(agg_index, i, "Aggregation");
                     break;
                 case tipb::ExecType::TypeTopN:
-                    has_orderby = true;
+                    assignOrThrowException(order_index, i, "Order");
                 case tipb::ExecType::TypeLimit:
-                    has_limit = true;
+                    assignOrThrowException(limit_index, i, "Limit");
                     break;
                 default:
-                    break;
+                    throw Exception("Unsupported executor in DAG request: " + dag_request.executors(i).DebugString());
             }
         }
     }
 
+    bool InterpreterDagRequest::buildSelPlan(const tipb::Selection & , Pipeline & ) {
+        return false;
+    }
+
+    // the flow is the same as executeFetchcolumns
     bool InterpreterDagRequest::buildTSPlan(const tipb::TableScan & ts, Pipeline & pipeline) {
         if(!ts.has_table_id()) {
             // do not have table id
@@ -77,7 +92,7 @@ namespace DB {
             return false;
         }
 
-        if(!has_agg) {
+        if(agg_index == -1) {
             // if the dag request does not contain agg, then the final output is
             // based on the output of table scan
             for (auto i : dag_request.output_offsets()) {
@@ -158,32 +173,35 @@ namespace DB {
     }
 
     //todo return the error message
-    bool InterpreterDagRequest::buildPlan(const tipb::Executor & executor, Pipeline & pipeline) {
-        switch (executor.tp()) {
-            case tipb::ExecType::TypeTableScan:
-                return buildTSPlan(executor.tbl_scan(), pipeline);
-            case tipb::ExecType::TypeIndexScan:
-                // index scan is not supported
-                return false;
-            case tipb::ExecType::TypeSelection:
-                return false;
-            case tipb::ExecType::TypeAggregation:
-            case tipb::ExecType::TypeStreamAgg:
-                return false;
-            case tipb::ExecType::TypeTopN:
-                return false;
-            case tipb::ExecType::TypeLimit:
-                return false;
+    bool InterpreterDagRequest::buildPlan(Pipeline & pipeline) {
+        // step 1. build table scan
+        if(!buildTSPlan(dag_request.executors(ts_index).tbl_scan(), pipeline)) {
+            return false;
         }
+        // step 2. build selection if needed
+        if(sel_index != -1) {
+            if(buildSelPlan(dag_request.executors(sel_index).selection(), pipeline)) {
+                return false;
+            }
+        }
+        // step 3. build agg if needed
+        if(agg_index != -1) {
+            return false;
+        }
+        // step 3. build order by if needed
+        if(order_index != -1) {
+            return false;
+        }
+        // step 3. build limit if needed
+        if(limit_index != -1) {
+            return false;
+        }
+        return true;
     }
 
     BlockIO InterpreterDagRequest::execute() {
         Pipeline pipeline;
-        for(const tipb::Executor & executor : dag_request.executors()) {
-            if(!buildPlan(executor, pipeline)) {
-                return BlockIO();
-            }
-        }
+        buildPlan(pipeline);
         // add final project
         auto stream_before_project = pipeline.firstStream();
         auto columns = stream_before_project->getHeader();
@@ -197,8 +215,5 @@ namespace DB {
         BlockIO res;
         res.in = final_stream;
         return res;
-    }
-    InterpreterDagRequest::~InterpreterDagRequest() {
-
     }
 }

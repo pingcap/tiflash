@@ -20,7 +20,7 @@ class InterpreterDagRequest : public IInterpreter {
 public:
     InterpreterDagRequest(CoprocessorContext & context_, const tipb::DAGRequest & dag_request);
 
-    ~InterpreterDagRequest();
+    ~InterpreterDagRequest() = default;
 
     BlockIO execute();
 
@@ -28,10 +28,11 @@ private:
     CoprocessorContext & context;
     const tipb::DAGRequest & dag_request;
     NamesWithAliases final_project;
-    bool has_where;
-    bool has_agg;
-    bool has_orderby;
-    bool has_limit;
+    Int32 ts_index = -1;
+    Int32 sel_index = -1;
+    Int32 agg_index = -1;
+    Int32 order_index = -1;
+    Int32 limit_index = -1;
     struct Pipeline
     {
         BlockInputStreams streams;
@@ -51,8 +52,9 @@ private:
         }
     };
 
-    bool buildPlan(const tipb::Executor & executor, Pipeline & streams);
+    bool buildPlan(Pipeline & streams);
     bool buildTSPlan(const tipb::TableScan & ts, Pipeline & streams);
+    bool buildSelPlan(const tipb::Selection & sel, Pipeline & streams);
 
 };
 }

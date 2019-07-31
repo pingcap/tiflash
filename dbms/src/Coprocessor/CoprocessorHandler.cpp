@@ -32,6 +32,9 @@ BlockIO CoprocessorHandler::buildCHPlan() {
     if(builder_version == "v1") {
         DagStringConverter converter(context, dag_request);
         String query = converter.buildSqlString();
+        if(query.empty()) {
+            return BlockIO();
+        }
         return executeQuery(query, context.ch_context, false, QueryProcessingStage::Complete);
     } else if (builder_version == "v2"){
         return executeQuery(dag_request, context, QueryProcessingStage::Complete);
@@ -42,7 +45,6 @@ BlockIO CoprocessorHandler::buildCHPlan() {
 
 bool CoprocessorHandler::execute() {
     context.ch_context.setSetting("read_tso", UInt64(dag_request.start_ts()));
-    //todo set region related info
     BlockIO streams = buildCHPlan();
     if(!streams.in || streams.out) {
         // only query is allowed, so streams.in must not be null and streams.out must be null
