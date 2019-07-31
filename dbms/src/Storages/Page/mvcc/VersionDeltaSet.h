@@ -24,101 +24,30 @@ public:
 
 public:
     explicit MultiVersionDeltaCountable() : prev(nullptr) {}
+
     virtual ~MultiVersionDeltaCountable() = default;
 };
 
-/// Base component for Snapshot of VersionDeltaSet.
-/// When view `release()` called, it will do compact on version-list
-///
-/// \tparam VersionSet_t
-///   members required:
-///       config
-///   functions required:
-///       void rebase(const VersionPtr & old_base, const VersionPtr & new_base)
-/// \tparam Builder_t
-///   functions required:
-///       VersionPtr compactDeltas(const VersionPtr &tail);
-///       bool needCompactToBase(const VersionSetConfig *config, const VersionPtr &delta)
-///       VersionPtr compactDeltaAndBase(const VersionPtr &old_base, const VersionPtr &delta)
-template <typename VersionSet_t, typename Builder_t>
-struct VersionViewBase
-{
-public:
-    VersionSet_t *                    vset;
-    typename VersionSet_t::VersionPtr tail;
-
-public:
-    VersionViewBase(VersionSet_t * vset_, typename VersionSet_t::VersionPtr tail_) : vset(vset_), tail(std::move(tail_)) {}
-
-    // Just let the reference of `tail` go
-    virtual ~VersionViewBase() {}
-
-    // Do compaction on version-list [head, tail]. If there some versions after tail,
-    // use vset's `rebase` to concat them.
-    void release()
-    {
-        do
-        {
-            if (tail == nullptr || tail->isBase())
-                break;
-            // If we can not found tail from `current` version-list, then other view has already
-            // do compaction on `tail` version, and we can just free that version
-            if (!isInCurrentVersionList())
-                break;
-            // do compact on delta
-            typename VersionSet_t::VersionPtr tmp = Builder_t::compactDeltas(tail);
-            if (tmp != nullptr)
-            {
-                // rebase vset->current on `this->tail` to base on `tmp`
-                vset->rebase(tail, tmp);
-                // release tail ref on this view, replace with tmp
-                tail = tmp;
-                tmp.reset();
-            }
-            // do compact on base
-            bool is_compact_delta_to_base = Builder_t::needCompactToBase(vset->config, tail);
-            if (is_compact_delta_to_base)
-            {
-                auto old_base = tail->prev;
-                assert(old_base != nullptr);
-                typename VersionSet_t::VersionPtr new_base = Builder_t::compactDeltaAndBase(old_base, tail);
-                // replace nodes [head, tail] -> new_base
-                vset->rebase(tail, new_base);
-            }
-        } while (0);
-        vset = nullptr;
-        tail.reset();
-    }
-
-private:
-    bool isInCurrentVersionList() const
-    {
-        for (auto node = vset->current; node != nullptr; node = node->prev)
-        {
-            if (node == tail)
-                return true;
-        }
-        return false;
-    }
-};
-
-
+/// \tparam TVersion         -- Single version on version-list. Require for a `prev` member, see `MultiVersionDeltaCountable`
+/// \tparam TVersionView     -- A view to see a list of versions as a single version
+/// \tparam TVersionEdit     -- Edit to apply to version set for generating new version
+/// \tparam TEditAcceptor    --
 template < //
-    typename Version_t,
-    typename VersionView_t,
-    typename VersionEdit_t,
-    typename Builder_t>
+    typename TVersion,
+    typename TVersionView,
+    typename TVersionEdit,
+    typename TEditAcceptor>
 class VersionDeltaSet
 {
 public:
-    using BuilderType = Builder_t;
-    using VersionType = Version_t;
-    using VersionPtr  = std::shared_ptr<VersionType>;
+    using EditAcceptor = TEditAcceptor;
+    using VersionType  = TVersion;
+    using VersionPtr   = std::shared_ptr<VersionType>;
 
 public:
     explicit VersionDeltaSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
-        : current(std::move(VersionType::createBase())),                                //
-          snapshots(std::move(std::make_shared<Snapshot>(this, nullptr, &read_mutex))), //
+        : current(std::move(VersionType::createBase())),                   //
+          snapshots(std::move(std::make_shared<Snapshot>(this, nullptr))), //
           config(config_)
     {
     }
@@ -129,14 +58,14 @@ public:
         current.reset();
     }
 
-    void apply(VersionEdit_t & edit)
+    void apply(TVersionEdit & edit)
     {
         std::unique_lock read_lock(read_mutex);
 
         if (current.use_count() == 1 && current->isBase())
         {
             // If no readers, we could directly merge edits.
-            BuilderType::applyInplace(current, edit);
+            TEditAcceptor::applyInplace(current, edit);
         }
         else
         {
@@ -147,8 +76,8 @@ public:
                 appendVersion(std::move(v));
             }
             // Make a view from head to new version, then apply edits on `current`.
-            auto      view = std::make_shared<VersionView_t>(this, current);
-            Builder_t builder(view.get());
+            auto         view = std::make_shared<TVersionView>(current);
+            EditAcceptor builder(view.get());
             builder.apply(edit);
         }
     }
@@ -160,34 +89,30 @@ public:
     class Snapshot
     {
     public:
-        VersionView_t       view;
-        std::shared_mutex * mutex;
+        VersionDeltaSet * vset;
+        TVersionView      view;
 
         Snapshot * prev;
         Snapshot * next;
 
     public:
-        Snapshot(VersionDeltaSet *   vset_,
-                 VersionPtr          tail_, //
-                 std::shared_mutex * mutex_)
-            : view(vset_, std::move(tail_)), mutex(mutex_), prev(this), next(this)
-        {
-        }
+        Snapshot(VersionDeltaSet * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this) {}
 
         ~Snapshot()
         {
-            std::unique_lock lock(*mutex);
-            view.release();
+            std::unique_lock lock = vset->acquireForLock();
+            vset->compactOnDeltaRelease(view.transferTailVersionOwn(), lock);
             // Remove from linked list
             prev->next = next;
             next->prev = prev;
         }
 
-        const VersionView_t * version() const { return &view; }
+        const TVersionView * version() const { return &view; }
 
-        template <typename V_t, typename VV_t, typename VE_t, typename B_t>
+        template <typename V, typename VV, typename VE, typename B>
         friend class VersionDeltaSet;
     };
+
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
     /// Create a snapshot for current version.
@@ -196,7 +121,7 @@ public:
     {
         // acquire for unique_lock since we need to add all snapshots to link list
         std::unique_lock<std::shared_mutex> lock(read_mutex);
-        auto                                s = std::make_shared<Snapshot>(this, current, &read_mutex);
+        auto                                s = std::make_shared<Snapshot>(this, current);
         // Register snapshot to VersionSet
         s->prev               = snapshots->prev;
         s->next               = snapshots.get();
@@ -205,16 +130,16 @@ public:
         return s;
     }
 
-public:
-    mutable std::shared_mutex    read_mutex;
-    VersionPtr                   current;
-    SnapshotPtr                  snapshots;
-    ::DB::MVCC::VersionSetConfig config;
+protected:
+    void appendVersion(VersionPtr && v)
+    {
+        assert(v != current);
+        // Append to linked list
+        v->prev = current;
+        current = v;
+    }
 
 protected:
-    template <typename VS_t, typename B_t>
-    friend struct VersionViewBase;
-
     /// Use after do compact on VersionList, rebase all
     /// successor Version of Version{`old_base`} onto Version{`new_base`}.
     /// Specially, if no successor version of Version{`old_base`}, which
@@ -251,13 +176,64 @@ protected:
         q->prev = new_base;
     }
 
-    void appendVersion(VersionPtr && v)
+    std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_mutex); }
+
+    // Return true if `tail` is in current version-list
+    bool isValidVersion(const VersionPtr tail) const
     {
-        assert(v != current);
-        // Append to linked list
-        v->prev = current;
-        current = v;
+        for (auto node = current; node != nullptr; node = node->prev)
+        {
+            if (node == tail)
+            {
+                return true;
+            }
+        }
+        return false;
     }
+
+    // If `tail` is in current
+    // Do compaction on version-list [head, tail]. If there some versions after tail, use vset's `rebase` to concat them.
+    void compactOnDeltaRelease(VersionPtr && tail, std::unique_lock<std::shared_mutex> & lock)
+    {
+        (void)lock; // TODO reduce lock range
+        do
+        {
+            if (tail == nullptr || tail->isBase())
+            {
+                break;
+            }
+            // If we can not found tail from `current` version-list, then other view has already
+            // do compaction on `tail` version, and we can just free that version
+            if (!isValidVersion(tail))
+            {
+                break;
+            }
+            // do compact on delta
+            VersionPtr tmp = compactDeltas(tail);
+            if (tmp != nullptr)
+            {
+                // rebase vset->current on `this->tail` to base on `tmp`
+                this->rebase(tail, tmp);
+                // release tail ref on this view, replace with tmp
+                tail = tmp;
+                tmp.reset();
+            }
+            // do compact on base
+            if (tail->shouldCompactToBase(config))
+            {
+                auto old_base = tail->prev;
+                assert(old_base != nullptr);
+                VersionPtr new_base = compactDeltaAndBase(old_base, tail);
+                // replace nodes [head, tail] -> new_base
+                this->rebase(tail, new_base);
+            }
+        } while (false);
+        tail.reset();
+    }
+
+    virtual VersionPtr compactDeltas(const VersionPtr & tail) = 0;
+
+    virtual VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) = 0;
 
 public:
     /// Some helper functions
@@ -272,17 +248,15 @@ public:
     {
         size_t sz = 0;
         for (auto v = current; v != nullptr; v = v->prev)
+        {
             sz += 1;
+        }
         return sz;
     }
 
-    std::string toDebugStringUnlocked() const
-    {
-        return versionToDebugString(current);
-    }
+    std::string toDebugStringUnlocked() const { return versionToDebugString(current); }
 
-    static
-    std::string versionToDebugString(VersionPtr tail)
+    static std::string versionToDebugString(VersionPtr tail)
     {
         std::string            s;
         bool                   is_first = true;
@@ -304,6 +278,12 @@ public:
         }
         return s;
     }
+
+protected:
+    mutable std::shared_mutex    read_mutex;
+    VersionPtr                   current;
+    SnapshotPtr                  snapshots;
+    ::DB::MVCC::VersionSetConfig config;
 };
 
 } // namespace MVCC

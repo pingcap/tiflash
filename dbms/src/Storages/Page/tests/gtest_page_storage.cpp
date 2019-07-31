@@ -291,15 +291,21 @@ TEST_F(PageStorage_test, GcMoveRefPage)
         storage->write(batch);
     }
 
-    PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
-    PageStorage::GcLivesPages livesPages{ {id_and_lvl, {buf_sz, {1,}}}};
-    PageStorage::GcCandidates candidates{ id_and_lvl, };
-    auto s0 = storage->getSnapshot();
+    PageFileIdAndLevel        id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
+    PageStorage::GcLivesPages livesPages{{id_and_lvl,
+                                          {buf_sz,
+                                           {
+                                               1,
+                                           }}}};
+    PageStorage::GcCandidates candidates{
+        id_and_lvl,
+    };
+    auto            s0   = storage->getSnapshot();
     PageEntriesEdit edit = storage->gcMigratePages(s0, livesPages, candidates);
 
     // After migrate, RefPage 3 -> 1 is still valid
     bool exist = false;
-    for (const auto &rec : edit.getRecords())
+    for (const auto & rec : edit.getRecords())
     {
         if (rec.type == WriteBatch::WriteType::REF && rec.page_id == 3 && rec.ori_page_id == 1)
         {
@@ -311,8 +317,8 @@ TEST_F(PageStorage_test, GcMoveRefPage)
     s0.reset();
 
     // reopen PageStorage, RefPage 3 -> 1 is still valid
-    storage = reopenWithConfig(config);
-    auto s1 = storage->getSnapshot();
+    storage                       = reopenWithConfig(config);
+    auto s1                       = storage->getSnapshot();
     auto [is_ref, normal_page_id] = s1->version()->isRefId(3);
     ASSERT_TRUE(is_ref);
     ASSERT_EQ(normal_page_id, 1UL);

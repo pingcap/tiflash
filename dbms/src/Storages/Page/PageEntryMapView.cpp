@@ -8,7 +8,7 @@ namespace DB
 const PageEntry * PageEntryMapView::find(PageId page_id) const
 {
     // First we find ref-pairs to get the normal page id
-    bool found = false;
+    bool   found          = false;
     PageId normal_page_id = 0;
     for (auto node = tail; node != nullptr; node = node->prev)
     {
@@ -20,7 +20,7 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
         auto iter = node->page_ref.find(page_id);
         if (iter != node->page_ref.end())
         {
-            found = true;
+            found          = true;
             normal_page_id = iter->second;
             break;
         }
@@ -35,9 +35,8 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
     // RefPage exists, but normal Page do NOT exist. Should NOT call here
     if (entry == nullptr)
     {
-        throw DB::Exception(
-                "Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
-                ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception("Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+                            ErrorCodes::LOGICAL_ERROR);
     }
     return entry;
 }
@@ -87,23 +86,25 @@ PageId PageEntryMapView::resolveRefId(PageId page_id) const
 
 std::set<PageId> PageEntryMapView::validPageIds() const
 {
-    std::vector<std::shared_ptr<PageEntryMapBase>> link_nodes;
-    for (auto node = vset->current; node != nullptr; node = node->prev)
+    std::stack<std::shared_ptr<PageEntryMapBase>> link_nodes;
+    for (auto node = tail; node != nullptr; node = node->prev)
     {
-        link_nodes.emplace_back(node);
+        link_nodes.emplace(node);
     }
     // Get valid pages, from link-list's head to tail
     std::set<PageId> valid_pages;
-    for (auto node_iter = link_nodes.rbegin(); node_iter != link_nodes.rend(); node_iter++)
+    while (!link_nodes.empty())
     {
-        if (!(*node_iter)->isBase())
+        auto node = link_nodes.top();
+        link_nodes.pop();
+        if (!node->isBase())
         {
-            for (auto deleted_id : (*node_iter)->ref_deletions)
+            for (auto deleted_id : node->ref_deletions)
             {
                 valid_pages.erase(deleted_id);
             }
         }
-        for (auto ref_pairs : (*node_iter)->page_ref)
+        for (auto ref_pairs : node->page_ref)
         {
             valid_pages.insert(ref_pairs.first);
         }
@@ -113,23 +114,25 @@ std::set<PageId> PageEntryMapView::validPageIds() const
 
 std::set<PageId> PageEntryMapView::validNormalPageIds() const
 {
-    std::vector<std::shared_ptr<PageEntryMapBase>> link_nodes;
-    for (auto node = vset->current; node != nullptr; node = node->prev)
+    std::stack<std::shared_ptr<PageEntryMapBase>> link_nodes;
+    for (auto node = tail; node != nullptr; node = node->prev)
     {
-        link_nodes.emplace_back(node);
+        link_nodes.emplace(node);
     }
     // Get valid normal pages, from link-list's head to tail
     std::set<PageId> valid_normal_pages;
-    for (auto node_iter = link_nodes.rbegin(); node_iter != link_nodes.rend(); node_iter++)
+    while (!link_nodes.empty())
     {
-        if (!(*node_iter)->isBase())
+        auto node = link_nodes.top();
+        link_nodes.pop();
+        if (!node->isBase())
         {
-            for (auto deleted_id : (*node_iter)->ref_deletions)
+            for (auto deleted_id : node->ref_deletions)
             {
                 valid_normal_pages.erase(deleted_id);
             }
         }
-        for (auto &[page_id, entry]: (*node_iter)->normal_pages)
+        for (auto & [page_id, entry] : node->normal_pages)
         {
             if (entry.ref != 0)
                 valid_normal_pages.insert(page_id);

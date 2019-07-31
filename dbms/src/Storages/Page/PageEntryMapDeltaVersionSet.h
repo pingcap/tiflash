@@ -1,28 +1,29 @@
+#include <utility>
+
 #pragma once
 
 #include <Storages/Page/PageEntryMap.h>
 #include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/PageEntryMapView.h>
 #include <Storages/Page/mvcc/VersionDeltaSet.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 
 namespace DB
 {
 
-class PageEntryMapView;
-
-class PageEntryMapDeltaBuilder;
+class DeltaVersionEditAcceptor;
 
 class PageEntryMapDeltaVersionSet : public ::DB::MVCC::VersionDeltaSet< //
                                         PageEntryMapBase,
                                         PageEntryMapView,
                                         PageEntriesEdit,
-                                        PageEntryMapDeltaBuilder>
+                                        DeltaVersionEditAcceptor>
 {
 public:
-    using BaseType    = ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapView, PageEntriesEdit, PageEntryMapDeltaBuilder>;
-    using BuilderType = BaseType::BuilderType;
-    using VersionType = BaseType::VersionType;
-    using VersionPtr  = BaseType::VersionPtr;
+    using BaseType     = ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapView, PageEntriesEdit, DeltaVersionEditAcceptor>;
+    using EditAcceptor = BaseType::EditAcceptor;
+    using VersionType  = BaseType::VersionType;
+    using VersionPtr   = BaseType::VersionPtr;
 
 public:
     explicit PageEntryMapDeltaVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig()) : BaseType(config_)
@@ -35,106 +36,52 @@ public:
     /// List all PageFile that are used by any version
     std::set<PageFileIdAndLevel> listAllLiveFiles() const;
 
+    VersionPtr compactDeltas(const VersionPtr & tail) override;
+
+    VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) override;
+
 private:
-    void collectLiveFilesFromVersionList(VersionPtr tail, std::set<VersionPtr> &visited, std::set<PageFileIdAndLevel> &liveFiles) const;
+    void collectLiveFilesFromVersionList(VersionPtr tail, std::set<VersionPtr> & visited, std::set<PageFileIdAndLevel> & liveFiles) const;
 };
 
-class PageEntryMapDeltaBuilder
+/// Read old entries state from `view_` and apply new edit to `view_->tail`
+class DeltaVersionEditAcceptor
 {
 public:
-    explicit PageEntryMapDeltaBuilder(const PageEntryMapView * base_, //
+    explicit DeltaVersionEditAcceptor(const PageEntryMapView * view_, //
                                       bool                     ignore_invalid_ref_ = false,
                                       Poco::Logger *           log_                = nullptr);
 
-    ~PageEntryMapDeltaBuilder();
+    ~DeltaVersionEditAcceptor();
 
     void apply(PageEntriesEdit & edit);
 
-    void gcApply(PageEntriesEdit & edit)
-    {
-        PageEntryMapBuilder::gcApplyTemplate(view, edit, v);
-    }
+    static void applyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit);
 
-    static void applyInplace( //
-        const PageEntryMapDeltaVersionSet::VersionPtr & current,
-        const PageEntriesEdit &                         edit);
+    void gcApply(PageEntriesEdit & edit) { PageEntryMapBuilder::gcApplyTemplate(view, edit, current_version); }
 
-    static void gcApplyInplace(//
+    static void gcApplyInplace( //
         const PageEntryMapDeltaVersionSet::VersionPtr & current,
-        PageEntriesEdit & edit)
+        PageEntriesEdit &                               edit)
     {
         assert(current->isBase());
         assert(current.use_count() == 1);
         PageEntryMapBuilder::gcApplyTemplate(current, edit, current);
     }
 
-    // Functions used when view release and do compact on version-list
-
-    static PageEntryMapDeltaVersionSet::VersionPtr //
-    compactDeltas(const PageEntryMapDeltaVersionSet::VersionPtr & tail);
-
-    inline static bool //
-    needCompactToBase( //
-        const ::DB::MVCC::VersionSetConfig &            config,
-        const PageEntryMapDeltaVersionSet::VersionPtr & delta)
-    {
-        assert(!delta->isBase());
-        return delta->numDeletions() >= config.compact_hint_delta_deletions //
-            || delta->numRefEntries() >= config.compact_hint_delta_entries
-            || delta->numNormalEntries() >= config.compact_hint_delta_entries;
-    }
-
-    static PageEntryMapDeltaVersionSet::VersionPtr //
-    compactDeltaAndBase(                           //
-        const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
-        PageEntryMapDeltaVersionSet::VersionPtr &       delta);
-
 private:
+    // Read old state from `view` and apply new edit to `current_version`
 
-    // Read old state from `view` and apply new entry to `v`
-
-    void applyPut(PageEntriesEdit::EditRecord &record);
-    void applyDel(PageEntriesEdit::EditRecord &record);
-    void applyRef(PageEntriesEdit::EditRecord &record);
+    void applyPut(PageEntriesEdit::EditRecord & record);
+    void applyDel(PageEntriesEdit::EditRecord & record);
+    void applyRef(PageEntriesEdit::EditRecord & record);
     void decreasePageRef(PageId page_id);
 
 private:
     PageEntryMapView *                      view;
-    PageEntryMapDeltaVersionSet::VersionPtr v;
+    PageEntryMapDeltaVersionSet::VersionPtr current_version;
     bool                                    ignore_invalid_ref;
     Poco::Logger *                          log;
-};
-
-using PageEntryMapViewBaseType = ::DB::MVCC::VersionViewBase<PageEntryMapDeltaVersionSet::BaseType, PageEntryMapDeltaBuilder>;
-
-class PageEntryMapView : public PageEntryMapViewBaseType
-{
-public:
-    PageEntryMapView(PageEntryMapDeltaVersionSet::BaseType * vset_, PageEntryMapDeltaVersionSet::VersionPtr tail_)
-            : PageEntryMapViewBaseType(vset_, std::move(tail_))
-    {
-    }
-
-    const PageEntry * find(PageId page_id) const;
-
-    const PageEntry & at(PageId page_id) const;
-
-    std::pair<bool, PageId> isRefId(PageId page_id) const;
-
-    // For iterate over all pages
-    std::set<PageId> validPageIds() const;
-
-    // For iterate over all normal pages
-    std::set<PageId> validNormalPageIds() const;
-
-    PageId maxId() const;
-
-private:
-    const PageEntry * findNormalPageEntry(PageId page_id) const;
-
-    PageId resolveRefId(PageId page_id) const;
-
-    friend class PageEntryMapDeltaBuilder;
 };
 
 } // namespace DB

@@ -247,7 +247,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
         }
     }
 
-    auto s = versions.getSnapshot();
+    auto s     = versions.getSnapshot();
     auto entry = s->version()->find(1);
     ASSERT_EQ(entry, nullptr);
     auto entry2 = s->version()->find(2);
@@ -319,7 +319,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
 
     TypeParam versions(this->config_);
 
-    const PageId pid = 0;
+    const PageId pid     = 0;
     const PageId ref_pid = 1;
     // old Page0 is in PageFile{5, 0}
     PageEntriesEdit init_edit;
@@ -337,7 +337,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
     versions.gcApply(gc_edit);
 
     // Page get updated
-    auto            snapshot = versions.getSnapshot();
+    auto      snapshot = versions.getSnapshot();
     PageEntry entry    = snapshot->version()->at(pid);
     ASSERT_TRUE(entry.isValid());
     ASSERT_EQ(entry.file_id, 5ULL);
@@ -466,8 +466,8 @@ TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
         edit.ref(2, 1);
         versions.apply(edit);
     }
-    auto s1 = versions.getSnapshot();
-    bool is_ref;
+    auto   s1 = versions.getSnapshot();
+    bool   is_ref;
     PageId normal_page_id;
     std::tie(is_ref, normal_page_id) = s1->version()->isRefId(2);
     ASSERT_TRUE(is_ref);
@@ -478,7 +478,7 @@ TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
         edit.del(2);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
+    auto s2                          = versions.getSnapshot();
     std::tie(is_ref, normal_page_id) = s2->version()->isRefId(2);
     ASSERT_FALSE(is_ref);
 }
@@ -537,7 +537,7 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
         versions.apply(edit);
     }
     auto s3 = versions.getSnapshot();
-    s3.reset();// do compact on version-list, and
+    s3.reset(); // do compact on version-list, and
     auto livefiles = versions.listAllLiveFiles();
     ASSERT_EQ(livefiles.size(), 4UL);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
@@ -572,8 +572,7 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            UpdateOnRefPage2,
                            IsRefId,
                            Snapshot,
-                           LiveFiles
-                           );
+                           LiveFiles);
 
 using VersionSetTypes = ::testing::Types<PageEntryMapVersionSet, PageEntryMapDeltaVersionSet>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);

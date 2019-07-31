@@ -115,7 +115,6 @@ TEST_F(PageEntryMap_test, PutDel)
     map->del(2);
     ASSERT_EQ(map->find(0), nullptr);
     ASSERT_EQ(map->find(2), nullptr);
-
 }
 
 TEST_F(PageEntryMap_test, UpdateRefPageEntry)
@@ -263,7 +262,6 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     ASSERT_EQ(map->find(3), nullptr);
     ASSERT_EQ(map->find(0), nullptr);
     ASSERT_EQ(map->find(2), nullptr);
-
 }
 
 TEST_F(PageEntryMap_test, ReBindRef)

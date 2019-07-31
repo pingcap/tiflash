@@ -67,5 +67,4 @@ void PageEntryMapBuilder::apply(const PageEntriesEdit & edit)
 }
 
 
-
 } // namespace DB

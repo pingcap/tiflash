@@ -11,7 +11,7 @@
 namespace DB
 {
 
-/// Page Entries change to apply to version set.
+/// Page entries change to apply to version set.
 class PageEntriesEdit
 {
 public:
@@ -105,16 +105,13 @@ public:
 
     void apply(const PageEntriesEdit & edit);
 
-    void gcApply(PageEntriesEdit & edit)
-    {
-        gcApplyTemplate(v, edit, v);
-    }
+    void gcApply(PageEntriesEdit & edit) { gcApplyTemplate(v, edit, v); }
 
     PageEntryMap * build() { return v; }
 
 public:
     template <typename OldVersionType, typename VersionType>
-    static void gcApplyTemplate(const OldVersionType &old_version, PageEntriesEdit &edit, VersionType &new_version)
+    static void gcApplyTemplate(const OldVersionType & old_version, PageEntriesEdit & edit, VersionType & new_version)
     {
         for (auto & rec : edit.getRecords())
         {
@@ -131,7 +128,7 @@ public:
                 if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
                 {
                     // no new page write to `page_entry_map`, replace it with gc page
-                    rec.entry.ref = old_page_entry->ref;
+                    rec.entry.ref                          = old_page_entry->ref;
                     new_version->normal_pages[rec.page_id] = rec.entry;
                 }
                 // else new page written by another thread, gc page is replaced. leave the page for next gc

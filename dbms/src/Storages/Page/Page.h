@@ -41,6 +41,7 @@ struct PageEntry
     UInt32     ref      = 1; // for ref counting
 
     inline bool               isValid() const { return file_id != 0; }
+    inline bool               isTombstone() const { return ref == 0; }
     inline PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
 };
 static_assert(std::is_trivially_copyable_v<PageEntry>);

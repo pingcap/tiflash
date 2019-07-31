@@ -87,18 +87,20 @@ public:
 ///         -- Apply edit to builder
 ///     Version_t* Builder_t::build()
 ///         -- Build new version
-template <typename Version_t, typename VersionEdit_t, typename Builder_t>
+template <typename TVersion, typename TVersionEdit, typename TBuilder>
 class VersionSet
 {
 public:
-    using BuilderType = Builder_t;
+    using BuilderType = TBuilder;
+    using VersionType = TVersion;
+    using VersionPtr  = VersionType *;
 
 public:
     explicit VersionSet(const VersionSetConfig & config_ = VersionSetConfig()) : placeholder_node(), current(nullptr)
     {
         (void)config_; // just ignore config
         // append a init version to link
-        appendVersion(new Version_t);
+        appendVersion(new VersionType);
     }
 
     virtual ~VersionSet()
@@ -107,21 +109,21 @@ public:
         assert(placeholder_node.next == &placeholder_node); // List must be empty
     }
 
-    void restore(Version_t * const v)
+    void restore(VersionPtr const v)
     {
         std::unique_lock read_lock(read_mutex);
         appendVersion(v);
     }
 
     /// `apply` accept changes and append new version to version-list
-    void apply(const VersionEdit_t & edit)
+    void apply(const TVersionEdit & edit)
     {
         std::unique_lock read_lock(read_mutex);
 
         // apply edit on base
-        Version_t * v = nullptr;
+        VersionPtr v = nullptr;
         {
-            Builder_t builder(current);
+            BuilderType builder(current);
             builder.apply(edit);
             v = builder.build();
         }
@@ -133,7 +135,7 @@ public:
     {
         std::unique_lock read_lock(read_mutex);
         size_t           sz = 0;
-        for (Version_t * v = current; v != &placeholder_node; v = v->prev)
+        for (VersionPtr v = current; v != &placeholder_node; v = v->prev)
             sz += 1;
         return sz;
     }
@@ -141,7 +143,7 @@ public:
     std::string toDebugStringUnlocked() const
     {
         std::string s;
-        for (Version_t * v = placeholder_node.next; v != &placeholder_node; v = v->next)
+        for (VersionPtr v = placeholder_node.next; v != &placeholder_node; v = v->next)
         {
             if (!s.empty())
                 s += "->";
@@ -157,14 +159,14 @@ public:
     class Snapshot
     {
     private:
-        Version_t *         v;     // particular version
+        VersionPtr          v;     // particular version
         std::shared_mutex * mutex; // mutex to be used when freeing version
 
     public:
-        Snapshot(Version_t * version_, std::shared_mutex * mutex_) : v(version_), mutex(mutex_) { v->incrRefCount(); }
+        Snapshot(VersionPtr version_, std::shared_mutex * mutex_) : v(version_), mutex(mutex_) { v->incrRefCount(); }
         ~Snapshot() { v->decrRefCount(*mutex); }
 
-        const Version_t * version() const { return v; }
+        const VersionPtr version() const { return v; }
 
     public:
         // No copying allowed.
@@ -181,13 +183,13 @@ public:
     }
 
 protected:
-    Version_t   placeholder_node; // Head of circular double-linked list of all versions
-    Version_t * current;          // current version; current == placeholder_node.prev
+    VersionType placeholder_node; // Head of circular double-linked list of all versions
+    VersionPtr  current;          // current version; current == placeholder_node.prev
 
     mutable std::shared_mutex read_mutex;
 
 protected:
-    void appendVersion(Version_t * const v)
+    void appendVersion(VersionPtr const v)
     {
         // Make "v" become "current"
         assert(v->ref_count == 0);

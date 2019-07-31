@@ -78,6 +78,7 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
     }
 #else
     auto snapshot = version_set.getSnapshot();
+
     typename PageEntryMapVersionSet::BuilderType builder(
         snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
     for (auto & page_file : page_files)
@@ -356,7 +357,7 @@ bool PageStorage::gc()
                 auto page_entry = snapshot->version()->find(page_id);
                 if (unlikely(page_entry == nullptr))
                 {
-                    throw Exception("PageStorage GC: Normal Page " + DB::toString(page_id) + " not found, vset: " + PageEntryMapDeltaVersionSet::versionToDebugString(snapshot->version()->tail), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("PageStorage GC: Normal Page " + DB::toString(page_id) + " not found.", ErrorCodes::LOGICAL_ERROR);
                 }
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry->fileIdLevel()];
                 valid_size += page_entry->size;
@@ -480,9 +481,8 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
     PageEntriesEdit gc_file_edit;
 
     // merge `merge_files` to PageFile which PageId = max of all `merge_files` and level = level + 1
-    auto[largest_file_id, level] = *(merge_files.rbegin());
-    PageFile gc_file = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true,
-                                             page_file_log);
+    auto [largest_file_id, level] = *(merge_files.rbegin());
+    PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
 
     size_t num_successful_migrate_pages = 0;
     size_t num_valid_ref_pages          = 0;
@@ -492,10 +492,9 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         // No need to sync after each write. Do sync before closing is enough.
         auto gc_file_writer = gc_file.createWriter(/* sync_on_write= */ false);
 
-        for (const auto &file_id_level : merge_files)
+        for (const auto & file_id_level : merge_files)
         {
-            PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second,
-                                                                   storage_path, page_file_log);
+            PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
             // Note: This file may not contain any valid page, but valid RefPages which we need to migrate
             to_merge_file.readAndSetPageMetas(legacy_edit);
 
@@ -506,10 +505,10 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                 continue;
             }
 
-            auto to_merge_file_reader = to_merge_file.createReader();
+            auto             to_merge_file_reader = to_merge_file.createReader();
             PageIdAndEntries page_id_and_entries;
             {
-                const auto &page_ids = it->second.second;
+                const auto & page_ids = it->second.second;
                 for (auto page_id : page_ids)
                 {
                     try
@@ -523,7 +522,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                         page_id_and_entries.emplace_back(page_id, *page_entry);
                         num_successful_migrate_pages += 1;
                     }
-                    catch (DB::Exception &e)
+                    catch (DB::Exception & e)
                     {
                         // ignore if it2 is a ref to non-exist page
                         LOG_WARNING(log, "Ignore invalid RefPage while gcMigratePages: " + e.message());
@@ -534,11 +533,11 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
             if (!page_id_and_entries.empty())
             {
                 // copy valid pages from `to_merge_file` to `gc_file`
-                PageMap pages = to_merge_file_reader->read(page_id_and_entries);
+                PageMap    pages = to_merge_file_reader->read(page_id_and_entries);
                 WriteBatch wb;
-                for (const auto &[page_id, page_cache] : page_id_and_entries)
+                for (const auto & [page_id, page_cache] : page_id_and_entries)
                 {
-                    auto &page = pages.find(page_id)->second;
+                    auto & page = pages.find(page_id)->second;
                     wb.putPage(page_id,
                                page_cache.tag,
                                std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
@@ -552,7 +551,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         {
             // Migrate RefPages which are still valid.
             WriteBatch batch;
-            for (const auto &rec : legacy_edit.getRecords())
+            for (const auto & rec : legacy_edit.getRecords())
             {
                 // Get `normal_page_id` from memory's `page_entry_map`. Note: can not get `normal_page_id` from disk,
                 // if it is a record of RefPage to another RefPage, the later ref-id is resolve to the actual `normal_page_id`.
@@ -576,8 +575,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         gc_file.setFormal();
         const auto id = gc_file.fileIdLevel();
         LOG_INFO(log,
-                 "GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages
-                                     << " RefPages to PageFile_"
+                 "GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages << " RefPages to PageFile_"
                                      << id.first << "_" << id.second);
     }
     return gc_file_edit;
