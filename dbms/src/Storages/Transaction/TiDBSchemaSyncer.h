@@ -33,17 +33,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        LOG_INFO(log, "start to sync schemas. current version is: " + std::to_string(cur_version));
-
         auto tso = pdClient->getTS();
-        LOG_DEBUG(log, "get schema use tso: " + std::to_string(tso));
         SchemaGetter getter = SchemaGetter(regionCache, rpcClient, tso);
         Int64 version = getter.getVersion();
         if (version <= cur_version)
         {
             return false;
         }
-        LOG_INFO(log, "try to sync schema version to: " + std::to_string(version));
+        LOG_INFO(log, "start to sync schemas. current version is: " + std::to_string(cur_version) + " and try to sync schema version to: " + std::to_string(version));
         if (!tryLoadSchemaDiffs(getter, version, context))
         {
             loadAllSchema(getter, version, context);
