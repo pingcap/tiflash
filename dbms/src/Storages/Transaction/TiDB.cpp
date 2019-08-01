@@ -1,6 +1,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/MyTimeParser.h>
 #include <Common/Decimal.h>
 
 namespace TiDB
@@ -34,6 +35,7 @@ Field ColumnInfo::defaultValueToField() const
         case TypeLong:
         case TypeLongLong:
         case TypeInt24:
+        case TypeBit:
             return value.convert<Int64>();
         // Floating type.
         case TypeFloat:
@@ -42,10 +44,8 @@ Field ColumnInfo::defaultValueToField() const
         case TypeDate:
         case TypeDatetime:
         case TypeTimestamp:
-        case TypeTime:
-        case TypeYear:
             // TODO:: Process Datetime Family
-            return value.convert<String>();
+            return DB::parseMyDatetime(value.convert<String>(), tp == TypeDate);
         case TypeVarchar:
         case TypeTinyBlob:
         case TypeMediumBlob:
@@ -61,7 +61,11 @@ Field ColumnInfo::defaultValueToField() const
         case TypeDecimal:
         case TypeNewDecimal:
             return getDecimalDefaultValue(value.convert<String>());
-        // TODO : Consider Bit / binary literal / Set / Duration.
+        case TypeTime:
+        case TypeYear:
+        case TypeSet:
+            // TODO refine
+            return Field();
         default:
             throw Exception("Have not proccessed type: " + std::to_string(tp));
     }
