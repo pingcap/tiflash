@@ -8,9 +8,9 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/PageFile.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace DB

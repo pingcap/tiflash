@@ -137,6 +137,8 @@ DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_
       log(log_)
 {
 #ifndef NDEBUG
+    // tail of view must be a delta
+    assert(!current_version->isBase());
     if (ignore_invalid_ref)
     {
         assert(log != nullptr);
@@ -149,7 +151,6 @@ DeltaVersionEditAcceptor::~DeltaVersionEditAcceptor() = default;
 /// Apply edits and generate new delta
 void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
 {
-    assert(!current_version->isBase());
     for (auto && rec : edit.getRecords())
     {
         switch (rec.type)
@@ -182,7 +183,11 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
 
     // update normal page's entry
     auto old_entry = view->findNormalPageEntry(normal_page_id);
-    assert(!is_ref_exist || (is_ref_exist && old_entry != nullptr));
+    if (is_ref_exist && old_entry == nullptr)
+    {
+        throw DB::Exception("Accessing RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(normal_page_id),
+                            ErrorCodes::LOGICAL_ERROR);
+    }
     if (old_entry == nullptr)
     {
         // Page{normal_page_id} not exist

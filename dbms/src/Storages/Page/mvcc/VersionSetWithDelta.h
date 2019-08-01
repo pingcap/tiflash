@@ -8,9 +8,9 @@
 #include <stack>
 #include <unordered_set>
 
+#include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/mvcc/VersionSet.h>
-#include <Common/ProfileEvents.h>
 
 namespace ProfileEvents
 {
@@ -65,8 +65,9 @@ public:
 
     virtual ~VersionSetWithDelta()
     {
-        assert(snapshots->prev == snapshots.get()); // snapshot list is empty
         current.reset();
+        // snapshot list is empty
+        assert(snapshots->prev == snapshots.get());
     }
 
     void apply(TVersionEdit & edit)
@@ -107,7 +108,7 @@ public:
     {
     public:
         VersionSetWithDelta * vset;
-        TVersionView      view;
+        TVersionView          view;
 
         Snapshot * prev;
         Snapshot * next;
@@ -120,8 +121,8 @@ public:
             vset->compactOnDeltaRelease(view.transferTailVersionOwn());
             // Remove snapshot from linked list
             std::unique_lock lock = vset->acquireForLock();
-            prev->next = next;
-            next->prev = prev;
+            prev->next            = next;
+            next->prev            = prev;
         }
 
         const TVersionView * version() const { return &view; }
@@ -157,7 +158,6 @@ protected:
     }
 
 protected:
-
     enum class RebaseResult
     {
         SUCCESS,

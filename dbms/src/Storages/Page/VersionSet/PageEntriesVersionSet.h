@@ -5,10 +5,10 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageEntries.h>
+#include <Storages/Page/VersionSet/PageEntriesBuilder.h>
+#include <Storages/Page/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/WriteBatch.h>
 #include <Storages/Page/mvcc/VersionSet.h>
-#include <Storages/Page/VersionSet/PageEntriesEdit.h>
-#include <Storages/Page/VersionSet/PageEntriesBuilder.h>
 
 namespace DB
 {

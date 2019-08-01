@@ -1,5 +1,8 @@
 #pragma once
 
+#include <Storages/Page/VersionSet/PageEntriesEdit.h>
+#include <Storages/Page/WriteBatch.h>
+
 namespace DB
 {
 
@@ -7,12 +10,12 @@ class PageEntriesBuilder
 {
 public:
     explicit PageEntriesBuilder(const PageEntries * base_, //
-                                bool                 ignore_invalid_ref_ = false,
-                                Poco::Logger *       log_                = nullptr)
-            : base(const_cast<PageEntries *>(base_)),
-              v(new PageEntries), //
-              ignore_invalid_ref(ignore_invalid_ref_),
-              log(log_)
+                                bool                ignore_invalid_ref_ = false,
+                                Poco::Logger *      log_                = nullptr)
+        : base(const_cast<PageEntries *>(base_)),
+          v(new PageEntries), //
+          ignore_invalid_ref(ignore_invalid_ref_),
+          log(log_)
     {
 #ifndef NDEBUG
         if (ignore_invalid_ref)
@@ -64,8 +67,8 @@ public:
     }
 
 private:
-    PageEntries * base;
-    PageEntries * v;
+    PageEntries *  base;
+    PageEntries *  v;
     bool           ignore_invalid_ref;
     Poco::Logger * log;
 };

@@ -3,9 +3,11 @@
 namespace DB
 {
 
+/// Treat a list of PageEntriesForDelta as a single PageEntries
 class PageEntriesView
 {
 private:
+    // tail of the list
     std::shared_ptr<PageEntriesForDelta> tail;
 
 public:

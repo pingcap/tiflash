@@ -7,8 +7,8 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
-#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 namespace DB
 {

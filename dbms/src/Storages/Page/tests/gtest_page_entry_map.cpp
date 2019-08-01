@@ -16,7 +16,7 @@ protected:
     void SetUp() override
     {
         // Generate an empty PageEntries for each test
-        auto                snapshot = versions.getSnapshot();
+        auto               snapshot = versions.getSnapshot();
         PageEntriesBuilder builder(snapshot->version());
         map = builder.build();
     }

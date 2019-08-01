@@ -1,5 +1,8 @@
 #pragma once
 
+#include <Storages/Page/PageDefines.h>
+#include <Storages/Page/WriteBatch.h>
+
 namespace DB
 {
 
@@ -48,7 +51,6 @@ public:
         PageEntry             entry;
     };
     using EditRecords = std::vector<EditRecord>;
-    static_assert(std::is_trivially_copyable_v<EditRecord>);
 
     EditRecords &       getRecords() { return records; }
     const EditRecords & getRecords() const { return records; }

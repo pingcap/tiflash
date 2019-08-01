@@ -11,8 +11,8 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 #include <Storages/Page/mvcc/VersionSet.h>
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 
 namespace DB
 {
@@ -281,7 +281,10 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
     auto iter = normal_pages.find(page_id);
     if constexpr (must_exist)
     {
-        assert(iter != normal_pages.end());
+        if (unlikely(iter == normal_pages.end()))
+        {
+            throw Exception("Decreasing NON-exist normal page[" + DB::toString(page_id) + "] ref-count", ErrorCodes::LOGICAL_ERROR);
+        }
     }
     if (iter != normal_pages.end())
     {
@@ -294,7 +297,7 @@ void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
     }
 }
 
-/// For PageEntryMapVersionSet
+/// For PageEntriesVersionSet
 class PageEntries : public PageEntriesMixin<PageEntries>, public ::DB::MVCC::MultiVersionCountable<PageEntries>
 {
 public:
@@ -399,9 +402,9 @@ public:
     inline const_iterator cbegin() const { return const_iterator(page_ref.cbegin(), normal_pages); }
 };
 
-/// For PageEntryMapDeltaVersionSet
+/// For PageEntriesVersionSetWithDelta
 class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>,
-                         public ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
+                            public ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
 {
 public:
     explicit PageEntriesForDelta(bool is_base_)
