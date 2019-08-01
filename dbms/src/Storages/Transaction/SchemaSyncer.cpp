@@ -331,13 +331,23 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     String table_info_json = getSchemaJson(table_id, context);
     if (table_info_json.empty())
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Table " << table_id << "doesn't exist in TiDB, it may have been dropped.");
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " doesn't exist in TiDB, it may have been dropped.");
         return;
     }
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
 
-    TableInfo table_info(table_info_json);
+    TableInfo table_info;
+    try
+    {
+        TableInfo table_info_(table_info_json);
+        table_info = table_info_;
+    }
+    catch (const JSONException & e)
+    {
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Invalid table info json: " << e.displayText() << ", will ignore it anyway: " << table_info_json);
+        return;
+    }
 
     if (context.getTiDBService().ignoreDatabases().count(table_info.db_name))
     {
