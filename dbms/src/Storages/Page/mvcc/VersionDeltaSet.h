@@ -10,6 +10,17 @@
 
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/mvcc/VersionSet.h>
+#include <Common/ProfileEvents.h>
+
+namespace ProfileEvents
+{
+extern const Event PSMVCCCompactOnDelta;
+extern const Event PSMVCCCompactOnDeltaRebaseRejected;
+extern const Event PSMVCCCompactOnBase;
+extern const Event PSMVCCApplyOnCurrentBase;
+extern const Event PSMVCCApplyOnCurrentDelta;
+extern const Event PSMVCCApplyOnNewDelta;
+} // namespace ProfileEvents
 
 namespace DB
 {
@@ -64,6 +75,7 @@ public:
 
         if (current.use_count() == 1 && current->isBase())
         {
+            ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentBase);
             // If no readers, we could directly merge edits.
             TEditAcceptor::applyInplace(current, edit);
         }
@@ -71,9 +83,14 @@ public:
         {
             if (current.use_count() != 1)
             {
+                ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnNewDelta);
                 // There are reader(s) on current, generate new delta version and append to version-list
                 VersionPtr v = VersionType::createDelta();
                 appendVersion(std::move(v));
+            }
+            else
+            {
+                ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentDelta);
             }
             // Make a view from head to new version, then apply edits on `current`.
             auto         view = std::make_shared<TVersionView>(current);
@@ -215,13 +232,15 @@ protected:
             {
                 break;
             }
-            // If we can not found tail from `current` version-list, then other view has already
-            // do compaction on `tail` version, and we can just free that version
-            if (!isValidVersion(tail))
             {
-                break;
+                // If we can not found tail from `current` version-list, then other view has already
+                // do compaction on `tail` version, and we can just free that version
+                std::shared_lock lock(read_mutex);
+                if (!isValidVersion(tail))
+                    break;
             }
             // do compact on delta
+            ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDelta);
             VersionPtr tmp = compactDeltas(tail); // Note: May be compacted by different threads
             if (tmp != nullptr)
             {
@@ -229,6 +248,7 @@ protected:
                 if (this->rebase(tail, tmp) == RebaseResult::INVALID_VERSION)
                 {
                     // Another thread may have done compaction and rebase, then we just release `tail`
+                    ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
                     break;
                 }
                 // release tail ref on this view, replace with tmp
@@ -238,6 +258,7 @@ protected:
             // do compact on base
             if (tail->shouldCompactToBase(config))
             {
+                ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
                 auto old_base = tail->prev;
                 assert(old_base != nullptr);
                 VersionPtr new_base = compactDeltaAndBase(old_base, tail);
