@@ -1,16 +1,16 @@
-#include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 
 namespace DB
 {
 
-std::set<PageFileIdAndLevel> PageEntryMapVersionSet::gcApply(PageEntriesEdit & edit)
+std::set<PageFileIdAndLevel> PageEntriesVersionSet::gcApply(PageEntriesEdit & edit)
 {
     std::unique_lock lock(read_mutex);
 
     // apply edit on base
-    PageEntryMap * v = nullptr;
+    PageEntries * v = nullptr;
     {
-        PageEntryMapBuilder builder(current);
+        PageEntriesBuilder builder(current);
         builder.gcApply(edit);
         v = builder.build();
     }
@@ -20,10 +20,10 @@ std::set<PageFileIdAndLevel> PageEntryMapVersionSet::gcApply(PageEntriesEdit & e
     return listAllLiveFiles();
 }
 
-std::set<PageFileIdAndLevel> PageEntryMapVersionSet::listAllLiveFiles() const
+std::set<PageFileIdAndLevel> PageEntriesVersionSet::listAllLiveFiles() const
 {
     std::set<PageFileIdAndLevel> liveFiles;
-    for (PageEntryMap * v = placeholder_node.next; v != &placeholder_node; v = v->next)
+    for (PageEntries * v = placeholder_node.next; v != &placeholder_node; v = v->next)
     {
         for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
         {
@@ -33,7 +33,7 @@ std::set<PageFileIdAndLevel> PageEntryMapVersionSet::listAllLiveFiles() const
     return liveFiles;
 }
 
-void PageEntryMapBuilder::apply(const PageEntriesEdit & edit)
+void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
 {
     for (const auto & rec : edit.getRecords())
     {

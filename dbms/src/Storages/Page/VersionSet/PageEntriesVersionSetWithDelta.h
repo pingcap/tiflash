@@ -2,31 +2,32 @@
 
 #pragma once
 
-#include <Storages/Page/PageEntryMap.h>
-#include <Storages/Page/PageEntryMapVersionSet.h>
-#include <Storages/Page/PageEntryMapView.h>
-#include <Storages/Page/mvcc/VersionDeltaSet.h>
+#include <Storages/Page/PageEntries.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesView.h>
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 #include <Storages/Page/mvcc/VersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesEdit.h>
 
 namespace DB
 {
 
 class DeltaVersionEditAcceptor;
 
-class PageEntryMapDeltaVersionSet : public ::DB::MVCC::VersionDeltaSet< //
-                                        PageEntryMapBase,
-                                        PageEntryMapView,
+class PageEntriesVersionSetWithDelta : public ::DB::MVCC::VersionSetWithDelta< //
+                                        PageEntriesForDelta,
+                                        PageEntriesView,
                                         PageEntriesEdit,
                                         DeltaVersionEditAcceptor>
 {
 public:
-    using BaseType     = ::DB::MVCC::VersionDeltaSet<PageEntryMapBase, PageEntryMapView, PageEntriesEdit, DeltaVersionEditAcceptor>;
+    using BaseType     = ::DB::MVCC::VersionSetWithDelta<PageEntriesForDelta, PageEntriesView, PageEntriesEdit, DeltaVersionEditAcceptor>;
     using EditAcceptor = BaseType::EditAcceptor;
     using VersionType  = BaseType::VersionType;
     using VersionPtr   = BaseType::VersionPtr;
 
 public:
-    explicit PageEntryMapDeltaVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig()) : BaseType(config_)
+    explicit PageEntriesVersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig()) : BaseType(config_)
     {
     }
 
@@ -48,7 +49,7 @@ private:
 class DeltaVersionEditAcceptor
 {
 public:
-    explicit DeltaVersionEditAcceptor(const PageEntryMapView * view_, //
+    explicit DeltaVersionEditAcceptor(const PageEntriesView * view_, //
                                       bool                     ignore_invalid_ref_ = false,
                                       Poco::Logger *           log_                = nullptr);
 
@@ -56,17 +57,17 @@ public:
 
     void apply(PageEntriesEdit & edit);
 
-    static void applyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit);
+    static void applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit);
 
-    void gcApply(PageEntriesEdit & edit) { PageEntryMapBuilder::gcApplyTemplate(view, edit, current_version); }
+    void gcApply(PageEntriesEdit & edit) { PageEntriesBuilder::gcApplyTemplate(view, edit, current_version); }
 
     static void gcApplyInplace( //
-        const PageEntryMapDeltaVersionSet::VersionPtr & current,
+        const PageEntriesVersionSetWithDelta::VersionPtr & current,
         PageEntriesEdit &                               edit)
     {
         assert(current->isBase());
         assert(current.use_count() == 1);
-        PageEntryMapBuilder::gcApplyTemplate(current, edit, current);
+        PageEntriesBuilder::gcApplyTemplate(current, edit, current);
     }
 
 private:
@@ -78,8 +79,8 @@ private:
     void decreasePageRef(PageId page_id);
 
 private:
-    PageEntryMapView *                      view;
-    PageEntryMapDeltaVersionSet::VersionPtr current_version;
+    PageEntriesView *                      view;
+    PageEntriesVersionSetWithDelta::VersionPtr current_version;
     bool                                    ignore_invalid_ref;
     Poco::Logger *                          log;
 };

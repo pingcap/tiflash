@@ -61,8 +61,8 @@ int main(int argc, char ** argv)
     }
     auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
 
-    //DB::PageEntryMapVersionSet versions;
-    DB::PageEntryMapDeltaVersionSet versions;
+    //DB::PageEntriesVersionSet versions;
+    DB::PageEntriesVersionSetWithDelta versions;
     for (auto & page_file : page_files)
     {
         DB::PageEntriesEdit  edit;

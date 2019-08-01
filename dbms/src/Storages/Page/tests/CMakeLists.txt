@@ -1,4 +1,6 @@
 add_headers_and_sources(page_storage ../)
+add_headers_and_sources(page_storage ../mvcc)
+add_headers_and_sources(page_storage ../VersionSet)
 add_library(page_storage EXCLUDE_FROM_ALL
         ${page_storage_headers} ${page_storage_sources})
 target_link_libraries(page_storage clickhouse_common_io)
@@ -11,6 +13,7 @@ endmacro()
 
 # attach all dm gtest sources
 grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/tests ps_gtest_sources)
+
 add_executable(unit_tests_page_storage EXCLUDE_FROM_ALL ${ps_gtest_sources})
 target_link_libraries(unit_tests_page_storage gtest_main page_storage)
 add_check(unit_tests_page_storage)

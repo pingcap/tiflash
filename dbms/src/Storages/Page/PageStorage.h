@@ -8,8 +8,8 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/PageEntryMapDeltaVersionSet.h>
-#include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
 
@@ -56,7 +56,7 @@ public:
     void write(const WriteBatch & write_batch);
 
 #ifdef DELTA_VERSION_SET
-    using SnapshotPtr = PageEntryMapDeltaVersionSet::SnapshotPtr;
+    using SnapshotPtr = PageEntriesVersionSetWithDelta::SnapshotPtr;
 #else
     using SnapshotPtr = PageEntryMapVersionSet::SnapshotPtr;
 #endif
@@ -92,7 +92,7 @@ private:
     Config config;
 
 #ifdef DELTA_VERSION_SET
-    PageEntryMapDeltaVersionSet version_set;
+    PageEntriesVersionSetWithDelta version_set;
 #else
     PageEntryMapVersionSet version_set;
 #endif

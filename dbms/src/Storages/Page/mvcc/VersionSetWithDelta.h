@@ -26,17 +26,17 @@ namespace DB
 {
 namespace MVCC
 {
-/// Base type for VersionType of VersionDeltaSet
+/// Base type for VersionType of VersionSetWithDelta
 template <typename T>
-struct MultiVersionDeltaCountable
+struct MultiVersionCountableForDelta
 {
 public:
     std::shared_ptr<T> prev;
 
 public:
-    explicit MultiVersionDeltaCountable() : prev(nullptr) {}
+    explicit MultiVersionCountableForDelta() : prev(nullptr) {}
 
-    virtual ~MultiVersionDeltaCountable() = default;
+    virtual ~MultiVersionCountableForDelta() = default;
 };
 
 /// \tparam TVersion         -- Single version on version-list. Require for a `prev` member, see `MultiVersionDeltaCountable`
@@ -48,7 +48,7 @@ template < //
     typename TVersionView,
     typename TVersionEdit,
     typename TEditAcceptor>
-class VersionDeltaSet
+class VersionSetWithDelta
 {
 public:
     using EditAcceptor = TEditAcceptor;
@@ -56,14 +56,14 @@ public:
     using VersionPtr   = std::shared_ptr<VersionType>;
 
 public:
-    explicit VersionDeltaSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
+    explicit VersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
         : current(std::move(VersionType::createBase())),                   //
           snapshots(std::move(std::make_shared<Snapshot>(this, nullptr))), //
           config(config_)
     {
     }
 
-    virtual ~VersionDeltaSet()
+    virtual ~VersionSetWithDelta()
     {
         assert(snapshots->prev == snapshots.get()); // snapshot list is empty
         current.reset();
@@ -106,14 +106,14 @@ public:
     class Snapshot
     {
     public:
-        VersionDeltaSet * vset;
+        VersionSetWithDelta * vset;
         TVersionView      view;
 
         Snapshot * prev;
         Snapshot * next;
 
     public:
-        Snapshot(VersionDeltaSet * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this) {}
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this) {}
 
         ~Snapshot()
         {
@@ -127,7 +127,7 @@ public:
         const TVersionView * version() const { return &view; }
 
         template <typename V, typename VV, typename VE, typename B>
-        friend class VersionDeltaSet;
+        friend class VersionSetWithDelta;
     };
 
     using SnapshotPtr = std::shared_ptr<Snapshot>;
@@ -315,7 +315,7 @@ public:
             is_first = false;
             s += "{\"rc\":";
             s += DB::toString(v.use_count() - 1);
-            s += ",\"addr\":", s += DB::pToString(v.get());
+            s += ",\"addr\":", s += DB::ptrToString(v.get());
             s += '}';
         }
         return s;

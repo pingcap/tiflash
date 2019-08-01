@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 
 namespace DB
 {
@@ -15,18 +15,18 @@ public:
 protected:
     void SetUp() override
     {
-        // Generate an empty PageEntryMap for each test
+        // Generate an empty PageEntries for each test
         auto                snapshot = versions.getSnapshot();
-        PageEntryMapBuilder builder(snapshot->version());
+        PageEntriesBuilder builder(snapshot->version());
         map = builder.build();
     }
 
     void TearDown() override { delete map; }
 
-    PageEntryMap * map;
+    PageEntries * map;
 
 private:
-    PageEntryMapVersionSet versions;
+    PageEntriesVersionSet versions;
 };
 
 TEST_F(PageEntryMap_test, Empty)

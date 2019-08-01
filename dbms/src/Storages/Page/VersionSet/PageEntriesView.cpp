@@ -1,11 +1,11 @@
-#include <Storages/Page/PageEntryMapDeltaVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 namespace DB
 {
 
 ////  PageEntryMapView
 
-const PageEntry * PageEntryMapView::find(PageId page_id) const
+const PageEntry * PageEntriesView::find(PageId page_id) const
 {
     // First we find ref-pairs to get the normal page id
     bool   found          = false;
@@ -41,7 +41,7 @@ const PageEntry * PageEntryMapView::find(PageId page_id) const
     return entry;
 }
 
-const PageEntry & PageEntryMapView::at(const PageId page_id) const
+const PageEntry & PageEntriesView::at(const PageId page_id) const
 {
     auto entry = this->find(page_id);
     if (entry == nullptr)
@@ -51,7 +51,7 @@ const PageEntry & PageEntryMapView::at(const PageId page_id) const
     return *entry;
 }
 
-const PageEntry * PageEntryMapView::findNormalPageEntry(PageId page_id) const
+const PageEntry * PageEntriesView::findNormalPageEntry(PageId page_id) const
 {
     for (auto node = tail; node != nullptr; node = node->prev)
     {
@@ -64,7 +64,7 @@ const PageEntry * PageEntryMapView::findNormalPageEntry(PageId page_id) const
     return nullptr;
 }
 
-std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id) const
+std::pair<bool, PageId> PageEntriesView::isRefId(PageId page_id) const
 {
     auto node = tail;
     for (; !node->isBase(); node = node->prev)
@@ -78,15 +78,15 @@ std::pair<bool, PageId> PageEntryMapView::isRefId(PageId page_id) const
     return node->isRefId(page_id);
 }
 
-PageId PageEntryMapView::resolveRefId(PageId page_id) const
+PageId PageEntriesView::resolveRefId(PageId page_id) const
 {
     auto [is_ref, normal_page_id] = isRefId(page_id);
     return is_ref ? normal_page_id : page_id;
 }
 
-std::set<PageId> PageEntryMapView::validPageIds() const
+std::set<PageId> PageEntriesView::validPageIds() const
 {
-    std::stack<std::shared_ptr<PageEntryMapBase>> link_nodes;
+    std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         link_nodes.emplace(node);
@@ -112,9 +112,9 @@ std::set<PageId> PageEntryMapView::validPageIds() const
     return valid_pages;
 }
 
-std::set<PageId> PageEntryMapView::validNormalPageIds() const
+std::set<PageId> PageEntriesView::validNormalPageIds() const
 {
-    std::stack<std::shared_ptr<PageEntryMapBase>> link_nodes;
+    std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         link_nodes.emplace(node);
@@ -141,7 +141,7 @@ std::set<PageId> PageEntryMapView::validNormalPageIds() const
     return valid_normal_pages;
 }
 
-PageId PageEntryMapView::maxId() const
+PageId PageEntriesView::maxId() const
 {
     PageId max_id = 0;
     for (auto node = tail; node != nullptr; node = node->prev)

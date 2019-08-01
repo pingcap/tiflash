@@ -7,8 +7,8 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
-#include <Storages/Page/PageEntryMapDeltaVersionSet.h>
-#include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 
 namespace DB
 {
@@ -52,7 +52,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
         versions.apply(edit);
     }
     // VersionSet, new version generate && old version removed at the same time
-    // VersionDeltaSet, delta version merged
+    // VersionSetWithDelta, delta version merged
     LOG_TRACE(&Logger::root(), "apply    A:" + versions.toDebugStringUnlocked());
     EXPECT_EQ(versions.size(), 1UL);
     {
@@ -98,7 +98,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugStringUnlocked());
     /// For VersionSet, size is 2 since A is still hold by s1
     /// For VersionDeltaSet, size is 1 since we do a compaction on delta
-    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
         EXPECT_EQ(versions.size(), 2UL);
     else
         EXPECT_EQ(versions.size(), 1UL);
@@ -106,7 +106,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     s1.reset();
     LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugStringUnlocked());
     // VersionSet, old version removed from version set
-    // VersionDeltaSet, delta version merged
+    // VersionSetWithDelta, delta version merged
     EXPECT_EQ(versions.size(), 1UL);
 
     // Ensure that after old snapshot released, new snapshot get the same content
@@ -122,7 +122,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     }
     LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugStringUnlocked());
     // VersionSet, new version gen and old version remove at the same time
-    // VersionDeltaSet, C merge to delta
+    // VersionSetWithDelta, C merge to delta
     EXPECT_EQ(versions.size(), 1UL);
     auto s4 = versions.getSnapshot();
     entry   = s4->version()->at(0);
@@ -147,8 +147,8 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
     s1.reset();
     LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugStringUnlocked());
     // VersionSet, size decrease to 1 when s1 release
-    // VersionDeltaSet, size is 2 since we can not do a compaction on delta
-    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+    // VersionSetWithDelta, size is 2 since we can not do a compaction on delta
+    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
         EXPECT_EQ(versions.size(), 1UL);
     else
         EXPECT_EQ(versions.size(), 2UL);
@@ -188,15 +188,15 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
     s1.reset();
     LOG_TRACE(&Logger::root(), "rel snap 1:" + versions.toDebugStringUnlocked());
     // VersionSet, size decrease to 2 when s1 release
-    // VersionDeltaSet, size is 3 since we can not do a compaction on delta
-    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+    // VersionSetWithDelta, size is 3 since we can not do a compaction on delta
+    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
         EXPECT_EQ(versions.size(), 2UL);
     else
         EXPECT_EQ(versions.size(), 3UL);
 
     s2.reset();
     LOG_TRACE(&Logger::root(), "rel snap 2:" + versions.toDebugStringUnlocked());
-    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
         EXPECT_EQ(versions.size(), 1UL);
     else
         EXPECT_EQ(versions.size(), 2UL);
@@ -209,7 +209,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
 TYPED_TEST_P(PageMapVersionSet_test, Restore)
 {
     TypeParam versions(this->config_);
-    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
     {
         auto s1 = versions.getSnapshot();
 
@@ -257,7 +257,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     ASSERT_EQ(entry3->checksum, 3UL);
 
     std::set<PageId> valid_normal_page_ids;
-    if constexpr (std::is_same_v<TypeParam, PageEntryMapVersionSet>)
+    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
     {
         for (auto iter = s->version()->pages_cbegin(); iter != s->version()->pages_cend(); iter++)
             valid_normal_page_ids.insert(iter->first);
@@ -574,7 +574,7 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            Snapshot,
                            LiveFiles);
 
-using VersionSetTypes = ::testing::Types<PageEntryMapVersionSet, PageEntryMapDeltaVersionSet>;
+using VersionSetTypes = ::testing::Types<PageEntriesVersionSet, PageEntriesVersionSetWithDelta>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);
 
 

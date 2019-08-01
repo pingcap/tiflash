@@ -8,7 +8,7 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 #include <Storages/Page/WriteBatch.h>
 
 namespace Poco

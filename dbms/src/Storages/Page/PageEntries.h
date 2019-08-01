@@ -11,7 +11,7 @@
 
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
-#include <Storages/Page/mvcc/VersionDeltaSet.h>
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
 #include <Storages/Page/mvcc/VersionSet.h>
 
 namespace DB
@@ -22,10 +22,10 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 template <typename T>
-class PageEntryMapBaseDeltaMixin
+class PageEntriesMixin
 {
 public:
-    explicit PageEntryMapBaseDeltaMixin(bool is_base_) : normal_pages(), page_ref(), ref_deletions(), max_page_id(0), is_base(is_base_) {}
+    explicit PageEntriesMixin(bool is_base_) : normal_pages(), page_ref(), ref_deletions(), max_page_id(0), is_base(is_base_) {}
 
 public:
     static std::shared_ptr<T> createBase() { return std::make_shared<T>(true); }
@@ -88,7 +88,7 @@ public:
                                 ErrorCodes::LOGICAL_ERROR);
         }
     }
-    inline const PageEntry & at(const PageId page_id) const { return const_cast<PageEntryMapBaseDeltaMixin *>(this)->at(page_id); }
+    inline const PageEntry & at(const PageId page_id) const { return const_cast<PageEntriesMixin *>(this)->at(page_id); }
 
     inline std::pair<bool, PageId> isRefId(PageId page_id) const
     {
@@ -152,7 +152,7 @@ private:
     template <bool must_exist = true>
     void decreasePageRef(PageId page_id);
 
-    void copyEntries(const PageEntryMapBaseDeltaMixin & rhs)
+    void copyEntries(const PageEntriesMixin & rhs)
     {
         page_ref      = rhs.page_ref;
         normal_pages  = rhs.normal_pages;
@@ -162,11 +162,11 @@ private:
 
 public:
     // no copying allowed
-    PageEntryMapBaseDeltaMixin(const PageEntryMapBaseDeltaMixin &) = delete;
-    PageEntryMapBaseDeltaMixin & operator=(const PageEntryMapBaseDeltaMixin &) = delete;
+    PageEntriesMixin(const PageEntriesMixin &) = delete;
+    PageEntriesMixin & operator=(const PageEntriesMixin &) = delete;
     // only move allowed
-    PageEntryMapBaseDeltaMixin(PageEntryMapBaseDeltaMixin && rhs) noexcept : PageEntryMapBaseDeltaMixin(true) { *this = std::move(rhs); }
-    PageEntryMapBaseDeltaMixin & operator=(PageEntryMapBaseDeltaMixin && rhs) noexcept
+    PageEntriesMixin(PageEntriesMixin && rhs) noexcept : PageEntriesMixin(true) { *this = std::move(rhs); }
+    PageEntriesMixin & operator=(PageEntriesMixin && rhs) noexcept
     {
         if (this != &rhs)
         {
@@ -179,14 +179,14 @@ public:
         return *this;
     }
 
-    friend class PageEntryMapBuilder;
+    friend class PageEntriesBuilder;
     friend class DeltaVersionEditAcceptor;
-    friend class PageEntryMapView;
-    friend class PageEntryMapDeltaVersionSet; // For copyEntries
+    friend class PageEntriesView;
+    friend class PageEntriesVersionSetWithDelta; // For copyEntries
 };
 
 template <typename T>
-void PageEntryMapBaseDeltaMixin<T>::put(PageId page_id, const PageEntry & entry)
+void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
 {
     assert(is_base); // can only call by base
     const PageId normal_page_id = resolveRefId(page_id);
@@ -221,7 +221,7 @@ void PageEntryMapBaseDeltaMixin<T>::put(PageId page_id, const PageEntry & entry)
 
 template <typename T>
 template <bool must_exist>
-void PageEntryMapBaseDeltaMixin<T>::del(PageId page_id)
+void PageEntriesMixin<T>::del(PageId page_id)
 {
     assert(is_base); // can only call by base
     // Note: must resolve ref-id before erasing entry in `page_ref`
@@ -234,7 +234,7 @@ void PageEntryMapBaseDeltaMixin<T>::del(PageId page_id)
 
 template <typename T>
 template <bool must_exist>
-void PageEntryMapBaseDeltaMixin<T>::ref(const PageId ref_id, const PageId page_id)
+void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
 {
     assert(is_base); // can only call by base
     // if `page_id` is a ref-id, collapse the ref-path to actual PageId
@@ -276,7 +276,7 @@ void PageEntryMapBaseDeltaMixin<T>::ref(const PageId ref_id, const PageId page_i
 
 template <typename T>
 template <bool must_exist>
-void PageEntryMapBaseDeltaMixin<T>::decreasePageRef(const PageId page_id)
+void PageEntriesMixin<T>::decreasePageRef(const PageId page_id)
 {
     auto iter = normal_pages.find(page_id);
     if constexpr (must_exist)
@@ -295,10 +295,10 @@ void PageEntryMapBaseDeltaMixin<T>::decreasePageRef(const PageId page_id)
 }
 
 /// For PageEntryMapVersionSet
-class PageEntryMap : public PageEntryMapBaseDeltaMixin<PageEntryMap>, public ::DB::MVCC::MultiVersionCountable<PageEntryMap>
+class PageEntries : public PageEntriesMixin<PageEntries>, public ::DB::MVCC::MultiVersionCountable<PageEntries>
 {
 public:
-    explicit PageEntryMap(bool is_base_ = true) : PageEntryMapBaseDeltaMixin(true), ::DB::MVCC::MultiVersionCountable<PageEntryMap>(this)
+    explicit PageEntries(bool is_base_ = true) : PageEntriesMixin(true), ::DB::MVCC::MultiVersionCountable<PageEntries>(this)
     {
         (void)is_base_;
     }
@@ -346,7 +346,7 @@ public:
     private:
         std::unordered_map<PageId, PageId>::iterator _iter;
         std::unordered_map<PageId, PageEntry> &      _normal_pages;
-        friend class PageEntryMapView;
+        friend class PageEntriesView;
     };
 
     class const_iterator
@@ -390,7 +390,7 @@ public:
     private:
         std::unordered_map<PageId, PageId>::const_iterator _iter;
         std::unordered_map<PageId, PageEntry> &            _normal_pages;
-        friend class PageEntryMapView;
+        friend class PageEntriesView;
     };
 
 public:
@@ -400,16 +400,16 @@ public:
 };
 
 /// For PageEntryMapDeltaVersionSet
-class PageEntryMapBase : public PageEntryMapBaseDeltaMixin<PageEntryMapBase>,
-                         public ::DB::MVCC::MultiVersionDeltaCountable<PageEntryMapBase>
+class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>,
+                         public ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
 {
 public:
-    explicit PageEntryMapBase(bool is_base_)
-        : PageEntryMapBaseDeltaMixin(is_base_), ::DB::MVCC::MultiVersionDeltaCountable<PageEntryMapBase>()
+    explicit PageEntriesForDelta(bool is_base_)
+        : PageEntriesMixin(is_base_), ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>()
     {
     }
 
-    void merge(PageEntryMapBase & rhs)
+    void merge(PageEntriesForDelta & rhs)
     {
         assert(!rhs.isBase()); // rhs must be delta
         for (auto page_id : rhs.ref_deletions)

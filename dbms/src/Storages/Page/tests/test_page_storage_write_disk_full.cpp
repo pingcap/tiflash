@@ -147,7 +147,7 @@ int main(int argc, char ** argv)
     auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
     for (auto & page_file : page_files)
     {
-        DB::PageEntryMap page_entries;
+        DB::PageEntries page_entries;
         const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries, false);
         printf("File: page_%lu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
         DB::PageIdAndEntries id_and_caches;

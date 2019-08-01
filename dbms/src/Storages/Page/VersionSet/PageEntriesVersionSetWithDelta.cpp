@@ -1,17 +1,17 @@
-#include <Storages/Page/PageEntryMapDeltaVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
 
 #include <stack>
 
-#include <Storages/Page/PageEntryMapVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
 
 namespace DB
 {
 
 //==========================================================================================
-// PageEntryMapDeltaVersionSet
+// PageEntriesVersionSetWithDelta
 //==========================================================================================
 
-std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(PageEntriesEdit & edit)
+std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit)
 {
     std::unique_lock lock(read_mutex);
 
@@ -27,7 +27,7 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(PageEntriesEdi
             VersionPtr v = VersionType::createDelta();
             appendVersion(std::move(v));
         }
-        auto         view = std::make_shared<PageEntryMapView>(current);
+        auto         view = std::make_shared<PageEntriesView>(current);
         EditAcceptor builder(view.get());
         builder.gcApply(edit);
     }
@@ -35,7 +35,7 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::gcApply(PageEntriesEdi
     return listAllLiveFiles();
 }
 
-std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() const
+std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::listAllLiveFiles() const
 {
     // Note read_mutex must be hold.
     std::set<PageFileIdAndLevel> liveFiles;
@@ -50,7 +50,7 @@ std::set<PageFileIdAndLevel> PageEntryMapDeltaVersionSet::listAllLiveFiles() con
     return liveFiles;
 }
 
-void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList( //
+void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
     VersionPtr                     v,
     std::set<VersionPtr> &         visited,
     std::set<PageFileIdAndLevel> & liveFiles) const
@@ -76,12 +76,12 @@ void PageEntryMapDeltaVersionSet::collectLiveFilesFromVersionList( //
 // Functions used when view release and do compact on version-list
 //==========================================================================================
 
-PageEntryMapDeltaVersionSet::VersionPtr           //
-PageEntryMapDeltaVersionSet::compactDeltaAndBase( //
-    const PageEntryMapDeltaVersionSet::VersionPtr & old_base,
-    PageEntryMapDeltaVersionSet::VersionPtr &       delta) const
+PageEntriesVersionSetWithDelta::VersionPtr           //
+PageEntriesVersionSetWithDelta::compactDeltaAndBase( //
+    const PageEntriesVersionSetWithDelta::VersionPtr & old_base,
+    PageEntriesVersionSetWithDelta::VersionPtr &       delta) const
 {
-    PageEntryMapDeltaVersionSet::VersionPtr base = PageEntryMapBase::createBase();
+    PageEntriesVersionSetWithDelta::VersionPtr base = PageEntriesForDelta::createBase();
     base->copyEntries(*old_base);
     // apply delta edits
     delta->prev = base;
@@ -90,9 +90,9 @@ PageEntryMapDeltaVersionSet::compactDeltaAndBase( //
     return base;
 }
 
-PageEntryMapDeltaVersionSet::VersionPtr     //
-PageEntryMapDeltaVersionSet::compactDeltas( //
-    const PageEntryMapDeltaVersionSet::VersionPtr & tail) const
+PageEntriesVersionSetWithDelta::VersionPtr     //
+PageEntriesVersionSetWithDelta::compactDeltas( //
+    const PageEntriesVersionSetWithDelta::VersionPtr & tail) const
 {
     if (tail->prev == nullptr || tail->prev->isBase())
     {
@@ -100,9 +100,9 @@ PageEntryMapDeltaVersionSet::compactDeltas( //
         return nullptr;
     }
 
-    auto tmp = PageEntryMapDeltaVersionSet::VersionType::createDelta();
+    auto tmp = PageEntriesVersionSetWithDelta::VersionType::createDelta();
 
-    std::stack<PageEntryMapDeltaVersionSet::VersionPtr> nodes;
+    std::stack<PageEntriesVersionSetWithDelta::VersionPtr> nodes;
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         if (node->isBase())
@@ -130,8 +130,8 @@ PageEntryMapDeltaVersionSet::compactDeltas( //
 // DeltaVersionEditAcceptor
 //==========================================================================================
 
-DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntryMapView * view_, bool ignore_invalid_ref_, Logger * log_)
-    : view(const_cast<PageEntryMapView *>(view_)),
+DeltaVersionEditAcceptor::DeltaVersionEditAcceptor(const PageEntriesView * view_, bool ignore_invalid_ref_, Logger * log_)
+    : view(const_cast<PageEntriesView *>(view_)),
       current_version(view->getSharedTailVersion()),
       ignore_invalid_ref(ignore_invalid_ref_),
       log(log_)
@@ -252,7 +252,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
     current_version->max_page_id = std::max(current_version->max_page_id, rec.page_id);
 }
 
-void DeltaVersionEditAcceptor::applyInplace(const PageEntryMapDeltaVersionSet::VersionPtr & current, const PageEntriesEdit & edit)
+void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit)
 {
     assert(current->isBase());
     assert(current.use_count() == 1);

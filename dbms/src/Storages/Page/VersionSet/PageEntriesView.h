@@ -3,13 +3,13 @@
 namespace DB
 {
 
-class PageEntryMapView
+class PageEntriesView
 {
 private:
-    std::shared_ptr<PageEntryMapBase> tail;
+    std::shared_ptr<PageEntriesForDelta> tail;
 
 public:
-    explicit PageEntryMapView(std::shared_ptr<PageEntryMapBase> tail_) : tail(std::move(tail_)) {}
+    explicit PageEntriesView(std::shared_ptr<PageEntriesForDelta> tail_) : tail(std::move(tail_)) {}
 
     const PageEntry * find(PageId page_id) const;
 
@@ -25,11 +25,11 @@ public:
 
     PageId maxId() const;
 
-    inline std::shared_ptr<PageEntryMapBase> getSharedTailVersion() const { return tail; }
+    inline std::shared_ptr<PageEntriesForDelta> getSharedTailVersion() const { return tail; }
 
-    inline std::shared_ptr<PageEntryMapBase> transferTailVersionOwn()
+    inline std::shared_ptr<PageEntriesForDelta> transferTailVersionOwn()
     {
-        std::shared_ptr<PageEntryMapBase> owned_ptr;
+        std::shared_ptr<PageEntriesForDelta> owned_ptr;
         owned_ptr.swap(tail);
         return owned_ptr;
     }
