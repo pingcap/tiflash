@@ -340,8 +340,7 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
     TableInfo table_info;
     try
     {
-        TableInfo table_info_(table_info_json);
-        table_info = table_info_;
+        table_info.deserialize(table_info_json);
     }
     catch (const JSONException & e)
     {
