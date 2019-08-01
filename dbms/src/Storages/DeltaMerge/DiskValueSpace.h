@@ -81,8 +81,6 @@ public:
     DiskValueSpace(bool should_cache_, PageId page_id_, const Chunks & chunks_);
     DiskValueSpace(const DiskValueSpace & other);
 
-    void swap(DiskValueSpace & other);
-
     /// Called after the instance is created from existing metadata.
     void restore(const OpContext & context);
 

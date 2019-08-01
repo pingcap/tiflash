@@ -26,6 +26,10 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
 
         i = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
 
+        // The following is trying to unroll the filtering operations,
+        // so that optimizer could use vectorized optimization.
+        // The original logic can be seen in #checkWithNextIndex().
+
         if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
         {
             for (size_t n = 0; n < i; n += UNROLL_BATCH)
@@ -52,7 +56,7 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
                     filter[n + k] &= !(*delete_col_data)[n + k];
             }
         }
-        else if (MODE == DM_VESION_FILTER_MODE_COMPACT)
+        else if constexpr (MODE == DM_VESION_FILTER_MODE_COMPACT)
         {
 
             for (size_t n = 0; n < i; n += UNROLL_BATCH)

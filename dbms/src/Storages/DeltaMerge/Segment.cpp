@@ -336,21 +336,6 @@ Segment::Segment(UInt64              epoch_,
 {
 }
 
-//void Segment::swap(Segment & other)
-//{
-//    std::swap(epoch, other.epoch);
-//    range.swap(other.range);
-//    std::swap(segment_id, other.segment_id);
-//    std::swap(next_segment_id, other.next_segment_id);
-//
-//    delta.swap(other.delta);
-//    stable.swap(other.stable);
-//
-//    delta_tree.swap(other.delta_tree);
-//    std::swap(placed_delta_rows, other.placed_delta_rows);
-//    std::swap(placed_delta_deletes, other.placed_delta_deletes);
-//}
-
 size_t Segment::getEstimatedRows()
 {
     std::shared_lock lock(read_write_mutex);

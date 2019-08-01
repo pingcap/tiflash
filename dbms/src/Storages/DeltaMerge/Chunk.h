@@ -84,7 +84,7 @@ public:
         if (isDeleteRange())
             throw Exception("Insert column into delete range chunk is not allowed");
         columns[c.col_id] = c;
-        if (rows && rows != c.rows)
+        if (rows != 0 && rows != c.rows)
             throw Exception("Rows not match");
         else
             rows = c.rows;
@@ -111,12 +111,7 @@ void   serializeChunks(WriteBuffer &           buf,
                        const Chunk *           extra2 = nullptr);
 Chunks deserializeChunks(ReadBuffer & buf);
 
-
-using BufferAndSize = std::pair<ReadBufferPtr, size_t>;
-BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, size_t offset, size_t num, bool compress);
-Chunk         prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block);
-
-void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & page, size_t rows_limit);
+Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block);
 
 void readChunkData(MutableColumns &      columns,
                    const Chunk &         chunk,

@@ -49,7 +49,7 @@ Chunk Chunk::deserialize(ReadBuffer & buf)
 
         chunk.columns.emplace(d.col_id, d);
 
-        if (chunk.rows && chunk.rows != d.rows)
+        if (chunk.rows != 0 && chunk.rows != d.rows)
             throw Exception("Rows not match");
         else
             chunk.rows = d.rows;
@@ -166,7 +166,7 @@ void readChunkData(MutableColumns &      columns,
         const ColumnMeta &   meta = chunk.getColumn(define.id);
         IColumn &            col  = *columns[index];
 
-        if (!rows_offset)
+        if (rows_offset == 0)
         {
             deserializeColumn(col, meta, page, rows_limit);
         }

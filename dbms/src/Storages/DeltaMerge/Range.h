@@ -43,7 +43,7 @@ struct Range
     inline bool intersect(T first, T last_include) const
     {
         T max_start = std::max(first, start);
-        return (last_include >= end && max_start < end) || (last_include < end && max_start <= last_include);
+        return (last_include >= end && checkEnd(max_start)) || (last_include < end && max_start <= last_include);
     }
 
     // [first, last_include]

@@ -42,7 +42,7 @@ inline Block filterSorted(const HandleRange & handle_range, Block && block, size
     auto [offset, limit] = getPosRangeOfSorted(handle_range, block.getByPosition(handle_pos).column, 0, rows);
     if (!limit)
         return {};
-    if (!offset && limit == rows)
+    if (offset == 0 && limit == rows)
         return std::move(block);
 
     for (size_t i = 0; i < block.columns(); i++)

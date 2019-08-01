@@ -34,7 +34,7 @@ public:
 
     Block read() override
     {
-        if (chunk_index >= chunks.size())
+        if (!hasNextBlock())
             return {};
         return readChunk(chunks[chunk_index++], read_columns, data_storage);
     }

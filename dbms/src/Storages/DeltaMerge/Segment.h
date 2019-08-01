@@ -117,8 +117,6 @@ public:
             PageId              stable_id,
             const Chunks &      stable_chunks_);
 
-    void swap(Segment & other);
-
     void check(DMContext & dm_context, const String & when);
 
     String simpleInfo() { return "{" + DB::toString(segment_id) + ":" + range.toString() + "}"; }
@@ -133,9 +131,6 @@ public:
     size_t delta_deletes();
 
 private:
-    std::pair<DiskValueSpacePtr, DeltaValueSpacePtr> getDeltaSnapshot(const DMContext & dm_context, const ColumnDefines & columns_to_read);
-    DeltaIndexPtr getDeltaIndexSnapshot(const DMContext & dm_context, const DiskValueSpacePtr & delta_snap);
-
     template <bool add_tag_column>
     ReadSnapshot getReadSnapshot(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 

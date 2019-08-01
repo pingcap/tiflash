@@ -39,15 +39,6 @@ DiskValueSpace::DiskValueSpace(const DiskValueSpace & other)
         cache.emplace(col_id, col->cloneResized(col->size()));
 }
 
-void DiskValueSpace::swap(DiskValueSpace & other)
-{
-    std::swap(page_id, other.page_id);
-    chunks.swap(other.chunks);
-
-    cache.swap(other.cache);
-    std::swap(cache_chunks, other.cache_chunks);
-}
-
 void DiskValueSpace::restore(const OpContext & context)
 {
     // Deserialize.
