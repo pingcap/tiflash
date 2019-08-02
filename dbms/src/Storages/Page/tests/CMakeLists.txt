@@ -16,6 +16,7 @@ grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Page/tests ps_gtes
 
 add_executable(unit_tests_page_storage EXCLUDE_FROM_ALL ${ps_gtest_sources})
 target_link_libraries(unit_tests_page_storage gtest_main page_storage)
+target_compile_options(unit_tests_page_storage PRIVATE -Wno-unknown-pragmas)
 add_check(unit_tests_page_storage)
 
 # non googletest
