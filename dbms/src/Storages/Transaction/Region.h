@@ -41,30 +41,25 @@ public:
             const auto & data = store->data.writeCF().getData();
             if (auto it = data.find(expected_table_id); it != data.end())
             {
-                found = true;
+                write_map_size = it->second.size();
                 write_map_it = it->second.begin();
                 write_map_it_end = it->second.end();
             }
-            else
-                found = false;
         }
 
-        bool hasNext() const { return found && write_map_it != write_map_it_end; }
+        bool hasNext() const { return write_map_size && write_map_it != write_map_it_end; }
 
-        auto next(bool need_value = true)
-        {
-            if (!found)
-                throw Exception("CommittedScanner table: " + DB::toString(expected_table_id) + " is not found", ErrorCodes::LOGICAL_ERROR);
-            return store->readDataByWriteIt(expected_table_id, write_map_it++, need_value);
-        }
+        auto next(bool need_value = true) { return store->readDataByWriteIt(expected_table_id, write_map_it++, need_value); }
 
         LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
+
+        size_t writeMapSize() const { return write_map_size; }
 
     private:
         RegionPtr store;
         std::shared_lock<std::shared_mutex> lock;
 
-        bool found;
+        size_t write_map_size = 0;
         TableID expected_table_id;
         RegionData::ConstWriteCFIter write_map_it;
         RegionData::ConstWriteCFIter write_map_it_end;
@@ -151,6 +146,9 @@ public:
 
     RegionVersion version() const;
     RegionVersion confVer() const;
+
+    /// version, conf_version, range
+    std::tuple<RegionVersion, RegionVersion, RegionRange> dumpVersionRangeByTable() const;
 
     HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
 

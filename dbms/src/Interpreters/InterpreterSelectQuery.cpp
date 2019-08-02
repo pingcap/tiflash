@@ -750,7 +750,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         query_info.mvcc_query_info->resolve_locks = settings.resolve_locks;
         query_info.mvcc_query_info->read_tso = settings.read_tso;
 
-        String request_str = settings.regions;
+        const String & request_str = settings.regions;
 
         if (request_str.size() > 0)
         {
@@ -768,18 +768,14 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
                 RegionQueryInfo info;
                 info.region_id = region.id();
-                auto epoch = region.region_epoch();
+                const auto & epoch = region.region_epoch();
                 info.version = epoch.version();
                 info.conf_version = epoch.conf_ver();
-
-                auto table_id = static_cast<StorageMergeTree*>(storage.get()) -> getTableInfo().id;
-
-                auto start_key = TiKVRange::getRangeHandle<true, true, std::string>(region.start_key(), table_id);
-                auto end_key = TiKVRange::getRangeHandle<false, true, std::string>(region.end_key(), table_id);
-                info.range_in_table = HandleRange<HandleID>(start_key, end_key);
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
 
+            if (query_info.mvcc_query_info->regions_query_info.empty())
+                throw Exception("[InterpreterSelectQuery::executeFetchColumns] no region query", ErrorCodes::LOGICAL_ERROR);
             query_info.mvcc_query_info->concurrent = 0.0;
         }
 

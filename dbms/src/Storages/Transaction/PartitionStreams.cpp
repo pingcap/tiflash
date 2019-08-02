@@ -2,13 +2,13 @@
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRange.h>
 
 #include <common/logger_useful.h>
 
@@ -19,8 +19,6 @@ namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
-
-using BlockOption = std::optional<Block>;
 
 void RegionTable::writeBlockByRegion(
     Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
@@ -44,6 +42,9 @@ void RegionTable::writeBlockByRegion(
             // Shortcut for empty region.
             if (!scanner->hasNext())
                 return;
+
+            data_list_to_remove.reserve(scanner->writeMapSize());
+
             auto start_time = Clock::now();
             do
             {
@@ -116,17 +117,18 @@ void RegionTable::writeBlockByRegion(
                             << ", region decode " << region_decode_cost << ", write part " << write_part_cost << "] ms");
 }
 
-std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
+std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
     const RegionPtr & region,
     RegionVersion region_version,
     RegionVersion conf_version,
     bool resolve_locks,
-    Timestamp start_ts)
+    Timestamp start_ts,
+    DB::HandleRange<HandleID> & handle_range)
 {
     if (!region)
-        return {BlockOption{}, NOT_FOUND};
+        return {{}, NOT_FOUND};
 
     /// Blocking learner read. Note that learner read must be performed ahead of data read, otherwise the desired index will be blocked by the lock of data read.
     {
@@ -140,10 +142,13 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
         /// Some sanity checks for region meta.
         {
             if (region->isPendingRemove())
-                return {BlockOption{}, PENDING_REMOVE};
+                return {{}, PENDING_REMOVE};
 
-            if (region->version() != region_version || region->confVer() != conf_version)
-                return {BlockOption{}, VERSION_ERROR};
+            const auto & [version, conf_ver, key_range] = region->dumpVersionRangeByTable();
+            if (version != region_version || conf_ver != conf_version)
+                return {{}, VERSION_ERROR};
+
+            handle_range = TiKVRange::getHandleRangeByTable(key_range, table_info.id);
         }
 
         /// Deal with locks.
@@ -164,7 +169,10 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
         {
             // Shortcut for empty region.
             if (!scanner->hasNext())
-                return {BlockOption{}, OK};
+                return {{}, OK};
+
+            data_list_read.reserve(scanner->writeMapSize());
+
             // Tiny optimization for queries that need only handle, tso, delmark.
             bool need_value = column_names_to_read.size() != 3;
             do
