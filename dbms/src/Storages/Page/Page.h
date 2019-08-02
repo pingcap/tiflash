@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <unordered_map>
 
 #include <IO/BufferBase.h>
@@ -27,8 +28,8 @@ using Pages       = std::vector<Page>;
 using PageMap     = std::map<PageId, Page>;
 using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
-// Indicate the page size && offset in PageFile. TODO: rename to `PageEntry`?
-struct PageCache
+// Indicate the page size && offset in PageFile.
+struct PageEntry
 {
     // if file_id == 0, means it is invalid
     PageFileId file_id  = 0;
@@ -37,15 +38,15 @@ struct PageCache
     UInt64     offset   = 0;
     UInt64     tag      = 0;
     UInt64     checksum = 0;
+    UInt32     ref      = 1; // for ref counting
 
-    bool               isValid() const { return file_id != 0; }
-    PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
+    inline bool               isValid() const { return file_id != 0; }
+    inline bool               isTombstone() const { return ref == 0; }
+    inline PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
 };
-static_assert(std::is_trivially_copyable_v<PageCache>);
+static_assert(std::is_trivially_copyable_v<PageEntry>);
 
-using PageCacheMap    = std::unordered_map<PageId, PageCache>;
-using PageCaches      = std::vector<PageCache>;
-using PageIdAndCache  = std::pair<PageId, PageCache>;
-using PageIdAndCaches = std::vector<PageIdAndCache>;
+using PageIdAndEntry   = std::pair<PageId, PageEntry>;
+using PageIdAndEntries = std::vector<PageIdAndEntry>;
 
 } // namespace DB

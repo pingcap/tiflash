@@ -1,9 +1,11 @@
 add_headers_and_sources(page_storage ../)
-add_library(page_storage
+add_headers_and_sources(page_storage ../mvcc)
+add_headers_and_sources(page_storage ../VersionSet)
+add_library(page_storage EXCLUDE_FROM_ALL
         ${page_storage_headers} ${page_storage_sources})
 target_link_libraries(page_storage clickhouse_common_io)
 
-# glob all unit tests of dm into gtests_page_storage
+# glob all unit tests of PageStorage into gtests_page_storage
 macro(grep_gtest_sources BASE_DIR DST_VAR)
     # Cold match files that are not in tests/ directories
     file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
@@ -29,4 +31,6 @@ target_compile_options(page_utils_get_valid_pages PRIVATE -Wno-format)
 add_executable(test_page_storage_write_disk_full test_page_storage_write_disk_full.cpp)
 target_link_libraries(test_page_storage_write_disk_full dbms)
 target_compile_options(test_page_storage_write_disk_full PRIVATE -Wno-format)
+
+add_executable(mem_usage_test mem_usage_test.cpp)
 

@@ -60,10 +60,10 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto cache = page_storage.getCache(region_id);
-    if (cache.isValid() && cache.tag > applied_index)
+    auto entry = page_storage.getEntry(region_id);
+    if (entry.isValid() && entry.tag > applied_index)
     {
-        LOG_DEBUG(log, "[region " << region_id << ", applied index " << applied_index << "] have already persisted index " << cache.tag);
+        LOG_DEBUG(log, "[region " << region_id << ", applied index " << applied_index << "] have already persisted index " << entry.tag);
         return;
     }
 
