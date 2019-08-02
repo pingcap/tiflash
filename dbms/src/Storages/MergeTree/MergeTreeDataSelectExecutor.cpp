@@ -1063,9 +1063,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         if (!blocks.empty())
                         {
                             BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
-
-                            region_input_stream = func_make_version_filter_input(region_input_stream);
-
                             merging.emplace_back(region_input_stream);
                         }
                     }
@@ -1137,9 +1134,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         if (!blocks.empty())
                         {
                             BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
-
-                            region_input_stream = func_make_version_filter_input(region_input_stream);
-
                             merging.emplace_back(region_input_stream);
                         }
                     }
