@@ -41,7 +41,10 @@ TEST_F(PageEntryMap_test, Empty)
 
 
     // add some Pages, RefPages
-    PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
+    PageEntry p0entry;
+    p0entry.file_id  = 1;
+    p0entry.level    = 0;
+    p0entry.checksum = 0x123;
     map->put(0, p0entry);
     map->ref(1, 0);
     item_count = 0;
@@ -64,12 +67,14 @@ TEST_F(PageEntryMap_test, Empty)
 
 TEST_F(PageEntryMap_test, UpdatePageEntry)
 {
-    const PageId    page_id = 0;
-    const PageEntry entry0{.checksum = 0x123};
+    const PageId page_id = 0;
+    PageEntry    entry0;
+    entry0.checksum = 0x123;
     map->put(page_id, entry0);
     ASSERT_EQ(map->at(page_id).checksum, entry0.checksum);
 
-    const PageEntry entry1{.checksum = 0x456};
+    PageEntry entry1;
+    entry1.checksum = 0x456;
     map->put(page_id, entry1);
     ASSERT_EQ(map->at(page_id).checksum, entry1.checksum);
 
@@ -79,7 +84,10 @@ TEST_F(PageEntryMap_test, UpdatePageEntry)
 
 TEST_F(PageEntryMap_test, PutDel)
 {
-    PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
+    PageEntry p0entry;
+    p0entry.file_id  = 1;
+    p0entry.level    = 0;
+    p0entry.checksum = 0x123;
     map->put(0, p0entry);
     {
         ASSERT_NE(map->find(0), nullptr);
@@ -119,9 +127,10 @@ TEST_F(PageEntryMap_test, PutDel)
 
 TEST_F(PageEntryMap_test, UpdateRefPageEntry)
 {
-    const PageId    page_id = 0;
-    const PageId    ref_id  = 1; // RefPage1 -> Page0
-    const PageEntry entry0{.checksum = 0x123};
+    const PageId page_id = 0;
+    const PageId ref_id  = 1; // RefPage1 -> Page0
+    PageEntry    entry0;
+    entry0.checksum = 0x123;
     map->put(page_id, entry0);
     ASSERT_NE(map->find(page_id), nullptr);
     ASSERT_EQ(map->at(page_id).checksum, entry0.checksum);
@@ -131,13 +140,15 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
     ASSERT_EQ(map->at(ref_id).checksum, entry0.checksum);
 
     // update on Page0, both Page0 and RefPage1 entry get update
-    const PageEntry entry1{.checksum = 0x456};
+    PageEntry entry1;
+    entry1.checksum = 0x456;
     map->put(page_id, entry1);
     ASSERT_EQ(map->at(page_id).checksum, entry1.checksum);
     ASSERT_EQ(map->at(ref_id).checksum, entry1.checksum);
 
     // update on RefPage1, both Page0 and RefPage1 entry get update
-    const PageEntry entry2{.checksum = 0x789};
+    PageEntry entry2;
+    entry2.checksum = 0x789;
     map->put(page_id, entry2);
     ASSERT_EQ(map->at(page_id).checksum, entry2.checksum);
     ASSERT_EQ(map->at(ref_id).checksum, entry2.checksum);
@@ -153,7 +164,8 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
 
 TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
 {
-    const PageEntry entry0{.checksum = 0xf};
+    PageEntry entry0;
+    entry0.checksum = 0xf;
     map->put(0, entry0);
     map->ref(1, 0);
     map->del(0);
@@ -161,7 +173,8 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
     ASSERT_EQ(map->at(1).checksum, 0xfUL);
 
     // update Page0, both Page0 and RefPage1 got update
-    const PageEntry entry1{.checksum = 0x1};
+    PageEntry entry1;
+    entry1.checksum = 0x1;
     map->put(0, entry1);
     ASSERT_EQ(map->at(0).checksum, 0x1UL);
     ASSERT_EQ(map->at(1).checksum, 0x1UL);
@@ -169,7 +182,9 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
 
 TEST_F(PageEntryMap_test, AddRefToNonExistPage)
 {
-    PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
+    PageEntry p0entry;
+    p0entry.file_id = 1;
+    p0entry.level = 0, p0entry.checksum = 0x123;
     map->put(0, p0entry);
     // if try to add ref to non-exist page
     ASSERT_THROW({ map->ref<true>(3, 2); }, DB::Exception);
@@ -189,7 +204,8 @@ TEST_F(PageEntryMap_test, AddRefToNonExistPage)
 
 TEST_F(PageEntryMap_test, PutDuplicateRef)
 {
-    PageEntry p0entry{.checksum = 0xFF};
+    PageEntry p0entry;
+    p0entry.checksum = 0xFF;
     map->put(0, p0entry);
     ASSERT_EQ(map->at(0).checksum, p0entry.checksum);
 
@@ -206,7 +222,10 @@ TEST_F(PageEntryMap_test, PutDuplicateRef)
 
 TEST_F(PageEntryMap_test, PutRefOnRef)
 {
-    PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
+    PageEntry p0entry;
+    p0entry.file_id  = 1;
+    p0entry.level    = 0;
+    p0entry.checksum = 0x123;
     // put Page0
     map->put(0, p0entry);
     // add RefPage2 -> Page0
@@ -266,8 +285,14 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
 
 TEST_F(PageEntryMap_test, ReBindRef)
 {
-    PageEntry entry0{.file_id = 1, .level = 0, .checksum = 0x123};
-    PageEntry entry1{.file_id = 1, .level = 0, .checksum = 0x123};
+    PageEntry entry0;
+    entry0.file_id  = 1;
+    entry0.level    = 0;
+    entry0.checksum = 0x123;
+    PageEntry entry1;
+    entry1.file_id  = 1;
+    entry1.level    = 0;
+    entry1.checksum = 0x123;
     // put Page0, Page1
     map->put(0, entry0);
     ASSERT_EQ(map->at(0).checksum, entry0.checksum);
@@ -285,8 +310,14 @@ TEST_F(PageEntryMap_test, ReBindRef)
 
 TEST_F(PageEntryMap_test, Scan)
 {
-    PageEntry p0entry{.file_id = 1, .level = 0, .checksum = 0x123};
-    PageEntry p1entry{.file_id = 2, .level = 1, .checksum = 0x456};
+    PageEntry p0entry;
+    p0entry.file_id  = 1;
+    p0entry.level    = 0;
+    p0entry.checksum = 0x123;
+    PageEntry p1entry;
+    p1entry.file_id  = 1;
+    p1entry.level    = 0;
+    p1entry.checksum = 0x456;
     map->put(0, p0entry);
     map->put(1, p1entry);
     map->ref(10, 0);

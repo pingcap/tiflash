@@ -48,7 +48,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
     LOG_TRACE(&Logger::root(), "init      :" + versions.toDebugStringUnlocked());
     {
         PageEntriesEdit edit;
-        edit.put(0, PageEntry{.checksum = 0x123});
+        PageEntry       e;
+        e.checksum = 0x123;
+        edit.put(0, e);
         versions.apply(edit);
     }
     // VersionSet, new version generate && old version removed at the same time
@@ -57,7 +59,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
     EXPECT_EQ(versions.size(), 1UL);
     {
         PageEntriesEdit edit;
-        edit.put(1, PageEntry{.checksum = 0x456});
+        PageEntry       e;
+        e.checksum = 0x456;
+        edit.put(1, e);
         versions.apply(edit);
     }
     LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
@@ -81,7 +85,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
     {
         PageEntriesEdit edit;
-        edit.put(0, PageEntry{.checksum = 0x123});
+        PageEntry       e;
+        e.checksum = 0x123;
+        edit.put(0, e);
         versions.apply(edit);
     }
     EXPECT_EQ(versions.size(), 2UL); // former node is hold by s1, append new version
@@ -117,7 +123,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock)
 
     {
         PageEntriesEdit edit;
-        edit.put(0, PageEntry{.checksum = 0x456});
+        PageEntry       e;
+        e.checksum = 0x456;
+        edit.put(0, e);
         versions.apply(edit);
     }
     LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugStringUnlocked());
@@ -137,7 +145,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock2)
     auto      s1 = versions.getSnapshot();
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
     PageEntriesEdit edit;
-    edit.put(0, PageEntry{.checksum = 0x123});
+    PageEntry       e;
+    e.checksum = 0x123;
+    edit.put(0, e);
     versions.apply(edit);
     LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
     auto s2    = versions.getSnapshot();
@@ -167,7 +177,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
     LOG_TRACE(&Logger::root(), "snapshot 1:" + versions.toDebugStringUnlocked());
     {
         PageEntriesEdit edit;
-        edit.put(0, PageEntry{.checksum = 0x123});
+        PageEntry       e;
+        e.checksum = 0x123;
+        edit.put(0, e);
         versions.apply(edit);
     }
     LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
@@ -177,7 +189,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
 
     {
         PageEntriesEdit edit;
-        edit.put(1, PageEntry{.checksum = 0xff});
+        PageEntry       e;
+        e.checksum = 0xff;
+        edit.put(1, e);
         versions.apply(edit);
     }
     LOG_TRACE(&Logger::root(), "apply    C:" + versions.toDebugStringUnlocked());
@@ -217,10 +231,14 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
 
         {
             PageEntriesEdit edit;
-            edit.put(1, PageEntry{.checksum = 1});
+            PageEntry       e;
+            e.checksum = 1;
+            edit.put(1, e);
             edit.del(1);
-            edit.put(2, PageEntry{.checksum = 2});
-            edit.put(3, PageEntry{.checksum = 3});
+            e.checksum = 2;
+            edit.put(2, e);
+            e.checksum = 3;
+            edit.put(3, e);
             builder.apply(edit);
         }
         {
@@ -234,10 +252,14 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     {
         {
             PageEntriesEdit edit;
-            edit.put(1, PageEntry{.checksum = 1});
+            PageEntry       e;
+            e.checksum = 1;
+            edit.put(1, e);
             edit.del(1);
-            edit.put(2, PageEntry{.checksum = 2});
-            edit.put(3, PageEntry{.checksum = 3});
+            e.checksum = 2;
+            edit.put(2, e);
+            e.checksum = 3;
+            edit.put(3, e);
             versions.apply(edit);
         }
         {
@@ -278,13 +300,19 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
     // Page0 is in PageFile{2, 0} at first
     {
         PageEntriesEdit init_edit;
-        init_edit.put(pid, PageEntry{.file_id = 2, .level = 1});
+        PageEntry       e;
+        e.file_id = 2;
+        e.level   = 1;
+        init_edit.put(pid, e);
         versions.apply(init_edit);
     }
 
     // gc try to move Page0 -> PageFile{5, 1}, but is interrupt by write thread before gcApply
     PageEntriesEdit gc_edit;
-    gc_edit.put(pid, PageEntry{.file_id = 5, .level = 1});
+    PageEntry       e;
+    e.file_id = 5;
+    e.level   = 1;
+    gc_edit.put(pid, e);
 
     {
         // write thread del Page0 before gc thread get unique_lock of `read_mutex`
@@ -322,19 +350,25 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
     const PageId pid     = 0;
     const PageId ref_pid = 1;
     // old Page0 is in PageFile{5, 0}
-    PageEntriesEdit init_edit;
-    init_edit.put(pid, PageEntry{.file_id = 5, .level = 0});
-    init_edit.ref(ref_pid, pid);
-    versions.apply(init_edit);
+    {
+        PageEntriesEdit init_edit;
+        PageEntry       e;
+        e.file_id = 5;
+        e.level   = 0;
+        init_edit.put(pid, e);
+        init_edit.ref(ref_pid, pid);
+        versions.apply(init_edit);
+    }
 
     // gc move Page0 -> PageFile{5,1}
     PageEntriesEdit gc_edit;
-    gc_edit.put(pid,
-                PageEntry{
-                    .file_id = 5,
-                    .level   = 1,
-                });
-    versions.gcApply(gc_edit);
+    {
+        PageEntry e;
+        e.file_id = 5;
+        e.level   = 1;
+        gc_edit.put(pid, e);
+        versions.gcApply(gc_edit);
+    }
 
     // Page get updated
     auto      snapshot = versions.getSnapshot();
@@ -360,16 +394,20 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
 
     // gc move Page0 -> PageFile{5,1}
     PageEntriesEdit gc_edit;
-    gc_edit.put(pid,
-                PageEntry{
-                    .file_id = 5,
-                    .level   = 1,
-                });
+    {
+        PageEntry e;
+        e.file_id = 5;
+        e.level   = 1;
+        gc_edit.put(pid, e);
+    }
 
     {
         // write thread insert newer Page0 before gc thread get unique_lock on `read_mutex`
         PageEntriesEdit write_edit;
-        write_edit.put(pid, PageEntry{.file_id = 6, .level = 0});
+        PageEntry       e;
+        e.file_id = 6;
+        e.level   = 0;
+        write_edit.put(pid, e);
         versions.apply(write_edit);
     }
 
@@ -389,7 +427,9 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
     TypeParam versions(this->config_);
     {
         PageEntriesEdit edit;
-        edit.put(2, PageEntry{.checksum = 0xf});
+        PageEntry       e;
+        e.checksum = 0xf;
+        edit.put(2, e);
         edit.ref(3, 2);
         versions.apply(edit);
     }
@@ -400,7 +440,9 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
     // Update RefPage3, both Page2 and RefPage3 got updated.
     {
         PageEntriesEdit edit;
-        edit.put(3, PageEntry{.checksum = 0xff});
+        PageEntry       e;
+        e.checksum = 0xff;
+        edit.put(3, e);
         versions.apply(edit);
     }
     auto s2 = versions.getSnapshot();
@@ -437,7 +479,9 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
     TypeParam versions(this->config_);
     {
         PageEntriesEdit edit;
-        edit.put(2, PageEntry{.checksum = 0xf});
+        PageEntry       e;
+        e.checksum = 0xf;
+        edit.put(2, e);
         edit.ref(3, 2);
         edit.del(2);
         versions.apply(edit);
@@ -448,7 +492,9 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
 
     {
         PageEntriesEdit edit;
-        edit.put(2, PageEntry{.checksum = 0x9});
+        PageEntry       e;
+        e.checksum = 0x9;
+        edit.put(2, e);
         edit.del(2);
         versions.apply(edit);
     }
@@ -462,7 +508,9 @@ TYPED_TEST_P(PageMapVersionSet_test, IsRefId)
     TypeParam versions(this->config_);
     {
         PageEntriesEdit edit;
-        edit.put(1, PageEntry{.checksum = 0xf});
+        PageEntry       e;
+        e.checksum = 0xf;
+        edit.put(1, e);
         edit.ref(2, 1);
         versions.apply(edit);
     }
@@ -489,8 +537,11 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
     ASSERT_EQ(versions.size(), 1UL);
     {
         PageEntriesEdit init_edit;
-        init_edit.put(0, PageEntry{.checksum = 0x123});
-        init_edit.put(1, PageEntry{.checksum = 0x1234});
+        PageEntry       e;
+        e.checksum = 0x123;
+        init_edit.put(0, e);
+        e.checksum = 0x1234;
+        init_edit.put(1, e);
         versions.apply(init_edit);
         ASSERT_EQ(versions.size(), 1UL);
     }
@@ -498,7 +549,9 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
     auto s1 = versions.getSnapshot();
     {
         PageEntriesEdit edit;
-        edit.put(0, PageEntry{.checksum = 0x456});
+        PageEntry       e;
+        e.checksum = 0x456;
+        edit.put(0, e);
         edit.del(1);
         versions.apply(edit);
     }
@@ -518,16 +571,24 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
 
     {
         PageEntriesEdit edit;
-        edit.put(0, PageEntry{.file_id = 1, .level = 0});
-        edit.put(1, PageEntry{.file_id = 2, .level = 0});
-        edit.put(2, PageEntry{.file_id = 3, .level = 0});
+        PageEntry       e;
+        e.file_id = 1;
+        e.level   = 0;
+        edit.put(0, e);
+        e.file_id = 2;
+        edit.put(1, e);
+        e.file_id = 3;
+        edit.put(2, e);
         versions.apply(edit);
     }
     auto s1 = versions.getSnapshot();
     {
         PageEntriesEdit edit;
         edit.del(0);
-        edit.put(3, PageEntry{.file_id = 3, .level = 1});
+        PageEntry e;
+        e.file_id = 3;
+        e.level   = 1;
+        edit.put(3, e);
         versions.apply(edit);
     }
     auto s2 = versions.getSnapshot();
