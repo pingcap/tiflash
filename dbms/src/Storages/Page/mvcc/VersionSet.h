@@ -166,7 +166,7 @@ public:
         Snapshot(VersionPtr version_, std::shared_mutex * mutex_) : v(version_), mutex(mutex_) { v->incrRefCount(); }
         ~Snapshot() { v->decrRefCount(*mutex); }
 
-        const VersionPtr version() const { return v; }
+        VersionPtr version() const { return v; }
 
     public:
         // No copying allowed.

@@ -9,11 +9,11 @@ namespace DB
 class PageEntriesBuilder
 {
 public:
-    explicit PageEntriesBuilder(const PageEntries * base_, //
+    explicit PageEntriesBuilder(const PageEntries * old_version_, //
                                 bool                ignore_invalid_ref_ = false,
                                 Poco::Logger *      log_                = nullptr)
-        : base(const_cast<PageEntries *>(base_)),
-          v(new PageEntries), //
+        : old_version(const_cast<PageEntries *>(old_version_)),
+          current_version(new PageEntries), //
           ignore_invalid_ref(ignore_invalid_ref_),
           log(log_)
     {
@@ -23,17 +23,17 @@ public:
             assert(log != nullptr);
         }
 #endif
-        base->incrRefCount();
-        v->copyEntries(*base);
+        old_version->incrRefCount();
+        current_version->copyEntries(*old_version);
     }
 
-    ~PageEntriesBuilder() { base->decrRefCount(); }
+    ~PageEntriesBuilder() { old_version->decrRefCount(); }
 
     void apply(const PageEntriesEdit & edit);
 
-    void gcApply(PageEntriesEdit & edit) { gcApplyTemplate(v, edit, v); }
+    void gcApply(PageEntriesEdit & edit) { gcApplyTemplate(current_version, edit, current_version); }
 
-    PageEntries * build() { return v; }
+    PageEntries * build() { return current_version; }
 
 public:
     template <typename OldVersionType, typename VersionType>
@@ -44,31 +44,24 @@ public:
             if (rec.type != WriteBatch::WriteType::PUT)
                 continue;
             // Gc only apply PUT for updating page entries
-            try
+            auto old_page_entry = old_version->find(rec.page_id);
+            // If the gc page have already been removed, or is a ref to non-exist page, just ignore it
+            if (old_page_entry == nullptr)
+                continue;
+            // In case of page being updated during GC process.
+            if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
             {
-                auto old_page_entry = old_version->find(rec.page_id); // this may throw an exception if ref to non-exist page
-                // If the gc page have already been removed, just ignore it
-                if (old_page_entry == nullptr)
-                    continue;
-                // In case of page being updated during GC process.
-                if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())
-                {
-                    // no new page write to `page_entry_map`, replace it with gc page
-                    rec.entry.ref                          = old_page_entry->ref;
-                    new_version->normal_pages[rec.page_id] = rec.entry;
-                }
-                // else new page written by another thread, gc page is replaced. leave the page for next gc
+                // no new page write to `page_entry_map`, replace it with gc page
+                rec.entry.ref                          = old_page_entry->ref;
+                new_version->normal_pages[rec.page_id] = rec.entry;
             }
-            catch (DB::Exception & e)
-            {
-                // just ignore and continue
-            }
+            // else new page written by another thread, gc page is replaced. leave the page for next gc
         }
     }
 
 private:
-    PageEntries *  base;
-    PageEntries *  v;
+    PageEntries *  old_version;
+    PageEntries *  current_version;
     bool           ignore_invalid_ref;
     Poco::Logger * log;
 };
