@@ -309,7 +309,8 @@ void PageStorage::traversePageEntries( //
     {
         auto page_entry = snapshot->version()->find(page_id);
         if (unlikely(page_entry == nullptr))
-            throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage's entries", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage's entries",
+                            ErrorCodes::LOGICAL_ERROR);
         acceptor(page_id, *page_entry);
     }
 #else

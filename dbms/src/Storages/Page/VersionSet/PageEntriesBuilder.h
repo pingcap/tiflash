@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Storages/Page/PageEntries.h>
 #include <Storages/Page/VersionSet/PageEntriesEdit.h>
 #include <Storages/Page/WriteBatch.h>
 
