@@ -128,7 +128,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
     DB::HandleRange<HandleID> & handle_range)
 {
     if (!region)
-        return {{}, NOT_FOUND};
+        return {Block(), NOT_FOUND};
 
     /// Blocking learner read. Note that learner read must be performed ahead of data read, otherwise the desired index will be blocked by the lock of data read.
     {
@@ -142,11 +142,11 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
         /// Some sanity checks for region meta.
         {
             if (region->isPendingRemove())
-                return {{}, PENDING_REMOVE};
+                return {Block(), PENDING_REMOVE};
 
             const auto & [version, conf_ver, key_range] = region->dumpVersionRangeByTable();
             if (version != region_version || conf_ver != conf_version)
-                return {{}, VERSION_ERROR};
+                return {Block(), VERSION_ERROR};
 
             handle_range = TiKVRange::getHandleRangeByTable(key_range, table_info.id);
         }
@@ -169,7 +169,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
         {
             // Shortcut for empty region.
             if (!scanner->hasNext())
-                return {{}, OK};
+                return {Block(), OK};
 
             data_list_read.reserve(scanner->writeMapSize());
 
