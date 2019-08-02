@@ -144,7 +144,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
             if (region->isPendingRemove())
                 return {Block(), PENDING_REMOVE};
 
-            const auto & [version, conf_ver, key_range] = region->dumpVersionRangeByTable();
+            const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
             if (version != region_version || conf_ver != conf_version)
                 return {Block(), VERSION_ERROR};
 

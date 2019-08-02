@@ -267,7 +267,7 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
         && meta1.region_state == meta2.region_state;
 }
 
-std::tuple<RegionVersion, RegionVersion, RegionRange> RegionMeta::dumpVersionRangeByTable() const
+std::tuple<RegionVersion, RegionVersion, RegionRange> RegionMeta::dumpVersionRange() const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return {region_state.region().region_epoch().version(), region_state.region().region_epoch().conf_ver(),
