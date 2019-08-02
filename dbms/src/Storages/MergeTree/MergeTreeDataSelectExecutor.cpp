@@ -343,6 +343,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     RegionQueryInfo & region_query_info = regions_executor_data[region_index].info;
                     // wait learner read index
                     auto region = kvstore_region[region_query_info.region_id];
+
+                    /// Blocking learner read. Note that learner read must be performed ahead of data read,
+                    /// otherwise the desired index will be blocked by the lock of data read.
                     region->waitIndex(region->learnerRead());
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,

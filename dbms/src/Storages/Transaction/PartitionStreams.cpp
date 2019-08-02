@@ -128,12 +128,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
     DB::HandleRange<HandleID> & handle_range)
 {
     if (!region)
-        return {Block(), NOT_FOUND};
-
-    /// Blocking learner read. Note that learner read must be performed ahead of data read, otherwise the desired index will be blocked by the lock of data read.
-    {
-        region->waitIndex(region->learnerRead());
-    }
+        throw Exception("[RegionTable::readBlockByRegion] region is null", ErrorCodes::LOGICAL_ERROR);
 
     RegionDataReadInfoList data_list_read;
     {
