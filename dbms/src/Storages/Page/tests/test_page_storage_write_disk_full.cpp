@@ -3,12 +3,15 @@
 #include <memory>
 #include <random>
 
+#include <IO/ReadBufferFromMemory.h>
 #include <Poco/ConsoleChannel.h>
+#include <Poco/File.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
 #include <Poco/Timer.h>
+#include <common/logger_useful.h>
 
 #include <Storages/Page/PageStorage.h>
 
@@ -21,7 +24,7 @@ using PSPtr = std::shared_ptr<DB::PageStorage>;
 
 const DB::PageId MAX_PAGE_ID = 500;
 
-void printPageEntry(const DB::PageId pid, const DB::PageCache & entry)
+void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
     printf("\tpid:%9lu\t\t"
            "%9lu\t%u\t%u\t%9lu\t%9lu\t%016lx\n",
@@ -134,7 +137,7 @@ int main(int argc, char ** argv)
     // Create PageStorage
     DB::PageStorage::Config config;
     config.file_roll_size = 96UL * 1024 * 1024;
-    PSPtr    ps           = std::make_shared<DB::PageStorage>(path, config);
+    PSPtr ps              = std::make_shared<DB::PageStorage>(path, config);
 
     // Write until disk is full
     PSWriter writer(ps, path);
@@ -144,13 +147,14 @@ int main(int argc, char ** argv)
     auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
     for (auto & page_file : page_files)
     {
-        DB::PageCacheMap page_entries;
-        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries);
-        printf("File: page_%lu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(),
-               page_entries.size());
-        DB::PageIdAndCaches id_and_caches;
-        for (auto &[pid, entry] : page_entries)
+        DB::PageEntries page_entries;
+        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries, false);
+        printf("File: page_%lu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
+        DB::PageIdAndEntries id_and_caches;
+        for (auto iter = page_entries.cbegin(); iter != page_entries.cend(); ++iter)
         {
+            auto pid   = iter.pageId();
+            auto entry = iter.pageEntry();
             id_and_caches.emplace_back(pid, entry);
             printPageEntry(pid, entry);
         }
@@ -160,7 +164,7 @@ int main(int argc, char ** argv)
             fprintf(stderr, "Scanning over data.\n");
             auto page_map = reader->read(id_and_caches);
         }
-        catch (DB::Exception &e)
+        catch (DB::Exception & e)
         {
             fprintf(stderr, "%s\n", e.displayText().c_str());
             return 1; // Error

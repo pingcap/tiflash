@@ -816,4 +816,12 @@ toString(const T & x, int precision)
     return ss.str();
 }
 
+/// Pointer to a string
+inline String ptrToString(const void * const p)
+{
+    std::stringstream ss;
+    ss << p;
+    return ss.str();
+}
+
 }

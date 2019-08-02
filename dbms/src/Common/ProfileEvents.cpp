@@ -162,6 +162,13 @@
     M(PSMWriteFailed) \
     M(PSMReadFailed) \
     \
+    M(PSMVCCApplyOnCurrentBase) \
+    M(PSMVCCApplyOnCurrentDelta) \
+    M(PSMVCCApplyOnNewDelta) \
+    M(PSMVCCCompactOnDelta) \
+    M(PSMVCCCompactOnDeltaRebaseRejected) \
+    M(PSMVCCCompactOnBase) \
+    \
     M(DMWriteBlock) \
     M(DMWriteBlockNS) \
     M(DMAppendDelta) \

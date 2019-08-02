@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <Core/Defines.h>
 #include <Core/Types.h>
 
 namespace DB
