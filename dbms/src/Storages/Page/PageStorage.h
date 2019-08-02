@@ -6,10 +6,17 @@
 #include <shared_mutex>
 #include <unordered_map>
 
+#include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSet.h>
+#include <Storages/Page/VersionSet/PageEntriesVersionSetWithDelta.h>
+#include <Storages/Page/WriteBatch.h>
 
 namespace DB
 {
+
+#define DELTA_VERSION_SET
 
 /**
  * A storage system stored pages. Pages are serialized objects referenced by PageId. Store Page with the same PageId
@@ -42,21 +49,29 @@ public:
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
 public:
-    PageStorage(const std::string & storage_path, const Config & config_);
+    PageStorage(const String & storage_path, const Config & config_);
 
-    PageId    getMaxId();
-    PageCache getCache(PageId page_id);
+    PageId getMaxId();
 
-    void    write(const WriteBatch & write_batch);
-    Page    read(PageId page_id);
-    PageMap read(const std::vector<PageId> & page_ids);
-    void    read(const std::vector<PageId> & page_ids, PageHandler & handler);
-    void    traverse(std::function<void(const Page & page)> acceptor);
-    void    traversePageCache(std::function<void(PageId page_id, const PageCache & page)> acceptor);
-    bool    gc();
+    void write(const WriteBatch & write_batch);
+
+#ifdef DELTA_VERSION_SET
+    using SnapshotPtr = PageEntriesVersionSetWithDelta::SnapshotPtr;
+#else
+    using SnapshotPtr = PageEntryMapVersionSet::SnapshotPtr;
+#endif
+    SnapshotPtr getSnapshot();
+
+    PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = nullptr);
+    Page      read(PageId page_id, SnapshotPtr snapshot = nullptr);
+    PageMap   read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = nullptr);
+    void      read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot = nullptr);
+    void      traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = nullptr);
+    void      traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
+    bool      gc();
 
     static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const std::string & storage_path, bool remove_tmp_file, Logger * page_file_log);
+    listAllPageFiles(const String & storage_path, bool remove_tmp_file, Poco::Logger * page_file_log);
 
 private:
     PageFile::Writer & getWriter();
@@ -69,15 +84,18 @@ private:
                                         const PageFileIdAndLevel &                       writing_file_id_level,
                                         UInt64 &                                         candidate_total_size,
                                         size_t &                                         migrate_page_count) const;
-    PageCacheMap gcMigratePages(const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
-    void         gcUpdatePageMap(const PageCacheMap & gc_pages_map);
+    PageEntriesEdit
+    gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
 
 private:
-    std::string storage_path;
-    Config      config;
+    String storage_path;
+    Config config;
 
-    PageCacheMap page_cache_map;
-    PageId       max_page_id = 0;
+#ifdef DELTA_VERSION_SET
+    PageEntriesVersionSetWithDelta version_set;
+#else
+    PageEntryMapVersionSet version_set;
+#endif
 
     PageFile  write_file;
     WriterPtr write_file_writer;
@@ -85,12 +103,11 @@ private:
     OpenReadFiles open_read_files;
     std::mutex    open_read_files_mutex; // A mutex only used to protect open_read_files.
 
-    Logger * page_file_log;
-    Logger * log;
+    Poco::Logger * page_file_log;
+    Poco::Logger * log;
 
-    std::mutex        write_mutex;
-    std::shared_mutex read_mutex;
-    std::mutex        gc_mutex; // A mutex used to protect only gc
+    std::mutex write_mutex;
+    std::mutex gc_mutex; // A mutex used to protect gc
 };
 
 } // namespace DB
