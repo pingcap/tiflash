@@ -267,7 +267,8 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
         for (auto page_id : valid_pages_ids)
         {
             auto page_entry = snapshot->version()->find(page_id);
-            assert(page_entry != nullptr);
+            if (unlikely(page_entry == nullptr))
+                throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage", ErrorCodes::LOGICAL_ERROR);
             file_and_pages[page_entry->fileIdLevel()].emplace_back(page_id);
         }
     }
@@ -307,7 +308,8 @@ void PageStorage::traversePageEntries( //
     for (auto page_id : valid_pages_ids)
     {
         auto page_entry = snapshot->version()->find(page_id);
-        assert(page_entry != nullptr);
+        if (unlikely(page_entry == nullptr))
+            throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage's entries", ErrorCodes::LOGICAL_ERROR);
         acceptor(page_id, *page_entry);
     }
 #else
