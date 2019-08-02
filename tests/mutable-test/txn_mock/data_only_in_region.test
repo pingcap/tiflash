@@ -35,5 +35,40 @@
 │       0 │
 └─────────┘
 
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 1, 10000000, 0, 'f1', -5)
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 2, 10000002, 0, 'f2', -6)
+=> select (*) from default.test " --read_tso "10000001
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+└───────┴───────┴─────────────┘
+
+=> select (*) from default.test " --read_tso "10000003
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+│ f2    │    -6 │           2 │
+└───────┴───────┴─────────────┘
+
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 2, 10000005, 1, 'f2', -6)
+=> select (*) from default.test " --read_tso "10000003
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+│ f2    │    -6 │           2 │
+└───────┴───────┴─────────────┘
+
+=> select (*) from default.test " --read_tso "10000005
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+└───────┴───────┴─────────────┘
+
+=> selraw count(*) from default.test
+┌─count()─┐
+│    1207 │
+└─────────┘
+
+=> select count(*) from default.test
+┌─count()─┐
+│    1205 │
+└─────────┘
+
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
