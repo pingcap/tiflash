@@ -79,6 +79,39 @@ inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
     }
 }
 
+template <TMTPKType pk_type>
+void setPKVersionDel(ColumnUInt8 & delmark_col,
+    ColumnUInt64 & version_col,
+    MutableColumnPtr & pk_column,
+    const RegionDataReadInfoList & data_list,
+    const Timestamp tso)
+{
+    ColumnUInt8::Container & delmark_data = delmark_col.getData();
+    ColumnUInt64::Container & version_data = version_col.getData();
+
+    delmark_data.reserve(data_list.size());
+    version_data.reserve(data_list.size());
+
+    for (const auto & [handle, write_type, commit_ts, value] : data_list)
+    {
+        std::ignore = value;
+
+        // Ignore data after the start_ts.
+        if (commit_ts > tso)
+            continue;
+
+        delmark_data.emplace_back(write_type == Region::DelFlag);
+        version_data.emplace_back(commit_ts);
+
+        if constexpr (pk_type == TMTPKType::INT64)
+            typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(static_cast<Int64>(handle));
+        else if constexpr (pk_type == TMTPKType::UINT64)
+            typeid_cast<ColumnVector<UInt64> &>(*pk_column).insert(static_cast<UInt64>(handle));
+        else
+            pk_column->insert(Field(static_cast<Int64>(handle)));
+    }
+}
+
 std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
@@ -110,38 +143,34 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         column_map[handle_col_id].first->reserve(data_list.size());
     }
 
-    const bool pk_is_uint64 = getTMTPKType(*column_map[handle_col_id].second.type) == TMTPKType::UINT64;
+    const TMTPKType pk_type = getTMTPKType(*column_map[handle_col_id].second.type);
 
-    if (pk_is_uint64)
+    if (pk_type == TMTPKType::UINT64)
         ReorderRegionDataReadList(data_list);
 
+    {
+        auto func = setPKVersionDel<TMTPKType::UNSPECIFIED>;
+
+        switch (pk_type)
+        {
+            case TMTPKType::INT64:
+                func = setPKVersionDel<TMTPKType::INT64>;
+                break;
+            case TMTPKType::UINT64:
+                func = setPKVersionDel<TMTPKType::UINT64>;
+                break;
+            default:
+                break;
+        }
+
+        func(*delmark_col, *version_col, column_map[handle_col_id].first, data_list, start_ts);
+    }
+
     const auto & date_lut = DateLUT::instance();
-
-    ColumnUInt8::Container & delmark_data = delmark_col->getData();
-    ColumnUInt64::Container & version_data = version_col->getData();
-
-    delmark_data.reserve(data_list.size());
-    version_data.reserve(data_list.size());
 
     std::unordered_set<ColumnID> col_id_included;
 
     const size_t target_row_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
-
-    for (const auto & [handle, write_type, commit_ts, value] : data_list)
-    {
-        std::ignore = value;
-
-        // Ignore data after the start_ts.
-        if (commit_ts > start_ts)
-            continue;
-
-        delmark_data.emplace_back(write_type == Region::DelFlag);
-        version_data.emplace_back(commit_ts);
-        if (pk_is_uint64)
-            column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
-        else
-            column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
-    }
 
     Block block;
 
