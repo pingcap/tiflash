@@ -7,6 +7,7 @@
 #include <initializer_list>
 #include <vector>
 
+#include <Storages/Transaction/TiDB.h>
 #include <iostream>
 
 namespace DB
@@ -96,8 +97,7 @@ std::vector<String> splitDatetime(String format)
     return parseDateFormat(format);
 }
 
-
-Field parseMyDatetime(const String & str, bool is_date)
+Field parseMyDatetime(const String & str)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
 
@@ -176,17 +176,10 @@ Field parseMyDatetime(const String & str, bool is_date)
             throw Exception("Wrong datetime format");
         }
     }
-    const auto & date_lut = DateLUT::instance();
-    if (is_date)
-    {
-        auto date = date_lut.makeDayNum(year, month, day);
-        Field date_field(static_cast<Int64>(date));
-        return date_field;
-    }
-    else
-    {
-        auto datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-        return Field(datetime);
-    }
+
+    UInt64 ymd = ((year * 13 + month) << 5) | day;
+    UInt64 hms = (hour << 12) | (minute << 6) | second;
+    return Field((ymd << 17 | hms) << 24);
 }
+
 } // namespace DB

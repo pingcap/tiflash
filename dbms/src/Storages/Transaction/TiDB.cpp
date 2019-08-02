@@ -44,8 +44,7 @@ Field ColumnInfo::defaultValueToField() const
         case TypeDate:
         case TypeDatetime:
         case TypeTimestamp:
-            // TODO:: Process Datetime Family
-            return DB::parseMyDatetime(value.convert<String>(), tp == TypeDate);
+            return DB::parseMyDatetime(value.convert<String>());
         case TypeVarchar:
         case TypeTinyBlob:
         case TypeMediumBlob:
@@ -64,7 +63,7 @@ Field ColumnInfo::defaultValueToField() const
         case TypeTime:
         case TypeYear:
         case TypeSet:
-            // TODO refine
+            // TODO support it !
             return Field();
         default:
             throw Exception("Have not proccessed type: " + std::to_string(tp));
