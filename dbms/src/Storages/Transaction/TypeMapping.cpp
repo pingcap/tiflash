@@ -6,6 +6,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 
@@ -85,13 +86,25 @@ DataTypePtr TypeMapping::getUnsigned(const ColumnInfo & column_info)
     return unsigned_type_map[column_info.tp](column_info);
 }
 
-TiDB::CodecFlag TypeMapping::getCodecFlag(const DB::DataTypePtr & dataTypePtr) {
+TiDB::CodecFlag TypeMapping::getCodecFlag(const DB::DataTypePtr & dataTypePtr)
+{
     // fixme: String's CodecFlag will be CodecFlagCompactBytes, which is wrong for Json type
     return codec_flag_map[dataTypePtr->getFamilyName()];
 }
 
-TiDB::CodecFlag getCodecFlagByDataType(const DataTypePtr & dataTypePtr) {
+TiDB::CodecFlag getCodecFlagByDataType(const DataTypePtr & dataTypePtr)
+{
     return TypeMapping::instance().getCodecFlag(dataTypePtr);
+}
+
+DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
+{
+    ColumnInfo mock_ci;
+    mock_ci.tp = static_cast<TiDB::TP>(field_type.tp());
+    mock_ci.flag = field_type.flag();
+    mock_ci.flen = field_type.flen();
+    mock_ci.decimal = field_type.decimal();
+    return getDataTypeByColumnInfo(mock_ci);
 }
 
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
