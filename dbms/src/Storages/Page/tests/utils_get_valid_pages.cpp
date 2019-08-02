@@ -1,5 +1,6 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
+#include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/Runnable.h>
 #include <Poco/ThreadPool.h>
@@ -17,10 +18,10 @@ void Usage(const char * prog)
             prog);
 }
 
-void printPageEntry(const DB::PageId pid, const DB::PageCache & entry)
+void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 {
-    printf("\tpid:%9lu\t\t"
-           "%9lu\t%u\t%u\t%9lu\t%9lu\t%016lx\n",
+    printf("\tpid:%9lld\t\t"
+           "%9llu\t%9u\t%9u\t%9llu\t%9llu\t%016llx\n",
            pid, //
            entry.file_id,
            entry.level,
@@ -45,8 +46,8 @@ int main(int argc, char ** argv)
     Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
     formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
-    Logger::root().setChannel(formatting_channel);
-    Logger::root().setLevel("trace");
+    Poco::Logger::root().setChannel(formatting_channel);
+    Poco::Logger::root().setLevel("trace");
 
     DB::String    path                    = argv[1];
     const int32_t MODE_DUMP_ALL_ENTRIES   = 1;
@@ -58,23 +59,36 @@ int main(int argc, char ** argv)
         Usage(argv[0]);
         return 1;
     }
-    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Logger::get("root"));
+    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
 
-    DB::PageCacheMap valid_page_entries;
+    //DB::PageEntriesVersionSet versions;
+    DB::PageEntriesVersionSetWithDelta versions;
     for (auto & page_file : page_files)
     {
-        DB::PageCacheMap page_entries;
-        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(page_entries);
-        printf("File: page_%lu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), page_entries.size());
-        DB::PageIdAndCaches id_and_caches;
-        for (auto & [pid, entry] : page_entries)
+        DB::PageEntriesEdit  edit;
+        DB::PageIdAndEntries id_and_caches;
+        const_cast<DB::PageFile &>(page_file).readAndSetPageMetas(edit);
+
+        printf("File: page_%llu_%u with %zu entries:\n", page_file.getFileId(), page_file.getLevel(), edit.size());
+        for (const auto & record : edit.getRecords())
         {
-            id_and_caches.emplace_back(pid, entry);
             if (mode == MODE_DUMP_ALL_ENTRIES)
             {
-                printPageEntry(pid, entry);
+                switch (record.type)
+                {
+                case DB::WriteBatch::WriteType::PUT:
+                    printf("PUT");
+                    printPageEntry(record.page_id, record.entry);
+                    id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
+                    break;
+                case DB::WriteBatch::WriteType::DEL:
+                    printf("DEL\t%lld\n", record.page_id);
+                    break;
+                case DB::WriteBatch::WriteType::REF:
+                    printf("REF\t%lld\t%lld\n", record.page_id, record.ori_page_id);
+                    break;
+                }
             }
-            valid_page_entries[pid] = entry;
         }
         // Read correspond page and check checksum
         auto reader = const_cast<DB::PageFile &>(page_file).createReader();
@@ -87,17 +101,28 @@ int main(int argc, char ** argv)
         {
             fprintf(stderr, "%s\n", e.displayText().c_str());
         }
+
+        versions.apply(edit);
     }
 
     if (mode == MODE_DUMP_VALID_ENTRIES)
     {
-        printf("Valid page entries: %zu\n", valid_page_entries.size());
-        for (auto & [pid, entry] : valid_page_entries)
+        auto snapshot = versions.getSnapshot();
+        auto page_ids = snapshot->version()->validPageIds();
+        for (auto page_id : page_ids)
         {
+            const DB::PageEntry * entry = snapshot->version()->find(page_id);
+            printPageEntry(page_id, *entry);
+        }
+#if 0
+        //printf("Valid page entries: %zu\n", valid_page_entries->size());
+        for (auto iter = snapshot->version()->cbegin(); iter != snapshot->version()->cend(); ++iter)
+        {
+            const DB::PageId      pid   = iter.pageId();
+            const DB::PageEntry & entry = iter.pageEntry();
             printPageEntry(pid, entry);
         }
+#endif
     }
-
     return 0;
 }
-
