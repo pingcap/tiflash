@@ -1,8 +1,9 @@
+#include <Flash/Coprocessor/DAGDriver.h>
+
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/DAGBlockOutputStream.h>
 #include <DataStreams/copyData.h>
-#include <Flash/Coprocessor/DAGDriver.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DAGStringConverter.h>
 #include <Interpreters/executeQuery.h>

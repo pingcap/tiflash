@@ -1,13 +1,10 @@
 #include <Flash/Coprocessor/CoprocessorHandler.h>
 
 #include <DataStreams/BlockIO.h>
-#include <DataStreams/DAGBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Interpreters/DAGStringConverter.h>
 #include <Interpreters/InterpreterDAG.h>
 #include <Interpreters/SQLQuerySource.h>
-#include <Interpreters/executeQuery.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>

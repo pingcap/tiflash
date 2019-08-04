@@ -1,6 +1,7 @@
 #pragma once
 
-#include <Storages/RegionQueryInfo.h>
+#include <DataStreams/BlockIO.h>
+#include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
 
 namespace DB

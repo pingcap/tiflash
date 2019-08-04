@@ -1,6 +1,7 @@
+#include <Flash/FlashService.h>
+
 #include <Core/Types.h>
 #include <Flash/Coprocessor/CoprocessorHandler.h>
-#include <Flash/FlashService.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <grpcpp/security/server_credentials.h>
