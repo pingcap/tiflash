@@ -5,18 +5,20 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Coprocessor/CoprocessorHandler.h>
 #include <Core/QueryProcessingStage.h>
-#include <Interpreters/IQueryInfo.h>
+#include <Interpreters/IQuerySource.h>
 #include <Parsers/IAST.h>
+#include <Storages/Transaction/Types.h>
 
 
 namespace DB
 {
 
+class Context;
+
 /** DAGQueryInfo for query represented by DAG request.
   */
-class DAGQueryInfo : public IQueryInfo
+class DAGQuerySource : public IQuerySource
 {
 public:
     static const String TS_NAME;
@@ -25,11 +27,13 @@ public:
     static const String TOPN_NAME;
     static const String LIMIT_NAME;
 
-    DAGQueryInfo(const tipb::DAGRequest & dag_request, CoprocessorContext & coprocessorContext_);
-    bool isInternalQuery() { return false; };
-    virtual std::tuple<std::string, ASTPtr> parse(size_t max_query_size);
-    virtual String get_query_ignore_error(size_t max_query_size);
-    virtual std::unique_ptr<IInterpreter> getInterpreter(Context & context, QueryProcessingStage::Enum stage);
+    DAGQuerySource(Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
+        const tipb::DAGRequest & dag_request_);
+
+    virtual std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
+    virtual String str(size_t max_query_size) override;
+    virtual std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
+
     void assertValid(Int32 index, const String & name)
     {
         if (index < 0 || index > dag_request.executors_size())
@@ -37,10 +41,16 @@ public:
             throw Exception("Access invalid executor: " + name);
         }
     }
+
+    RegionID getRegionID() const { return region_id; }
+    UInt64 getRegionVersion() const { return region_version; }
+    UInt64 getRegionConfVersion() const { return region_conf_version; }
+
     bool has_selection() { return sel_index != -1; };
     bool has_aggregation() { return agg_index != -1; };
     bool has_topN() { return order_index != -1; };
     bool has_limit() { return order_index == -1 && limit_index != -1; };
+
     const tipb::TableScan & get_ts()
     {
         assertValid(ts_index, TS_NAME);
@@ -68,11 +78,15 @@ public:
     };
     const tipb::DAGRequest & get_dag_request() { return dag_request; };
 
-private:
+protected:
+    Context & context;
+
+    const RegionID region_id;
+    const UInt64 region_version;
+    const UInt64 region_conf_version;
+
     const tipb::DAGRequest & dag_request;
-    CoprocessorContext & coprocessorContext;
-    String query;
-    ASTPtr ast;
+
     Int32 ts_index = -1;
     Int32 sel_index = -1;
     Int32 agg_index = -1;

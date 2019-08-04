@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/CoprocessorBuilderUtils.h>
+#include <Interpreters/DAGUtils.h>
 #include <Interpreters/ExpressionActions.h>
 #include <tipb/executor.pb.h>
 

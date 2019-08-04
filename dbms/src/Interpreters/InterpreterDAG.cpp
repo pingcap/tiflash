@@ -5,9 +5,9 @@
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
-#include <Interpreters/CoprocessorBuilderUtils.h>
 #include <Interpreters/DAGExpressionAnalyzer.h>
-#include <Interpreters/InterpreterDAGRequest.h>
+#include <Interpreters/DAGUtils.h>
+#include <Interpreters/InterpreterDAG.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
@@ -25,12 +25,10 @@ namespace ErrorCodes
 extern const int TOO_MANY_COLUMNS;
 }
 
-InterpreterDAGRequest::InterpreterDAGRequest(CoprocessorContext & context_, DAGQueryInfo & dag_query_info_)
-    : context(context_), dag_query_info(dag_query_info_)
-{}
+InterpreterDAG::InterpreterDAG(Context & context_, DAGQuerySource & dag_query_src_) : context(context_), dag_query_src(dag_query_src_) {}
 
 // the flow is the same as executeFetchcolumns
-bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
+bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
     if (!ts.has_table_id())
     {
@@ -38,11 +36,11 @@ bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pip
         return false;
     }
     TableID id = ts.table_id();
-    auto & tmt_ctx = context.ch_context.getTMTContext();
+    auto & tmt_ctx = context.getTMTContext();
     auto storage = tmt_ctx.getStorages().get(id);
     if (storage == nullptr)
     {
-        tmt_ctx.getSchemaSyncer()->syncSchema(id, context.ch_context, false);
+        tmt_ctx.getSchemaSyncer()->syncSchema(id, context, false);
         storage = tmt_ctx.getStorages().get(id);
     }
     if (storage == nullptr)
@@ -75,11 +73,11 @@ bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pip
         return false;
     }
 
-    if (!dag_query_info.has_aggregation())
+    if (!dag_query_src.has_aggregation())
     {
         // if the dag request does not contain agg, then the final output is
         // based on the output of table scan
-        for (auto i : dag_query_info.get_dag_request().output_offsets())
+        for (auto i : dag_query_src.get_dag_request().output_offsets())
         {
             if (i < 0 || i >= required_columns.size())
             {
@@ -91,7 +89,7 @@ bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pip
         }
     }
     // todo handle alias column
-    const Settings & settings = context.ch_context.getSettingsRef();
+    const Settings & settings = context.getSettingsRef();
 
     if (settings.max_columns_to_read && required_columns.size() > settings.max_columns_to_read)
     {
@@ -112,15 +110,14 @@ bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pip
     //todo support index in
     SelectQueryInfo query_info;
     query_info.query = std::make_unique<ASTSelectQuery>();
-    ((ASTSelectQuery *)query_info.query.get())->is_fake_sel = true;
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
     RegionQueryInfo info;
-    info.region_id = context.kv_context.region_id();
-    info.conf_version = context.kv_context.region_epoch().conf_ver();
-    info.version = context.kv_context.region_epoch().version();
-    auto current_region = context.ch_context.getTMTContext().getRegionTable().getRegionById(id, info.region_id);
+    info.region_id = dag_query_src.getRegionID();
+    info.version = dag_query_src.getRegionVersion();
+    info.conf_version = dag_query_src.getRegionConfVersion();
+    auto current_region = context.getTMTContext().getRegionTable().getRegionById(id, info.region_id);
     if (!current_region)
     {
         return false;
@@ -128,7 +125,7 @@ bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pip
     info.range_in_table = current_region->getHandleRangeByTable(id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
-    pipeline.streams = storage->read(required_columns, query_info, context.ch_context, from_stage, max_block_size, max_streams);
+    pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
     /// Set the limits and quota for reading data, the speed and time of the query.
     {
         IProfilingBlockInputStream::LocalLimits limits;
@@ -147,7 +144,7 @@ bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pip
         limits.min_execution_speed = settings.min_execution_speed;
         limits.timeout_before_checking_execution_speed = settings.timeout_before_checking_execution_speed;
 
-        QuotaForIntervals & quota = context.ch_context.getQuota();
+        QuotaForIntervals & quota = context.getQuota();
 
         pipeline.transform([&](auto & stream) {
             if (IProfilingBlockInputStream * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()))
@@ -162,15 +159,15 @@ bool InterpreterDAGRequest::executeTS(const tipb::TableScan & ts, Pipeline & pip
     return true;
 }
 
-InterpreterDAGRequest::AnalysisResult InterpreterDAGRequest::analyzeExpressions()
+InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    res.need_aggregate = dag_query_info.has_aggregation();
-    DAGExpressionAnalyzer expressionAnalyzer(source_columns, context.ch_context);
-    if (dag_query_info.has_selection())
+    res.need_aggregate = dag_query_src.has_aggregation();
+    DAGExpressionAnalyzer expressionAnalyzer(source_columns, context);
+    if (dag_query_src.has_selection())
     {
-        if (expressionAnalyzer.appendWhere(chain, dag_query_info.get_sel(), res.filter_column_name))
+        if (expressionAnalyzer.appendWhere(chain, dag_query_src.get_sel(), res.filter_column_name))
         {
             res.has_where = true;
             res.before_where = chain.getLastActions();
@@ -182,9 +179,9 @@ InterpreterDAGRequest::AnalysisResult InterpreterDAGRequest::analyzeExpressions(
     {
         throw Exception("agg not supported");
     }
-    if (dag_query_info.has_topN())
+    if (dag_query_src.has_topN())
     {
-        res.has_order_by = expressionAnalyzer.appendOrderBy(chain, dag_query_info.get_topN(), res.order_column_names);
+        res.has_order_by = expressionAnalyzer.appendOrderBy(chain, dag_query_src.get_topN(), res.order_column_names);
     }
     // append final project results
     for (auto & name : final_project)
@@ -198,13 +195,13 @@ InterpreterDAGRequest::AnalysisResult InterpreterDAGRequest::analyzeExpressions(
     return res;
 }
 
-void InterpreterDAGRequest::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column)
+void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column)
 {
     pipeline.transform(
         [&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expressionActionsPtr, filter_column); });
 }
 
-void InterpreterDAGRequest::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
+void InterpreterDAG::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
 {
     if (expressionActionsPtr->getActions().size() > 0)
     {
@@ -212,11 +209,11 @@ void InterpreterDAGRequest::executeExpression(Pipeline & pipeline, const Express
     }
 }
 
-SortDescription InterpreterDAGRequest::getSortDescription(Strings & order_column_names)
+SortDescription InterpreterDAG::getSortDescription(Strings & order_column_names)
 {
     // construct SortDescription
     SortDescription order_descr;
-    const tipb::TopN & topN = dag_query_info.get_topN();
+    const tipb::TopN & topN = dag_query_src.get_topN();
     order_descr.reserve(topN.order_by_size());
     for (int i = 0; i < topN.order_by_size(); i++)
     {
@@ -234,7 +231,7 @@ SortDescription InterpreterDAGRequest::getSortDescription(Strings & order_column
     return order_descr;
 }
 
-void InterpreterDAGRequest::executeUnion(Pipeline & pipeline)
+void InterpreterDAG::executeUnion(Pipeline & pipeline)
 {
     if (pipeline.hasMoreThanOneStream())
     {
@@ -243,11 +240,11 @@ void InterpreterDAGRequest::executeUnion(Pipeline & pipeline)
     }
 }
 
-void InterpreterDAGRequest::executeOrder(Pipeline & pipeline, Strings & order_column_names)
+void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_names)
 {
     SortDescription order_descr = getSortDescription(order_column_names);
-    const Settings & settings = context.ch_context.getSettingsRef();
-    Int64 limit = dag_query_info.get_topN().limit();
+    const Settings & settings = context.getSettingsRef();
+    Int64 limit = dag_query_src.get_topN().limit();
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, limit);
@@ -266,13 +263,13 @@ void InterpreterDAGRequest::executeOrder(Pipeline & pipeline, Strings & order_co
 
     /// Merge the sorted blocks.
     pipeline.firstStream() = std::make_shared<MergeSortingBlockInputStream>(pipeline.firstStream(), order_descr, settings.max_block_size,
-        limit, settings.max_bytes_before_external_sort, context.ch_context.getTemporaryPath());
+        limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
 }
 
 //todo return the error message
-bool InterpreterDAGRequest::executeImpl(Pipeline & pipeline)
+bool InterpreterDAG::executeImpl(Pipeline & pipeline)
 {
-    if (!executeTS(dag_query_info.get_ts(), pipeline))
+    if (!executeTS(dag_query_src.get_ts(), pipeline))
     {
         return false;
     }
@@ -303,14 +300,14 @@ bool InterpreterDAGRequest::executeImpl(Pipeline & pipeline)
     executeFinalProject(pipeline);
 
     // execute limit
-    if (dag_query_info.has_limit() && !dag_query_info.has_topN())
+    if (dag_query_src.has_limit() && !dag_query_src.has_topN())
     {
         executeLimit(pipeline);
     }
     return true;
 }
 
-void InterpreterDAGRequest::executeFinalProject(Pipeline & pipeline)
+void InterpreterDAG::executeFinalProject(Pipeline & pipeline)
 {
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
@@ -318,25 +315,25 @@ void InterpreterDAGRequest::executeFinalProject(Pipeline & pipeline)
     {
         input_column.emplace_back(column.name, column.type);
     }
-    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.ch_context.getSettingsRef());
+    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column, context.getSettingsRef());
     project->add(ExpressionAction::project(final_project));
     // add final project
     pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, project); });
 }
 
-void InterpreterDAGRequest::executeLimit(Pipeline & pipeline)
+void InterpreterDAG::executeLimit(Pipeline & pipeline)
 {
     pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_info.get_limit().limit(), 0, false); });
+        [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.get_limit().limit(), 0, false); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline);
         pipeline.transform(
-            [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_info.get_limit().limit(), 0, false); });
+            [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.get_limit().limit(), 0, false); });
     }
 }
 
-BlockIO InterpreterDAGRequest::execute()
+BlockIO InterpreterDAG::execute()
 {
     Pipeline pipeline;
     executeImpl(pipeline);

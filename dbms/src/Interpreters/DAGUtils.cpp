@@ -3,7 +3,7 @@
 
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/CoprocessorBuilderUtils.h>
+#include <Interpreters/DAGUtils.h>
 #include <Storages/Transaction/Codec.h>
 
 namespace DB

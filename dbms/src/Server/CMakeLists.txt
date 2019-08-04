@@ -24,9 +24,7 @@ add_library (clickhouse-server-lib
     RootRequestHandler.cpp
     Server.cpp
     StatusFile.cpp
-    TCPHandler.cpp
-    FlashService.cpp
-    cop_test.cpp)
+    TCPHandler.cpp)
 
 target_link_libraries (clickhouse-server-lib clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
 target_include_directories (clickhouse-server-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
@@ -106,9 +104,6 @@ else ()
     target_link_libraries (theflash clickhouse_common_io)
     target_include_directories (theflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
     target_include_directories (theflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-
-    add_executable (copClient cop_test.cpp)
-    target_link_libraries (copClient clickhouse-server-lib)
 
     if (USE_EMBEDDED_COMPILER)
         target_link_libraries (theflash clickhouse-compiler-lib)

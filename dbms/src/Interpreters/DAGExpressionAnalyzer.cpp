@@ -2,8 +2,8 @@
 #include <DataTypes/FieldToDataType.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/CoprocessorBuilderUtils.h>
 #include <Interpreters/DAGExpressionAnalyzer.h>
+#include <Interpreters/DAGUtils.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/TypeMapping.h>

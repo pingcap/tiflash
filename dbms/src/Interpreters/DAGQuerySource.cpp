@@ -1,17 +1,17 @@
 
-#include <Interpreters/DAGQueryInfo.h>
-#include <Interpreters/InterpreterDAGRequest.h>
+#include <Interpreters/DAGQuerySource.h>
+#include <Interpreters/InterpreterDAG.h>
 #include <Parsers/ASTSelectQuery.h>
 
 
 namespace DB
 {
 
-const String DAGQueryInfo::TS_NAME("tablescan");
-const String DAGQueryInfo::SEL_NAME("selection");
-const String DAGQueryInfo::AGG_NAME("aggregation");
-const String DAGQueryInfo::TOPN_NAME("topN");
-const String DAGQueryInfo::LIMIT_NAME("limit");
+const String DAGQuerySource::TS_NAME("tablescan");
+const String DAGQuerySource::SEL_NAME("selection");
+const String DAGQuerySource::AGG_NAME("aggregation");
+const String DAGQuerySource::TOPN_NAME("topN");
+const String DAGQuerySource::LIMIT_NAME("limit");
 
 static void assignOrThrowException(Int32 & index, Int32 value, const String & name)
 {
@@ -22,8 +22,13 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
     index = value;
 }
 
-DAGQueryInfo::DAGQueryInfo(const tipb::DAGRequest & dag_request_, CoprocessorContext & coprocessorContext_)
-    : dag_request(dag_request_), coprocessorContext(coprocessorContext_)
+DAGQuerySource::DAGQuerySource(
+    Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_, const tipb::DAGRequest & dag_request_)
+    : context(context_),
+      region_id(region_id_),
+      region_version(region_version_),
+      region_conf_version(region_conf_version_),
+      dag_request(dag_request_)
 {
     for (int i = 0; i < dag_request.executors_size(); i++)
     {
@@ -50,18 +55,17 @@ DAGQueryInfo::DAGQueryInfo(const tipb::DAGRequest & dag_request_, CoprocessorCon
     }
 }
 
-std::tuple<std::string, ASTPtr> DAGQueryInfo::parse(size_t)
+std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
 {
-    query = String("cop query");
-    ast = std::make_shared<ASTSelectQuery>();
-    ((ASTSelectQuery *)ast.get())->is_fake_sel = true;
+    auto query = dag_request.DebugString();
+    auto ast = std::make_shared<ASTSelectQuery>();
     return std::make_tuple(query, ast);
 }
 
-String DAGQueryInfo::get_query_ignore_error(size_t) { return query; }
+String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }
 
-std::unique_ptr<IInterpreter> DAGQueryInfo::getInterpreter(Context &, QueryProcessingStage::Enum)
+std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
-    return std::make_unique<InterpreterDAGRequest>(coprocessorContext, *this);
+    return std::make_unique<InterpreterDAG>(context, *this);
 }
 } // namespace DB
