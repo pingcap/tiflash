@@ -5,6 +5,7 @@
 #include <DataStreams/DAGBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DAGQuerySource.h>
 #include <Interpreters/DAGStringConverter.h>
 #include <Interpreters/executeQuery.h>
 
@@ -28,38 +29,34 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
 void DAGDriver::execute()
 {
     context.setSetting("read_tso", UInt64(dag_request.start_ts()));
-    BlockIO streams = executeDAG();
-    if (!streams.in || streams.out)
-    {
-        // Only query is allowed, so streams.in must not be null and streams.out must be null
-        throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
-    }
-    BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(
-        dag_response, context.getSettings().dag_records_per_chunk, dag_request.encode_type(), streams.in->getHeader());
-    copyData(*streams.in, *outputStreamPtr);
-}
 
-BlockIO DAGDriver::executeDAG()
-{
+    DAGQuerySource dag(context, region_id, region_version, region_conf_version, dag_request);
+    BlockIO streams;
+
     String planner = context.getSettings().dag_planner;
     if (planner == "sql")
     {
         DAGStringConverter converter(context, dag_request);
         String query = converter.buildSqlString();
-        if (query.empty())
-        {
-            return BlockIO();
-        }
-        return executeQuery(query, context, false, QueryProcessingStage::Complete);
+        if (!query.empty())
+            streams = executeQuery(query, context, false, QueryProcessingStage::Complete);
     }
     else if (planner == "optree")
     {
-        return executeQuery(dag_request, region_id, region_version, region_conf_version, context, QueryProcessingStage::Complete);
+        streams = executeQuery(dag, context, QueryProcessingStage::Complete);
     }
     else
     {
         throw Exception("Unknown DAG planner type " + planner, ErrorCodes::LOGICAL_ERROR);
     }
+
+    if (!streams.in || streams.out)
+        // Only query is allowed, so streams.in must not be null and streams.out must be null
+        throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
+
+    BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(
+        dag_response, context.getSettings().dag_records_per_chunk, dag_request.encode_type(), streams.in->getHeader());
+    copyData(*streams.in, *outputStreamPtr);
 }
 
 } // namespace DB

@@ -26,10 +26,15 @@ namespace DB
 
 namespace ErrorCodes
 {
+extern const int UNKNOWN_TABLE;
 extern const int TOO_MANY_COLUMNS;
-}
+extern const int SCHEMA_VERSION_ERROR;
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
 
-InterpreterDAG::InterpreterDAG(Context & context_, DAGQuerySource & dag_query_src_) : context(context_), dag_query_src(dag_query_src_) {}
+InterpreterDAG::InterpreterDAG(Context & context_, DAGQuerySource & dag_)
+    : context(context_), dag(dag_), log(&Logger::get("InterpreterDAG"))
+{}
 
 // the flow is the same as executeFetchcolumns
 bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
@@ -39,36 +44,20 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         // do not have table id
         return false;
     }
-    TableID id = ts.table_id();
-    auto & tmt_ctx = context.getTMTContext();
-    auto storage = tmt_ctx.getStorages().get(id);
-    // TODO: Using new get storage in DDL branch.
-    if (storage == nullptr)
-    {
-        tmt_ctx.getSchemaSyncer()->syncSchema(id, context, false);
-        storage = tmt_ctx.getStorages().get(id);
-    }
-    if (storage == nullptr)
-    {
-        return false;
-    }
-    auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-    const auto * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-    if (!merge_tree)
-    {
-        return false;
-    }
+    TableID table_id = ts.table_id();
+    // TODO: Get schema version from DAG request.
+    getAndLockStorageWithSchemaVersion(table_id, DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
 
     Names required_columns;
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
-        if (cid < 1 || cid > (Int64)merge_tree->getTableInfo().columns.size())
+        if (cid < 1 || cid > (Int64)storage->getTableInfo().columns.size())
         {
             // cid out of bound
             return false;
         }
-        String name = merge_tree->getTableInfo().columns[cid - 1].name;
+        String name = storage->getTableInfo().columns[cid - 1].name;
         required_columns.push_back(name);
     }
     if (required_columns.empty())
@@ -77,11 +66,11 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         return false;
     }
 
-    if (!dag_query_src.hasAggregation())
+    if (!dag.hasAggregation())
     {
         // if the dag request does not contain agg, then the final output is
         // based on the output of table scan
-        for (auto i : dag_query_src.getDAGRequest().output_offsets())
+        for (auto i : dag.getDAGRequest().output_offsets())
         {
             if (i < 0 || i >= required_columns.size())
             {
@@ -118,15 +107,15 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
     RegionQueryInfo info;
-    info.region_id = dag_query_src.getRegionID();
-    info.version = dag_query_src.getRegionVersion();
-    info.conf_version = dag_query_src.getRegionConfVersion();
-    auto current_region = context.getTMTContext().getRegionTable().getRegionById(id, info.region_id);
+    info.region_id = dag.getRegionID();
+    info.version = dag.getRegionVersion();
+    info.conf_version = dag.getRegionConfVersion();
+    auto current_region = context.getTMTContext().getRegionTable().getRegionById(table_id, info.region_id);
     if (!current_region)
     {
         return false;
     }
-    info.range_in_table = current_region->getHandleRangeByTable(id);
+    info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
     pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
@@ -167,11 +156,11 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    res.need_aggregate = dag_query_src.hasAggregation();
+    res.need_aggregate = dag.hasAggregation();
     DAGExpressionAnalyzer expressionAnalyzer(source_columns, context);
-    if (dag_query_src.hasSelection())
+    if (dag.hasSelection())
     {
-        if (expressionAnalyzer.appendWhere(chain, dag_query_src.getSelection(), res.filter_column_name))
+        if (expressionAnalyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name))
         {
             res.has_where = true;
             res.before_where = chain.getLastActions();
@@ -182,23 +171,23 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     if (res.need_aggregate)
     {
         res.need_aggregate
-            = expressionAnalyzer.appendAggregation(chain, dag_query_src.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+            = expressionAnalyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
         res.before_aggregation = chain.getLastActions();
 
         chain.finalize();
         chain.clear();
 
         // add cast if type is not match
-        expressionAnalyzer.appendAggSelect(chain, dag_query_src.getAggregation());
+        expressionAnalyzer.appendAggSelect(chain, dag.getAggregation());
         //todo use output_offset to pruner the final project columns
         for (auto element : expressionAnalyzer.getCurrentInputColumns())
         {
             final_project.emplace_back(element.name, "");
         }
     }
-    if (dag_query_src.hasTopN())
+    if (dag.hasTopN())
     {
-        res.has_order_by = expressionAnalyzer.appendOrderBy(chain, dag_query_src.getTopN(), res.order_column_names);
+        res.has_order_by = expressionAnalyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
     // append final project results
     for (auto & name : final_project)
@@ -285,11 +274,90 @@ void InterpreterDAG::executeExpression(Pipeline & pipeline, const ExpressionActi
     }
 }
 
+void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version)
+{
+    /// Lambda for get storage, then align schema version under the read lock.
+    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<TMTStoragePtr, TableStructureReadLockPtr, Int64, bool> {
+        /// Get storage in case it's dropped then re-created.
+        // If schema synced, call getTable without try, leading to exception on table not existing.
+        auto storage_ = context.getTMTContext().getStorages().get(table_id);
+        if (!storage_)
+        {
+            if (schema_synced)
+                throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+            else
+                return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
+        }
+
+        if (storage->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
+            throw Exception("Specifying schema_version for non-TMT storage: " + storage_->getName() + ", table: " + std::to_string(table_id)
+                    + " is not allowed",
+                ErrorCodes::LOGICAL_ERROR);
+
+        /// Lock storage.
+        auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
+
+        /// Check schema version.
+        auto storage_schema_version = storage->getTableInfo().schema_version;
+        if (storage_schema_version > schema_version)
+            throw Exception("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
+                    + " newer than query schema version " + std::to_string(schema_version),
+                ErrorCodes::SCHEMA_VERSION_ERROR);
+
+        if ((schema_synced && storage_schema_version <= schema_version) || (!schema_synced && storage_schema_version == schema_version))
+            return std::make_tuple(storage_, lock, storage_schema_version, true);
+
+        return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
+    };
+
+    /// Try get storage and lock once.
+    TMTStoragePtr storage_;
+    TableStructureReadLockPtr lock;
+    Int64 storage_schema_version;
+    bool ok;
+    {
+        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(false);
+        if (ok)
+        {
+            LOG_DEBUG(log,
+                __PRETTY_FUNCTION__ << " Table " << table_id << " schema version: " << storage_schema_version
+                                    << ", query schema version: " << schema_version << ", OK, no syncing required.");
+            storage = storage_;
+            table_lock = lock;
+            return;
+        }
+    }
+
+    /// If first try failed, sync schema and try again.
+    {
+        LOG_DEBUG(log,
+            __PRETTY_FUNCTION__ << " Table " << table_id << " schema version: " << storage_schema_version
+                                << ", query schema version: " << schema_version << ", not OK, syncing schemas.");
+        auto start_time = Clock::now();
+        context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+        auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << table_id << " schema sync cost " << schema_sync_cost << "ms.");
+
+        std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(true);
+        if (ok)
+        {
+            LOG_DEBUG(log,
+                __PRETTY_FUNCTION__ << " Table " << table_id << " schema version: " << storage_schema_version
+                                    << ", query schema version: " << schema_version << ", OK after syncing.");
+            storage = storage_;
+            table_lock = lock;
+            return;
+        }
+
+        throw Exception("Shouldn't reach here", ErrorCodes::UNKNOWN_EXCEPTION);
+    }
+}
+
 SortDescription InterpreterDAG::getSortDescription(Strings & order_column_names)
 {
     // construct SortDescription
     SortDescription order_descr;
-    const tipb::TopN & topN = dag_query_src.getTopN();
+    const tipb::TopN & topN = dag.getTopN();
     order_descr.reserve(topN.order_by_size());
     for (int i = 0; i < topN.order_by_size(); i++)
     {
@@ -320,7 +388,7 @@ void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_na
 {
     SortDescription order_descr = getSortDescription(order_column_names);
     const Settings & settings = context.getSettingsRef();
-    Int64 limit = dag_query_src.getTopN().limit();
+    Int64 limit = dag.getTopN().limit();
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, limit);
@@ -345,7 +413,7 @@ void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_na
 //todo return the error message
 bool InterpreterDAG::executeImpl(Pipeline & pipeline)
 {
-    if (!executeTS(dag_query_src.getTS(), pipeline))
+    if (!executeTS(dag.getTS(), pipeline))
     {
         return false;
     }
@@ -373,7 +441,7 @@ bool InterpreterDAG::executeImpl(Pipeline & pipeline)
     executeFinalProject(pipeline);
 
     // execute limit
-    if (dag_query_src.hasLimit() && !dag_query_src.hasTopN())
+    if (dag.hasLimit() && !dag.hasTopN())
     {
         executeLimit(pipeline);
     }
@@ -396,13 +464,12 @@ void InterpreterDAG::executeFinalProject(Pipeline & pipeline)
 
 void InterpreterDAG::executeLimit(Pipeline & pipeline)
 {
-    pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.getLimit().limit(), 0, false); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag.getLimit().limit(), 0, false); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline);
         pipeline.transform(
-            [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.getLimit().limit(), 0, false); });
+            [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag.getLimit().limit(), 0, false); });
     }
 }
 

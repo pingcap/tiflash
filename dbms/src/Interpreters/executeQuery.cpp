@@ -18,7 +18,6 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 
-#include <Interpreters/DAGQuerySource.h>
 #include <Interpreters/IQuerySource.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/ProcessList.h>
@@ -393,12 +392,10 @@ BlockIO executeQuery(
 }
 
 
-BlockIO executeQuery(const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version,
-    Context & context, QueryProcessingStage::Enum stage)
+BlockIO executeQuery(DAGQuerySource & dag, Context & context, QueryProcessingStage::Enum stage)
 {
     BlockIO streams;
-    DAGQuerySource query_src(context, region_id, region_version, region_conf_version, dag_request);
-    std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, false, stage);
+    std::tie(std::ignore, streams) = executeQueryImpl(dag, context, false, stage);
     return streams;
 }
 

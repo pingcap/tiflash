@@ -13,6 +13,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
 {
@@ -24,21 +25,13 @@ class Context;
 class InterpreterDAG : public IInterpreter
 {
 public:
-    InterpreterDAG(Context & context_, DAGQuerySource & dag_query_src_);
+    InterpreterDAG(Context & context_, DAGQuerySource & dag_);
 
     ~InterpreterDAG() = default;
 
     BlockIO execute();
 
 private:
-    Context & context;
-
-    DAGQuerySource & dag_query_src;
-
-    NamesWithAliases final_project;
-    NamesAndTypesList source_columns;
-    size_t max_streams = 1;
-
     struct Pipeline
     {
         BlockInputStreams streams;
@@ -85,7 +78,25 @@ private:
     void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
         AggregateDescriptions & aggregate_descriptions);
     void executeFinalProject(Pipeline & pipeline);
+    void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
+
+private:
+    Context & context;
+
+    DAGQuerySource & dag;
+
+    NamesWithAliases final_project;
+    NamesAndTypesList source_columns;
+
+    /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
+    size_t max_streams = 1;
+
+    /// Table from where to read data, if not subquery.
+    TMTStoragePtr storage;
+    TableStructureReadLockPtr table_lock;
+
+    Poco::Logger * log;
 };
 } // namespace DB

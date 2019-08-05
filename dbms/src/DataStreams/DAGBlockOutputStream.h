@@ -6,7 +6,6 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
-
 #pragma GCC diagnostic pop
 
 namespace DB

@@ -2,8 +2,8 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <Interpreters/DAGQuerySource.h>
 #include <Storages/Transaction/Types.h>
-#include <tipb/select.pb.h>
 
 
 namespace DB
@@ -42,12 +42,6 @@ BlockIO executeQuery(
     );
 
 
-BlockIO executeQuery(
-    const tipb::DAGRequest & dag_request,
-    RegionID region_id,
-    UInt64 region_version,
-    UInt64 region_conf_version,
-    Context & context,
-    QueryProcessingStage::Enum stage);
+BlockIO executeQuery(DAGQuerySource & dag, Context & context, QueryProcessingStage::Enum stage);
 
 }

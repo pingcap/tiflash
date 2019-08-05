@@ -19,18 +19,13 @@ class TypeMapping : public ext::singleton<TypeMapping>
 public:
     using Creator = std::function<DataTypePtr(const ColumnInfo & column_info)>;
     using TypeMap = std::unordered_map<TiDB::TP, Creator>;
-    using CodecFlagMap = std::unordered_map<String, TiDB::CodecFlag>;
 
     DataTypePtr getDataType(const ColumnInfo & column_info);
-
-    TiDB::CodecFlag getCodecFlag(const DB::DataTypePtr & data_type);
 
 private:
     TypeMapping();
 
     TypeMap type_map;
-
-    CodecFlagMap codec_flag_map;
 
     friend class ext::singleton<TypeMapping>;
 };
@@ -152,22 +147,13 @@ TypeMapping::TypeMapping()
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-
 #define M(tt, v, cf, ct, w) \
     type_map[TiDB::Type##tt] = std::bind(getDataTypeByColumnInfoBase<DataType##ct, w>, std::placeholders::_1, (DataType##ct *)nullptr);
-    codec_flag_map[#ctu] = TiDB::CodecFlag##cfu;
-    codec_flag_map[#ct] = TiDB::CodecFlag##cf;
     COLUMN_TYPES(M)
 #undef M
 }
 
 DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info) { return type_map[column_info.tp](column_info); }
-
-TiDB::CodecFlag TypeMapping::getCodecFlag(const DB::DataTypePtr & dataTypePtr)
-{
-    // TODO: String's CodecFlag will be CodecFlagCompactBytes, which is wrong for Json type
-    return codec_flag_map[dataTypePtr->getFamilyName()];
-}
 
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 {
@@ -191,7 +177,5 @@ DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
     // TODO: Enum's elems?
     return getDataTypeByColumnInfo(ci);
 }
-
-TiDB::CodecFlag getCodecFlagByDataType(const DataTypePtr & data_type) { return TypeMapping::instance().getCodecFlag(data_type); }
 
 } // namespace DB
