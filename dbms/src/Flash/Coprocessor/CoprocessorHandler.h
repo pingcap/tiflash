@@ -34,16 +34,16 @@ class CoprocessorHandler
 public:
     CoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * response_);
 
-    ~CoprocessorHandler();
+    ~CoprocessorHandler() = default;
 
-    bool execute();
+    void execute();
 
 protected:
     enum
     {
-        REQ_TYPE_DAG = 103,
-        REQ_TYPE_ANALYZE = 104,
-        REQ_TYPE_CHECKSUM = 105,
+        COP_REQ_TYPE_DAG = 103,
+        COP_REQ_TYPE_ANALYZE = 104,
+        COP_REQ_TYPE_CHECKSUM = 105,
     };
 
     CoprocessorContext & cop_context;

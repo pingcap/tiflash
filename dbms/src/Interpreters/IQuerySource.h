@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST.h>
@@ -8,8 +7,7 @@
 namespace DB
 {
 
-/** IQueryInfo interface for different source of queries.
-  */
+/// A tiny abstraction of different sources a query comes from, i.e. SQL string or DAG request.
 class IQuerySource
 {
 public:

@@ -28,7 +28,7 @@
 
 #define DEFAULT_MAX_READ_TSO 0xFFFFFFFFFFFFFFFF
 
-#define DEFAULT_RECORDS_PER_CHUNK 64L
+#define DEFAULT_DAG_RECORDS_PER_CHUNK 64L
 
 /** Which blocks by default read the data (by number of rows).
   * Smaller values give better cache locality, less consumption of RAM, but more overhead to process the query.

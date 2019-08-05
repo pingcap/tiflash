@@ -5,19 +5,16 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Core/QueryProcessingStage.h>
 #include <Interpreters/IQuerySource.h>
-#include <Parsers/IAST.h>
 #include <Storages/Transaction/Types.h>
-
 
 namespace DB
 {
 
 class Context;
 
-/** DAGQueryInfo for query represented by DAG request.
-  */
+/// Query source of a DAG request via gRPC.
+/// This is also an IR of a DAG.
 class DAGQuerySource : public IQuerySource
 {
 public:
@@ -30,9 +27,9 @@ public:
     DAGQuerySource(Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
         const tipb::DAGRequest & dag_request_);
 
-    virtual std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
-    virtual String str(size_t max_query_size) override;
-    virtual std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
+    std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
+    String str(size_t max_query_size) override;
+    std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
 
     void assertValid(Int32 index, const String & name)
     {

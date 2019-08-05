@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <common/logger_useful.h>
 #include <grpc++/grpc++.h>
@@ -24,6 +25,9 @@ public:
     ~FlashService() final;
 
     grpc::Status Coprocessor(grpc::ServerContext * context, const coprocessor::Request * request, coprocessor::Response * response);
+
+private:
+    std::tuple<Context, ::grpc::Status> createDBContext(grpc::ServerContext * grpc_contex);
 
 private:
     IServer & server;

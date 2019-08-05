@@ -1,7 +1,6 @@
 #include <Flash/Coprocessor/CoprocessorHandler.h>
 
 #include <DataStreams/BlockIO.h>
-#include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Interpreters/InterpreterDAG.h>
 #include <Interpreters/SQLQuerySource.h>
@@ -14,40 +13,39 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int NOT_IMPLEMENTED;
+}
+
 CoprocessorHandler::CoprocessorHandler(
     CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * cop_response_)
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-CoprocessorHandler::~CoprocessorHandler() {}
-
-bool CoprocessorHandler::execute()
+void CoprocessorHandler::execute()
 {
     switch (cop_request->tp())
     {
-        case REQ_TYPE_DAG:
+        case COP_REQ_TYPE_DAG:
         {
             tipb::DAGRequest dag_request;
             dag_request.ParseFromString(cop_request->data());
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
             tipb::SelectResponse dag_response;
             DAGDriver driver(cop_context.db_context, dag_request, cop_context.kv_context.region_id(),
                 cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), dag_response);
-            if (driver.execute())
-            {
-                cop_response->set_data(dag_response.SerializeAsString());
-                return true;
-            }
-            return false;
+            driver.execute();
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
+            cop_response->set_data(dag_response.SerializeAsString());
+            break;
         }
-        case REQ_TYPE_ANALYZE:
-        case REQ_TYPE_CHECKSUM:
+        case COP_REQ_TYPE_ANALYZE:
+        case COP_REQ_TYPE_CHECKSUM:
         default:
-            LOG_ERROR(log, "Flash service Coprocessor other than dag request not implement yet");
-            // return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "Only DAG request is supported");
-            return false;
+            throw Exception(
+                "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
-
-    return true;
 }
 
 } // namespace DB
