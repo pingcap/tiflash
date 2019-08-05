@@ -435,9 +435,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                             "Store special region " << regions_executor_data[i].info.region_id << " first"
                                                     << ", handle range [" << regions_executor_data[i].info.range_in_table.first.toString()
                                                     << ", " << regions_executor_data[i].info.range_in_table.second.toString() << ")");
-                        auto tmp = std::move(regions_executor_data[i]);
-                        regions_executor_data.erase(regions_executor_data.begin() + i);
-                        regions_executor_data.emplace_back(std::move(tmp));
+
+                        // move to end directly, the order of ranges under uint64 will be resorted.
+                        std::swap(regions_executor_data[i], regions_executor_data.back());
 
                         // important step, we need to get all data from memory
                         region_cnt = regions_executor_data.size() - 1;
