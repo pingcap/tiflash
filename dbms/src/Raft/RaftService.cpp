@@ -28,28 +28,29 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
 
     grpc_server = builder.BuildAndStart();
 
-    persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); });
-    table_flush_handle = background_pool.addTask([this] {
+    persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); }, false);
+
+    table_flush_handle = background_pool.addTask(
+        [this] {
+            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+            return region_table.tryFlushRegions();
+        },
+        false);
+
+    region_flush_handle = background_pool.addTask([this] {
+        RegionID region_id;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (regions_to_flush.empty())
+                return false;
+            region_id = regions_to_flush.front();
+            regions_to_flush.pop();
+        }
         RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-        return region_table.tryFlushRegions();
+        region_table.tryFlushRegion(region_id);
+        return true;
     });
 
-    for (size_t i = 0; i < region_flush_handles.size(); ++i)
-    {
-        region_flush_handles[i] = background_pool.addTask([this] {
-            RegionID region_id;
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                if (regions_to_flush.empty())
-                    return false;
-                region_id = regions_to_flush.front();
-                regions_to_flush.pop();
-            }
-            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-            region_table.tryFlushRegion(region_id);
-            return true;
-        });
-    }
 
     LOG_INFO(log, "Raft service listening on [" << address << "]");
 }
@@ -60,8 +61,7 @@ void RaftService::addRegionToFlush(const Region & region)
         std::lock_guard<std::mutex> lock(mutex);
         regions_to_flush.push(region.id());
     }
-    size_t index = round_index++;
-    region_flush_handles[index % region_flush_handles.size()]->wake();
+    region_flush_handle->wake();
 }
 
 RaftService::~RaftService()
@@ -77,13 +77,10 @@ RaftService::~RaftService()
         table_flush_handle = nullptr;
     }
 
-    for (size_t i = 0; i < region_flush_handles.size(); ++i)
+    if (region_flush_handle)
     {
-        if (region_flush_handles[i])
-        {
-            background_pool.removeTask(region_flush_handles[i]);
-            region_flush_handles[i] = nullptr;
-        }
+        background_pool.removeTask(region_flush_handle);
+        region_flush_handle = nullptr;
     }
 
     // wait 5 seconds for pending rpcs to gracefully stop

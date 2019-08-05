@@ -61,9 +61,9 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_) : size(size_)
 }
 
 
-BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Task & task)
+BackgroundProcessingPool::TaskHandle BackgroundProcessingPool::addTask(const Task & task, const bool multi)
 {
-    TaskHandle res = std::make_shared<TaskInfo>(*this, task);
+    TaskHandle res = std::make_shared<TaskInfo>(*this, task, multi);
 
     Poco::Timestamp current_time;
 
@@ -174,11 +174,30 @@ void BackgroundProcessingPool::threadFunction()
 
             {
                 CurrentMetrics::Increment metric_increment{CurrentMetrics::BackgroundPoolTask};
-                done_work = task->function();
+
+                if (!task->multi)
+                {
+                    bool expected = false;
+                    if (task->occupied == expected && task->occupied.compare_exchange_strong(expected, true))
+                    {
+                        done_work = task->function();
+                        task->occupied = false;
+                    }
+                    else
+                        done_work = false;
+                }
+                else
+                    done_work = task->function();
             }
         }
         catch (...)
         {
+            if (task && !task->multi)
+            {
+                std::unique_lock<std::shared_mutex> wlock(task->rwlock);
+                task->occupied = false;
+            }
+
             tryLogCurrentException(__PRETTY_FUNCTION__);
         }
 
