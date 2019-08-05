@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <memory>
+#include <mutex>
 
 #include <Common/Allocator.h>
 #include <Common/ArenaWithFreeLists.h>
@@ -62,6 +63,8 @@ struct ColumnDefine
     ColId       id;
     String      name;
     DataTypePtr type;
+
+    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr): id(id_), name(std::move(name_)), type(std::move(type_)) {}
 };
 using ColumnDefines   = std::vector<ColumnDefine>;
 using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
