@@ -2,6 +2,8 @@
 
 #include "dm_basic_include.h"
 
+#include <Poco/File.h>
+
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>

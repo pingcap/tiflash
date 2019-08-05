@@ -1,6 +1,8 @@
 #include "dm_basic_include.h"
 
+#include <Poco/File.h>
 #include <DataStreams/OneBlockInputStream.h>
+
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 

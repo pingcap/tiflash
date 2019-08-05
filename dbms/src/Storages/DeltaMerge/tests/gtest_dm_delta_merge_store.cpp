@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "dm_basic_include.h"
 
+#include <Poco/File.h>
+
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 
 namespace DB
