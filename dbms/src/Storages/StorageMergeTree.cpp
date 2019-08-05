@@ -89,7 +89,7 @@ void StorageMergeTree::startup()
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.getStorages().put(shared_from_this());
+        tmt.getStorages().put(std::static_pointer_cast<StorageMergeTree>(shared_from_this()));
     }
 
     merge_task_handle = background_pool.addTask([this] { return mergeTask(); });
@@ -113,8 +113,9 @@ void StorageMergeTree::shutdown()
 
     if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
     {
-        TMTContext &tmt_context = context.getTMTContext();
+        TMTContext & tmt_context = context.getTMTContext();
         tmt_context.getStorages().remove(data.table_info->id);
+        tmt_context.getRegionTable().removeTable(data.table_info->id);
     }
 }
 
@@ -318,6 +319,25 @@ void StorageMergeTree::alter(
     const String & table_name,
     const Context & context)
 {
+    alterInternal(params, database_name, table_name, std::nullopt, context);
+}
+
+void StorageMergeTree::alterForTMT(
+    const AlterCommands & params,
+    const TiDB::TableInfo & table_info,
+    const String & database_name,
+    const Context & context)
+{
+    alterInternal(params, database_name, table_info.name, std::optional<std::reference_wrapper<const TableInfo>>(table_info), context);
+}
+
+void StorageMergeTree::alterInternal(
+    const AlterCommands & params,
+    const String & database_name,
+    const String & table_name,
+    const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info,
+    const Context & context)
+{
     /// NOTE: Here, as in ReplicatedMergeTree, you can do ALTER which does not block the writing of data for a long time.
     auto merge_blocker = merger.merges_blocker.cancel();
 
@@ -378,6 +398,8 @@ void StorageMergeTree::alter(
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
     setColumns(std::move(new_columns));
+    if (table_info)
+        setTableInfo(table_info->get());
 
     if (primary_key_is_modified)
     {
@@ -395,7 +417,6 @@ void StorageMergeTree::alter(
     if (primary_key_is_modified)
         data.loadDataParts(false);
 }
-
 
 /// While exists, marks parts as 'currently_merging' and reserves free space on filesystem.
 /// It's possible to mark parts before.

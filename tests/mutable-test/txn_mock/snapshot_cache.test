@@ -1,5 +1,7 @@
-=> drop table if exists default.test
+=> DBGInvoke __enable_schema_sync_service('true')
+
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
 => DBGInvoke mock_schema_syncer('true')
 ┌─mock_schema_syncer("true")─┐
 │ mock schema syncer enabled │
@@ -14,7 +16,7 @@
 => DBGInvoke __raft_insert_row_full(default, test, 4, 3, 10, 0, 17)
 => DBGInvoke __raft_insert_row_full(default, test, 4, 4, 4, 1, 0)
 => DBGInvoke __raft_insert_row_full(default, test, 4, 100, 1, 0, 16)
-=> select (*) from default.test
+=> select (*) from default.test " --schema_version "100
 ┌─col_1─┬─_tidb_rowid─┐
 │    12 │           1 │
 └───────┴─────────────┘
@@ -54,5 +56,5 @@
 │    19 │           2 │
 │    20 │           4 │
 └───────┴─────────────┘
-=> drop table if exists default.test
 => DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test

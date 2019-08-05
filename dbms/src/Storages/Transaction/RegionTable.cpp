@@ -23,9 +23,6 @@ RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
     if (it == tables.end())
     {
         // Load persisted info.
-        if (getOrCreateStorage(table_id) == nullptr)
-            throw Exception("Get or create storage fail", ErrorCodes::LOGICAL_ERROR);
-
         std::tie(it, std::ignore) = tables.emplace(table_id, Table(table_id));
 
         Poco::File dir(parent_path + "tables/" + DB::toString(table_id));
@@ -41,22 +38,6 @@ RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
         }
     }
     return it->second;
-}
-
-StoragePtr RegionTable::getOrCreateStorage(TableID table_id)
-{
-    auto & tmt_ctx = context.getTMTContext();
-    auto storage = tmt_ctx.getStorages().get(table_id);
-    if (storage == nullptr)
-    {
-        tmt_ctx.getSchemaSyncer()->syncSchema(table_id, context, false);
-        storage = tmt_ctx.getStorages().get(table_id);
-    }
-    if (storage == nullptr)
-    {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " not found in TMT context.");
-    }
-    return storage;
 }
 
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
@@ -160,67 +141,27 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
 
 void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cache_size, const bool try_persist)
 {
-    StoragePtr storage = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        storage = getOrCreateStorage(table_id);
-    }
+    const auto & tmt = context.getTMTContext();
 
-    TMTContext & tmt = context.getTMTContext();
-
-    // store region ptr first.
+    /// Store region ptr first, for ABA avoidance when removing region data.
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
-    if (!region)
     {
-        LOG_WARNING(log, "[flushRegion] region " << region_id << " is not found");
-        return;
-    }
-
-    LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] original " << region->dataSize() << " bytes");
-
-    UInt64 mem_read_cost = -1, write_part_cost = -1;
-
-    RegionDataReadInfoList data_list;
-    if (storage == nullptr)
-    {
-        // If storage still not existing after syncing schema, meaning this table is dropped and the data is to be GC-ed.
-        // Ignore such data.
-        LOG_WARNING(log,
-            __PRETTY_FUNCTION__ << ": Not flushing table_id: " << table_id << ", region_id: " << region_id << " as storage doesn't exist.");
-    }
-    else
-    {
-        auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-
-        auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
-
-        const auto & table_info = merge_tree->getTableInfo();
-        const auto & columns = merge_tree->getColumns();
-        // TODO: confirm names is right
-        Names names = columns.getNamesOfPhysical();
-        if (names.size() < 3)
-            throw Exception("[flushRegion] size of merge tree columns < 3, should not happen", ErrorCodes::LOGICAL_ERROR);
-
-        auto start_time = Clock::now();
-
-        auto block = getBlockInputStreamByRegion(table_id, region, table_info, columns, names, data_list);
-        if (!block)
+        if (!region)
         {
-            // no data in region for table. update cache size.
-            cache_size = region->dataSize();
+            LOG_WARNING(log, "[flushRegion] region " << region_id << " is not found");
             return;
         }
 
-        mem_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        start_time = Clock::now();
-
-        TxnMergeTreeBlockOutputStream output(*merge_tree);
-        output.write(std::move(*block));
-
-        write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] original " << region->dataSize() << " bytes");
     }
 
-    // remove data in region
+    /// Write region data into corresponding storage.
+    RegionDataReadInfoList data_list_to_remove;
+    {
+        writeBlockByRegion(context, table_id, region, data_list_to_remove, log);
+    }
+
+    /// Remove data in region.
     {
         // avoid ABA problem.
         if (region != tmt.getKVStore()->getRegion(region_id))
@@ -231,7 +172,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
         {
             auto remover = region->createCommittedRemover(table_id);
-            for (const auto & [handle, write_type, commit_ts, value] : data_list)
+            for (const auto & [handle, write_type, commit_ts, value] : data_list_to_remove)
             {
                 std::ignore = write_type;
                 std::ignore = value;
@@ -250,9 +191,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
                 region->incDirtyFlag();
         }
 
-        LOG_DEBUG(log,
-            "[flushRegion] table " << table_id << ", [region " << region_id << "] after flush " << cache_size << " bytes, cost [mem read "
-                                   << mem_read_cost << ", write part " << write_part_cost << "] ms");
+        LOG_DEBUG(log, "[flushRegion] table " << table_id << ", [region " << region_id << "] after flush " << cache_size << " bytes");
     }
 }
 
@@ -301,6 +240,25 @@ void RegionTable::restore()
 
         LOG_INFO(log, "Restore " << tables.size() << " tables " << ss.str());
     }
+}
+
+void RegionTable::removeTable(TableID table_id)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    auto it = tables.find(table_id);
+    if (it == tables.end())
+        return;
+    auto & table = it->second;
+
+    // Remove from region list.
+    for (const auto & region_info : table.regions)
+    {
+        regions[region_info.first].erase(table.table_id);
+    }
+
+    // Remove from table map.
+    tables.erase(it);
 }
 
 void RegionTable::updateRegion(const Region & region, const TableIDSet & relative_table_ids)

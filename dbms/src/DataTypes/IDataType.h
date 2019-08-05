@@ -137,6 +137,48 @@ public:
     virtual void serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const;
     virtual void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const;
 
+    /** Widen version for `serializeBinaryBulkWithMultipleStreams`.
+      */
+    virtual void serializeWidenBinaryBulkWithMultipleStreams(
+        const IColumn & column,
+        OutputStreamGetter getter,
+        size_t offset,
+        size_t limit,
+        bool /*position_independent_encoding*/,
+        SubstreamPath path) const
+    {
+        if (WriteBuffer * stream = getter(path))
+            serializeWidenBinaryBulk(column, *stream, offset, limit);
+    }
+
+    /** Widen version for `deserializeBinaryBulkWithMultipleStreams`.
+      */
+    virtual void deserializeWidenBinaryBulkWithMultipleStreams(
+        IColumn & column,
+        InputStreamGetter getter,
+        size_t limit,
+        double avg_value_size_hint,
+        bool /*position_independent_encoding*/,
+        SubstreamPath path) const
+    {
+        if (ReadBuffer * stream = getter(path))
+            deserializeWidenBinaryBulk(column, *stream, limit, avg_value_size_hint);
+    }
+
+    /** Widen version for `serializeBinaryBulk`.
+      */
+    virtual void serializeWidenBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
+    {
+        serializeBinaryBulk(column, ostr, offset, limit);
+    }
+
+    /** Widen version for `deserializeBinaryBulk`.
+      */
+    virtual void deserializeWidenBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const
+    {
+        deserializeBinaryBulk(column, istr, limit, avg_value_size_hint);
+    }
+
     /** Serialization/deserialization of individual values.
       *
       * These are helper methods for implementation of various formats to input/output for user (like CSV, JSON, etc.).
@@ -354,6 +396,14 @@ public:
     /** If this data type cannot be wrapped in Nullable data type.
       */
     virtual bool canBeInsideNullable() const { return false; };
+
+    /** Some specific data types are required to be widened for some specific storage for whatever reason,
+      * i.e. to avoid data rewriting upon type change,
+      * TMT will intentionally store narrow type (int8/16/32) to its widest possible type (int64) of the same family,
+      * meanwhile behaves as its original narrow type.
+      * Given that most data type objects on the fly are const (DataTypePtr), this function returns a new copy of the widened type.
+      */
+    virtual DataTypePtr widen() const { return nullptr; }
 
 
     /// Updates avg_value_size_hint for newly read column. Uses to optimize deserialization. Zero expected for first column.

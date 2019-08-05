@@ -1,21 +1,26 @@
+#include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server.h>
 #include <grpcpp/server_builder.h>
-#include <grpcpp/security/server_credentials.h>
 #include <kvproto/pdpb.grpc.pb.h>
 
 #include "MockTiKV.h"
 
-namespace pingcap{
-namespace test {
+namespace pingcap
+{
+namespace test
+{
 
-class PDService final : public ::pdpb::PD::Service {
+class PDService final : public ::pdpb::PD::Service
+{
 public:
-    PDService(std::vector<std::string> addrs_){
+    PDService(std::vector<std::string> addrs_)
+    {
         addrs = addrsToUrls(addrs_);
         leader = addrs[0];
     }
 
-    ::grpc::Status GetMembers(::grpc::ServerContext* context, const ::pdpb::GetMembersRequest* request, ::pdpb::GetMembersResponse* response) override 
+    ::grpc::Status GetMembers(
+        ::grpc::ServerContext * context, const ::pdpb::GetMembersRequest * request, ::pdpb::GetMembersResponse * response) override
     {
         pdpb::Member * leader_pb = new pdpb::Member();
         setMember(leader, leader_pb);
@@ -23,36 +28,40 @@ public:
         pdpb::Member * etcd_leader_pb = new pdpb::Member();
         setMember(leader, etcd_leader_pb);
         response->set_allocated_etcd_leader(etcd_leader_pb);
-        for (size_t i = 0; i < addrs.size(); i++) {
-            pdpb::Member * member = response -> add_members();
+        for (size_t i = 0; i < addrs.size(); i++)
+        {
+            pdpb::Member * member = response->add_members();
             setMember(addrs[i], member);
         }
         pdpb::ResponseHeader * header = new pdpb::ResponseHeader();
         setHeader(header);
-        response -> set_allocated_header(header);
+        response->set_allocated_header(header);
         return ::grpc::Status::OK;
     }
 
-    ::grpc::Status GetGCSafePoint(::grpc::ServerContext* context, const ::pdpb::GetGCSafePointRequest* request, ::pdpb::GetGCSafePointResponse* response) override
+    ::grpc::Status GetGCSafePoint(
+        ::grpc::ServerContext * context, const ::pdpb::GetGCSafePointRequest * request, ::pdpb::GetGCSafePointResponse * response) override
     {
         pdpb::ResponseHeader * header = new pdpb::ResponseHeader();
         setHeader(header);
-        response -> set_allocated_header(header);
-        response -> set_safe_point(gc_point);
+        response->set_allocated_header(header);
+        response->set_safe_point(gc_point);
         return ::grpc::Status::OK;
     }
 
-    ::grpc::Status GetStore(::grpc::ServerContext* context, const ::pdpb::GetStoreRequest* request, ::pdpb::GetStoreResponse* response) override
+    ::grpc::Status GetStore(
+        ::grpc::ServerContext * context, const ::pdpb::GetStoreRequest * request, ::pdpb::GetStoreResponse * response) override
     {
         pdpb::ResponseHeader * header = new pdpb::ResponseHeader();
         setHeader(header);
         auto it = stores.find(request->store_id());
-        response -> set_allocated_header(header);
-        if (it != stores.end()) {
+        response->set_allocated_header(header);
+        if (it != stores.end())
+        {
             auto store = new ::metapb::Store();
-            store -> set_address(it -> second -> getStoreUrl());
-            store -> set_id(it -> second -> store_id);
-            response -> set_allocated_store(store);
+            store->set_address(it->second->getStoreUrl());
+            store->set_id(it->second->store_id);
+            response->set_allocated_store(store);
         }
         if (statuses.empty())
             return ::grpc::Status::OK;
@@ -61,23 +70,22 @@ public:
         return ret;
     }
 
-    void registerStoreAddr(uint64_t store_id, std::string addr)
-    {
-        stores[store_id] -> registerAddr(addr);
-    }
+    void registerStoreAddr(uint64_t store_id, std::string addr) { stores[store_id]->registerAddr(addr); }
 
-    ::grpc::Status GetRegionByID(::grpc::ServerContext* context, const ::pdpb::GetRegionByIDRequest* request, ::pdpb::GetRegionResponse* response) override
+    ::grpc::Status GetRegionByID(
+        ::grpc::ServerContext * context, const ::pdpb::GetRegionByIDRequest * request, ::pdpb::GetRegionResponse * response) override
     {
         pdpb::ResponseHeader * header = new pdpb::ResponseHeader();
         setHeader(header);
         auto it = regions.find(request->region_id());
-        response -> set_allocated_header(header);
-        if (it != regions.end()) {
-            auto region = new ::metapb::Region (it -> second->meta);
-            response -> set_allocated_region(region);
-            auto leader = new ::metapb::Peer (it -> second->peer);
-            response -> set_allocated_leader(leader);
-            auto slave = response -> add_slaves();
+        response->set_allocated_header(header);
+        if (it != regions.end())
+        {
+            auto region = new ::metapb::Region(it->second->meta);
+            response->set_allocated_region(region);
+            auto leader = new ::metapb::Peer(it->second->peer);
+            response->set_allocated_leader(leader);
+            auto slave = response->add_slaves();
             *slave = it->second->learner;
         }
         if (statuses.empty())
@@ -87,52 +95,59 @@ public:
         return ret;
     }
 
-    void setGCPoint(uint64_t gc_point_) {
-        gc_point = gc_point_;
-    }
+    void setGCPoint(uint64_t gc_point_) { gc_point = gc_point_; }
 
-    void addStore() {
-        std::string addr = ("127.0.0.1:" + std::to_string(6000+cur_store_id));
-        Store* store = new Store(addr, cur_store_id);
+    void addStore()
+    {
+        std::string addr = ("127.0.0.1:" + std::to_string(6000 + cur_store_id));
+        Store * store = new Store(addr, cur_store_id);
         stores[cur_store_id] = store;
-        store -> aynsc_run();
-        cur_store_id ++;
+        store->aynsc_run();
+        cur_store_id++;
     }
 
-    void addRegion(::metapb::Region region, uint64_t leader_id, uint64_t learner_id) {
-        ::metapb::Peer *learner, * leader;
+    void addRegion(::metapb::Region region, uint64_t leader_id, uint64_t learner_id)
+    {
+        ::metapb::Peer *learner, *leader;
         int i = 0;
-        for (auto it = stores.begin(); it != stores.end(); it++, i ++) {
-            Store * store = it -> second;
-            ::metapb::Peer* peer = region.add_peers();
-            peer -> set_id(i);
-            peer -> set_store_id(store->store_id);
-            if (store -> store_id == learner_id) {
+        for (auto it = stores.begin(); it != stores.end(); it++, i++)
+        {
+            Store * store = it->second;
+            ::metapb::Peer * peer = region.add_peers();
+            peer->set_id(i);
+            peer->set_store_id(store->store_id);
+            if (store->store_id == learner_id)
+            {
                 learner = peer;
             }
-            if (store -> store_id == leader_id) {
+            if (store->store_id == leader_id)
+            {
                 leader = peer;
             }
         }
         kv::RegionPtr region_ptr = std::make_shared<kv::Region>(region, *leader, *learner);
-        for (auto it: stores) {
-            it.second -> addRegion(region_ptr);
+        for (auto it : stores)
+        {
+            it.second->addRegion(region_ptr);
         }
         regions[region_ptr->meta.id()] = (region_ptr);
     }
-    std::map<uint64_t, Store*> stores;
+    std::map<uint64_t, Store *> stores;
 
-    void registerGRPCStatus(::grpc::Status status_) {
-        statuses.push(status_);
-    }
+    void registerGRPCStatus(::grpc::Status status_) { statuses.push(status_); }
 
 private:
-    std::vector<std::string> addrsToUrls(std::vector<std::string> addrs) {
+    std::vector<std::string> addrsToUrls(std::vector<std::string> addrs)
+    {
         std::vector<std::string> urls;
-        for (const std::string & addr: addrs) {
-            if (addr.find("://") == std::string::npos) {
+        for (const std::string & addr : addrs)
+        {
+            if (addr.find("://") == std::string::npos)
+            {
                 urls.push_back("http://" + addr);
-            } else {
+            }
+            else
+            {
                 urls.push_back(addr);
             }
         }
@@ -146,30 +161,32 @@ private:
     std::map<uint64_t, kv::RegionPtr> regions;
     uint64_t gc_point;
 
-    void setMember(const std::string & addr, pdpb::Member* member) {
+    void setMember(const std::string & addr, pdpb::Member * member)
+    {
         member->set_name(addr);
         member->add_peer_urls(addr);
         member->add_client_urls(addr);
         member->set_leader_priority(1);
     }
 
-    void setHeader(pdpb::ResponseHeader * header) {
-        header->set_cluster_id(0);
-    }
+    void setHeader(pdpb::ResponseHeader * header) { header->set_cluster_id(0); }
 
     int cur_store_id = 0;
 };
 
-struct PDServerHandler {
+struct PDServerHandler
+{
 
     std::vector<std::string> addrs;
     PDService * service;
 
     PDServerHandler(std::vector<std::string> addrs_) : addrs(addrs_) {}
 
-    void startServer() {
+    void startServer()
+    {
         grpc::ServerBuilder builder;
-        for (auto addr : addrs) {
+        for (auto addr : addrs)
+        {
             builder.AddListeningPort(addr, grpc::InsecureServerCredentials());
         }
         builder.RegisterService(service);
@@ -184,8 +201,7 @@ struct PDServerHandler {
         pd_server_thread.detach();
         return service;
     }
-
 };
 
-}
-}
+} // namespace test
+} // namespace pingcap

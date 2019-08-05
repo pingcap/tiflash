@@ -378,10 +378,9 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                 const RegionQueryInfo & region_query_info = regions_query_info[region_index];
 
-                auto [block, status]
-                    = RegionTable::getBlockInputStreamByRegion(data.table_info->id, kvstore_region[region_query_info.region_id],
-                        region_query_info.version, region_query_info.conf_version, *data.table_info, data.getColumns(),
-                        tmt_column_names_to_read, true, mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
+                auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
+                    kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
+                    mvcc_query_info.resolve_locks, mvcc_query_info.read_tso);
 
                 if (status != RegionTable::OK)
                 {
@@ -1072,21 +1071,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         }
                     }
 
-                    {
-                        BlocksList blocks;
-                        if (region_block_data[special_region_index])
-                            blocks.emplace_back(std::move(region_block_data[special_region_index]));
-
-                        if (!blocks.empty())
-                        {
-                            BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
-
-                            region_input_stream = func_make_version_filter_input(region_input_stream);
-
-                            merging.emplace_back(region_input_stream);
-                        }
-                    }
-
                     if (log->debug())
                     {
                         std::stringstream ss;
@@ -1104,6 +1088,21 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                                              << ss.str() << ", " << region_sum_marks << " marks to read from "
                                                              << region_sum_ranges << " ranges, read "
                                                              << region_block_data[special_region_index].rows() << " rows from memory");
+                    }
+
+                    {
+                        BlocksList blocks;
+                        if (region_block_data[special_region_index])
+                            blocks.emplace_back(std::move(region_block_data[special_region_index]));
+
+                        if (!blocks.empty())
+                        {
+                            BlockInputStreamPtr region_input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
+
+                            region_input_stream = func_make_version_filter_input(region_input_stream);
+
+                            merging.emplace_back(region_input_stream);
+                        }
                     }
 
                     if (!merging.empty())

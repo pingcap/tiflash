@@ -1,3 +1,5 @@
+>> DBGInvoke __enable_schema_sync_service('false')
+
 >> drop table if exists test
 
 >> create table test (i Int64, d1 decimal(1, 0), d2 decimal(2, 0)) engine = MutableMergeTree((i), 8192)

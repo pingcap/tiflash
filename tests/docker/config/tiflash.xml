@@ -24,14 +24,6 @@
         <!--pd_addr>192.168.65.2:2379</pd_addr-->
     </raft>
 
-    <tidb>
-        <!--Linux-->
-        <service_ip>tidb0</service_ip>
-        <!--Mac (seemingly)-->
-        <!--service_ip>192.168.65.2</service_ip-->
-        <status_port>10080</status_port>
-    </tidb>
-
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
     <interserver_http_port>9009</interserver_http_port>

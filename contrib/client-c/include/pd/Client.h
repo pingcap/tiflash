@@ -1,24 +1,28 @@
 #pragma once
 
+#include <common/Log.h>
+#include <kvproto/pdpb.grpc.pb.h>
 #include <atomic>
-#include <thread>
+#include <condition_variable>
 #include <mutex>
 #include <shared_mutex>
-#include <condition_variable>
-#include <kvproto/pdpb.grpc.pb.h>
-#include <common/Log.h>
+#include <thread>
 #include "IClient.h"
 
-namespace pingcap{
-namespace pd {
+namespace pingcap
+{
+namespace pd
+{
 
-struct SecurityOption {
+struct SecurityOption
+{
     std::string CAPath;
     std::string CertPath;
     std::string KeyPath;
 };
 
-class Client : public IClient {
+class Client : public IClient
+{
     const int max_init_cluster_retries;
 
     const std::chrono::seconds pd_timeout;
@@ -28,7 +32,6 @@ class Client : public IClient {
     const std::chrono::seconds update_leader_interval;
 
 public:
-
     Client(const std::vector<std::string> & addrs);
 
     ~Client() override;
@@ -36,9 +39,7 @@ public:
     //uint64_t getClusterID() override;
 
     // only implement a weak get ts.
-    uint64_t getTS() override {
-        throw "not implemented";
-    }
+    uint64_t getTS() override;
 
     std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> getRegion(std::string key) override;
 
@@ -59,17 +60,17 @@ private:
 
     void updateLeader();
 
-    void updateURLs(const ::google::protobuf::RepeatedPtrField<::pdpb::Member>& members);
+    void updateURLs(const ::google::protobuf::RepeatedPtrField<::pdpb::Member> & members);
 
     void leaderLoop();
 
-    void switchLeader(const ::google::protobuf::RepeatedPtrField<std::string>&);
+    void switchLeader(const ::google::protobuf::RepeatedPtrField<std::string> &);
 
     std::unique_ptr<pdpb::PD::Stub> leaderStub();
 
     pdpb::GetMembersResponse getMembers(std::string);
 
-    pdpb::RequestHeader* requestHeader();
+    pdpb::RequestHeader * requestHeader();
 
     std::shared_ptr<grpc::Channel> getOrCreateGRPCConn(const std::string &);
 
@@ -83,7 +84,7 @@ private:
 
     std::mutex gc_safepoint_mutex;
 
-    std::unordered_map<std::string, std::shared_ptr<grpc::Channel> > channel_map;
+    std::unordered_map<std::string, std::shared_ptr<grpc::Channel>> channel_map;
 
     std::vector<std::string> urls;
 
@@ -100,9 +101,8 @@ private:
     std::atomic<bool> check_leader;
 
     Logger * log;
-
 };
 
 
-}
-}
+} // namespace pd
+} // namespace pingcap
