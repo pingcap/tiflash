@@ -123,19 +123,14 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
     RegionVersion region_version,
     RegionVersion conf_version,
     bool resolve_locks,
-    Timestamp start_ts,
-    Logger * log)
+    Timestamp start_ts)
 {
     if (!region)
         return {BlockOption{}, NOT_FOUND};
 
-    UInt64 wait_index_cost = -1, region_read_cost = -1, region_decode_cost = -1;
-
     /// Blocking learner read. Note that learner read must be performed ahead of data read, otherwise the desired index will be blocked by the lock of data read.
     {
-        auto start_time = Clock::now();
         region->waitIndex(region->learnerRead());
-        wait_index_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
     }
 
     RegionDataReadInfoList data_list_read;
@@ -172,12 +167,10 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
                 return {BlockOption{}, OK};
             // Tiny optimization for queries that need only handle, tso, delmark.
             bool need_value = column_names_to_read.size() != 3;
-            auto start_time = Clock::now();
             do
             {
                 data_list_read.emplace_back(scanner->next(need_value));
             } while (scanner->hasNext());
-            region_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         }
     }
 
@@ -185,18 +178,12 @@ std::tuple<BlockOption, RegionTable::RegionReadStatus> RegionTable::readBlockByR
     Block block;
     {
         bool ok = false;
-        auto start_time = Clock::now();
         std::tie(block, ok) = readRegionBlock(table_info, columns, column_names_to_read, data_list_read, start_ts, true);
-        region_decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         if (!ok)
             // TODO: Enrich exception message.
             throw Exception("Read region " + std::to_string(region->id()) + " of table " + std::to_string(table_info.id) + " failed",
                 ErrorCodes::LOGICAL_ERROR);
     }
-
-    LOG_TRACE(log,
-        __PRETTY_FUNCTION__ << ": table " << table_info.id << ", region " << region->id() << ", cost [wait index " << wait_index_cost
-                            << ", region read " << region_read_cost << ", region decode " << region_decode_cost << "] ms");
 
     return {std::move(block), OK};
 }

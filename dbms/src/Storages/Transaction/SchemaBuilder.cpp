@@ -336,11 +336,14 @@ void SchemaBuilder::applyDropSchema(DatabaseID schema_id)
     LOG_INFO(log, "Try to drop database: " + database_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
+    drop_query->if_exists = true;
     ASTPtr ast_drop_query = drop_query;
     drop_query->if_exists = true;
     // It will drop all tables in this database.
     InterpreterDropQuery drop_interpreter(ast_drop_query, context);
     drop_interpreter.execute();
+
+    databases.erase(schema_id);
 }
 
 String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
@@ -446,6 +449,7 @@ void SchemaBuilder::applyDropTableImpl(const String & database_name, const Strin
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
     drop_query->table = table_name;
+    drop_query->if_exists = true;
     ASTPtr ast_drop_query = drop_query;
     InterpreterDropQuery drop_interpreter(ast_drop_query, context);
     drop_interpreter.execute();

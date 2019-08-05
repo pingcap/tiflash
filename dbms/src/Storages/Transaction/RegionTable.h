@@ -200,8 +200,7 @@ public:
         RegionVersion region_version,
         RegionVersion conf_version,
         bool resolve_locks,
-        Timestamp start_ts,
-        Logger * log);
+        Timestamp start_ts);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
 };
