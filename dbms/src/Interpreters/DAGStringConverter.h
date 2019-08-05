@@ -6,7 +6,6 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Coprocessor/CoprocessorHandler.h>
 #include <DataStreams/BlockIO.h>
 
 namespace DB
