@@ -42,6 +42,7 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     TableID id = ts.table_id();
     auto & tmt_ctx = context.getTMTContext();
     auto storage = tmt_ctx.getStorages().get(id);
+    // TODO: Using new get storage in DDL branch.
     if (storage == nullptr)
     {
         tmt_ctx.getSchemaSyncer()->syncSchema(id, context, false);
