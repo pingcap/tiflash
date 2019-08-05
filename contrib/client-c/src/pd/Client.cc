@@ -222,8 +222,20 @@ uint64_t Client::getTS()
     context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
 
     auto stream = leaderStub()->Tso(&context);
-    stream->Write(request);
-    stream->Read(&response);
+    if (!stream->Write(request))
+    {
+        std::string err_msg = ("write tso failed\n ");
+        log->error(err_msg);
+        check_leader.store(true);
+        throw Exception(err_msg, GRPCErrorCode);
+    }
+    if (!stream->Read(&response))
+    {
+        std::string err_msg = ("write tso failed\n ");
+        log->error(err_msg);
+        check_leader.store(true);
+        throw Exception(err_msg, GRPCErrorCode);
+    }
     auto ts = response.timestamp();
     return (ts.physical() << 18) + ts.logical();
 }
