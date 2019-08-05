@@ -32,6 +32,9 @@ class DeltaTree;
 template <size_t M, size_t F, size_t S>
 class DTEntryIterator;
 
+template <size_t M, size_t F, size_t S, typename TAllocator = Allocator<false>>
+class DTEntriesCopy;
+
 struct RefTuple;
 
 struct EmptyValueSpace
@@ -44,12 +47,15 @@ struct EmptyValueSpace
 using EntryIterator    = DTEntryIterator<DT_M, DT_F, DT_S>;
 using DefaultDeltaTree = DeltaTree<EmptyValueSpace, DT_M, DT_F, DT_S, ArenaWithFreeLists>;
 using DeltaTreePtr     = std::shared_ptr<DefaultDeltaTree>;
+using DeltaIndex       = DTEntriesCopy<DT_M, DT_F, DT_S>;
+using DeltaIndexPtr    = std::shared_ptr<DeltaIndex>;
 
 using Handle = Int64;
 using RowId  = UInt64;
 using ColId  = Int64;
 
-using ColIds = std::vector<ColId>;
+using ColIds     = std::vector<ColId>;
+using HandlePair = std::pair<Handle, Handle>;
 
 struct ColumnDefine
 {
@@ -81,15 +87,14 @@ static DataTypePtr TAG_COLUMN_TYPE          = DataTypeFactory::instance().get("U
 static ColumnDefine VERSION_COLUMN_DEFINE{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
 static ColumnDefine TAG_COLUMN_DEFINE{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
 
-
 static constexpr UInt64 MIN_UINT64 = std::numeric_limits<UInt64>::min();
 static constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
 
 static constexpr Int64 MIN_INT64 = std::numeric_limits<Int64>::min();
 static constexpr Int64 MAX_INT64 = std::numeric_limits<Int64>::max();
 
-static constexpr Handle N_INF_HANDLE = MIN_INT64; // Use in range, indicating negative infinity.
-static constexpr Handle P_INF_HANDLE = MAX_INT64; // Use in range, indicating positive infinity.
+static constexpr Handle N_INF_HANDLE = MIN_INT64; // Used in range, indicating negative infinity.
+static constexpr Handle P_INF_HANDLE = MAX_INT64; // Used in range, indicating positive infinity.
 
 static_assert(static_cast<Int64>(static_cast<UInt64>(MIN_INT64)) == MIN_INT64, "Unsupported compiler!");
 static_assert(static_cast<Int64>(static_cast<UInt64>(MAX_INT64)) == MAX_INT64, "Unsupported compiler!");

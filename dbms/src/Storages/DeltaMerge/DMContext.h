@@ -14,7 +14,7 @@ using NotCompress = std::unordered_set<ColId>;
 class StoragePool;
 
 /**
- * This context object carry table infos. And the infos are only meaningful to current context.
+ * This context object carries table infos. And those infos are only meaningful to current context.
  */
 struct DMContext
 {
