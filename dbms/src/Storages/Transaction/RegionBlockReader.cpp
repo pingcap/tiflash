@@ -109,7 +109,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     std::unordered_set<ColumnID> col_id_included;
 
-    const size_t target_row_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
+    const size_t target_col_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
 
     for (const auto & [handle, write_type, commit_ts, value] : data_list)
     {
@@ -208,7 +208,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 }
             }
 
-            if (row.size() != target_row_size)
+            if (row.size() != target_col_size)
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
 
             /// Transform `row` to columnar format.
