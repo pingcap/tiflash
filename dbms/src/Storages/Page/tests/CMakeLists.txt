@@ -32,4 +32,4 @@ add_executable(test_page_storage_write_disk_full test_page_storage_write_disk_fu
 target_link_libraries(test_page_storage_write_disk_full dbms)
 target_compile_options(test_page_storage_write_disk_full PRIVATE -Wno-format)
 
-add_executable(mem_usage_test mem_usage_test.cpp)
+add_executable(mem_usage_test EXCLUDE_FROM_ALL mem_usage_test.cpp)
