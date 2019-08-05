@@ -41,7 +41,74 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
         case TiDB::CodecFlagVarUInt:
             return Field(UInt64(0));
         default:
-            throw Exception("Not implented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implemented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
+{
+    // resort the data_list
+    // if the order in int64 is like -3 -1 0 1 2 3, the real order in uint64 is 0 1 2 3 -3 -1
+    if (data_list.size() > 2)
+    {
+        bool need_check = false;
+        {
+            const auto h1 = std::get<0>(data_list.front());
+            const auto h2 = std::get<0>(data_list.back());
+            if ((h1 ^ h2) & RecordKVFormat::SIGN_MARK)
+                need_check = true;
+        }
+
+        if (need_check)
+        {
+            auto it = data_list.begin();
+            for (; it != data_list.end();)
+            {
+                const auto handle = std::get<0>(*it);
+
+                if (handle & RecordKVFormat::SIGN_MARK)
+                    ++it;
+                else
+                    break;
+            }
+
+            std::reverse(it, data_list.end());
+            std::reverse(data_list.begin(), it);
+            std::reverse(data_list.begin(), data_list.end());
+        }
+    }
+}
+
+template <TMTPKType pk_type>
+void setPKVersionDel(ColumnUInt8 & delmark_col,
+    ColumnUInt64 & version_col,
+    MutableColumnPtr & pk_column,
+    const RegionDataReadInfoList & data_list,
+    const Timestamp tso)
+{
+    ColumnUInt8::Container & delmark_data = delmark_col.getData();
+    ColumnUInt64::Container & version_data = version_col.getData();
+
+    delmark_data.reserve(data_list.size());
+    version_data.reserve(data_list.size());
+
+    for (const auto & [handle, write_type, commit_ts, value] : data_list)
+    {
+        std::ignore = value;
+
+        // Ignore data after the start_ts.
+        if (commit_ts > tso)
+            continue;
+
+        delmark_data.emplace_back(write_type == Region::DelFlag);
+        version_data.emplace_back(commit_ts);
+
+        if constexpr (pk_type == TMTPKType::INT64)
+            typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(static_cast<Int64>(handle));
+        else if constexpr (pk_type == TMTPKType::UINT64)
+            typeid_cast<ColumnVector<UInt64> &>(*pk_column).insert(static_cast<UInt64>(handle));
+        else
+            pk_column->insert(Field(static_cast<Int64>(handle)));
     }
 }
 
@@ -76,56 +143,34 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         column_map[handle_col_id].first->reserve(data_list.size());
     }
 
-    const bool pk_is_uint64 = getTMTPKType(*column_map[handle_col_id].second.type) == TMTPKType::UINT64;
+    const TMTPKType pk_type = getTMTPKType(*column_map[handle_col_id].second.type);
 
-    if (pk_is_uint64)
+    if (pk_type == TMTPKType::UINT64)
+        ReorderRegionDataReadList(data_list);
+
     {
-        size_t ori_size = data_list.size();
-        std::ignore = ori_size;
+        auto func = setPKVersionDel<TMTPKType::UNSPECIFIED>;
 
-        // resort the data_list;
-        auto it = data_list.begin();
-        for (; it != data_list.end();)
+        switch (pk_type)
         {
-            const auto handle = std::get<0>(*it);
-
-            if (handle & RecordKVFormat::SIGN_MARK)
-                ++it;
-            else
+            case TMTPKType::INT64:
+                func = setPKVersionDel<TMTPKType::INT64>;
+                break;
+            case TMTPKType::UINT64:
+                func = setPKVersionDel<TMTPKType::UINT64>;
+                break;
+            default:
                 break;
         }
-        data_list.splice(data_list.end(), data_list, data_list.begin(), it);
 
-        assert(ori_size == data_list.size());
+        func(*delmark_col, *version_col, column_map[handle_col_id].first, data_list, start_ts);
     }
 
     const auto & date_lut = DateLUT::instance();
 
-    ColumnUInt8::Container & delmark_data = delmark_col->getData();
-    ColumnUInt64::Container & version_data = version_col->getData();
-
-    delmark_data.reserve(data_list.size());
-    version_data.reserve(data_list.size());
-
     std::unordered_set<ColumnID> col_id_included;
 
     const size_t target_col_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
-
-    for (const auto & [handle, write_type, commit_ts, value] : data_list)
-    {
-        std::ignore = value;
-
-        // Ignore data after the start_ts.
-        if (commit_ts > start_ts)
-            continue;
-
-        delmark_data.emplace_back(write_type == Region::DelFlag);
-        version_data.emplace_back(commit_ts);
-        if (pk_is_uint64)
-            column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
-        else
-            column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
-    }
 
     Block block;
 

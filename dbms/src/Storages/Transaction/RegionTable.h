@@ -188,19 +188,18 @@ public:
     static void writeBlockByRegion(
         Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log);
 
-    using BlockOption = std::optional<Block>;
-
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
     /// we directly ask readRegionBlock to perform a read with the given start_ts and force_decode being true.
-    static std::tuple<BlockOption, RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
+    static std::tuple<Block, RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & column_names_to_read,
         const RegionPtr & region,
         RegionVersion region_version,
         RegionVersion conf_version,
         bool resolve_locks,
-        Timestamp start_ts);
+        Timestamp start_ts,
+        DB::HandleRange<HandleID> & handle_range);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
 };

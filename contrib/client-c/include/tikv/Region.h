@@ -7,7 +7,6 @@
 #include <kvproto/errorpb.pb.h>
 #include <kvproto/metapb.pb.h>
 #include <pd/Client.h>
-#include <pd/MockPDClient.h>
 #include <tikv/Backoff.h>
 
 namespace pingcap
