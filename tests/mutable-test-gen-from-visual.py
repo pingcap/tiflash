@@ -81,6 +81,7 @@ def gen(output, title, rows, gn, order, source, ln, selraw_first, no_selraw):
         file.write('#\n')
         file.write('\n')
 
+        file.write('>> DBGInvoke __enable_schema_sync_service(\'false\')\n')
         file.write('>> drop table if exists test\n')
         file.write('>> create table test (\n')
         file.write('\tdt Date,\n')
