@@ -18,9 +18,6 @@ using JsonArrayPtr = Poco::JSON::Array::Ptr;
 using JsonObjectPtr = Poco::JSON::Object::Ptr;
 using JsonVar = Poco::Dynamic::Var;
 
-
-JsonArrayPtr decodeJSONArray(size_t & cursor, const String & raw_value);
-
 String DecodeJson(size_t &cursor, const String &raw_value);
 
 }
