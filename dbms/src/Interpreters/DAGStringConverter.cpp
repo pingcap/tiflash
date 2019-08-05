@@ -27,11 +27,6 @@ bool DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
     auto storage = tmt_ctx.getStorages().get(id);
     if (storage == nullptr)
     {
-        tmt_ctx.getSchemaSyncer()->syncSchema(id, context, false);
-        storage = tmt_ctx.getStorages().get(id);
-    }
-    if (storage == nullptr)
-    {
         return false;
     }
     const auto * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
@@ -116,7 +111,8 @@ bool isProject(const tipb::Executor &)
     // currently, project is not pushed so always return false
     return false;
 }
-DAGStringConverter::DAGStringConverter(Context & context_, const tipb::DAGRequest & dag_request_) : context(context_), dag_request(dag_request_)
+DAGStringConverter::DAGStringConverter(Context & context_, const tipb::DAGRequest & dag_request_)
+    : context(context_), dag_request(dag_request_)
 {
     afterAgg = false;
 }

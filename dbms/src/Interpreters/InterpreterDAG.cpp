@@ -1,3 +1,5 @@
+#include <Interpreters/InterpreterDAG.h>
+
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -11,14 +13,12 @@
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/DAGExpressionAnalyzer.h>
 #include <Interpreters/DAGUtils.h>
-#include <Interpreters/InterpreterDAG.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -32,7 +32,7 @@ extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
-InterpreterDAG::InterpreterDAG(Context & context_, DAGQuerySource & dag_)
+InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_), dag(dag_), log(&Logger::get("InterpreterDAG"))
 {}
 
@@ -119,6 +119,9 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
     pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+
+    pipeline.transform([&](auto & stream) { stream->addTableLock(table_lock); });
+
     /// Set the limits and quota for reading data, the speed and time of the query.
     {
         IProfilingBlockInputStream::LocalLimits limits;
@@ -157,10 +160,10 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     AnalysisResult res;
     ExpressionActionsChain chain;
     res.need_aggregate = dag.hasAggregation();
-    DAGExpressionAnalyzer expressionAnalyzer(source_columns, context);
+    DAGExpressionAnalyzer analyzer(source_columns, context);
     if (dag.hasSelection())
     {
-        if (expressionAnalyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name))
+        if (analyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name))
         {
             res.has_where = true;
             res.before_where = chain.getLastActions();
@@ -170,24 +173,23 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     }
     if (res.need_aggregate)
     {
-        res.need_aggregate
-            = expressionAnalyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        res.need_aggregate = analyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
         res.before_aggregation = chain.getLastActions();
 
         chain.finalize();
         chain.clear();
 
         // add cast if type is not match
-        expressionAnalyzer.appendAggSelect(chain, dag.getAggregation());
+        analyzer.appendAggSelect(chain, dag.getAggregation());
         //todo use output_offset to pruner the final project columns
-        for (auto element : expressionAnalyzer.getCurrentInputColumns())
+        for (auto element : analyzer.getCurrentInputColumns())
         {
             final_project.emplace_back(element.name, "");
         }
     }
     if (dag.hasTopN())
     {
-        res.has_order_by = expressionAnalyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
+        res.has_order_by = analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
     // append final project results
     for (auto & name : final_project)
@@ -201,16 +203,15 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     return res;
 }
 
-void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column)
+void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expr, String & filter_column)
 {
-    pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expressionActionsPtr, filter_column); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expr, filter_column); });
 }
 
 void InterpreterDAG::executeAggregation(
-    Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & key_names, AggregateDescriptions & aggregates)
+    Pipeline & pipeline, const ExpressionActionsPtr & expr, Names & key_names, AggregateDescriptions & aggregates)
 {
-    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr); });
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expr); });
 
     Block header = pipeline.firstStream()->getHeader();
     ColumnNumbers keys;

@@ -54,8 +54,8 @@ void DAGDriver::execute()
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(
-        dag_response, context.getSettings().dag_records_per_chunk, dag_request.encode_type(), streams.in->getHeader());
+    BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk,
+        dag_request.encode_type(), dag.getOutputFieldTpAndFlags(), streams.in->getHeader());
     copyData(*streams.in, *outputStreamPtr);
 }
 

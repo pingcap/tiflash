@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
+#include <Interpreters/DAGQuerySource.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
@@ -17,7 +18,8 @@ namespace DB
 class DAGBlockOutputStream : public IBlockOutputStream
 {
 public:
-    DAGBlockOutputStream(tipb::SelectResponse & response, Int64 records_per_chunk, tipb::EncodeType encodeType, Block header);
+    DAGBlockOutputStream(tipb::SelectResponse & response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
+        FieldTpAndFlags && field_tp_and_flags_, Block header_);
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;
@@ -29,6 +31,8 @@ private:
 
     Int64 records_per_chunk;
     tipb::EncodeType encodeType;
+    FieldTpAndFlags field_tp_and_flags;
+
     Block header;
 
     tipb::Chunk * current_chunk;
