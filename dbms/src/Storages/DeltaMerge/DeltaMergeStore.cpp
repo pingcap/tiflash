@@ -176,12 +176,12 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                   "Insert block. Segment range " + action.segment->getRange().toString() + //
                       ", block range " + rangeToString(action.offset, action.offset + action.limit));
         auto range_end   = action.segment->getRange().end;
-        auto new_semgent = write_segment(dm_context, action.segment, block, action.offset, action.limit);
-        if (new_semgent)
+        auto new_segment = write_segment(dm_context, action.segment, block, action.offset, action.limit);
+        if (new_segment)
         {
             std::unique_lock lock(mutex);
 
-            segments[range_end] = new_semgent;
+            segments[range_end] = new_segment;
         }
     }
 
