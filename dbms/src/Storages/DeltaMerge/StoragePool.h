@@ -21,6 +21,7 @@ public:
     using Seconds   = std::chrono::seconds;
 
     explicit StoragePool(const String & path);
+    StoragePool(const StoragePool &) = delete;
 
     PageId maxLogPageId() { return max_log_page_id; }
     PageId maxDataPageId() { return max_data_page_id; }

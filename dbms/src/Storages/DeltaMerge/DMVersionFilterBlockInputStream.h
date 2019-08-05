@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Columns/ColumnsCommon.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
@@ -22,7 +23,8 @@ public:
           header(input->getHeader()),
           handle_col_pos(header.getPositionByName(handle_define.name)),
           version_col_pos(header.getPositionByName(VERSION_COLUMN_NAME)),
-          delete_col_pos(header.getPositionByName(TAG_COLUMN_NAME))
+          delete_col_pos(header.getPositionByName(TAG_COLUMN_NAME)),
+          filter(65536)
     {
         children.push_back(input);
     }
@@ -31,110 +33,33 @@ public:
     Block  getHeader() const override { return header; }
 
 protected:
-    Block readImpl() override
+
+    Block readImpl() override;
+
+    inline UInt8 checkWithNextIndex(size_t i)
     {
-        while (true)
-        {
-            if (!raw_block)
-            {
-                if (!initNextBlock())
-                    return {};
-            }
-
-            Block  cur_raw_block = raw_block;
-            size_t rows          = cur_raw_block.rows();
-
-            IColumn::Filter filter(rows);
-
-            size_t passed_count = 0;
-            for (size_t i = 0; i < rows - 1; ++i)
-            {
 #define cur_handle (*handle_col_data)[i]
 #define next_handle (*handle_col_data)[i + 1]
 #define cur_version (*version_col_data)[i]
 #define next_version (*version_col_data)[i + 1]
 #define deleted (*delete_col_data)[i]
-                bool ok;
-                if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
-                {
-                    ok = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
-                }
-                else if constexpr (MODE == DM_VESION_FILTER_MODE_COMPACT)
-                {
-                    ok = cur_version >= version_limit || (cur_handle != next_handle && !deleted);
-                }
-                else
-                {
-                    throw Exception("Unsupported mode");
-                }
+        if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
+        {
+            return !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
+        }
+        else if constexpr (MODE == DM_VESION_FILTER_MODE_COMPACT)
+        {
+            return cur_version >= version_limit || (cur_handle != next_handle && !deleted);
+        }
+        else
+        {
+            throw Exception("Unsupported mode");
+        }
 #undef cur_handle
 #undef next_handle
 #undef cur_version
 #undef next_version
 #undef deleted
-                filter[i] = ok;
-                passed_count += ok;
-            }
-
-            {
-                // Now let's handle the last row of current block.
-                auto cur_handle  = (*handle_col_data)[rows - 1];
-                auto cur_version = (*version_col_data)[rows - 1];
-                auto deleted     = (*delete_col_data)[rows - 1];
-                if (!initNextBlock())
-                {
-                    // No more block.
-                    bool ok;
-                    if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
-                    {
-                        ok = !deleted && cur_version <= version_limit;
-                    }
-                    else if (MODE == DM_VESION_FILTER_MODE_COMPACT)
-                    {
-                        ok = cur_version >= version_limit || !deleted;
-                    }
-                    else
-                    {
-                        throw Exception("Unsupported mode");
-                    }
-
-                    filter[rows - 1] = ok;
-                    passed_count += ok;
-                }
-                else
-                {
-                    auto next_handle  = (*handle_col_data)[0];
-                    auto next_version = (*version_col_data)[0];
-                    bool ok;
-                    if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
-                    {
-                        ok = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
-                    }
-                    else if (MODE == DM_VESION_FILTER_MODE_COMPACT)
-                    {
-                        ok = cur_version >= version_limit || (cur_handle != next_handle && !deleted);
-                    }
-                    else
-                    {
-                        throw Exception("Unsupported mode");
-                    }
-                    filter[rows - 1] = ok;
-                    passed_count += ok;
-                }
-            }
-
-            if (!passed_count)
-                continue;
-            if (passed_count == rows)
-                return cur_raw_block;
-
-            for (size_t i = 0; i < cur_raw_block.columns(); ++i)
-            {
-                auto & column = cur_raw_block.getByPosition(i);
-                column.column = column.column->filter(filter, passed_count);
-            }
-            return cur_raw_block;
-        }
     }
 
     bool initNextBlock()
@@ -177,6 +102,8 @@ private:
     size_t handle_col_pos;
     size_t version_col_pos;
     size_t delete_col_pos;
+
+    IColumn::Filter filter;
 
     Block raw_block;
 
