@@ -173,9 +173,6 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     do_global(do_global_), subqueries_for_sets(subqueries_for_set_)
 {
     select_query = typeid_cast<ASTSelectQuery *>(ast.get());
-    if(select_query && select_query->is_fake_sel) {
-        return;
-    }
 
     if (!storage && select_query)
     {

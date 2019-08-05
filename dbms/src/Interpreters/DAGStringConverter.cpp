@@ -1,8 +1,7 @@
-#include <Core/QueryProcessingStage.h>
-#include <DataStreams/BlockIO.h>
-#include <Interpreters/CoprocessorBuilderUtils.h>
 #include <Interpreters/DAGStringConverter.h>
-#include <Interpreters/executeQuery.h>
+
+#include <Core/QueryProcessingStage.h>
+#include <Interpreters/DAGUtils.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -24,11 +23,11 @@ bool DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         // do not have table id
         return false;
     }
-    auto & tmt_ctx = context.ch_context.getTMTContext();
+    auto & tmt_ctx = context.getTMTContext();
     auto storage = tmt_ctx.getStorages().get(id);
     if (storage == nullptr)
     {
-        tmt_ctx.getSchemaSyncer()->syncSchema(id, context.ch_context, false);
+        tmt_ctx.getSchemaSyncer()->syncSchema(id, context, false);
         storage = tmt_ctx.getStorages().get(id);
     }
     if (storage == nullptr)
@@ -117,8 +116,7 @@ bool isProject(const tipb::Executor &)
     // currently, project is not pushed so always return false
     return false;
 }
-DAGStringConverter::DAGStringConverter(CoprocessorContext & context_, tipb::DAGRequest & dag_request_)
-    : context(context_), dag_request(dag_request_)
+DAGStringConverter::DAGStringConverter(Context & context_, const tipb::DAGRequest & dag_request_) : context(context_), dag_request(dag_request_)
 {
     afterAgg = false;
 }

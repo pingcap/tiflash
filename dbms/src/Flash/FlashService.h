@@ -1,9 +1,9 @@
 #pragma once
 
-#include <grpc++/grpc++.h>
+#include <Server/IServer.h>
 #include <common/logger_useful.h>
+#include <grpc++/grpc++.h>
 #include <boost/noncopyable.hpp>
-#include "IServer.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/tikvpb.grpc.pb.h>
@@ -23,17 +23,16 @@ public:
 
     ~FlashService() final;
 
-    grpc::Status Coprocessor(grpc::ServerContext* context, const coprocessor::Request* request, coprocessor::Response* response);
-private:
+    grpc::Status Coprocessor(grpc::ServerContext * context, const coprocessor::Request * request, coprocessor::Response * response);
 
-    IServer &server;
+private:
+    IServer & server;
 
     std::string address;
 
     GRPCServerPtr grpc_server;
 
     Logger * log;
-
 };
 
 } // namespace DB

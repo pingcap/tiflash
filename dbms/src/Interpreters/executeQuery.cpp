@@ -18,16 +18,16 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 
-#include <Interpreters/Quota.h>
+#include <Interpreters/DAGQuerySource.h>
+#include <Interpreters/IQuerySource.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
+#include <Interpreters/Quota.h>
+#include <Interpreters/SQLQuerySource.h>
 #include <Interpreters/executeQuery.h>
-#include <Interpreters/IQueryInfo.h>
 #include <tipb/expression.pb.h>
 #include <tipb/select.pb.h>
-#include <Interpreters/StringQueryInfo.h>
-#include <Interpreters/DAGQueryInfo.h>
 
 
 namespace ProfileEvents
@@ -137,8 +137,9 @@ static void onExceptionBeforeStart(const String & query, Context & context, time
 
 
 static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
-    IQueryInfo & queryInfo,
+    IQuerySource & query_src,
     Context & context,
+    bool internal,
     QueryProcessingStage::Enum stage)
 {
     ProfileEvents::increment(ProfileEvents::Query);
@@ -153,21 +154,21 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     /// Don't limit the size of internal queries.
     size_t max_query_size = 0;
-    if (!queryInfo.isInternalQuery())
+    if (!internal)
         max_query_size = settings.max_query_size;
 
     try
     {
-        std::tie(query, ast) = queryInfo.parse(max_query_size);
+        std::tie(query, ast) = query_src.parse(max_query_size);
     }
     catch (...)
     {
-        if (!queryInfo.isInternalQuery())
+        if (!internal)
         {
             /// Anyway log the query.
-            String q = queryInfo.get_query_ignore_error(max_query_size);
-            logQuery(query.substr(0, settings.log_queries_cut_to_length), context);
-            onExceptionBeforeStart(query, context, current_time);
+            String str = query_src.str(max_query_size);
+            logQuery(str.substr(0, settings.log_queries_cut_to_length), context);
+            onExceptionBeforeStart(str, context, current_time);
         }
 
         throw;
@@ -177,7 +178,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     try
     {
-        if (!queryInfo.isInternalQuery())
+        if (!internal)
             logQuery(query.substr(0, settings.log_queries_cut_to_length), context);
 
         /// Check the limits.
@@ -190,7 +191,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Put query to process list. But don't put SHOW PROCESSLIST query itself.
         ProcessList::EntryPtr process_list_entry;
-        if (!queryInfo.isInternalQuery() && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
+        if (!internal && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
         {
             process_list_entry = context.getProcessList().insert(
                 query,
@@ -201,7 +202,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             context.setProcessListElement(&process_list_entry->get());
         }
 
-        auto interpreter = queryInfo.getInterpreter(context, stage);
+        auto interpreter = query_src.interpreter(context, stage);
         res = interpreter->execute();
 
         /// Delayed initialization of query streams (required for KILL QUERY purposes)
@@ -253,7 +254,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             elem.client_info = context.getClientInfo();
 
-            bool log_queries = settings.log_queries && !queryInfo.isInternalQuery();
+            bool log_queries = settings.log_queries && !internal;
 
             /// Log into system table start of query execution, if need.
             if (log_queries)
@@ -358,7 +359,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 }
             };
 
-            if (!queryInfo.isInternalQuery() && res.in)
+            if (!internal && res.in)
             {
                 std::stringstream log_str;
                 log_str << "Query pipeline:\n";
@@ -369,7 +370,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
     catch (...)
     {
-        if (!queryInfo.isInternalQuery())
+        if (!internal)
             onExceptionBeforeStart(query, context, current_time);
 
         throw;
@@ -386,17 +387,21 @@ BlockIO executeQuery(
     QueryProcessingStage::Enum stage)
 {
     BlockIO streams;
-    StringQueryInfo queryInfo(query.data(), query.data() + query.size(), internal);
-    std::tie(std::ignore, streams) = executeQueryImpl(queryInfo, context, stage);
+    SQLQuerySource query_src(query.data(), query.data() + query.size());
+    std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, internal, stage);
     return streams;
 }
 
-BlockIO executeQuery(const tipb::DAGRequest & dag_request, CoprocessorContext & context, QueryProcessingStage::Enum stage) {
+
+BlockIO executeQuery(const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version,
+    Context & context, QueryProcessingStage::Enum stage)
+{
     BlockIO streams;
-    DAGQueryInfo queryInfo(dag_request, context);
-    std::tie(std::ignore, streams) = executeQueryImpl(queryInfo, context.ch_context, stage);
+    DAGQuerySource query_src(context, region_id, region_version, region_conf_version, dag_request);
+    std::tie(std::ignore, streams) = executeQueryImpl(query_src, context, false, stage);
     return streams;
 }
+
 
 void executeQuery(
     ReadBuffer & istr,
@@ -434,8 +439,8 @@ void executeQuery(
     ASTPtr ast;
     BlockIO streams;
 
-    StringQueryInfo queryInfo(begin, end, false);
-    std::tie(ast, streams) = executeQueryImpl(queryInfo, context, QueryProcessingStage::Complete);
+    SQLQuerySource query_info(begin, end);
+    std::tie(ast, streams) = executeQueryImpl(query_info, context, false, QueryProcessingStage::Complete);
 
     try
     {

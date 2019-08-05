@@ -6,31 +6,35 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
-#include <Coprocessor/CoprocessorHandler.h>
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/CoprocessorBuilderUtils.h>
-#include <Interpreters/DAGQueryInfo.h>
+#include <Interpreters/DAGQuerySource.h>
+#include <Interpreters/DAGUtils.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
+#include <Storages/RegionQueryInfo.h>
 
 namespace DB
 {
 
+class Context;
+
 /** build ch plan from dag request: dag executors -> ch plan
   */
-class InterpreterDAGRequest : public IInterpreter
+class InterpreterDAG : public IInterpreter
 {
 public:
-    InterpreterDAGRequest(CoprocessorContext & context_, DAGQueryInfo & dag_query_info);
+    InterpreterDAG(Context & context_, DAGQuerySource & dag_query_src_);
 
-    ~InterpreterDAGRequest() = default;
+    ~InterpreterDAG() = default;
 
     BlockIO execute();
 
 private:
-    CoprocessorContext & context;
+    Context & context;
+
+    DAGQuerySource & dag_query_src;
+
     NamesWithAliases final_project;
-    DAGQueryInfo & dag_query_info;
     NamesAndTypesList source_columns;
     size_t max_streams = 1;
 
