@@ -351,7 +351,7 @@ bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::
 
         SegmentPtr option;
         SegmentPtr next;
-        bool       is_split;
+        bool       is_split = false;
 
         {
             std::shared_lock lock(mutex);
