@@ -128,7 +128,7 @@ public:
     void call(std::unique_ptr<tikvpb::Tikv::Stub> stub)
     {
         grpc::ClientContext context;
-        context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(20));
+        context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(3));
         auto status = Trait::doRPCCall(&context, std::move(stub), *req, resp);
         if (!status.ok())
         {
