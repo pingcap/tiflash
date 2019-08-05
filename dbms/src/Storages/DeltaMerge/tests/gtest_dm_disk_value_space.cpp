@@ -1,6 +1,8 @@
 #include "dm_basic_include.h"
 
+#include <Poco/File.h>
 #include <DataStreams/OneBlockInputStream.h>
+
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 
@@ -31,11 +33,7 @@ protected:
 
         storage_pool        = std::make_unique<StoragePool>(path);
         Context context     = DMTestEnv::getContext();
-        table_handle_define = ColumnDefine{
-            .name = "pk",
-            .type = std::make_shared<DataTypeInt64>(),
-            .id   = 1,
-        };
+        table_handle_define = ColumnDefine(1, "pk", std::make_shared<DataTypeInt64>());
         table_columns.clear();
         table_columns.emplace_back(table_handle_define);
         table_columns.emplace_back(VERSION_COLUMN_DEFINE);
