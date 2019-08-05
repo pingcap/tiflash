@@ -77,9 +77,9 @@ private:
     StoragePtr stable_storage;
     SortDescription primary_sort_descr;
 
-    DM::MyDeltaTreePtr delta_tree;
-    DM::MyValueSpacePtr insert_value_space;
-    DM::MyValueSpacePtr modify_value_space;
+    DM::Dummy::MyDeltaTreePtr delta_tree;
+    DM::Dummy::MyValueSpacePtr insert_value_space;
+    DM::Dummy::MyValueSpacePtr modify_value_space;
 
     Logger * log;
 };
