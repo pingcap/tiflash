@@ -271,7 +271,8 @@ if (ENABLE_TESTS)
     # attach all dbms gtest sources
     grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
-    target_link_libraries(unit_tests_dbms gtest_main dbms clickhouse_functions)
+    target_link_libraries(unit_tests_dbms EXCLUDE_FROM_ALL gtest_main dbms clickhouse_functions)
+    target_compile_options(unit_tests_dbms PRIVATE -Wno-unknown-pragmas)
     add_check(unit_tests_dbms)
 endif ()
 
