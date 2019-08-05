@@ -1,8 +1,7 @@
-#include <curl/curl.h>
-
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Databases/DatabaseOrdinary.h>
+#include <Debug/MockSchemaSyncer.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
@@ -18,7 +17,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <TiDB/TiDBService.h>
 #include <common/JSON.h>
 
 
@@ -28,110 +26,6 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
-
-class Curl final : public ext::singleton<Curl>
-{
-public:
-    String getTiDBTableInfoJson(TableID table_id, Context & context);
-    String getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context);
-
-private:
-    Curl();
-    ~Curl();
-
-    friend class ext::singleton<Curl>;
-};
-
-Curl::Curl()
-{
-    CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
-    if (code != CURLE_OK)
-        throw DB::Exception("CURL global init failed.", code);
-}
-
-Curl::~Curl() { curl_global_cleanup(); }
-
-String Curl::getTiDBTableInfoJson(TableID table_id, Context & context)
-{
-    auto & tidb_service = context.getTiDBService();
-
-    CURL * curl = curl_easy_init();
-
-    curl_easy_setopt(curl,
-        CURLOPT_URL,
-        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/db-table/" + toString(table_id)).c_str());
-
-    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
-        auto str = reinterpret_cast<String *>(result);
-        size_t real_size = size * nmemb;
-        str->append((const char *)buffer, real_size);
-        return real_size;
-    };
-    typedef size_t (*WriteFuncT)(void * buffer, size_t size, size_t nmemb, void * result);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (WriteFuncT)writeFunc);
-
-    String result;
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&result);
-
-    CURLcode code = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-
-    if (code != CURLE_OK)
-        throw DB::Exception("Get TiDB schema through HTTP failed.", code);
-
-    if (result.empty() || result[0] == '[')
-    {
-        result.clear();
-    }
-
-    return result;
-}
-
-String Curl::getTiDBTableInfoJson(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    auto & tidb_service = context.getTiDBService();
-
-    CURL * curl = curl_easy_init();
-
-    curl_easy_setopt(curl,
-        CURLOPT_URL,
-        std::string("http://" + tidb_service.serviceIp() + ":" + tidb_service.statusPort() + "/schema/" + database_name + "/" + table_name)
-            .c_str());
-
-    auto writeFunc = [](void * buffer, size_t size, size_t nmemb, void * result) {
-        auto str = reinterpret_cast<String *>(result);
-        size_t real_size = size * nmemb;
-        str->append((const char *)buffer, real_size);
-        return real_size;
-    };
-    typedef size_t (*WriteFuncT)(void * buffer, size_t size, size_t nmemb, void * result);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (WriteFuncT)writeFunc);
-
-    String result;
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&result);
-
-    CURLcode code = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-
-    if (code != CURLE_OK)
-        throw DB::Exception("Get TiDB schema through HTTP failed.", code);
-
-    if (result.empty() || result[0] == '[')
-    {
-        result.clear();
-    }
-
-    return result;
-}
-
-String getTiDBTableInfoJsonByCurl(TableID table_id, Context & context) { return Curl::instance().getTiDBTableInfoJson(table_id, context); }
-
-String getTiDBTableInfoJsonByCurl(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    return Curl::instance().getTiDBTableInfoJson(database_name, table_name, context);
 }
 
 using TableInfo = TiDB::TableInfo;
@@ -260,7 +154,6 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
     AlterCommands alter_commands;
 
     /// Detect new columns.
-    // TODO: Detect rename or type-changed columns.
     for (const auto & column_info : table_info.columns)
     {
         const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
@@ -309,42 +202,74 @@ AlterCommands detectSchemaChanges(const TableInfo & table_info, const TableInfo 
         alter_commands.emplace_back(std::move(command));
     }
 
+    /// Detect type changed columns.
+    for (const auto & orig_column_info : orig_table_info.columns)
+    {
+        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+            // TODO: Check primary key.
+            return column_info_.id == orig_column_info.id && column_info_.tp != orig_column_info.tp;
+        });
+
+        AlterCommand command;
+        if (column_info == table_info.columns.end())
+        {
+            // Column unchanged.
+            continue;
+        }
+        else
+        {
+            // Type changed column.
+            command.type = AlterCommand::MODIFY_COLUMN;
+            command.column_name = orig_column_info.name;
+            command.data_type = getDataTypeByColumnInfo(*column_info);
+        }
+
+        alter_commands.emplace_back(std::move(command));
+    }
+
+    // TODO: Detect rename columns.
+
     return alter_commands;
 }
 
-JsonSchemaSyncer::JsonSchemaSyncer() : log(&Logger::get("SchemaSyncer")) {}
+MockSchemaSyncer::MockSchemaSyncer() : log(&Logger::get("MockSchemaSyncer")) {}
 
-void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool force)
+bool MockSchemaSyncer::syncSchemas(Context & context)
 {
-    // Do nothing if table already exists unless forced,
-    // so that we don't grab schema from TiDB, which is costly, on every syncSchema call.
+    std::lock_guard<std::mutex> lock(schema_mutex);
+
+    std::unordered_map<TableID, MockTiDB::TablePtr> new_tables;
+    MockTiDB::instance().traverseTables([&](const auto & table) { new_tables.emplace(table->id(), table); });
+    bool done_anything = false;
+
+    for (auto [id, table] : tables)
+    {
+        if (new_tables.find(id) == new_tables.end())
+        {
+            dropTable(table->table_info.db_name, table->table_info.name, context);
+            done_anything = true;
+        }
+    }
+
+    for (auto [id, table] : new_tables)
+    {
+        std::ignore = id;
+        if (syncTable(context, table))
+            done_anything = true;
+    }
+
+    tables.swap(new_tables);
+
+    return done_anything;
+}
+
+bool MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
+{
     auto & tmt_context = context.getTMTContext();
-    if (!force && tmt_context.getStorages().get(table_id))
-        return;
 
-    if (ignored_tables.count(table_id))
-    {
-        return;
-    }
-
-    /// Get table schema json from TiDB/TiKV.
-    String table_info_json = getSchemaJson(table_id, context);
-    if (table_info_json.empty())
-    {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Table " << table_id << "doesn't exist in TiDB, it may have been dropped.");
-        return;
-    }
-
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Table " << table_id << " info json: " << table_info_json);
-
-    TableInfo table_info(table_info_json);
-
-    if (context.getTiDBService().ignoreDatabases().count(table_info.db_name))
-    {
-        ignored_tables.emplace(table_info.id);
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Added table " << table_id << " into ignored list.");
-        return;
-    }
+    /// Get table schema json.
+    const TableInfo & table_info = table->table_info;
+    auto table_id = table_info.id;
 
     auto storage = tmt_context.getStorages().get(table_id);
 
@@ -360,15 +285,16 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
         auto create_table_internal = [&]() {
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Creating table " << table_info.name);
             createTable(table_info, context);
-            context.getTMTContext().getStorages().put(context.getTable(table_info.db_name, table_info.name));
 
-            /// Mangle for partition table.
-            bool is_partition_table = table_info.manglePartitionTableIfNeeded(table_id);
-            if (is_partition_table && !context.isTableExist(table_info.db_name, table_info.name))
+            /// Create sub-table for partitions if any.
+            if (table_info.is_partition_table)
             {
-                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Re-creating table after mangling partition table " << table_info.name);
-                createTable(table_info, context);
-                context.getTMTContext().getStorages().put(context.getTable(table_info.db_name, table_info.name));
+                // create partition table.
+                for (auto part_def : table_info.partition.definitions)
+                {
+                    auto part_table_info = table_info.producePartitionTableInfo(part_def.id);
+                    createTable(part_table_info, context);
+                }
             }
         };
 
@@ -390,8 +316,10 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
             create_table_internal();
         }
 
-        return;
+        return true;
     }
+
+    bool done_anything = false;
 
     // TODO: Check database name change?
     // TODO: Partition table?
@@ -402,83 +330,38 @@ void JsonSchemaSyncer::syncSchema(TableID table_id, Context & context, bool forc
             __PRETTY_FUNCTION__ << ": Renaming table " << table_info.db_name << "." << storage->getTableName() << " TO "
                                 << table_info.db_name << "." << table_info.name);
         renameTable(table_info.db_name, storage->getTableName(), table_info, context);
+        done_anything = true;
     }
 
     /// Table existing, detect schema changes and apply.
-    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-    const TableInfo & orig_table_info = merge_tree->getTableInfo();
+    const TableInfo & orig_table_info = storage->getTableInfo();
     AlterCommands alter_commands = detectSchemaChanges(table_info, orig_table_info);
-
-    std::stringstream ss;
-    ss << "Detected schema changes: ";
-    for (const auto & command : alter_commands)
+    if (!alter_commands.empty())
     {
-        // TODO: Other command types.
-        if (command.type == AlterCommand::ADD_COLUMN)
-            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-        else if (command.type == AlterCommand::DROP_COLUMN)
-            ss << "DROP COLUMN " << command.column_name << ", ";
+        std::stringstream ss;
+        ss << "Detected schema changes: ";
+        for (const auto & command : alter_commands)
+        {
+            // TODO: Other command types.
+            if (command.type == AlterCommand::ADD_COLUMN)
+                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::DROP_COLUMN)
+                ss << "DROP COLUMN " << command.column_name << ", ";
+            else if (command.type == AlterCommand::MODIFY_COLUMN)
+                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+        }
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
+
+        // Call storage alter to apply schema changes.
+        storage->alterForTMT(alter_commands, table_info, table->table_info.db_name, context);
+        done_anything = true;
+
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
+
+        // TODO: Apply schema changes to partition tables.
     }
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
-
-    {
-        // Change internal TableInfo in TMT first.
-        // TODO: Ideally this should be done within alter function, however we are limited by the narrow alter interface, thus not truly atomic.
-        auto table_hard_lock = storage->lockStructureForAlter(__PRETTY_FUNCTION__);
-        merge_tree->setTableInfo(table_info);
-    }
-
-    // Call storage alter to apply schema changes.
-    storage->alter(alter_commands, table_info.db_name, table_info.name, context);
-
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
-
-    // TODO: Apply schema changes to partition tables.
-}
-
-int JsonSchemaSyncer::getTableIdByName(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    String table_info_json = getSchemaJsonByName(database_name, table_name, context);
-    if (table_info_json.empty())
-    {
-        LOG_WARNING(log,
-            __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name
-                                << "doesn't exist in TiDB, it may have been dropped.");
-        return InvalidTableID;
-    }
-
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Database" << database_name << ": Table " << table_name << " info json: " << table_info_json);
-
-    // parse table id from table_info_json
-    if (table_info_json.empty())
-    {
-        return InvalidTableID;
-    }
-
-    /// The JSON library does not support whitespace. We delete them. Inefficient.
-    /// TODO: This may mis-delete innocent spaces/newlines enclosed by quotes, consider using some lexical way.
-    /// Copy from TableInfo::deserialize
-    ReadBufferFromString in(table_info_json);
-    WriteBufferFromOwnString out;
-    while (!in.eof())
-    {
-        char c;
-        readChar(c, in);
-        if (!isspace(c))
-            writeChar(c, out);
-    }
-
-    JSON json(out.str());
-
-    return json["id"].getInt();
-}
-
-String HttpJsonSchemaSyncer::getSchemaJson(TableID table_id, Context & context) { return getTiDBTableInfoJsonByCurl(table_id, context); }
-
-String HttpJsonSchemaSyncer::getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context)
-{
-    return getTiDBTableInfoJsonByCurl(database_name, table_name, context);
+    return done_anything;
 }
 
 } // namespace DB

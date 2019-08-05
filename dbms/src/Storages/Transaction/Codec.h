@@ -2,20 +2,20 @@
 
 #include <Common/Decimal.h>
 #include <Core/Field.h>
+#include <IO/Endian.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
-#include <IO/Endian.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
-constexpr UInt64 signMask = UInt64(1)<<63;
-constexpr UInt32 signMask32 = UInt32(1)<< 31 ;
+constexpr UInt64 signMask = UInt64(1) << 63;
+constexpr UInt32 signMask32 = UInt32(1) << 31;
 
 constexpr int digitsPerWord = 9;
 constexpr int wordSize = 4;
@@ -25,7 +25,7 @@ static const size_t ENC_GROUP_SIZE = 8;
 static const UInt8 ENC_MARKER = static_cast<UInt8>(0xff);
 static const char ENC_ASC_PADDING[ENC_GROUP_SIZE] = {0};
 
-template<typename T>
+template <typename T>
 T DecodeInt(size_t & cursor, const String & raw_value)
 {
     T res = readBigEndian<T>(&raw_value[cursor]);
@@ -33,13 +33,14 @@ T DecodeInt(size_t & cursor, const String & raw_value)
     return res;
 }
 
-template<typename B, typename A>
-inline B enforce_cast(A a) {
-    if constexpr (std::is_same_v<A,B>)
+template <typename B, typename A>
+inline B enforce_cast(A a)
+{
+    if constexpr (std::is_same_v<A, B>)
     {
         return a;
     }
-    else if constexpr(sizeof(B) == sizeof(A))
+    else if constexpr (sizeof(B) == sizeof(A))
     {
         B b;
         memcpy(&b, &a, sizeof(A));
@@ -54,7 +55,7 @@ inline B enforce_cast(A a) {
 inline Float64 DecodeFloat64(size_t & cursor, const String & raw_value)
 {
     UInt64 num = DecodeInt<UInt64>(cursor, raw_value);
-    if ( num & signMask )
+    if (num & signMask)
         num ^= signMask;
     else
         num = ~num;
@@ -70,7 +71,7 @@ inline String DecodeBytes(size_t & cursor, const String & raw_value)
         if (next_cursor > raw_value.size())
             throw Exception("Wrong format, cursor over buffer size. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
         UInt8 marker = (UInt8)raw_value[cursor + 8];
-        UInt8 pad_size = 255  - marker;
+        UInt8 pad_size = ENC_MARKER - marker;
 
         if (pad_size > 8)
             throw Exception("Wrong format, too many padding bytes. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
@@ -86,12 +87,12 @@ inline UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 {
     UInt64 res = 0;
     int s = 0;
-    for(int i = 0; cursor < raw_value.size(); i++)
+    for (int i = 0; cursor < raw_value.size(); i++)
     {
         UInt64 v = raw_value[cursor++];
         if (v < 0x80)
         {
-            if (i > 9 || (i == 9 && v> 1))
+            if (i > 9 || (i == 9 && v > 1))
                 throw Exception("Overflow when DecodeVarUInt", ErrorCodes::LOGICAL_ERROR);
             return res | v << s;
         }
@@ -123,7 +124,8 @@ inline Int8 getWords(PrecType prec, ScaleType scale)
     return scale_word + int_word;
 }
 
-inline int getBytes(PrecType prec, ScaleType scale) {
+inline int getBytes(PrecType prec, ScaleType scale)
+{
     int digitsInt = prec - scale;
     int wordsInt = digitsInt / digitsPerWord;
     int wordsFrac = scale / digitsPerWord;
@@ -132,22 +134,27 @@ inline int getBytes(PrecType prec, ScaleType scale) {
     return wordsInt * wordSize + dig2Bytes[xInt] + wordsFrac * wordSize + dig2Bytes[xFrac];
 }
 
-inline UInt32 readWord(int binIdx, const String & dec, int size) {
+inline UInt32 readWord(int binIdx, const String & dec, int size)
+{
     UInt32 v = 0;
-    switch (size) {
+    switch (size)
+    {
         case 1:
             v = Int32(Int8(dec[binIdx]));
             break;
         case 2:
             if ((dec[binIdx] & 128) > 0)
-                v = (255 << 24) | (255 << 16) | (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx+1]);
+                v = (255 << 24) | (255 << 16) | (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx + 1]);
             else
-                v = (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx+1]);
+                v = (UInt8(dec[binIdx]) << 8) | UInt8(dec[binIdx + 1]);
             break;
-        case 3 :
-            if ((dec[binIdx] & 128) > 0) {
+        case 3:
+            if ((dec[binIdx] & 128) > 0)
+            {
                 v = (255 << 24) | (UInt8(dec[binIdx]) << 16) | (UInt8(dec[binIdx + 1]) << 8) | UInt8(dec[binIdx + 2]);
-            } else {
+            }
+            else
+            {
                 v = (UInt8(dec[binIdx]) << 16) | (UInt8(dec[binIdx + 1]) << 8) | UInt8(dec[binIdx + 2]);
             }
             break;
@@ -168,22 +175,24 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     int leadingDigits = digitsInt - wordsInt * digitsPerWord;
     int wordsFrac = frac / digitsPerWord;
     int trailingDigits = frac - wordsFrac * digitsPerWord;
-//    int wordsIntTo = wordsInt + (leadingDigits > 0);
-//    int wordsFracTo = wordsFrac + (trailingDigits > 0);
+    //    int wordsIntTo = wordsInt + (leadingDigits > 0);
+    //    int wordsFracTo = wordsFrac + (trailingDigits > 0);
 
     int binSize = getBytes(prec, frac);
     String dec = raw_value.substr(cursor, binSize);
     cursor += binSize;
     int mask = -1;
     int binIdx = 0;
-    if (dec[binIdx] & 0x80) {
+    if (dec[binIdx] & 0x80)
+    {
         mask = 0;
     }
     dec[0] ^= 0x80;
 
     int256_t value = 0;
 
-    if (leadingDigits) {
+    if (leadingDigits)
+    {
         int i = dig2Bytes[leadingDigits];
         UInt32 x = readWord(binIdx, dec, i);
         binIdx += i;
@@ -193,7 +202,8 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     for (int stop = binIdx + wordsInt * wordSize + wordsFrac * wordSize; binIdx < stop; binIdx += wordSize)
     {
         UInt32 v = readWord(binIdx, dec, 4) ^ mask;
-        if (v >= wordMax) {
+        if (v >= wordMax)
+        {
             throw Exception("bad number: " + std::to_string(v));
         }
         value *= wordMax;
@@ -203,7 +213,7 @@ inline Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     {
         int len = dig2Bytes[trailingDigits];
         UInt32 x = readWord(binIdx, dec, len);
-        for(int i = 0; i < trailingDigits; i++)
+        for (int i = 0; i < trailingDigits; i++)
             value *= 10;
         value += x ^ mask;
     }
@@ -247,11 +257,18 @@ inline void writeIntBinary(const T & x, std::stringstream & ss)
     ss.write(reinterpret_cast<const char *>(&x), sizeof(x));
 }
 
-template<typename T, UInt8 WriteFlag>
+template <typename T, UInt8 WriteFlag>
 inline void EncodeNumber(T u, std::stringstream & ss)
 {
     u = toBigEndian(u);
     writeIntBinary(WriteFlag, ss);
+    writeIntBinary(u, ss);
+}
+
+template <typename T>
+inline void EncodeNumber(T u, std::stringstream & ss)
+{
+    u = toBigEndian(u);
     writeIntBinary(u, ss);
 }
 
@@ -273,7 +290,7 @@ inline void EncodeBytes(const String & ori_str, std::stringstream & ss)
     {
         size_t remain = len - index;
         size_t pad = 0;
-        if (remain > ENC_GROUP_SIZE)
+        if (remain >= ENC_GROUP_SIZE)
         {
             ss.write(ori_str.data() + index, ENC_GROUP_SIZE);
         }
@@ -326,7 +343,7 @@ inline void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
     if (scale % 9 != 0)
     {
         ScaleType padding = static_cast<ScaleType>(9 - scale % 9);
-        while(padding > 0)
+        while (padding > 0)
         {
             padding--;
             value *= 10;
@@ -335,7 +352,7 @@ inline void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
     std::vector<Int32> v;
     Int8 words = getWords(prec, scale);
 
-    for (Int8 i = 0; i < words; i ++)
+    for (Int8 i = 0; i < words; i++)
     {
         v.push_back(static_cast<Int32>(value % decimal_mod));
         value /= decimal_mod;
@@ -348,16 +365,16 @@ inline void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
     v[0] |= signMask32;
     if (neg)
     {
-        for (size_t i =0; i < v.size(); i++)
+        for (size_t i = 0; i < v.size(); i++)
             v[i] = ~v[i];
     }
-    for (size_t i =0; i < v.size(); i++)
+    for (size_t i = 0; i < v.size(); i++)
     {
         writeIntBinary(v[i], ss);
     }
 }
 
-template<typename T>
+template <typename T>
 T getFieldValue(const Field & field)
 {
     switch (field.getType())
@@ -398,4 +415,4 @@ inline void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringst
     }
 }
 
-}
+} // namespace DB

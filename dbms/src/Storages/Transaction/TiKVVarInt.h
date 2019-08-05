@@ -1,30 +1,30 @@
 #pragma once
 
-#include <iostream>
 #include <Core/Types.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <common/likely.h>
+#include <iostream>
 
 namespace DB::ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
+extern const int LOGICAL_ERROR;
 }
 
 namespace TiKV
 {
 
-using DB::UInt64;
-using DB::Int64;
-using DB::UInt32;
-using DB::Int32;
-using DB::UInt8;
-using DB::Int8;
-using DB::UInt16;
-using DB::Int16;
-using DB::WriteBuffer;
-using DB::ReadBuffer;
 using DB::Exception;
+using DB::Int16;
+using DB::Int32;
+using DB::Int64;
+using DB::Int8;
+using DB::ReadBuffer;
+using DB::UInt16;
+using DB::UInt32;
+using DB::UInt64;
+using DB::UInt8;
+using DB::WriteBuffer;
 
 void writeVarUInt(UInt64 x, std::ostream & ostr);
 void writeVarUInt(UInt64 x, WriteBuffer & ostr);
@@ -46,21 +46,18 @@ inline void writeVarInt(Int64 x, OUT & ostr)
     TiKV::writeVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)), ostr);
 }
 
-inline char * writeVarInt(Int64 x, char * ostr)
-{
-    return writeVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)), ostr);
-}
+inline char * writeVarInt(Int64 x, char * ostr) { return writeVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)), ostr); }
 
 template <typename IN>
 inline void readVarInt(Int64 & x, IN & istr)
 {
-    TiKV::readVarUInt(*reinterpret_cast<UInt64*>(&x), istr);
+    TiKV::readVarUInt(*reinterpret_cast<UInt64 *>(&x), istr);
     x = (static_cast<UInt64>(x) >> 1) ^ -(x & 1);
 }
 
 inline const char * readVarInt(Int64 & x, const char * istr, size_t size)
 {
-    const char * res = readVarUInt(*reinterpret_cast<UInt64*>(&x), istr, size);
+    const char * res = readVarUInt(*reinterpret_cast<UInt64 *>(&x), istr, size);
     x = (static_cast<UInt64>(x) >> 1) ^ -(x & 1);
     return res;
 }
@@ -70,8 +67,8 @@ inline void writeVarT(UInt64 x, std::ostream & ostr) { writeVarUInt(x, ostr); }
 inline void writeVarT(Int64 x, std::ostream & ostr) { writeVarInt(x, ostr); }
 inline void writeVarT(UInt64 x, WriteBuffer & ostr) { TiKV::writeVarUInt(x, ostr); }
 inline void writeVarT(Int64 x, WriteBuffer & ostr) { TiKV::writeVarInt(x, ostr); }
-inline char * writeVarT(UInt64 x, char * & ostr) { return writeVarUInt(x, ostr); }
-inline char * writeVarT(Int64 x, char * & ostr) { return writeVarInt(x, ostr); }
+inline char * writeVarT(UInt64 x, char *& ostr) { return writeVarUInt(x, ostr); }
+inline char * writeVarT(Int64 x, char *& ostr) { return writeVarInt(x, ostr); }
 
 inline void readVarT(UInt64 & x, std::istream & istr) { readVarUInt(x, istr); }
 inline void readVarT(Int64 & x, std::istream & istr) { readVarInt(x, istr); }
@@ -112,23 +109,16 @@ inline void readVarInt(Int16 & x, ReadBuffer & istr)
 }
 
 template <typename T>
-inline std::enable_if_t<!std::is_same_v<T, UInt64>, void>
-readVarUInt(T & x, ReadBuffer & istr)
+inline std::enable_if_t<!std::is_same_v<T, UInt64>, void> readVarUInt(T & x, ReadBuffer & istr)
 {
     UInt64 tmp = 0;
     TiKV::readVarUInt(tmp, istr);
     x = tmp;
 }
 
-inline void throwReadAfterEOF()
-{
-    throw Exception("Attempt to read after eof", DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF);
-}
+inline void throwReadAfterEOF() { throw Exception("Attempt to read after eof", DB::ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF); }
 
-inline void throwReadUnfinished()
-{
-    throw Exception("Read unfinished", DB::ErrorCodes::LOGICAL_ERROR);
-}
+inline void throwReadUnfinished() { throw Exception("Read unfinished", DB::ErrorCodes::LOGICAL_ERROR); }
 
 inline void readVarUInt(UInt64 & x, ReadBuffer & istr)
 {
@@ -187,9 +177,10 @@ inline const char * readVarUInt(UInt64 & x, const char * istr, size_t size)
 
 inline void writeVarUInt(UInt64 x, WriteBuffer & ostr)
 {
-    while (x >= 0x80) {
+    while (x >= 0x80)
+    {
         ostr.nextIfAtEnd();
-        *ostr.position() = static_cast<char>(static_cast<UInt8>(x)|0x80);
+        *ostr.position() = static_cast<char>(static_cast<UInt8>(x) | 0x80);
         ++ostr.position();
         x >>= 7;
     }
@@ -201,8 +192,9 @@ inline void writeVarUInt(UInt64 x, WriteBuffer & ostr)
 
 inline void writeVarUInt(UInt64 x, std::ostream & ostr)
 {
-    while (x >= 0x80) {
-        ostr.put(static_cast<char>(static_cast<UInt8>(x)|0x80));
+    while (x >= 0x80)
+    {
+        ostr.put(static_cast<char>(static_cast<UInt8>(x) | 0x80));
         x >>= 7;
     }
     ostr.put(static_cast<char>(x));
@@ -211,8 +203,9 @@ inline void writeVarUInt(UInt64 x, std::ostream & ostr)
 
 inline char * writeVarUInt(UInt64 x, char * ostr)
 {
-    while (x >= 0x80) {
-        *ostr = static_cast<char>(static_cast<UInt8>(x)|0x80);
+    while (x >= 0x80)
+    {
+        *ostr = static_cast<char>(static_cast<UInt8>(x) | 0x80);
         ++ostr;
         x >>= 7;
     }
@@ -222,10 +215,11 @@ inline char * writeVarUInt(UInt64 x, char * ostr)
 }
 
 
-inline void writeVarUInt(UInt64 x, std::string& ostr)
+inline void writeVarUInt(UInt64 x, std::string & ostr)
 {
-    while (x >= 0x80) {
-        ostr += static_cast<char>(static_cast<UInt8>(x)|0x80);
+    while (x >= 0x80)
+    {
+        ostr += static_cast<char>(static_cast<UInt8>(x) | 0x80);
         x >>= 7;
     }
     ostr += static_cast<char>(x);
@@ -234,22 +228,23 @@ inline void writeVarUInt(UInt64 x, std::string& ostr)
 
 inline size_t getLengthOfVarUInt(UInt64 x)
 {
-    return x < (1ULL << 7) ? 1
-        : (x < (1ULL << 14) ? 2
-        : (x < (1ULL << 21) ? 3
-        : (x < (1ULL << 28) ? 4
-        : (x < (1ULL << 35) ? 5
-        : (x < (1ULL << 42) ? 6
-        : (x < (1ULL << 49) ? 7
-        : (x < (1ULL << 56) ? 8
-        : (x < (1ULL << 63) ? 9
-        : 10))))))));
+    return x < (1ULL << 7)
+        ? 1
+        : (x < (1ULL << 14)
+                  ? 2
+                  : (x < (1ULL << 21)
+                            ? 3
+                            : (x < (1ULL << 28)
+                                      ? 4
+                                      : (x < (1ULL << 35)
+                                                ? 5
+                                                : (x < (1ULL << 42)
+                                                          ? 6
+                                                          : (x < (1ULL << 49) ? 7
+                                                                              : (x < (1ULL << 56) ? 8 : (x < (1ULL << 63) ? 9 : 10))))))));
 }
 
 
-inline size_t getLengthOfVarInt(Int64 x)
-{
-    return getLengthOfVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63)));
-}
+inline size_t getLengthOfVarInt(Int64 x) { return getLengthOfVarUInt(static_cast<UInt64>((x << 1) ^ (x >> 63))); }
 
-}
+} // namespace TiKV

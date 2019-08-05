@@ -61,29 +61,26 @@ public:
     };
     using TablePtr = std::shared_ptr<Table>;
 
-    class MockSchemaSyncer : public JsonSchemaSyncer
-    {
-    protected:
-        String getSchemaJson(TableID table_id, Context & /*context*/) override { return MockTiDB::instance().getSchemaJson(table_id); }
-        String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override
-        {
-            std::ignore = database_name;
-            std::ignore = table_name;
-            std::ignore = context;
-            throw Exception("getSchemaJsonByName not implemented in MockSchemaSyncer");
-        }
-    };
-
 public:
-    String getSchemaJson(TableID table_id);
+    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso);
 
-    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns);
-
-    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name);
+    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
 
     void dropTable(const String & database_name, const String & table_name);
 
+    void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+
+    void dropColumnFromTable(const String & database_name, const String & table_name, const String & column_name);
+
+    void modifyColumnInTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+
+    void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
+
+    void truncateTable(const String & database_name, const String & table_name);
+
     TablePtr getTableByName(const String & database_name, const String & table_name);
+
+    void traverseTables(std::function<void(TablePtr)> f);
 
 private:
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
@@ -94,6 +91,8 @@ private:
     std::unordered_map<String, DatabaseID> databases;
     std::unordered_map<String, TablePtr> tables_by_name;
     std::unordered_map<TableID, TablePtr> tables_by_id;
+
+    std::atomic<TableID> table_id_allocator = MaxSystemTableID + 1;
 };
 
 } // namespace DB

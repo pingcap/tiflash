@@ -10,7 +10,7 @@ rm -rf ./data ./log
 
 docker-compose up -d --scale tics0=0 --scale tiflash0=0 --scale tikv-learner0=0
 
-sleep 10
+sleep 60
 
 docker-compose up -d --scale tics0=0 --scale tikv-learner0=0 --build
 

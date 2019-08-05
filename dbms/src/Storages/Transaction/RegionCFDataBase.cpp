@@ -273,6 +273,32 @@ typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
     return data;
 }
 
+template <typename Trait>
+void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVKey & end_key)
+{
+    for (auto data_it = data.begin(); data_it != data.end();)
+    {
+        auto & ori_map = data_it->second;
+
+        for (auto it = ori_map.begin(); it != ori_map.end();)
+        {
+            const auto & key = getTiKVKey(it->second);
+
+            bool ok = start_key ? key >= start_key : true;
+            ok = ok && (end_key ? key < end_key : true);
+            if (ok)
+                it = ori_map.erase(it);
+            else
+                ++it;
+        }
+
+        if (ori_map.empty())
+            data_it = data.erase(data_it);
+        else
+            ++data_it;
+    }
+}
+
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
 template struct RegionCFDataBase<RegionDefaultCFDataTrait>;
 template struct RegionCFDataBase<RegionLockCFDataTrait>;

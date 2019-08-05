@@ -6,6 +6,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/ExpressionActions.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Storages/Transaction/Types.h>
 
 
 namespace Poco { class Logger; }
@@ -110,6 +111,8 @@ private:
         const Context & context_);
 
     void init(const Names & required_result_column_names);
+
+    void getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 schema_version);
 
     void executeImpl(Pipeline & pipeline, const BlockInputStreamPtr & input, bool dry_run);
 
