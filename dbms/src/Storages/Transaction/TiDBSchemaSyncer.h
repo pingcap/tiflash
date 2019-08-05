@@ -40,7 +40,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         {
             return false;
         }
-        LOG_INFO(log, "start to sync schemas. current version is: " + std::to_string(cur_version) + " and try to sync schema version to: " + std::to_string(version));
+        LOG_INFO(log,
+            "start to sync schemas. current version is: " + std::to_string(cur_version)
+                + " and try to sync schema version to: " + std::to_string(version));
         if (!tryLoadSchemaDiffs(getter, version, context))
         {
             loadAllSchema(getter, version, context);
@@ -68,19 +70,23 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
         LOG_DEBUG(log, "end load schema diffs.");
-        try {
+        try
+        {
             for (const auto & diff : diffs)
             {
                 builder.applyDiff(diff);
             }
-        } catch (Exception & e) {
+        }
+        catch (Exception & e)
+        {
             LOG_ERROR(log, "apply diff meets exception : " + e.displayText());
             return false;
         }
         return true;
     }
 
-    void loadAllSchema(SchemaGetter & getter, Int64 version, Context & context) {
+    void loadAllSchema(SchemaGetter & getter, Int64 version, Context & context)
+    {
         SchemaBuilder builder(getter, context, databases, version);
         builder.syncAllSchema();
     }

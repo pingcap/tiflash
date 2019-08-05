@@ -330,7 +330,8 @@ void SchemaBuilder::applyDropSchema(DatabaseID schema_id)
     auto database_name = databases[schema_id];
     if (unlikely(database_name == ""))
     {
-        LOG_INFO(log, "Syncer wants to drop database: " + std::to_string(schema_id) + " . But database is not found, may has been dropped.");
+        LOG_INFO(
+            log, "Syncer wants to drop database: " + std::to_string(schema_id) + " . But database is not found, may has been dropped.");
         return;
     }
     LOG_INFO(log, "Try to drop database: " + database_name);
@@ -480,7 +481,8 @@ void SchemaBuilder::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
 }
 
 // Drop Invalid Tables in Every DB
-void SchemaBuilder::dropInvalidTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs) {
+void SchemaBuilder::dropInvalidTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs)
+{
 
     std::set<TableID> table_ids;
 
@@ -508,29 +510,35 @@ using TableNameMap = std::map<TableName, TableName>;
 using TableNameSet = std::set<TableName>;
 constexpr char TmpTableNamePrefix[] = "_tiflash_tmp_";
 
-inline TableName generateTmpTable(const TableName & name) {
-    return TableName(name.first, String(TmpTableNamePrefix) + name.second);
-}
+inline TableName generateTmpTable(const TableName & name) { return TableName(name.first, String(TmpTableNamePrefix) + name.second); }
 
-TableNamePair resolveRename(SchemaBuilder * builder, TableNameMap & map, TableNameMap::iterator it, TableNameSet & visited, TableNameMap::iterator & cycle_it) {
+TableNamePair resolveRename(
+    SchemaBuilder * builder, TableNameMap & map, TableNameMap::iterator it, TableNameSet & visited, TableNameMap::iterator & cycle_it)
+{
     TableName target_name = it->second;
     TableName origin_name = it->first;
     visited.insert(it->first);
     auto next_it = map.find(target_name);
-    if(next_it == map.end()) {
+    if (next_it == map.end())
+    {
         builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
         map.erase(it);
         return TableNamePair();
-    } else if (visited.find(target_name) != visited.end()) {
+    }
+    else if (visited.find(target_name) != visited.end())
+    {
         // There is a cycle.
         auto tmp_name = generateTmpTable(target_name);
         builder->applyRenameTableImpl(target_name.first, tmp_name.first, target_name.second, tmp_name.second);
         builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
         map.erase(it);
         return TableNamePair(target_name, tmp_name);
-    } else {
+    }
+    else
+    {
         auto pair = resolveRename(builder, map, next_it, visited, cycle_it);
-        if (pair.first == origin_name) {
+        if (pair.first == origin_name)
+        {
             origin_name = pair.second;
         }
         builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
@@ -539,25 +547,30 @@ TableNamePair resolveRename(SchemaBuilder * builder, TableNameMap & map, TableNa
     }
 }
 
-void SchemaBuilder::alterAndRenameTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs) {
+void SchemaBuilder::alterAndRenameTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs)
+{
     // Rename Table First.
     auto & tmt_context = context.getTMTContext();
     auto storage_map = tmt_context.getStorages().getAllStorage();
     TableNameMap rename_map;
-    for (auto table_db : table_dbs) {
+    for (auto table_db : table_dbs)
+    {
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
-        if (storage != nullptr) {
+        if (storage != nullptr)
+        {
             const String old_db = storage->getDatabaseName();
             const String old_table = storage->getTableName();
             const String new_db = table_db.second->name;
             const String new_table = table_db.first->name;
-            if (old_db != new_db || old_table != new_table) {
+            if (old_db != new_db || old_table != new_table)
+            {
                 rename_map[TableName(old_db, old_table)] = TableName(new_db, new_table);
             }
         }
     }
 
-    while(!rename_map.empty()) {
+    while (!rename_map.empty())
+    {
         auto it = rename_map.begin();
         auto tmp_it = rename_map.end();
         TableNameSet visited;
@@ -565,22 +578,25 @@ void SchemaBuilder::alterAndRenameTables(std::vector<std::pair<TableInfoPtr, DBI
     }
 
     // Then Alter Table
-    for (auto table_db : table_dbs) {
+    for (auto table_db : table_dbs)
+    {
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
-        if (storage != nullptr) {
+        if (storage != nullptr)
+        {
             const String db_name = storage->getDatabaseName();
             applyAlterTableImpl(table_db.first, db_name, storage);
         }
     }
-
 }
 
 void SchemaBuilder::createTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs)
 {
     auto & tmt_context = context.getTMTContext();
-    for (auto table_db : table_dbs) {
+    for (auto table_db : table_dbs)
+    {
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
-        if (storage == nullptr) {
+        if (storage == nullptr)
+        {
             applyCreateTableImpl(*table_db.second, *table_db.first);
         }
     }
@@ -614,14 +630,16 @@ void SchemaBuilder::syncAllSchema()
 
     // Collect All Table Info and Create DBs.
     std::vector<std::pair<TableInfoPtr, DBInfoPtr>> all_tables;
-    for (auto db : all_schema) {
+    for (auto db : all_schema)
+    {
         auto database_name = databases[db->id];
         if (database_name == "")
         {
             applyCreateSchemaImpl(db);
         }
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
-        for (auto table : tables) {
+        for (auto table : tables)
+        {
             all_tables.push_back(std::make_pair(table, db));
         }
     }
