@@ -10,6 +10,10 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+}
 
 DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
     UInt64 region_conf_version_, tipb::SelectResponse & dag_response_)
@@ -21,25 +25,24 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
       dag_response(dag_response_)
 {}
 
-bool DAGDriver::execute()
+void DAGDriver::execute()
 {
     context.setSetting("read_tso", UInt64(dag_request.start_ts()));
     BlockIO streams = executeDAG();
     if (!streams.in || streams.out)
     {
-        // only query is allowed, so streams.in must not be null and streams.out must be null
-        return false;
+        // Only query is allowed, so streams.in must not be null and streams.out must be null
+        throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
     }
     BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(
-        dag_response, context.getSettings().records_per_chunk, dag_request.encode_type(), streams.in->getHeader());
+        dag_response, context.getSettings().dag_records_per_chunk, dag_request.encode_type(), streams.in->getHeader());
     copyData(*streams.in, *outputStreamPtr);
-    return true;
 }
 
 BlockIO DAGDriver::executeDAG()
 {
-    String builder_version = context.getSettings().coprocessor_plan_builder_version;
-    if (builder_version == "v1")
+    String planner = context.getSettings().dag_planner;
+    if (planner == "sql")
     {
         DAGStringConverter converter(context, dag_request);
         String query = converter.buildSqlString();
@@ -49,13 +52,13 @@ BlockIO DAGDriver::executeDAG()
         }
         return executeQuery(query, context, false, QueryProcessingStage::Complete);
     }
-    else if (builder_version == "v2")
+    else if (planner == "optree")
     {
         return executeQuery(dag_request, region_id, region_version, region_conf_version, context, QueryProcessingStage::Complete);
     }
     else
     {
-        throw Exception("coprocessor plan builder version should be set to v1 or v2");
+        throw Exception("Unknown DAG planner type " + planner, ErrorCodes::LOGICAL_ERROR);
     }
 }
 

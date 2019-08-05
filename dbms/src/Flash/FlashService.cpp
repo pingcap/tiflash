@@ -10,6 +10,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int NOT_IMPLEMENTED;
+}
+
 FlashService::FlashService(const std::string & address_, IServer & server_)
     : server(server_), address(address_), log(&Logger::get("FlashService"))
 {
@@ -35,22 +40,78 @@ FlashService::~FlashService()
     grpc_server->Wait();
 }
 
-String getClientMetaVar(grpc::ServerContext * grpc_context, String name, String default_val)
+grpc::Status FlashService::Coprocessor(
+    grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
-    if (grpc_context->client_metadata().count(name) != 1)
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
+
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
     {
-        return default_val;
+        return status;
     }
-    else
+
+    try
     {
-        return String(grpc_context->client_metadata().find(name)->second.data());
+        CoprocessorContext cop_context(context, request->context(), *grpc_context);
+        CoprocessorHandler cop_handler(cop_context, request, response);
+
+        cop_handler.execute();
+
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done");
+        return ::grpc::Status(::grpc::StatusCode::OK, "");
+    }
+    catch (const LockException & e)
+    {
+        // TODO: handle lock error properly.
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.displayText());
+        response->set_data("");
+        return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
+    }
+    catch (const RegionException & e)
+    {
+        // TODO: handle region error properly.
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.displayText());
+        response->set_data("");
+        return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
+        response->set_data("");
+
+        if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
+            return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
+
+        // TODO: Map other DB error codes to grpc codes.
+
+        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
+        response->set_data("");
+        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.what());
     }
 }
 
-::grpc::Status setClientInfo(grpc::ServerContext * grpc_context, Context & context)
+String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {
+    if (grpc_context->client_metadata().count(name) != 1)
+        return default_val;
+    else
+        return String(grpc_context->client_metadata().find(name)->second.data());
+}
+
+std::tuple<Context, ::grpc::Status> FlashService::createDBContext(grpc::ServerContext * grpc_context)
+{
+    /// Create DB context.
+    Context context = server.context();
+    context.setGlobalContext(server.context());
+
+    /// Set a bunch of client information.
     auto client_meta = grpc_context->client_metadata();
-    String query_id = getClientMetaVar(grpc_context, "query_id", "");
+    String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
     context.setCurrentQueryId(query_id);
     ClientInfo & client_info = context.getClientInfo();
     client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
@@ -59,70 +120,23 @@ String getClientMetaVar(grpc::ServerContext * grpc_context, String name, String 
     Int64 pos = peer.find(':');
     if (pos == -1)
     {
-        return ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "invalid peer address");
+        return std::make_tuple(context, ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer));
     }
     std::string client_ip = peer.substr(pos + 1);
     Poco::Net::SocketAddress client_address(client_ip);
     client_info.current_address = client_address;
-    client_info.current_user = getClientMetaVar(grpc_context, "user", "");
-    std::string records_per_chunk_str = getClientMetaVar(grpc_context, "records_per_chunk", "");
-    if (!records_per_chunk_str.empty())
-    {
-        context.setSetting("records_per_chunk", records_per_chunk_str);
-    }
-    std::string builder_version = getClientMetaVar(grpc_context, "builder_version", "v1");
-    context.setSetting("coprocessor_plan_builder_version", builder_version);
-    return ::grpc::Status::OK;
-}
+    client_info.current_user = getClientMetaVarWithDefault(grpc_context, "user", "");
 
-grpc::Status FlashService::Coprocessor(
-    grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
-{
-    LOG_DEBUG(log, "receive coprocessor request");
-    LOG_DEBUG(log, request->DebugString());
-    Context context = server.context();
-    context.setGlobalContext(server.context());
-    setClientInfo(grpc_context, context);
-    try
+    /// Set DAG parameters.
+    std::string dag_records_per_chunk_str = getClientMetaVarWithDefault(grpc_context, "dag_records_per_chunk", "");
+    if (!dag_records_per_chunk_str.empty())
     {
-        CoprocessorContext cop_context(context, request->context(), *grpc_context);
-        CoprocessorHandler cop_handler(cop_context, request, response);
-        if (cop_handler.execute())
-        {
-            LOG_DEBUG(log, "Flash service Coprocessor finished");
-            return ::grpc::Status(::grpc::StatusCode::OK, "");
-        }
-        else
-        {
-            LOG_ERROR(log, "Flash service Coprocessor meet internal error");
-            return ::grpc::Status(::grpc::StatusCode::INTERNAL, "");
-        }
+        context.setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
     }
-    catch (LockException & e)
-    {
-        //todo set lock error info
-        LOG_ERROR(log, "meet lock exception");
-        // clear the data to avoid sending partial data
-        response->set_data("");
-    }
-    catch (RegionException & e)
-    {
-        // todo set region error info
-        LOG_ERROR(log, "meet region exception");
-        response->set_data("");
-    }
-    catch (Exception & e)
-    {
-        // todo return exception message
-        LOG_ERROR(log, "meet unknown exception, errmsg: " + e.message());
-        response->set_data("");
-    }
-    catch (...)
-    {
-        LOG_ERROR(log, "meet unknown exception");
-        response->set_data("");
-    }
-    return ::grpc::Status(::grpc::StatusCode::INTERNAL, "");
+    std::string planner = getClientMetaVarWithDefault(grpc_context, "dag_planner", "sql");
+    context.setSetting("dag_planner", planner);
+
+    return std::make_tuple(context, ::grpc::Status::OK);
 }
 
 } // namespace DB

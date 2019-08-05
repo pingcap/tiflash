@@ -1,5 +1,5 @@
-#include <sstream>
 #include <grpc++/grpc++.h>
+#include <sstream>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -26,7 +26,7 @@ public:
     {
         grpc::ClientContext clientContext;
         clientContext.AddMetadata("user_name", "");
-        clientContext.AddMetadata("builder_version", "v2");
+        clientContext.AddMetadata("dag_planner", "optree");
         coprocessor::Response response;
         grpc::Status status = sp->Coprocessor(&clientContext, *rqst, &response);
         size_t column_num = 3;
