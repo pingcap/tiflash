@@ -31,6 +31,7 @@ namespace DB
 {
 
 using namespace DM;
+using namespace DM::Dummy;
 
 StorageDeltaMergeDummy::StorageDeltaMergeDummy(const std::string & path_,
     const std::string & name_,

@@ -202,8 +202,14 @@ void placeInsert(const BlockInputStreamPtr & stable, //
 
     using Rids = std::vector<std::pair<UInt64, bool>>;
     Rids rids(block_rows);
-    for (size_t i = 0; i < block_rows; ++i)
+    for (size_t i = 0; i < block_rows; ++i) {
         rids[i] = rid_gen.nextForUpsert();
+
+        if (rids[i].first == 262140)
+        {
+            rids[i].first +=0;
+        }
+    }
     for (size_t i = 0; i < block_rows; ++i)
     {
         auto [rid, dup] = rids[i];
