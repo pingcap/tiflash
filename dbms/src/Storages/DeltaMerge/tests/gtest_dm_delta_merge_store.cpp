@@ -94,10 +94,10 @@ TEST_F(DeltaMergeStore_test, Case1)
         BlockInputStreamPtr in = store->read(context,
                                              context.getSettingsRef(),
                                              table_column_defines,
-                                             /* expected_block_size= */ 1024,
+                                             {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             /* is_raw= */ false)[0];
+                                             /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
         in->readPrefix();
