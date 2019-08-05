@@ -1,10 +1,14 @@
+#include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
+#include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Interpreters/Aggregator.h>
 #include <Interpreters/DAGExpressionAnalyzer.h>
 #include <Interpreters/DAGUtils.h>
 #include <Interpreters/InterpreterDAG.h>
@@ -64,7 +68,6 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             return false;
         }
         String name = merge_tree->getTableInfo().columns[cid - 1].name;
-        //todo handle output_offset
         required_columns.push_back(name);
     }
     if (required_columns.empty())
@@ -73,11 +76,11 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         return false;
     }
 
-    if (!dag_query_src.has_aggregation())
+    if (!dag_query_src.hasAggregation())
     {
         // if the dag request does not contain agg, then the final output is
         // based on the output of table scan
-        for (auto i : dag_query_src.get_dag_request().output_offsets())
+        for (auto i : dag_query_src.getDAGRequest().output_offsets())
         {
             if (i < 0 || i >= required_columns.size())
             {
@@ -163,11 +166,11 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    res.need_aggregate = dag_query_src.has_aggregation();
+    res.need_aggregate = dag_query_src.hasAggregation();
     DAGExpressionAnalyzer expressionAnalyzer(source_columns, context);
-    if (dag_query_src.has_selection())
+    if (dag_query_src.hasSelection())
     {
-        if (expressionAnalyzer.appendWhere(chain, dag_query_src.get_sel(), res.filter_column_name))
+        if (expressionAnalyzer.appendWhere(chain, dag_query_src.getSelection(), res.filter_column_name))
         {
             res.has_where = true;
             res.before_where = chain.getLastActions();
@@ -177,11 +180,24 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     }
     if (res.need_aggregate)
     {
-        throw Exception("agg not supported");
+        res.need_aggregate
+            = expressionAnalyzer.appendAggregation(chain, dag_query_src.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        res.before_aggregation = chain.getLastActions();
+
+        chain.finalize();
+        chain.clear();
+
+        // add cast if type is not match
+        expressionAnalyzer.appendAggSelect(chain, dag_query_src.getAggregation());
+        //todo use output_offset to pruner the final project columns
+        for (auto element : expressionAnalyzer.getCurrentInputColumns())
+        {
+            final_project.emplace_back(element.name, "");
+        }
     }
-    if (dag_query_src.has_topN())
+    if (dag_query_src.hasTopN())
     {
-        res.has_order_by = expressionAnalyzer.appendOrderBy(chain, dag_query_src.get_topN(), res.order_column_names);
+        res.has_order_by = expressionAnalyzer.appendOrderBy(chain, dag_query_src.getTopN(), res.order_column_names);
     }
     // append final project results
     for (auto & name : final_project)
@@ -201,9 +217,68 @@ void InterpreterDAG::executeWhere(Pipeline & pipeline, const ExpressionActionsPt
         [&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, expressionActionsPtr, filter_column); });
 }
 
+void InterpreterDAG::executeAggregation(
+    Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & key_names, AggregateDescriptions & aggregates)
+{
+    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr); });
+
+    Block header = pipeline.firstStream()->getHeader();
+    ColumnNumbers keys;
+    for (const auto & name : key_names)
+    {
+        keys.push_back(header.getPositionByName(name));
+    }
+    for (auto & descr : aggregates)
+    {
+        if (descr.arguments.empty())
+        {
+            for (const auto & name : descr.argument_names)
+            {
+                descr.arguments.push_back(header.getPositionByName(name));
+            }
+        }
+    }
+
+    const Settings & settings = context.getSettingsRef();
+
+    /** Two-level aggregation is useful in two cases:
+      * 1. Parallel aggregation is done, and the results should be merged in parallel.
+      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
+      */
+    bool allow_to_use_two_level_group_by = pipeline.streams.size() > 1 || settings.max_bytes_before_external_group_by != 0;
+
+    Aggregator::Params params(header, keys, aggregates, false, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
+        settings.compile ? &context.getCompiler() : nullptr, settings.min_count_to_compile,
+        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold : SettingUInt64(0),
+        allow_to_use_two_level_group_by ? settings.group_by_two_level_threshold_bytes : SettingUInt64(0),
+        settings.max_bytes_before_external_group_by, settings.empty_result_for_aggregation_by_empty_set, context.getTemporaryPath());
+
+    /// If there are several sources, then we perform parallel aggregation
+    if (pipeline.streams.size() > 1)
+    {
+        pipeline.firstStream() = std::make_shared<ParallelAggregatingBlockInputStream>(pipeline.streams, nullptr, params, true, max_streams,
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
+                                                                : static_cast<size_t>(settings.max_threads));
+
+        pipeline.streams.resize(1);
+    }
+    else
+    {
+        BlockInputStreams inputs;
+        if (!pipeline.streams.empty())
+            inputs.push_back(pipeline.firstStream());
+        else
+            pipeline.streams.resize(1);
+
+        pipeline.firstStream()
+            = std::make_shared<AggregatingBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs), params, true);
+    }
+    // add cast
+}
+
 void InterpreterDAG::executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr)
 {
-    if (expressionActionsPtr->getActions().size() > 0)
+    if (!expressionActionsPtr->getActions().empty())
     {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, expressionActionsPtr); });
     }
@@ -213,7 +288,7 @@ SortDescription InterpreterDAG::getSortDescription(Strings & order_column_names)
 {
     // construct SortDescription
     SortDescription order_descr;
-    const tipb::TopN & topN = dag_query_src.get_topN();
+    const tipb::TopN & topN = dag_query_src.getTopN();
     order_descr.reserve(topN.order_by_size());
     for (int i = 0; i < topN.order_by_size(); i++)
     {
@@ -244,7 +319,7 @@ void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_na
 {
     SortDescription order_descr = getSortDescription(order_column_names);
     const Settings & settings = context.getSettingsRef();
-    Int64 limit = dag_query_src.get_topN().limit();
+    Int64 limit = dag_query_src.getTopN().limit();
 
     pipeline.transform([&](auto & stream) {
         auto sorting_stream = std::make_shared<PartialSortingBlockInputStream>(stream, order_descr, limit);
@@ -269,7 +344,7 @@ void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_na
 //todo return the error message
 bool InterpreterDAG::executeImpl(Pipeline & pipeline)
 {
-    if (!executeTS(dag_query_src.get_ts(), pipeline))
+    if (!executeTS(dag_query_src.getTS(), pipeline))
     {
         return false;
     }
@@ -283,12 +358,9 @@ bool InterpreterDAG::executeImpl(Pipeline & pipeline)
     if (res.need_aggregate)
     {
         // execute aggregation
-        throw Exception("agg not supported");
+        executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
     }
-    else
-    {
-        executeExpression(pipeline, res.before_order_and_select);
-    }
+    executeExpression(pipeline, res.before_order_and_select);
 
     if (res.has_order_by)
     {
@@ -300,7 +372,7 @@ bool InterpreterDAG::executeImpl(Pipeline & pipeline)
     executeFinalProject(pipeline);
 
     // execute limit
-    if (dag_query_src.has_limit() && !dag_query_src.has_topN())
+    if (dag_query_src.hasLimit() && !dag_query_src.hasTopN())
     {
         executeLimit(pipeline);
     }
@@ -324,12 +396,12 @@ void InterpreterDAG::executeFinalProject(Pipeline & pipeline)
 void InterpreterDAG::executeLimit(Pipeline & pipeline)
 {
     pipeline.transform(
-        [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.get_limit().limit(), 0, false); });
+        [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.getLimit().limit(), 0, false); });
     if (pipeline.hasMoreThanOneStream())
     {
         executeUnion(pipeline);
         pipeline.transform(
-            [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.get_limit().limit(), 0, false); });
+            [&](auto & stream) { stream = std::make_shared<LimitBlockInputStream>(stream, dag_query_src.getLimit().limit(), 0, false); });
     }
 }
 

@@ -67,6 +67,7 @@ grpc::Status rpcTest()
     // construct a dag request
     tipb::DAGRequest dagRequest;
     dagRequest.set_start_ts(18446744073709551615uL);
+    // table scan: s,i
     tipb::Executor * executor = dagRequest.add_executors();
     executor->set_tp(tipb::ExecType::TypeTableScan);
     tipb::TableScan * ts = executor->mutable_tbl_scan();
@@ -78,6 +79,8 @@ grpc::Status rpcTest()
     dagRequest.add_output_offsets(1);
     dagRequest.add_output_offsets(0);
     dagRequest.add_output_offsets(1);
+
+    // selection: less(i, 123)
     executor = dagRequest.add_executors();
     executor->set_tp(tipb::ExecType::TypeSelection);
     tipb::Selection * selection = executor->mutable_selection();
@@ -94,6 +97,28 @@ grpc::Status rpcTest()
     ss.str("");
     DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(123, ss);
     value->set_val(std::string(ss.str()));
+
+    // agg: count(s) group by i;
+    /*
+    executor = dagRequest.add_executors();
+    executor->set_tp(tipb::ExecType::TypeAggregation);
+    auto agg = executor->mutable_aggregation();
+    auto agg_func = agg->add_agg_func();
+    agg_func->set_tp(tipb::ExprType::Count);
+    auto child = agg_func->add_children();
+    child->set_tp(tipb::ExprType::ColumnRef);
+    ss.str("");
+    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(1, ss);
+    child->set_val(ss.str());
+    auto type = agg_func->mutable_field_type();
+    type->set_tp(3);
+    type->set_flag(33);
+    auto group_col = agg->add_group_by();
+    group_col->set_tp(tipb::ExprType::ColumnRef);
+    ss.str("");
+    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(2,ss);
+    group_col->set_val(ss.str());
+     */
 
     // topn
     executor = dagRequest.add_executors();

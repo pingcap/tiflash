@@ -43,37 +43,37 @@ public:
     UInt64 getRegionVersion() const { return region_version; }
     UInt64 getRegionConfVersion() const { return region_conf_version; }
 
-    bool has_selection() { return sel_index != -1; };
-    bool has_aggregation() { return agg_index != -1; };
-    bool has_topN() { return order_index != -1; };
-    bool has_limit() { return order_index == -1 && limit_index != -1; };
+    bool hasSelection() { return sel_index != -1; };
+    bool hasAggregation() { return agg_index != -1; };
+    bool hasTopN() { return order_index != -1; };
+    bool hasLimit() { return order_index == -1 && limit_index != -1; };
 
-    const tipb::TableScan & get_ts()
+    const tipb::TableScan & getTS()
     {
         assertValid(ts_index, TS_NAME);
         return dag_request.executors(ts_index).tbl_scan();
     };
-    const tipb::Selection & get_sel()
+    const tipb::Selection & getSelection()
     {
         assertValid(sel_index, SEL_NAME);
         return dag_request.executors(sel_index).selection();
     };
-    const tipb::Aggregation & get_agg()
+    const tipb::Aggregation & getAggregation()
     {
         assertValid(agg_index, AGG_NAME);
         return dag_request.executors(agg_index).aggregation();
     };
-    const tipb::TopN & get_topN()
+    const tipb::TopN & getTopN()
     {
         assertValid(order_index, TOPN_NAME);
         return dag_request.executors(order_index).topn();
     };
-    const tipb::Limit & get_limit()
+    const tipb::Limit & getLimit()
     {
         assertValid(limit_index, LIMIT_NAME);
         return dag_request.executors(limit_index).limit();
     };
-    const tipb::DAGRequest & get_dag_request() { return dag_request; };
+    const tipb::DAGRequest & getDAGRequest() { return dag_request; };
 
 protected:
     Context & context;

@@ -39,6 +39,15 @@ bool isFunctionExpr(const tipb::Expr & expr)
     }
 }
 
+const String & getAggFunctionName(const tipb::Expr & expr)
+{
+    if (!aggFunMap.count(expr.tp()))
+    {
+        throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.");
+    }
+    return aggFunMap[expr.tp()];
+}
+
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
@@ -78,8 +87,7 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::Float64:
             return std::to_string(DecodeFloat64(cursor, expr.val()));
         case tipb::ExprType::String:
-            //
-            return expr.val();
+            return DecodeCompactBytes(cursor, expr.val());
         case tipb::ExprType::Bytes:
             return DecodeBytes(cursor, expr.val());
         case tipb::ExprType::ColumnRef:

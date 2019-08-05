@@ -7,6 +7,7 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Interpreters/AggregateDescription.h>
 #include <Interpreters/DAGQuerySource.h>
 #include <Interpreters/DAGUtils.h>
 #include <Interpreters/ExpressionActions.h>
@@ -69,6 +70,9 @@ private:
         Strings order_column_names;
         /// Columns from the SELECT list, before renaming them to aliases.
         Names selected_columns;
+
+        Names aggregation_keys;
+        AggregateDescriptions aggregate_descriptions;
     };
 
     bool executeImpl(Pipeline & pipeline);
@@ -78,6 +82,8 @@ private:
     void executeOrder(Pipeline & pipeline, Strings & order_column_names);
     void executeUnion(Pipeline & pipeline);
     void executeLimit(Pipeline & pipeline);
+    void executeAggregation(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, Names & aggregation_keys,
+        AggregateDescriptions & aggregate_descriptions);
     void executeFinalProject(Pipeline & pipeline);
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
