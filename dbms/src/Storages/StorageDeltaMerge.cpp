@@ -1,3 +1,5 @@
+#include <random>
+
 #include <gperftools/malloc_extension.h>
 
 #include <DataStreams/IBlockOutputStream.h>
@@ -20,12 +22,18 @@ namespace DB
 {
 using namespace DM;
 
+constexpr bool TEST_SPLIT = false;
+
 StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     const std::string & name_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
     Context & global_context_)
-    : IManageableStorage{columns_}, path(path_ + "/" + name_), name(name_), global_context(global_context_), log(&Logger::get("StorageDeltaMerge"))
+    : IManageableStorage{columns_},
+      path(path_ + "/" + name_),
+      name(name_),
+      global_context(global_context_),
+      log(&Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -228,15 +236,65 @@ BlockInputStreams StorageDeltaMerge::read( //
         to_read.push_back(col_define);
     }
 
-    assert(query_info.query != nullptr);
+
+    HandleRanges ranges;
+    if (TEST_SPLIT)
+    {
+        /// TODO Those code is used to test range read, should be removed later
+
+        size_t rate_base = 1000000;
+        Handle start = N_INF_HANDLE;
+        {
+            auto streams = store->readRaw(context, context.getSettingsRef(), {store->getHandle()}, 1);
+            auto stream = streams[0];
+            stream->readPrefix();
+
+            while (true)
+            {
+                Block block = stream->read();
+                if (!block)
+                    break;
+                auto & handle_data = DB::DM::getColumnVectorData<Handle>(block, 0);
+                for (size_t i = 0; i < handle_data.size(); ++i)
+                {
+                    if ((std::abs(random()) % rate_base) == 0)
+                    {
+                        ranges.emplace_back(start, handle_data[i]);
+                        start = handle_data[i];
+                    }
+                }
+            }
+
+            ranges.emplace_back(start, DB::DM::P_INF_HANDLE);
+
+            stream->readSuffix();
+        }
+
+        LOG_DEBUG(log, "Random split ranges: " + DB::toString(ranges.size()));
+
+        Handle prev = N_INF_HANDLE;
+        for (auto & r : ranges)
+        {
+            if (r.start != prev)
+                LOG_DEBUG(log, "illegal, expected " + DB::toString(prev) + ". got " + DB::toString(r.start));
+
+            prev = r.end;
+
+            if (r.start == r.end)
+                LOG_DEBUG(log, "range start and end are identical");
+        }
+    }
+    else
+    {
+        ranges.emplace_back(DB::DM::HandleRange::newAll());
+    }
+
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    return store->read(context,
-        context.getSettingsRef(),
-        to_read,
-        max_block_size,
-        num_streams,
-        std::numeric_limits<UInt64>::max(),
-        select_query.raw_for_mutable);
+    if (select_query.raw_for_mutable)
+        return store->readRaw(context, context.getSettingsRef(), to_read, num_streams);
+    else
+        return store->read(
+            context, context.getSettingsRef(), to_read, ranges, num_streams, std::numeric_limits<UInt64>::max(), max_block_size);
 }
 
 void StorageDeltaMerge::check(const Context & context) { store->check(context, context.getSettingsRef()); }

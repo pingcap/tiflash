@@ -18,6 +18,8 @@ namespace DB
 {
 namespace DM
 {
+namespace Dummy
+{
 
 enum class Action : UInt8
 {
@@ -399,5 +401,6 @@ private:
     Logger * log;
 };
 
+} // namespace Dummy
 } // namespace DM
 } // namespace DB

@@ -92,9 +92,9 @@ TEST_F(Segment_test, WriteRead)
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ *dm_context,
                                           /*columns_to_read= */ table_columns,
-                                          /* expected_block_size= */ 1024,
+                                          {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* is_raw= */ false);
+                                          /* expected_block_size= */ 1024);
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -108,7 +108,7 @@ TEST_F(Segment_test, WriteRead)
     {
         // test delete range [1,99)
         HandleRange remove(1, 99);
-        segment->deleteRange(*dm_context, remove);
+        segment->write(*dm_context, {remove});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
@@ -117,9 +117,9 @@ TEST_F(Segment_test, WriteRead)
         // read after delete range
         auto in = segment->getInputStream(/* dm_context= */ *dm_context,
                                           /* columns_to_read= */ table_columns,
-                                          /* expected_block_size= */ 1024,
+                                          {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* is_raw= */ false);
+                                          /* expected_block_size= */ 1024);
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -151,9 +151,9 @@ TEST_F(Segment_test, Split)
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ *dm_context,
                                           /*columns_to_read= */ table_columns,
-                                          /* expected_block_size= */ 1024,
+                                          {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* is_raw= */ false);
+                                          /* expected_block_size= */ 1024);
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -165,41 +165,44 @@ TEST_F(Segment_test, Split)
     }
 
     const auto old_range = segment->getRange();
+
     SegmentPtr new_segment;
     // test split segment
-    new_segment = segment->split(*dm_context);
+    std::tie(segment, new_segment) = segment->split(*dm_context);
 
-        // check segment range
-        const auto s1_range = segment->getRange();
-        EXPECT_EQ(s1_range.start, old_range.start);
-        const auto s2_range = new_segment->getRange();
-        EXPECT_EQ(s2_range.start, s1_range.end);
-        EXPECT_EQ(s2_range.end, old_range.end);
-        // TODO check segment epoch is increase
+    // check segment range
+    const auto s1_range = segment->getRange();
+    EXPECT_EQ(s1_range.start, old_range.start);
+    const auto s2_range = new_segment->getRange();
+    EXPECT_EQ(s2_range.start, s1_range.end);
+    EXPECT_EQ(s2_range.end, old_range.end);
+    // TODO check segment epoch is increase
 
     size_t num_rows_seg1 = 0;
     size_t num_rows_seg2 = 0;
     {
         {
             auto in = segment->getInputStream(/* dm_context= */ *dm_context,
-                    /* columns_to_read= */ table_columns,
-                    /* expected_block_size= */ 1024,
-                    /* max_version= */ std::numeric_limits<UInt64>::max(),
-                    /* is_raw= */ false);
+                                              /* columns_to_read= */ table_columns,
+                                              {HandleRange::newAll()},
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
             in->readPrefix();
-            while (Block block = in->read()) {
+            while (Block block = in->read())
+            {
                 num_rows_seg1 += block.rows();
             }
             in->readSuffix();
         }
         {
             auto in = new_segment->getInputStream(/* dm_context= */ *dm_context,
-                    /*columns_to_read= */ table_columns,
-                    /* expected_block_size= */ 1024,
-                    /* max_version= */ std::numeric_limits<UInt64>::max(),
-                    /* is_raw= */ false);
+                                                  /*columns_to_read= */ table_columns,
+                                                  {HandleRange::newAll()},
+                                                  /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                                  /* expected_block_size= */ 1024);
             in->readPrefix();
-            while (Block block = in->read()) {
+            while (Block block = in->read())
+            {
                 num_rows_seg2 += block.rows();
             }
             in->readSuffix();
@@ -209,23 +212,24 @@ TEST_F(Segment_test, Split)
 
     // merge segments
     {
-        segment->merge(*dm_context, new_segment);
+        segment = Segment::merge(*dm_context, segment, new_segment);
         {
             // check merged segment range
-            const auto &merged_range = segment->getRange();
+            const auto & merged_range = segment->getRange();
             EXPECT_EQ(merged_range.start, s1_range.start);
             EXPECT_EQ(merged_range.end, s2_range.end);
             // TODO check segment epoch is increase
         }
         {
             size_t num_rows_read = 0;
-            auto in = segment->getInputStream(/* dm_context= */ *dm_context,
-                    /* columns_to_read= */ table_columns,
-                    /* expected_block_size= */ 1024,
-                    /* max_version= */ std::numeric_limits<UInt64>::max(),
-                    /* is_raw= */ false);
+            auto   in            = segment->getInputStream(/* dm_context= */ *dm_context,
+                                              /* columns_to_read= */ table_columns,
+                                              {HandleRange::newAll()},
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
             in->readPrefix();
-            while (Block block = in->read()) {
+            while (Block block = in->read())
+            {
                 num_rows_read += block.rows();
             }
             in->readSuffix();
@@ -234,10 +238,7 @@ TEST_F(Segment_test, Split)
     }
 }
 
-TEST_F(Segment_test, Restore)
-{
-
-}
+TEST_F(Segment_test, Restore) {}
 
 } // namespace tests
 } // namespace DM

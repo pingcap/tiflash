@@ -6,6 +6,8 @@ namespace DB
 {
 namespace DM
 {
+namespace Dummy
+{
 
 MemoryValueSpace::MemoryValueSpace(String name, const NamesAndTypesList & name_types, const SortDescription & sort_desc)
     : log(&Logger::get("MemoryValueSpace(" + name + ")"))
@@ -129,5 +131,6 @@ void MemoryValueSpace::gc()
         sc.gc();
 }
 
+} // namespace Dummy
 } // namespace DM
 } // namespace DB

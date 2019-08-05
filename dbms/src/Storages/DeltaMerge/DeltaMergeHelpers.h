@@ -99,16 +99,29 @@ inline PermutationPtr sortBlockByPk(const ColumnDefine & handle, Block & block)
 }
 
 template <typename T>
+inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
+{
+    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+    return &c.getData();
+}
+
+template <typename T>
+inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
+{
+    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+    return c.getData();
+}
+
+template <typename T>
 inline const PaddedPODArray<T> & getColumnVectorData(const Block & block, size_t pos)
 {
-    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(block.getByPosition(pos).column));
-    return c.getData();
+    return toColumnVectorData<T>(block.getByPosition(pos).column);
 }
 
 template <typename T>
 inline PaddedPODArray<T> const * getColumnVectorDataPtr(const Block & block, size_t pos)
 {
-    return &getColumnVectorData<T>(block, pos);
+    return toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
 inline void addColumn(Block & block, ColId col_id, String col_name, const DataTypePtr & col_type, const ColumnPtr & col)
@@ -218,6 +231,25 @@ inline void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_colu
 #undef APPEND
 }
 
+inline void concat(Block & base, const Block & next)
+{
+    size_t next_rows = next.rows();
+    for (size_t i = 0; i < base.columns(); ++i)
+    {
+        auto & col     = base.getByPosition(i).column;
+        auto * col_raw = const_cast<IColumn *>(col.get());
+        col_raw->insertRangeFrom((*next.getByPosition(i).column), 0, next_rows);
+    }
+}
+
+inline size_t blockBytes(const Block & block)
+{
+    size_t bytes = 0;
+    for (auto & c : block)
+        bytes += c.column->byteSize();
+    return bytes;
+}
+
 inline Block createHeader(const ColumnDefines & col_defines)
 {
     Block header;
@@ -244,13 +276,13 @@ inline String rangeToString(T start, T end)
     return s;
 }
 
-template <typename T, bool right_open>
+template <typename T>
 struct Range;
 
-template <typename T, bool right_open = true>
-inline String rangeToString(const Range<T, right_open> & range)
+template <typename T>
+inline String rangeToString(const Range<T> & range)
 {
-    return rangeToString<T, right_open>(range.start, range.end);
+    return rangeToString<T, true>(range.start, range.end);
 }
 
 } // namespace DM

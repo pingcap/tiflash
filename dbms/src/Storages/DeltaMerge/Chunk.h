@@ -8,9 +8,11 @@
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <Storages/Page/Page.h>
+#include <Storages/Page/PageStorage.h>
+
 
 namespace DB
 {
@@ -35,13 +37,27 @@ class Chunk
 public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
-    Chunk() : delete_range(HandleRange::newNone()) {}
-    explicit Chunk(const HandleRange & delete_range_) : delete_range(delete_range_) {}
 
-    static Chunk newChunk(const HandleRange & delete_range_) { return Chunk{delete_range_}; }
+    Chunk() = default;
+    Chunk(Handle handle_first_, Handle handle_last_) : handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false) {}
+    explicit Chunk(const HandleRange & delete_range) : handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
+    {
+    }
 
-    bool                isDeleteRange() const { return !delete_range.none(); }
-    const HandleRange & getDeleteRange() const { return delete_range; }
+    bool        isDeleteRange() const { return is_delete_range; }
+    HandleRange getDeleteRange() const
+    {
+        if (!is_delete_range)
+            throw Exception("Not a delete range");
+        return {handle_start, handle_end};
+    }
+
+    HandlePair getHandleFirstLast() const
+    {
+        if (is_delete_range)
+            throw Exception("It is a delete range");
+        return {handle_start, handle_end};
+    }
 
     size_t getRows() const { return rows; }
 
@@ -66,88 +82,47 @@ public:
     void insert(const ColumnMeta & c)
     {
         if (isDeleteRange())
-            throw Exception("Insert column into delete range chunk is not allowed.");
+            throw Exception("Insert column into delete range chunk is not allowed");
         columns[c.col_id] = c;
-        if (rows && rows != c.rows)
+        if (rows != 0 && rows != c.rows)
             throw Exception("Rows not match");
         else
             rows = c.rows;
     }
 
-    void serialize(WriteBuffer & buf) const
-    {
-        writeIntBinary(delete_range.start, buf);
-        writeIntBinary(delete_range.end, buf);
-        writeIntBinary((UInt64)columns.size(), buf);
-        for (const auto & [col_id, d] : columns)
-        {
-            writeIntBinary(col_id, buf);
-            writeIntBinary(d.page_id, buf);
-            writeIntBinary(d.rows, buf);
-            writeIntBinary(d.bytes, buf);
-            writeStringBinary(d.type->getName(), buf);
-        }
-    }
-
-    static Chunk deserialize(ReadBuffer & buf)
-    {
-        Chunk chunk;
-        readIntBinary(chunk.delete_range.start, buf);
-        readIntBinary(chunk.delete_range.end, buf);
-        UInt64 col_size;
-        readIntBinary(col_size, buf);
-        chunk.columns.reserve(col_size);
-        for (UInt64 ci = 0; ci < col_size; ++ci)
-        {
-            ColumnMeta d;
-            String     type;
-            readIntBinary(d.col_id, buf);
-            readIntBinary(d.page_id, buf);
-            readIntBinary(d.rows, buf);
-            readIntBinary(d.bytes, buf);
-            readStringBinary(type, buf);
-
-            d.type = DataTypeFactory::instance().get(type);
-
-            chunk.columns.emplace(d.col_id, d);
-
-            if (chunk.rows && chunk.rows != d.rows)
-                throw Exception("Rows not match");
-            else
-                chunk.rows = d.rows;
-        }
-        return chunk;
-    }
+    void         serialize(WriteBuffer & buf) const;
+    static Chunk deserialize(ReadBuffer & buf);
 
 private:
+    Handle        handle_start;
+    Handle        handle_end;
+    bool          is_delete_range;
     ColumnMetaMap columns;
     size_t        rows = 0;
-
-    /// delete_range and columns can exist at the same time.
-    HandleRange delete_range;
 };
 
-using Chunks = std::vector<Chunk>;
+using Chunks    = std::vector<Chunk>;
+using GenPageId = std::function<PageId()>;
 
-inline void serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, std::optional<Chunk> extra_chunk)
-{
-    UInt64 size = extra_chunk.has_value() ? (UInt64)(end - begin) + 1 : (UInt64)(end - begin);
-    writeIntBinary(size, buf);
-    for (; begin != end; ++begin)
-        (*begin).serialize(buf);
-    if (extra_chunk)
-        extra_chunk->serialize(buf);
-}
+void   serializeChunks(WriteBuffer &           buf,
+                       Chunks::const_iterator  begin,
+                       Chunks ::const_iterator end,
+                       const Chunk *           extra1 = nullptr,
+                       const Chunk *           extra2 = nullptr);
+Chunks deserializeChunks(ReadBuffer & buf);
 
-inline Chunks deserializeChunks(ReadBuffer & buf)
-{
-    Chunks chunks;
-    UInt64 size;
-    readIntBinary(size, buf);
-    for (UInt64 i = 0; i < size; ++i)
-        chunks.push_back(Chunk::deserialize(buf));
-    return chunks;
-}
+Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block);
+
+void readChunkData(MutableColumns &      columns,
+                   const Chunk &         chunk,
+                   const ColumnDefines & column_defines,
+                   PageStorage &         storage,
+                   size_t                rows_offset,
+                   size_t                rows_limit);
+
+
+Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage);
+
 
 } // namespace DM
 } // namespace DB

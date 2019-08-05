@@ -8,6 +8,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/Chunk.h>
+#include <Storages/DeltaMerge/ChunkBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -19,14 +20,15 @@ namespace DB
 namespace DM
 {
 
-using GenPageId = std::function<PageId()>;
-
-struct BlockOrRange
+struct BlockOrDelete
 {
+    BlockOrDelete(Block && block_) : block(block_) {}
+    BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
+
     Block       block;
     HandleRange delete_range;
 };
-using BlockOrRanges = std::vector<BlockOrRange>;
+using BlockOrDeletes = std::vector<BlockOrDelete>;
 
 class DiskValueSpace
 {
@@ -60,16 +62,34 @@ public:
         GenPageId     gen_data_page_id;
     };
 
+    struct AppendTask
+    {
+        /// The write order of the following wirte batch is critical!
+
+        WriteBatch data_write_batch;
+        WriteBatch meta_write_batch;
+
+        WriteBatch data_remove_write_batch;
+
+        bool   append_cache; // If not append cache, then clear cache.
+        size_t remove_chunk_back;
+        Chunks append_chunks;
+    };
+    using AppendTaskPtr = std::unique_ptr<AppendTask>;
+
     DiskValueSpace(bool should_cache_, PageId page_id_);
     DiskValueSpace(bool should_cache_, PageId page_id_, const Chunks & chunks_);
+    DiskValueSpace(const DiskValueSpace & other);
 
-    void swap(DiskValueSpace & other);
-
-    /// Called after
+    /// Called after the instance is created from existing metadata.
     void restore(const OpContext & context);
 
+    AppendTaskPtr createAppendTask(const OpContext & context, const BlockOrDelete & block_or_delete) const;
+
+    void applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & block_or_delete);
+
     /// Write the blocks from input_stream into underlying storage, the returned chunks can be added to
-    /// specified value space instance by #prepareSetChunk + #commitSetChunks or #appendChunkWithCache later.
+    /// specified value space instance by #setChunks or #appendChunkWithCache later.
     static Chunks writeChunks(const OpContext & context, const BlockInputStreamPtr & input_stream);
 
     static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
@@ -81,44 +101,53 @@ public:
     void appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block);
 
     /// Read the requested chunks' data and compact into a block.
-    /// For convenient, the columns of the block are guaranteed to be in order of read_columns.
-    Block read(const ColumnDefines & read_columns, PageStorage & data_storage, size_t rows_offset, size_t rows_limit);
+    /// The columns of the returned block are guaranteed to be in order of read_columns.
+    Block read(const ColumnDefines & read_columns,
+               PageStorage &         data_storage,
+               size_t                rows_offset,
+               size_t                rows_limit,
+               std::optional<size_t> reserve_rows = {}) const;
 
-    /// Read the chunk data
-    /// For convenient, the columns of the block are guaranteed to be in order of read_columns.
-    Block read(const ColumnDefines & read_columns, PageStorage & data_storage, size_t chunk_index);
+    /// Read the chunk data.
+    /// The columns of the returned block are guaranteed to be in order of read_columns.
+    Block read(const ColumnDefines & read_columns, PageStorage & data_storage, size_t chunk_index) const;
 
     /// The data of returned block is in insert order.
-    BlockOrRanges getMergeBlocks(const ColumnDefine & handle, PageStorage & data_storage, size_t rows_offset, size_t deletes_offset);
+    BlockOrDeletes getMergeBlocks(const ColumnDefine & handle,
+                                  PageStorage &        data_storage,
+                                  size_t               rows_begin,
+                                  size_t               deletes_begin,
+                                  size_t               rows_end,
+                                  size_t               deletes_end) const;
 
-    class DVSBlockInputStream;
-    BlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage);
+    ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage) const;
 
     bool tryFlushCache(const OpContext & context, bool force = false);
 
-    size_t num_rows();
-    size_t num_rows(size_t chunks_offset, size_t chunk_length);
-    size_t num_deletes();
-    size_t num_bytes();
-    size_t num_chunks();
+    size_t num_rows() const;
+    size_t num_rows(size_t chunks_offset, size_t chunk_length) const;
+    size_t num_deletes() const;
+    size_t num_bytes() const;
+    size_t num_chunks() const;
 
     PageId         pageId() const { return page_id; }
-    const Chunk &  getChunk(size_t index) const { return chunks.at(index); }
-    const Chunks & getChunks() { return chunks; }
+    const Chunks & getChunks() const { return chunks; }
 
 private:
     bool doFlushCache(const OpContext & context);
 
-    size_t rowsFromBack(size_t chunks);
-    size_t cacheRows();
-    size_t cacheBytes();
+    size_t rowsFromBack(size_t chunks) const;
+    size_t cacheRows() const;
+    size_t cacheBytes() const;
+
     /// Return (chunk_index, offset_in_chunk)
-    std::pair<size_t, size_t> findChunk(size_t rows);
-    std::pair<size_t, size_t> findChunk(size_t rows, size_t deletes);
+    std::pair<size_t, size_t> findChunk(size_t rows) const;
+    std::pair<size_t, size_t> findChunk(size_t rows, size_t deletes) const;
 
 private:
-    // page_id and chunks are the only vars needed to persisted.
-    bool   should_cache;
+    bool should_cache;
+
+    // page_id and chunks are the only vars needed to persist.
     PageId page_id;
     Chunks chunks;
 
@@ -128,6 +157,8 @@ private:
 
     Logger * log;
 };
+
+using DiskValueSpacePtr = std::shared_ptr<DiskValueSpace>;
 
 } // namespace DM
 } // namespace DB

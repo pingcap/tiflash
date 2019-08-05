@@ -31,11 +31,22 @@ static_assert(sizeof(UInt64) >= sizeof(DTModifiesPtr));
 #define isLeaf(p) (((*reinterpret_cast<size_t *>(p)) & 0x01) != 0)
 #define nodeName(p) (isLeaf(p) ? "leaf" : "intern")
 
+inline std::string addrToHex(const void * addr)
+{
+    if (!addr)
+        return "null";
+    std::stringstream ss;
+    ss << addr;
+    return ss.str();
+}
+
 /// DTMutation type available values.
-static constexpr UInt16 DT_INS           = 65535;
-static constexpr UInt16 DT_DEL           = 65534;
-static constexpr UInt16 DT_MULTI_MOD     = 65533;
-static constexpr UInt16 DT_MAX_COLUMN_ID = 65500;
+using DT_TYPE = UInt16;
+
+static constexpr DT_TYPE DT_INS           = 65535;
+static constexpr DT_TYPE DT_DEL           = 65534;
+static constexpr DT_TYPE DT_MULTI_MOD     = 65533;
+static constexpr DT_TYPE DT_MAX_COLUMN_ID = 65500;
 
 inline std::string DTTypeString(UInt16 type)
 {
@@ -70,7 +81,7 @@ struct DTMutation
     UInt16 type = 0;
     /// for DT_INS and DT_MOD, "value" is the value index in value space;
     /// for DT_MULTI_MOD, "value" represents the chain pointer;
-    /// for DT_DEL, "value" is the consecutive deleting number, e.g. 5 means 5 tuples got deleted starting from current position.
+    /// for DT_DEL, "value" is the consecutive deleting tuple count, e.g. 5 means 5 tuples got deleted starting from current position.
     UInt64 value = 0;
 
     inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
@@ -104,11 +115,17 @@ struct DTLeaf
 
     UInt64     sids[M * S + 1];
     DTMutation mutations[M * S + 1];
-    size_t     count = 0; // mutations number count
+    size_t     count = 0; // mutations count
 
     LeafPtr   prev   = nullptr;
     LeafPtr   next   = nullptr;
     InternPtr parent = nullptr;
+
+    std::string toString()
+    {
+        return "{count:" + DB::toString(count) + ",prev:" + addrToHex(prev) + ",next:" + addrToHex(next) + ",parent:" + addrToHex(parent)
+            + "}";
+    }
 
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
     inline UInt64 rid(size_t pos, Int64 delta) const { return sids[pos] + delta; }
@@ -156,7 +173,7 @@ struct DTLeaf
     }
 
     /// Search the first pos with equal or greater id.
-    /// Returns the mutations count if the id is not found in this leaf.
+    /// Returns <pos_in_node, delta>.
     template <bool isRid>
     inline std::pair<size_t, Int64> search(const UInt64 id, Int64 delta) const
     {
@@ -286,9 +303,11 @@ struct DTIntern
     UInt64  sids[F * S + 1];
     Int64   deltas[F * S + 1];
     NodePtr children[F * S + 1];
-    size_t  count = 0; // children number count, and sids' is "count - 1"
+    size_t  count = 0; // deltas / children count, and the number of sids is "count - 1"
 
     InternPtr parent = nullptr;
+
+    std::string toString() { return "{count:" + DB::toString(count) + ",parent:" + addrToHex(parent) + "}"; }
 
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
     inline UInt64 rid(size_t pos, Int64 delta) const { return sids[pos] + delta; }
@@ -449,7 +468,10 @@ class DTEntryIterator
     Int64   delta;
 
 public:
+    DTEntryIterator() = default;
     DTEntryIterator(LeafPtr leaf_, size_t pos_, Int64 delta_) : leaf(leaf_), pos(pos_), delta(delta_) {}
+
+    std::string toString() { return "{leaf:" + addrToHex(leaf) + ",pos:" + DB::toString(pos) + ",delta:" + DB::toString(delta) + "}"; }
 
     bool operator==(const DTEntryIterator & rhs) const { return leaf == rhs.leaf && pos == rhs.pos; }
     bool operator!=(const DTEntryIterator & rhs) const { return !(*this == rhs); }
@@ -500,6 +522,93 @@ public:
     UInt64     getRid() const { return leaf->sids[pos] + delta; }
 };
 
+template <size_t M, size_t F, size_t S, typename Allocator>
+class DTEntriesCopy : Allocator
+{
+    using LeafPtr = DTLeaf<M, F, S> *;
+
+    const size_t entry_count;
+    const Int64  delta;
+    UInt64 *     sids;
+    DTMutation * mutations;
+
+public:
+    DTEntriesCopy(LeafPtr left_leaf, size_t entry_count_, Int64 delta_)
+        : entry_count(entry_count_),
+          delta(delta_),
+          sids(reinterpret_cast<UInt64 *>(this->alloc(sizeof(UInt64) * entry_count))),
+          mutations(reinterpret_cast<DTMutation *>(this->alloc(sizeof(DTMutation) * entry_count)))
+    {
+        size_t offset = 0;
+        while (left_leaf)
+        {
+            std::move(left_leaf->sids, left_leaf->sids + left_leaf->count, sids + offset);
+            std::move(left_leaf->mutations, left_leaf->mutations + left_leaf->count, mutations + offset);
+
+            offset += left_leaf->count;
+            left_leaf = left_leaf->next;
+        }
+    }
+
+    ~DTEntriesCopy()
+    {
+        this->free(sids, sizeof(UInt64) * entry_count);
+        this->free(mutations, sizeof(DTMutation) * entry_count);
+    }
+
+    class Iterator
+    {
+    private:
+        std::shared_ptr<DTEntriesCopy> entries_holder; // Holds a reference, stop being freed.
+        DTEntriesCopy *                entries;
+
+        size_t index = 0;
+        Int64  delta;
+
+    public:
+        Iterator(const std::shared_ptr<DTEntriesCopy> & entries_, size_t index_, Int64 delta_)
+            : entries_holder(entries_), entries(entries_.get()), index(index_), delta(delta_)
+        {
+        }
+
+        bool operator==(const Iterator & rhs) const { return index == rhs.index; }
+        bool operator!=(const Iterator & rhs) const { return index != rhs.index; }
+
+        Iterator & operator++()
+        {
+            if (entries->mutations[index].type == DT_INS)
+                delta += 1;
+            else if (entries->mutations[index].type == DT_DEL)
+                delta -= entries->mutations[index].value;
+
+            ++index;
+
+            return *this;
+        }
+
+        Iterator & operator--()
+        {
+            --index;
+
+            if (entries->mutations[index].type == DT_INS)
+                delta -= 1;
+            else if (entries->mutations[index].type == DT_DEL)
+                delta += entries->mutations[index].value;
+
+            return *this;
+        }
+
+        Int64  getDelta() const { return delta; }
+        UInt16 getType() const { return entries->mutations[index].type; }
+        UInt64 getValue() const { return entries->mutations[index].value; }
+        UInt64 getSid() const { return entries->sids[index]; }
+        UInt64 getRid() const { return entries->sids[index] + delta; }
+    };
+
+    static Iterator begin(const std::shared_ptr<DTEntriesCopy> & entries) { return {entries, 0, 0}; }
+    static Iterator end(const std::shared_ptr<DTEntriesCopy> & entries) { return {entries, entries->entry_count, entries->delta}; }
+}; // namespace DM
+
 template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
 class DeltaTree
 {
@@ -544,14 +653,14 @@ private:
 
     void check(NodePtr node) const;
 
-    using LeafAndDeltaPtr = std::pair<LeafPtr, Int64>;
+    using LeafPtrAndDelta = std::pair<LeafPtr, Int64>;
     /// Find right most leaf this id (rid/sid) could exists/insert.
     template <bool isRid>
-    LeafAndDeltaPtr findRightLeaf(const UInt64 id) const;
+    LeafPtrAndDelta findRightLeaf(const UInt64 id) const;
 
     /// Find left most leaf this id (rid/sid) could exists.
     template <bool isRid>
-    LeafAndDeltaPtr findLeftLeaf(const UInt64 id) const;
+    LeafPtrAndDelta findLeftLeaf(const UInt64 id) const;
 
     using InterAndSid = std::pair<InternPtr, UInt64>;
     template <typename T>
@@ -701,6 +810,27 @@ public:
     {
         Int64 delta = isLeaf(root) ? as(Leaf, root)->getDelta() : as(Intern, root)->getDelta();
         return EntryIterator(right_leaf, right_leaf->count, delta);
+    }
+
+    template <typename CopyAllocator>
+    std::shared_ptr<DTEntriesCopy<M, F, S, CopyAllocator>> getEntriesCopy()
+    {
+        Int64 delta = isLeaf(root) ? as(Leaf, root)->getDelta() : as(Intern, root)->getDelta();
+        return std::make_shared<DTEntriesCopy<M, F, S, CopyAllocator>>(left_leaf, num_entries, delta);
+    }
+
+    EntryIterator sidLowerBound(UInt64 sid) const
+    {
+        LeafPtr leaf;
+        Int64   delta;
+        size_t  pos;
+        std::tie(leaf, delta) = findLeftLeaf<false>(sid);
+        std::tie(pos, delta)  = leaf->searchSid(sid, delta);
+        EntryIterator it(leaf, pos, delta);
+        if (it != end() && pos == leaf->count)
+            return {leaf->next, 0, delta};
+        else
+            return it;
     }
 
     size_t numEntries() const { return num_entries; }
@@ -993,6 +1123,9 @@ void DT_CLASS::addDelete(const UInt64 rid)
     }
 
     afterLeafUpdated(leaf);
+
+    if (unlikely(!isRootOnly() && !leaf->legal()))
+        throw Exception("Illegal leaf state: " + leaf->state());
 }
 
 DT_TEMPLATE
@@ -1033,11 +1166,14 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
     ++(leaf->count);
 
     afterLeafUpdated(leaf);
+
+    if (unlikely(!isRootOnly() && !leaf->legal()))
+        throw Exception("Illegal leaf state: " + leaf->state());
 }
 
 DT_TEMPLATE
 template <bool isRid>
-typename DT_CLASS::LeafAndDeltaPtr DT_CLASS::findRightLeaf(const UInt64 id) const
+typename DT_CLASS::LeafPtrAndDelta DT_CLASS::findRightLeaf(const UInt64 id) const
 {
     NodePtr node  = root;
     Int64   delta = 0;
@@ -1072,7 +1208,7 @@ typename DT_CLASS::LeafAndDeltaPtr DT_CLASS::findRightLeaf(const UInt64 id) cons
 
 DT_TEMPLATE
 template <bool isRid>
-typename DT_CLASS::LeafAndDeltaPtr DT_CLASS::findLeftLeaf(const UInt64 id) const
+typename DT_CLASS::LeafPtrAndDelta DT_CLASS::findLeftLeaf(const UInt64 id) const
 {
     NodePtr node      = root;
     Int64   delta     = 0;
