@@ -38,7 +38,7 @@ public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
 
-    Chunk() = default;
+    Chunk() : Chunk(0, 0) {}
     Chunk(Handle handle_first_, Handle handle_last_) : handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false) {}
     explicit Chunk(const HandleRange & delete_range) : handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
     {

@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "dm_basic_include.h"
 
+#include <Poco/File.h>
+
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 
 namespace DB
@@ -35,15 +37,12 @@ TEST_F(DeltaMergeStore_test, Case1)
 {
     // create table
     Context      context = DMTestEnv::getContext();
-    ColumnDefine handle_column_define{
-        .name = "pk",
-        .type = std::make_shared<DataTypeInt64>(),
-        .id   = 1,
-    };
+    ColumnDefine handle_column_define(1, "pk", std::make_shared<DataTypeInt64>());
     ColumnDefines table_column_defines;
     {
         table_column_defines.emplace_back(handle_column_define);
-        table_column_defines.emplace_back(ColumnDefine{.name = "col2", .type = std::make_shared<DataTypeString>(), .id = 2});
+        ColumnDefine cd(2, "col2", std::make_shared<DataTypeString>());
+        table_column_defines.emplace_back(cd);
     }
 
     DeltaMergeStorePtr store
