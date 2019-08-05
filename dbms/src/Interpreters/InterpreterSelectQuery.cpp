@@ -242,7 +242,10 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     /// If first try failed, sync schema and try again.
     {
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", not OK, syncing schemas.");
+        auto start_time = Clock::now();
         context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
+        auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema sync cost " << schema_sync_cost << "ms.");
 
         std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(true);
         if (ok)

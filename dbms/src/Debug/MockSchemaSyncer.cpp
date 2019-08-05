@@ -240,25 +240,30 @@ bool MockSchemaSyncer::syncSchemas(Context & context)
 
     std::unordered_map<TableID, MockTiDB::TablePtr> new_tables;
     MockTiDB::instance().traverseTables([&](const auto & table) { new_tables.emplace(table->id(), table); });
+    bool done_anything = false;
 
     for (auto [id, table] : tables)
     {
         if (new_tables.find(id) == new_tables.end())
+        {
             dropTable(table->table_info.db_name, table->table_info.name, context);
+            done_anything = true;
+        }
     }
 
     for (auto [id, table] : new_tables)
     {
         std::ignore = id;
-        syncTable(context, table);
+        if (syncTable(context, table))
+            done_anything = true;
     }
 
     tables.swap(new_tables);
 
-    return true;
+    return done_anything;
 }
 
-void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
+bool MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
 {
     auto & tmt_context = context.getTMTContext();
 
@@ -311,8 +316,10 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
             create_table_internal();
         }
 
-        return;
+        return true;
     }
+
+    bool done_anything = false;
 
     // TODO: Check database name change?
     // TODO: Partition table?
@@ -323,6 +330,7 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
             __PRETTY_FUNCTION__ << ": Renaming table " << table_info.db_name << "." << storage->getTableName() << " TO "
                                 << table_info.db_name << "." << table_info.name);
         renameTable(table_info.db_name, storage->getTableName(), table_info, context);
+        done_anything = true;
     }
 
     /// Table existing, detect schema changes and apply.
@@ -346,11 +354,14 @@ void MockSchemaSyncer::syncTable(Context & context, MockTiDB::TablePtr table)
 
         // Call storage alter to apply schema changes.
         storage->alterForTMT(alter_commands, table_info, table->table_info.db_name, context);
+        done_anything = true;
 
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Schema changes apply done.");
 
         // TODO: Apply schema changes to partition tables.
     }
+
+    return done_anything;
 }
 
 } // namespace DB
