@@ -5,26 +5,28 @@
 namespace DB
 {
 
-TableID RegionData::insert(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key, const TiKVValue & value)
+TableID RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const String & raw_key, TiKVValue && value)
 {
     switch (cf)
     {
         case Write:
         {
-            auto table_id = write_cf.insert(key, value, raw_key);
+            size_t size = key.dataSize() + value.dataSize();
+            auto table_id = write_cf.insert(std::move(key), std::move(value), raw_key);
             if (table_id != InvalidTableID)
-                cf_data_size += key.dataSize() + value.dataSize();
+                cf_data_size += size;
             return table_id;
         }
         case Default:
         {
-            auto table_id = default_cf.insert(key, value, raw_key);
-            cf_data_size += key.dataSize() + value.dataSize();
+            size_t size = key.dataSize() + value.dataSize();
+            auto table_id = default_cf.insert(std::move(key), std::move(value), raw_key);
+            cf_data_size += size;
             return table_id;
         }
         case Lock:
         {
-            return lock_cf.insert(key, value, raw_key);
+            return lock_cf.insert(std::move(key), std::move(value), raw_key);
         }
         default:
             throw Exception("RegionData::insert with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
@@ -194,5 +196,23 @@ RegionData::RegionData(RegionData && data)
 {}
 
 UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
+
+void RegionData::deleteRange(const ColumnFamilyType cf, const TiKVKey & start_key, const TiKVKey & end_key)
+{
+    switch (cf)
+    {
+        case Write:
+            write_cf.deleteRange(start_key, end_key);
+            break;
+        case Default:
+            default_cf.deleteRange(start_key, end_key);
+            break;
+        case Lock:
+            lock_cf.deleteRange(start_key, end_key);
+            break;
+        default:
+            throw Exception("[RegionData::deleteRange] with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+    }
+}
 
 } // namespace DB

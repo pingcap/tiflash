@@ -25,6 +25,7 @@ public:
     struct FuturePart
     {
         String name;
+        String path;
         MergeTreePartInfo part_info;
         MergeTreeData::DataPartsVector parts;
 

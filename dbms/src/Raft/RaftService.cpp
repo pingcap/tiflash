@@ -28,28 +28,29 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
 
     grpc_server = builder.BuildAndStart();
 
-    persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); });
-    table_flush_handle = background_pool.addTask([this] {
+    persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); }, false);
+
+    table_flush_handle = background_pool.addTask(
+        [this] {
+            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+            return region_table.tryFlushRegions();
+        },
+        false);
+
+    region_flush_handle = background_pool.addTask([this] {
+        RegionID region_id;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (regions_to_flush.empty())
+                return false;
+            region_id = regions_to_flush.front();
+            regions_to_flush.pop();
+        }
         RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-        return region_table.tryFlushRegions();
+        region_table.tryFlushRegion(region_id);
+        return true;
     });
 
-    for (size_t i = 0; i < region_flush_handles.size(); ++i)
-    {
-        region_flush_handles[i] = background_pool.addTask([this] {
-            RegionID region_id;
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                if (regions_to_flush.empty())
-                    return false;
-                region_id = regions_to_flush.front();
-                regions_to_flush.pop();
-            }
-            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-            region_table.tryFlushRegion(region_id);
-            return true;
-        });
-    }
 
     LOG_INFO(log, "Raft service listening on [" << address << "]");
 }
@@ -60,8 +61,7 @@ void RaftService::addRegionToFlush(const Region & region)
         std::lock_guard<std::mutex> lock(mutex);
         regions_to_flush.push(region.id());
     }
-    size_t index = round_index++;
-    region_flush_handles[index % region_flush_handles.size()]->wake();
+    region_flush_handle->wake();
 }
 
 RaftService::~RaftService()
@@ -77,13 +77,10 @@ RaftService::~RaftService()
         table_flush_handle = nullptr;
     }
 
-    for (size_t i = 0; i < region_flush_handles.size(); ++i)
+    if (region_flush_handle)
     {
-        if (region_flush_handles[i])
-        {
-            background_pool.removeTask(region_flush_handles[i]);
-            region_flush_handles[i] = nullptr;
-        }
+        background_pool.removeTask(region_flush_handle);
+        region_flush_handle = nullptr;
     }
 
     // wait 5 seconds for pending rpcs to gracefully stop
@@ -95,16 +92,16 @@ RaftService::~RaftService()
 
 grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream)
 {
-    RaftContext rctx(&db_context, grpc_context, stream);
+    RaftContext raft_contex(&db_context, grpc_context, stream);
 
     try
     {
-        kvstore->report(rctx);
+        kvstore->report(raft_contex);
 
-        enginepb::CommandRequestBatch request;
-        while (stream->Read(&request))
+        enginepb::CommandRequestBatch cmds;
+        while (stream->Read(&cmds))
         {
-            applyCommand(rctx, request);
+            kvstore->onServiceCommand(std::move(cmds), raft_contex);
         }
     }
     catch (...)
@@ -127,11 +124,6 @@ grpc::Status RaftService::ApplySnapshot(grpc::ServerContext *, CommandServerRead
         tryLogCurrentException(log, "gRPC ApplyCommandBatch on " + address + " error");
         return grpc::Status(grpc::StatusCode::UNKNOWN, "Runtime error, check theflash log for detail.");
     }
-}
-
-void RaftService::applyCommand(RaftContext & context, const enginepb::CommandRequestBatch & cmd)
-{
-    kvstore->onServiceCommand(cmd, context);
 }
 
 } // namespace DB

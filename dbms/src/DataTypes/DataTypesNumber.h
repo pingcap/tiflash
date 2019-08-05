@@ -20,6 +20,14 @@ class DataTypeNumber final : public DataTypeNumberBase<T>
     bool isNumber() const override { return true; }
     bool isInteger() const override { return std::is_integral_v<T>; }
     bool canBeInsideNullable() const override { return true; }
+
+public:
+    DataTypePtr widen() const override
+    {
+        auto t = std::make_shared<DataTypeNumber<T>>();
+        t->widened = true;
+        return t;
+    }
 };
 
 template <>

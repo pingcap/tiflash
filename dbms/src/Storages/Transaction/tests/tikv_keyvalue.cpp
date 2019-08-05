@@ -1,13 +1,15 @@
 #include "region_helper.h"
 
 #include <Storages/Transaction/CHTableHandle.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVHelper.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <Storages/Transaction/Region.h>
 
 using namespace DB;
 
-inline bool checkTableInvolveRange(const TableID table_id, const std::pair<TiKVKey, TiKVKey> & range)
+using RangeRef = std::pair<const TiKVKey &, const TiKVKey &>;
+
+inline bool checkTableInvolveRange(const TableID table_id, const RangeRef & range)
 {
     const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
     const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
@@ -100,26 +102,26 @@ int main(int, char **)
         TiKVKey start_key = RecordKVFormat::genKey(200, 123);
         TiKVKey end_key = RecordKVFormat::genKey(300, 124);
 
-        assert(checkTableInvolveRange(200, std::make_pair(start_key, end_key)));
-        assert(checkTableInvolveRange(250, std::make_pair(start_key, end_key)));
-        assert(checkTableInvolveRange(300, std::make_pair(start_key, end_key)));
-        assert(!checkTableInvolveRange(400, std::make_pair(start_key, end_key)));
+        assert(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
+        assert(checkTableInvolveRange(250, RangeRef{start_key, end_key}));
+        assert(checkTableInvolveRange(300, RangeRef{start_key, end_key}));
+        assert(!checkTableInvolveRange(400, RangeRef{start_key, end_key}));
     }
     {
         TiKVKey start_key = RecordKVFormat::genKey(200, std::numeric_limits<HandleID>::min());
         TiKVKey end_key = RecordKVFormat::genKey(200, 100);
 
-        assert(checkTableInvolveRange(200, std::make_pair(start_key, end_key)));
-        assert(!checkTableInvolveRange(100, std::make_pair(start_key, end_key)));
+        assert(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
+        assert(!checkTableInvolveRange(100, RangeRef{start_key, end_key}));
     }
     {
         TiKVKey start_key;
         TiKVKey end_key;
 
-        assert(checkTableInvolveRange(200, std::make_pair(start_key, end_key)));
-        assert(checkTableInvolveRange(250, std::make_pair(start_key, end_key)));
-        assert(checkTableInvolveRange(300, std::make_pair(start_key, end_key)));
-        assert(checkTableInvolveRange(400, std::make_pair(start_key, end_key)));
+        assert(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
+        assert(checkTableInvolveRange(250, RangeRef{start_key, end_key}));
+        assert(checkTableInvolveRange(300, RangeRef{start_key, end_key}));
+        assert(checkTableInvolveRange(400, RangeRef{start_key, end_key}));
     }
 
     {
@@ -253,8 +255,18 @@ int main(int, char **)
         std::string s = "1234";
         s[0] = char(1);
         s[3] = char(111);
-        TiKVKey key(s);
+        auto & key = static_cast<const TiKVKey &>(s);
         assert(key.toHex() == "[1 32 33 6f]");
+    }
+
+    {
+        std::string s(12, 1);
+        s[8] = s[9] = s[10] = 0;
+        assert(RecordKVFormat::checkKeyPaddingValid(s.data() + 1, 1));
+        assert(RecordKVFormat::checkKeyPaddingValid(s.data() + 2, 2));
+        assert(RecordKVFormat::checkKeyPaddingValid(s.data() + 3, 3));
+        for (auto i = 1; i <= 8; ++i)
+            assert(!RecordKVFormat::checkKeyPaddingValid(s.data() + 4, i));
     }
 
     return res ? 0 : 1;

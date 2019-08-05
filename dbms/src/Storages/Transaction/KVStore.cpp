@@ -108,14 +108,14 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
     return true;
 }
 
-void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftContext & raft_ctx)
+void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & raft_ctx)
 {
     TMTContext * tmt_context = raft_ctx.context ? &(raft_ctx.context->getTMTContext()) : nullptr;
     RegionTable * region_table = tmt_context ? &(tmt_context->getRegionTable()) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
 
-    const auto report_region_destroy = [&](RegionID region_id) {
+    const auto report_region_destroy = [&](const RegionID region_id) {
         auto & resp = *(responseBatch.add_responses());
         resp.mutable_header()->set_region_id(region_id);
         resp.mutable_header()->set_destroyed(true);
@@ -124,10 +124,10 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
 
     std::lock_guard<std::mutex> lock(task_mutex);
 
-    for (const auto & cmd : cmds.requests())
+    for (auto && cmd : *cmds.mutable_requests())
     {
-        auto & header = cmd.header();
-        auto curr_region_id = header.region_id();
+        const auto & header = cmd.header();
+        const auto curr_region_id = header.region_id();
 
         const RegionPtr curr_region_ptr = getRegion(curr_region_id);
         if (curr_region_ptr == nullptr)
@@ -151,7 +151,7 @@ void KVStore::onServiceCommand(const enginepb::CommandRequestBatch & cmds, RaftC
             continue;
         }
 
-        RaftCommandResult result = curr_region.onCommand(cmd);
+        RaftCommandResult result = curr_region.onCommand(std::move(cmd));
 
         const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region.toCommandResponse(); };
 

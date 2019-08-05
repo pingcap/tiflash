@@ -24,6 +24,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -119,13 +120,32 @@ int Server::main(const std::vector<std::string> & /*args*/)
         config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
     }
 
-    std::string path = getCanonicalPath(config().getString("path"));
+    String paths = config().getString("path");
+    std::vector<String> all_path;
+    Poco::trimInPlace(paths);
+    if (paths.empty())
+        throw Exception("path configuration parameter is empty");
+    Poco::StringTokenizer string_tokens(paths, ";");
+    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+    {
+        all_path.push_back(getCanonicalPath(std::string(*it)));
+        LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+    }
+    global_context->setAllPath(all_path);
+    {
+        global_context->initializePartPathSelector(global_context->getAllPath());
+    }
+
+    std::string path = global_context->getAllPath()[0];
     std::string default_database = config().getString("default_database", "default");
 
     global_context->setPath(path);
 
     /// Create directories for 'path' and for default database, if not exist.
-    Poco::File(path + "data/" + default_database).createDirectories();
+    for (const String & candidate_path : global_context->getAllPath())
+    {
+        Poco::File(candidate_path + "data/" + default_database).createDirectories();
+    }
     Poco::File(path + "metadata/" + default_database).createDirectories();
 
     StatusFile status{path + "status"};
@@ -314,6 +334,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::vector<std::string> pd_addrs;
     std::string learner_key;
     std::string learner_value;
+    std::unordered_set<std::string> ignore_databases;
     std::string kvstore_path = path + "kvstore/";
     std::string region_mapping_path = path + "regmap/";
 
@@ -329,7 +350,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 pd_addrs.push_back(*it);
             }
-            LOG_INFO(log, "Found pd addrs.");
+            LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
         }
         else
         {
@@ -354,6 +375,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
             learner_value = "engine";
         }
 
+        if (config().has("raft.ignore_databases"))
+        {
+            String ignore_dbs = config().getString("raft.ignore_databases");
+            Poco::StringTokenizer string_tokens(ignore_dbs, ",");
+            std::stringstream ss;
+            for (const auto & string_token : string_tokens)
+            {
+                ignore_databases.emplace(string_token);
+                ss << string_token << std::endl;
+            }
+            LOG_INFO(log, "Found ignore databases:\n" << ss.str());
+        }
+
         if (config().has("raft.kvstore_path"))
         {
             kvstore_path = config().getString("raft.kvstore_path");
@@ -364,29 +398,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             region_mapping_path = config().getString("raft.regmap");
         }
     }
-    if (config().has("tidb"))
-    {
-        String service_ip = config().getString("tidb.service_ip");
-        String status_port = config().getString("tidb.status_port");
-        std::unordered_set<std::string> ignore_databases;
-        if (config().has("tidb.ignore_databases"))
-        {
-            String ignore_dbs = config().getString("tidb.ignore_databases");
-            Poco::StringTokenizer string_tokens(ignore_dbs, ",");
-            std::stringstream ss;
-            for (const auto & string_token : string_tokens)
-            {
-                ignore_databases.emplace(string_token);
-                ss << string_token << std::endl;
-            }
-            LOG_INFO(log, "Found ignore databases:\n" << ss.str());
-        }
-        global_context->initializeTiDBService(service_ip, status_port, ignore_databases);
-    }
 
     {
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
     }
 
     /// Then, load remaining databases
@@ -394,6 +409,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_DEBUG(log, "Loaded metadata.");
 
     global_context->setCurrentDatabase(default_database);
+
+    /// Then, sync schemas with TiDB, and initialize schema sync service.
+    global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+    LOG_DEBUG(log, "Sync schemas done.");
+    global_context->initializeSchemaSyncService();
 
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,

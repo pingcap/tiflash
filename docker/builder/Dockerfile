@@ -13,9 +13,6 @@ RUN apt update -y \
         # For tests: # bash expect python python-lxml python-termcolor curl perl sudo tzdata
  && rm -rf /var/lib/apt/lists/*
 
-RUN git clone https://github.com/curl/curl.git \
- && cd /curl && mkdir .build && cd .build && cmake .. && make && make install
-
 RUN git clone https://github.com/grpc/grpc.git && cd grpc && git checkout v1.14.2 && git submodule update --init \
  && cd /grpc && mkdir .build && cd .build && cmake .. -DgRPC_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo) \
  && rm -rf /grpc/.build \

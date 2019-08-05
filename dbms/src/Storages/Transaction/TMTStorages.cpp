@@ -5,21 +5,17 @@
 namespace DB
 {
 
-void TMTStorages::put(StoragePtr storage)
+void TMTStorages::put(TMTStoragePtr storage)
 {
     std::lock_guard lock(mutex);
 
-    const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-    if (!merge_tree)
-        throw Exception{storage->getName() + " is not in MergeTree family", ErrorCodes::LOGICAL_ERROR};
-
-    TableID table_id = merge_tree->getTableInfo().id;
+    TableID table_id = storage->getTableInfo().id;
     if (storages.find(table_id) != storages.end())
         return;
     storages.emplace(table_id, storage);
 }
 
-StoragePtr TMTStorages::get(TableID table_id) const
+TMTStoragePtr TMTStorages::get(TableID table_id) const
 {
     std::lock_guard lock(mutex);
 
@@ -29,9 +25,9 @@ StoragePtr TMTStorages::get(TableID table_id) const
     return it->second;
 }
 
-std::unordered_map<TableID, StoragePtr> TMTStorages::getAllStorage() const { return storages; }
+std::unordered_map<TableID, TMTStoragePtr> TMTStorages::getAllStorage() const { return storages; }
 
-StoragePtr TMTStorages::getByName(const std::string & db, const std::string & table) const
+TMTStoragePtr TMTStorages::getByName(const std::string & db, const std::string & table) const
 {
     std::lock_guard lock(mutex);
 
