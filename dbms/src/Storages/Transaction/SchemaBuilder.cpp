@@ -338,7 +338,6 @@ void SchemaBuilder::applyDropSchema(DatabaseID schema_id)
     drop_query->database = database_name;
     drop_query->if_exists = true;
     ASTPtr ast_drop_query = drop_query;
-    drop_query->if_exists = true;
     // It will drop all tables in this database.
     InterpreterDropQuery drop_interpreter(ast_drop_query, context);
     drop_interpreter.execute();
