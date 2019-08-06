@@ -1,12 +1,9 @@
 #include <Interpreters/DAGQuerySource.h>
-
 #include <Interpreters/InterpreterDAG.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
 
 namespace DB
 {
