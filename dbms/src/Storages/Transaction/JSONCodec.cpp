@@ -124,7 +124,7 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
 
 JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value)
 {
-    long elementCount = decodeNumeric<UInt32>(cursor, raw_value); // elementCount
+    long elementCount = decodeNumeric<UInt32>(cursor, raw_value);
     size_t size = decodeNumeric<UInt32>(cursor, raw_value);
 
     JsonArrayPtr arrayPtr = new Poco::JSON::Array();
