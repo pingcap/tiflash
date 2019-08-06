@@ -30,12 +30,10 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
 
     persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); }, false);
 
-    table_flush_handle = background_pool.addTask(
-        [this] {
-            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-            return region_table.tryFlushRegions();
-        },
-        false);
+    table_flush_handle = background_pool.addTask([this] {
+        RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+        return region_table.tryFlushRegions();
+    });
 
     region_flush_handle = background_pool.addTask([this] {
         RegionID region_id;
