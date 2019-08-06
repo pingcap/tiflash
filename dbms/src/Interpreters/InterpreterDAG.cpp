@@ -114,7 +114,7 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 
     //todo support index in
     SelectQueryInfo query_info;
-    query_info.query = std::make_unique<ASTSelectQuery>();
+    query_info.query = dag.getAST();
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
