@@ -91,6 +91,8 @@ private:
     std::unordered_map<String, DatabaseID> databases;
     std::unordered_map<String, TablePtr> tables_by_name;
     std::unordered_map<TableID, TablePtr> tables_by_id;
+
+    std::atomic<TableID> table_id_allocator = MaxSystemTableID + 1;
 };
 
 } // namespace DB

@@ -1,19 +1,26 @@
-#include <pd/Client.h>
-#include <common/CltException.h>
-#include <grpcpp/security/credentials.h>
-#include <grpcpp/create_channel.h>
 #include <Poco/URI.h>
+#include <common/CltException.h>
+#include <grpcpp/create_channel.h>
+#include <grpcpp/security/credentials.h>
+#include <pd/Client.h>
 #include <unistd.h>
 
-namespace pingcap {
-namespace pd {
+namespace pingcap
+{
+namespace pd
+{
 
-inline std::vector<std::string> addrsToUrls(const std::vector<std::string> & addrs) {
+inline std::vector<std::string> addrsToUrls(const std::vector<std::string> & addrs)
+{
     std::vector<std::string> urls;
-    for (const std::string & addr: addrs) {
-        if (addr.find("://") == std::string::npos) {
+    for (const std::string & addr : addrs)
+    {
+        if (addr.find("://") == std::string::npos)
+        {
             urls.push_back("http://" + addr);
-        } else {
+        }
+        else
+        {
             urls.push_back(addr);
         }
     }
@@ -21,12 +28,12 @@ inline std::vector<std::string> addrsToUrls(const std::vector<std::string> & add
 }
 
 Client::Client(const std::vector<std::string> & addrs)
-    :max_init_cluster_retries(100),
-     pd_timeout(3),
-     loop_interval(100),
-     update_leader_interval(60),
-     urls(addrsToUrls(addrs)),
-     log(&Logger::get("pingcap.pd"))
+    : max_init_cluster_retries(100),
+      pd_timeout(3),
+      loop_interval(100),
+      update_leader_interval(60),
+      urls(addrsToUrls(addrs)),
+      log(&Logger::get("pingcap.pd"))
 {
     initClusterID();
 
@@ -34,21 +41,20 @@ Client::Client(const std::vector<std::string> & addrs)
 
     work_threads_stop = false;
 
-    work_thread = std::thread([&](){leaderLoop();});
+    work_thread = std::thread([&]() { leaderLoop(); });
 }
 
 Client::~Client()
 {
     work_threads_stop = true;
 
-    if (work_thread.joinable()) {
+    if (work_thread.joinable())
+    {
         work_thread.join();
     }
 }
 
-bool Client::isMock() {
-    return false;
-}
+bool Client::isMock() { return false; }
 
 std::shared_ptr<grpc::Channel> Client::getOrCreateGRPCConn(const std::string & addr)
 {
@@ -77,7 +83,8 @@ pdpb::GetMembersResponse Client::getMembers(std::string url)
     context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
 
     auto status = pdpb::PD::NewStub(cc)->GetMembers(&context, pdpb::GetMembersRequest{}, &resp);
-    if (!status.ok()) {
+    if (!status.ok())
+    {
         std::string err_msg = "get member failed: " + std::to_string(status.error_code()) + ": " + status.error_message();
         log->error(err_msg);
         return {};
@@ -85,15 +92,19 @@ pdpb::GetMembersResponse Client::getMembers(std::string url)
     return resp;
 }
 
-std::unique_ptr<pdpb::PD::Stub> Client::leaderStub() {
+std::unique_ptr<pdpb::PD::Stub> Client::leaderStub()
+{
     std::shared_lock lk(leader_mutex);
     auto cc = getOrCreateGRPCConn(leader);
     return pdpb::PD::NewStub(cc);
 }
 
-void Client::initClusterID() {
-    for (int i = 0; i < max_init_cluster_retries; i++) {
-        for (auto url : urls) {
+void Client::initClusterID()
+{
+    for (int i = 0; i < max_init_cluster_retries; i++)
+    {
+        for (auto url : urls)
+        {
             auto resp = getMembers(url);
             if (!resp.has_header())
             {
@@ -101,20 +112,22 @@ void Client::initClusterID() {
                 continue;
             }
             cluster_id = resp.header().cluster_id();
-            return ;
+            return;
         };
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
     throw Exception("failed to init cluster id", InitClusterIDFailed);
 }
 
-void Client::updateLeader() {
+void Client::updateLeader()
+{
     std::unique_lock lk(leader_mutex);
-    for (auto url: urls) {
+    for (auto url : urls)
+    {
         auto resp = getMembers(url);
         if (!resp.has_header() || resp.leader().client_urls_size() == 0)
         {
-            log -> error("failed to get cluster id by :" + url);
+            log->error("failed to get cluster id by :" + url);
             continue;
         }
         updateURLs(resp.members());
@@ -124,64 +137,81 @@ void Client::updateLeader() {
     throw Exception("failed to update leader", UpdatePDLeaderFailed);
 }
 
-void Client::switchLeader(const ::google::protobuf::RepeatedPtrField<std::string>& leader_urls) {
+void Client::switchLeader(const ::google::protobuf::RepeatedPtrField<std::string> & leader_urls)
+{
     std::string old_leader = leader;
     leader = leader_urls[0];
-    if (leader == old_leader) {
-        return ;
+    if (leader == old_leader)
+    {
+        return;
     }
 
     getOrCreateGRPCConn(leader);
 }
 
-void Client::updateURLs(const ::google::protobuf::RepeatedPtrField<::pdpb::Member>& members) {
+void Client::updateURLs(const ::google::protobuf::RepeatedPtrField<::pdpb::Member> & members)
+{
     std::vector<std::string> tmp_urls;
-    for (int i = 0; i < members.size(); i++) {
+    for (int i = 0; i < members.size(); i++)
+    {
         auto client_urls = members[i].client_urls();
-        for (int j = 0; j < client_urls.size(); j++) {
+        for (int j = 0; j < client_urls.size(); j++)
+        {
             tmp_urls.push_back(client_urls[j]);
         }
     }
     urls = tmp_urls;
 }
 
-void Client::leaderLoop() {
+void Client::leaderLoop()
+{
     auto next_update_time = std::chrono::system_clock::now();
 
-    for (;;) {
+    for (;;)
+    {
         bool should_update = false;
         std::unique_lock<std::mutex> lk(update_leader_mutex);
         auto now = std::chrono::system_clock::now();
-        if (update_leader_cv.wait_until(lk, now + loop_interval, [this](){return check_leader.load();})) {
+        if (update_leader_cv.wait_until(lk, now + loop_interval, [this]() { return check_leader.load(); }))
+        {
             should_update = true;
-        } else {
+        }
+        else
+        {
             if (work_threads_stop)
             {
                 return;
             }
-            if (std::chrono::system_clock::now() >= next_update_time) {
+            if (std::chrono::system_clock::now() >= next_update_time)
+            {
                 should_update = true;
                 next_update_time = std::chrono::system_clock::now() + update_leader_interval;
             }
         }
-        if (should_update) {
-            try {
+        if (should_update)
+        {
+            try
+            {
                 check_leader.store(false);
                 updateLeader();
-            } catch (Exception & e) {
+            }
+            catch (Exception & e)
+            {
                 log->error(e.displayText());
             }
         }
     }
 }
 
-pdpb::RequestHeader * Client::requestHeader() {
+pdpb::RequestHeader * Client::requestHeader()
+{
     auto header = new pdpb::RequestHeader();
     header->set_cluster_id(cluster_id);
     return header;
 }
 
-uint64_t Client::getTS() {
+uint64_t Client::getTS()
+{
     pdpb::TsoRequest request{};
     pdpb::TsoResponse response{};
     request.set_allocated_header(requestHeader());
@@ -192,23 +222,37 @@ uint64_t Client::getTS() {
     context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
 
     auto stream = leaderStub()->Tso(&context);
-    stream->Write(request);
-    stream->Read(&response);
+    if (!stream->Write(request))
+    {
+        std::string err_msg = ("write tso failed\n ");
+        log->error(err_msg);
+        check_leader.store(true);
+        throw Exception(err_msg, GRPCErrorCode);
+    }
+    if (!stream->Read(&response))
+    {
+        std::string err_msg = ("write tso failed\n ");
+        log->error(err_msg);
+        check_leader.store(true);
+        throw Exception(err_msg, GRPCErrorCode);
+    }
     auto ts = response.timestamp();
     return (ts.physical() << 18) + ts.logical();
 }
 
-uint64_t Client::getGCSafePoint() {
+uint64_t Client::getGCSafePoint()
+{
     std::lock_guard<std::mutex> lk(gc_safepoint_mutex);
 
     pdpb::GetGCSafePointRequest request{};
     pdpb::GetGCSafePointResponse response{};
     request.set_allocated_header(requestHeader());
-;
+    ;
     ::grpc::Status status;
     std::string err_msg;
 
-    for (int i = 0; i < max_init_cluster_retries; i++) {
+    for (int i = 0; i < max_init_cluster_retries; i++)
+    {
         grpc::ClientContext context;
 
         context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
@@ -225,7 +269,8 @@ uint64_t Client::getGCSafePoint() {
     throw Exception(err_msg, status.error_code());
 }
 
-std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegion(std::string key) {
+std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegion(std::string key)
+{
     pdpb::GetRegionRequest request{};
     pdpb::GetRegionResponse response{};
 
@@ -237,7 +282,8 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
     request.set_region_key(key);
 
     auto status = leaderStub()->GetRegion(&context, request, &response);
-    if (!status.ok()) {
+    if (!status.ok())
+    {
         std::string err_msg = ("get region failed: " + std::to_string(status.error_code()) + " : " + status.error_message());
         log->error(err_msg);
         check_leader.store(true);
@@ -245,13 +291,15 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
     }
 
     std::vector<metapb::Peer> slaves;
-    for (size_t i = 0; i < response.slaves_size(); i++) {
+    for (size_t i = 0; i < response.slaves_size(); i++)
+    {
         slaves.push_back(response.slaves(i));
     }
     return std::make_tuple(response.region(), response.leader(), slaves);
 }
 
-std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegionByID(uint64_t region_id) {
+std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getRegionByID(uint64_t region_id)
+{
     pdpb::GetRegionByIDRequest request{};
     pdpb::GetRegionResponse response{};
 
@@ -263,21 +311,24 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
     context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
 
     auto status = leaderStub()->GetRegionByID(&context, request, &response);
-    if (!status.ok()) {
-        std::string err_msg = ("get region by id failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
+    if (!status.ok())
+    {
+        std::string err_msg = ("get region by id failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
         log->error(err_msg);
         check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
     }
 
     std::vector<metapb::Peer> slaves;
-    for (size_t i = 0; i < response.slaves_size(); i++) {
+    for (size_t i = 0; i < response.slaves_size(); i++)
+    {
         slaves.push_back(response.slaves(i));
     }
     return std::make_tuple(response.region(), response.leader(), slaves);
 }
 
-metapb::Store Client::getStore(uint64_t store_id) {
+metapb::Store Client::getStore(uint64_t store_id)
+{
     pdpb::GetStoreRequest request{};
     pdpb::GetStoreResponse response{};
 
@@ -289,8 +340,9 @@ metapb::Store Client::getStore(uint64_t store_id) {
     context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
 
     auto status = leaderStub()->GetStore(&context, request, &response);
-    if (!status.ok()) {
-        std::string err_msg = ("get store failed: " + std::to_string (status.error_code())  + ": " + status.error_message());
+    if (!status.ok())
+    {
+        std::string err_msg = ("get store failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
         log->error(err_msg);
         check_leader.store(true);
         throw Exception(err_msg, GRPCErrorCode);
@@ -298,5 +350,5 @@ metapb::Store Client::getStore(uint64_t store_id) {
     return response.store();
 }
 
-}
-}
+} // namespace pd
+} // namespace pingcap

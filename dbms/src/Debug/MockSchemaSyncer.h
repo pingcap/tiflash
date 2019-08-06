@@ -15,7 +15,7 @@ public:
     bool syncSchemas(Context & context) override;
 
 protected:
-    void syncTable(Context & context, MockTiDB::TablePtr table);
+    bool syncTable(Context & context, MockTiDB::TablePtr table);
 
     Logger * log;
 

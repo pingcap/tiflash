@@ -349,7 +349,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 pd_addrs.push_back(*it);
             }
-            LOG_INFO(log, "Found pd addrs.");
+            LOG_INFO(log, "Found pd addrs: " << pd_service_addrs);
         }
         else
         {
@@ -376,7 +376,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         if (config().has("raft.ignore_databases"))
         {
-            String ignore_dbs = config().getString("tidb.ignore_databases");
+            String ignore_dbs = config().getString("raft.ignore_databases");
             Poco::StringTokenizer string_tokens(ignore_dbs, ",");
             std::stringstream ss;
             for (const auto & string_token : string_tokens)

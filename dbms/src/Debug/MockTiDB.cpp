@@ -122,7 +122,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     }
     table_info.db_id = databases[database_name];
     table_info.db_name = database_name;
-    table_info.id = static_cast<TableID>(tables_by_id.size()) + MaxSystemTableID + 1;
+    table_info.id = table_id_allocator++;
     table_info.name = table_name;
 
     int i = 0;
@@ -247,7 +247,7 @@ void MockTiDB::truncateTable(const String & database_name, const String & table_
     TablePtr table = getTableByNameInternal(database_name, table_name);
 
     TableID old_table_id = table->table_info.id;
-    table->table_info.id += 1000; // Just big enough is OK.
+    table->table_info.id = table_id_allocator++;
 
     tables_by_id.erase(old_table_id);
     tables_by_id.emplace(table->id(), table);

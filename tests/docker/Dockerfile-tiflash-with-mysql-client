@@ -1,0 +1,4 @@
+ARG TAG=master
+FROM hub.pingcap.net/tiflash/tics:${TAG}
+RUN apt-get update
+RUN apt-get install -y mysql-client
