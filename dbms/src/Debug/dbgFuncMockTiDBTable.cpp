@@ -1,4 +1,3 @@
-#include <Debug/MockSchemaSyncer.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/InterpreterCreateQuery.h>

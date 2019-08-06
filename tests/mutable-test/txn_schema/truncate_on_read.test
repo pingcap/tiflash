@@ -4,7 +4,6 @@
 => drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
-=> DBGInvoke __mock_schema_syncer('true')
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
 => DBGInvoke __refresh_schemas()
@@ -19,7 +18,7 @@
 ┌─col_1─┬─_tidb_rowid─┐
 │ test1 │          50 │
 └───────┴─────────────┘
-=> select * from default.test " --schema_version "100
+=> select * from default.test " --schema_version "10000000
 
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test

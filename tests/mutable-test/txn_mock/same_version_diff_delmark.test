@@ -2,10 +2,6 @@
 
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> DBGInvoke mock_schema_syncer('true')
-┌─mock_schema_syncer("true")─┐
-│ mock schema syncer enabled │
-└────────────────────────────┘
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 Int64')
 => DBGInvoke __region_snapshot(4, 0, 1000, default, test)
 => DBGInvoke __raft_insert_row_full(default, test, 4, 2, 1, 0, 10)
