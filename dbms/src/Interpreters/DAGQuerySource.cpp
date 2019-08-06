@@ -2,6 +2,11 @@
 
 #include <Interpreters/InterpreterDAG.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ParserQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 
 namespace DB
 {
@@ -54,10 +59,13 @@ DAGQuerySource::DAGQuerySource(
     }
 }
 
-std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t)
+std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)
 {
+    String tmp = "select 1";
+    ParserQuery parser(tmp.data() + tmp.size());
+    ASTPtr parent = parseQuery(parser, tmp.data(), tmp.data() + tmp.size(), "", max_query_size);
     auto query = dag_request.DebugString();
-    auto ast = std::make_shared<ASTSelectQuery>();
+    ast = ((ASTSelectWithUnionQuery *)parent.get())->list_of_selects->children.at(0);
     return std::make_tuple(query, ast);
 }
 

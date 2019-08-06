@@ -87,6 +87,8 @@ public:
     /// This will somewhat duplicate the planning logic, but we don't have a decent way to keep this information.
     FieldTpAndFlags getOutputFieldTpAndFlags() const;
 
+    ASTPtr getAST() const { return ast; };
+
 protected:
     void assertValid(Int32 index, const String & name) const
     {
@@ -110,6 +112,8 @@ protected:
     Int32 agg_index = -1;
     Int32 order_index = -1;
     Int32 limit_index = -1;
+
+    ASTPtr ast;
 };
 
 } // namespace DB

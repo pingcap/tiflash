@@ -68,7 +68,6 @@ void DAGBlockOutputStream::write(const Block & block)
         }
         for (size_t j = 0; j < block.columns(); j++)
         {
-            // TODO: No need to encode column id?
             auto field = (*block.getByPosition(j).column.get())[i];
             EncodeDatum(field, field_tp_and_flags[j].getCodecFlag(), current_ss);
         }
