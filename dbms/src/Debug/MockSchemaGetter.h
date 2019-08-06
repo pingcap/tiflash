@@ -11,7 +11,7 @@ struct MockSchemaGetter
 
     TiDB::DBInfoPtr getDatabase(DatabaseID db_id) { return MockTiDB::instance().getDBInfoByID(db_id); }
 
-    Int64 getVersion() { return MockTiDB::instance().version; }
+    Int64 getVersion() { return MockTiDB::instance().getVersion(); }
 
     SchemaDiff getSchemaDiff(Int64 version) { return MockTiDB::instance().getSchemaDiff(version); }
 

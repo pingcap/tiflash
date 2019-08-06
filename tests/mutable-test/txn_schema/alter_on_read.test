@@ -24,7 +24,7 @@
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_2.
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_2 from default.test " --schema_version "100
+=> select col_2 from default.test " --schema_version "10000000
 ┌─col_2─┐
 │     1 │
 └───────┘
@@ -40,7 +40,7 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 │       │
 └───────┘
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_1 from default.test " --schema_version "100
+=> select col_1 from default.test " --schema_version "10000000
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_1.
 
@@ -65,7 +65,7 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 Received exception from server (version {#WORD}):
 Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 128 of type Nullable(Int8).
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_2 from default.test " --schema_version "100
+=> select col_2 from default.test " --schema_version "10000000
 ┌─col_2─┐
 │     1 │
 │     2 │
@@ -82,7 +82,7 @@ Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow 
 Received exception from server (version {#WORD}):
 Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 65536 of type Nullable(Int16).
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_2 from default.test " --schema_version "100
+=> select col_2 from default.test " --schema_version "10000000
 ┌─col_2─┐
 │     1 │
 │     2 │
@@ -103,7 +103,7 @@ Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow 
 Received exception from server (version {#WORD}):
 Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 256 of type UInt8.
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_3, col_4 from default.test " --schema_version "100
+=> select col_3, col_4 from default.test " --schema_version "10000000
 ┌─col_3─┬─col_4─┐
 │     0 │    \N │
 │     0 │    \N │
@@ -135,7 +135,7 @@ Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow 
 ┌───────────────col_2─┬────────────────col_3─┬─col_4─┐
 │ 9223372036854775807 │ 18446744073709551615 │     1 │
 └─────────────────────┴──────────────────────┴───────┘
-=> select col_3, col_4 from default.test " --schema_version "100
+=> select col_3, col_4 from default.test " --schema_version "100000000
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_3.
 
@@ -149,7 +149,7 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 Received exception from server (version {#WORD}):
 Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 256 of type Nullable(UInt8).
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_4 from default.test " --schema_version "100
+=> select col_4 from default.test " --schema_version "100000000
 ┌─col_4─┐
 │    \N │
 │    \N │

@@ -87,13 +87,13 @@ public:
 
     TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
 
-    Int64 version = 0;
-
     SchemaDiff getSchemaDiff(Int64 version);
 
     std::unordered_map<String, DatabaseID> getDatabases() { return databases; }
 
     std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
+
+    Int64 getVersion() { return version; }
 
 private:
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
@@ -108,6 +108,8 @@ private:
     std::unordered_map<Int64, SchemaDiff> version_diff;
 
     std::atomic<TableID> table_id_allocator = MaxSystemTableID + 1;
+
+    Int64 version = 0;
 };
 
 } // namespace DB

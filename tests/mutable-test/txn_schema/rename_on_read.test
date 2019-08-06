@@ -13,11 +13,11 @@
 => select * from default.test
 => DBGInvoke __rename_tidb_table(default, test, test1)
 => select * from default.test
-=> select * from default.test " --schema_version "100
+=> select * from default.test " --schema_version "1000000
 Received exception from server (version {#WORD}):
 Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test doesn't exist..
 => select * from default.test1
-=> select * from default.test1 " --schema_version "100
+=> select * from default.test1 " --schema_version "1000000
 
 => DBGInvoke __drop_tidb_table(default, test1)
 => drop table if exists default.test1
