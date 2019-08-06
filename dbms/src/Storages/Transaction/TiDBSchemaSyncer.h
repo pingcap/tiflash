@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Debug/MockSchemaGetter.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <tikv/Snapshot.h>
@@ -7,11 +8,15 @@
 namespace DB
 {
 
+template <bool mock_getter>
 struct TiDBSchemaSyncer : public SchemaSyncer
 {
-    pingcap::pd::ClientPtr pdClient;
-    pingcap::kv::RegionCachePtr regionCache;
-    pingcap::kv::RpcClientPtr rpcClient;
+
+    using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
+
+    pingcap::pd::ClientPtr pd_client;
+    pingcap::kv::RegionCachePtr region_cache;
+    pingcap::kv::RpcClientPtr rpc_client;
 
     const Int64 maxNumberOfDiffs = 100;
 
@@ -23,18 +28,30 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Logger * log;
 
-    TiDBSchemaSyncer(pingcap::pd::ClientPtr pdClient_, pingcap::kv::RegionCachePtr regionCache_, pingcap::kv::RpcClientPtr rpcClient_)
-        : pdClient(pdClient_), regionCache(regionCache_), rpcClient(rpcClient_), cur_version(0), log(&Logger::get("SchemaSyncer"))
+    TiDBSchemaSyncer(pingcap::pd::ClientPtr pd_client_, pingcap::kv::RegionCachePtr region_cache_, pingcap::kv::RpcClientPtr rpc_client_)
+        : pd_client(pd_client_), region_cache(region_cache_), rpc_client(rpc_client_), cur_version(0), log(&Logger::get("SchemaSyncer"))
     {}
 
     bool isTooOldSchema(Int64 cur_version, Int64 new_version) { return cur_version == 0 || new_version - cur_version > maxNumberOfDiffs; }
+
+    Getter createSchemaGetter(UInt64 tso [[maybe_unused]])
+    {
+        if constexpr (mock_getter)
+        {
+            return Getter();
+        }
+        else
+        {
+            return Getter(region_cache, rpc_client, tso);
+        }
+    }
 
     bool syncSchemas(Context & context) override
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto tso = pdClient->getTS();
-        SchemaGetter getter = SchemaGetter(regionCache, rpcClient, tso);
+        auto tso = pd_client->getTS();
+        auto getter = createSchemaGetter(tso);
         Int64 version = getter.getVersion();
         if (version <= cur_version)
         {
@@ -51,7 +68,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return true;
     }
 
-    bool tryLoadSchemaDiffs(SchemaGetter & getter, Int64 version, Context & context)
+    bool tryLoadSchemaDiffs(Getter & getter, Int64 version, Context & context)
     {
         if (isTooOldSchema(cur_version, version))
         {
@@ -60,7 +77,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         LOG_DEBUG(log, "try load schema diffs.");
 
-        SchemaBuilder builder(getter, context, databases, version);
+        SchemaBuilder<Getter> builder(getter, context, databases, version);
 
         Int64 used_version = cur_version;
         std::vector<SchemaDiff> diffs;
@@ -85,9 +102,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return true;
     }
 
-    void loadAllSchema(SchemaGetter & getter, Int64 version, Context & context)
+    void loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
-        SchemaBuilder builder(getter, context, databases, version);
+        SchemaBuilder<Getter> builder(getter, context, databases, version);
         builder.syncAllSchema();
     }
 };

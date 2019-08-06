@@ -222,6 +222,7 @@ struct DBInfo
     String collate;
     SchemaState state;
 
+    DBInfo() = default;
     DBInfo(const String & json) { deserialize(json); }
 
     void deserialize(const String & json_str);
