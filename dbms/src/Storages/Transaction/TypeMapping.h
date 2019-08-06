@@ -11,4 +11,4 @@ using ColumnInfo = TiDB::ColumnInfo;
 
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info);
 
-}
+} // namespace DB

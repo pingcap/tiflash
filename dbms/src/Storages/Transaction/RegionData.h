@@ -63,6 +63,8 @@ public:
 
     RegionData(RegionData && data);
 
+    void deleteRange(const ColumnFamilyType cf, const TiKVKey & start_key, const TiKVKey & end_key);
+
 public:
     static UInt8 getWriteType(const ConstWriteCFIter & write_it);
 

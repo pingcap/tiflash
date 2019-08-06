@@ -1,0 +1,54 @@
+# PD Configuration
+initial-cluster-state = "new"
+
+enable-prevote = true
+lease = 3
+namespace-classifier = "table"
+tso-save-interval = "3s"
+
+[security]
+cacert-path = ""
+cert-path = ""
+key-path = ""
+
+[log]
+level = "info"
+
+[log.file]
+
+[metric]
+
+[schedule]
+leader-schedule-limit = 4
+max-merge-region-keys = 0
+max-merge-region-size = 0
+max-pending-peer-count = 16
+max-snapshot-count = 3
+max-store-down-time = "3000h"
+merge-schedule-limit = 0
+region-schedule-limit = 20
+replica-schedule-limit = 20
+split-merge-interval = "1h"
+tolerant-size-ratio = 5.0
+
+# [[schedule.schedulers]]
+# type = "balance-hot-region-scheduler"
+# disable = true
+# [[schedule.schedulers]]
+# type = "label-scheduler"
+# disable = true
+# [[schedule.schedulers]]
+# type = "balance-region-scheduler"
+# disable = true
+# [[schedule.schedulers]]
+# type = "balance-leader-scheduler"
+# disable = true
+
+[replication]
+location-labels = []
+max-replicas = 1
+
+[label-property]
+[[label-property.slave]]
+key = "zone"
+value = "engine"

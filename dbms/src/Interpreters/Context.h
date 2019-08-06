@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 
 #include <common/MultiVersion.h>
 #include <Core/Types.h>
@@ -80,6 +81,8 @@ class RaftService;
 using RaftServicePtr = std::shared_ptr<RaftService>;
 class TiDBService;
 using TiDBServicePtr = std::shared_ptr<TiDBService>;
+class SchemaSyncService;
+using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
 
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
@@ -362,15 +365,16 @@ public:
     void createTMTContext(const std::vector<std::string> & pd_addrs,
                           const std::string & learner_key,
                           const std::string & learner_value,
+                          const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
                           const std::string & region_mapping_path);
     RaftService & getRaftService();
 
+    void initializeSchemaSyncService();
+    SchemaSyncServicePtr & getSchemaSyncService();
+
     void initializePartPathSelector(const std::vector<std::string> & all_path);
     PartPathSelector & getPartPathSelector();
-
-    void initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases);
-    TiDBService & getTiDBService();
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

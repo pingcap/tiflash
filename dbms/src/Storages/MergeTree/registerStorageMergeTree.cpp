@@ -592,6 +592,23 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             secondary_sorting_expr_list->children.push_back(ASTPtr(new ASTIdentifier(MutableSupport::version_column_name)));
             secondary_sorting_expr_list->children.push_back(ASTPtr(new ASTIdentifier(MutableSupport::delmark_column_name)));
         }
+
+        // Widen some specific data types, reason see comment for `IDataType::widen()`.
+        if (merging_params.mode == MergeTreeData::MergingParams::Txn)
+        {
+            std::for_each(columns.ordinary.begin(), columns.ordinary.end(), [] (NameAndTypePair & column) {
+                if (MutableSupport::instance().shouldWiden(column))
+                {
+                    DataTypePtr t = column.type->isNullable() ? dynamic_cast<const DataTypeNullable *>(column.type.get())->getNestedType() : column.type;
+                    auto widen = t->widen();
+                    if (column.type->isNullable())
+                    {
+                        widen = std::make_shared<DataTypeNullable>(widen);
+                    }
+                    column.type.swap(widen);
+                }
+            });
+        }
     }
     else if (merging_params.mode == MergeTreeData::MergingParams::Summing)
     {

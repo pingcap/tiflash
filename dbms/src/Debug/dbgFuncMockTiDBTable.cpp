@@ -1,3 +1,4 @@
+#include <Debug/MockSchemaSyncer.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -22,28 +23,6 @@ extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void MockTiDBTable::dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 1)
-        throw Exception("Args not matched, should be: enable (true/false)", ErrorCodes::BAD_ARGUMENTS);
-
-    bool enabled = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value) == "true";
-
-    TMTContext & tmt = context.getTMTContext();
-    if (enabled)
-    {
-        tmt.setSchemaSyncer(std::make_shared<MockTiDB::MockSchemaSyncer>());
-    }
-    else
-    {
-        tmt.setSchemaSyncer(std::make_shared<HttpJsonSchemaSyncer>());
-    }
-
-    std::stringstream ss;
-    ss << "mock schema syncer " << (enabled ? "enabled" : "disabled");
-    output(ss.str());
-}
-
 void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3)
@@ -62,15 +41,16 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
         throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
     ColumnsDescription columns
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+    auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns);
+    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso);
 
     std::stringstream ss;
     ss << "mock table #" << table_id;
     output(ss.str());
 }
 
-void MockTiDBTable::dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3)
         throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
@@ -78,8 +58,9 @@ void MockTiDBTable::dbgFuncMockTiDBPartition(Context &, const ASTs & args, DBGIn
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     const String & partition_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+    auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID partition_id = MockTiDB::instance().newPartition(database_name, table_name, partition_name);
+    TableID partition_id = MockTiDB::instance().newPartition(database_name, table_name, partition_name, tso);
 
     std::stringstream ss;
     ss << "mock partition #" << partition_id;
@@ -118,11 +99,14 @@ void MockTiDBTable::dbgFuncRenameTableForPartition(Context & context, const ASTs
 
 void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 2)
-        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() != 2 && args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name[, drop-regions]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    bool drop_regions = true;
+    if (args.size() == 3)
+        drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
 
     MockTiDB::TablePtr table = nullptr;
     TableID table_id = InvalidTableID;
@@ -131,7 +115,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
         table = MockTiDB::instance().getTableByName(database_name, table_name);
         table_id = table->id();
     }
-    catch (Exception e)
+    catch (const Exception & e)
     {
         if (e.code() != ErrorCodes::UNKNOWN_TABLE)
             throw;
@@ -143,7 +127,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     auto & kvstore = tmt.getKVStore();
     auto & region_table = tmt.getRegionTable();
 
-    if (table->isPartitionTable())
+    if (table->isPartitionTable() && drop_regions)
     {
         auto partition_ids = table->getPartitionIDs();
         std::for_each(partition_ids.begin(), partition_ids.end(), [&](TableID partition_id) {
@@ -154,6 +138,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
         });
     }
 
+    if (drop_regions)
     {
         for (auto & e : region_table.getRegionsByTable(table_id))
             kvstore->removeRegion(e.first, &region_table);
@@ -164,6 +149,117 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
 
     std::stringstream ss;
     ss << "dropped table #" << table_id;
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, 'col type'", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    auto col_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    ASTPtr col_ast;
+    ParserColumnDeclarationList schema_parser;
+    Tokens tokens(col_str.data(), col_str.data() + col_str.length());
+    TokenIterator pos(tokens);
+    Expected expected;
+    if (!schema_parser.parse(pos, col_ast, expected))
+        throw Exception("Invalid TiDB table column", ErrorCodes::LOGICAL_ERROR);
+    ColumnsDescription cols = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*col_ast), context);
+    if (cols.getAllPhysical().size() > 1)
+        throw Exception("Not support multiple columns", ErrorCodes::LOGICAL_ERROR);
+
+    // TODO: Support partition table.
+
+    NameAndTypePair column = cols.getAllPhysical().front();
+    MockTiDB::instance().addColumnToTable(database_name, table_name, column);
+
+    std::stringstream ss;
+    ss << "added column " << column.name << " " << column.type->getName();
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncDropColumnFromTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, column-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    const String & column_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+
+    MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
+
+    // TODO: Support partition table.
+
+    MockTiDB::instance().dropColumnFromTable(database_name, table_name, column_name);
+
+    std::stringstream ss;
+    ss << "dropped column " << column_name;
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncModifyColumnInTiDBTable(DB::Context & context, const DB::ASTs & args, DB::DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, 'col type'", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    auto col_str = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    ASTPtr col_ast;
+    ParserColumnDeclarationList schema_parser;
+    Tokens tokens(col_str.data(), col_str.data() + col_str.length());
+    TokenIterator pos(tokens);
+    Expected expected;
+    if (!schema_parser.parse(pos, col_ast, expected))
+        throw Exception("Invalid TiDB table column", ErrorCodes::LOGICAL_ERROR);
+    ColumnsDescription cols = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*col_ast), context);
+    if (cols.getAllPhysical().size() > 1)
+        throw Exception("Not support multiple columns", ErrorCodes::LOGICAL_ERROR);
+
+    // TODO: Support partition table.
+
+    NameAndTypePair column = cols.getAllPhysical().front();
+    MockTiDB::instance().modifyColumnInTable(database_name, table_name, column);
+
+    std::stringstream ss;
+    ss << "modified column " << column.name << " " << column.type->getName();
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncRenameTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, new-table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    const String & new_table_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+
+    MockTiDB::instance().renameTable(database_name, table_name, new_table_name);
+
+    std::stringstream ss;
+    ss << "renamed table " << database_name << "." << table_name << " to " << database_name << "." << new_table_name;
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncTruncateTiDBTable(Context & /*context*/, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: database-name, table-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    MockTiDB::instance().truncateTable(database_name, table_name);
+
+    std::stringstream ss;
+    ss << "truncated table " << database_name << "." << table_name;
     output(ss.str());
 }
 

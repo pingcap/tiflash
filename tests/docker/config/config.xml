@@ -21,11 +21,6 @@
         <!--pd_addr>127.0.0.1:2379</pd_addr-->
     </raft>
 
-    <tidb>
-        <service_ip>127.0.0.1</service_ip>
-        <status_port>10080</status_port>
-    </tidb>
-
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>
     <interserver_http_port>9009</interserver_http_port>

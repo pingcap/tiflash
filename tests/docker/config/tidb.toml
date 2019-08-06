@@ -1,0 +1,93 @@
+# TiDB Configuration.
+
+compatible-kill-query = false
+enable-streaming = false
+host = "0.0.0.0"
+lease = "45s"
+lower-case-table-names = 2
+oom-action = "log"
+run-ddl = true
+socket = ""
+split-table = true
+store = "tikv"
+token-limit = 10000
+
+[log]
+disable-timestamp = false
+expensive-threshold = 10000
+format = "text"
+level = "info"
+query-log-max-len = 2048
+slow-threshold = 6000
+
+[log.file]
+log-rotate = true
+max-backups = 0
+max-days = 0
+max-size = 300
+
+[security]
+cluster-ssl-ca = ""
+cluster-ssl-cert = ""
+cluster-ssl-key = ""
+ssl-ca = ""
+ssl-cert = ""
+ssl-key = ""
+
+[status]
+report-status = true
+
+[performance]
+cross-join = true
+feedback-probability = 0.05
+force-priority = "NO_PRIORITY"
+max-procs = 0
+pseudo-estimate-ratio = 0.8
+query-feedback-limit = 1024
+run-auto-analyze = false
+stats-lease = "3s"
+stmt-count-limit = 100000000
+tcp-keep-alive = true
+
+[proxy-protocol]
+header-timeout = 5
+networks = ""
+
+[prepared-plan-cache]
+capacity = 1000
+enabled = true
+
+[opentracing]
+enable = false
+rpc-metrics = false
+
+[opentracing.reporter]
+buffer-flush-interval = 0
+local-agent-host-port = ""
+log-spans = false
+queue-size = 0
+
+[opentracing.sampler]
+max-operations = 0
+param = 1.0
+sampling-refresh-interval = 0
+sampling-server-url = ""
+type = "const"
+
+[tikv-client]
+batch-wait-size = 16
+batch-wait-time = 3000000
+commit-timeout = "60s"
+grpc-connection-count = 4
+grpc-keepalive-time = 10
+grpc-keepalive-timeout = 3
+max-batch-size = 128
+tikv-heavy-load-to-batch = 30
+
+[txn-local-latches]
+capacity = 20480000
+enabled = false
+
+[binlog]
+ignore-error = false
+write-timeout = "15s"

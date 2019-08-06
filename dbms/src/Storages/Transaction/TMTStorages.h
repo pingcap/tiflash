@@ -9,23 +9,23 @@
 namespace DB
 {
 
-class IStorage;
-using StoragePtr = std::shared_ptr<IStorage>;
+class StorageMergeTree;
+using TMTStoragePtr = std::shared_ptr<StorageMergeTree>;
 
 class TMTStorages : private boost::noncopyable
 {
 public:
-    void put(StoragePtr storage);
+    void put(TMTStoragePtr storage);
 
-    StoragePtr get(TableID table_id) const;
-    std::unordered_map<TableID, StoragePtr> getAllStorage() const;
+    TMTStoragePtr get(TableID table_id) const;
+    std::unordered_map<TableID, TMTStoragePtr> getAllStorage() const;
 
-    StoragePtr getByName(const std::string & db, const std::string & table) const;
+    TMTStoragePtr getByName(const std::string & db, const std::string & table) const;
 
     void remove(TableID table_id);
 
 private:
-    std::unordered_map<TableID, StoragePtr> storages;
+    std::unordered_map<TableID, TMTStoragePtr> storages;
     mutable std::mutex mutex;
 };
 

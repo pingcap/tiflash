@@ -1,3 +1,5 @@
+>> DBGInvoke __enable_schema_sync_service('false')
+
 >> drop table if exists test
 >> create table test (
 	k Int32,

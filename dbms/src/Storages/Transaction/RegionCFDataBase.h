@@ -67,6 +67,8 @@ struct RegionCFDataBase
 
     TableIDSet getAllTables() const;
 
+    void deleteRange(const TiKVKey & start_key, const TiKVKey & end_key);
+
 private:
     static bool shouldIgnoreInsert(const Value & value);
     static bool shouldIgnoreRemove(const Value & value);

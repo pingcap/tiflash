@@ -1,5 +1,8 @@
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/TMTPKType.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
@@ -38,19 +41,90 @@ static const Field GenDecodeRow(TiDB::CodecFlag flag)
         case TiDB::CodecFlagVarUInt:
             return Field(UInt64(0));
         default:
-            throw Exception("Not implented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implemented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescription & columns, const Names & ordered_columns,
-    RegionDataReadInfoList & data_list)
+inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
+{
+    // resort the data_list
+    // if the order in int64 is like -3 -1 0 1 2 3, the real order in uint64 is 0 1 2 3 -3 -1
+    if (data_list.size() > 2)
+    {
+        bool need_check = false;
+        {
+            const auto h1 = std::get<0>(data_list.front());
+            const auto h2 = std::get<0>(data_list.back());
+            if ((h1 ^ h2) & RecordKVFormat::SIGN_MARK)
+                need_check = true;
+        }
+
+        if (need_check)
+        {
+            auto it = data_list.begin();
+            for (; it != data_list.end();)
+            {
+                const auto handle = std::get<0>(*it);
+
+                if (handle & RecordKVFormat::SIGN_MARK)
+                    ++it;
+                else
+                    break;
+            }
+
+            std::reverse(it, data_list.end());
+            std::reverse(data_list.begin(), it);
+            std::reverse(data_list.begin(), data_list.end());
+        }
+    }
+}
+
+template <TMTPKType pk_type>
+void setPKVersionDel(ColumnUInt8 & delmark_col,
+    ColumnUInt64 & version_col,
+    MutableColumnPtr & pk_column,
+    const RegionDataReadInfoList & data_list,
+    const Timestamp tso)
+{
+    ColumnUInt8::Container & delmark_data = delmark_col.getData();
+    ColumnUInt64::Container & version_data = version_col.getData();
+
+    delmark_data.reserve(data_list.size());
+    version_data.reserve(data_list.size());
+
+    for (const auto & [handle, write_type, commit_ts, value] : data_list)
+    {
+        std::ignore = value;
+
+        // Ignore data after the start_ts.
+        if (commit_ts > tso)
+            continue;
+
+        delmark_data.emplace_back(write_type == Region::DelFlag);
+        version_data.emplace_back(commit_ts);
+
+        if constexpr (pk_type == TMTPKType::INT64)
+            typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(static_cast<Int64>(handle));
+        else if constexpr (pk_type == TMTPKType::UINT64)
+            typeid_cast<ColumnVector<UInt64> &>(*pk_column).insert(static_cast<UInt64>(handle));
+        else
+            pk_column->insert(Field(static_cast<Int64>(handle)));
+    }
+}
+
+std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
+    const ColumnsDescription & columns,
+    const Names & column_names_to_read,
+    RegionDataReadInfoList & data_list,
+    Timestamp start_ts,
+    bool force_decode)
 {
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 
     ColumnID handle_col_id = InvalidColumnID;
 
-    std::map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
+    std::unordered_map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
     for (const auto & column_info : table_info.columns)
     {
         ColumnID col_id = column_info.id;
@@ -69,60 +143,47 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
         column_map[handle_col_id].first->reserve(data_list.size());
     }
 
-    const bool pk_is_uint64 = getTMTPKType(*column_map[handle_col_id].second.type) == TMTPKType::UINT64;
+    const TMTPKType pk_type = getTMTPKType(*column_map[handle_col_id].second.type);
 
-    if (pk_is_uint64)
+    if (pk_type == TMTPKType::UINT64)
+        ReorderRegionDataReadList(data_list);
+
     {
-        size_t ori_size = data_list.size();
-        std::ignore = ori_size;
+        auto func = setPKVersionDel<TMTPKType::UNSPECIFIED>;
 
-        // resort the data_list;
-        auto it = data_list.begin();
-        for (; it != data_list.end();)
+        switch (pk_type)
         {
-            const auto handle = std::get<0>(*it);
-
-            if (handle & RecordKVFormat::SIGN_MARK)
-                ++it;
-            else
+            case TMTPKType::INT64:
+                func = setPKVersionDel<TMTPKType::INT64>;
+                break;
+            case TMTPKType::UINT64:
+                func = setPKVersionDel<TMTPKType::UINT64>;
+                break;
+            default:
                 break;
         }
-        data_list.splice(data_list.end(), data_list, data_list.begin(), it);
 
-        assert(ori_size == data_list.size());
+        func(*delmark_col, *version_col, column_map[handle_col_id].first, data_list, start_ts);
     }
 
     const auto & date_lut = DateLUT::instance();
 
-    ColumnUInt8::Container & delmark_data = delmark_col->getData();
-    ColumnUInt64::Container & version_data = version_col->getData();
-
-    delmark_data.reserve(data_list.size());
-    version_data.reserve(data_list.size());
-
     std::unordered_set<ColumnID> col_id_included;
 
-    const size_t target_row_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
+    const size_t target_col_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
 
-    for (const auto & [handle, write_type, commit_ts, value] : data_list)
-    {
-        std::ignore = value;
+    Block block;
 
-        delmark_data.emplace_back(write_type == Region::DelFlag);
-        version_data.emplace_back(commit_ts);
-        if (pk_is_uint64)
-            column_map[handle_col_id].first->insert(Field(static_cast<UInt64>(handle)));
-        else
-            column_map[handle_col_id].first->insert(Field(static_cast<Int64>(handle)));
-    }
-
-    /// optimize for only need handle, tso, delmark.
-    if (ordered_columns.size() > 3)
+    // optimize for only need handle, tso, delmark.
+    if (column_names_to_read.size() > 3)
     {
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
-            std::ignore = commit_ts;
             std::ignore = handle;
+
+            // Ignore data after the start_ts.
+            if (commit_ts > start_ts)
+                continue;
 
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
@@ -166,9 +227,16 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 if (col_id_included.count(column.id))
                     continue;
 
-                row.push_back(Field(column.id));
-                // TODO: Fill `zero` value if NOT NULL specified or else NULL. Need checking DEFAULT VALUE too.
-                row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
+                if (!force_decode)
+                    return std::make_tuple(block, false);
+
+                row.emplace_back(Field(column.id));
+                if (column.hasNoDefaultValueFlag())
+                    // Fill `zero` value if NOT NULL specified or else NULL.
+                    row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
+                else
+                    // Fill default value.
+                    row.push_back(column.defaultValueToField());
             }
 
             // Remove values of non-existing columns, which could be data inserted (but not flushed) before DDLs that drop some columns.
@@ -178,11 +246,14 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 Field & col_id = row[i];
                 if (column_map.find(col_id.get<ColumnID>()) == column_map.end())
                 {
+                    if (!force_decode)
+                        return std::make_tuple(block, false);
+
                     row.erase(row.begin() + i, row.begin() + i + 2);
                 }
             }
 
-            if (row.size() != target_row_size)
+            if (row.size() != target_col_size)
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
 
             /// Transform `row` to columnar format.
@@ -194,8 +265,9 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
-                const auto & tp = it->second.second.type->getName();
-                if (tp == "Nullable(DateTime)" || tp == "Nullable(Date)" || tp == "DateTime" || tp == "Date")
+                const auto & tp = it->second.second.type;
+                if (tp->isDateOrDateTime()
+                    || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isDateOrDateTime()))
                 {
                     Field & field = row[i + 1];
                     if (field.isNull())
@@ -216,7 +288,10 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                     int minute = int((hms >> 6) & ((1 << 6) - 1));
                     int hour = int(hms >> 12);
 
-                    if (tp == "Nullable(DateTime)" || tp == "DateTime")
+                    if (typeid_cast<const DataTypeDateTime *>(tp.get())
+                        || (tp->isNullable()
+                               && typeid_cast<const DataTypeDateTime *>(
+                                      dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType().get())))
                     {
                         time_t datetime;
                         if (unlikely(year == 0))
@@ -243,13 +318,53 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
                 else
                 {
                     it->second.first->insert(row[i + 1]);
+
+                    // Check overflow for potential un-synced data type widen,
+                    // i.e. schema is old and narrow, meanwhile data is new and wide.
+                    // So far only integers is possible of overflow.
+                    auto nested_tp = tp->isNullable() ? dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType() : tp;
+                    auto & orig_column = *it->second.first;
+                    auto & nested_column = it->second.first->isColumnNullable()
+                        ? dynamic_cast<ColumnNullable &>(*it->second.first).getNestedColumn()
+                        : *it->second.first;
+                    auto inserted_index = orig_column.size() - 1;
+                    if (!orig_column.isNullAt(inserted_index) && nested_tp->isInteger())
+                    {
+                        bool overflow = false;
+                        if (nested_tp->isUnsignedInteger())
+                        {
+                            // Unsigned checking by bitwise compare.
+                            UInt64 inserted = nested_column.get64(inserted_index);
+                            UInt64 orig = row[i + 1].get<UInt64>();
+                            overflow = inserted != orig;
+                        }
+                        else
+                        {
+                            // Singed checking by arithmetical cast.
+                            Int64 inserted = nested_column.getInt(inserted_index);
+                            Int64 orig = row[i + 1].get<Int64>();
+                            overflow = inserted != orig;
+                        }
+                        if (overflow)
+                        {
+                            // Overflow detected, fatal if force_decode is true,
+                            // as schema being newer and narrow shouldn't happen.
+                            // Otherwise return false to outer, outer should sync schema and try again.
+                            if (force_decode)
+                                throw Exception(
+                                    "Detected overflow for data " + std::to_string(row[i + 1].get<UInt64>()) + " of type " + tp->getName(),
+                                    ErrorCodes::LOGICAL_ERROR);
+
+                            return std::make_tuple(block, false);
+                        }
+                    }
+                    // TODO: Consider other kind of type change? I.e. arbitrary type change.
                 }
             }
         }
     }
 
-    Block block;
-    for (const auto & name : ordered_columns)
+    for (const auto & name : column_names_to_read)
     {
         if (name == MutableSupport::delmark_column_name)
         {
@@ -266,7 +381,7 @@ Block RegionBlockRead(const TiDB::TableInfo & table_info, const ColumnsDescripti
         }
     }
 
-    return block;
+    return std::make_tuple(std::move(block), true);
 }
 
 } // namespace DB

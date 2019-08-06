@@ -1,5 +1,6 @@
 #include <Poco/Logger.h>
 
-namespace pingcap {
+namespace pingcap
+{
 using Poco::Logger;
 }

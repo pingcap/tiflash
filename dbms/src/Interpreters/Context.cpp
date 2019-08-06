@@ -16,16 +16,17 @@
 #include <Common/Stopwatch.h>
 #include <Common/formatReadable.h>
 #include <Debug/DBGInvoker.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
+#include <Storages/CompressionSettingsSelector.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/Transaction/SchemaSyncService.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/PartPathSelector.h>
-#include <Storages/CompressionSettingsSelector.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
@@ -51,7 +52,6 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Raft/RaftService.h>
-#include <TiDB/TiDBService.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -153,7 +153,7 @@ struct ContextShared
 
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
     RaftServicePtr raft_service;                            /// Raft service instance.
-    TiDBServicePtr tidb_service;                            /// TiDB service instance.
+    SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
@@ -1421,13 +1421,14 @@ void Context::shutdownRaftService()
 void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & learner_key,
                                const std::string & learner_value,
+                               const std::unordered_set<std::string> & ignore_databases,
                                const std::string & kvstore_path,
                                const std::string & region_mapping_path)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, kvstore_path, region_mapping_path);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
 }
 
 void Context::initializePartPathSelector(const std::vector<std::string> & all_path)
@@ -1454,20 +1455,18 @@ RaftService & Context::getRaftService()
     return *shared->raft_service;
 }
 
-void Context::initializeTiDBService(const std::string & service_ip, const std::string & status_port, const std::unordered_set<std::string> & ignore_databases)
+void Context::initializeSchemaSyncService()
 {
     auto lock = getLock();
-    if (shared->tidb_service)
-        throw Exception("TiDB Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->tidb_service = std::make_shared<TiDBService>(service_ip, status_port, ignore_databases);
+    if (shared->schema_sync_service)
+        throw Exception("Schema Sync Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->schema_sync_service = std::make_shared<SchemaSyncService>(*global_context);
 }
 
-TiDBService & Context::getTiDBService()
+SchemaSyncServicePtr & Context::getSchemaSyncService()
 {
     auto lock = getLock();
-    if (!shared->tidb_service)
-        throw Exception("TiDB Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->tidb_service;
+    return shared->schema_sync_service;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const

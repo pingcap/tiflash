@@ -462,7 +462,7 @@ void MergeTreeReader::readData(
     };
 
     double & avg_value_size_hint = avg_value_size_hints[name];
-    type.deserializeBinaryBulkWithMultipleStreams(column, stream_getter, max_rows_to_read, avg_value_size_hint, true, {});
+    type.deserializeWidenBinaryBulkWithMultipleStreams(column, stream_getter, max_rows_to_read, avg_value_size_hint, true, {});
     IDataType::updateAvgValueSizeHint(column, avg_value_size_hint);
 }
 

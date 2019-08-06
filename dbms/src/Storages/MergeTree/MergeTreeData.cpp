@@ -1006,7 +1006,8 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, const Name
 
             if (!new_type->equals(*old_type) && (!part || part->hasColumnFiles(column.name)))
             {
-                if (isMetadataOnlyConversion(old_type, new_type))
+                // TODO: Asserting TXN table never needs data conversion might be arbitary.
+                if (isMetadataOnlyConversion(old_type, new_type) || merging_params.mode == MergingParams::Txn)
                 {
                     out_force_update_metadata = true;
                     continue;
