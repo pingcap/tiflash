@@ -513,7 +513,7 @@ constexpr char TmpTableNamePrefix[] = "_tiflash_tmp_";
 inline TableName generateTmpTable(const TableName & name) { return TableName(name.first, String(TmpTableNamePrefix) + name.second); }
 
 TableNamePair resolveRename(
-    SchemaBuilder * builder, TableNameMap & map, TableNameMap::iterator it, TableNameSet & visited, TableNameMap::iterator & cycle_it)
+    SchemaBuilder * builder, TableNameMap & map, TableNameMap::iterator it, TableNameSet & visited)
 {
     TableName target_name = it->second;
     TableName origin_name = it->first;
@@ -536,7 +536,7 @@ TableNamePair resolveRename(
     }
     else
     {
-        auto pair = resolveRename(builder, map, next_it, visited, cycle_it);
+        auto pair = resolveRename(builder, map, next_it, visited);
         if (pair.first == origin_name)
         {
             origin_name = pair.second;
@@ -572,9 +572,8 @@ void SchemaBuilder::alterAndRenameTables(std::vector<std::pair<TableInfoPtr, DBI
     while (!rename_map.empty())
     {
         auto it = rename_map.begin();
-        auto tmp_it = rename_map.end();
         TableNameSet visited;
-        resolveRename(this, rename_map, it, visited, tmp_it);
+        resolveRename(this, rename_map, it, visited);
     }
 
     // Then Alter Table
