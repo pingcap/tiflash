@@ -2,6 +2,60 @@
 #include "Codec.h"
 
 
+
+
+/**
+ * https://github.com/pingcap/tidb/blob/release-3.0/types/json/binary.go
+   The binary JSON format from MySQL 5.7 is as follows:
+   JSON doc ::= type value
+   type ::=
+       0x01 |       // large JSON object
+       0x03 |       // large JSON array
+       0x04 |       // literal (true/false/null)
+       0x05 |       // int16
+       0x06 |       // uint16
+       0x07 |       // int32
+       0x08 |       // uint32
+       0x09 |       // int64
+       0x0a |       // uint64
+       0x0b |       // double
+       0x0c |       // utf8mb4 string
+   value ::=
+       object  |
+       array   |
+       literal |
+       number  |
+       string  |
+   object ::= element-count size key-entry* value-entry* key* value*
+   array ::= element-count size value-entry* value*
+   // number of members in object or number of elements in array
+   element-count ::= uint32
+   // number of bytes in the binary representation of the object or array
+   size ::= uint32
+   key-entry ::= key-offset key-length
+   key-offset ::= uint32
+   key-length ::= uint16    // key length must be less than 64KB
+   value-entry ::= type offset-or-inlined-value
+   // This field holds either the offset to where the value is stored,
+   // or the value itself if it is small enough to be inlined (that is,
+   // if it is a JSON literal or a small enough [u]int).
+   offset-or-inlined-value ::= uint32
+   key ::= utf8mb4-data
+   literal ::=
+       0x00 |   // JSON null literal
+       0x01 |   // JSON true literal
+       0x02 |   // JSON false literal
+   number ::=  ....    // little-endian format for [u]int(16|32|64), whereas
+                       // double is stored in a platform-independent, eight-byte
+                       // format using float8store()
+   string ::= data-length utf8mb4-data
+   data-length ::= uint8*    // If the high bit of a byte is 1, the length
+                             // field is continued in the next byte,
+                             // otherwise it is the last byte of the length
+                             // field. So we need 1 byte to represent
+                             // lengths up to 127, 2 bytes to represent
+                             // lengths up to 16383, and so on...
+ */
 namespace DB
 {
 
@@ -28,16 +82,17 @@ constexpr int PREFIX_LENGTH = 8;
 
 JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value);
 JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value);
-JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_offset);
-JsonVar decodeLiteral(size_t & cursor, const String & raw_value);
-const String decodeString(size_t & cursor, const String & raw_value);
-JsonVar decodeValue(size_t & cursor, const String & raw_value);
+inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value);
+inline const String decodeString(size_t & cursor, const String & raw_value);
 JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value);
-const String decodeString(size_t & cursor, const String & raw_value, size_t length);
+
+// Below funcs decode via relative offset and base offset does not move
+JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_offset);
+inline const String decodeString(size_t base, const String & raw_value, size_t length);
 
 
 template <typename T>
-T decodeNumeric(size_t & cursor, const String & raw_value)
+inline T decodeNumeric(size_t & cursor, const String & raw_value)
 {
     T res = *(reinterpret_cast<const T *>(raw_value.data() + cursor));
     cursor += sizeof(T);
@@ -62,7 +117,7 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
         JsonVar val = decodeValueEntry(base, raw_value, elementCount * KEY_ENTRY_LENGTH + i * VALUE_ENTRY_SIZE);
         objPtr->set(key, val);
     }
-    cursor += size - 8;
+    cursor += size - sizeof(UInt32);
 
     return objPtr;
 }
@@ -85,14 +140,14 @@ JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value)
 JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_entry_offset)
 {
     int type = raw_value[base + value_entry_offset];
-    size_t abs_value_offset = base + value_entry_offset + 1;
+    size_t abs_entry_offset = base + value_entry_offset + 1;
 
     if (type == TYPE_CODE_LITERAL)
     {
-        return decodeLiteral(abs_value_offset, raw_value);
+        return decodeLiteral(abs_entry_offset, raw_value);
     }
 
-    size_t value_offset = base + decodeNumeric<UInt32>(abs_value_offset, raw_value) - PREFIX_LENGTH;
+    size_t value_offset = base + decodeNumeric<UInt32>(abs_entry_offset, raw_value) - PREFIX_LENGTH;
     return decodeValue(type, value_offset, raw_value);
 }
 
@@ -119,12 +174,7 @@ JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value)
     }
 }
 
-JsonVar decodeValue(size_t & cursor, const String & raw_value)
-{
-    return decodeValue(raw_value[cursor++], cursor, raw_value);
-}
-
-JsonVar decodeLiteral(size_t & cursor, const String & raw_value)
+inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value)
 {
     int type = raw_value[cursor++];
     switch (type)
@@ -140,15 +190,17 @@ JsonVar decodeLiteral(size_t & cursor, const String & raw_value)
     }
 }
 
-const String decodeString(size_t & cursor, const String & raw_value, size_t length)
+inline const String decodeString(size_t base, const String & raw_value, size_t length)
 {
-    return String(raw_value, cursor, length);
+    return String(raw_value, base, length);
 }
 
-const String decodeString(size_t & cursor, const String & raw_value)
+inline const String decodeString(size_t & cursor, const String & raw_value)
 {
     size_t length = DecodeVarUInt(cursor, raw_value);
-    return String(raw_value, cursor, length);
+    const String & val = String(raw_value, cursor, length);
+    cursor += length;
+    return val;
 }
 
 template <typename T>
@@ -162,26 +214,7 @@ String stringify(T value)
 String DecodeJson(size_t & cursor, const String & raw_value)
 {
     UInt8 type = raw_value[cursor++];
-
-    switch (type) // JSON Root element type
-    {
-        case TYPE_CODE_OBJECT:
-            return stringify(decodeObject(cursor, raw_value));
-        case TYPE_CODE_ARRAY:
-            return stringify(decodeArray(cursor, raw_value));
-        case TYPE_CODE_LITERAL:
-            return decodeLiteral(cursor, raw_value);
-        case TYPE_CODE_INT64:
-            return JsonVar(decodeNumeric<Int64>(cursor, raw_value));
-        case TYPE_CODE_UINT64:
-            return JsonVar(decodeNumeric<UInt64>(cursor, raw_value));
-        case TYPE_CODE_FLOAT64:
-            return JsonVar(decodeNumeric<Float64>(cursor, raw_value));
-        case TYPE_CODE_STRING:
-            return JsonVar(decodeString(cursor, raw_value));
-        default:
-            throw Exception("DecodeJson: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
-    }
+    return decodeValue(type, cursor, raw_value);
 }
 
 
