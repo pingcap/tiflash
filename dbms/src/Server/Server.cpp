@@ -451,14 +451,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     FlashServicePtr flash_service = nullptr;
-    if(config().has("flash")) {
+    if (config().has("flash"))
+    {
         String flash_service_addr = config().getString("flash.service_addr");
         flash_service = std::make_shared<FlashService>(flash_service_addr, *this);
     }
 
     SCOPE_EXIT({
-        if (flash_service != nullptr) {
-            LOG_INFO(log, "Shutting down flash service.");
+        if (flash_service)
+        {
+            LOG_INFO(log, "Shutting down Flash service.");
             flash_service.reset();
             LOG_INFO(log, "Shutted down flash service.");
         }
