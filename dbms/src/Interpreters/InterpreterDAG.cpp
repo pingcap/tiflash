@@ -46,7 +46,19 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     TableID table_id = ts.table_id();
     // TODO: Get schema version from DAG request.
-    getAndLockStorageWithSchemaVersion(table_id, DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+    if (context.getSettingsRef().schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
+    {
+        storage = context.getTMTContext().getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+        }
+        table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
+    }
+    else
+    {
+        getAndLockStorageWithSchemaVersion(table_id, DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+    }
 
     Names required_columns;
     for (const tipb::ColumnInfo & ci : ts.columns())
@@ -290,7 +302,7 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
                 return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
         }
 
-        if (storage->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
+        if (storage_->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
             throw Exception("Specifying schema_version for non-TMT storage: " + storage_->getName() + ", table: " + std::to_string(table_id)
                     + " is not allowed",
                 ErrorCodes::LOGICAL_ERROR);
@@ -299,7 +311,7 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
         auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
 
         /// Check schema version.
-        auto storage_schema_version = storage->getTableInfo().schema_version;
+        auto storage_schema_version = storage_->getTableInfo().schema_version;
         if (storage_schema_version > schema_version)
             throw Exception("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
                     + " newer than query schema version " + std::to_string(schema_version),

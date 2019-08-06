@@ -71,11 +71,15 @@ grpc::Status rpcTest()
     tipb::Executor * executor = dagRequest.add_executors();
     executor->set_tp(tipb::ExecType::TypeTableScan);
     tipb::TableScan * ts = executor->mutable_tbl_scan();
-    ts->set_table_id(41);
+    ts->set_table_id(44);
     tipb::ColumnInfo * ci = ts->add_columns();
     ci->set_column_id(1);
+    ci->set_tp(0xfe);
+    ci->set_flag(1);
     ci = ts->add_columns();
     ci->set_column_id(2);
+    ci->set_tp(8);
+    ci->set_flag(1);
     dagRequest.add_output_offsets(1);
     dagRequest.add_output_offsets(0);
     dagRequest.add_output_offsets(1);
@@ -95,7 +99,7 @@ grpc::Status rpcTest()
     col->set_val(ss.str());
     value->set_tp(tipb::ExprType::Int64);
     ss.str("");
-    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(123, ss);
+    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(888, ss);
     value->set_val(std::string(ss.str()));
 
     // agg: count(s) group by i;
@@ -147,7 +151,7 @@ grpc::Status rpcTest()
     kvrpcpb::Context * ctx = request.mutable_context();
     ctx->set_region_id(2);
     auto region_epoch = ctx->mutable_region_epoch();
-    region_epoch->set_version(20);
+    region_epoch->set_version(21);
     region_epoch->set_conf_ver(2);
     request.set_tp(DAGREQUEST);
     request.set_data(dagRequest.SerializeAsString());
