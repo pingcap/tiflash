@@ -3,6 +3,7 @@
 #include <atomic>
 
 #include <Storages/ColumnsDescription.h>
+#include <Storages/Transaction/SchemaGetter.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -82,6 +83,18 @@ public:
 
     void traverseTables(std::function<void(TablePtr)> f);
 
+    TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
+
+    TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
+
+    Int64 version = 0;
+
+    SchemaDiff getSchemaDiff(Int64 version);
+
+    std::unordered_map<String, DatabaseID> getDatabases() { return databases; }
+
+    std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
+
 private:
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
 
@@ -91,6 +104,8 @@ private:
     std::unordered_map<String, DatabaseID> databases;
     std::unordered_map<String, TablePtr> tables_by_name;
     std::unordered_map<TableID, TablePtr> tables_by_id;
+
+    std::unordered_map<Int64, SchemaDiff> version_diff;
 
     std::atomic<TableID> table_id_allocator = MaxSystemTableID + 1;
 };

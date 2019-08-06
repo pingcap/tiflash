@@ -5,7 +5,6 @@
 => drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
-=> DBGInvoke __mock_schema_syncer('true')
 
 # Sync add column by reading.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String')

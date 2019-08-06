@@ -62,7 +62,6 @@ DBGInvoker::DBGInvoker()
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
 
     regFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
-    regFunc("mock_schema_syncer", dbgFuncMockSchemaSyncer);
     regFunc("refresh_schemas", dbgFuncRefreshSchemas);
 }
 
