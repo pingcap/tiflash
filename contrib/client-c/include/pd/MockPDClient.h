@@ -17,7 +17,7 @@ public:
 
     ~MockPDClient() override {}
 
-    uint64_t getGCSafePoint() override { return 1000000000000000; }
+    uint64_t getGCSafePoint() override { return 10000000; }
 
     uint64_t getTS() override { return Clock::now().time_since_epoch().count(); }
 
