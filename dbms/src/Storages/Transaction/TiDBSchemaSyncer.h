@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Debug/MockSchemaGetter.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <tikv/Snapshot.h>
-#include <Debug/MockSchemaGetter.h>
 
 namespace DB
 {
@@ -14,9 +14,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
-    pingcap::pd::ClientPtr pdClient;
-    pingcap::kv::RegionCachePtr regionCache;
-    pingcap::kv::RpcClientPtr rpcClient;
+    pingcap::pd::ClientPtr pd_client;
+    pingcap::kv::RegionCachePtr region_cache;
+    pingcap::kv::RpcClientPtr rpc_client;
 
     const Int64 maxNumberOfDiffs = 100;
 
@@ -28,17 +28,21 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Logger * log;
 
-    TiDBSchemaSyncer(pingcap::pd::ClientPtr pdClient_, pingcap::kv::RegionCachePtr regionCache_, pingcap::kv::RpcClientPtr rpcClient_)
-        : pdClient(pdClient_), regionCache(regionCache_), rpcClient(rpcClient_), cur_version(0), log(&Logger::get("SchemaSyncer"))
+    TiDBSchemaSyncer(pingcap::pd::ClientPtr pd_client_, pingcap::kv::RegionCachePtr region_cache_, pingcap::kv::RpcClientPtr rpc_client_)
+        : pd_client(pd_client_), region_cache(region_cache_), rpc_client(rpc_client_), cur_version(0), log(&Logger::get("SchemaSyncer"))
     {}
 
     bool isTooOldSchema(Int64 cur_version, Int64 new_version) { return cur_version == 0 || new_version - cur_version > maxNumberOfDiffs; }
 
-    Getter createSchemaGetter(pingcap::kv::RegionCachePtr regionCache [[maybe_unused]], pingcap::kv::RpcClientPtr rpcClient [[maybe_unused]], UInt64 tso [[maybe_unused]]) {
-        if constexpr (mock_getter) {
+    Getter createSchemaGetter(UInt64 tso [[maybe_unused]])
+    {
+        if constexpr (mock_getter)
+        {
             return Getter();
-        } else {
-            return Getter(regionCache, rpcClient, tso);
+        }
+        else
+        {
+            return Getter(region_cache, rpc_client, tso);
         }
     }
 
@@ -46,8 +50,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto tso = pdClient->getTS();
-        auto getter = createSchemaGetter(regionCache, rpcClient, tso);
+        auto tso = pd_client->getTS();
+        auto getter = createSchemaGetter(tso);
         Int64 version = getter.getVersion();
         if (version <= cur_version)
         {
