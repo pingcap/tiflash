@@ -69,7 +69,7 @@ private:
     };
 
     bool executeImpl(Pipeline & pipeline);
-    bool executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
+    void executeTS(const tipb::TableScan & ts, Pipeline & pipeline);
     void executeWhere(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr, String & filter_column);
     void executeExpression(Pipeline & pipeline, const ExpressionActionsPtr & expressionActionsPtr);
     void executeOrder(Pipeline & pipeline, Strings & order_column_names);
