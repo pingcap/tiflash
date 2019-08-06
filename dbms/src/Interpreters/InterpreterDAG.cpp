@@ -84,7 +84,7 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         // based on the output of table scan
         for (auto i : dag.getDAGRequest().output_offsets())
         {
-            if (i < 0 || i >= required_columns.size())
+            if (i >= required_columns.size())
             {
                 // array index out of bound
                 return false;
