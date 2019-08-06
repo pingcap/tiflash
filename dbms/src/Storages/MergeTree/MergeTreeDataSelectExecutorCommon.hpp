@@ -22,11 +22,13 @@ static inline void extendMutableEngineColumnNames(Names & column_names_to_read, 
     reserved_names.insert(handle_col_name);
     reserved_names.insert(MutableSupport::version_column_name);
     reserved_names.insert(MutableSupport::delmark_column_name);
-    Names org_names;
 
-    for (auto & name : column_names_to_read) {
-        if(reserved_names.count(name) == 0) {
-            org_names.emplace_back(std::move(name));
+    Names names;
+    for (auto & name : column_names_to_read)
+    {
+        if(reserved_names.count(name) == 0)
+        {
+            names.emplace_back(std::move(name));
         }
     }
     column_names_to_read.clear();
@@ -35,7 +37,7 @@ static inline void extendMutableEngineColumnNames(Names & column_names_to_read, 
     column_names_to_read.push_back(MutableSupport::version_column_name);
     column_names_to_read.push_back(MutableSupport::delmark_column_name);
 
-    for (auto & name : org_names)
+    for (auto & name : names)
         column_names_to_read.emplace_back(std::move(name));
 }
 

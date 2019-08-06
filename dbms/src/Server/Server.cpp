@@ -12,6 +12,7 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Flash/FlashService.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <Interpreters/AsynchronousMetrics.h>
@@ -34,7 +35,6 @@
 #include <sys/resource.h>
 #include <ext/scope_guard.h>
 #include <memory>
-#include "Flash/FlashService.h"
 #include "HTTPHandlerFactory.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"

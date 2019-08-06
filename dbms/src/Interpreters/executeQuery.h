@@ -3,7 +3,6 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/DAGQuerySource.h>
-#include <Storages/Transaction/Types.h>
 
 
 namespace DB

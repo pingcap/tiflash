@@ -122,7 +122,7 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.region_id = dag.getRegionID();
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
-    auto current_region = context.getTMTContext().getRegionTable().getRegionById(table_id, info.region_id);
+    auto current_region = context.getTMTContext().getRegionTable().getRegionByTableAndID(table_id, info.region_id);
     if (!current_region)
     {
         return false;

@@ -484,22 +484,6 @@ void RegionTable::traverseInternalRegionsByTable(const TableID table_id, std::fu
         callback(region_info.second);
 }
 
-RegionPtr RegionTable::getRegionById(const TableID table_id, const RegionID region_id) {
-    auto & kvstore = context.getTMTContext().getKVStore();
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        auto & table = getOrCreateTable(table_id);
-
-        for (const auto & region_info : table.regions)
-        {
-            if(region_info.second.region_id == region_id) {
-                return kvstore->getRegion(region_info.second.region_id);
-            }
-        }
-    }
-    return nullptr;
-}
-
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const TableID table_id)
 {
     auto & kvstore = context.getTMTContext().getKVStore();
@@ -515,6 +499,24 @@ std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const
         }
     }
     return regions;
+}
+
+RegionPtr RegionTable::getRegionByTableAndID(const TableID table_id, const RegionID region_id)
+{
+    auto & kvstore = context.getTMTContext().getKVStore();
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto & table = getOrCreateTable(table_id);
+
+        for (const auto & region_info : table.regions)
+        {
+            if (region_info.second.region_id == region_id)
+            {
+                return kvstore->getRegion(region_info.second.region_id);
+            }
+        }
+    }
+    return nullptr;
 }
 
 void RegionTable::mockDropRegionsInTable(TableID table_id)

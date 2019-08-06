@@ -48,6 +48,7 @@ DAGQuerySource::DAGQuerySource(
                 break;
             case tipb::ExecType::TypeTopN:
                 assignOrThrowException(order_index, i, TOPN_NAME);
+                break;
             case tipb::ExecType::TypeLimit:
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
                 break;
