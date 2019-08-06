@@ -46,14 +46,17 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     TableID table_id = ts.table_id();
     // TODO: Get schema version from DAG request.
-    if (context.getSettingsRef().schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION) {
+    if (context.getSettingsRef().schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
+    {
         storage = context.getTMTContext().getStorages().get(table_id);
         if (storage == nullptr)
         {
             throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
         }
         table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-    } else {
+    }
+    else
+    {
         getAndLockStorageWithSchemaVersion(table_id, DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
     }
 
