@@ -104,6 +104,8 @@ bool DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
     }
+
+    return false;
 }
 
 bool isProject(const tipb::Executor &)
