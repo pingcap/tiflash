@@ -50,11 +50,6 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         storage = context.getTMTContext().getStorages().get(table_id);
         if (storage == nullptr)
         {
-            context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
-            storage = context.getTMTContext().getStorages().get(table_id);
-        }
-        if (storage == nullptr)
-        {
             throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
         }
         table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
