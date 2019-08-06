@@ -20,7 +20,6 @@ DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const {
     return result;
 }
 
-// TODO:: Refine Date/Datatime/TimeStamp Defalut Value !!
 Field ColumnInfo::defaultValueToField() const
 {
     auto & value = origin_default_value;

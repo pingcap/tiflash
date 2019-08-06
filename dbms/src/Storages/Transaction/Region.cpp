@@ -653,4 +653,6 @@ void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, co
     return data.deleteRange(type, start_key, end_key);
 }
 
+std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
+
 } // namespace DB
