@@ -79,6 +79,6 @@ pingcap::kv::RegionCachePtr TMTContext::getRegionCache() const { return region_c
 
 pingcap::kv::RpcClientPtr TMTContext::getRpcClient() { return rpc_client; }
 
-std::unordered_set<std::string> TMTContext::getIgnoreDatabases() const { return ignore_databases; }
+const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
 
 } // namespace DB

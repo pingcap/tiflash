@@ -54,7 +54,7 @@ public:
 
     void restore();
 
-    std::unordered_set<std::string> getIgnoreDatabases() const;
+    const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
 private:
     KVStorePtr kvstore;

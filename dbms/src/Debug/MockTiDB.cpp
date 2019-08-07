@@ -26,6 +26,8 @@ Table::Table(const String & database_name_, const String & table_name_, TableInf
     : table_info(std::move(table_info_)), database_name(database_name_), table_name(table_name_)
 {}
 
+MockTiDB::MockTiDB() { databases["default"] = 0; }
+
 std::vector<String> MockTiDB::getTableNames(const String & db_name)
 {
     std::vector<String> table_names;

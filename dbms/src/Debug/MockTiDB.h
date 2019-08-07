@@ -23,6 +23,7 @@ class MockTiDB : public ext::singleton<MockTiDB>
     friend class ext::singleton<MockTiDB>;
 
 public:
+    MockTiDB();
     class Table
     {
         friend class MockTiDB;

@@ -542,14 +542,23 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
                 continue;
             }
             tables_to_drop.push_back(std::make_pair(db_name, storage->getTableName()));
-            if (db_names.count(db_name) == 0)
-                dbs_to_drop.insert(db_name);
         }
     }
     for (auto table : tables_to_drop)
     {
         applyDropTableImpl(table.first, table.second);
         LOG_DEBUG(log, "Table " + table.first + "." + table.second + " is dropped during sync all schemas");
+    }
+    const auto & dbs = context.getDatabases();
+    for (auto it = dbs.begin(); it != dbs.end(); it++)
+    {
+        String db_name = it->first;
+        if (isIgnoreDB(db_name))
+        {
+            continue;
+        }
+        if (db_names.count(db_name) == 0)
+            dbs_to_drop.insert(db_name);
     }
     for (auto db : dbs_to_drop)
     {

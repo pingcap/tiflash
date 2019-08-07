@@ -123,6 +123,7 @@ void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGI
     auto table_names = MockTiDB::instance().getTableNames(database_name);
     for (auto table_name : table_names)
         dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, true, output);
+    MockTiDB::instance().dropDB(database_name);
 }
 
 void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
