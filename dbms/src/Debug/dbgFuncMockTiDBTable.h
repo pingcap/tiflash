@@ -72,10 +72,11 @@ struct MockTiDBTable
     // Reset Schema Syncer.
     // Usage:
     //   ./storages-client.sh "DBGInvoke reset_syncer()"
-    static void dbgFuncResetSyncer(Context & context, const ASTs &args, DBGInvoker::Printer output);
+    static void dbgFuncResetSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 private:
-    static void dbgFuncDropTiDBTableImpl(Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output);
+    static void dbgFuncDropTiDBTableImpl(
+        Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output);
 };
 
 } // namespace DB

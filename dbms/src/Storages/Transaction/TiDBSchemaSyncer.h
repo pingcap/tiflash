@@ -47,7 +47,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     }
 
     // just for test
-    void reset() override {
+    void reset() override
+    {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
         databases.clear();

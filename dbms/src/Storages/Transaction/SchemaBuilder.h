@@ -6,7 +6,7 @@
 namespace DB
 {
 
-template<typename Getter>
+template <typename Getter>
 struct SchemaBuilder
 {
 

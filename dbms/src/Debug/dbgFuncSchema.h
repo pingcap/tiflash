@@ -21,7 +21,7 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs & args, DBGInvoker::Pri
 // Reset schemas.
 // Usage:
 //   ./storages-client.sh "DBGInvoke reset_schemas()"
-void dbgFuncResetSchemas(Context & context, const ASTs &args, DBGInvoker::Printer output);
+void dbgFuncResetSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 
 } // namespace DB

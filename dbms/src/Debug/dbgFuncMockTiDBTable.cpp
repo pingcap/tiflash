@@ -110,7 +110,8 @@ void MockTiDBTable::dbgFuncRenameTableForPartition(Context & context, const ASTs
     output(ss.str());
 }
 
-void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGInvoker::Printer output) {
+void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
     if (args.size() != 1 && args.size() != 2)
         throw Exception("Args not matched, should be: database-name [, drop-regions]", ErrorCodes::BAD_ARGUMENTS);
 
@@ -120,7 +121,7 @@ void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGI
         drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
 
     auto table_names = MockTiDB::instance().getTableNames(database_name);
-    for (auto table_name: table_names)
+    for (auto table_name : table_names)
         dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, true, output);
 }
 
@@ -137,7 +138,8 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, false, output);
 }
 
-void MockTiDBTable::dbgFuncDropTiDBTableImpl(Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncDropTiDBTableImpl(
+    Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output)
 {
     MockTiDB::TablePtr table = nullptr;
     TableID table_id = InvalidTableID;

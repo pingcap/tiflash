@@ -515,14 +515,16 @@ void SchemaBuilder<Getter>::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_i
 
 // Drop Invalid Tables in Every DB
 template <typename Getter>
-void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(const std::vector<std::pair<TableInfoPtr, DBInfoPtr>> & table_dbs, const std::set<String> & db_names)
+void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
+    const std::vector<std::pair<TableInfoPtr, DBInfoPtr>> & table_dbs, const std::set<String> & db_names)
 {
 
     std::set<TableID> table_ids;
     std::vector<std::pair<String, String>> tables_to_drop;
     std::set<String> dbs_to_drop;
 
-    for (auto table_db : table_dbs) {
+    for (auto table_db : table_dbs)
+    {
         table_ids.insert(table_db.first->id);
     }
 
@@ -544,11 +546,13 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(const std::vector<std::pair<
                 dbs_to_drop.insert(db_name);
         }
     }
-    for (auto table : tables_to_drop) {
+    for (auto table : tables_to_drop)
+    {
         applyDropTableImpl(table.first, table.second);
         LOG_DEBUG(log, "Table " + table.first + "." + table.second + " is dropped during sync all schemas");
     }
-    for (auto db : dbs_to_drop) {
+    for (auto db : dbs_to_drop)
+    {
         applyDropSchemaImpl(db);
         LOG_DEBUG(log, "DB " + db + " is dropped during sync all schemas");
     }
@@ -669,7 +673,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
         }
         else
         {
-            it ++;
+            it++;
         }
     }
 
@@ -704,8 +708,11 @@ void SchemaBuilder<Getter>::syncAllSchema()
     createTables(all_tables);
 }
 
-template<typename Getter>
-bool SchemaBuilder<Getter>::isIgnoreDB(const String & name) { return context.getTMTContext().getIgnoreDatabases().count(name) > 0; }
+template <typename Getter>
+bool SchemaBuilder<Getter>::isIgnoreDB(const String & name)
+{
+    return context.getTMTContext().getIgnoreDatabases().count(name) > 0;
+}
 
 template class SchemaBuilder<SchemaGetter>;
 template class SchemaBuilder<MockSchemaGetter>;
