@@ -11,6 +11,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int COP_BAD_DAG_REQUEST;
+} // namespace ErrorCodes
+
 static String genCastString(const String & org_name, const String & target_type_name)
 {
     return "cast(" + org_name + ", " + target_type_name + ") ";
@@ -44,13 +50,13 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(const NamesAndTypesList & source_co
     after_agg = false;
 }
 
-bool DAGExpressionAnalyzer::appendAggregation(
+void DAGExpressionAnalyzer::appendAggregation(
     ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregation_keys, AggregateDescriptions & aggregate_descriptions)
 {
     if (agg.group_by_size() == 0 && agg.agg_func_size() == 0)
     {
         //should not reach here
-        return false;
+        throw Exception("Aggregation executor without group by/agg exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
@@ -94,14 +100,13 @@ bool DAGExpressionAnalyzer::appendAggregation(
         aggregation_keys.push_back(name);
     }
     after_agg = true;
-    return true;
 }
 
-bool DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name)
+void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name)
 {
     if (sel.conditions_size() == 0)
     {
-        return false;
+        throw Exception("Selection executor without condition exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     tipb::Expr final_condition;
     if (sel.conditions_size() > 1)
@@ -120,14 +125,13 @@ bool DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const ti
     initChain(chain, getCurrentInputColumns());
     filter_column_name = getActions(filter, chain.steps.back().actions);
     chain.steps.back().required_output.push_back(filter_column_name);
-    return true;
 }
 
-bool DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names)
+void DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names)
 {
     if (topN.order_by_size() == 0)
     {
-        return false;
+        throw Exception("TopN executor without order by exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
@@ -137,12 +141,11 @@ bool DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const 
         step.required_output.push_back(name);
         order_column_names.push_back(name);
     }
-    return true;
 }
 
 const NamesAndTypesList & DAGExpressionAnalyzer::getCurrentInputColumns() { return after_agg ? aggregated_columns : source_columns; }
 
-bool DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
+void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
@@ -191,7 +194,6 @@ bool DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
             aggregated_columns.emplace_back(updated_aggregated_columns.getNames()[i], updated_aggregated_columns.getTypes()[i]);
         }
     }
-    return true;
 }
 
 String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String expr_name)

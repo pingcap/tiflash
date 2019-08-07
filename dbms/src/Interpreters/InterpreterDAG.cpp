@@ -179,17 +179,15 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     DAGExpressionAnalyzer analyzer(source_columns, context);
     if (dag.hasSelection())
     {
-        if (analyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name))
-        {
-            res.has_where = true;
-            res.before_where = chain.getLastActions();
-            res.filter_column_name = chain.steps.back().required_output[0];
-            chain.addStep();
-        }
+        analyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name);
+        res.has_where = true;
+        res.before_where = chain.getLastActions();
+        res.filter_column_name = chain.steps.back().required_output[0];
+        chain.addStep();
     }
     if (res.need_aggregate)
     {
-        res.need_aggregate = analyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        analyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
         res.before_aggregation = chain.getLastActions();
 
         chain.finalize();
@@ -205,7 +203,8 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     }
     if (dag.hasTopN())
     {
-        res.has_order_by = analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
+        res.has_order_by = true;
+        analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
     // append final project results
     for (auto & name : final_project)
