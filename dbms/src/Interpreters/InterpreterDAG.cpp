@@ -86,7 +86,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         // based on the output of table scan
         for (auto i : dag.getDAGRequest().output_offsets())
         {
-            if (i < 0 || i >= required_columns.size())
+            if (i >= required_columns.size())
             {
                 // array index out of bound
                 throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -124,7 +124,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.region_id = dag.getRegionID();
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
-    auto current_region = context.getTMTContext().getRegionTable().getRegionById(table_id, info.region_id);
+    auto current_region = context.getTMTContext().getRegionTable().getRegionByTableAndID(table_id, info.region_id);
     if (!current_region)
     {
         //todo add more region error info in RegionException
