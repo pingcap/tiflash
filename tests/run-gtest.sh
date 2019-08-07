@@ -1,4 +1,23 @@
 #!/usr/bin/env bash
 
-/tics/unit_tests_dbms && \
-/tics/unit_tests_libcommon
+function run_test()
+{
+	local name="$1"
+	local bin_path=$(find . -name "$name")
+	${bin_path}
+}
+
+source ./_env.sh
+
+set -ex
+
+cd "$build_dir"
+
+tests=(
+	"unit_tests_dbms"
+	"unit_tests_libcommon"
+)
+
+for test in ${tests[@]}; do
+	run_test "$test"
+done
