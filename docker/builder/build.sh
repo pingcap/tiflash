@@ -41,7 +41,7 @@ done
 # copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
-    make -j ${NPROC} unit_tests_dbms unit_tests_libcommon
-    cp -f "$build_dir/dbms/unit_tests_dbms" "$install_dir/"
-    cp -f "$build_dir/libs/libcommon/src/tests/unit_tests_libcommon" "$install_dir/"
+    make -j ${NPROC} gtests_dbms gtests_libcommon
+    cp -f "$build_dir/dbms/gtests_dbms" "$install_dir/"
+    cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "$install_dir/"
 fi
