@@ -49,4 +49,15 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
     output(ss.str());
 }
 
+void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
+{
+    TMTContext & tmt = context.getTMTContext();
+    auto schema_syncer = tmt.getSchemaSyncer();
+    schema_syncer->reset();
+
+    std::stringstream ss;
+    ss << "reset schemas";
+    output(ss.str());
+}
+
 } // namespace DB

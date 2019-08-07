@@ -65,9 +65,13 @@ public:
 public:
     TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso);
 
+    DatabaseID newDB(const String & database_name);
+
     TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
 
-    void dropTable(const String & database_name, const String & table_name);
+    void dropTable(const String & database_name, const String & table_name, bool is_drop_db);
+
+    void dropDB(const String & database_name);
 
     void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
 
@@ -94,6 +98,8 @@ public:
     std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
 
     Int64 getVersion() { return version; }
+
+    std::vector<String> getTableNames(const String & db_name);
 
 private:
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);

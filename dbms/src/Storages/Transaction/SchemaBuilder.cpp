@@ -182,6 +182,12 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
     if (di == nullptr)
         throw Exception("miss database: " + std::to_string(diff.schema_id));
 
+    if (isIgnoreDB(di->name))
+    {
+        LOG_INFO(log, "ignore schema changes for db: " + di->name);
+        return;
+    }
+
     Int64 oldTableID = 0, newTableID = 0;
 
     switch (diff.type)
@@ -310,7 +316,7 @@ template <typename Getter>
 bool SchemaBuilder<Getter>::applyCreateSchema(DatabaseID schema_id)
 {
     auto db = getter.getDatabase(schema_id);
-    if (db->name == "")
+    if (db == nullptr || db->name == "")
     {
         return false;
     }
@@ -321,6 +327,12 @@ bool SchemaBuilder<Getter>::applyCreateSchema(DatabaseID schema_id)
 template <typename Getter>
 void SchemaBuilder<Getter>::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info)
 {
+    if (isIgnoreDB(db_info->name))
+    {
+        LOG_INFO(log, "ignore schema changes for db: " + db_info->name);
+        return;
+    }
+
     ASTCreateQuery * create_query = new ASTCreateQuery();
     create_query->database = db_info->name;
     create_query->if_not_exists = true;
@@ -336,13 +348,20 @@ void SchemaBuilder<Getter>::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info)
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropSchema(DatabaseID schema_id)
 {
-    auto database_name = databases[schema_id];
-    if (unlikely(database_name == ""))
+    auto it = databases.find(schema_id);
+    if (unlikely(it == databases.end()))
     {
         LOG_INFO(
             log, "Syncer wants to drop database: " + std::to_string(schema_id) + " . But database is not found, may has been dropped.");
         return;
     }
+    applyDropSchemaImpl(it->second);
+    databases.erase(schema_id);
+}
+
+template <typename Getter>
+void SchemaBuilder<Getter>::applyDropSchemaImpl(const String & database_name)
+{
     LOG_INFO(log, "Try to drop database: " + database_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
@@ -351,8 +370,6 @@ void SchemaBuilder<Getter>::applyDropSchema(DatabaseID schema_id)
     // It will drop all tables in this database.
     InterpreterDropQuery drop_interpreter(ast_drop_query, context);
     drop_interpreter.execute();
-
-    databases.erase(schema_id);
 }
 
 String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
@@ -498,13 +515,16 @@ void SchemaBuilder<Getter>::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_i
 
 // Drop Invalid Tables in Every DB
 template <typename Getter>
-void SchemaBuilder<Getter>::dropInvalidTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs)
+void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(const std::vector<std::pair<TableInfoPtr, DBInfoPtr>> & table_dbs, const std::set<String> & db_names)
 {
 
     std::set<TableID> table_ids;
+    std::vector<std::pair<String, String>> tables_to_drop;
+    std::set<String> dbs_to_drop;
 
-    for (auto table_db : table_dbs)
+    for (auto table_db : table_dbs) {
         table_ids.insert(table_db.first->id);
+    }
 
     auto & tmt_context = context.getTMTContext();
     auto storage_map = tmt_context.getStorages().getAllStorage();
@@ -515,9 +535,22 @@ void SchemaBuilder<Getter>::dropInvalidTables(std::vector<std::pair<TableInfoPtr
         {
             // Drop Table
             const String db_name = storage->getDatabaseName();
-            applyDropTableImpl(db_name, storage->getTableName());
-            LOG_DEBUG(log, "Table " + db_name + "." + storage->getTableName() + " is dropped during schema all schemas");
+            if (isIgnoreDB(db_name))
+            {
+                continue;
+            }
+            tables_to_drop.push_back(std::make_pair(db_name, storage->getTableName()));
+            if (db_names.count(db_name) == 0)
+                dbs_to_drop.insert(db_name);
         }
+    }
+    for (auto table : tables_to_drop) {
+        applyDropTableImpl(table.first, table.second);
+        LOG_DEBUG(log, "Table " + table.first + "." + table.second + " is dropped during sync all schemas");
+    }
+    for (auto db : dbs_to_drop) {
+        applyDropSchemaImpl(db);
+        LOG_DEBUG(log, "DB " + db + " is dropped during sync all schemas");
     }
 }
 
@@ -627,32 +660,29 @@ void SchemaBuilder<Getter>::syncAllSchema()
 
     std::vector<DBInfoPtr> all_schema = getter.listDBs();
 
+    for (auto it = all_schema.begin(); it != all_schema.end();)
+    {
+        if (isIgnoreDB((*it)->name))
+        {
+            LOG_INFO(log, "ignore schema changes for db: " + (*it)->name);
+            it = all_schema.erase(it);
+        }
+        else
+        {
+            it ++;
+        }
+    }
+
     for (auto db_info : all_schema)
     {
         LOG_DEBUG(log, "Load schema : " + db_info->name);
-    }
-
-    std::set<TiDB::DatabaseID> db_ids;
-    for (auto db : all_schema)
-    {
-        db_ids.insert(db->id);
-    }
-
-    // Drop invalid databases;
-    for (auto it = databases.begin(); it != databases.end(); it++)
-    {
-        if (db_ids.count(it->first) == 0)
-        {
-            applyDropSchema(it->first);
-        }
     }
 
     // Collect All Table Info and Create DBs.
     std::vector<std::pair<TableInfoPtr, DBInfoPtr>> all_tables;
     for (auto db : all_schema)
     {
-        auto database_name = databases[db->id];
-        if (database_name == "")
+        if (databases.find(db->id) == databases.end())
         {
             applyCreateSchemaImpl(db);
         }
@@ -663,10 +693,19 @@ void SchemaBuilder<Getter>::syncAllSchema()
         }
     }
 
-    dropInvalidTables(all_tables);
+    std::set<String> db_names;
+    for (auto db : all_schema)
+    {
+        db_names.insert(db->name);
+    }
+
+    dropInvalidTablesAndDBs(all_tables, db_names);
     alterAndRenameTables(all_tables);
     createTables(all_tables);
 }
+
+template<typename Getter>
+bool SchemaBuilder<Getter>::isIgnoreDB(const String & name) { return context.getTMTContext().getIgnoreDatabases().count(name) > 0; }
 
 template class SchemaBuilder<SchemaGetter>;
 template class SchemaBuilder<MockSchemaGetter>;

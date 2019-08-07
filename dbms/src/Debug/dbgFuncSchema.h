@@ -18,4 +18,10 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
 //   ./storage-client.sh "DBGInvoke refresh_schemas()"
 void dbgFuncRefreshSchemas(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+// Reset schemas.
+// Usage:
+//   ./storages-client.sh "DBGInvoke reset_schemas()"
+void dbgFuncResetSchemas(Context & context, const ASTs &args, DBGInvoker::Printer output);
+
+
 } // namespace DB

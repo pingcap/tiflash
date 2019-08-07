@@ -46,6 +46,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
     }
 
+    // just for test
+    void reset() override {
+        std::lock_guard<std::mutex> lock(schema_mutex);
+
+        databases.clear();
+        cur_version = 0;
+    }
+
     bool syncSchemas(Context & context) override
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
