@@ -28,17 +28,6 @@ Table::Table(const String & database_name_, const String & table_name_, TableInf
 
 MockTiDB::MockTiDB() { databases["default"] = 0; }
 
-std::vector<String> MockTiDB::getTableNames(const String & db_name)
-{
-    std::vector<String> table_names;
-    for (auto it = tables_by_name.begin(); it != tables_by_name.end(); it++)
-    {
-        if (it->second->table_info.db_name == db_name)
-            table_names.push_back(it->second->table_info.name);
-    }
-    return table_names;
-}
-
 void MockTiDB::dropDB(const String & database_name)
 {
     version++;
@@ -144,7 +133,7 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
     return column_info;
 }
 
-DatabaseID MockTiDB::newDB(const String & database_name)
+DatabaseID MockTiDB::newDataBase(const String & database_name)
 {
     DatabaseID schema_id = 0;
 

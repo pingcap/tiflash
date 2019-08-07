@@ -56,7 +56,7 @@ void MockTiDBTable::dbgFuncMockTiDBDB(Context &, const ASTs & args, DBGInvoker::
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
 
-    DatabaseID db_id = MockTiDB::instance().newDB(database_name);
+    DatabaseID db_id = MockTiDB::instance().newDataBase(database_name);
 
     std::stringstream ss;
     ss << "mock db #" << db_id;
@@ -120,7 +120,11 @@ void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGI
     if (args.size() == 3)
         drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
 
-    auto table_names = MockTiDB::instance().getTableNames(database_name);
+    std::vector<String> table_names;
+    MockTiDB::instance().traverseTables([&](MockTiDB::TablePtr table) {
+        if (table->table_info.db_name == database_name)
+            table_names.push_back(table->table_info.name);
+    });
     for (auto table_name : table_names)
         dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, true, output);
     MockTiDB::instance().dropDB(database_name);
