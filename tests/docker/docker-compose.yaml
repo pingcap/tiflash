@@ -19,19 +19,12 @@ services:
     command:
       - --config-file
       - /config.xml
-  # tics-gtest container is for gtests cases
+  # tics-gtest container is for gtest cases
   tics-gtest:
     image: hub.pingcap.net/tiflash/tics:${TAG:-master}
-    ports:
-      - "3930:3930"
-      - "9000:9000"
-      - "8123:8123"
-      - "9009:9009"
     volumes:
       - ./config/config.xml:/config.xml:ro
       - ./config/users.xml:/users.xml:ro
-      - ./data:/data
-      - ./log:/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     entrypoint: sleep infinity # just wait

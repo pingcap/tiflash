@@ -14,8 +14,8 @@ set -ex
 cd "$build_dir"
 
 tests=(
-	"unit_tests_dbms"
-	"unit_tests_libcommon"
+	"gtests_dbms"
+	"gtests_libcommon"
 )
 
 for test in ${tests[@]}; do
