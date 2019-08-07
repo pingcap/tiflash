@@ -90,22 +90,20 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
             return buildTSString(executor.tbl_scan(), ss);
         case tipb::ExecType::TypeIndexScan:
             // index scan not supported
-            throw Exception("IndexScan is not supported");
+            throw Exception("IndexScan is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
         case tipb::ExecType::TypeSelection:
             return buildSelString(executor.selection(), ss);
         case tipb::ExecType::TypeAggregation:
             // stream agg is not supported, treated as normal agg
         case tipb::ExecType::TypeStreamAgg:
             //todo support agg
-            throw Exception("Aggregation is not supported");
+            throw Exception("Aggregation is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
         case tipb::ExecType::TypeTopN:
             // todo support top n
-            throw Exception("TopN is not supported");
+            throw Exception("TopN is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
     }
-
-    return false;
 }
 
 bool isProject(const tipb::Executor &)
