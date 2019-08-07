@@ -4,10 +4,6 @@
 => drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(100000, 20000000)
-=> DBGInvoke mock_schema_syncer('true')
-┌─mock_schema_syncer("true")─┐
-│ mock schema syncer enabled │
-└────────────────────────────┘
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
 => DBGInvoke __put_region(4, 0, 100, default, test)
@@ -22,7 +18,7 @@
 │ wrote 1200 row to default.test with raft commands │
 └───────────────────────────────────────────────────┘
 
-=> select count(*) from default.test " --schema_version "100
+=> select count(*) from default.test " --schema_version "10000000
 ┌─count()─┐
 │    1204 │
 └─────────┘
