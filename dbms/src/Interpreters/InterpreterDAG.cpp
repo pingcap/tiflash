@@ -427,7 +427,7 @@ void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_na
         limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
 }
 
-bool InterpreterDAG::executeImpl(Pipeline & pipeline)
+void InterpreterDAG::executeImpl(Pipeline & pipeline)
 {
     executeTS(dag.getTS(), pipeline);
 
@@ -458,7 +458,6 @@ bool InterpreterDAG::executeImpl(Pipeline & pipeline)
     {
         executeLimit(pipeline);
     }
-    return true;
 }
 
 void InterpreterDAG::executeFinalProject(Pipeline & pipeline)
