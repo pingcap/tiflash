@@ -17,6 +17,7 @@
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/Types.h>
@@ -30,6 +31,7 @@ extern const int UNKNOWN_TABLE;
 extern const int TOO_MANY_COLUMNS;
 extern const int SCHEMA_VERSION_ERROR;
 extern const int UNKNOWN_EXCEPTION;
+extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
@@ -37,12 +39,12 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
 {}
 
 // the flow is the same as executeFetchcolumns
-bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
+void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
     if (!ts.has_table_id())
     {
         // do not have table id
-        return false;
+        throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     TableID table_id = ts.table_id();
     // TODO: Get schema version from DAG request.
@@ -67,7 +69,7 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         if (cid < 1 || cid > (Int64)storage->getTableInfo().columns.size())
         {
             // cid out of bound
-            return false;
+            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
         String name = storage->getTableInfo().columns[cid - 1].name;
         required_columns.push_back(name);
@@ -75,7 +77,7 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     if (required_columns.empty())
     {
         // no column selected, must be something wrong
-        return false;
+        throw Exception("No column is selected in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
 
     if (!dag.hasAggregation())
@@ -87,7 +89,7 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             if (i >= required_columns.size())
             {
                 // array index out of bound
-                return false;
+                throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
             }
             // do not have alias
             final_project.emplace_back(required_columns[i], "");
@@ -125,7 +127,10 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     auto current_region = context.getTMTContext().getRegionTable().getRegionByTableAndID(table_id, info.region_id);
     if (!current_region)
     {
-        return false;
+        //todo add more region error info in RegionException
+        std::vector<RegionID> region_ids;
+        region_ids.push_back(info.region_id);
+        throw RegionException(region_ids);
     }
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
@@ -164,7 +169,6 @@ bool InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     ColumnsWithTypeAndName columnsWithTypeAndName = pipeline.firstStream()->getHeader().getColumnsWithTypeAndName();
     source_columns = storage->getColumns().getAllPhysical();
-    return true;
 }
 
 InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
@@ -175,17 +179,15 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     DAGExpressionAnalyzer analyzer(source_columns, context);
     if (dag.hasSelection())
     {
-        if (analyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name))
-        {
-            res.has_where = true;
-            res.before_where = chain.getLastActions();
-            res.filter_column_name = chain.steps.back().required_output[0];
-            chain.addStep();
-        }
+        analyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name);
+        res.has_where = true;
+        res.before_where = chain.getLastActions();
+        res.filter_column_name = chain.steps.back().required_output[0];
+        chain.addStep();
     }
     if (res.need_aggregate)
     {
-        res.need_aggregate = analyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        analyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
         res.before_aggregation = chain.getLastActions();
 
         chain.finalize();
@@ -201,7 +203,8 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     }
     if (dag.hasTopN())
     {
-        res.has_order_by = analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
+        res.has_order_by = true;
+        analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
     // append final project results
     for (auto & name : final_project)
@@ -423,13 +426,9 @@ void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_na
         limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
 }
 
-//todo return the error message
-bool InterpreterDAG::executeImpl(Pipeline & pipeline)
+void InterpreterDAG::executeImpl(Pipeline & pipeline)
 {
-    if (!executeTS(dag.getTS(), pipeline))
-    {
-        return false;
-    }
+    executeTS(dag.getTS(), pipeline);
 
     auto res = analyzeExpressions();
     // execute selection
@@ -458,7 +457,6 @@ bool InterpreterDAG::executeImpl(Pipeline & pipeline)
     {
         executeLimit(pipeline);
     }
-    return true;
 }
 
 void InterpreterDAG::executeFinalProject(Pipeline & pipeline)

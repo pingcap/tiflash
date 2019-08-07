@@ -41,10 +41,10 @@ public:
     }
 
 protected:
-    bool buildTSString(const tipb::TableScan & ts, std::stringstream & ss);
-    bool buildSelString(const tipb::Selection & sel, std::stringstream & ss);
-    bool buildLimitString(const tipb::Limit & limit, std::stringstream & ss);
-    bool buildString(const tipb::Executor & executor, std::stringstream & ss);
+    void buildTSString(const tipb::TableScan & ts, std::stringstream & ss);
+    void buildSelString(const tipb::Selection & sel, std::stringstream & ss);
+    void buildLimitString(const tipb::Limit & limit, std::stringstream & ss);
+    void buildString(const tipb::Executor & executor, std::stringstream & ss);
 
 protected:
     Context & context;

@@ -11,34 +11,41 @@
 namespace DB
 {
 
-bool DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringstream & ss)
+namespace ErrorCodes
 {
-    TableID id;
+extern const int UNKNOWN_TABLE;
+extern const int COP_BAD_DAG_REQUEST;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
+
+void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringstream & ss)
+{
+    TableID table_id;
     if (ts.has_table_id())
     {
-        id = ts.table_id();
+        table_id = ts.table_id();
     }
     else
     {
         // do not have table id
-        return false;
+        throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     auto & tmt_ctx = context.getTMTContext();
-    auto storage = tmt_ctx.getStorages().get(id);
+    auto storage = tmt_ctx.getStorages().get(table_id);
     if (storage == nullptr)
     {
-        return false;
+        throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
     }
     const auto * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
     if (!merge_tree)
     {
-        return false;
+        throw Exception("Only MergeTree table is supported in DAG request", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
 
     if (ts.columns_size() == 0)
     {
         // no column selected, must be something wrong
-        return false;
+        throw Exception("No column is selected in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     columns_from_ts = storage->getColumns().getAllPhysical();
     for (const tipb::ColumnInfo & ci : ts.columns())
@@ -46,16 +53,15 @@ bool DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         ColumnID cid = ci.column_id();
         if (cid <= 0 || cid > (ColumnID)columns_from_ts.size())
         {
-            throw Exception("column id out of bound");
+            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
         String name = merge_tree->getTableInfo().columns[cid - 1].name;
         output_from_ts.push_back(std::move(name));
     }
     ss << "FROM " << merge_tree->getTableInfo().db_name << "." << merge_tree->getTableInfo().name << " ";
-    return true;
 }
 
-bool DAGStringConverter::buildSelString(const tipb::Selection & sel, std::stringstream & ss)
+void DAGStringConverter::buildSelString(const tipb::Selection & sel, std::stringstream & ss)
 {
     bool first = true;
     for (const tipb::Expr & expr : sel.conditions())
@@ -72,17 +78,12 @@ bool DAGStringConverter::buildSelString(const tipb::Selection & sel, std::string
         }
         ss << s << " ";
     }
-    return true;
 }
 
-bool DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss)
-{
-    ss << "LIMIT " << limit.limit() << " ";
-    return true;
-}
+void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) { ss << "LIMIT " << limit.limit() << " "; }
 
 //todo return the error message
-bool DAGStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss)
+void DAGStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss)
 {
     switch (executor.tp())
     {
@@ -90,22 +91,20 @@ bool DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
             return buildTSString(executor.tbl_scan(), ss);
         case tipb::ExecType::TypeIndexScan:
             // index scan not supported
-            return false;
+            throw Exception("IndexScan is not supported", ErrorCodes::NOT_IMPLEMENTED);
         case tipb::ExecType::TypeSelection:
             return buildSelString(executor.selection(), ss);
         case tipb::ExecType::TypeAggregation:
             // stream agg is not supported, treated as normal agg
         case tipb::ExecType::TypeStreamAgg:
             //todo support agg
-            return false;
+            throw Exception("Aggregation is not supported", ErrorCodes::NOT_IMPLEMENTED);
         case tipb::ExecType::TypeTopN:
             // todo support top n
-            return false;
+            throw Exception("TopN is not supported", ErrorCodes::NOT_IMPLEMENTED);
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
     }
-
-    return false;
 }
 
 bool isProject(const tipb::Executor &)
@@ -125,10 +124,7 @@ String DAGStringConverter::buildSqlString()
     std::stringstream project;
     for (const tipb::Executor & executor : dag_request.executors())
     {
-        if (!buildString(executor, query_buf))
-        {
-            return "";
-        }
+        buildString(executor, query_buf);
     }
     if (!isProject(dag_request.executors(dag_request.executors_size() - 1)))
     {
