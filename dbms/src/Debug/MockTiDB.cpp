@@ -45,7 +45,10 @@ void MockTiDB::dropDB(const String & database_name)
 
     SchemaDiff diff;
     diff.type = SchemaActionDropSchema;
-    diff.schema_id = databases[database_name];
+    if (databases.find(database_name) == databases.end())
+        diff.schema_id = -1;
+    else
+        diff.schema_id = databases[database_name];
     diff.version = version;
     version_diff[version] = diff;
 
@@ -147,7 +150,7 @@ DatabaseID MockTiDB::newDB(const String & database_name)
 
     if (databases.find(database_name) == databases.end())
     {
-        schema_id = databases.size();
+        schema_id = databases.size() + 1;
         databases.emplace(database_name, schema_id);
     }
 
@@ -175,7 +178,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
 
     if (databases.find(database_name) == databases.end())
     {
-        databases.emplace(database_name, databases.size());
+        throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
     }
     table_info.db_id = databases[database_name];
     table_info.db_name = database_name;
