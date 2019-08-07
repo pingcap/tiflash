@@ -668,8 +668,8 @@ void SchemaBuilder<Getter>::syncAllSchema()
     createTables(all_tables);
 }
 
-template class SchemaBuilder<SchemaGetter>;
-template class SchemaBuilder<MockSchemaGetter>;
+template struct SchemaBuilder<SchemaGetter>;
+template struct SchemaBuilder<MockSchemaGetter>;
 
 // end namespace
 } // namespace DB
