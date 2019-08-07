@@ -15,6 +15,7 @@ namespace ErrorCodes
 {
 extern const int UNKNOWN_TABLE;
 extern const int COP_BAD_DAG_REQUEST;
+extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
 void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringstream & ss)
@@ -90,17 +91,17 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
             return buildTSString(executor.tbl_scan(), ss);
         case tipb::ExecType::TypeIndexScan:
             // index scan not supported
-            throw Exception("IndexScan is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
+            throw Exception("IndexScan is not supported", ErrorCodes::NOT_IMPLEMENTED);
         case tipb::ExecType::TypeSelection:
             return buildSelString(executor.selection(), ss);
         case tipb::ExecType::TypeAggregation:
             // stream agg is not supported, treated as normal agg
         case tipb::ExecType::TypeStreamAgg:
             //todo support agg
-            throw Exception("Aggregation is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
+            throw Exception("Aggregation is not supported", ErrorCodes::NOT_IMPLEMENTED);
         case tipb::ExecType::TypeTopN:
             // todo support top n
-            throw Exception("TopN is not supported", ErrorCodes::COP_BAD_DAG_REQUEST);
+            throw Exception("TopN is not supported", ErrorCodes::NOT_IMPLEMENTED);
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
     }
