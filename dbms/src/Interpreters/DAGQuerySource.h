@@ -27,12 +27,14 @@ public:
     static const String TOPN_NAME;
     static const String LIMIT_NAME;
 
-    DAGQuerySource(Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
-        const tipb::DAGRequest & dag_request_, DAGContext & dag_context_);
+    DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
+        const tipb::DAGRequest & dag_request_);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
     std::unique_ptr<IInterpreter> interpreter(Context & context, QueryProcessingStage::Enum stage) override;
+
+    DAGContext & getDAGContext() const { return dag_context; };
 
     RegionID getRegionID() const { return region_id; }
     UInt64 getRegionVersion() const { return region_version; }
@@ -76,8 +78,9 @@ public:
     };
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
+    std::vector<tipb::FieldType> getResultFieldTypes() const;
+
     ASTPtr getAST() const { return ast; };
-    DAGContext & getDAGContext() const { return dag_context; };
 
 protected:
     void assertValid(Int32 index, const String & name) const

@@ -93,9 +93,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             }
             // do not have alias
             final_project.emplace_back(required_columns[i], "");
-            auto & column_info = ts.columns(i);
-            dag.getDAGContext().getResultFields().emplace_back(
-                FieldTpAndFlag{static_cast<TiDB::TP>(column_info.tp()), static_cast<UInt32>(column_info.flag())});
         }
     }
     // todo handle alias column
@@ -199,13 +196,9 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         // add cast if type is not match
         analyzer.appendAggSelect(chain, dag.getAggregation());
         //todo use output_offset to reconstruct the final project columns
-        Int32 i = 0;
-        auto & target_types = analyzer.getAggregatedColumnTargetFieldType();
         for (auto element : analyzer.getCurrentInputColumns())
         {
             final_project.emplace_back(element.name, "");
-            dag.getDAGContext().getResultFields().emplace_back(
-                FieldTpAndFlag{static_cast<TiDB::TP>(target_types[i].tp()), static_cast<UInt32>(target_types[i].flag())});
         }
     }
     if (dag.hasTopN())
@@ -437,7 +430,7 @@ void InterpreterDAG::recordProfileStreams(Pipeline & pipeline, Int32 index)
 {
     for (auto & stream : pipeline.streams)
     {
-        dag.getDAGContext().getProfileStreamsList()[index].push_back(stream);
+        dag.getDAGContext().profile_streams_list[index].push_back(stream);
     }
 }
 

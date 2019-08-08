@@ -2,6 +2,7 @@
 
 #include <DataTypes/DataTypeNullable.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
@@ -13,11 +14,11 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-    FieldTpAndFlags && field_tp_and_flags_, Block header_)
+    std::vector<tipb::FieldType> && result_field_types_, Block header_)
     : dag_response(dag_response_),
       records_per_chunk(records_per_chunk_),
       encodeType(encodeType_),
-      field_tp_and_flags(field_tp_and_flags_),
+      result_field_types(result_field_types_),
       header(header_)
 {
     if (encodeType == tipb::EncodeType::TypeArrow)
@@ -46,7 +47,7 @@ void DAGBlockOutputStream::writeSuffix()
 
 void DAGBlockOutputStream::write(const Block & block)
 {
-    if (block.columns() != field_tp_and_flags.size())
+    if (block.columns() != result_field_types.size())
         throw Exception("Output column size mismatch with field type size", ErrorCodes::LOGICAL_ERROR);
 
     // TODO: Check compatibility between field_tp_and_flags and block column types.
@@ -69,7 +70,7 @@ void DAGBlockOutputStream::write(const Block & block)
         for (size_t j = 0; j < block.columns(); j++)
         {
             auto field = (*block.getByPosition(j).column.get())[i];
-            EncodeDatum(field, field_tp_and_flags[j].getCodecFlag(), current_ss);
+            EncodeDatum(field, getCodecFlagByFieldType(result_field_types[j]), current_ss);
         }
         // Encode current row
         records_per_chunk++;

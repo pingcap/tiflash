@@ -24,7 +24,6 @@ private:
     NamesAndTypesList source_columns;
     // all columns after aggregation
     NamesAndTypesList aggregated_columns;
-    std::vector<tipb::FieldType> aggregated_column_target_field_type;
     Settings settings;
     const Context & context;
     bool after_agg;
@@ -36,8 +35,7 @@ public:
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
         AggregateDescriptions & aggregate_descriptions);
     void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg);
-    String appendCastIfNeeded(
-        const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, const tipb::FieldType * default_type = nullptr);
+    String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name);
     void initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns) const
     {
         if (chain.steps.empty())
@@ -48,7 +46,6 @@ public:
     }
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const NamesAndTypesList & getCurrentInputColumns();
-    std::vector<tipb::FieldType> & getAggregatedColumnTargetFieldType() { return aggregated_column_target_field_type; };
 };
 
 } // namespace DB

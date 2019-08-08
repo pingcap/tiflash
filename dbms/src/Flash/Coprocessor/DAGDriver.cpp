@@ -31,9 +31,8 @@ void DAGDriver::execute()
 {
     context.setSetting("read_tso", UInt64(dag_request.start_ts()));
 
-    DAGContext dag_context;
-    dag_context.getProfileStreamsList().resize(dag_request.executors_size());
-    DAGQuerySource dag(context, region_id, region_version, region_conf_version, dag_request, dag_context);
+    DAGContext dag_context(dag_request.executors_size());
+    DAGQuerySource dag(context, dag_context, region_id, region_version, region_conf_version, dag_request);
     BlockIO streams;
 
     String planner = context.getSettings().dag_planner;
@@ -58,10 +57,10 @@ void DAGDriver::execute()
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
     BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk,
-        dag_request.encode_type(), std::move(dag.getDAGContext().getResultFields()), streams.in->getHeader());
+        dag_request.encode_type(), dag.getResultFieldTypes(), streams.in->getHeader());
     copyData(*streams.in, *outputStreamPtr);
     // add ExecutorExecutionSummary info
-    for (auto & p_streams : dag_context.getProfileStreamsList())
+    for (auto & p_streams : dag_context.profile_streams_list)
     {
         auto * executeSummary = dag_response.add_execution_summaries();
         UInt64 time_processed_ns = 0;

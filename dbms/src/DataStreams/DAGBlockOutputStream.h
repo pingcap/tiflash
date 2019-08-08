@@ -19,7 +19,7 @@ class DAGBlockOutputStream : public IBlockOutputStream
 {
 public:
     DAGBlockOutputStream(tipb::SelectResponse & response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
-        FieldTpAndFlags && field_tp_and_flags_, Block header_);
+        std::vector<tipb::FieldType> && result_field_types, Block header_);
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;
@@ -31,7 +31,7 @@ private:
 
     Int64 records_per_chunk;
     tipb::EncodeType encodeType;
-    FieldTpAndFlags field_tp_and_flags;
+    std::vector<tipb::FieldType> result_field_types;
 
     Block header;
 
