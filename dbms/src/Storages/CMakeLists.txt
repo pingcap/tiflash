@@ -1,7 +1,7 @@
 add_subdirectory (System)
 
 if (ENABLE_TESTS)
-    add_subdirectory (tests)
-    add_subdirectory (Transaction/tests)
-    add_subdirectory (Page/tests)
+    add_subdirectory (tests EXCLUDE_FROM_ALL)
+    add_subdirectory (Transaction/tests EXCLUDE_FROM_ALL)
+    add_subdirectory (Page/tests EXCLUDE_FROM_ALL)
 endif ()
