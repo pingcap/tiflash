@@ -100,7 +100,6 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
             return true;
         case tipb::ExecType::TypeStreamAgg:
         case tipb::ExecType::TypeAggregation:
-            //todo use output_offset info to reconstruct the result field type
             for (auto & expr : executor.aggregation().agg_func())
             {
                 if (!expr.has_field_type())
@@ -139,7 +138,7 @@ std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
     }
     // tispark assumes that if there is a agg, the output offset is
     // ignored and the request out put is the same as the agg's output.
-    // todo should eventually remove this
+    // todo should always use output offset to re-construct the output field types
     if (hasAggregation())
     {
         return executor_output;
