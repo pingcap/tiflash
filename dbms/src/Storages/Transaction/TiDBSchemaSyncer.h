@@ -55,7 +55,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         cur_version = 0;
     }
 
-    Int64 getCurrentVersion() const override { return cur_version; }
+    Int64 getCurrentVersion() const override
+    {
+        std::lock_guard<std::mutex> lock(schema_mutex);
+        return cur_version;
+    }
 
     bool syncSchemas(Context & context) override
     {
