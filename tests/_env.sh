@@ -3,10 +3,12 @@
 # Executable path
 
 if [ `uname` == "Darwin" ]; then
-	export storage_bin="../../build_clang/dbms/src/Server/theflash"
+	export build_dir="../../build_clang"
 else
-	export storage_bin="../../build/dbms/src/Server/theflash"
+	export build_dir="../../build"
 fi
+
+export storage_bin="$build_dir/dbms/src/Server/theflash"
 
 # Serve config for launching
 export storage_server_config="../../running/config/config.xml"

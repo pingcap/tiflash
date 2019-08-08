@@ -270,9 +270,10 @@ if (ENABLE_TESTS)
 
     # attach all dbms gtest sources
     grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms dbms_gtest_sources)
-    add_executable(unit_tests_dbms ${dbms_gtest_sources})
-    target_link_libraries(unit_tests_dbms gtest_main dbms clickhouse_functions)
-    add_check(unit_tests_dbms)
+    add_executable(gtests_dbms EXCLUDE_FROM_ALL ${dbms_gtest_sources})
+    target_link_libraries(gtests_dbms gtest_main dbms clickhouse_functions)
+    target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas)
+    add_check(gtests_dbms)
 endif ()
 
 if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
