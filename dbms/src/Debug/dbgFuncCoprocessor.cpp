@@ -27,7 +27,7 @@ using DAGSchema = std::vector<DAGField>;
 std::tuple<DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, Timestamp start_ts);
 tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version);
-BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse dag_response);
+BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 {
@@ -109,12 +109,12 @@ tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version)
 {
     tipb::SelectResponse dag_response;
-    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, dag_response);
+    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, dag_response, true);
     driver.execute();
     return dag_response;
 }
 
-BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse dag_response)
+BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
 {
     BlocksList blocks;
     for (const auto & chunk : dag_response.chunks())
