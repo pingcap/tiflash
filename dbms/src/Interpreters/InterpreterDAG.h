@@ -81,6 +81,7 @@ private:
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
+    void recordProfileStreams(Pipeline & pipeline, Int32 index);
 
 private:
     Context & context;

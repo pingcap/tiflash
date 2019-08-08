@@ -93,6 +93,9 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             }
             // do not have alias
             final_project.emplace_back(required_columns[i], "");
+            auto & column_info = ts.columns(i);
+            dag.getDAGContext().getResultFields().emplace_back(
+                FieldTpAndFlag{static_cast<TiDB::TP>(column_info.tp()), static_cast<UInt32>(column_info.flag())});
         }
     }
     // todo handle alias column
@@ -195,10 +198,14 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 
         // add cast if type is not match
         analyzer.appendAggSelect(chain, dag.getAggregation());
-        //todo use output_offset to pruner the final project columns
+        //todo use output_offset to reconstruct the final project columns
+        Int32 i = 0;
+        auto & target_types = analyzer.getAggregatedColumnTargetFieldType();
         for (auto element : analyzer.getCurrentInputColumns())
         {
             final_project.emplace_back(element.name, "");
+            dag.getDAGContext().getResultFields().emplace_back(
+                FieldTpAndFlag{static_cast<TiDB::TP>(target_types[i].tp()), static_cast<UInt32>(target_types[i].flag())});
         }
     }
     if (dag.hasTopN())
@@ -426,20 +433,31 @@ void InterpreterDAG::executeOrder(Pipeline & pipeline, Strings & order_column_na
         limit, settings.max_bytes_before_external_sort, context.getTemporaryPath());
 }
 
+void InterpreterDAG::recordProfileStreams(Pipeline & pipeline, Int32 index)
+{
+    for (auto & stream : pipeline.streams)
+    {
+        dag.getDAGContext().getProfileStreamsList()[index].push_back(stream);
+    }
+}
+
 void InterpreterDAG::executeImpl(Pipeline & pipeline)
 {
     executeTS(dag.getTS(), pipeline);
+    recordProfileStreams(pipeline, dag.getTSIndex());
 
     auto res = analyzeExpressions();
     // execute selection
     if (res.has_where)
     {
         executeWhere(pipeline, res.before_where, res.filter_column_name);
+        recordProfileStreams(pipeline, dag.getSelectionIndex());
     }
     if (res.need_aggregate)
     {
         // execute aggregation
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
+        recordProfileStreams(pipeline, dag.getAggregationIndex());
     }
     executeExpression(pipeline, res.before_order_and_select);
 
@@ -447,6 +465,7 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
     {
         // execute topN
         executeOrder(pipeline, res.order_column_names);
+        recordProfileStreams(pipeline, dag.getTopNIndex());
     }
 
     // execute projection
@@ -456,6 +475,7 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
     if (dag.hasLimit() && !dag.hasTopN())
     {
         executeLimit(pipeline);
+        recordProfileStreams(pipeline, dag.getLimitIndex());
     }
 }
 

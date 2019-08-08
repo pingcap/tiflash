@@ -14,7 +14,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int COP_BAD_DAG_REQUEST;
+extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 static String genCastString(const String & org_name, const String & target_type_name)
@@ -84,6 +84,15 @@ void DAGExpressionAnalyzer::appendAggregation(
         DataTypePtr result_type = aggregate.function->getReturnType();
         // this is a temp result since implicit cast maybe added on these aggregated_columns
         aggregated_columns.emplace_back(func_string, result_type);
+        if (expr.has_field_type())
+        {
+            aggregated_column_target_field_type.push_back(expr.field_type());
+        }
+        else
+        {
+            //todo derive the target field type based on agg_func_name and agg_argument_types
+            throw Exception("Agg expr field type not specified", ErrorCodes::COP_BAD_DAG_REQUEST);
+        }
     }
 
     for (auto name : agg_argument_names)
@@ -98,6 +107,14 @@ void DAGExpressionAnalyzer::appendAggregation(
         // this is a temp result since implicit cast maybe added on these aggregated_columns
         aggregated_columns.emplace_back(name, step.actions->getSampleBlock().getByName(name).type);
         aggregation_keys.push_back(name);
+        if (expr.has_field_type())
+        {
+            aggregated_column_target_field_type.push_back(expr.field_type());
+        }
+        else
+        {
+            throw Exception("group by expr field type not specified", ErrorCodes::COP_BAD_DAG_REQUEST);
+        }
     }
     after_agg = true;
 }
@@ -154,7 +171,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
         String & name = aggregated_columns.getNames()[i];
-        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
+        String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name, &(aggregated_column_target_field_type[i]));
         if (name != updated_name)
         {
             need_update_aggregated_columns = true;
@@ -171,7 +188,8 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
         String & name = aggregated_columns.getNames()[i + aggregation.agg_func_size()];
-        String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
+        String updated_name = appendCastIfNeeded(
+            aggregation.group_by(i), step.actions, name, &(aggregated_column_target_field_type[i + aggregation.agg_func_size()]));
         if (name != updated_name)
         {
             need_update_aggregated_columns = true;
@@ -196,11 +214,13 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
 }
 
-String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String expr_name)
+String DAGExpressionAnalyzer::appendCastIfNeeded(
+    const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name, const tipb::FieldType * default_type)
 {
-    if (expr.has_field_type() && isFunctionExpr(expr))
+    if ((expr.has_field_type() || default_type != nullptr) && isFunctionExpr(expr))
     {
-        DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
+        DataTypePtr expected_type
+            = expr.has_field_type() ? getDataTypeByFieldType(expr.field_type()) : getDataTypeByFieldType(*default_type);
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         //todo maybe use a more decent compare method
         if (expected_type->getName() != actual_type->getName())

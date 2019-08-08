@@ -24,9 +24,10 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
     index = value;
 }
 
-DAGQuerySource::DAGQuerySource(
-    Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_, const tipb::DAGRequest & dag_request_)
+DAGQuerySource::DAGQuerySource(Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
+    const tipb::DAGRequest & dag_request_, DAGContext & dag_context_)
     : context(context_),
+      dag_context(dag_context_),
       region_id(region_id_),
       region_version(region_version_),
       region_conf_version(region_conf_version_),
@@ -48,6 +49,7 @@ DAGQuerySource::DAGQuerySource(
                 break;
             case tipb::ExecType::TypeTopN:
                 assignOrThrowException(order_index, i, TOPN_NAME);
+                assignOrThrowException(limit_index, i, TOPN_NAME);
                 break;
             case tipb::ExecType::TypeLimit:
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
@@ -76,25 +78,6 @@ String DAGQuerySource::str(size_t) { return dag_request.DebugString(); }
 std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
     return std::make_unique<InterpreterDAG>(context, *this);
-}
-
-FieldTpAndFlags DAGQuerySource::getOutputFieldTpAndFlags() const
-{
-    FieldTpAndFlags output;
-
-    const auto & ts = getTS();
-    const auto & column_infos = ts.columns();
-    for (auto i : dag_request.output_offsets())
-    {
-        // TODO: Checking bound.
-        auto & column_info = column_infos[i];
-        output.emplace_back(FieldTpAndFlag{static_cast<TiDB::TP>(column_info.tp()), static_cast<UInt32>(column_info.flag())});
-    }
-
-    // TODO: Add aggregation columns.
-    // We either write our own code to infer types that follows the convention between TiDB and TiKV, or ask TiDB to push down aggregation field types.
-
-    return output;
 }
 
 } // namespace DB

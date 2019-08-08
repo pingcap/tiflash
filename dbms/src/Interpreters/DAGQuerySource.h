@@ -1,33 +1,20 @@
 #pragma once
 
-#include <Interpreters/IQuerySource.h>
-#include <Storages/Transaction/TiDB.h>
-#include <Storages/Transaction/Types.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
+
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Interpreters/IQuerySource.h>
+#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
 
 class Context;
 
-/// A handy struct to get codec flag based on tp and flag.
-struct FieldTpAndFlag
-{
-    TiDB::TP tp;
-    UInt32 flag;
-
-    TiDB::CodecFlag getCodecFlag() const
-    {
-        TiDB::ColumnInfo ci;
-        ci.tp = tp;
-        ci.flag = flag;
-        return ci.getCodecFlag();
-    }
-};
-using FieldTpAndFlags = std::vector<FieldTpAndFlag>;
 
 /// Query source of a DAG request via gRPC.
 /// This is also an IR of a DAG.
@@ -41,7 +28,7 @@ public:
     static const String LIMIT_NAME;
 
     DAGQuerySource(Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
-        const tipb::DAGRequest & dag_request_);
+        const tipb::DAGRequest & dag_request_, DAGContext & dag_context_);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -55,6 +42,12 @@ public:
     bool hasAggregation() const { return agg_index != -1; };
     bool hasTopN() const { return order_index != -1; };
     bool hasLimit() const { return order_index == -1 && limit_index != -1; };
+
+    Int32 getTSIndex() const { return ts_index; };
+    Int32 getSelectionIndex() const { return sel_index; };
+    Int32 getAggregationIndex() const { return agg_index; };
+    Int32 getTopNIndex() const { return order_index; };
+    Int32 getLimitIndex() const { return limit_index; };
 
     const tipb::TableScan & getTS() const
     {
@@ -83,11 +76,8 @@ public:
     };
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    /// Used to guide output stream to encode data, as we lost DAG field type during input streams.
-    /// This will somewhat duplicate the planning logic, but we don't have a decent way to keep this information.
-    FieldTpAndFlags getOutputFieldTpAndFlags() const;
-
     ASTPtr getAST() const { return ast; };
+    DAGContext & getDAGContext() const { return dag_context; };
 
 protected:
     void assertValid(Int32 index, const String & name) const
@@ -100,6 +90,7 @@ protected:
 
 protected:
     Context & context;
+    DAGContext & dag_context;
 
     const RegionID region_id;
     const UInt64 region_version;
