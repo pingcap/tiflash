@@ -151,6 +151,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         i++;
     }
 
+    // TODO: Other operator compile.
+
     return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request));
 }
 
