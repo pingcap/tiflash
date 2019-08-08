@@ -36,6 +36,7 @@ DBGInvoker::DBGInvoker()
     regFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
     regFunc("mock_tidb_db", MockTiDBTable::dbgFuncMockTiDBDB);
     regFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
+    regFunc("drop_tidb_partition", MockTiDBTable::dbgFuncDropTiDBPartition);
     regFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
     regFunc("drop_tidb_table", MockTiDBTable::dbgFuncDropTiDBTable);
     regFunc("drop_tidb_db", MockTiDBTable::dbgFuncDropTiDBDB);

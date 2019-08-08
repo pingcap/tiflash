@@ -65,18 +65,39 @@ void MockTiDBTable::dbgFuncMockTiDBDB(Context &, const ASTs & args, DBGInvoker::
 
 void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
+    if (args.size() != 3 && args.size() != 4)
+        throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    TableID partition_id = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    bool is_add_part = false;
+    if (args.size() == 4)
+    {
+        is_add_part = typeid_cast<const ASTIdentifier &>(*args[3]).name == "true";
+    }
+    auto tso = context.getTMTContext().getPDClient()->getTS();
+
+    MockTiDB::instance().newPartition(database_name, table_name, partition_id, tso, is_add_part);
+
+    std::stringstream ss;
+    ss << "mock partition #" << partition_id;
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncDropTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
+{
     if (args.size() != 3)
         throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    const String & partition_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
-    auto tso = context.getTMTContext().getPDClient()->getTS();
+    TableID partition_id = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
 
-    TableID partition_id = MockTiDB::instance().newPartition(database_name, table_name, partition_name, tso);
+    MockTiDB::instance().dropPartition(database_name, table_name, partition_id);
 
     std::stringstream ss;
-    ss << "mock partition #" << partition_id;
+    ss << "drop partition #" << partition_id;
     output(ss.str());
 }
 
@@ -117,7 +138,7 @@ void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGI
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     bool drop_regions = true;
-    if (args.size() == 3)
+    if (args.size() == 2)
         drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
 
     std::vector<String> table_names;

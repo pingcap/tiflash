@@ -68,7 +68,9 @@ public:
 
     DatabaseID newDataBase(const String & database_name);
 
-    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
+    void newPartition(const String & database_name, const String & table_name, TableID partition_id, Timestamp tso, bool);
+
+    void dropPartition(const String & database_name, const String & table_name, TableID partition_id);
 
     void dropTable(const String & database_name, const String & table_name, bool is_drop_db);
 

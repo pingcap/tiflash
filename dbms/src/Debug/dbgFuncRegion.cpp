@@ -61,7 +61,8 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
-    const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
+    const String & partition_name
+        = args.size() == 6 ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value)) : "";
 
     TableID table_id = getTableID(context, database_name, table_name, partition_name);
 
