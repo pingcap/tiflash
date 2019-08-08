@@ -1,4 +1,4 @@
-#include <Interpreters/InterpreterDAG.h>
+#include <Flash/Coprocessor/InterpreterDAG.h>
 
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
@@ -10,9 +10,9 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/DAGExpressionAnalyzer.h>
-#include <Interpreters/DAGUtils.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>

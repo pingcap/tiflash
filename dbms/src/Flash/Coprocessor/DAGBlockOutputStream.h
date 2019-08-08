@@ -3,7 +3,7 @@
 #include <Core/Types.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
-#include <Interpreters/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>

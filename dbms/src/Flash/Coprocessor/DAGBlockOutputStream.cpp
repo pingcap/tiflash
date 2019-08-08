@@ -1,4 +1,4 @@
-#include <DataStreams/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGBlockOutputStream.h>
 
 #include <DataTypes/DataTypeNullable.h>
 #include <Storages/Transaction/Codec.h>

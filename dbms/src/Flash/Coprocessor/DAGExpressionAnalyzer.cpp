@@ -1,10 +1,10 @@
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DAGExpressionAnalyzer.h>
-#include <Interpreters/DAGUtils.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -14,7 +14,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int COP_BAD_DAG_REQUEST;
+extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 static String genCastString(const String & org_name, const String & target_type_name)

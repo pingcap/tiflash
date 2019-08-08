@@ -1,7 +1,6 @@
-#include <Interpreters/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
 
-#include <Interpreters/InterpreterDAG.h>
-#include <Parsers/ASTSelectQuery.h>
+#include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>

@@ -7,9 +7,9 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/DAGQuerySource.h>
-#include <Interpreters/DAGUtils.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
