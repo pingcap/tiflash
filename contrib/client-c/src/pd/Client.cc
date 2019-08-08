@@ -350,5 +350,31 @@ metapb::Store Client::getStore(uint64_t store_id)
     return response.store();
 }
 
+std::vector<metapb::Store> Client::getAllStores()
+{
+    pdpb::GetAllStoresRequest request{};
+    pdpb::GetAllStoresResponse response{};
+
+    request.set_allocated_header(requestHeader());
+
+    grpc::ClientContext context;
+
+    context.set_deadline(std::chrono::system_clock::now() + pd_timeout);
+
+    auto status = leaderStub()->GetAllStores(&context, request, &response);
+    if (!status.ok())
+    {
+        std::string err_msg = ("get all stores failed: " + std::to_string(status.error_code()) + ": " + status.error_message());
+        log->error(err_msg);
+        check_leader.store(true);
+        throw Exception(err_msg, GRPCErrorCode);
+    }
+    std::vector<metapb::Store> stores;
+    int size = response.stores_size();
+    for (int i = 0; i < size; i++)
+        stores.push_back(response.stores(i));
+    return stores;
+}
+
 } // namespace pd
 } // namespace pingcap

@@ -30,7 +30,7 @@ public:
 
     virtual metapb::Store getStore(uint64_t store_id) = 0;
 
-    //    virtual std::vector<metapb::Store> getAllStores() = 0;
+    virtual std::vector<metapb::Store> getAllStores() = 0;
 
     virtual uint64_t getGCSafePoint() = 0;
 

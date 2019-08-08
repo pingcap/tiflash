@@ -49,7 +49,7 @@ public:
 
     metapb::Store getStore(uint64_t store_id) override;
 
-    //std::vector<metapb::Store> getAllStores() override;
+    std::vector<metapb::Store> getAllStores() override;
 
     uint64_t getGCSafePoint() override;
 
