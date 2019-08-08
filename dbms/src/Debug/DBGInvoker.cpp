@@ -35,9 +35,11 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("sleep", dbgFuncSleep);
 
     regSchemalessFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
+    regSchemalessFunc("mock_tidb_db", MockTiDBTable::dbgFuncMockTiDBDB);
     regSchemalessFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
     regSchemalessFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
     regSchemalessFunc("drop_tidb_table", MockTiDBTable::dbgFuncDropTiDBTable);
+    regSchemalessFunc("drop_tidb_db", MockTiDBTable::dbgFuncDropTiDBDB);
     regSchemalessFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
     regSchemalessFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
     regSchemalessFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
@@ -64,6 +66,7 @@ DBGInvoker::DBGInvoker()
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
+    regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
 
     regSchemafulFunc("dag", dbgFuncDAG);
 }
