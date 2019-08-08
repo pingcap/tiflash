@@ -176,19 +176,19 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    res.need_aggregate = dag.hasAggregation();
     DAGExpressionAnalyzer analyzer(source_columns, context);
     if (dag.hasSelection())
     {
         analyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name);
         res.has_where = true;
         res.before_where = chain.getLastActions();
-        res.filter_column_name = chain.steps.back().required_output[0];
         chain.addStep();
     }
-    if (res.need_aggregate)
+    // There will be either Agg...
+    if (dag.hasAggregation())
     {
         analyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
         chain.finalize();
@@ -202,17 +202,22 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
             final_project.emplace_back(element.name, "");
         }
     }
+    // Or TopN, not both.
     if (dag.hasTopN())
     {
         res.has_order_by = true;
         analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
-    // append final project results
-    for (auto & name : final_project)
+    // Append final project results if needed.
+    if (dag.hasSelection() || dag.hasAggregation() || dag.hasTopN())
     {
-        chain.steps.back().required_output.push_back(name.first);
+        // TODO: No new action added, file_project will be added last filter/agg/topN. OK???
+        for (auto & name : final_project)
+        {
+            chain.steps.back().required_output.push_back(name.first);
+        }
+        res.before_order_and_select = chain.getLastActions();
     }
-    res.before_order_and_select = chain.getLastActions();
     chain.finalize();
     chain.clear();
     //todo need call prependProjectInput??
@@ -453,7 +458,11 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
         executeAggregation(pipeline, res.before_aggregation, res.aggregation_keys, res.aggregate_descriptions);
         recordProfileStreams(pipeline, dag.getAggregationIndex());
     }
-    executeExpression(pipeline, res.before_order_and_select);
+    if (res.before_order_and_select)
+    {
+        executeExpression(pipeline, res.before_order_and_select);
+        // TODO: No record profile stream???
+    }
 
     if (res.has_order_by)
     {
@@ -464,6 +473,7 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
 
     // execute projection
     executeFinalProject(pipeline);
+    // TODO: No record profile stream???
 
     // execute limit
     if (dag.hasLimit() && !dag.hasTopN())
