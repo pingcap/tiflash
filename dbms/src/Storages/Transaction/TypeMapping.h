@@ -15,4 +15,6 @@ DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info);
 
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type);
 
+TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
+
 } // namespace DB

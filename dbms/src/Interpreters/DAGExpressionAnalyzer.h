@@ -5,6 +5,7 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/DAGUtils.h>
 #include <Interpreters/ExpressionActions.h>
@@ -34,7 +35,7 @@ public:
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
         AggregateDescriptions & aggregate_descriptions);
     void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg);
-    String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String expr_name);
+    String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name);
     void initChain(ExpressionActionsChain & chain, const NamesAndTypesList & columns) const
     {
         if (chain.steps.empty())

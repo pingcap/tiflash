@@ -14,7 +14,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int COP_BAD_DAG_REQUEST;
+extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 static String genCastString(const String & org_name, const String & target_type_name)
@@ -151,9 +151,10 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     bool need_update_aggregated_columns = false;
     NamesAndTypesList updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
+    auto agg_col_names = aggregated_columns.getNames();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
-        String & name = aggregated_columns.getNames()[i];
+        String & name = agg_col_names[i];
         String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
         if (name != updated_name)
         {
@@ -170,7 +171,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        String & name = aggregated_columns.getNames()[i + aggregation.agg_func_size()];
+        String & name = agg_col_names[i + aggregation.agg_func_size()];
         String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
         if (name != updated_name)
         {
@@ -188,17 +189,23 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
 
     if (need_update_aggregated_columns)
     {
+        auto updated_agg_col_names = updated_aggregated_columns.getNames();
+        auto updated_agg_col_types = updated_aggregated_columns.getTypes();
         aggregated_columns.clear();
         for (size_t i = 0; i < updated_aggregated_columns.size(); i++)
         {
-            aggregated_columns.emplace_back(updated_aggregated_columns.getNames()[i], updated_aggregated_columns.getTypes()[i]);
+            aggregated_columns.emplace_back(updated_agg_col_names[i], updated_agg_col_types[i]);
         }
     }
 }
 
-String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String expr_name)
+String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name)
 {
-    if (expr.has_field_type() && isFunctionExpr(expr))
+    if (!expr.has_field_type())
+    {
+        throw Exception("Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    if (isFunctionExpr(expr))
     {
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;

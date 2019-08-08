@@ -9,6 +9,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int COP_BAD_DAG_REQUEST;
+} // namespace ErrorCodes
+
 const String DAGQuerySource::TS_NAME("tablescan");
 const String DAGQuerySource::SEL_NAME("selection");
 const String DAGQuerySource::AGG_NAME("aggregation");
@@ -24,9 +29,10 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
     index = value;
 }
 
-DAGQuerySource::DAGQuerySource(
-    Context & context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_, const tipb::DAGRequest & dag_request_)
+DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_,
+    UInt64 region_conf_version_, const tipb::DAGRequest & dag_request_)
     : context(context_),
+      dag_context(dag_context_),
       region_id(region_id_),
       region_version(region_version_),
       region_conf_version(region_conf_version_),
@@ -48,6 +54,7 @@ DAGQuerySource::DAGQuerySource(
                 break;
             case tipb::ExecType::TypeTopN:
                 assignOrThrowException(order_index, i, TOPN_NAME);
+                assignOrThrowException(limit_index, i, TOPN_NAME);
                 break;
             case tipb::ExecType::TypeLimit:
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
@@ -78,23 +85,70 @@ std::unique_ptr<IInterpreter> DAGQuerySource::interpreter(Context &, QueryProces
     return std::make_unique<InterpreterDAG>(context, *this);
 }
 
-FieldTpAndFlags DAGQuerySource::getOutputFieldTpAndFlags() const
+bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<tipb::FieldType> & output_field_types)
 {
-    FieldTpAndFlags output;
-
-    const auto & ts = getTS();
-    const auto & column_infos = ts.columns();
-    for (auto i : dag_request.output_offsets())
+    tipb::FieldType field_type;
+    switch (executor.tp())
     {
-        // TODO: Checking bound.
-        auto & column_info = column_infos[i];
-        output.emplace_back(FieldTpAndFlag{static_cast<TiDB::TP>(column_info.tp()), static_cast<UInt32>(column_info.flag())});
+        case tipb::ExecType::TypeTableScan:
+            for (auto ci : executor.tbl_scan().columns())
+            {
+                field_type.set_tp(ci.tp());
+                field_type.set_flag(ci.flag());
+                output_field_types.push_back(field_type);
+            }
+            return true;
+        case tipb::ExecType::TypeStreamAgg:
+        case tipb::ExecType::TypeAggregation:
+            for (auto & expr : executor.aggregation().agg_func())
+            {
+                if (!expr.has_field_type())
+                {
+                    throw Exception("Agg expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+                }
+                output_field_types.push_back(expr.field_type());
+            }
+            for (auto & expr : executor.aggregation().group_by())
+            {
+                if (!expr.has_field_type())
+                {
+                    throw Exception("Group by expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+                }
+                output_field_types.push_back(expr.field_type());
+            }
+            return true;
+        default:
+            return false;
     }
+}
 
-    // TODO: Add aggregation columns.
-    // We either write our own code to infer types that follows the convention between TiDB and TiKV, or ask TiDB to push down aggregation field types.
-
-    return output;
+std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
+{
+    std::vector<tipb::FieldType> executor_output;
+    for (int i = dag_request.executors_size() - 1; i >= 0; i--)
+    {
+        if (fillExecutorOutputFieldTypes(dag_request.executors(i), executor_output))
+        {
+            break;
+        }
+    }
+    if (executor_output.empty())
+    {
+        throw Exception("Do not found result field type for current dag request", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    // tispark assumes that if there is a agg, the output offset is
+    // ignored and the request out put is the same as the agg's output.
+    // todo should always use output offset to re-construct the output field types
+    if (hasAggregation())
+    {
+        return executor_output;
+    }
+    std::vector<tipb::FieldType> ret;
+    for (int i : dag_request.output_offsets())
+    {
+        ret.push_back(executor_output[i]);
+    }
+    return ret;
 }
 
 } // namespace DB

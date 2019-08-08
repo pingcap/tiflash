@@ -99,7 +99,7 @@ grpc::Status rpcTest()
     col->set_val(ss.str());
     value->set_tp(tipb::ExprType::Int64);
     ss.str("");
-    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(888, ss);
+    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(10, ss);
     value->set_val(std::string(ss.str()));
 
     // agg: count(s) group by i;
