@@ -90,6 +90,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
         start_ts);
+    std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
     tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer());
