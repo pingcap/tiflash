@@ -23,6 +23,7 @@ class MockTiDB : public ext::singleton<MockTiDB>
     friend class ext::singleton<MockTiDB>;
 
 public:
+    MockTiDB();
     class Table
     {
         friend class MockTiDB;
@@ -65,9 +66,13 @@ public:
 public:
     TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso);
 
+    DatabaseID newDataBase(const String & database_name);
+
     TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
 
-    void dropTable(const String & database_name, const String & table_name);
+    void dropTable(const String & database_name, const String & table_name, bool is_drop_db);
+
+    void dropDB(const String & database_name);
 
     void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
 
