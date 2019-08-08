@@ -71,8 +71,10 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             // cid out of bound
             throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
-        String name = storage->getTableInfo().columns[cid - 1].name;
+        String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
+        NameAndTypePair nameAndTypePair = storage->getColumns().getPhysical(name);
+        source_columns.push_back(nameAndTypePair);
     }
     if (required_columns.empty())
     {
@@ -168,7 +170,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         });
     }
     ColumnsWithTypeAndName columnsWithTypeAndName = pipeline.firstStream()->getHeader().getColumnsWithTypeAndName();
-    source_columns = storage->getColumns().getAllPhysical();
 }
 
 InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
