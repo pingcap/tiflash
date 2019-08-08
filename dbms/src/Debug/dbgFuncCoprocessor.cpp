@@ -8,6 +8,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -24,12 +25,54 @@ extern const int BAD_ARGUMENTS;
 
 using DAGField = std::pair<String, tipb::FieldType>;
 using DAGSchema = std::vector<DAGField>;
-std::tuple<DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, Timestamp start_ts);
+using SchemaFetcher = std::function<TiDB::TableInfo(const String &, const String &)>;
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
+    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts);
 tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
+{
+    if (args.size() < 1 || args.size() > 2)
+        throw Exception("Args not matched, should be: query[, region-id]", ErrorCodes::BAD_ARGUMENTS);
+
+    String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    RegionID region_id = InvalidRegionID;
+    if (args.size() == 2)
+        region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
+
+    auto [table_id, schema, dag_request] = compileQuery(context, query,
+        [&](const String & database_name, const String & table_name) {
+            auto storage = context.getTable(database_name, table_name);
+            auto mmt = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+            if (!mmt || mmt->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
+                throw Exception("Not TMT", ErrorCodes::BAD_ARGUMENTS);
+            return mmt->getTableInfo();
+        },
+        start_ts);
+
+    RegionPtr region;
+    if (region_id == InvalidRegionID)
+    {
+        auto regions = context.getTMTContext().getRegionTable().getRegionsByTable(table_id);
+        if (regions.empty())
+            throw Exception("No region for table", ErrorCodes::BAD_ARGUMENTS);
+        region = context.getTMTContext().getRegionTable().getRegionsByTable(table_id).front().second;
+    }
+    else
+    {
+        region = context.getTMTContext().getRegionTable().getRegionByTableAndID(table_id, region_id);
+        if (!region)
+            throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
+    }
+    tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer());
+
+    return outputDAGResponse(context, schema, dag_response);
+}
+
+BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 {
     if (args.size() < 2 || args.size() > 3)
         throw Exception("Args not matched, should be: query, region-id[, start-ts]", ErrorCodes::BAD_ARGUMENTS);
@@ -42,14 +85,20 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
 
+    auto [table_id, schema, dag_request] = compileQuery(context, query,
+        [&](const String & database_name, const String & table_name) {
+            return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
+        },
+        start_ts);
+
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
-    auto [schema, dag_request] = compileQuery(context, query, start_ts);
     tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer());
 
     return outputDAGResponse(context, schema, dag_response);
 }
 
-std::tuple<DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, Timestamp start_ts)
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
+    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
@@ -76,7 +125,7 @@ std::tuple<DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const St
     {
         database_name = context.getCurrentDatabase();
     }
-    const auto & table_info = MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
+    auto table_info = schema_fetcher(database_name, table_name);
 
     tipb::Executor * executor = dag_request.add_executors();
     executor->set_tp(tipb::ExecType::TypeTableScan);
@@ -102,7 +151,7 @@ std::tuple<DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const St
         i++;
     }
 
-    return std::make_pair(std::move(schema), std::move(dag_request));
+    return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request));
 }
 
 tipb::SelectResponse executeDAGRequest(

@@ -18,6 +18,12 @@
 │ test1 │
 └───────┘
 
+# Mock DAG read
+=> DBGInvoke mock_dag('select * from default.test', 4) " --dag_planner="optree
+┌─col_1─┐
+│ test1 │
+└───────┘
+
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test

@@ -69,6 +69,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
 
     regSchemafulFunc("dag", dbgFuncDAG);
+    regSchemafulFunc("mock_dag", dbgFuncMockDAG);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
