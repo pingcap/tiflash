@@ -2,12 +2,12 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <DataStreams/DAGBlockOutputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DAGQuerySource.h>
-#include <Interpreters/DAGStringConverter.h>
 #include <Interpreters/executeQuery.h>
 
 namespace DB

@@ -6,8 +6,8 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/DAGUtils.h>
 #include <Interpreters/ExpressionActions.h>
 
 namespace DB

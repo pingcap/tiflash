@@ -1,7 +1,7 @@
-#include <Interpreters/DAGStringConverter.h>
+#include <Flash/Coprocessor/DAGStringConverter.h>
 
 #include <Core/QueryProcessingStage.h>
-#include <Interpreters/DAGUtils.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/SchemaSyncer.h>

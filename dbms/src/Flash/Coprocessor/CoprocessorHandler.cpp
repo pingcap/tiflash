@@ -2,8 +2,7 @@
 
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Interpreters/InterpreterDAG.h>
-#include <Interpreters/SQLQuerySource.h>
+#include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>
