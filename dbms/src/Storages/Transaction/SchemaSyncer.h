@@ -20,6 +20,8 @@ public:
      * @param context
      */
     virtual bool syncSchemas(Context & context) = 0;
+
+    virtual void reset() = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

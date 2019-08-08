@@ -26,7 +26,25 @@ Table::Table(const String & database_name_, const String & table_name_, TableInf
     : table_info(std::move(table_info_)), database_name(database_name_), table_name(table_name_)
 {}
 
-void MockTiDB::dropTable(const String & database_name, const String & table_name)
+MockTiDB::MockTiDB() { databases["default"] = 0; }
+
+void MockTiDB::dropDB(const String & database_name)
+{
+    version++;
+
+    SchemaDiff diff;
+    diff.type = SchemaActionDropSchema;
+    if (databases.find(database_name) == databases.end())
+        diff.schema_id = -1;
+    else
+        diff.schema_id = databases[database_name];
+    diff.version = version;
+    version_diff[version] = diff;
+
+    databases.erase(database_name);
+}
+
+void MockTiDB::dropTable(const String & database_name, const String & table_name, bool is_drop_db)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -47,14 +65,17 @@ void MockTiDB::dropTable(const String & database_name, const String & table_name
 
     tables_by_name.erase(it_by_name);
 
-    version++;
+    if (!is_drop_db)
+    {
+        version++;
 
-    SchemaDiff diff;
-    diff.type = SchemaActionDropTable;
-    diff.schema_id = table->table_info.db_id;
-    diff.table_id = table->id();
-    diff.version = version;
-    version_diff[version] = diff;
+        SchemaDiff diff;
+        diff.type = SchemaActionDropTable;
+        diff.schema_id = table->table_info.db_id;
+        diff.table_id = table->id();
+        diff.version = version;
+        version_diff[version] = diff;
+    }
 }
 
 ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
@@ -112,6 +133,26 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
     return column_info;
 }
 
+DatabaseID MockTiDB::newDataBase(const String & database_name)
+{
+    DatabaseID schema_id = 0;
+
+    if (databases.find(database_name) == databases.end())
+    {
+        schema_id = databases.size() + 1;
+        databases.emplace(database_name, schema_id);
+    }
+
+    version++;
+    SchemaDiff diff;
+    diff.type = SchemaActionCreateSchema;
+    diff.schema_id = schema_id;
+    diff.version = version;
+    version_diff[version] = diff;
+
+    return schema_id;
+}
+
 TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso)
 {
     std::lock_guard lock(tables_mutex);
@@ -124,9 +165,9 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
 
     TableInfo table_info;
 
-    if (databases.find(database_name) != databases.end())
+    if (databases.find(database_name) == databases.end())
     {
-        databases.emplace(database_name, databases.size());
+        throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
     }
     table_info.db_id = databases[database_name];
     table_info.db_name = database_name;
