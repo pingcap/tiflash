@@ -54,6 +54,8 @@ public:
 
     void restore();
 
+    const std::unordered_set<std::string> & getIgnoreDatabases() const;
+
 private:
     KVStorePtr kvstore;
     TMTStorages storages;
