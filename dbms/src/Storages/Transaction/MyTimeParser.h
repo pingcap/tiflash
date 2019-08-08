@@ -8,7 +8,7 @@
 #include <vector>
 
 #include <Storages/Transaction/TiDB.h>
-#include <iostream>
+#include <Poco/StringTokenizer.h>
 
 namespace DB
 {
@@ -51,18 +51,7 @@ int getFracIndex(const String & format)
 
 std::vector<String> parseDateFormat(String format)
 {
-    size_t ltrim = 0;
-    for (; ltrim < format.size(); ltrim++)
-    {
-        if (!std::isspace(ltrim))
-            break;
-    }
-    format = format.substr(ltrim);
-    size_t rtrim = format.size();
-    for (; rtrim != 0; rtrim--)
-        if (!std::isspace(rtrim))
-            break;
-    format = format.substr(0, rtrim);
+    format = Poco::trimInPlace(format);
 
     std::vector<String> seps;
     size_t start = 0;
