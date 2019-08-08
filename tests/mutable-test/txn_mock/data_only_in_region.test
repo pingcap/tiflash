@@ -4,10 +4,6 @@
 => drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(100000, 20000000)
-=> DBGInvoke mock_schema_syncer('true')
-┌─mock_schema_syncer("true")─┐
-│ mock schema syncer enabled │
-└────────────────────────────┘
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
 => DBGInvoke __put_region(4, 0, 100, default, test)
@@ -22,7 +18,7 @@
 │ wrote 1200 row to default.test with raft commands │
 └───────────────────────────────────────────────────┘
 
-=> select count(*) from default.test " --schema_version "100
+=> select count(*) from default.test " --schema_version "10000000
 ┌─count()─┐
 │    1204 │
 └─────────┘
@@ -35,6 +31,41 @@
 => selraw nokvstore count(*) from default.test
 ┌─count()─┐
 │       0 │
+└─────────┘
+
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 1, 10000000, 0, 'f1', -5)
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 2, 10000002, 0, 'f2', -6)
+=> select (*) from default.test " --read_tso "10000001
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+└───────┴───────┴─────────────┘
+
+=> select (*) from default.test " --read_tso "10000003
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+│ f2    │    -6 │           2 │
+└───────┴───────┴─────────────┘
+
+=> DBGInvoke __raft_insert_row_full(default, test, 4, 2, 10000005, 1, 'f2', -6)
+=> select (*) from default.test " --read_tso "10000003
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+│ f2    │    -6 │           2 │
+└───────┴───────┴─────────────┘
+
+=> select (*) from default.test " --read_tso "10000005
+┌─col_1─┬─col_2─┬─_tidb_rowid─┐
+│ f1    │    -5 │           1 │
+└───────┴───────┴─────────────┘
+
+=> selraw count(*) from default.test
+┌─count()─┐
+│    1207 │
+└─────────┘
+
+=> select count(*) from default.test
+┌─count()─┐
+│    1205 │
 └─────────┘
 
 => DBGInvoke __drop_tidb_table(default, test)

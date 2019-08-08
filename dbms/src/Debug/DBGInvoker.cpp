@@ -34,9 +34,11 @@ DBGInvoker::DBGInvoker()
     regFunc("sleep", dbgFuncSleep);
 
     regFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
+    regFunc("mock_tidb_db", MockTiDBTable::dbgFuncMockTiDBDB);
     regFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
     regFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
     regFunc("drop_tidb_table", MockTiDBTable::dbgFuncDropTiDBTable);
+    regFunc("drop_tidb_db", MockTiDBTable::dbgFuncDropTiDBDB);
     regFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
     regFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
     regFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
@@ -62,8 +64,8 @@ DBGInvoker::DBGInvoker()
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
 
     regFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
-    regFunc("mock_schema_syncer", dbgFuncMockSchemaSyncer);
     regFunc("refresh_schemas", dbgFuncRefreshSchemas);
+    regFunc("reset_schemas", dbgFuncResetSchemas);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

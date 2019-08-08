@@ -5,8 +5,6 @@
 => drop table if exists default.test_p1
 => drop table if exists default.test_p2
 
-=> DBGInvoke __mock_schema_syncer('true')
-
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Int64')
 => DBGInvoke __mock_tidb_partition(default, test, p1)
 => DBGInvoke __mock_tidb_partition(default, test, p2)

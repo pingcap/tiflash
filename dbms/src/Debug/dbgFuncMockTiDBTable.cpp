@@ -1,4 +1,3 @@
-#include <Debug/MockSchemaSyncer.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -50,6 +49,20 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncMockTiDBDB(Context &, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 1)
+        throw Exception("Args not matched, should be: database-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+
+    DatabaseID db_id = MockTiDB::instance().newDataBase(database_name);
+
+    std::stringstream ss;
+    ss << "mock db #" << db_id;
+    output(ss.str());
+}
+
 void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3)
@@ -97,6 +110,26 @@ void MockTiDBTable::dbgFuncRenameTableForPartition(Context & context, const ASTs
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 1 && args.size() != 2)
+        throw Exception("Args not matched, should be: database-name [, drop-regions]", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    bool drop_regions = true;
+    if (args.size() == 3)
+        drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
+
+    std::vector<String> table_names;
+    MockTiDB::instance().traverseTables([&](MockTiDB::TablePtr table) {
+        if (table->table_info.db_name == database_name)
+            table_names.push_back(table->table_info.name);
+    });
+    for (auto table_name : table_names)
+        dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, true, output);
+    MockTiDB::instance().dropDB(database_name);
+}
+
 void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 2 && args.size() != 3)
@@ -107,7 +140,12 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     bool drop_regions = true;
     if (args.size() == 3)
         drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
+    dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, false, output);
+}
 
+void MockTiDBTable::dbgFuncDropTiDBTableImpl(
+    Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output)
+{
     MockTiDB::TablePtr table = nullptr;
     TableID table_id = InvalidTableID;
     try
@@ -145,7 +183,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
         region_table.mockDropRegionsInTable(table_id);
     }
 
-    MockTiDB::instance().dropTable(database_name, table_name);
+    MockTiDB::instance().dropTable(database_name, table_name, is_drop_db);
 
     std::stringstream ss;
     ss << "dropped table #" << table_id;

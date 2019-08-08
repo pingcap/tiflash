@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Debug/MockSchemaGetter.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <tikv/Snapshot.h>
@@ -7,11 +8,15 @@
 namespace DB
 {
 
+template <bool mock_getter>
 struct TiDBSchemaSyncer : public SchemaSyncer
 {
-    pingcap::pd::ClientPtr pdClient;
-    pingcap::kv::RegionCachePtr regionCache;
-    pingcap::kv::RpcClientPtr rpcClient;
+
+    using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
+
+    pingcap::pd::ClientPtr pd_client;
+    pingcap::kv::RegionCachePtr region_cache;
+    pingcap::kv::RpcClientPtr rpc_client;
 
     const Int64 maxNumberOfDiffs = 100;
 
@@ -23,11 +28,32 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Logger * log;
 
-    TiDBSchemaSyncer(pingcap::pd::ClientPtr pdClient_, pingcap::kv::RegionCachePtr regionCache_, pingcap::kv::RpcClientPtr rpcClient_)
-        : pdClient(pdClient_), regionCache(regionCache_), rpcClient(rpcClient_), cur_version(0), log(&Logger::get("SchemaSyncer"))
+    TiDBSchemaSyncer(pingcap::pd::ClientPtr pd_client_, pingcap::kv::RegionCachePtr region_cache_, pingcap::kv::RpcClientPtr rpc_client_)
+        : pd_client(pd_client_), region_cache(region_cache_), rpc_client(rpc_client_), cur_version(0), log(&Logger::get("SchemaSyncer"))
     {}
 
     bool isTooOldSchema(Int64 cur_version, Int64 new_version) { return cur_version == 0 || new_version - cur_version > maxNumberOfDiffs; }
+
+    Getter createSchemaGetter(UInt64 tso [[maybe_unused]])
+    {
+        if constexpr (mock_getter)
+        {
+            return Getter();
+        }
+        else
+        {
+            return Getter(region_cache, rpc_client, tso);
+        }
+    }
+
+    // just for test
+    void reset() override
+    {
+        std::lock_guard<std::mutex> lock(schema_mutex);
+
+        databases.clear();
+        cur_version = 0;
+    }
 
     Int64 getCurrentVersion() const override { return cur_version; }
 
@@ -35,8 +61,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto tso = pdClient->getTS();
-        SchemaGetter getter = SchemaGetter(regionCache, rpcClient, tso);
+        auto tso = pd_client->getTS();
+        auto getter = createSchemaGetter(tso);
         Int64 version = getter.getVersion();
         if (version <= cur_version)
         {
@@ -53,7 +79,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return true;
     }
 
-    bool tryLoadSchemaDiffs(SchemaGetter & getter, Int64 version, Context & context)
+    bool tryLoadSchemaDiffs(Getter & getter, Int64 version, Context & context)
     {
         if (isTooOldSchema(cur_version, version))
         {
@@ -62,7 +88,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         LOG_DEBUG(log, "try load schema diffs.");
 
-        SchemaBuilder builder(getter, context, databases, version);
+        SchemaBuilder<Getter> builder(getter, context, databases, version);
 
         Int64 used_version = cur_version;
         std::vector<SchemaDiff> diffs;
@@ -72,41 +98,25 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
         LOG_DEBUG(log, "end load schema diffs.");
-        for (const auto & diff : diffs)
+        try
         {
-            builder.applyDiff(diff);
+            for (const auto & diff : diffs)
+            {
+                builder.applyDiff(diff);
+            }
+        }
+        catch (Exception & e)
+        {
+            LOG_ERROR(log, "apply diff meets exception : " + e.displayText());
+            return false;
         }
         return true;
     }
 
-    bool loadAllSchema(SchemaGetter & getter, Int64 version, Context & context)
+    void loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
-        LOG_DEBUG(log, "try load all schemas.");
-
-        std::vector<TiDB::DBInfoPtr> all_schema = getter.listDBs();
-
-        for (auto db_info : all_schema)
-        {
-            LOG_DEBUG(log, "Load schema : " + db_info->name);
-        }
-
-        SchemaBuilder builder(getter, context, databases, version);
-
-        std::set<TiDB::DatabaseID> db_ids;
-        for (auto db : all_schema)
-        {
-            builder.updateDB(db);
-            db_ids.insert(db->id);
-        }
-        // Drop databases;
-        for (auto it = databases.begin(); it != databases.end(); it++)
-        {
-            if (db_ids.count(it->first) == 0)
-            {
-                builder.applyDropSchema(it->first);
-            }
-        }
-        return true;
+        SchemaBuilder<Getter> builder(getter, context, databases, version);
+        builder.syncAllSchema();
     }
 };
 

@@ -62,7 +62,7 @@ void dbgInsertRowFull(Context & context, const ASTs & args, DBGInvoker::Printer 
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
-    Timestamp tso = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+    Timestamp tso = (Timestamp)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
     UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value);
 
     using TsoDel = std::tuple<Timestamp, UInt8>;
