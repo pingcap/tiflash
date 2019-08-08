@@ -25,6 +25,7 @@ services:
     volumes:
       - ./config/config.xml:/config.xml:ro
       - ./config/users.xml:/users.xml:ro
+      - ./log:/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     entrypoint: sleep infinity # just wait
