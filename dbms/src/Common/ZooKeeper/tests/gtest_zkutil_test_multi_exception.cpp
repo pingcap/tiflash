@@ -15,7 +15,9 @@
 
 using namespace DB;
 
-TEST(zkutil, zookeeper_connected)
+/// Disable zookeeper tests since tiflash don't use zookeeper
+
+TEST(zkutil, DISABLED_zookeeper_connected)
 {
     auto zookeeper = std::make_unique<zkutil::ZooKeeper>("localhost:2181");
     try
@@ -29,7 +31,7 @@ TEST(zkutil, zookeeper_connected)
     }
 }
 
-TEST(zkutil, multi_nice_exception_msg)
+TEST(zkutil, DISABLED_multi_nice_exception_msg)
 {
     auto zookeeper = std::make_unique<zkutil::ZooKeeper>("localhost:2181");
 
@@ -67,7 +69,7 @@ TEST(zkutil, multi_nice_exception_msg)
 }
 
 
-TEST(zkutil, multi_async)
+TEST(zkutil, DISABLED_multi_async)
 {
     auto zookeeper = std::make_unique<zkutil::ZooKeeper>("localhost:2181");
     zkutil::Requests ops;
@@ -129,7 +131,7 @@ TEST(zkutil, multi_async)
     }
 }
 
-TEST(zkutil, watch_get_children_with_chroot)
+TEST(zkutil, DISABLED_watch_get_children_with_chroot)
 {
     try
     {
@@ -160,7 +162,7 @@ TEST(zkutil, watch_get_children_with_chroot)
     }
 }
 
-TEST(zkutil, multi_create_sequential)
+TEST(zkutil, DISABLED_multi_create_sequential)
 {
     try
     {

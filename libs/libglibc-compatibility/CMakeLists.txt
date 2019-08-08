@@ -12,4 +12,4 @@ musl/syscall.s
 musl/syscall_ret.c
 musl/sched_cpucount.c)
 
-add_subdirectory (tests)
+add_subdirectory (tests EXCLUDE_FROM_ALL)
