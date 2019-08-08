@@ -178,4 +178,14 @@ DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
     return getDataTypeByColumnInfo(ci);
 }
 
+TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type)
+{
+    ColumnInfo ci;
+    ci.tp = static_cast<TiDB::TP>(field_type.tp());
+    ci.flag = field_type.flag();
+    ci.flen = field_type.flen();
+    ci.decimal = field_type.decimal();
+    return ci.getCodecFlag();
+}
+
 } // namespace DB

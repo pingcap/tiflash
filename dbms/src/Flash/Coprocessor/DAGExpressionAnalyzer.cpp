@@ -1,10 +1,10 @@
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DAGExpressionAnalyzer.h>
-#include <Interpreters/DAGUtils.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -14,7 +14,8 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int COP_BAD_DAG_REQUEST;
+extern const int COP_BAD_DAG_REQUEST;
+extern const int UNSUPPORTED_METHOD;
 } // namespace ErrorCodes
 
 static String genCastString(const String & org_name, const String & target_type_name)
@@ -151,9 +152,10 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     bool need_update_aggregated_columns = false;
     NamesAndTypesList updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
+    auto agg_col_names = aggregated_columns.getNames();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
-        String & name = aggregated_columns.getNames()[i];
+        String & name = agg_col_names[i];
         String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
         if (name != updated_name)
         {
@@ -170,7 +172,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        String & name = aggregated_columns.getNames()[i + aggregation.agg_func_size()];
+        String & name = agg_col_names[i + aggregation.agg_func_size()];
         String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
         if (name != updated_name)
         {
@@ -188,21 +190,28 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
 
     if (need_update_aggregated_columns)
     {
+        auto updated_agg_col_names = updated_aggregated_columns.getNames();
+        auto updated_agg_col_types = updated_aggregated_columns.getTypes();
         aggregated_columns.clear();
         for (size_t i = 0; i < updated_aggregated_columns.size(); i++)
         {
-            aggregated_columns.emplace_back(updated_aggregated_columns.getNames()[i], updated_aggregated_columns.getTypes()[i]);
+            aggregated_columns.emplace_back(updated_agg_col_names[i], updated_agg_col_types[i]);
         }
     }
 }
 
-String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String expr_name)
+String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name)
 {
-    if (expr.has_field_type() && isFunctionExpr(expr))
+    if (!expr.has_field_type())
+    {
+        throw Exception("Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    if (isFunctionExpr(expr))
     {
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         //todo maybe use a more decent compare method
+        // todo ignore nullable info??
         if (expected_type->getName() != actual_type->getName())
         {
             // need to add cast function
@@ -259,9 +268,9 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     else if (isColumnExpr(expr))
     {
         ColumnID columnId = getColumnID(expr);
-        if (columnId < 1 || columnId > (ColumnID)getCurrentInputColumns().size())
+        if (columnId < 0 || columnId >= (ColumnID)getCurrentInputColumns().size())
         {
-            throw Exception("column id out of bound");
+            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
         //todo check if the column type need to be cast to field type
         return expr_name;
@@ -270,13 +279,13 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         if (isAggFunctionExpr(expr))
         {
-            throw Exception("agg function is not supported yet");
+            throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
         if (func_name == "in" || func_name == "notIn" || func_name == "globalIn" || func_name == "globalNotIn")
         {
             // todo support in
-            throw Exception(func_name + " is not supported yet");
+            throw Exception(func_name + " is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
 
         const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
@@ -285,15 +294,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         for (auto & child : expr.children())
         {
             String name = getActions(child, actions);
-            if (actions->getSampleBlock().has(name))
-            {
-                argument_names.push_back(name);
-                argument_types.push_back(actions->getSampleBlock().getByName(name).type);
-            }
-            else
-            {
-                throw Exception("Unknown expr: " + child.DebugString());
-            }
+            argument_names.push_back(name);
+            argument_types.push_back(actions->getSampleBlock().getByName(name).type);
         }
 
         // re-construct expr_name, because expr_name generated previously is based on expr tree,
@@ -312,7 +314,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else
     {
-        throw Exception("Unsupported expr type: " + getTypeName(expr));
+        throw Exception("Unsupported expr type: " + getTypeName(expr), ErrorCodes::UNSUPPORTED_METHOD);
     }
 }
 } // namespace DB

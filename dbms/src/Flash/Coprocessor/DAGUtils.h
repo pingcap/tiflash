@@ -7,6 +7,8 @@
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Core/Field.h>
+#include <Core/NamesAndTypes.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB

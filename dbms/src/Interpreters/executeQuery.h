@@ -2,7 +2,7 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
 
 
 namespace DB

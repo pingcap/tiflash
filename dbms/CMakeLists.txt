@@ -60,8 +60,7 @@ add_headers_and_sources(dbms src/Storages/Page)
 add_headers_and_sources(dbms src/Raft)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
-add_headers_and_sources(dbms src/Flash)
-add_headers_and_sources(dbms src/Flash/Coprocessor)
+add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
@@ -151,6 +150,7 @@ target_link_libraries (dbms
     clickhouse_parsers
     clickhouse_common_config
     clickhouse_common_io
+    flash_service
     kvproto
     kv_client
     tipb

@@ -7,9 +7,9 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/DAGQuerySource.h>
-#include <Interpreters/DAGUtils.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
 #include <Storages/RegionQueryInfo.h>
@@ -81,6 +81,7 @@ private:
     void getAndLockStorageWithSchemaVersion(TableID table_id, Int64 schema_version);
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
+    void recordProfileStreams(Pipeline & pipeline, Int32 index);
 
 private:
     Context & context;

@@ -263,6 +263,7 @@ struct TableInfo
     Int64 schema_version = -1;
 
     ColumnID getColumnID(const String & name) const;
+    String getColumnName(const ColumnID id) const;
 
     TableInfo producePartitionTableInfo(TableID table_or_partition_id) const
     {

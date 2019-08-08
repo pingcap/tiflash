@@ -2,11 +2,12 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <DataStreams/DAGBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
+#include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/DAGQuerySource.h>
-#include <Interpreters/DAGStringConverter.h>
 #include <Interpreters/executeQuery.h>
 
 namespace DB
@@ -31,7 +32,8 @@ void DAGDriver::execute()
 {
     context.setSetting("read_tso", UInt64(dag_request.start_ts()));
 
-    DAGQuerySource dag(context, region_id, region_version, region_conf_version, dag_request);
+    DAGContext dag_context(dag_request.executors_size());
+    DAGQuerySource dag(context, dag_context, region_id, region_version, region_conf_version, dag_request);
     BlockIO streams;
 
     String planner = context.getSettings().dag_planner;
@@ -56,8 +58,28 @@ void DAGDriver::execute()
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
     BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk,
-        dag_request.encode_type(), dag.getOutputFieldTpAndFlags(), streams.in->getHeader());
+        dag_request.encode_type(), dag.getResultFieldTypes(), streams.in->getHeader());
     copyData(*streams.in, *outputStreamPtr);
+    // add ExecutorExecutionSummary info
+    for (auto & p_streams : dag_context.profile_streams_list)
+    {
+        auto * executeSummary = dag_response.add_execution_summaries();
+        UInt64 time_processed_ns = 0;
+        UInt64 num_produced_rows = 0;
+        UInt64 num_iterations = 0;
+        for (auto & streamPtr : p_streams)
+        {
+            if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
+            {
+                time_processed_ns += p_stream->getProfileInfo().total_stopwatch.elapsed();
+                num_produced_rows += p_stream->getProfileInfo().rows;
+                num_iterations += p_stream->getProfileInfo().blocks;
+            }
+        }
+        executeSummary->set_time_processed_ns(time_processed_ns);
+        executeSummary->set_num_produced_rows(num_produced_rows);
+        executeSummary->set_num_iterations(num_iterations);
+    }
 }
 
 } // namespace DB
