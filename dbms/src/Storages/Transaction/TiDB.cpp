@@ -15,7 +15,8 @@ ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 Field ColumnInfo::defaultValueToField() const
 {
     auto & value = origin_default_value;
-    if (value.isEmpty()) {
+    if (value.isEmpty())
+    {
         return Field();
     }
     switch (tp)
@@ -55,7 +56,8 @@ Field ColumnInfo::defaultValueToField() const
     return Field();
 }
 
-Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
+Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
+try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -98,7 +100,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json) try
+void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json)
+try
 {
     id = json->getValue<Int64>("id");
     name = json->getObject("name")->getValue<String>("L");
@@ -132,7 +135,8 @@ catch (const Poco::Exception & e)
 
 PartitionDefinition::PartitionDefinition(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const try
+Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const
+try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
@@ -153,7 +157,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionDef): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json) try
+void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json)
+try
 {
     id = json->getValue<Int64>("id");
     name = json->getObject("name")->getValue<String>("L");
@@ -168,7 +173,8 @@ catch (const Poco::Exception & e)
 
 PartitionInfo::PartitionInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const try
+Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const
+try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -197,7 +203,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionInfo::deserialize(Poco::JSON::Object::Ptr json) try
+void PartitionInfo::deserialize(Poco::JSON::Object::Ptr json)
+try
 {
     type = static_cast<PartitionType>(json->getValue<Int32>("type"));
     expr = json->getValue<String>("expr");
@@ -221,7 +228,8 @@ catch (const Poco::Exception & e)
 
 TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
-String TableInfo::serialize(bool escaped) const try
+String TableInfo::serialize(bool escaped) const
+try
 {
     std::stringstream buf;
 
@@ -279,7 +287,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void DBInfo::deserialize(const String & json_str) try
+void DBInfo::deserialize(const String & json_str)
+try
 {
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var result = parser.parse(json_str);
@@ -297,7 +306,8 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
-void TableInfo::deserialize(const String & json_str) try
+void TableInfo::deserialize(const String & json_str)
+try
 {
     if (json_str.empty())
     {
@@ -334,7 +344,8 @@ void TableInfo::deserialize(const String & json_str) try
             belonging_table_id = obj->getValue<TableID>("belonging_table_id");
         partition.deserialize(partition_obj);
     }
-    if (obj->has("schema_version")) {
+    if (obj->has("schema_version"))
+    {
         schema_version = obj->getValue<Int64>("schema_version");
     }
 }
@@ -382,7 +393,7 @@ CodecFlag ColumnInfo::getCodecFlag() const
 
 ColumnID TableInfo::getColumnID(const String & name) const
 {
-    for (auto col : columns)
+    for (auto & col : columns)
     {
         if (name == col.name)
         {
@@ -394,6 +405,21 @@ ColumnID TableInfo::getColumnID(const String & name) const
         return DB::InvalidColumnID;
 
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
+}
+
+String TableInfo::getColumnName(const ColumnID id) const
+{
+    for (auto & col : columns)
+    {
+        if (id == col.id)
+        {
+            return col.name;
+        }
+    }
+
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + db_name + "." + name,
+        DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 } // namespace TiDB

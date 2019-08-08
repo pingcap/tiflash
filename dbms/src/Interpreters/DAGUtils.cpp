@@ -92,11 +92,11 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
             return DecodeBytes(cursor, expr.val());
         case tipb::ExprType::ColumnRef:
             columnId = DecodeInt<Int64>(cursor, expr.val());
-            if (columnId < 1 || columnId > (ColumnID)input_col.size())
+            if (columnId < 0 || columnId >= (ColumnID)input_col.size())
             {
                 throw Exception("out of bound");
             }
-            return input_col.getNames()[columnId - 1];
+            return input_col.getNames()[columnId];
         case tipb::ExprType::Count:
         case tipb::ExprType::Sum:
         case tipb::ExprType::Avg:

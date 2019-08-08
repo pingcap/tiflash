@@ -15,6 +15,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
+extern const int UNSUPPORTED_METHOD;
 } // namespace ErrorCodes
 
 static String genCastString(const String & org_name, const String & target_type_name)
@@ -210,6 +211,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         //todo maybe use a more decent compare method
+        // todo ignore nullable info??
         if (expected_type->getName() != actual_type->getName())
         {
             // need to add cast function
@@ -266,9 +268,9 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     else if (isColumnExpr(expr))
     {
         ColumnID columnId = getColumnID(expr);
-        if (columnId < 1 || columnId > (ColumnID)getCurrentInputColumns().size())
+        if (columnId < 0 || columnId >= (ColumnID)getCurrentInputColumns().size())
         {
-            throw Exception("column id out of bound");
+            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
         //todo check if the column type need to be cast to field type
         return expr_name;
@@ -277,13 +279,13 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     {
         if (isAggFunctionExpr(expr))
         {
-            throw Exception("agg function is not supported yet");
+            throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
         if (func_name == "in" || func_name == "notIn" || func_name == "globalIn" || func_name == "globalNotIn")
         {
             // todo support in
-            throw Exception(func_name + " is not supported yet");
+            throw Exception(func_name + " is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
 
         const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
@@ -292,15 +294,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         for (auto & child : expr.children())
         {
             String name = getActions(child, actions);
-            if (actions->getSampleBlock().has(name))
-            {
-                argument_names.push_back(name);
-                argument_types.push_back(actions->getSampleBlock().getByName(name).type);
-            }
-            else
-            {
-                throw Exception("Unknown expr: " + child.DebugString());
-            }
+            argument_names.push_back(name);
+            argument_types.push_back(actions->getSampleBlock().getByName(name).type);
         }
 
         // re-construct expr_name, because expr_name generated previously is based on expr tree,
@@ -319,7 +314,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else
     {
-        throw Exception("Unsupported expr type: " + getTypeName(expr));
+        throw Exception("Unsupported expr type: " + getTypeName(expr), ErrorCodes::UNSUPPORTED_METHOD);
     }
 }
 } // namespace DB
