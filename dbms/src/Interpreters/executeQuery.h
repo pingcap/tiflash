@@ -41,6 +41,6 @@ BlockIO executeQuery(
     );
 
 
-BlockIO executeQuery(DAGQuerySource & dag, Context & context, QueryProcessingStage::Enum stage);
+BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage);
 
 }
