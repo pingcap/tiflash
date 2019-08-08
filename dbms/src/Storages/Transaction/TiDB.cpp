@@ -1,8 +1,8 @@
+#include <Common/Decimal.h>
 #include <IO/ReadBufferFromString.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/MyTimeParser.h>
-#include <Common/Decimal.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace TiDB
 {
@@ -11,7 +11,8 @@ using DB::WriteBufferFromOwnString;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const {
+DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const
+{
     DB::ReadBufferFromString buffer(str);
     DB::Decimal result;
     result.precision = flen;
@@ -23,7 +24,8 @@ DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const {
 Field ColumnInfo::defaultValueToField() const
 {
     auto & value = origin_default_value;
-    if (value.isEmpty()) {
+    if (value.isEmpty())
+    {
         return Field();
     }
     switch (tp)
@@ -71,10 +73,12 @@ Field ColumnInfo::defaultValueToField() const
 }
 
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
-Int64 ColumnInfo::getEnumIndex(const String & default_str) const 
+Int64 ColumnInfo::getEnumIndex(const String & default_str) const
 {
-    for (const auto & elem: elems) {
-        if (elem.first == default_str) {
+    for (const auto & elem : elems)
+    {
+        if (elem.first == default_str)
+        {
             return elem.second;
         }
     }
@@ -361,7 +365,8 @@ void TableInfo::deserialize(const String & json_str) try
             belonging_table_id = obj->getValue<TableID>("belonging_table_id");
         partition.deserialize(partition_obj);
     }
-    if (obj->has("schema_version")) {
+    if (obj->has("schema_version"))
+    {
         schema_version = obj->getValue<Int64>("schema_version");
     }
 }
