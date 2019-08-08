@@ -29,6 +29,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     bool isTooOldSchema(Int64 cur_version, Int64 new_version) { return cur_version == 0 || new_version - cur_version > maxNumberOfDiffs; }
 
+    Int64 getCurrentVersion() const override { return cur_version; }
+
     bool syncSchemas(Context & context) override
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
@@ -40,7 +42,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         {
             return false;
         }
-        LOG_INFO(log, "start to sync schemas. current version is: " + std::to_string(cur_version) + " and try to sync schema version to: " + std::to_string(version));
+        LOG_INFO(log,
+            "start to sync schemas. current version is: " + std::to_string(cur_version)
+                + " and try to sync schema version to: " + std::to_string(version));
         if (!tryLoadSchemaDiffs(getter, version, context))
         {
             loadAllSchema(getter, version, context);
