@@ -70,9 +70,9 @@ public:
 
     TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
 
-    void dropTable(const String & database_name, const String & table_name, bool is_drop_db);
+    void dropTable(Context & context, const String & database_name, const String & table_name, bool drop_regions);
 
-    void dropDB(const String & database_name);
+    void dropDB(Context & context, const String & database_name, bool drop_regions);
 
     void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
 
@@ -85,8 +85,6 @@ public:
     void truncateTable(const String & database_name, const String & table_name);
 
     TablePtr getTableByName(const String & database_name, const String & table_name);
-
-    void traverseTables(std::function<void(TablePtr)> f);
 
     TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
 
@@ -101,6 +99,7 @@ public:
     Int64 getVersion() { return version; }
 
 private:
+    TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
 
 private:
