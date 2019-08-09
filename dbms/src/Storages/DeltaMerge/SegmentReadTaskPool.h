@@ -12,12 +12,23 @@ namespace DM
 
 struct SegmentReadTask
 {
-    SegmentPtr   segment;
-    HandleRanges ranges;
+    SegmentPtr      segment;
+    SegmentSnapshot read_snapshot;
+    HandleRanges    ranges;
 
     SegmentReadTask() = default;
-    explicit SegmentReadTask(const SegmentPtr & segment_) : segment(segment_) {}
-    SegmentReadTask(const SegmentPtr & segment_, const HandleRanges & ranges_) : segment(segment_), ranges(ranges_) {}
+
+    explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshot & read_snapshot_)
+        : segment(segment_), read_snapshot(read_snapshot_)
+    {
+    }
+
+    SegmentReadTask(const SegmentPtr &      segment_, //
+                    const SegmentSnapshot & read_snapshot_,
+                    const HandleRanges &    ranges_)
+        : segment(segment_), read_snapshot(read_snapshot_), ranges(ranges_)
+    {
+    }
 
     void addRange(const HandleRange & range) { ranges.push_back(range); }
 };

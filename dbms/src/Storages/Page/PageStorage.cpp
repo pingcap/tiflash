@@ -54,7 +54,7 @@ PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file,
 PageStorage::PageStorage(const String & storage_path_, const Config & config_)
     : storage_path(storage_path_),
       config(config_),
-      version_set(),
+      versioned_page_entries(),
       page_file_log(&Poco::Logger::get("PageFile")),
       log(&Poco::Logger::get("PageStorage"))
 {
@@ -74,13 +74,12 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
             write_file = page_file;
         }
         // apply edit to new version
-        version_set.apply(edit);
+        versioned_page_entries.apply(edit);
     }
 #else
-    auto snapshot = version_set.getSnapshot();
+    auto snapshot = versioned_page_entries.getSnapshot();
 
-    typename PageEntryMapVersionSet::BuilderType builder(
-        snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
+    typename PageEntriesVersionSet::BuilderType builder(snapshot->version(), true, log); // If there are invalid ref-pairs, just ignore that
     for (auto & page_file : page_files)
     {
         PageEntriesEdit edit;
@@ -94,19 +93,19 @@ PageStorage::PageStorage(const String & storage_path_, const Config & config_)
         // apply edit to new version
         builder.apply(edit);
     }
-    version_set.restore(builder.build());
+    versioned_page_entries.restore(builder.build());
 #endif
 }
 
 PageId PageStorage::getMaxId()
 {
     std::lock_guard<std::mutex> write_lock(write_mutex);
-    return version_set.getSnapshot()->version()->maxId();
+    return versioned_page_entries.getSnapshot()->version()->maxId();
 }
 
 PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 {
-    if (snapshot == nullptr)
+    if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
@@ -162,21 +161,21 @@ void PageStorage::write(const WriteBatch & wb)
     std::lock_guard<std::mutex> lock(write_mutex);
     getWriter().write(wb, edit);
 
-    // Apply changes into version_set(generate a new version)
+    // Apply changes into versioned_page_entries(generate a new version)
     // If there are RefPages to non-exist Pages, just put the ref pair to new version
     // instead of throwing exception. Or we can't open PageStorage since we have already
     // persist the invalid ref pair into PageFile.
-    version_set.apply(edit);
+    versioned_page_entries.apply(edit);
 }
 
 PageStorage::SnapshotPtr PageStorage::getSnapshot()
 {
-    return version_set.getSnapshot();
+    return versioned_page_entries.getSnapshot();
 }
 
 Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
 {
-    if (snapshot == nullptr)
+    if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
@@ -192,7 +191,7 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
 
 PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot)
 {
-    if (snapshot == nullptr)
+    if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
@@ -225,7 +224,7 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
 
 void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot)
 {
-    if (snapshot == nullptr)
+    if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
@@ -255,7 +254,7 @@ void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handl
 
 void PageStorage::traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot)
 {
-    if (snapshot == nullptr)
+    if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
@@ -297,7 +296,7 @@ void PageStorage::traversePageEntries( //
     const std::function<void(PageId page_id, const PageEntry & page)> & acceptor,
     SnapshotPtr                                                         snapshot)
 {
-    if (snapshot == nullptr)
+    if (!snapshot)
     {
         snapshot = this->getSnapshot();
     }
@@ -397,8 +396,8 @@ bool PageStorage::gc()
     }
 
     std::set<PageFileIdAndLevel> live_files;
-    /// Here we have to apply edit to version_set and generate a new version, then return all files that are in used
-    live_files = version_set.gcApply(gc_file_entries_edit);
+    /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
+    live_files = versioned_page_entries.gcApply(gc_file_entries_edit);
 
     {
         // Remove obsolete files' reader cache that are not used by any version

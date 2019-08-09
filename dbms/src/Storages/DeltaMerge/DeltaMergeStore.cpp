@@ -13,6 +13,10 @@ namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
 extern const Event DMWriteBlockNS;
+extern const Event DMAppendDeltaCommitDisk;
+extern const Event DMAppendDeltaCommitDiskNS;
+extern const Event DMAppendDeltaCleanUp;
+extern const Event DMAppendDeltaCleanUpNS;
 } // namespace ProfileEvents
 
 namespace DB
@@ -86,9 +90,32 @@ DeltaMergeStore::~DeltaMergeStore()
     background_pool.removeTask(gc_handle);
 }
 
+inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
+{
+    if (!offset && limit == block.rows())
+    {
+        return block;
+    }
+    else
+    {
+        Block sub_block;
+        for (const auto & c : block)
+        {
+            auto column = c.column->cloneEmpty();
+            column->insertRangeFrom(*c.column, offset, limit);
+
+            auto sub_col      = c.cloneEmpty();
+            sub_col.column    = std::move(column);
+            sub_col.column_id = c.column_id;
+            sub_block.insert(std::move(sub_col));
+        }
+        return sub_block;
+    }
+}
+
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
 {
-    EventRecorder recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
+    EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
     const size_t rows = to_write.rows();
     if (rows == 0)
@@ -140,6 +167,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         SegmentPtr segment;
         size_t     offset;
         size_t     limit;
+
+        BlockOrDelete update;
+        AppendTaskPtr task;
     };
     std::vector<WriteAction> actions;
 
@@ -164,59 +194,56 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
                                                      : std::lower_bound(handle_data.cbegin() + offset, handle_data.cend(), range.end);
             size_t limit = end_pos - (handle_data.cbegin() + offset);
 
-            actions.emplace_back(WriteAction{segment, offset, limit});
+            actions.emplace_back(WriteAction{.segment = segment, .offset = offset, .limit = limit});
 
             offset += limit;
         }
     }
 
+    auto               op_context = OpContext::createForLogStorage(dm_context);
+    AppendWriteBatches wbs;
+
+    // Prepare updates' information.
     for (auto & action : actions)
     {
-        LOG_DEBUG(log,
-                  "Insert block. Segment range " + action.segment->getRange().toString() + //
-                      ", block range " + rangeToString(action.offset, action.offset + action.limit));
-        auto range_end   = action.segment->getRange().end;
-        auto new_segment = write_segment(dm_context, action.segment, block, action.offset, action.limit);
-        if (new_segment)
-        {
-            std::unique_lock lock(mutex);
+        action.update = getSubBlock(block, action.offset, action.limit);
+        action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
+    }
 
-            segments[range_end] = new_segment;
+    // Commit updates to disk.
+    {
+        EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitDisk, ProfileEvents::DMAppendDeltaCommitDiskNS);
+        dm_context.storage_pool.log().write(wbs.data);
+        dm_context.storage_pool.meta().write(wbs.meta);
+    }
+
+    // Commit updates in memory.
+    for (auto & action : actions)
+    {
+        action.segment->applyAppendTask(op_context, action.task, action.update);
+    }
+
+    // Flush delta if needed.
+    for (auto & action : actions)
+    {
+        const auto & segment = action.segment;
+        const auto   range   = segment->getRange();
+        // TODO: Do flush by background threads.
+        if (segment->shouldFlush(dm_context, false))
+        {
+            auto new_segment    = action.segment->flush(dm_context);
+            segments[range.end] = new_segment;
         }
     }
 
-    // This should be called by background thread.
+    // Clean up deleted data on disk.
+    {
+        EventRecorder recorder(ProfileEvents::DMAppendDeltaCleanUp, ProfileEvents::DMAppendDeltaCleanUpNS);
+        dm_context.storage_pool.log().write(wbs.removed_data);
+    }
+
+    // TODO: Should only check the updated segments.
     afterInsertOrDelete(db_context, db_settings);
-
-    recorder.submit();
-}
-
-SegmentPtr DeltaMergeStore::write_segment(DMContext &        dm_context, //
-                                          const SegmentPtr & segment,
-                                          const Block &      block,
-                                          size_t             offset,
-                                          size_t             limit)
-{
-    if (!offset && limit == block.rows())
-    {
-        Block block_copy = block;
-        return segment->write(dm_context, std::move(block_copy));
-    }
-    else
-    {
-        Block sub_block;
-        for (const auto & c : block)
-        {
-            auto column = c.column->cloneEmpty();
-            column->insertRangeFrom(*c.column, offset, limit);
-
-            auto sub_col      = c.cloneEmpty();
-            sub_col.column    = std::move(column);
-            sub_col.column_id = c.column_id;
-            sub_block.insert(std::move(sub_col));
-        }
-        return segment->write(dm_context, std::move(sub_block));
-    }
 }
 
 BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
@@ -224,19 +251,25 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
                                            const ColumnDefines & columns_to_read,
                                            size_t                num_streams)
 {
-    SegmentReadTasks tasks;
+    SegmentReadTasks   tasks;
+    StorageSnapshotPtr storage_snapshot;
+
     {
         std::shared_lock lock(mutex);
+
+        storage_snapshot.reset(new StorageSnapshot(storage_pool));
 
         for (const auto & [handle, segment] : segments)
         {
             (void)handle;
-            tasks.emplace_back(SegmentReadTask(segment, {segment->getRange()}));
+            tasks.emplace_back(SegmentReadTask(segment, segment->getReadSnapshot(), {segment->getRange()}));
         }
     }
 
     auto dm_context     = newDMContext(db_context, db_settings);
-    auto stream_creator = [=](const SegmentReadTask & task) { return task.segment->getInputStreamRaw(dm_context, columns_to_read); };
+    auto stream_creator = [=](const SegmentReadTask & task) {
+        return task.segment->getInputStreamRaw(dm_context, task.read_snapshot, *storage_snapshot, columns_to_read);
+    };
 
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks), stream_creator);
@@ -264,10 +297,14 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         UInt64                max_version,
                                         size_t                expected_block_size)
 {
-    SegmentReadTasks tasks;
+    SegmentReadTasks   tasks;
+    StorageSnapshotPtr storage_snapshot;
 
     {
         std::shared_lock lock(mutex);
+
+        /// FIXME: the creation of storage_snapshot is not atomic!
+        storage_snapshot.reset(new StorageSnapshot(storage_pool));
 
         auto range_it = sorted_ranges.begin();
         auto seg_it   = segments.upper_bound(range_it->start);
@@ -287,7 +324,10 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             if (req_range.intersect(seg_range))
             {
                 if (tasks.empty() || tasks.back().segment != seg_it->second)
-                    tasks.emplace_back(seg_it->second);
+                {
+                    auto segment = seg_it->second;
+                    tasks.emplace_back(segment, segment->getReadSnapshot());
+                }
 
                 tasks.back().addRange(req_range);
 
@@ -318,8 +358,13 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     auto dm_context = newDMContext(db_context, db_settings);
 
     auto stream_creator = [=](const SegmentReadTask & task) {
-        return task.segment->getInputStream(
-            dm_context, columns_to_read, task.ranges, max_version, std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
+        return task.segment->getInputStream(dm_context,
+                                            task.read_snapshot,
+                                            *storage_snapshot,
+                                            columns_to_read,
+                                            task.ranges,
+                                            max_version,
+                                            std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
     };
 
     size_t final_num_stream = std::min(num_streams, tasks.size());

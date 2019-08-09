@@ -22,7 +22,7 @@ public:
           handle_name(handle_name_),
           handle_real_type(handle_real_type_),
           context(context_),
-          log(&Logger::get("SegmentReadTaskPool"))
+          log(&Logger::get("DMSegmentThreadInputStream"))
     {
     }
 
@@ -34,32 +34,41 @@ protected:
     {
         if (done)
             return {};
-        while (true)
+        try
         {
-            if (!cur_stream)
+            while (true)
             {
-                std::tie(cur_segment_id, cur_stream) = task_pool->nextTask();
-                if (!cur_stream) // we are done.
+                if (!cur_stream)
                 {
-                    done = true;
-                    return {};
+                    std::tie(cur_segment_id, cur_stream) = task_pool->nextTask();
+                    if (!cur_stream) // we are done.
+                    {
+                        done = true;
+                        return {};
+                    }
+                    LOG_DEBUG(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
                 }
-                LOG_DEBUG(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
-            }
 
-            Block res = cur_stream->read();
-            if (res)
-            {
-                if (!res.rows())
-                    continue;
+                Block res = cur_stream->read();
+                if (res)
+                {
+                    if (!res.rows())
+                        continue;
+                    else
+                        return handleBlock(std::move(res));
+                }
                 else
-                    return handleBlock(std::move(res));
+                {
+                    cur_stream = {};
+                    LOG_DEBUG(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
+                }
             }
-            else
-            {
-                cur_stream = {};
-                LOG_DEBUG(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
-            }
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "throw error");
+            DB::tryLogCurrentException("DMSegmentThreadInputStream", "read");
+            throw;
         }
     }
 
