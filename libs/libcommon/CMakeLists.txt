@@ -118,5 +118,5 @@ if (RT_LIBRARY)
 endif ()
 
 if (ENABLE_TESTS)
-    add_subdirectory (src/tests)
+    add_subdirectory (src/tests EXCLUDE_FROM_ALL)
 endif ()

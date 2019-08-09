@@ -142,6 +142,7 @@ private:
     void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size, const bool try_persist = true);
 
     // For debug
+    friend class MockTiDB;
     friend struct MockTiDBTable;
 
     void mockDropRegionsInTable(TableID table_id);

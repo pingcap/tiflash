@@ -1,3 +1,5 @@
+#include <Debug/MockTiDB.h>
+
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -7,10 +9,10 @@
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-
 #include <Functions/FunctionHelpers.h>
-
-#include <Debug/MockTiDB.h>
+#include <Interpreters/Context.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -28,8 +30,57 @@ Table::Table(const String & database_name_, const String & table_name_, TableInf
 
 MockTiDB::MockTiDB() { databases["default"] = 0; }
 
-void MockTiDB::dropDB(const String & database_name)
+TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions)
 {
+    String qualified_name = database_name + "." + table_name;
+    auto it_by_name = tables_by_name.find(qualified_name);
+    if (it_by_name == tables_by_name.end())
+        return nullptr;
+
+    auto & kvstore = context.getTMTContext().getKVStore();
+    auto & region_table = context.getTMTContext().getRegionTable();
+
+    auto table = it_by_name->second;
+    if (table->isPartitionTable())
+    {
+        for (const auto & partition : table->table_info.partition.definitions)
+        {
+            tables_by_id.erase(partition.id);
+            if (drop_regions)
+            {
+                for (auto & e : region_table.getRegionsByTable(partition.id))
+                    kvstore->removeRegion(e.first, &region_table);
+                region_table.mockDropRegionsInTable(partition.id);
+            }
+        }
+    }
+    tables_by_id.erase(table->id());
+
+    tables_by_name.erase(it_by_name);
+
+    if (drop_regions)
+    {
+        for (auto & e : region_table.getRegionsByTable(table->id()))
+            kvstore->removeRegion(e.first, &region_table);
+        region_table.mockDropRegionsInTable(table->id());
+    }
+
+    return table;
+}
+
+void MockTiDB::dropDB(Context & context, const String & database_name, bool drop_regions)
+{
+    std::lock_guard lock(tables_mutex);
+
+    std::vector<String> table_names;
+    std::for_each(tables_by_id.begin(), tables_by_id.end(), [&](const auto & pair) {
+        if (pair.second->table_info.db_name == database_name)
+            table_names.emplace_back(pair.second->table_info.name);
+    });
+
+    for (const auto & table_name : table_names)
+        dropTableInternal(context, database_name, table_name, drop_regions);
+
     version++;
 
     SchemaDiff diff;
@@ -44,38 +95,22 @@ void MockTiDB::dropDB(const String & database_name)
     databases.erase(database_name);
 }
 
-void MockTiDB::dropTable(const String & database_name, const String & table_name, bool is_drop_db)
+void MockTiDB::dropTable(Context & context, const String & database_name, const String & table_name, bool drop_regions)
 {
     std::lock_guard lock(tables_mutex);
 
-    String qualified_name = database_name + "." + table_name;
-    auto it_by_name = tables_by_name.find(qualified_name);
-    if (it_by_name == tables_by_name.end())
+    auto table = dropTableInternal(context, database_name, table_name, drop_regions);
+    if (!table)
         return;
 
-    const auto & table = it_by_name->second;
-    if (table->isPartitionTable())
-    {
-        for (const auto & partition : table->table_info.partition.definitions)
-        {
-            tables_by_id.erase(partition.id);
-        }
-    }
-    tables_by_id.erase(table->id());
+    version++;
 
-    tables_by_name.erase(it_by_name);
-
-    if (!is_drop_db)
-    {
-        version++;
-
-        SchemaDiff diff;
-        diff.type = SchemaActionDropTable;
-        diff.schema_id = table->table_info.db_id;
-        diff.table_id = table->id();
-        diff.version = version;
-        version_diff[version] = diff;
-    }
+    SchemaDiff diff;
+    diff.type = SchemaActionDropTable;
+    diff.schema_id = table->table_info.db_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
 }
 
 ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
@@ -390,13 +425,6 @@ TablePtr MockTiDB::getTableByName(const String & database_name, const String & t
     std::lock_guard lock(tables_mutex);
 
     return getTableByNameInternal(database_name, table_name);
-}
-
-void MockTiDB::traverseTables(std::function<void(TablePtr)> f)
-{
-    std::lock_guard lock(tables_mutex);
-
-    std::for_each(tables_by_id.begin(), tables_by_id.end(), [&](const auto & pair) { f(pair.second); });
 }
 
 TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const String & table_name)

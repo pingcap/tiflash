@@ -16,6 +16,11 @@ public:
     virtual ~SchemaSyncer() = default;
 
     /**
+     * Get current version of CH schema.
+     */
+    virtual Int64 getCurrentVersion() = 0;
+
+    /**
      * Synchronize all schemas between TiDB and CH.
      * @param context
      */
