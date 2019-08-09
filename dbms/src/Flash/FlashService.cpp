@@ -64,7 +64,7 @@ grpc::Status FlashService::Coprocessor(
     catch (const LockException & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.displayText());
-        response->clear_data();
+        response->Clear();
         kvrpcpb::LockInfo * lock_info = response->mutable_locked();
         lock_info->set_key(e.lock_infos[0]->key);
         lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
@@ -75,7 +75,7 @@ grpc::Status FlashService::Coprocessor(
     catch (const RegionException & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.displayText());
-        response->clear_data();
+        response->Clear();
         errorpb::Error * region_err;
         switch (e.status)
         {
@@ -97,7 +97,7 @@ grpc::Status FlashService::Coprocessor(
     catch (const Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
-        response->clear_data();
+        response->Clear();
         response->set_other_error(e.message());
 
         if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
@@ -110,7 +110,7 @@ grpc::Status FlashService::Coprocessor(
     catch (const std::exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
-        response->clear_data();
+        response->Clear();
         response->set_other_error(e.what());
         return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.what());
     }

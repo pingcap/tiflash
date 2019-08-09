@@ -107,8 +107,7 @@ catch (const std::exception & e)
 
 void DAGDriver::recordError(Int32 err_code, const String & err_msg)
 {
-    dag_response.clear_chunks();
-    dag_response.clear_execution_summaries();
+    dag_response.Clear();
     tipb::Error * error = dag_response.mutable_error();
     error->set_code(err_code);
     error->set_msg(err_msg);
