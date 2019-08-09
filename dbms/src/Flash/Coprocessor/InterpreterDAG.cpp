@@ -129,10 +129,9 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     auto current_region = context.getTMTContext().getRegionTable().getRegionByTableAndID(table_id, info.region_id);
     if (!current_region)
     {
-        //todo add more region error info in RegionException
         std::vector<RegionID> region_ids;
         region_ids.push_back(info.region_id);
-        throw RegionException(region_ids);
+        throw RegionException(std::move(region_ids), RegionTable::RegionReadStatus::NOT_FOUND);
     }
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);

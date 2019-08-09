@@ -29,5 +29,7 @@ private:
     UInt64 region_conf_version;
 
     tipb::SelectResponse & dag_response;
+
+    void recordError(Int32 err_code, const String & err_msg);
 };
 } // namespace DB
