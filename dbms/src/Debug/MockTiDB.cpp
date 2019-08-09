@@ -174,7 +174,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     table_info.id = table_id_allocator++;
     table_info.name = table_name;
 
-    int i = 0;
+    int i = 1;
     for (auto & column : columns.getAllPhysical())
     {
         table_info.columns.emplace_back(getColumnInfoFromColumn(column, i++));

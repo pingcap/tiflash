@@ -15,7 +15,7 @@ class DAGDriver
 {
 public:
     DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
-        UInt64 region_conf_version_, tipb::SelectResponse & dag_response_);
+        UInt64 region_conf_version_, tipb::SelectResponse & dag_response_, bool internal_ = false);
 
     void execute();
 
@@ -29,6 +29,8 @@ private:
     UInt64 region_conf_version;
 
     tipb::SelectResponse & dag_response;
+
+    bool internal;
 
     void recordError(Int32 err_code, const String & err_msg);
 };

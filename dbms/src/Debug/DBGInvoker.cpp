@@ -3,6 +3,7 @@
 
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
@@ -29,43 +30,46 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
 
 DBGInvoker::DBGInvoker()
 {
-    regFunc("echo", dbgFuncEcho);
+    regSchemalessFunc("echo", dbgFuncEcho);
     // TODO: remove this, use sleep in bash script
-    regFunc("sleep", dbgFuncSleep);
+    regSchemalessFunc("sleep", dbgFuncSleep);
 
-    regFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
-    regFunc("mock_tidb_db", MockTiDBTable::dbgFuncMockTiDBDB);
-    regFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
-    regFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
-    regFunc("drop_tidb_table", MockTiDBTable::dbgFuncDropTiDBTable);
-    regFunc("drop_tidb_db", MockTiDBTable::dbgFuncDropTiDBDB);
-    regFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
-    regFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
-    regFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
-    regFunc("rename_tidb_table", MockTiDBTable::dbgFuncRenameTiDBTable);
-    regFunc("truncate_tidb_table", MockTiDBTable::dbgFuncTruncateTiDBTable);
+    regSchemalessFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
+    regSchemalessFunc("mock_tidb_db", MockTiDBTable::dbgFuncMockTiDBDB);
+    regSchemalessFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);
+    regSchemalessFunc("rename_table_for_partition", MockTiDBTable::dbgFuncRenameTableForPartition);
+    regSchemalessFunc("drop_tidb_table", MockTiDBTable::dbgFuncDropTiDBTable);
+    regSchemalessFunc("drop_tidb_db", MockTiDBTable::dbgFuncDropTiDBDB);
+    regSchemalessFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
+    regSchemalessFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
+    regSchemalessFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
+    regSchemalessFunc("rename_tidb_table", MockTiDBTable::dbgFuncRenameTiDBTable);
+    regSchemalessFunc("truncate_tidb_table", MockTiDBTable::dbgFuncTruncateTiDBTable);
 
-    regFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
+    regSchemalessFunc("set_flush_threshold", dbgFuncSetFlushThreshold);
 
-    regFunc("raft_insert_row", dbgFuncRaftInsertRow);
-    regFunc("raft_insert_row_full", dbgFuncRaftInsertRowFull);
-    regFunc("raft_insert_rows", dbgFuncRaftInsertRows);
-    regFunc("raft_update_rows", dbgFuncRaftUpdateRows);
-    regFunc("raft_delete_rows", dbgFuncRaftDelRows);
-    regFunc("raft_delete_row", dbgFuncRaftDeleteRow);
+    regSchemalessFunc("raft_insert_row", dbgFuncRaftInsertRow);
+    regSchemalessFunc("raft_insert_row_full", dbgFuncRaftInsertRowFull);
+    regSchemalessFunc("raft_insert_rows", dbgFuncRaftInsertRows);
+    regSchemalessFunc("raft_update_rows", dbgFuncRaftUpdateRows);
+    regSchemalessFunc("raft_delete_rows", dbgFuncRaftDelRows);
+    regSchemalessFunc("raft_delete_row", dbgFuncRaftDeleteRow);
 
-    regFunc("put_region", dbgFuncPutRegion);
-    regFunc("region_snapshot", dbgFuncRegionSnapshot);
-    regFunc("region_snapshot_data", dbgFuncRegionSnapshotWithData);
+    regSchemalessFunc("put_region", dbgFuncPutRegion);
+    regSchemalessFunc("region_snapshot", dbgFuncRegionSnapshot);
+    regSchemalessFunc("region_snapshot_data", dbgFuncRegionSnapshotWithData);
 
-    regFunc("try_flush", dbgFuncTryFlush);
-    regFunc("try_flush_region", dbgFuncTryFlushRegion);
+    regSchemalessFunc("try_flush", dbgFuncTryFlush);
+    regSchemalessFunc("try_flush_region", dbgFuncTryFlushRegion);
 
-    regFunc("dump_all_region", dbgFuncDumpAllRegion);
+    regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
 
-    regFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
-    regFunc("refresh_schemas", dbgFuncRefreshSchemas);
-    regFunc("reset_schemas", dbgFuncResetSchemas);
+    regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
+    regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
+    regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
+
+    regSchemafulFunc("dag", dbgFuncDAG);
+    regSchemafulFunc("mock_dag", dbgFuncMockDAG);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
@@ -97,10 +101,25 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
         name = ori_name.substr(prefix_not_print_res.size(), ori_name.size() - prefix_not_print_res.size());
     }
 
-    auto it = funcs.find(name);
-    if (it == funcs.end())
-        throw Exception("DBG function not found", ErrorCodes::BAD_ARGUMENTS);
+    BlockInputStreamPtr res;
+    auto it_schemaless = schemaless_funcs.find(name);
+    if (it_schemaless != schemaless_funcs.end())
+        res = invokeSchemaless(context, name, it_schemaless->second, args);
+    else
+    {
+        auto it_schemaful = schemaful_funcs.find(name);
+        if (it_schemaful != schemaful_funcs.end())
+            res = invokeSchemaful(context, name, it_schemaful->second, args);
+        if (it_schemaful == schemaful_funcs.end())
+            throw Exception("DBG function not found", ErrorCodes::BAD_ARGUMENTS);
+    }
 
+    return print_res ? res : std::shared_ptr<StringStreamBlockInputStream>();
+}
+
+BlockInputStreamPtr DBGInvoker::invokeSchemaless(
+    Context & context, const std::string & name, const SchemalessDBGFunc & func, const ASTs & args)
+{
     std::stringstream col_name;
     col_name << name << "(";
     for (size_t i = 0; i < args.size(); ++i)
@@ -113,9 +132,14 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
     std::shared_ptr<StringStreamBlockInputStream> res = std::make_shared<StringStreamBlockInputStream>(col_name.str());
     Printer printer = [&](const std::string & s) { res->append(s); };
 
-    (it->second)(context, args, printer);
+    func(context, args, printer);
 
-    return print_res ? res : std::shared_ptr<StringStreamBlockInputStream>();
+    return res;
+}
+
+BlockInputStreamPtr DBGInvoker::invokeSchemaful(Context & context, const std::string &, const SchemafulDBGFunc & func, const ASTs & args)
+{
+    return func(context, args);
 }
 
 } // namespace DB
