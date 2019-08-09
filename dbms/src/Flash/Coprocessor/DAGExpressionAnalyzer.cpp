@@ -85,10 +85,9 @@ void DAGExpressionAnalyzer::appendAggregation(
         DataTypePtr result_type = aggregate.function->getReturnType();
         // this is a temp result since implicit cast maybe added on these aggregated_columns
         aggregated_columns.emplace_back(func_string, result_type);
-        // TODO: No clear agg_argument_names???
     }
 
-    std::move(step.required_output.begin(), step.required_output.end(), std::back_inserter(agg_argument_names));
+    std::move(agg_argument_names.begin(), agg_argument_names.end(), std::back_inserter(step.required_output));
 
     for (const tipb::Expr & expr : agg.group_by())
     {

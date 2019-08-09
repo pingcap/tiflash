@@ -209,9 +209,9 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
     // Append final project results if needed.
+    // TODO: Refine this logic by an `analyzer.appendFinalProject()`-like call.
     if (dag.hasSelection() || dag.hasAggregation() || dag.hasTopN())
     {
-        // TODO: No new action added, file_project will be added last filter/agg/topN. OK???
         for (auto & name : final_project)
         {
             chain.steps.back().required_output.push_back(name.first);
@@ -461,7 +461,6 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
     if (res.before_order_and_select)
     {
         executeExpression(pipeline, res.before_order_and_select);
-        // TODO: No record profile stream???
     }
 
     if (res.has_order_by)
@@ -473,7 +472,6 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
 
     // execute projection
     executeFinalProject(pipeline);
-    // TODO: No record profile stream???
 
     // execute limit
     if (dag.hasLimit() && !dag.hasTopN())
