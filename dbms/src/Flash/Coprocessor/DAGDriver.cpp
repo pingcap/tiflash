@@ -18,13 +18,14 @@ extern const int LOGICAL_ERROR;
 }
 
 DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
-    UInt64 region_conf_version_, tipb::SelectResponse & dag_response_)
+    UInt64 region_conf_version_, tipb::SelectResponse & dag_response_, bool internal_)
     : context(context_),
       dag_request(dag_request_),
       region_id(region_id_),
       region_version(region_version_),
       region_conf_version(region_conf_version_),
-      dag_response(dag_response_)
+      dag_response(dag_response_),
+      internal(internal_)
 {}
 
 void DAGDriver::execute()
@@ -41,11 +42,11 @@ void DAGDriver::execute()
         DAGStringConverter converter(context, dag_request);
         String query = converter.buildSqlString();
         if (!query.empty())
-            streams = executeQuery(query, context, false, QueryProcessingStage::Complete);
+            streams = executeQuery(query, context, internal, QueryProcessingStage::Complete);
     }
     else if (planner == "optree")
     {
-        streams = executeQuery(dag, context, QueryProcessingStage::Complete);
+        streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     }
     else
     {

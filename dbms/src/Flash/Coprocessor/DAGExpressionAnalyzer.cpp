@@ -87,10 +87,7 @@ void DAGExpressionAnalyzer::appendAggregation(
         aggregated_columns.emplace_back(func_string, result_type);
     }
 
-    for (auto name : agg_argument_names)
-    {
-        step.required_output.push_back(std::move(name));
-    }
+    std::move(agg_argument_names.begin(), agg_argument_names.end(), std::back_inserter(step.required_output));
 
     for (const tipb::Expr & expr : agg.group_by())
     {
