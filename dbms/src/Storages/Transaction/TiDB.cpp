@@ -11,16 +11,6 @@ using DB::WriteBufferFromOwnString;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const
-{
-    DB::ReadBufferFromString buffer(str);
-    DB::Decimal result;
-    result.precision = flen;
-    result.scale = decimal;
-    DB::readDecimalText(result, buffer);
-    return result;
-}
-
 Field ColumnInfo::defaultValueToField() const
 {
     auto & value = origin_default_value;
@@ -70,6 +60,16 @@ Field ColumnInfo::defaultValueToField() const
             throw Exception("Have not proccessed type: " + std::to_string(tp));
     }
     return Field();
+}
+
+DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const
+{
+    DB::ReadBufferFromString buffer(str);
+    DB::Decimal result;
+    result.precision = flen;
+    result.scale = decimal;
+    DB::readDecimalText(result, buffer);
+    return result;
 }
 
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
