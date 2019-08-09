@@ -120,14 +120,11 @@ void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGI
     if (args.size() == 3)
         drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
 
-    std::vector<String> table_names;
-    MockTiDB::instance().traverseTables([&](MockTiDB::TablePtr table) {
-        if (table->table_info.db_name == database_name)
-            table_names.push_back(table->table_info.name);
-    });
-    for (auto table_name : table_names)
-        dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, true, output);
-    MockTiDB::instance().dropDB(database_name);
+    MockTiDB::instance().dropDB(context, database_name, drop_regions);
+
+    std::stringstream ss;
+    ss << "dropped db #" << database_name;
+    output(ss.str());
 }
 
 void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
@@ -140,12 +137,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
     bool drop_regions = true;
     if (args.size() == 3)
         drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
-    dbgFuncDropTiDBTableImpl(context, database_name, table_name, drop_regions, false, output);
-}
 
-void MockTiDBTable::dbgFuncDropTiDBTableImpl(
-    Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output)
-{
     MockTiDB::TablePtr table = nullptr;
     TableID table_id = InvalidTableID;
     try
@@ -161,29 +153,7 @@ void MockTiDBTable::dbgFuncDropTiDBTableImpl(
         return;
     }
 
-    TMTContext & tmt = context.getTMTContext();
-    auto & kvstore = tmt.getKVStore();
-    auto & region_table = tmt.getRegionTable();
-
-    if (table->isPartitionTable() && drop_regions)
-    {
-        auto partition_ids = table->getPartitionIDs();
-        std::for_each(partition_ids.begin(), partition_ids.end(), [&](TableID partition_id) {
-            for (auto & e : region_table.getRegionsByTable(partition_id))
-                kvstore->removeRegion(e.first, &region_table);
-
-            region_table.mockDropRegionsInTable(partition_id);
-        });
-    }
-
-    if (drop_regions)
-    {
-        for (auto & e : region_table.getRegionsByTable(table_id))
-            kvstore->removeRegion(e.first, &region_table);
-        region_table.mockDropRegionsInTable(table_id);
-    }
-
-    MockTiDB::instance().dropTable(database_name, table_name, is_drop_db);
+    MockTiDB::instance().dropTable(context, database_name, table_name, drop_regions);
 
     std::stringstream ss;
     ss << "dropped table #" << table_id;
