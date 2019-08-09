@@ -40,7 +40,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
     auto & kvstore = context.getTMTContext().getKVStore();
     auto & region_table = context.getTMTContext().getRegionTable();
 
-    const auto & table = it_by_name->second;
+    auto table = it_by_name->second;
     if (table->isPartitionTable())
     {
         for (const auto & partition : table->table_info.partition.definitions)
