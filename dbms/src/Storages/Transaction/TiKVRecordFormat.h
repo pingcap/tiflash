@@ -37,14 +37,28 @@ static const UInt64 SIGN_MARK = UInt64(1) << 63;
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
-inline std::vector<Field> DecodeRow(const TiKVValue & value)
+inline std::vector<Field> DecodeRow(const TiKVValue & value, std::unordered_set<ColumnID> column_ids_to_read)
 {
     std::vector<Field> vec;
     const String & raw_value = value.getStr();
     size_t cursor = 0;
+    size_t field_index = 0;
     while (cursor < raw_value.size())
     {
-        vec.push_back(DecodeDatum(cursor, raw_value));
+        if (field_index % 2 == 0)
+        {
+            Field f = DecodeDatum(cursor, raw_value);
+            if (!column_ids_to_read.count(f.get<ColumnID>()))
+            {
+                SkipDatum(cursor, raw_value);
+            }
+            else
+            {
+                vec.push_back(f);
+                vec.push_back(DecodeDatum(cursor, raw_value));
+            }
+        }
+        field_index++;
     }
 
     if (cursor != raw_value.size())

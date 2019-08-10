@@ -125,10 +125,16 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     ColumnID handle_col_id = InvalidColumnID;
 
     std::unordered_map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
+    std::unordered_set<ColumnID> column_ids_to_read;
     for (const auto & column_info : table_info.columns)
     {
         ColumnID col_id = column_info.id;
         String col_name = column_info.name;
+        if (std::find(column_names_to_read.begin(), column_names_to_read.end(), col_name) == column_names_to_read.end())
+        {
+            continue;
+        }
+        column_ids_to_read.emplace(col_id);
         auto ch_col = columns.getPhysical(col_name);
         column_map[col_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
         column_map[col_id].first->reserve(data_list.size());
@@ -170,7 +176,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     std::unordered_set<ColumnID> col_id_included;
 
-    const size_t target_col_size = (!table_info.pk_is_handle ? table_info.columns.size() : table_info.columns.size() - 1) * 2;
+    const size_t target_col_size = (column_ids_to_read.size() - 3) * 2;
 
     Block block;
 
@@ -202,7 +208,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 }
             }
             else
-                row = RecordKVFormat::DecodeRow(*value_ptr);
+                row = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read);
 
             if (row.size() == 1 && row[0].isNull())
             {
@@ -225,6 +231,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 if (handle_col_id == column.id)
                     continue;
                 if (col_id_included.count(column.id))
+                    continue;
+                if (!column_ids_to_read.count(column.id))
                     continue;
 
                 if (!force_decode)

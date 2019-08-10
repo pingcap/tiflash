@@ -251,6 +251,96 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
     }
 }
 
+inline void SkipBytes(size_t & cursor, const String & raw_value)
+{
+    while (true)
+    {
+        size_t next_cursor = cursor + 9;
+        if (next_cursor > raw_value.size())
+            throw Exception("Wrong format, cursor over buffer size. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
+        UInt8 marker = (UInt8)raw_value[cursor + 8];
+        UInt8 pad_size = ENC_MARKER - marker;
+
+        if (pad_size > 8)
+            throw Exception("Wrong format, too many padding bytes. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
+        cursor = next_cursor;
+        if (pad_size != 0)
+            break;
+    }
+}
+
+inline void SkipCompactBytes(size_t & cursor, const String & raw_value)
+{
+    size_t size = DecodeVarInt(cursor, raw_value);
+    cursor += size;
+}
+
+inline void SkipVarUInt(size_t & cursor, const String & raw_value)
+{
+    for (int i = 0; cursor < raw_value.size(); i++)
+    {
+        UInt64 v = raw_value[cursor++];
+        if (v < 0x80)
+        {
+            if (i > 9 || (i == 9 && v > 1))
+                throw Exception("Overflow when DecodeVarUInt", ErrorCodes::LOGICAL_ERROR);
+            return;
+        }
+    }
+    throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
+}
+
+inline void SkipVarInt(size_t & cursor, const String & raw_value)
+{
+    SkipVarUInt(cursor, raw_value);
+}
+
+inline void SkipDecimal(size_t & cursor, const String & raw_value)
+{
+    PrecType prec = raw_value[cursor++];
+    ScaleType frac = raw_value[cursor++];
+
+    int binSize = getBytes(prec, frac);
+    cursor += binSize;
+}
+
+inline void SkipDatum(size_t & cursor, const String & raw_value)
+{
+    switch (raw_value[cursor++])
+    {
+        case TiDB::CodecFlagNil:
+            return;
+        case TiDB::CodecFlagInt:
+            cursor += sizeof(Int64);
+            return;
+        case TiDB::CodecFlagUInt:
+            cursor += sizeof(UInt64);
+            return;
+        case TiDB::CodecFlagBytes:
+            SkipBytes(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagCompactBytes:
+            SkipCompactBytes(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagFloat:
+            cursor += sizeof(UInt64);
+            return;
+        case TiDB::CodecFlagVarUInt:
+            SkipVarUInt(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagVarInt:
+            SkipVarInt(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagDuration:
+            throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+        case TiDB::CodecFlagDecimal:
+            SkipDecimal(cursor, raw_value);
+            return;
+        default:
+            throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 template <typename T>
 inline void writeIntBinary(const T & x, std::stringstream & ss)
 {
