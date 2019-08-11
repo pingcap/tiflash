@@ -176,7 +176,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     std::unordered_set<ColumnID> col_id_included;
 
-    const size_t target_col_size = (column_ids_to_read.size() - 3) * 2;
+    const size_t target_col_size = (column_names_to_read.size() - 3) * 2;
 
     Block block;
 
