@@ -324,6 +324,10 @@ inline void EncodeVarUInt(UInt64 num, std::stringstream & ss)
     TiKV::writeVarUInt(num, ss);
 }
 
+inline void EncodeNull(std::stringstream &ss) {
+    writeIntBinary(UInt8(TiDB::CodecFlagNil), ss);
+}
+
 inline void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
 {
     writeIntBinary(UInt8(TiDB::CodecFlagDecimal), ss);
@@ -394,6 +398,9 @@ T getFieldValue(const Field & field)
 
 inline void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
 {
+    if (field.isNull()) {
+        return EncodeNull(ss);
+    }
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:

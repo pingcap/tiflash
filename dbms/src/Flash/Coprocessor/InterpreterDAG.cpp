@@ -208,15 +208,8 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
     // Append final project results if needed.
-    // TODO: Refine this logic by an `analyzer.appendFinalProject()`-like call.
-    if (dag.hasSelection() || dag.hasAggregation() || dag.hasTopN())
-    {
-        for (auto & name : final_project)
-        {
-            chain.steps.back().required_output.push_back(name.first);
-        }
-        res.before_order_and_select = chain.getLastActions();
-    }
+    analyzer.appendFinalProject(chain, final_project);
+    res.before_order_and_select = chain.getLastActions();
     chain.finalize();
     chain.clear();
     //todo need call prependProjectInput??

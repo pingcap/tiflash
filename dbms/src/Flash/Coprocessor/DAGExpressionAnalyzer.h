@@ -44,6 +44,7 @@ public:
             chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns, settings));
         }
     }
+    void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const NamesAndTypesList & getCurrentInputColumns();
 };
