@@ -3,6 +3,8 @@
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -21,6 +23,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
+extern const int LOGICA_ERROR;
 } // namespace ErrorCodes
 
 using DAGField = std::pair<String, tipb::FieldType>;
@@ -98,6 +101,42 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     return outputDAGResponse(context, schema, dag_response);
 }
 
+struct ExecutorCtx
+{
+    tipb::Executor * input;
+    DAGSchema output;
+    std::unordered_map<String, tipb::Expr *> col_ref_map;
+};
+
+void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
+    std::unordered_map<String, tipb::Expr *> col_ref_map)
+{
+    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    {
+        auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) { return field.first == id->getColumnName(); });
+        if (ft == input.end())
+            throw DB::Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+        expr->set_tp(tipb::ColumnRef);
+        *(expr->mutable_field_type()) = (*ft).second;
+
+        referred_columns.emplace((*ft).first);
+        col_ref_map.emplace((*ft).first, expr);
+    }
+    //    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    //    {
+    //    }
+    else
+    {
+        throw DB::Exception("Unsupported expression " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    for (const auto & child_ast : ast->children)
+    {
+        tipb::Expr * child = expr->add_children();
+        compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+    }
+};
+
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts)
 {
@@ -110,49 +149,162 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "from DAG compiler", 0);
     ASTSelectQuery & ast_query = typeid_cast<ASTSelectQuery &>(*ast);
 
-    String database_name, table_name;
-    auto query_database = ast_query.database();
-    auto query_table = ast_query.table();
-    if (query_database)
-        database_name = typeid_cast<ASTIdentifier &>(*query_database).name;
-    if (query_table)
-        table_name = typeid_cast<ASTIdentifier &>(*query_table).name;
-    if (!query_table)
+    /// Get table metadata.
+    TiDB::TableInfo table_info;
     {
-        database_name = "system";
-        table_name = "one";
-    }
-    else if (!query_database)
-    {
-        database_name = context.getCurrentDatabase();
-    }
-    auto table_info = schema_fetcher(database_name, table_name);
+        String database_name, table_name;
+        auto query_database = ast_query.database();
+        auto query_table = ast_query.table();
+        if (query_database)
+            database_name = typeid_cast<ASTIdentifier &>(*query_database).name;
+        if (query_table)
+            table_name = typeid_cast<ASTIdentifier &>(*query_table).name;
+        if (!query_table)
+        {
+            database_name = "system";
+            table_name = "one";
+        }
+        else if (!query_database)
+        {
+            database_name = context.getCurrentDatabase();
+        }
 
-    tipb::Executor * executor = dag_request.add_executors();
-    executor->set_tp(tipb::ExecType::TypeTableScan);
-    tipb::TableScan * ts = executor->mutable_tbl_scan();
-    ts->set_table_id(table_info.id);
-    size_t i = 0;
-    for (const auto & column_info : table_info.columns)
-    {
-        tipb::ColumnInfo * ci = ts->add_columns();
-        ci->set_column_id(column_info.id);
-        ci->set_tp(column_info.tp);
-        ci->set_flag(column_info.flag);
-
-        tipb::FieldType field_type;
-        field_type.set_tp(column_info.tp);
-        field_type.set_flag(column_info.flag);
-        field_type.set_flen(column_info.flen);
-        field_type.set_decimal(column_info.decimal);
-        schema.emplace_back(std::make_pair(column_info.name, std::move(field_type)));
-
-        dag_request.add_output_offsets(i);
-
-        i++;
+        table_info = schema_fetcher(database_name, table_name);
     }
 
-    // TODO: Other operator compile.
+    std::map<tipb::Executor *, ExecutorCtx> executor_ctx_map;
+    std::unordered_set<String> referred_columns;
+    tipb::TableScan * ts = nullptr;
+    tipb::Executor * last_executor = nullptr;
+
+    /// Table scan.
+    {
+        tipb::Executor * ts_exec = dag_request.add_executors();
+        ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+        ts = ts_exec->mutable_tbl_scan();
+        ts->set_table_id(table_info.id);
+        DAGSchema ts_output;
+        for (const auto & column_info : table_info.columns)
+        {
+            tipb::FieldType field_type;
+            field_type.set_tp(column_info.tp);
+            field_type.set_flag(column_info.flag);
+            field_type.set_flen(column_info.flen);
+            field_type.set_decimal(column_info.decimal);
+            ts_output.emplace_back(std::make_pair(column_info.name, std::move(field_type)));
+        }
+        executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, tipb::Expr *>{}});
+        last_executor = ts_exec;
+    }
+
+    /// Filter.
+    if (ast_query.where_expression)
+    {
+        tipb::Executor * filter_exec = dag_request.add_executors();
+        filter_exec->set_tp(tipb::ExecType::TypeSelection);
+        tipb::Selection * filter = filter_exec->mutable_selection();
+        tipb::Expr * cond = filter->add_conditions();
+        std::unordered_map<String, tipb::Expr *> col_ref_map;
+        compileExpr(executor_ctx_map[last_executor].output, ast_query.where_expression, cond, referred_columns, col_ref_map);
+        executor_ctx_map.emplace(filter_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
+        last_executor = filter_exec;
+    }
+
+    /// TopN.
+    if (ast_query.order_expression_list && ast_query.limit_length)
+    {
+        tipb::Executor * topn_exec = dag_request.add_executors();
+        topn_exec->set_tp(tipb::ExecType::TypeTopN);
+        tipb::TopN * topN = topn_exec->mutable_topn();
+        std::unordered_map<String, tipb::Expr *> col_ref_map;
+        for (const auto & child : ast_query.order_expression_list->children)
+        {
+            tipb::ByItem * by = topN->add_order_by();
+            tipb::Expr * expr = by->mutable_expr();
+            compileExpr(executor_ctx_map[last_executor].output, child, expr, referred_columns, col_ref_map);
+        }
+        auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
+        topN->set_limit(limit);
+        executor_ctx_map.emplace(topn_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
+        last_executor = topn_exec;
+    }
+
+    /// Aggregation.
+    if (ast_query.group_expression_list) {}
+    if (ast_query.select_expression_list /* select_expression_list has agg*/) {}
+
+    /// Finalize.
+    if (!last_executor->has_aggregation())
+    {
+        std::vector<String> final_output;
+        for (const auto & expr : ast_query.select_expression_list->children)
+        {
+            if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(expr.get()))
+            {
+                referred_columns.emplace(id->getColumnName());
+                final_output.emplace_back(id->getColumnName());
+            }
+            else if (typeid_cast<ASTAsterisk *>(expr.get()))
+            {
+                const auto & last_output = executor_ctx_map[last_executor].output;
+                for (const auto & field : last_output)
+                {
+                    referred_columns.emplace(field.first);
+                    final_output.push_back(field.first);
+                }
+            }
+            else
+            {
+                throw DB::Exception("Unsupported expression type in select", ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+
+        std::function<void(ExecutorCtx &)> column_pruner = [&](ExecutorCtx & executor_ctx) {
+            if (!executor_ctx.input)
+            {
+                executor_ctx.output.erase(std::remove_if(executor_ctx.output.begin(), executor_ctx.output.end(),
+                                              [&](const auto & field) { return referred_columns.count(field.first) == 0; }),
+                    executor_ctx.output.end());
+
+                for (const auto & field : executor_ctx.output)
+                {
+                    tipb::ColumnInfo * ci = ts->add_columns();
+                    ci->set_column_id(table_info.getColumnID(field.first));
+                    ci->set_tp(field.second.tp());
+                    ci->set_flag(field.second.flag());
+                    ci->set_columnlen(field.second.flen());
+                    ci->set_decimal(field.second.decimal());
+                }
+
+                return;
+            }
+            column_pruner(executor_ctx_map[executor_ctx.input]);
+            const auto & last_output = executor_ctx_map[executor_ctx.input].output;
+            for (const auto & pair : executor_ctx.col_ref_map)
+            {
+                auto iter
+                    = std::find_if(last_output.begin(), last_output.end(), [&](const auto & field) { return field.first == pair.first; });
+                if (iter == last_output.end())
+                    throw DB::Exception("Column not found when pruning: " + pair.first, ErrorCodes::LOGICAL_ERROR);
+                std::stringstream ss;
+                DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(iter - last_output.begin(), ss);
+                pair.second->set_val(ss.str());
+            }
+            executor_ctx.output = last_output;
+        };
+        column_pruner(executor_ctx_map[last_executor]);
+
+        const auto & last_output = executor_ctx_map[last_executor].output;
+        for (const auto & field : final_output)
+        {
+            auto iter
+                = std::find_if(last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
+            if (iter == last_output.end())
+                throw DB::Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
+            dag_request.add_output_offsets(iter - last_output.begin());
+            schema.push_back(*iter);
+        }
+    }
 
     return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request));
 }
@@ -160,9 +312,12 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
 tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version)
 {
+    Logger * log = &Logger::get("MockDAG");
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
     DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, dag_response, true);
     driver.execute();
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;
 }
 
