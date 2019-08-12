@@ -22,6 +22,8 @@
 #include <Interpreters/NullableUtils.h>
 
 #include <Storages/MergeTree/KeyCondition.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 
 namespace DB
@@ -34,6 +36,7 @@ namespace ErrorCodes
     extern const int TYPE_MISMATCH;
     extern const int INCORRECT_ELEMENT_OF_SET;
     extern const int NUMBER_OF_COLUMNS_DOESNT_MATCH;
+    extern const int COP_BAD_DAG_REQUEST;
 }
 
 
@@ -256,6 +259,41 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
     insertFromBlock(block, fill_set_elements);
 }
 
+void Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements)
+{
+    /// Will form a block with values from the set.
+
+    Block header;
+    size_t num_columns = types.size();
+    if (num_columns != 1)
+    {
+        throw Exception("Incorrect element of set, tuple in is not supported yet", ErrorCodes::INCORRECT_ELEMENT_OF_SET);
+    }
+    for (size_t i = 0; i < num_columns; ++i)
+        header.insert(ColumnWithTypeAndName(types[i]->createColumn(), types[i], "_" + toString(i)));
+    setHeader(header);
+
+    MutableColumns columns = header.cloneEmptyColumns();
+
+    for (int i = 1; i < expr.children_size(); i++)
+    {
+        auto & child = expr.children(i);
+        // todo support constant expression
+        if (!isLiteralExpr(child))
+        {
+            throw Exception("Only literal is supported in children of expr `in`", ErrorCodes::COP_BAD_DAG_REQUEST);
+        }
+        Field value = decodeLiteral(child);
+        DataTypePtr type = child.has_field_type() ? getDataTypeByFieldType(child.field_type()) : types[0];
+        value = convertFieldToType(value, *type);
+
+        if (!value.isNull())
+            columns[0]->insert(value);
+    }
+
+    Block block = header.cloneWithColumns(std::move(columns));
+    insertFromBlock(block, fill_set_elements);
+}
 
 ColumnPtr Set::execute(const Block & block, bool negative) const
 {
