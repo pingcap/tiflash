@@ -126,10 +126,10 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
             throw Exception(tipb::ExprType_Name(expr.tp()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
     }
     // build function expr
-    if (func_name == "in" && for_parser)
+    if (isInOrGlobalInOperator(func_name) && for_parser)
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
-        throw Exception("Function In not supported", ErrorCodes::UNSUPPORTED_METHOD);
+        throw Exception("Function " + func_name + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
     }
     ss << func_name << "(";
     bool first = true;
@@ -239,6 +239,8 @@ ColumnID getColumnID(const tipb::Expr & expr)
     size_t cursor = 1;
     return DecodeInt<Int64>(cursor, expr.val());
 }
+
+bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
 
 std::unordered_map<tipb::ExprType, String> aggFunMap({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Avg, "avg"}, {tipb::ExprType::Min, "min"},

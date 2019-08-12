@@ -321,7 +321,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         Names argument_names;
         DataTypes argument_types;
 
-        if (func_name == "in" || func_name == "notIn" || func_name == "globalIn" || func_name == "globalNotIn")
+        if (isInOrGlobalInOperator(func_name))
         {
             String name = getActions(expr.children(0), actions);
             argument_names.push_back(name);
