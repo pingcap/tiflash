@@ -6,6 +6,8 @@
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -22,7 +24,8 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-void CoprocessorHandler::execute()
+grpc::Status CoprocessorHandler::execute()
+try
 {
     switch (cop_request->tp())
     {
@@ -45,6 +48,62 @@ void CoprocessorHandler::execute()
             throw Exception(
                 "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
+    return ::grpc::Status(::grpc::StatusCode::OK, "");
+}
+catch (const LockException & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.displayText());
+    cop_response->Clear();
+    kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
+    lock_info->set_key(e.lock_infos[0]->key);
+    lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
+    lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
+    lock_info->set_lock_version(e.lock_infos[0]->lock_version);
+    // return ok so TiDB has the chance to see the LockException
+    return ::grpc::Status(::grpc::StatusCode::OK, "");
+}
+catch (const RegionException & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.displayText());
+    cop_response->Clear();
+    errorpb::Error * region_err;
+    switch (e.status)
+    {
+        case RegionTable::RegionReadStatus::NOT_FOUND:
+        case RegionTable::RegionReadStatus::PENDING_REMOVE:
+            region_err = cop_response->mutable_region_error();
+            region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
+            break;
+        case RegionTable::RegionReadStatus::VERSION_ERROR:
+            region_err = cop_response->mutable_region_error();
+            region_err->mutable_epoch_not_match();
+            break;
+        default:
+            // should not happen
+            break;
+    }
+    // return ok so TiDB has the chance to see the LockException
+    return ::grpc::Status(::grpc::StatusCode::OK, "");
+}
+catch (const Exception & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
+    cop_response->Clear();
+    cop_response->set_other_error(e.message());
+
+    if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
+        return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
+
+    // TODO: Map other DB error codes to grpc codes.
+
+    return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.message());
+}
+catch (const std::exception & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
+    cop_response->Clear();
+    cop_response->set_other_error(e.what());
+    return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.what());
 }
 
 } // namespace DB

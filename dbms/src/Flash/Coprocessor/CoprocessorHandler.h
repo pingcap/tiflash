@@ -36,7 +36,7 @@ public:
 
     ~CoprocessorHandler() = default;
 
-    void execute();
+    grpc::Status execute();
 
 protected:
     enum

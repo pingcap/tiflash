@@ -67,7 +67,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
         if (!region)
             throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
     }
-    tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer());
+    tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer());
 
     return outputDAGResponse(context, schema, dag_response);
 }

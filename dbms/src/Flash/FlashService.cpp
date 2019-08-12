@@ -2,8 +2,6 @@
 
 #include <Core/Types.h>
 #include <Flash/Coprocessor/CoprocessorHandler.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server_builder.h>
 
@@ -51,48 +49,13 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    try
-    {
-        CoprocessorContext cop_context(context, request->context(), *grpc_context);
-        CoprocessorHandler cop_handler(cop_context, request, response);
+    CoprocessorContext cop_context(context, request->context(), *grpc_context);
+    CoprocessorHandler cop_handler(cop_context, request, response);
 
-        cop_handler.execute();
+    auto ret = cop_handler.execute();
 
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done");
-        return ::grpc::Status(::grpc::StatusCode::OK, "");
-    }
-    catch (const LockException & e)
-    {
-        // TODO: handle lock error properly.
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.displayText());
-        response->set_data("");
-        return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
-    }
-    catch (const RegionException & e)
-    {
-        // TODO: handle region error properly.
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.displayText());
-        response->set_data("");
-        return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
-    }
-    catch (const Exception & e)
-    {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
-        response->set_data("");
-
-        if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
-            return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
-
-        // TODO: Map other DB error codes to grpc codes.
-
-        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.message());
-    }
-    catch (const std::exception & e)
-    {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
-        response->set_data("");
-        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.what());
-    }
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done");
+    return ret;
 }
 
 String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const String & name, const String & default_val)
@@ -133,8 +96,10 @@ std::tuple<Context, ::grpc::Status> FlashService::createDBContext(grpc::ServerCo
     {
         context.setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
     }
-    std::string planner = getClientMetaVarWithDefault(grpc_context, "dag_planner", "sql");
+    std::string planner = getClientMetaVarWithDefault(grpc_context, "dag_planner", "optree");
     context.setSetting("dag_planner", planner);
+    std::string expr_field_type_check = getClientMetaVarWithDefault(grpc_context, "dag_expr_field_type_strict_check", "1");
+    context.setSetting("dag_expr_field_type_strict_check", expr_field_type_check);
 
     return std::make_tuple(context, ::grpc::Status::OK);
 }

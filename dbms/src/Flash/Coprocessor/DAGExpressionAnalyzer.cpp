@@ -143,6 +143,15 @@ void DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const 
 
 const NamesAndTypesList & DAGExpressionAnalyzer::getCurrentInputColumns() { return after_agg ? aggregated_columns : source_columns; }
 
+void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project)
+{
+    initChain(chain, getCurrentInputColumns());
+    for (auto name : final_project)
+    {
+        chain.steps.back().required_output.push_back(name.first);
+    }
+}
+
 void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
 {
     initChain(chain, getCurrentInputColumns());
@@ -199,11 +208,11 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
 
 String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name)
 {
-    if (!expr.has_field_type())
+    if (!expr.has_field_type() && context.getSettingsRef().dag_expr_field_type_strict_check)
     {
         throw Exception("Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    if (isFunctionExpr(expr))
+    if (expr.has_field_type() && isFunctionExpr(expr))
     {
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;

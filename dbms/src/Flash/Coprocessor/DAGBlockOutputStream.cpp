@@ -42,6 +42,7 @@ void DAGBlockOutputStream::writeSuffix()
     if (current_chunk != nullptr && records_per_chunk > 0)
     {
         current_chunk->set_rows_data(current_ss.str());
+        dag_response.add_output_counts(records_per_chunk);
     }
 }
 
@@ -62,6 +63,7 @@ void DAGBlockOutputStream::write(const Block & block)
             {
                 // set the current ss to current chunk
                 current_chunk->set_rows_data(current_ss.str());
+                dag_response.add_output_counts(current_records_num);
             }
             current_chunk = dag_response.add_chunks();
             current_ss.str("");

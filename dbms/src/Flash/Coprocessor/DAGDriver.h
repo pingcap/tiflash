@@ -31,5 +31,7 @@ private:
     tipb::SelectResponse & dag_response;
 
     bool internal;
+
+    void recordError(Int32 err_code, const String & err_msg);
 };
 } // namespace DB
