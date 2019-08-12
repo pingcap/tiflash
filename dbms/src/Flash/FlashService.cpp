@@ -2,8 +2,6 @@
 
 #include <Core/Types.h>
 #include <Flash/Coprocessor/CoprocessorHandler.h>
-#include <Storages/Transaction/LockException.h>
-#include <Storages/Transaction/RegionException.h>
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server_builder.h>
 
@@ -51,69 +49,13 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
 
-    try
-    {
-        CoprocessorContext cop_context(context, request->context(), *grpc_context);
-        CoprocessorHandler cop_handler(cop_context, request, response);
+    CoprocessorContext cop_context(context, request->context(), *grpc_context);
+    CoprocessorHandler cop_handler(cop_context, request, response);
 
-        cop_handler.execute();
+    auto ret = cop_handler.execute();
 
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done");
-        return ::grpc::Status(::grpc::StatusCode::OK, "");
-    }
-    catch (const LockException & e)
-    {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.displayText());
-        response->Clear();
-        kvrpcpb::LockInfo * lock_info = response->mutable_locked();
-        lock_info->set_key(e.lock_infos[0]->key);
-        lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
-        lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
-        lock_info->set_lock_version(e.lock_infos[0]->lock_version);
-        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.message());
-    }
-    catch (const RegionException & e)
-    {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.displayText());
-        response->Clear();
-        errorpb::Error * region_err;
-        switch (e.status)
-        {
-            case RegionTable::RegionReadStatus::NOT_FOUND:
-            case RegionTable::RegionReadStatus::PENDING_REMOVE:
-                region_err = response->mutable_region_error();
-                region_err->mutable_region_not_found()->set_region_id(request->context().region_id());
-                break;
-            case RegionTable::RegionReadStatus::VERSION_ERROR:
-                region_err = response->mutable_region_error();
-                region_err->mutable_epoch_not_match();
-                break;
-            default:
-                // should not happen
-                break;
-        }
-        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.message());
-    }
-    catch (const Exception & e)
-    {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
-        response->Clear();
-        response->set_other_error(e.message());
-
-        if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
-            return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
-
-        // TODO: Map other DB error codes to grpc codes.
-
-        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.message());
-    }
-    catch (const std::exception & e)
-    {
-        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
-        response->Clear();
-        response->set_other_error(e.what());
-        return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.what());
-    }
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done");
+    return ret;
 }
 
 String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const String & name, const String & default_val)
