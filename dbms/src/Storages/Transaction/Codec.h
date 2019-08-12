@@ -399,7 +399,8 @@ T getFieldValue(const Field & field)
 
 inline void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
 {
-    if (field.isNull()) {
+    if (field.isNull())
+    {
         return EncodeNull(ss);
     }
     switch (flag)
