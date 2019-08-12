@@ -2,32 +2,31 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiDBSchemaSyncer.h>
 #include <pd/MockPDClient.h>
 
 namespace DB
 {
 
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-    const std::string & learner_value, const std::string & kvstore_path, const std::string & region_mapping_path)
+    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
+    const std::string & region_mapping_path)
     : kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context, region_mapping_path),
-      schema_syncer(std::make_shared<HttpJsonSchemaSyncer>()),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key, learner_value)),
-      rpc_client(std::make_shared<pingcap::kv::RpcClient>())
+      rpc_client(std::make_shared<pingcap::kv::RpcClient>()),
+      ignore_databases(ignore_databases_),
+      schema_syncer(addrs.size() == 0
+              ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(pd_client, region_cache, rpc_client))
+              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client)))
 {}
 
 void TMTContext::restore()
 {
-    std::vector<RegionID> regions_to_remove;
-
-    kvstore->restore(
-        [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); }, &regions_to_remove);
-    region_table.restore(std::bind(&KVStore::getRegion, kvstore.get(), std::placeholders::_1));
-    for (RegionID id : regions_to_remove)
-        kvstore->removeRegion(id, &region_table);
-
+    kvstore->restore([&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); });
+    region_table.restore();
     kvstore->updateRegionTableBySnapshot(region_table);
     initialized = true;
 }
@@ -79,5 +78,7 @@ pingcap::kv::RegionClientPtr TMTContext::createRegionClient(pingcap::kv::RegionV
 pingcap::kv::RegionCachePtr TMTContext::getRegionCache() const { return region_cache; }
 
 pingcap::kv::RpcClientPtr TMTContext::getRpcClient() { return rpc_client; }
+
+const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
 
 } // namespace DB

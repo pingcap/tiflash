@@ -3,6 +3,7 @@
 #include <atomic>
 
 #include <Storages/ColumnsDescription.h>
+#include <Storages/Transaction/SchemaGetter.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -22,6 +23,7 @@ class MockTiDB : public ext::singleton<MockTiDB>
     friend class ext::singleton<MockTiDB>;
 
 public:
+    MockTiDB();
     class Table
     {
         friend class MockTiDB;
@@ -61,31 +63,43 @@ public:
     };
     using TablePtr = std::shared_ptr<Table>;
 
-    class MockSchemaSyncer : public JsonSchemaSyncer
-    {
-    protected:
-        String getSchemaJson(TableID table_id, Context & /*context*/) override { return MockTiDB::instance().getSchemaJson(table_id); }
-        String getSchemaJsonByName(const std::string & database_name, const std::string & table_name, Context & context) override
-        {
-            std::ignore = database_name;
-            std::ignore = table_name;
-            std::ignore = context;
-            throw Exception("getSchemaJsonByName not implemented in MockSchemaSyncer");
-        }
-    };
-
 public:
-    String getSchemaJson(TableID table_id);
+    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso);
 
-    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns);
+    DatabaseID newDataBase(const String & database_name);
 
-    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name);
+    TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
 
-    void dropTable(const String & database_name, const String & table_name);
+    void dropTable(Context & context, const String & database_name, const String & table_name, bool drop_regions);
+
+    void dropDB(Context & context, const String & database_name, bool drop_regions);
+
+    void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+
+    void dropColumnFromTable(const String & database_name, const String & table_name, const String & column_name);
+
+    void modifyColumnInTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+
+    void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
+
+    void truncateTable(const String & database_name, const String & table_name);
 
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
+    TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
+
+    TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
+
+    SchemaDiff getSchemaDiff(Int64 version);
+
+    std::unordered_map<String, DatabaseID> getDatabases() { return databases; }
+
+    std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
+
+    Int64 getVersion() { return version; }
+
 private:
+    TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
 
 private:
@@ -94,6 +108,12 @@ private:
     std::unordered_map<String, DatabaseID> databases;
     std::unordered_map<String, TablePtr> tables_by_name;
     std::unordered_map<TableID, TablePtr> tables_by_id;
+
+    std::unordered_map<Int64, SchemaDiff> version_diff;
+
+    std::atomic<TableID> table_id_allocator = MaxSystemTableID + 1;
+
+    Int64 version = 0;
 };
 
 } // namespace DB

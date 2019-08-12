@@ -8,6 +8,8 @@
 #include <tikv/RegionClient.h>
 #pragma GCC diagnostic pop
 
+#include <unordered_set>
+
 namespace DB
 {
 
@@ -19,7 +21,7 @@ using KVStorePtr = std::shared_ptr<KVStore>;
 class SchemaSyncer;
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
-class TMTContext
+class TMTContext : private boost::noncopyable
 {
 public:
     const KVStorePtr & getKVStore() const;
@@ -35,7 +37,8 @@ public:
 
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-        const std::string & learner_value, const std::string & kv_store_path, const std::string & region_mapping_path);
+        const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path,
+        const std::string & region_mapping_path);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -51,19 +54,23 @@ public:
 
     void restore();
 
+    const std::unordered_set<std::string> & getIgnoreDatabases() const;
+
 private:
     KVStorePtr kvstore;
     TMTStorages storages;
     RegionTable region_table;
 
 private:
-    SchemaSyncerPtr schema_syncer;
     pingcap::pd::ClientPtr pd_client;
     pingcap::kv::RegionCachePtr region_cache;
     pingcap::kv::RpcClientPtr rpc_client;
 
     mutable std::mutex mutex;
     std::atomic_bool initialized = false;
+
+    const std::unordered_set<std::string> ignore_databases;
+    SchemaSyncerPtr schema_syncer;
 };
 
 } // namespace DB

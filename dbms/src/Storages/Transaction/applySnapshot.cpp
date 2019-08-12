@@ -1,3 +1,4 @@
+#include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -22,12 +23,10 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     Logger * log = &Logger::get(RegionSnapshotName);
 
     auto old_region = kvstore->getRegion(new_region->id());
-    std::optional<UInt64> expect_old_index;
 
     if (old_region)
     {
-        expect_old_index = old_region->getIndex();
-        if (*expect_old_index >= new_region->getIndex())
+        if (old_region->getIndex() >= new_region->getIndex())
         {
             LOG_WARNING(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
             return false;
@@ -38,6 +37,9 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     {
         auto & tmt = context->getTMTContext();
         Timestamp safe_point = tmt.getPDClient()->getGCSafePoint();
+
+        if (old_region)
+            new_region->compareAndCompleteSnapshot(safe_point, *old_region);
 
         for (auto [table_id, storage] : tmt.getStorages().getAllStorage())
         {
@@ -50,14 +52,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
                 auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                 auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
 
-                bool pk_is_uint64 = false;
-                {
-                    std::string handle_col_name = merge_tree->getData().getPrimarySortDescription()[0].column_name;
-                    const auto pk_type = merge_tree->getColumns().getPhysical(handle_col_name).type->getFamilyName();
-
-                    if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-                        pk_is_uint64 = true;
-                }
+                const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
 
                 if (pk_is_uint64)
                 {
@@ -79,7 +74,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     }
 
     // context may be null in test cases.
-    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr, expect_old_index);
+    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)
@@ -114,24 +109,22 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         if (!request.has_data())
             throw Exception("Failed to read snapshot data", ErrorCodes::LOGICAL_ERROR);
 
-        const auto & data = request.data();
-        const auto & cf_data = data.data();
+        auto & data = *request.mutable_data();
+        auto & cf_data = *data.mutable_data();
         for (auto it = cf_data.begin(); it != cf_data.end(); ++it)
         {
-            auto & key = it->key();
-            auto & value = it->value();
+            auto & key = *it->mutable_key();
+            auto & value = *it->mutable_value();
 
-            const auto & tikv_key = static_cast<const TiKVKey &>(key);
-            const auto & tikv_value = static_cast<const TiKVValue &>(value);
+            auto & tikv_key = static_cast<TiKVKey &>(key);
+            auto & tikv_value = static_cast<TiKVValue &>(value);
 
-            new_region->insert(data.cf(), tikv_key, tikv_value);
+            new_region->insert(data.cf(), std::move(tikv_key), std::move(tikv_value));
         }
     }
 
-    {
-        if (new_region->isPeerRemoved())
-            new_region->setPendingRemove();
-    }
+    if (new_region->isPeerRemoved())
+        throw Exception("[applySnapshot] region is removed, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     bool status = applySnapshot(kvstore, new_region, context);
 

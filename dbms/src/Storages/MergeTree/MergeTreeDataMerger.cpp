@@ -29,7 +29,7 @@
 #include <Common/SimpleIncrement.h>
 #include <Common/interpolate.h>
 #include <Common/typeid_cast.h>
-
+#include <Storages/MergeTree/TMTDataPartProperty.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/CHTableHandle.h>
@@ -113,6 +113,7 @@ void MergeTreeDataMerger::FuturePart::assign(MergeTreeData::DataPartsVector part
     }
     else
         name = part_info.getPartName();
+    path = parts[0]->storage.context.getPartPathSelector().getPathForPart(parts[0]->storage, name);
 }
 
 MergeTreeDataMerger::MergeTreeDataMerger(MergeTreeData & data_, const BackgroundProcessingPool & pool_)
@@ -151,7 +152,16 @@ size_t MergeTreeDataMerger::getMaxPartsSizeForMerge(size_t pool_size, size_t poo
             data.settings.max_bytes_to_merge_at_max_space_in_pool,
             static_cast<double>(free_entries) / data.settings.number_of_free_entries_in_pool_to_lower_max_size_of_merge);
 
-    return std::min(max_size, static_cast<size_t>(DiskSpaceMonitor::getUnreservedFreeSpace(data.full_path) / DISK_USAGE_COEFFICIENT_TO_SELECT));
+    size_t max_parts_size = max_size;
+    for (auto & path : data.context.getAllPath())
+    {
+        auto s = static_cast<size_t>(DiskSpaceMonitor::getUnreservedFreeSpace(path) / DISK_USAGE_COEFFICIENT_TO_SELECT);
+        if (s < max_parts_size)
+        {
+            max_parts_size = s;
+        }
+    }
+    return max_parts_size;
 }
 
 
@@ -531,7 +541,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
               << parts.front()->name << " to " << parts.back()->name
               << " into " << TMP_PREFIX + future_part.name);
 
-    String new_part_tmp_path = data.getFullPath() + TMP_PREFIX + future_part.name + "/";
+    String new_part_tmp_path = data.getDataPartsPath(future_part.path) + TMP_PREFIX + future_part.name + "/";
     if (Poco::File(new_part_tmp_path).exists())
         throw Exception("Directory " + new_part_tmp_path + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
 
@@ -559,7 +569,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             , data.merging_params, gathering_columns, gathering_column_names, merging_columns, merging_column_names);
 
     MergeTreeData::MutableDataPartPtr new_data_part = std::make_shared<MergeTreeData::DataPart>(
-            data, future_part.name, future_part.part_info);
+            data, future_part.name, future_part.part_info, future_part.path);
     new_data_part->partition.assign(future_part.getPartition());
     new_data_part->relative_path = TMP_PREFIX + future_part.name;
     new_data_part->is_temp = true;
@@ -655,22 +665,16 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
         {
             auto &tmt = data.context.getTMTContext();
 
-            while (!tmt.isInitialized())
+            if (!tmt.isInitialized())
             {
-                LOG_WARNING(log, "TMTContext is not initialized, wait and retry");
-                std::this_thread::sleep_for(std::chrono::seconds(1));
+                // Merger will get the 'structure_lock' of current storage. But syncer also need this lock when bootstraping.
+                // If merging is applied before schema syncing, the tmt context has not been inited and this may cause dead lock.
+                throw Exception("TMTContext is not initialized, throw exception", ErrorCodes::LOGICAL_ERROR);
             }
 
-            bool pk_is_uint64 = false;
+            const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
 
             const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
-
-            {
-                const auto pk_type = data.getColumns().getPhysical(handle_col_name).type->getFamilyName();
-
-                if (std::strcmp(pk_type, TypeName<UInt64>::get()) == 0)
-                    pk_is_uint64 = true;
-            }
 
             std::vector<HandleRange<HandleID>> ranges;
             tmt.getRegionTable().traverseInternalRegionsByTable(
@@ -843,6 +847,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
 
     for (const auto & part : parts)
         new_data_part->minmax_idx.merge(part->minmax_idx);
+
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+    {
+        for (const auto & part : parts)
+            new_data_part->tmt_property->merge(*part->tmt_property);
+    }
 
     /// Print overall profiling info. NOTE: it may duplicates previous messages
     {

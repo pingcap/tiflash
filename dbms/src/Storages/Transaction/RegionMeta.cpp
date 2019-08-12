@@ -8,7 +8,7 @@
 namespace DB
 {
 
-size_t RegionMeta::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf) const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
@@ -17,7 +17,7 @@ size_t RegionMeta::serialize(WriteBuffer & buf) const
     size += writeBinary2(apply_state, buf);
     size += writeBinary2(applied_term, buf);
     size += writeBinary2(region_state, buf);
-    return size;
+    return {size, apply_state.applied_index()};
 }
 
 RegionMeta RegionMeta::deserialize(ReadBuffer & buf)
@@ -120,7 +120,7 @@ RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
 RegionRange RegionMeta::getRange() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {TiKVKey(region_state.region().start_key()), TiKVKey(region_state.region().end_key())};
+    return {TiKVKey::copyFrom(region_state.region().start_key()), TiKVKey::copyFrom(region_state.region().end_key())};
 }
 
 std::string RegionMeta::toString(bool dump_status) const
@@ -136,7 +136,7 @@ std::string RegionMeta::toString(bool dump_status) const
             term = applied_term;
             index = apply_state.applied_index();
         }
-        ss << ", applied_term: " << term << ", applied_index: " << index;
+        ss << ", applied: term " << term << " index " << index;
     }
     ss << "]";
     return ss.str();
@@ -265,6 +265,13 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 {
     return meta1.peer == meta2.peer && meta1.apply_state == meta2.apply_state && meta1.applied_term == meta2.applied_term
         && meta1.region_state == meta2.region_state;
+}
+
+std::tuple<RegionVersion, RegionVersion, RegionRange> RegionMeta::dumpVersionRange() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return {region_state.region().region_epoch().version(), region_state.region().region_epoch().conf_ver(),
+        std::make_pair(TiKVKey::copyFrom(region_state.region().start_key()), TiKVKey::copyFrom(region_state.region().end_key()))};
 }
 
 } // namespace DB

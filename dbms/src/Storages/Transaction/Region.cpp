@@ -34,13 +34,13 @@ RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const Reg
 
 LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
 
-TableID Region::insert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::insert(const std::string & cf, TiKVKey key, TiKVValue value)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doInsert(cf, key, value);
+    return doInsert(cf, std::move(key), std::move(value));
 }
 
-TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKVValue & value)
+TableID Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
     std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
@@ -48,7 +48,7 @@ TableID Region::doInsert(const std::string & cf, const TiKVKey & key, const TiKV
         return InvalidTableID;
 
     auto type = getCf(cf);
-    return data.insert(type, key, raw_key, value);
+    return data.insert(type, std::move(key), raw_key, std::move(value));
 }
 
 TableID Region::remove(const std::string & cf, const TiKVKey & key)
@@ -195,9 +195,9 @@ void Region::execCompactLog(
     meta.execCompactLog(request, response, index, term);
 }
 
-RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
+RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
 {
-    auto & header = cmd.header();
+    const auto & header = cmd.header();
     UInt64 term = header.term();
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
@@ -249,8 +249,6 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 
                 result.type = RaftCommandResult::Type::BatchSplit;
                 result.split_regions = std::move(split_regions);
-
-                is_dirty = true;
                 break;
             }
             case raft_cmdpb::AdminCmdType::CompactLog:
@@ -277,7 +275,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
 
         std::unique_lock<std::shared_mutex> lock(mutex);
 
-        for (const auto & req : cmd.requests())
+        for (auto && req : *cmd.mutable_requests())
         {
             auto type = req.cmd_type();
 
@@ -285,23 +283,23 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
             {
                 case raft_cmdpb::CmdType::Put:
                 {
-                    const auto & put = req.put();
+                    auto & put = *req.mutable_put();
 
-                    auto & key = put.key();
-                    auto & value = put.value();
+                    auto & key = *put.mutable_key();
+                    auto & value = *put.mutable_value();
 
-                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
-                    const auto & tikv_value = static_cast<const TiKVValue &>(value);
+                    auto & tikv_key = static_cast<TiKVKey &>(key);
+                    auto & tikv_value = static_cast<TiKVValue &>(value);
 
                     try
                     {
-                        table_id = doInsert(put.cf(), tikv_key, tikv_value);
+                        table_id = doInsert(put.cf(), std::move(tikv_key), std::move(tikv_value));
                     }
                     catch (Exception & e)
                     {
                         LOG_ERROR(log,
                             toString() << " catch exception: " << e.message() << ", while applying CmdType::Put on [term: " << term
-                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << put.cf());
+                                       << ", index: " << index << "], CF: " << put.cf());
                         e.rethrow();
                     }
 
@@ -327,7 +325,7 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                     {
                         LOG_ERROR(log,
                             toString() << " catch exception: " << e.message() << ", while applying CmdType::Delete on [term: " << term
-                                       << ", index: " << index << "] with key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
+                                       << ", index: " << index << "], key in hex: " << tikv_key.toHex() << ", CF: " << del.cf());
                         e.rethrow();
                     }
 
@@ -343,6 +341,19 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
                 case raft_cmdpb::CmdType::ReadIndex:
                     LOG_WARNING(log, toString(false) << " skip unsupported command: " << raft_cmdpb::CmdType_Name(type));
                     break;
+                case raft_cmdpb::CmdType::DeleteRange:
+                {
+                    const auto & delete_range = req.delete_range();
+                    const auto & cf = delete_range.cf();
+                    const auto & start = static_cast<const TiKVKey &>(delete_range.start_key());
+                    const auto & end = static_cast<const TiKVKey &>(delete_range.end_key());
+
+                    LOG_INFO(log,
+                        toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
+                                        << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
+                    doDeleteRange(cf, start, end);
+                    break;
+                }
                 default:
                 {
                     throw Exception(
@@ -364,17 +375,24 @@ RaftCommandResult Region::onCommand(const enginepb::CommandRequest & cmd)
     return result;
 }
 
-size_t Region::serialize(WriteBuffer & buf) const
+std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
 {
-    std::shared_lock<std::shared_mutex> lock(mutex);
-
     size_t total_size = writeBinary2(Region::CURRENT_VERSION, buf);
+    UInt64 applied_index = -1;
 
-    total_size += meta.serialize(buf);
+    {
+        std::shared_lock<std::shared_mutex> lock(mutex);
 
-    total_size += data.serialize(buf);
+        {
+            auto [size, index] = meta.serialize(buf);
+            total_size += size;
+            applied_index = index;
+        }
 
-    return total_size;
+        total_size += data.serialize(buf);
+    }
+
+    return {total_size, applied_index};
 }
 
 RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create)
@@ -431,22 +449,24 @@ std::string Region::dataInfo() const
 
     std::stringstream ss;
     auto write_size = data.writeCF().getSize(), lock_size = data.lockCF().getSize(), default_size = data.defaultCF().getSize();
+    ss << "[";
     if (write_size)
-        ss << "write cf: " << write_size << ", ";
+        ss << "write " << write_size << " ";
     if (lock_size)
-        ss << "lock cf: " << lock_size << ", ";
+        ss << "lock " << lock_size << " ";
     if (default_size)
-        ss << "default cf: " << default_size << ", ";
+        ss << "default " << default_size << " ";
+    ss << "]";
     return ss.str();
 }
 
-void Region::markPersisted() { last_persist_time = Clock::now(); }
+void Region::markPersisted() const { last_persist_time = Clock::now(); }
 
 Timepoint Region::lastPersistTime() const { return last_persist_time; }
 
 size_t Region::dirtyFlag() const { return dirty_flag; }
 
-void Region::decDirtyFlag(size_t x) { dirty_flag -= x; }
+void Region::decDirtyFlag(size_t x) const { dirty_flag -= x; }
 
 void Region::incDirtyFlag() { dirty_flag++; }
 
@@ -479,9 +499,9 @@ void Region::waitIndex(UInt64 index)
     {
         if (!meta.checkIndex(index))
         {
-            LOG_DEBUG(log, "Region " << id() << " need to wait learner index: " << index);
+            LOG_DEBUG(log, toString() << " need to wait learner index: " << index);
             meta.waitIndex(index);
-            LOG_DEBUG(log, "Region " << id() << " wait learner index " << index << " done");
+            LOG_DEBUG(log, toString(false) << " wait learner index " << index << " done");
         }
     }
 }
@@ -509,10 +529,10 @@ void Region::assignRegion(Region && new_region)
 
 bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
 
-TableIDSet Region::getCommittedRecordTableID() const
+TableIDSet Region::getAllWriteCFTables() const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);
-    return data.getCommittedRecordTableID();
+    return data.getAllWriteCFTables();
 }
 
 void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point)
@@ -546,7 +566,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
                     LOG_ERROR(log,
                         "[compareAndCompleteSnapshot] WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: "
                                                                                         << ori_del << " , current: " << is_deleted);
-                    throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
                 }
                 handle_map.erase(it);
             }
@@ -563,14 +583,14 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         std::ignore = ori_del;
 
         if (ori_ts >= safe_point)
-            throw Exception("[compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
         std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
         TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
         TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
         TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
 
-        data.insert(Write, commit_key, raw_key, value);
+        data.insert(Write, std::move(commit_key), raw_key, std::move(value));
         ++deleted_gc_cnt;
     }
 
@@ -580,5 +600,59 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
     if (deleted_gc_cnt)
         LOG_INFO(log, "[compareAndCompleteSnapshot] add deleted gc: " << deleted_gc_cnt);
 }
+
+void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region)
+{
+    const auto & [start_key, end_key] = getRange();
+    std::unordered_map<TableID, HandleMap> handle_maps;
+    {
+        std::shared_lock<std::shared_mutex> source_lock(source_region.mutex);
+
+        const auto & region_data = source_region.data.writeCF().getData();
+        for (auto & [table_id, write_map] : region_data)
+        {
+            if (write_map.empty())
+                continue;
+
+            auto & handle_map = handle_maps[table_id];
+            for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
+            {
+                const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
+
+                {
+                    bool ok = start_key ? key >= start_key : true;
+                    ok = ok && (end_key ? key < end_key : true);
+
+                    if (!ok)
+                        continue;
+                }
+
+                const auto & [handle, ts] = write_map_it->first;
+                const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
+                auto [it, ok] = handle_map.emplace(handle, cur_ele);
+                if (!ok)
+                {
+                    auto & ele = it->second;
+                    ele = std::max(ele, cur_ele);
+                }
+            }
+
+            LOG_DEBUG(log,
+                "[compareAndCompleteSnapshot] memory cache: source " << source_region.toString(false) << ", table " << table_id
+                                                                     << ", record size " << write_map.size());
+        }
+    }
+
+    for (auto & [table_id, handle_map] : handle_maps)
+        compareAndCompleteSnapshot(handle_map, table_id, safe_point);
+}
+
+void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, const TiKVKey & end_key)
+{
+    auto type = getCf(cf);
+    return data.deleteRange(type, start_key, end_key);
+}
+
+std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
 
 } // namespace DB

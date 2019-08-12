@@ -68,7 +68,7 @@ public:
 
     enginepb::CommandResponse toCommandResponse() const;
 
-    size_t serialize(WriteBuffer & buf) const;
+    std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
 
     static RegionMeta deserialize(ReadBuffer & buf);
 
@@ -86,6 +86,7 @@ public:
 
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
     void execCompactLog(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    std::tuple<RegionVersion, RegionVersion, RegionRange> dumpVersionRange() const;
 
 private:
     void doSetRegion(const metapb::Region & region);

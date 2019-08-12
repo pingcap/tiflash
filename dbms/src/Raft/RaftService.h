@@ -26,15 +26,13 @@ public:
 
     ~RaftService() final;
 
-    void addRegionToFlush(const Regions & regions);
+    void addRegionToFlush(const Region & region);
 
 private:
     grpc::Status ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream) override;
 
     grpc::Status ApplySnapshot(
         grpc::ServerContext * grpc_context, CommandServerReader * reader, enginepb::SnapshotDone * response) override;
-
-    void applyCommand(RaftContext & context, const enginepb::CommandRequestBatch & cmd);
 
 private:
     std::string address;
@@ -53,7 +51,7 @@ private:
 
     BackgroundProcessingPool::TaskHandle persist_handle;
     BackgroundProcessingPool::TaskHandle table_flush_handle;
-    std::array<BackgroundProcessingPool::TaskHandle, 3> region_flush_handles;
+    BackgroundProcessingPool::TaskHandle region_flush_handle;
 };
 
 } // namespace DB

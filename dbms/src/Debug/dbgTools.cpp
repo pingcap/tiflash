@@ -159,7 +159,7 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     RaftContext raft_ctx(&context, nullptr, nullptr);
     enginepb::CommandRequestBatch cmds;
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, is_del);
-    tmt.getKVStore()->onServiceCommand(cmds, raft_ctx);
+    tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)
@@ -180,7 +180,7 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, true);
 
-    tmt.getKVStore()->onServiceCommand(cmds, raft_ctx);
+    tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
 }
 
 struct BatchCtrl
@@ -288,7 +288,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
             addRequestsToRaftCmd(cmd, region->id(), key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
-        tmt.getKVStore()->onServiceCommand(cmds, raft_ctx);
+        tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
     }
 }
 
@@ -332,15 +332,13 @@ Int64 concurrentRangeOperate(
 
     {
         TMTContext & tmt = context.getTMTContext();
-        tmt.getRegionTable().traverseRegionsByTable(table_info.id, [&](std::vector<std::pair<RegionID, RegionPtr>> & d) {
-            for (auto && [_, r] : d)
-            {
-                std::ignore = _;
-                if (r == nullptr)
-                    continue;
-                regions.push_back(r);
-            }
-        });
+        for (auto && [_, r] : tmt.getRegionTable().getRegionsByTable(table_info.id))
+        {
+            std::ignore = _;
+            if (r == nullptr)
+                continue;
+            regions.push_back(r);
+        }
     }
 
     std::shuffle(regions.begin(), regions.end(), std::default_random_engine());

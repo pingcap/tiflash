@@ -1,10 +1,9 @@
 #pragma once
 
 #include <functional>
-#include <vector>
 #include <optional>
+#include <vector>
 
-#include <Common/PersistedContainer.h>
 #include <Core/Names.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/TiKVHandle.h>
@@ -30,13 +29,13 @@ using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
 class Block;
 // for debug
 struct MockTiDBTable;
+using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 class RegionTable : private boost::noncopyable
 {
 public:
     struct InternalRegion
     {
-        InternalRegion() {}
         InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
         InternalRegion(const RegionID region_id_, const HandleRange<HandleID> & range_in_table_ = {0, 0})
             : region_id(region_id_), range_in_table(range_in_table_)
@@ -51,39 +50,13 @@ public:
         Timepoint last_flush_time = Clock::now();
     };
 
+    using InternalRegions = std::unordered_map<RegionID, InternalRegion>;
+
     struct Table
     {
-        Table(const std::string & parent_path, TableID table_id_) : table_id(table_id_), regions(parent_path + DB::toString(table_id))
-        {
-            regions.restore();
-        }
-
-        struct Write
-        {
-            void operator()(const RegionID k, const InternalRegion &, DB::WriteBuffer & buf) { writeIntBinary(k, buf); }
-        };
-
-        struct Read
-        {
-            std::pair<RegionID, InternalRegion> operator()(DB::ReadBuffer & buf)
-            {
-                RegionID region_id;
-                readIntBinary(region_id, buf);
-                return {region_id, InternalRegion(region_id)};
-            }
-        };
-
-        void persist() { regions.persist(); }
-
-        using InternalRegions = PersistedContainerMap<RegionID, InternalRegion, std::unordered_map, Write, Read>;
-
+        Table(const TableID table_id_) : table_id(table_id_) {}
         TableID table_id;
         InternalRegions regions;
-    };
-
-    struct RegionInfo
-    {
-        std::unordered_set<TableID> tables;
     };
 
     enum RegionReadStatus : UInt8
@@ -110,6 +83,7 @@ public:
         return "Unknown";
     };
 
+    using RegionInfo = std::unordered_set<TableID>;
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionInfoMap = std::unordered_map<RegionID, RegionInfo>;
 
@@ -157,42 +131,44 @@ private:
     Logger * log;
 
 private:
-    Table & getOrCreateTable(TableID table_id);
-    StoragePtr getOrCreateStorage(TableID table_id);
+    Table & getOrCreateTable(const TableID table_id);
 
-    InternalRegion & insertRegion(Table & table, const RegionPtr & region);
-    InternalRegion & getOrInsertRegion(TableID table_id, const RegionPtr & region, TableIDSet & table_to_persist);
-
-    /// This functional only shrink the table range of this region_id, range expand will (only) be done at flush.
-    /// Note that region update range should not affect the data in storage.
-    void updateRegionRange(const RegionPtr & region, TableIDSet & table_to_persist);
+    InternalRegion & insertRegion(Table & table, const Region & region);
+    InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
+    InternalRegion & insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id);
 
     bool shouldFlush(const InternalRegion & region) const;
 
-    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size);
+    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size, const bool try_persist = true);
 
     // For debug
+    friend class MockTiDB;
     friend struct MockTiDBTable;
 
     void mockDropRegionsInTable(TableID table_id);
+    void doShrinkRegionRange(const Region & region);
 
 public:
     RegionTable(Context & context_, const std::string & parent_path_);
-    void restore(std::function<RegionPtr(RegionID)> region_fetcher);
+    void restore();
 
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
 
-    /// After the region is updated (insert or delete KVs).
-    void updateRegion(const RegionPtr & region, const TableIDSet & relative_table_ids);
-    /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
-    void applySnapshotRegion(const RegionPtr & region);
-    void applySnapshotRegions(const std::unordered_map<RegionID, RegionPtr> & regions);
+    /// Remove a table and associated regions.
+    void removeTable(TableID table_id);
 
-    /// Manage data after region split into split_regions.
-    /// i.e. split_regions could have assigned to another partitions, we need to move the data belong with them.
-    void splitRegion(const RegionPtr & region, const std::vector<RegionPtr> & split_regions);
-    /// Remove a region from corresponding partitions.
-    void removeRegion(const RegionPtr & region);
+    /// After the region is updated (insert or delete KVs).
+    void updateRegion(const Region & region, const TableIDSet & relative_table_ids);
+    /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
+    void applySnapshotRegion(const Region & region);
+    void applySnapshotRegions(const RegionMap & regions);
+
+    void updateRegionForSplit(const Region & split_region, const RegionID source_region);
+
+    /// This functional only shrink the table range of this region_id
+    void shrinkRegionRange(const Region & region);
+
+    void removeRegion(const RegionID region_id);
 
     /// Try pick some regions and flush.
     /// Note that flush is organized by partition. i.e. if a regions is selected to be flushed, all regions belong to its partition will also flushed.
@@ -204,26 +180,29 @@ public:
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
-    void traverseRegionsByTable(const TableID table_id, std::function<void(std::vector<std::pair<RegionID, RegionPtr>> &)> && callback);
+    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
 
-    static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
-        RegionPtr region,
-        const TiDB::TableInfo & table_info,
-        const ColumnsDescription & columns,
-        const Names & ordered_columns,
-        RegionDataReadInfoList & data_list_for_remove);
+    /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
+    /// Will trigger schema sync on read error for only once,
+    /// assuming that newer schema can always apply to older data by setting force_decode to true in readRegionBlock.
+    /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
+    static void writeBlockByRegion(
+        Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log);
 
-    static std::tuple<std::optional<Block>, RegionReadStatus> getBlockInputStreamByRegion(TableID table_id,
-        RegionPtr region,
-        const RegionVersion region_version,
-        const RegionVersion conf_version,
-        const TiDB::TableInfo & table_info,
+    /// Read the data of the given region into block, take good care of learner read and locks.
+    /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
+    /// we directly ask readRegionBlock to perform a read with the given start_ts and force_decode being true.
+    static std::tuple<Block, RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
-        const Names & ordered_columns,
-        bool learner_read,
+        const Names & column_names_to_read,
+        const RegionPtr & region,
+        RegionVersion region_version,
+        RegionVersion conf_version,
         bool resolve_locks,
         Timestamp start_ts,
-        RegionDataReadInfoList * data_list_for_remove = nullptr);
+        DB::HandleRange<HandleID> & handle_range);
+
+    TableIDSet getAllMappedTables(const RegionID region_id) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

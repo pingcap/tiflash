@@ -25,7 +25,7 @@ public:
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 
-    TableID insert(ColumnFamilyType cf, const TiKVKey & key, const String & raw_key, const TiKVValue & value);
+    TableID insert(ColumnFamilyType cf, TiKVKey && key, const String & raw_key, TiKVValue && value);
 
     void removeLockCF(const TableID & table_id, const String & raw_key);
     void removeDefaultCF(const TableID & table_id, const TiKVKey & key, const String & raw_key);
@@ -57,14 +57,16 @@ public:
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
 
-    TableIDSet getCommittedRecordTableID() const;
+    TableIDSet getAllWriteCFTables() const;
 
     RegionData() {}
 
     RegionData(RegionData && data);
 
+    void deleteRange(const ColumnFamilyType cf, const TiKVKey & start_key, const TiKVKey & end_key);
+
 public:
-    static UInt8 getWriteType(const WriteCFIter & write_it);
+    static UInt8 getWriteType(const ConstWriteCFIter & write_it);
 
 private:
     RegionWriteCFData write_cf;

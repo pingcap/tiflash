@@ -6,12 +6,12 @@
 namespace DB
 {
 
- class RegionException : public Exception
+class RegionException : public Exception
 {
 public:
-    explicit RegionException(std::vector<RegionID> region_ids_): region_ids(region_ids_) {}
+    explicit RegionException(std::vector<RegionID> region_ids_) : region_ids(region_ids_) {}
 
-     std::vector<RegionID> region_ids;
+    std::vector<RegionID> region_ids;
 };
 
-}
+} // namespace DB

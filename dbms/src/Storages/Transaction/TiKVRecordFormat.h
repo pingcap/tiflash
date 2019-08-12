@@ -56,12 +56,10 @@ inline std::vector<Field> DecodeRow(const TiKVValue & value)
 // Key format is here:
 // https://docs.google.com/document/d/1J9Dsp8l5Sbvzjth77hK8yx3SzpEJ4SXaR_wIvswRhro/edit
 // https://github.com/tikv/tikv/blob/289ce2ddac505d7883ec616c078e184c00844d17/src/util/codec/bytes.rs#L33-L63
-inline void encodeAsTiKVKey(const String & ori_str, std::stringstream & ss) { EncodeBytes(ori_str, ss); }
-
 inline TiKVKey encodeAsTiKVKey(const String & ori_str)
 {
     std::stringstream ss;
-    encodeAsTiKVKey(ori_str, ss);
+    EncodeBytes(ori_str, ss);
     return TiKVKey(ss.str());
 }
 
@@ -111,33 +109,37 @@ inline String genRawKey(const TableID tableId, const HandleID handleId)
 
 inline TiKVKey genKey(const TableID tableId, const HandleID handleId) { return encodeAsTiKVKey(genRawKey(tableId, handleId)); }
 
-inline std::tuple<String, size_t> decodeTiKVKeyFull(const TiKVKey & key)
+inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
 {
-    std::stringstream res;
-    const char * ptr = key.data();
+    UInt64 p = (*reinterpret_cast<const UInt64 *>(ptr)) >> ((ENC_GROUP_SIZE - pad_size) * 8);
+    return p == 0;
+}
+
+inline std::tuple<std::string, size_t> decodeTiKVKeyFull(const TiKVKey & key)
+{
     const size_t chunk_len = ENC_GROUP_SIZE + 1;
-    for (const char * next_ptr = ptr;; next_ptr += chunk_len)
+    std::string res;
+    res.reserve(key.dataSize() / chunk_len * ENC_GROUP_SIZE);
+    for (const char * ptr = key.data();; ptr += chunk_len)
     {
-        ptr = next_ptr;
         if (ptr + chunk_len > key.dataSize() + key.data())
             throw Exception("Unexpected eof", ErrorCodes::LOGICAL_ERROR);
         auto marker = (UInt8) * (ptr + ENC_GROUP_SIZE);
-        size_t pad_size = (ENC_MARKER - marker);
+        UInt8 pad_size = (ENC_MARKER - marker);
         if (pad_size == 0)
         {
-            res.write(ptr, ENC_GROUP_SIZE);
+            res.append(ptr, ENC_GROUP_SIZE);
             continue;
         }
         if (pad_size > ENC_GROUP_SIZE)
             throw Exception("Key padding", ErrorCodes::LOGICAL_ERROR);
-        res.write(ptr, ENC_GROUP_SIZE - pad_size);
-        for (const char * p = ptr + ENC_GROUP_SIZE - pad_size; p < ptr + ENC_GROUP_SIZE; ++p)
-        {
-            if (*p != 0)
-                throw Exception("Key padding, wrong end", ErrorCodes::LOGICAL_ERROR);
-        }
+        res.append(ptr, ENC_GROUP_SIZE - pad_size);
+
+        if (!checkKeyPaddingValid(ptr, pad_size))
+            throw Exception("Key padding, wrong end", ErrorCodes::LOGICAL_ERROR);
+
         // raw string and the offset of remaining string such as timestamp
-        return std::make_tuple(res.str(), ptr - key.data() + chunk_len);
+        return std::make_tuple(std::move(res), ptr - key.data() + chunk_len);
     }
 }
 
@@ -203,9 +205,9 @@ inline TiKVValue encodeLockCfValue(UInt8 lock_type, const String & primary, Time
     return internalEncodeLockCfValue(lock_type, primary, ts, ttl, nullptr);
 }
 
-using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64, std::unique_ptr<String>>;
+using DecodedLockCFValue = std::tuple<UInt8, String, Timestamp, UInt64, std::shared_ptr<const TiKVValue>>;
 
-inline std::tuple<UInt8, String, UInt64, UInt64, std::unique_ptr<String>> decodeLockCfValue(const TiKVValue & value)
+inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
 {
     UInt8 lock_type;
     String primary;
@@ -237,10 +239,10 @@ inline std::tuple<UInt8, String, UInt64, UInt64, std::unique_ptr<String>> decode
     data += 1, len -= 1;
     assert(len == slen);
     (void)slen;
-    return std::make_tuple(lock_type, primary, ts, ttl, std::make_unique<String>(data, len));
+    return std::make_tuple(lock_type, primary, ts, ttl, std::make_shared<const TiKVValue>(data, len));
 }
 
-using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::unique_ptr<String>>;
+using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
 
 inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
 {
@@ -262,7 +264,7 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
     data += 1, len -= 1;
     if (slen != len)
         throw Exception("unexpected eof.", ErrorCodes::LOGICAL_ERROR);
-    return std::make_tuple(write_type, ts, std::make_unique<String>(data, len));
+    return std::make_tuple(write_type, ts, std::make_shared<const TiKVValue>(data, len));
 }
 
 

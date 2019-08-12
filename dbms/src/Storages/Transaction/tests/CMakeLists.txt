@@ -1,8 +1,5 @@
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable (sync_schema sync_schema.cpp)
-target_link_libraries (sync_schema dbms)
-
 add_executable (tikv_keyvalue tikv_keyvalue.cpp)
 target_link_libraries (tikv_keyvalue dbms)
 

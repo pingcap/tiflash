@@ -168,8 +168,8 @@ TEST_F(PageStorage_test, GcPageMove)
     // page_map get updated
     const PageCache entry = storage->getCache(pid);
     ASSERT_TRUE(entry.isValid());
-    ASSERT_EQ(entry.file_id, 5);
-    ASSERT_EQ(entry.level, 1);
+    ASSERT_EQ(entry.file_id, 5u);
+    ASSERT_EQ(entry.level, 1u);
 }
 
 TEST_F(PageStorage_test, GcConcurrencySetPage)
@@ -185,8 +185,8 @@ TEST_F(PageStorage_test, GcConcurrencySetPage)
     // read
     const PageCache entry = storage->getCache(pid);
     ASSERT_TRUE(entry.isValid());
-    ASSERT_EQ(entry.file_id, 6);
-    ASSERT_EQ(entry.level, 0);
+    ASSERT_EQ(entry.file_id, 6u);
+    ASSERT_EQ(entry.level, 0u);
 }
 
 } // namespace tests

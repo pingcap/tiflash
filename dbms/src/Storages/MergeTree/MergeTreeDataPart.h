@@ -15,7 +15,7 @@ namespace DB
 {
 
 class MergeTreeData;
-
+struct TMTDataPartProperty;
 
 /// Description of the data part.
 struct MergeTreeDataPart
@@ -23,10 +23,9 @@ struct MergeTreeDataPart
     using Checksums = MergeTreeDataPartChecksums;
     using Checksum = MergeTreeDataPartChecksums::Checksum;
 
-    MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_)
-        : storage(storage_), name(name_), info(info_)
-    {
-    }
+    MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_, const String & parent_path);
+
+    MergeTreeDataPart(MergeTreeData & storage_, const String & name_, const MergeTreePartInfo & info_);
 
     MergeTreeDataPart(MergeTreeData & storage_, const String & name_);
 
@@ -75,6 +74,7 @@ struct MergeTreeDataPart
 
     String name;
     MergeTreePartInfo info;
+    String full_path_prefix;
 
     /// A directory path (relative to storage's path) where part data is actually stored
     /// Examples: 'detached/tmp_fetch_<name>', 'tmp_<name>', '<name>'
@@ -202,6 +202,8 @@ struct MergeTreeDataPart
     };
 
     MinMaxIndex minmax_idx;
+
+    std::unique_ptr<TMTDataPartProperty> tmt_property;
 
     Checksums checksums;
 

@@ -7,26 +7,26 @@ namespace DB
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
 {
-    return std::get<0>(val);
+    return *std::get<0>(val);
 }
 
 template <typename Trait>
 const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 {
-    return std::get<1>(val);
+    return *std::get<1>(val);
 }
 
 template <typename Trait>
-TableID RegionCFDataBase<Trait>::insert(const TiKVKey & key, const TiKVValue & value)
+TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
 {
     const String & raw_key = RecordKVFormat::decodeTiKVKey(key);
-    return insert(key, value, raw_key);
+    return insert(std::move(key), std::move(value), raw_key);
 }
 
 template <typename Trait>
-TableID RegionCFDataBase<Trait>::insert(const TiKVKey & key, const TiKVValue & value, const String & raw_key)
+TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const String & raw_key)
 {
-    Pair kv_pair = Trait::genKVPair(key, raw_key, value);
+    Pair kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (shouldIgnoreInsert(kv_pair.second))
         return InvalidTableID;
 
@@ -40,7 +40,7 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
     auto [it, ok] = map.emplace(std::move(kv_pair));
     std::ignore = it;
     if (!ok)
-        throw Exception("Found existing key", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Found existing key in hex: " + getTiKVKey(kv_pair.second).toHex(), ErrorCodes::LOGICAL_ERROR);
     return table_id;
 }
 
@@ -103,9 +103,8 @@ size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool q
         return size;
     }
     else if (!quiet)
-    {
         throw Exception("Key not found", ErrorCodes::LOGICAL_ERROR);
-    }
+
     return 0;
 }
 
@@ -242,15 +241,15 @@ size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase &
     {
         auto key = TiKVKey::deserialize(buf);
         auto value = TiKVValue::deserialize(buf);
-
-        new_region_data.insert(key, value);
-        cf_data_size += calcTiKVKeyValueSize(key, value);
+        const auto size = calcTiKVKeyValueSize(key, value);
+        new_region_data.insert(std::move(key), std::move(value));
+        cf_data_size += size;
     }
     return cf_data_size;
 }
 
 template <typename Trait>
-TableIDSet RegionCFDataBase<Trait>::getAllRecordTableID() const
+TableIDSet RegionCFDataBase<Trait>::getAllTables() const
 {
     TableIDSet tables;
     for (const auto & [table_id, map] : data)
@@ -272,6 +271,32 @@ template <typename Trait>
 typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
 {
     return data;
+}
+
+template <typename Trait>
+void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVKey & end_key)
+{
+    for (auto data_it = data.begin(); data_it != data.end();)
+    {
+        auto & ori_map = data_it->second;
+
+        for (auto it = ori_map.begin(); it != ori_map.end();)
+        {
+            const auto & key = getTiKVKey(it->second);
+
+            bool ok = start_key ? key >= start_key : true;
+            ok = ok && (end_key ? key < end_key : true);
+            if (ok)
+                it = ori_map.erase(it);
+            else
+                ++it;
+        }
+
+        if (ori_map.empty())
+            data_it = data.erase(data_it);
+        else
+            ++data_it;
+    }
 }
 
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
