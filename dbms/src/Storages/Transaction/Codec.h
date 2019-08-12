@@ -244,11 +244,11 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
         case TiDB::CodecFlagVarInt:
             return DecodeVarInt(cursor, raw_value);
         case TiDB::CodecFlagDuration:
-            throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implemented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDecimal:
             return DecodeDecimal(cursor, raw_value);
         case TiDB::CodecFlagJson:
-            return DecodeJson(cursor, raw_value);
+            return DecodeJsonAsBinary(cursor, raw_value);
         default:
             throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }

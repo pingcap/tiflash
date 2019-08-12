@@ -80,6 +80,9 @@ constexpr int VALUE_ENTRY_SIZE = 5;
 constexpr int KEY_ENTRY_LENGTH = 6;
 constexpr int PREFIX_LENGTH = 8;
 
+using JsonArrayPtr = Poco::JSON::Array::Ptr;
+using JsonObjectPtr = Poco::JSON::Object::Ptr;
+
 JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value);
 JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value);
 inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value);
@@ -117,7 +120,7 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
         JsonVar val = decodeValueEntry(base, raw_value, elementCount * KEY_ENTRY_LENGTH + i * VALUE_ENTRY_SIZE);
         objPtr->set(key, val);
     }
-    cursor += size - sizeof(UInt32);
+    cursor += size - 8;
 
     return objPtr;
 }
@@ -211,11 +214,48 @@ String stringify(T value)
     return os.str();
 }
 
-String DecodeJson(size_t & cursor, const String & raw_value)
+String DecodeJsonAsString(size_t & cursor, const String & raw_value)
 {
     UInt8 type = raw_value[cursor++];
     return decodeValue(type, cursor, raw_value);
 }
 
+
+String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
+{
+    size_t base = cursor;
+    UInt8 type = raw_value[cursor++];
+    size_t size = 0;
+
+    switch (type) // JSON Root element type
+    {
+        case TYPE_CODE_OBJECT:
+            cursor += 4;
+            size = decodeNumeric<UInt32>(cursor, raw_value);
+            break;
+        case TYPE_CODE_ARRAY:
+            cursor += 4;
+            size = decodeNumeric<UInt32>(cursor, raw_value);
+            break;
+        case TYPE_CODE_LITERAL:
+            size = 1;
+            break;
+        case TYPE_CODE_INT64:
+        case TYPE_CODE_UINT64:
+        case TYPE_CODE_FLOAT64:
+            size = 8;
+            break;
+        case TYPE_CODE_STRING:
+            size = DecodeVarUInt(cursor, raw_value);
+            size += (cursor - base - 1);
+            break;
+        default:
+            throw Exception("DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    size ++;
+    cursor = base + size;
+    return raw_value.substr(base, size);
+}
 
 }

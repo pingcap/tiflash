@@ -14,10 +14,9 @@
 namespace DB
 {
 
-using JsonArrayPtr = Poco::JSON::Array::Ptr;
-using JsonObjectPtr = Poco::JSON::Object::Ptr;
 using JsonVar = Poco::Dynamic::Var;
 
-String DecodeJson(size_t &cursor, const String &raw_value);
+String DecodeJsonAsString(size_t &cursor, const String &raw_value);
+String DecodeJsonAsBinary(size_t &cursor, const String & raw_value);
 
 }
