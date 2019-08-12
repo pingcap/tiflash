@@ -24,7 +24,7 @@ extern const int BAD_ARGUMENTS;
 extern const int UNKNOWN_TABLE;
 } // namespace ErrorCodes
 
-TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_name)
+TableID getTableID(Context & context, const std::string & database_name, const std::string & table_name, const std::string & partition_id)
 {
     try
     {
@@ -32,7 +32,7 @@ TableID getTableID(Context & context, const std::string & database_name, const s
         TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
 
         if (table->isPartitionTable())
-            return table->getPartitionIDByName(partition_name);
+            return std::atoi(partition_id.c_str());
 
         return table->id();
     }
@@ -61,10 +61,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
-    const String & partition_name
-        = args.size() == 6 ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value)) : "";
+    const String & partition_id = args.size() == 6 ? std::to_string(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value)) : "";
 
-    TableID table_id = getTableID(context, database_name, table_name, partition_name);
+    TableID table_id = getTableID(context, database_name, table_name, partition_id);
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
@@ -180,9 +179,9 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
     HandleID end = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[4]).name;
-    const String & partition_name = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
+    const String & partition_id = args.size() == 6 ? typeid_cast<const ASTIdentifier &>(*args[5]).name : "";
 
-    TableID table_id = getTableID(context, database_name, table_name, partition_name);
+    TableID table_id = getTableID(context, database_name, table_name, partition_id);
 
     TMTContext & tmt = context.getTMTContext();
 
