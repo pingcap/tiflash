@@ -324,7 +324,8 @@ inline void EncodeVarUInt(UInt64 num, std::stringstream & ss)
     TiKV::writeVarUInt(num, ss);
 }
 
-inline void EncodeNull(std::stringstream &ss) {
+inline void EncodeNull(std::stringstream &ss)
+{
     writeIntBinary(UInt8(TiDB::CodecFlagNil), ss);
 }
 
