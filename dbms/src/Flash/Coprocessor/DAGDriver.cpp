@@ -9,13 +9,16 @@
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/Transaction/LockException.h>
+#include <Storages/Transaction/RegionException.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
-}
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
 
 DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
     UInt64 region_conf_version_, tipb::SelectResponse & dag_response_, bool internal_)
@@ -29,6 +32,7 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
 {}
 
 void DAGDriver::execute()
+try
 {
     context.setSetting("read_tso", UInt64(dag_request.start_ts()));
 
@@ -57,8 +61,11 @@ void DAGDriver::execute()
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(dag_response, context.getSettings().dag_records_per_chunk,
-        dag_request.encode_type(), dag.getResultFieldTypes(), streams.in->getHeader());
+    BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(dag_response,
+        context.getSettings().dag_records_per_chunk,
+        dag_request.encode_type(),
+        dag.getResultFieldTypes(),
+        streams.in->getHeader());
     copyData(*streams.in, *outputStreamPtr);
     // add ExecutorExecutionSummary info
     for (auto & p_streams : dag_context.profile_streams_list)
@@ -80,6 +87,30 @@ void DAGDriver::execute()
         executeSummary->set_num_produced_rows(num_produced_rows);
         executeSummary->set_num_iterations(num_iterations);
     }
+}
+catch (const RegionException & e)
+{
+    e.rethrow();
+}
+catch (const LockException & e)
+{
+    e.rethrow();
+}
+catch (const Exception & e)
+{
+    recordError(e.code(), e.message());
+}
+catch (const std::exception & e)
+{
+    recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+}
+
+void DAGDriver::recordError(Int32 err_code, const String & err_msg)
+{
+    dag_response.Clear();
+    tipb::Error * error = dag_response.mutable_error();
+    error->set_code(err_code);
+    error->set_msg(err_msg);
 }
 
 } // namespace DB
