@@ -90,7 +90,7 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
     switch (executor.tp())
     {
         case tipb::ExecType::TypeTableScan:
-            for (auto ci : executor.tbl_scan().columns())
+            for (auto & ci : executor.tbl_scan().columns())
             {
                 field_type.set_tp(ci.tp());
                 field_type.set_flag(ci.flag());
@@ -136,7 +136,7 @@ std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
         throw Exception("Do not found result field type for current dag request", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     // tispark assumes that if there is a agg, the output offset is
-    // ignored and the request out put is the same as the agg's output.
+    // ignored and the request output is the same as the agg's output.
     // todo should always use output offset to re-construct the output field types
     if (hasAggregation())
     {

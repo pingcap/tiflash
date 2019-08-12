@@ -98,16 +98,11 @@ public:
 };
 
 using ClientPtr = std::shared_ptr<FlashClient>;
-grpc::Status rpcTest()
+
+void appendTS(tipb::DAGRequest & dag_request, size_t & result_field_num)
 {
-    ChannelPtr cp = grpc::CreateChannel("localhost:9093", grpc::InsecureChannelCredentials());
-    ClientPtr clientPtr = std::make_shared<FlashClient>(cp);
-    size_t result_field_num = 0;
-    // construct a dag request
-    tipb::DAGRequest dagRequest;
-    dagRequest.set_start_ts(18446744073709551615uL);
     // table scan: s,i
-    tipb::Executor * executor = dagRequest.add_executors();
+    tipb::Executor * executor = dag_request.add_executors();
     executor->set_tp(tipb::ExecType::TypeTableScan);
     tipb::TableScan * ts = executor->mutable_tbl_scan();
     ts->set_table_id(44);
@@ -119,13 +114,16 @@ grpc::Status rpcTest()
     ci->set_column_id(2);
     ci->set_tp(8);
     ci->set_flag(0);
-    dagRequest.add_output_offsets(1);
-    dagRequest.add_output_offsets(0);
-    dagRequest.add_output_offsets(1);
+    dag_request.add_output_offsets(1);
+    dag_request.add_output_offsets(0);
+    dag_request.add_output_offsets(1);
     result_field_num = 3;
+}
 
+void appendSelection(tipb::DAGRequest & dag_request)
+{
     // selection: less(i, 123)
-    executor = dagRequest.add_executors();
+    auto * executor = dag_request.add_executors();
     executor->set_tp(tipb::ExecType::TypeSelection);
     tipb::Selection * selection = executor->mutable_selection();
     tipb::Expr * expr = selection->add_conditions();
@@ -150,16 +148,19 @@ grpc::Status rpcTest()
     type = expr->mutable_field_type();
     type->set_tp(1);
     type->set_flag(1 << 5);
+}
 
+void appendAgg(tipb::DAGRequest & dag_request, size_t & result_field_num)
+{
     // agg: count(s) group by i;
-    executor = dagRequest.add_executors();
+    auto * executor = dag_request.add_executors();
     executor->set_tp(tipb::ExecType::TypeAggregation);
     auto agg = executor->mutable_aggregation();
     auto agg_func = agg->add_agg_func();
     agg_func->set_tp(tipb::ExprType::Count);
     auto child = agg_func->add_children();
     child->set_tp(tipb::ExprType::ColumnRef);
-    ss.str("");
+    std::stringstream ss;
     DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(0, ss);
     child->set_val(ss.str());
     auto f_type = agg_func->mutable_field_type();
@@ -174,10 +175,11 @@ grpc::Status rpcTest()
     f_type->set_tp(8);
     f_type->set_flag(1);
     result_field_num = 2;
+}
 
-    // topn
-    /*
-    executor = dagRequest.add_executors();
+void appendTopN(tipb::DAGRequest & dag_request)
+{
+    auto * executor = dag_request.add_executors();
     executor->set_tp(tipb::ExecType::TypeTopN);
     tipb::TopN * topN = executor->mutable_topn();
     topN->set_limit(3);
@@ -185,21 +187,44 @@ grpc::Status rpcTest()
     byItem->set_desc(false);
     tipb::Expr * expr1 = byItem->mutable_expr();
     expr1->set_tp(tipb::ExprType::ColumnRef);
-    ss.str("");
+    std::stringstream ss;
     DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(1, ss);
     expr1->set_val(ss.str());
-    type = expr1->mutable_field_type();
+    auto * type = expr1->mutable_field_type();
     type->set_tp(8);
     type->set_tp(0);
-     */
-    // limit
-    /*
-    executor = dagRequest.add_executors();
-    executor->set_tp(tipb::ExecType::TypeLimit);
-    tipb::Limit *limit = executor->mutable_limit();
-    limit->set_limit(5);
-     */
+}
 
+void appendLimit(tipb::DAGRequest & dag_request)
+{
+    auto * executor = dag_request.add_executors();
+    executor->set_tp(tipb::ExecType::TypeLimit);
+    tipb::Limit * limit = executor->mutable_limit();
+    limit->set_limit(5);
+}
+
+grpc::Status rpcTest()
+{
+    ChannelPtr cp = grpc::CreateChannel("localhost:9093", grpc::InsecureChannelCredentials());
+    ClientPtr clientPtr = std::make_shared<FlashClient>(cp);
+    size_t result_field_num = 0;
+    bool has_selection = false;
+    bool has_agg = true;
+    bool has_topN = false;
+    bool has_limit = false;
+    // construct a dag request
+    tipb::DAGRequest dagRequest;
+    dagRequest.set_start_ts(18446744073709551615uL);
+
+    appendTS(dagRequest, result_field_num);
+    if (has_selection)
+        appendSelection(dagRequest);
+    if (has_agg)
+        appendAgg(dagRequest, result_field_num);
+    if (has_topN)
+        appendTopN(dagRequest);
+    if (has_limit)
+        appendLimit(dagRequest);
 
     // construct a coprocessor request
     coprocessor::Request request;
