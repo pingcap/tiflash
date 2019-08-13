@@ -42,28 +42,25 @@ inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, s
     std::vector<Field> vec;
     const String & raw_value = value.getStr();
     size_t cursor = 0;
-    size_t field_index = 0;
     bool has_unknown_col_id = false;
     while (cursor < raw_value.size())
     {
-        if (field_index % 2 == 0)
+        Field f = DecodeDatum(cursor, raw_value);
+        if (f.isNull())
+            break;
+        if (!all_column_ids.count(f.get<ColumnID>()))
         {
-            Field f = DecodeDatum(cursor, raw_value);
-            if (!all_column_ids.count(f.get<ColumnID>()))
-            {
-                has_unknown_col_id = true;
-            }
-            if (!column_ids_to_read.count(f.get<ColumnID>()))
-            {
-                SkipDatum(cursor, raw_value);
-            }
-            else
-            {
-                vec.push_back(f);
-                vec.push_back(DecodeDatum(cursor, raw_value));
-            }
+            has_unknown_col_id = true;
         }
-        field_index++;
+        if (!column_ids_to_read.count(f.get<ColumnID>()))
+        {
+            SkipDatum(cursor, raw_value);
+        }
+        else
+        {
+            vec.push_back(f);
+            vec.push_back(DecodeDatum(cursor, raw_value));
+        }
     }
 
     if (cursor != raw_value.size())
