@@ -1,3 +1,4 @@
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Debug/MockTiDB.h>
@@ -314,11 +315,111 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         last_executor = limit_exec;
     }
 
-    /// Aggregation.
-    if (ast_query.group_expression_list) {}
-    if (ast_query.select_expression_list /* select_expression_list has agg*/) {}
+    /// Column pruner.
+    std::function<void(ExecutorCtx &)> column_pruner = [&](ExecutorCtx & executor_ctx) {
+        if (!executor_ctx.input)
+        {
+            executor_ctx.output.erase(std::remove_if(executor_ctx.output.begin(), executor_ctx.output.end(),
+                                          [&](const auto & field) { return referred_columns.count(field.first) == 0; }),
+                executor_ctx.output.end());
 
-    /// Finalize.
+            for (const auto & field : executor_ctx.output)
+            {
+                tipb::ColumnInfo * ci = ts->add_columns();
+                ci->set_column_id(table_info.getColumnID(field.first));
+                ci->set_tp(field.second.tp());
+                ci->set_flag(field.second.flag());
+                ci->set_columnlen(field.second.flen());
+                ci->set_decimal(field.second.decimal());
+            }
+
+            return;
+        }
+        column_pruner(executor_ctx_map[executor_ctx.input]);
+        const auto & last_output = executor_ctx_map[executor_ctx.input].output;
+        for (const auto & pair : executor_ctx.col_ref_map)
+        {
+            auto iter = std::find_if(last_output.begin(), last_output.end(), [&](const auto & field) { return field.first == pair.first; });
+            if (iter == last_output.end())
+                throw DB::Exception("Column not found when pruning: " + pair.first, ErrorCodes::LOGICAL_ERROR);
+            std::stringstream ss;
+            DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(iter - last_output.begin(), ss);
+            pair.second->set_val(ss.str());
+        }
+        executor_ctx.output = last_output;
+    };
+
+    /// Aggregation finalize.
+    {
+        bool has_gby = ast_query.group_expression_list != nullptr;
+        bool has_agg_func = false;
+        for (const auto & child : ast_query.select_expression_list->children)
+        {
+            const ASTFunction * func = typeid_cast<const ASTFunction *>(child.get());
+            if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+            {
+                has_agg_func = true;
+                break;
+            }
+        }
+
+        if (has_gby || has_agg_func)
+        {
+            if (last_executor->has_limit() || last_executor->has_topn())
+                throw DB::Exception("Limit/TopN and Agg cannot co-exist.", ErrorCodes::LOGICAL_ERROR);
+
+            tipb::Executor * agg_exec = dag_request.add_executors();
+            agg_exec->set_tp(tipb::ExecType::TypeAggregation);
+            tipb::Aggregation * agg = agg_exec->mutable_aggregation();
+            std::unordered_map<String, tipb::Expr *> col_ref_map;
+            for (const auto & expr : ast_query.select_expression_list->children)
+            {
+                const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+                if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+                    throw DB::Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
+
+                tipb::Expr * agg_func = agg->add_agg_func();
+
+                for (const auto & arg : func->arguments->children)
+                {
+                    tipb::Expr * arg_expr = agg_func->add_children();
+                    compileExpr(executor_ctx_map[last_executor].output, arg, arg_expr, referred_columns, col_ref_map);
+                }
+
+                if (func->name == "count")
+                {
+                    agg_func->set_tp(tipb::Count);
+                    auto ft = agg_func->mutable_field_type();
+                    ft->set_tp(TiDB::TypeLongLong);
+                    ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+                }
+                // TODO: Other agg func.
+                else
+                {
+                    throw DB::Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+                }
+
+                schema.emplace_back(std::make_pair(func->getColumnName(), agg_func->field_type()));
+            }
+
+            if (has_gby)
+            {
+                for (const auto & child : ast_query.group_expression_list->children)
+                {
+                    tipb::Expr * gby = agg->add_group_by();
+                    compileExpr(executor_ctx_map[last_executor].output, child, gby, referred_columns, col_ref_map);
+                    schema.emplace_back(std::make_pair(child->getColumnName(), gby->field_type()));
+                }
+            }
+
+            executor_ctx_map.emplace(agg_exec, ExecutorCtx{last_executor, DAGSchema{}, std::move(col_ref_map)});
+            last_executor = agg_exec;
+
+            column_pruner(executor_ctx_map[last_executor]);
+        }
+    }
+
+    /// Non-aggregation finalize.
     if (!last_executor->has_aggregation())
     {
         std::vector<String> final_output;
@@ -344,39 +445,6 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             }
         }
 
-        std::function<void(ExecutorCtx &)> column_pruner = [&](ExecutorCtx & executor_ctx) {
-            if (!executor_ctx.input)
-            {
-                executor_ctx.output.erase(std::remove_if(executor_ctx.output.begin(), executor_ctx.output.end(),
-                                              [&](const auto & field) { return referred_columns.count(field.first) == 0; }),
-                    executor_ctx.output.end());
-
-                for (const auto & field : executor_ctx.output)
-                {
-                    tipb::ColumnInfo * ci = ts->add_columns();
-                    ci->set_column_id(table_info.getColumnID(field.first));
-                    ci->set_tp(field.second.tp());
-                    ci->set_flag(field.second.flag());
-                    ci->set_columnlen(field.second.flen());
-                    ci->set_decimal(field.second.decimal());
-                }
-
-                return;
-            }
-            column_pruner(executor_ctx_map[executor_ctx.input]);
-            const auto & last_output = executor_ctx_map[executor_ctx.input].output;
-            for (const auto & pair : executor_ctx.col_ref_map)
-            {
-                auto iter
-                    = std::find_if(last_output.begin(), last_output.end(), [&](const auto & field) { return field.first == pair.first; });
-                if (iter == last_output.end())
-                    throw DB::Exception("Column not found when pruning: " + pair.first, ErrorCodes::LOGICAL_ERROR);
-                std::stringstream ss;
-                DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(iter - last_output.begin(), ss);
-                pair.second->set_val(ss.str());
-            }
-            executor_ctx.output = last_output;
-        };
         column_pruner(executor_ctx_map[last_executor]);
 
         const auto & last_output = executor_ctx_map[last_executor].output;
