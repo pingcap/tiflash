@@ -48,7 +48,7 @@ inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, c
         Field f = DecodeDatum(cursor, raw_value);
         if (f.isNull())
             break;
-        if (!all_column_ids.count(f.get<ColumnID>()))
+        if (!has_unknown_col_id && !all_column_ids.count(f.get<ColumnID>()))
         {
             has_unknown_col_id = true;
         }
