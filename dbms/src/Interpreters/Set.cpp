@@ -12,6 +12,8 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeNullable.h>
 
+#include <Flash/Coprocessor/DAGUtils.h>
+
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -22,7 +24,6 @@
 #include <Interpreters/NullableUtils.h>
 
 #include <Storages/MergeTree/KeyCondition.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 
