@@ -196,7 +196,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
             std::vector<Field> row;
-            bool has_unknown_col_id;
+            bool has_unknown_col_id = false;
 
             if (write_type == Region::DelFlag)
             {
