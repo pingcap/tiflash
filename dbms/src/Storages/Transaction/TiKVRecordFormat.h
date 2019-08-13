@@ -37,7 +37,7 @@ static const UInt64 SIGN_MARK = UInt64(1) << 63;
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
-inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, std::unordered_set<ColumnID> column_ids_to_read, std::unordered_set<ColumnID> all_column_ids)
+inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read, const std::unordered_set<ColumnID> & all_column_ids)
 {
     std::vector<Field> vec;
     const String & raw_value = value.getStr();
@@ -58,7 +58,7 @@ inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, s
         }
         else
         {
-            vec.push_back(f);
+            vec.push_back(std::move(f));
             vec.push_back(DecodeDatum(cursor, raw_value));
         }
     }
