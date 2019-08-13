@@ -52,5 +52,5 @@ target_link_libraries (mysqlxx common ${MYSQLCLIENT_LIBRARIES} ${OPENSSL_LIBRARI
 target_include_directories (mysqlxx PRIVATE ${OPENSSL_INCLUDE_DIR})
 
 if (ENABLE_TESTS)
-    add_subdirectory (src/tests)
+    add_subdirectory (src/tests EXCLUDE_FROM_ALL)
 endif ()

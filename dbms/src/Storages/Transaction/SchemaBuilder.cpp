@@ -723,8 +723,8 @@ bool SchemaBuilder<Getter>::isIgnoreDB(const String & name)
     return context.getTMTContext().getIgnoreDatabases().count(name) > 0;
 }
 
-template class SchemaBuilder<SchemaGetter>;
-template class SchemaBuilder<MockSchemaGetter>;
+template struct SchemaBuilder<SchemaGetter>;
+template struct SchemaBuilder<MockSchemaGetter>;
 
 // end namespace
 } // namespace DB
