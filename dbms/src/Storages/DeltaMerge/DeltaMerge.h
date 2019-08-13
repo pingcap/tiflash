@@ -19,6 +19,7 @@ namespace DM
 {
 
 // Note that the columns in stable input stream and value space must exactly the same, include the name, type, and id.
+// TODO adjust this
 template <class DeltaValueSpace, class IndexIterator>
 class DeltaMergeBlockInputStream final : public IProfilingBlockInputStream
 {

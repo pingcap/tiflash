@@ -32,9 +32,14 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
+
+    void alterFromTiDB(const AlterCommands &params, const TiDB::TableInfo &table_info, const String &database_name, const Context &context);
+
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
     BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
+
 
     void check(const Context & context) override;
 
@@ -55,6 +60,7 @@ private:
 
     DM::DeltaMergeStorePtr store;
 
+    // TODO these defines can get from `store` instead of keeping them here
     DM::ColumnDefines table_column_defines;
     DM::ColumnDefine handle_column_define;
     Strings pk_column_names;

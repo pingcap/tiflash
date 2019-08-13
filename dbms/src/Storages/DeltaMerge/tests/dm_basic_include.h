@@ -19,11 +19,28 @@ namespace tests
 class DMTestEnv
 {
 public:
-    static Context getContext()
+    static Context getContext(const DB::Settings &settings = DB::Settings())
     {
         return ::DB::tests::TiFlashTestEnv::getContext();
     }
 
+    static ColumnDefines getDefaultColumns()
+    {
+        ColumnDefines columns;
+        columns.emplace_back(ColumnDefine(1, "pk", std::make_shared<DataTypeInt64>()));
+        columns.emplace_back(VERSION_COLUMN_DEFINE);
+        columns.emplace_back(TAG_COLUMN_DEFINE);
+        return columns;
+    }
+
+    /**
+     * Create a simple block with 3 columns:
+     *   * `pk` - Int64 / `version` / `tag`
+     * @param beg       `pk`'s value begin
+     * @param end       `pk`'s value end (not included)
+     * @param reversed  increasing/decreasing insert `pk`'s value
+     * @return
+     */
     static Block prepareSimpleWriteBlock(size_t beg, size_t end, bool reversed)
     {
         Block        block;

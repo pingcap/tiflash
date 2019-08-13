@@ -69,6 +69,11 @@ public:
         return bytes;
     }
 
+    bool hasColumn(ColId col_id) const
+    {
+        return columns.count(col_id) > 0;
+    }
+
     const ColumnMeta & getColumn(ColId col_id) const
     {
         auto it = columns.find(col_id);

@@ -379,8 +379,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
 
         for (size_t index = 0; index < read_column_defines.size(); ++index)
         {
-            ColumnDefine define    = read_column_defines[index];
-            auto &       cache_col = cache.at(define.id);
+            const ColumnDefine & define    = read_column_defines[index];
+            auto &               cache_col = cache.at(define.id); // TODO define.id maybe not here
 
             size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
 

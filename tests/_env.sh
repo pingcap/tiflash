@@ -3,7 +3,8 @@
 # Executable path
 
 if [ `uname` == "Darwin" ]; then
-	export build_dir="../../build_clang"
+    #export build_dir="../../build_clang"
+    export build_dir="../cmake-build-debug"
 else
 	export build_dir="../../build"
 fi

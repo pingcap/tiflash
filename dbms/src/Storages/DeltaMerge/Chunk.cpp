@@ -1,5 +1,7 @@
 #include <Storages/DeltaMerge/Chunk.h>
 
+#include <DataTypes/getLeastSupertype.h>
+#include <Functions/FunctionHelpers.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
 
@@ -140,48 +142,126 @@ void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & p
                                                         {});
 }
 
-void readChunkData(MutableColumns &      columns,
-                   const Chunk &         chunk,
-                   const ColumnDefines & column_defines,
-                   PageStorage &         storage,
-                   size_t                rows_offset,
-                   size_t                rows_limit)
+void columnTypeCast(const Page &         page,
+                    const ColumnDefine & read_define,
+                    const ColumnMeta &   disk_meta,
+                    MutableColumnPtr     col,
+                    size_t               rows_offset,
+                    size_t               rows_limit)
 {
+    // sanity check
+    if (!disk_meta.type->isNumber())
+    {
+        throw Exception("Only support cast Numeric columns", ErrorCodes::CANNOT_CONVERT_TYPE);
+    }
+    const DataTypePtr least_super_type = getLeastSupertype({read_define.type, disk_meta.type});
+    if (!least_super_type->equals(*read_define.type))
+    {
+        throw Exception("Casting from " + disk_meta.type->getName() + " to " + read_define.type->getName() + " is NOT supported!",
+                        ErrorCodes::CANNOT_CONVERT_TYPE);
+    }
+
+    // read from disk according as chunk meta
+    MutableColumnPtr tmp_col = disk_meta.type->createColumn();
+    deserializeColumn(*tmp_col, disk_meta, page, rows_offset + rows_limit);
+
+    // cast to current DataType
+#if 1
+    // TODO this is awful, can we copy memory by using something like static_cast<> ?
+    for (size_t i = 0; i < tmp_col->size(); ++i)
+    {
+        col->insert((*tmp_col)[i]);
+    }
+#else
+    auto & memory_array = typeid_cast<ColumnVector<Int32> &>(col).getData();
+    auto & disk_data    = typeid_cast<ColumnVector<Int8> &>(*tmp_col).getData();
+    for (size_t i = 0; i < rows_limit; ++i)
+    {
+        // implicit cast from disk_meta.type to read_define.type
+        memory_array[i + rows_offset] = disk_data[i];
+    }
+#endif
+}
+
+void readChunkData(MutableColumns &        columns,
+                   const Chunk &           chunk,
+                   const ColumnDefines &   column_defines,
+                   PageStorage &           storage,
+                   size_t                  rows_offset,
+                   size_t                  rows_limit)
+{
+    assert(!chunk.isDeleteRange());
+    // Caller should already allocate memory for each column in columns
+
     std::unordered_map<PageId, size_t> page_to_index;
     PageIds                            page_ids;
     page_ids.reserve(column_defines.size());
     for (size_t index = 0; index < column_defines.size(); ++index)
     {
-        auto & define  = column_defines[index];
-        auto   page_id = chunk.getColumn(define.id).page_id;
-        page_ids.push_back(page_id);
-        page_to_index[page_id] = index;
-    }
-
-    PageHandler page_handler = [&](PageId page_id, const Page & page) {
-        size_t index = page_to_index[page_id];
-
-        ColumnDefine         define = column_defines[index];
-        ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        const ColumnMeta &   meta = chunk.getColumn(define.id);
-        IColumn &            col  = *columns[index];
-
-        if (rows_offset == 0)
+        const auto & define = column_defines[index];
+        if (chunk.hasColumn(define.id))
         {
-            deserializeColumn(col, meta, page, rows_limit);
+            // read chunk's data from PageStorage later
+            auto page_id = chunk.getColumn(define.id).page_id;
+            page_ids.push_back(page_id);
+            page_to_index[page_id] = index;
         }
         else
         {
-            auto tmp_col = define.type->createColumn();
-            deserializeColumn(*tmp_col, meta, page, rows_offset + rows_limit);
-            col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
+            // new column is not exist in chunk's meta, fill with default value
+            IColumn &   col       = *columns[index];
+            for (size_t row_index = 0; row_index < rows_limit; ++row_index)
+            {
+                // TODO this is awful
+                ReadBufferFromMemory buf(define.default_value.c_str(), define.default_value.size());
+                define.type->deserializeTextEscaped(col, buf);
+            }
+        }
+    }
+
+    PageHandler page_handler = [&](PageId page_id, const Page & page) {
+        size_t               index       = page_to_index[page_id];
+        IColumn &            col         = *columns[index];
+        const ColumnDefine & read_define = column_defines[index];
+        const ColumnMeta &   disk_meta   = chunk.getColumn(read_define.id);
+
+        // define.type is current type at memory
+        // meta.type is the type at disk (maybe different from define.type)
+
+        if (read_define.type->equals(*disk_meta.type))
+        {
+            if (rows_offset == 0)
+            {
+                deserializeColumn(col, disk_meta, page, rows_limit);
+            }
+            else
+            {
+                MutableColumnPtr tmp_col = read_define.type->createColumn();
+                deserializeColumn(*tmp_col, disk_meta, page, rows_offset + rows_limit);
+                col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
+            }
+        }
+        else
+        {
+#ifndef NDEBUG
+            const auto && [first, last] = chunk.getHandleFirstLast();
+            const String disk_col
+                = "col[" + DB::toString(read_define.name) + "," + DB::toString(disk_meta.col_id) + "," + disk_meta.type->getName() + "]";
+            LOG_TRACE(&Poco::Logger::get("Chunk"),
+                      "Reading chunk[" + DB::toString(first) + "," + DB::toString(last) + "] " + disk_col + " as type "
+                          + read_define.type->getName());
+#endif
+
+            columnTypeCast(page, read_define, disk_meta, col.getPtr(), rows_offset, rows_limit);
         }
     };
     storage.read(page_ids, page_handler);
 }
 
 
-Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage)
+Block readChunk(const Chunk &           chunk,
+                const ColumnDefines &   read_column_defines,
+                PageStorage &           data_storage)
 {
     if (read_column_defines.empty())
         return {};
@@ -202,14 +282,14 @@ Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, 
     Block res;
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
-        ColumnDefine          define = read_column_defines[index];
         ColumnWithTypeAndName col;
-        col.type      = define.type;
-        col.name      = define.name;
-        col.column_id = define.id;
-        col.column    = std::move(columns[index]);
+        const ColumnDefine &  define = read_column_defines[index];
+        col.type                     = define.type;
+        col.name                     = define.name;
+        col.column_id                = define.id;
+        col.column                   = std::move(columns[index]);
 
-        res.insert(col);
+        res.insert(std::move(col));
     }
     return res;
 }

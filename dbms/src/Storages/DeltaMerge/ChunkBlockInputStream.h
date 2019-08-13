@@ -8,6 +8,7 @@ namespace DB
 {
 namespace DM
 {
+/// Read `chunks` as blocks according to `read_columns`
 class ChunkBlockInputStream final : public IBlockInputStream
 {
 public:

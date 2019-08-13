@@ -91,6 +91,11 @@ TEST(Chunk_test, Seri)
     }
 }
 
+TEST(Chunk_test, Cast)
+{
+    //FunctionCast::create();
+}
+
 TEST(DeleteRange_test, Seri)
 {
     HandleRange range{20, 999};

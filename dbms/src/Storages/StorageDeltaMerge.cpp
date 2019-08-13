@@ -6,6 +6,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageTinyLog.h>
+#include <Storages/AlterCommands.h>
 
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -16,6 +17,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Databases/IDatabase.h>
 
 
 namespace DB
@@ -298,6 +300,41 @@ BlockInputStreams StorageDeltaMerge::read( //
 }
 
 void StorageDeltaMerge::check(const Context & context) { store->check(context, context.getSettingsRef()); }
+
+void StorageDeltaMerge::alterFromTiDB(
+    const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
+{
+    // TODO actually apply table_info from TiDB
+    alter(params, database_name, table_info.name, context);
+}
+
+void StorageDeltaMerge::alter(
+    const AlterCommands & params, const String & database_name, const String & table_name, const Context & context)
+{
+    for (const auto & param : params)
+    {
+        if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
+        {
+            throw Exception("Storage engine" + getName() + " doesn't support modify primary key.",
+                            ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
+
+    auto lock = lockStructureForAlter(__PRETTY_FUNCTION__);
+
+    // TODO check that add / drop primary key is forbidden
+    // TODO check that drop hidden columns is forbidden
+    // TODO check that lossy changes is forbidden
+    // TODO check that modifying the precision of DECIMAL data types is forbidden
+    // TODO check that changing the UNSIGNED attribute is forbidden
+
+
+    // update the metadata in database, so that we can read the new schema using TiFlash's client
+    ColumnsDescription new_columns = getColumns();
+    params.apply(new_columns); // apply AlterCommands to `new_columns`
+    context.getDatabase(database_name)->alterTable(context, table_name, new_columns, {});
+    setColumns(std::move(new_columns));
+}
 
 namespace ErrorCodes
 {

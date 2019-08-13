@@ -7,6 +7,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -71,7 +72,6 @@ private:
     {
         return DMContext{.db_context          = db_context,
                          .storage_pool        = storage_pool,
-                         .table_name          = table_name,
                          .table_columns       = table_columns,
                          .table_handle_define = table_handle_define,
                          .min_version         = min_version,
@@ -98,9 +98,10 @@ private:
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
 
-    String        path;
-    StoragePool   storage_pool;
-    String        table_name;
+    String      path;
+    StoragePool storage_pool;
+
+    String        table_name; // TODO use table_info.name instead
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;
     DataTypePtr   table_handle_real_type;

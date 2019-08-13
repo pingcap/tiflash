@@ -13,6 +13,7 @@ ColumnWithTypeAndName ColumnWithTypeAndName::cloneEmpty() const
 
     res.name = name;
     res.type = type;
+    res.column_id = column_id;
     if (column)
         res.column = column->cloneEmpty();
 
@@ -22,6 +23,7 @@ ColumnWithTypeAndName ColumnWithTypeAndName::cloneEmpty() const
 
 bool ColumnWithTypeAndName::operator==(const ColumnWithTypeAndName & other) const
 {
+    // TODO should we check column_id here?
     return name == other.name
         && ((!type && !other.type) || (type && other.type && type->equals(*other.type)))
         && ((!column && !other.column) || (column && other.column && column->getName() == other.column->getName()));
