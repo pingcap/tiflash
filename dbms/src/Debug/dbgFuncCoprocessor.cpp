@@ -7,6 +7,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
@@ -284,18 +285,33 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     {
         tipb::Executor * topn_exec = dag_request.add_executors();
         topn_exec->set_tp(tipb::ExecType::TypeTopN);
-        tipb::TopN * topN = topn_exec->mutable_topn();
+        tipb::TopN * topn = topn_exec->mutable_topn();
         std::unordered_map<String, tipb::Expr *> col_ref_map;
         for (const auto & child : ast_query.order_expression_list->children)
         {
-            tipb::ByItem * by = topN->add_order_by();
+            ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+            if (!elem)
+                throw DB::Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+            tipb::ByItem * by = topn->add_order_by();
+            by->set_desc(elem->direction < 0);
             tipb::Expr * expr = by->mutable_expr();
-            compileExpr(executor_ctx_map[last_executor].output, child, expr, referred_columns, col_ref_map);
+            compileExpr(executor_ctx_map[last_executor].output, elem->children[0], expr, referred_columns, col_ref_map);
         }
         auto limit = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
-        topN->set_limit(limit);
+        topn->set_limit(limit);
         executor_ctx_map.emplace(topn_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
         last_executor = topn_exec;
+    }
+    else if (ast_query.limit_length)
+    {
+        tipb::Executor * limit_exec = dag_request.add_executors();
+        limit_exec->set_tp(tipb::ExecType::TypeLimit);
+        tipb::Limit * limit = limit_exec->mutable_limit();
+        auto limit_length = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
+        limit->set_limit(limit_length);
+        executor_ctx_map.emplace(
+            limit_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, tipb::Expr *>{}});
+        last_executor = limit_exec;
     }
 
     /// Aggregation.
