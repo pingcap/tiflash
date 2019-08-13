@@ -97,6 +97,16 @@ enum TP
     M(PartKey, (1 << 14))        \
     M(Num, (1 << 15))
 
+enum ColumnFlag
+{
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(cf, v) ColumnFlag##cf = v,
+    COLUMN_FLAGS(M)
+#undef M
+};
+
 // Codec flags.
 // In format: TiDB codec flag, int value.
 #ifdef M

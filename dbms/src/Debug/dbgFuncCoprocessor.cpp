@@ -109,7 +109,7 @@ struct ExecutorCtx
 };
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
-    std::unordered_map<String, tipb::Expr *> col_ref_map)
+    std::unordered_map<String, tipb::Expr *> & col_ref_map)
 {
     if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
@@ -122,20 +122,89 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         referred_columns.emplace((*ft).first);
         col_ref_map.emplace((*ft).first, expr);
     }
-    //    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
-    //    {
-    //    }
+    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    {
+        // TODO: Support agg functions.
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+        }
+
+        String func_name_lowercase = Poco::toLower(func->name);
+        // TODO: Support more functions.
+        // TODO: Support type inference.
+        if (func_name_lowercase == "equals")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::EQInt);
+            auto * ft = expr->mutable_field_type();
+            // TODO: TiDB will infer Int64.
+            ft->set_tp(TiDB::TypeTiny);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else if (func_name_lowercase == "and")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::LogicalAnd);
+            auto * ft = expr->mutable_field_type();
+            // TODO: TiDB will infer Int64.
+            ft->set_tp(TiDB::TypeTiny);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else if (func_name_lowercase == "or")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::LogicalOr);
+            auto * ft = expr->mutable_field_type();
+            // TODO: TiDB will infer Int64.
+            ft->set_tp(TiDB::TypeTiny);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else
+        {
+            throw DB::Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
+        }
+        expr->set_tp(tipb::ExprType::ScalarFunc);
+    }
+    else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
+    {
+        TiDB::CodecFlag codec_flag;
+        switch (lit->value.getType())
+        {
+            case Field::Types::Which::Null:
+                expr->set_tp(tipb::Null);
+                codec_flag = TiDB::CodecFlagNil;
+                break;
+            case Field::Types::Which::UInt64:
+                expr->set_tp(tipb::Uint64);
+                codec_flag = TiDB::CodecFlagUInt;
+                break;
+            case Field::Types::Which::Int64:
+                expr->set_tp(tipb::Int64);
+                codec_flag = TiDB::CodecFlagInt;
+                break;
+            case Field::Types::Which::Float64:
+                expr->set_tp(tipb::Float64);
+                codec_flag = TiDB::CodecFlagFloat;
+                break;
+            case Field::Types::Which::Decimal:
+                expr->set_tp(tipb::MysqlDecimal);
+                codec_flag = TiDB::CodecFlagDecimal;
+                break;
+            case Field::Types::Which::String:
+                expr->set_tp(tipb::String);
+                codec_flag = TiDB::CodecFlagCompactBytes;
+                break;
+            default:
+                throw DB::Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
+        }
+        std::stringstream ss;
+        DB::EncodeDatum(lit->value, codec_flag, ss);
+        expr->set_val(ss.str());
+    }
     else
     {
         throw DB::Exception("Unsupported expression " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
     }
-
-    for (const auto & child_ast : ast->children)
-    {
-        tipb::Expr * child = expr->add_children();
-        compileExpr(input, child_ast, child, referred_columns, col_ref_map);
-    }
-};
+}
 
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts)
@@ -172,7 +241,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         table_info = schema_fetcher(database_name, table_name);
     }
 
-    std::map<tipb::Executor *, ExecutorCtx> executor_ctx_map;
+    std::unordered_map<tipb::Executor *, ExecutorCtx> executor_ctx_map;
     std::unordered_set<String> referred_columns;
     tipb::TableScan * ts = nullptr;
     tipb::Executor * last_executor = nullptr;
@@ -312,8 +381,9 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
 tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version)
 {
-    Logger * log = &Logger::get("MockDAG");
+    static Logger * log = &Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
+    context.setSetting("dag_planner", "optree");
     tipb::SelectResponse dag_response;
     DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, dag_response, true);
     driver.execute();
@@ -323,6 +393,9 @@ tipb::SelectResponse executeDAGRequest(
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
 {
+    if (dag_response.has_error())
+        throw DB::Exception(dag_response.error().msg(), dag_response.error().code());
+
     BlocksList blocks;
     for (const auto & chunk : dag_response.chunks())
     {
