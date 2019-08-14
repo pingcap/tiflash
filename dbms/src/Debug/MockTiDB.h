@@ -3,6 +3,7 @@
 #include <atomic>
 
 #include <Storages/ColumnsDescription.h>
+#include <Storages/Transaction/SchemaGetter.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -22,6 +23,7 @@ class MockTiDB : public ext::singleton<MockTiDB>
     friend class ext::singleton<MockTiDB>;
 
 public:
+    MockTiDB();
     class Table
     {
         friend class MockTiDB;
@@ -64,9 +66,13 @@ public:
 public:
     TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso);
 
+    DatabaseID newDataBase(const String & database_name);
+
     TableID newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso);
 
-    void dropTable(const String & database_name, const String & table_name);
+    void dropTable(Context & context, const String & database_name, const String & table_name, bool drop_regions);
+
+    void dropDB(Context & context, const String & database_name, bool drop_regions);
 
     void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
 
@@ -80,9 +86,20 @@ public:
 
     TablePtr getTableByName(const String & database_name, const String & table_name);
 
-    void traverseTables(std::function<void(TablePtr)> f);
+    TiDB::TableInfoPtr getTableInfoByID(TableID table_id);
+
+    TiDB::DBInfoPtr getDBInfoByID(DatabaseID db_id);
+
+    SchemaDiff getSchemaDiff(Int64 version);
+
+    std::unordered_map<String, DatabaseID> getDatabases() { return databases; }
+
+    std::unordered_map<TableID, TablePtr> getTables() { return tables_by_id; }
+
+    Int64 getVersion() { return version; }
 
 private:
+    TablePtr dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions);
     TablePtr getTableByNameInternal(const String & database_name, const String & table_name);
 
 private:
@@ -92,7 +109,11 @@ private:
     std::unordered_map<String, TablePtr> tables_by_name;
     std::unordered_map<TableID, TablePtr> tables_by_id;
 
+    std::unordered_map<Int64, SchemaDiff> version_diff;
+
     std::atomic<TableID> table_id_allocator = MaxSystemTableID + 1;
+
+    Int64 version = 0;
 };
 
 } // namespace DB

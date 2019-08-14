@@ -1,4 +1,3 @@
-#include <Debug/MockSchemaSyncer.h>
 #include <Debug/dbgFuncSchema.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -39,30 +38,6 @@ void dbgFuncEnableSchemaSyncService(Context & context, const ASTs & args, DBGInv
     output(ss.str());
 }
 
-void dbgFuncMockSchemaSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output)
-{
-    if (args.size() != 1)
-        throw Exception("Args not matched, should be: enable (true/false)", ErrorCodes::BAD_ARGUMENTS);
-
-    bool enabled = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value) == "true";
-
-    TMTContext & tmt = context.getTMTContext();
-
-    static auto old_schema_syncer = tmt.getSchemaSyncer();
-    if (enabled)
-    {
-        tmt.setSchemaSyncer(std::make_shared<MockSchemaSyncer>());
-    }
-    else
-    {
-        tmt.setSchemaSyncer(old_schema_syncer);
-    }
-
-    std::stringstream ss;
-    ss << "mock schema syncer " << (enabled ? "enabled" : "disabled");
-    output(ss.str());
-}
-
 void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
@@ -71,6 +46,17 @@ void dbgFuncRefreshSchemas(Context & context, const ASTs &, DBGInvoker::Printer 
 
     std::stringstream ss;
     ss << "schemas refreshed";
+    output(ss.str());
+}
+
+void dbgFuncResetSchemas(Context & context, const ASTs &, DBGInvoker::Printer output)
+{
+    TMTContext & tmt = context.getTMTContext();
+    auto schema_syncer = tmt.getSchemaSyncer();
+    schema_syncer->reset();
+
+    std::stringstream ss;
+    ss << "reset schemas";
     output(ss.str());
 }
 

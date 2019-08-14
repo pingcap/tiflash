@@ -6,10 +6,11 @@
 namespace DB
 {
 
+template <typename Getter>
 struct SchemaBuilder
 {
 
-    SchemaGetter & getter;
+    Getter & getter;
 
     Context & context;
 
@@ -19,19 +20,21 @@ struct SchemaBuilder
 
     Logger * log;
 
-    SchemaBuilder(SchemaGetter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> & dbs_, Int64 version)
+    SchemaBuilder(Getter & getter_, Context & context_, std::unordered_map<DB::DatabaseID, String> & dbs_, Int64 version)
         : getter(getter_), context(context_), databases(dbs_), target_version(version), log(&Logger::get("SchemaBuilder"))
     {}
 
     void applyDiff(const SchemaDiff & diff);
-
-    void applyDropSchema(DatabaseID schema_id);
 
     void syncAllSchema();
 
     void applyRenameTableImpl(const String & old_db, const String & new_db, const String & old_table, const String & new_table);
 
 private:
+    void applyDropSchema(DatabaseID schema_id);
+
+    void applyDropSchemaImpl(const String & db_name);
+
     bool applyCreateSchema(DatabaseID schema_id);
 
     void applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
@@ -61,7 +64,9 @@ private:
 
     void alterAndRenameTables(std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> table_dbs);
 
-    void dropInvalidTables(std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> table_dbs);
+    void dropInvalidTablesAndDBs(const std::vector<std::pair<TiDB::TableInfoPtr, TiDB::DBInfoPtr>> & table_dbs, const std::set<String> &);
+
+    bool isIgnoreDB(const String & name);
 };
 
 } // namespace DB

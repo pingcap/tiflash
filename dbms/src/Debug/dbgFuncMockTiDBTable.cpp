@@ -1,4 +1,3 @@
-#include <Debug/MockSchemaSyncer.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -50,6 +49,20 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncMockTiDBDB(Context &, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 1)
+        throw Exception("Args not matched, should be: database-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+
+    DatabaseID db_id = MockTiDB::instance().newDataBase(database_name);
+
+    std::stringstream ss;
+    ss << "mock db #" << db_id;
+    output(ss.str());
+}
+
 void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3)
@@ -97,6 +110,23 @@ void MockTiDBTable::dbgFuncRenameTableForPartition(Context & context, const ASTs
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 1 && args.size() != 2)
+        throw Exception("Args not matched, should be: database-name [, drop-regions]", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    bool drop_regions = true;
+    if (args.size() == 3)
+        drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
+
+    MockTiDB::instance().dropDB(context, database_name, drop_regions);
+
+    std::stringstream ss;
+    ss << "dropped db #" << database_name;
+    output(ss.str());
+}
+
 void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 2 && args.size() != 3)
@@ -123,29 +153,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
         return;
     }
 
-    TMTContext & tmt = context.getTMTContext();
-    auto & kvstore = tmt.getKVStore();
-    auto & region_table = tmt.getRegionTable();
-
-    if (table->isPartitionTable() && drop_regions)
-    {
-        auto partition_ids = table->getPartitionIDs();
-        std::for_each(partition_ids.begin(), partition_ids.end(), [&](TableID partition_id) {
-            for (auto & e : region_table.getRegionsByTable(partition_id))
-                kvstore->removeRegion(e.first, &region_table);
-
-            region_table.mockDropRegionsInTable(partition_id);
-        });
-    }
-
-    if (drop_regions)
-    {
-        for (auto & e : region_table.getRegionsByTable(table_id))
-            kvstore->removeRegion(e.first, &region_table);
-        region_table.mockDropRegionsInTable(table_id);
-    }
-
-    MockTiDB::instance().dropTable(database_name, table_name);
+    MockTiDB::instance().dropTable(context, database_name, table_name, drop_regions);
 
     std::stringstream ss;
     ss << "dropped table #" << table_id;

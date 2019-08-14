@@ -5,5 +5,5 @@ target_link_libraries (clickhouse_parsers clickhouse_common_io)
 target_include_directories (clickhouse_parsers PUBLIC ${DBMS_INCLUDE_DIR})
 
 if (ENABLE_TESTS)
-    add_subdirectory (tests)
+    add_subdirectory (tests EXCLUDE_FROM_ALL)
 endif ()
