@@ -1,19 +1,19 @@
-#include<IO/WriteHelpers.h>
-#include<IO/ReadHelpers.h>
-#include<Core/Field.h>
-#include<Columns/IColumn.h>
-#include<Columns/ColumnDecimal.h>
-#include<Common/typeid_cast.h>
-#include<DataTypes/DataTypeDecimal.h>
+#include <Columns/ColumnDecimal.h>
+#include <Columns/IColumn.h>
+#include <Common/typeid_cast.h>
+#include <Core/Field.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
-#include<Parsers/ASTLiteral.h>
-#include<Parsers/IAST.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/IAST.h>
 
 namespace DB
 {
 
 template <typename T>
-std::string DataTypeDecimal<T>::getName() const 
+std::string DataTypeDecimal<T>::getName() const
 {
     return "Decimal(" + toString(precision) + "," + toString(scale) + ")";
 }
@@ -34,13 +34,13 @@ void DataTypeDecimal<T>::deserializeBinary(Field & field, ReadBuffer & istr) con
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const 
+void DataTypeDecimal<T>::serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     writeBinary(static_cast<const ColumnType &>(column).getData()[row_num], ostr);
 }
 
 template <typename T>
-void DataTypeDecimal<T>::deserializeBinary(IColumn & column, ReadBuffer & istr) const 
+void DataTypeDecimal<T>::deserializeBinary(IColumn & column, ReadBuffer & istr) const
 {
     T x;
     readBinary(x, istr);
@@ -66,12 +66,12 @@ void DataTypeDecimal<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer & is
     typename ColumnType::Container & x = typeid_cast<ColumnType &>(column).getData();
     size_t initial_size = x.size();
     x.resize(initial_size + limit);
-    size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(FieldType) * limit);
+    size_t size = istr.readBig(reinterpret_cast<char *>(&x[initial_size]), sizeof(FieldType) * limit);
     x.resize(initial_size + size / sizeof(FieldType));
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const 
+void DataTypeDecimal<T>::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     writeText(static_cast<const ColumnType &>(column).getData()[row_num], scale, ostr);
 }
@@ -83,7 +83,8 @@ void DataTypeDecimal<T>::serializeTextEscaped(const IColumn & column, size_t row
 }
 
 template <typename T>
-void DataTypeDecimal<T>::readText(T & x, ReadBuffer & istr) const {
+void DataTypeDecimal<T>::readText(T & x, ReadBuffer & istr) const
+{
     readDecimalText(x, istr, precision, scale);
 }
 
@@ -96,31 +97,34 @@ void DataTypeDecimal<T>::deserializeTextEscaped(IColumn & column, ReadBuffer & i
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr) const {
+void DataTypeDecimal<T>::serializeTextQuoted(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
+{
     serializeText(column, row_num, ostr);
 }
 
 template <typename T>
-void DataTypeDecimal<T>::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const {
+void DataTypeDecimal<T>::deserializeTextQuoted(IColumn & column, ReadBuffer & istr) const
+{
     T v;
     this->readText(v, istr);
     static_cast<ColumnType &>(column).getData().push_back(v);
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeTextJSON(const IColumn &column , size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON & ) const
+void DataTypeDecimal<T>::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettingsJSON &) const
 {
     serializeText(column, row_num, ostr);
 }
 
 template <typename T>
-void DataTypeDecimal<T>::deserializeTextJSON(IColumn & , ReadBuffer & ) const {
+void DataTypeDecimal<T>::deserializeTextJSON(IColumn &, ReadBuffer &) const
+{
     // TODO
     throw Exception("Not yet implemented.");
 }
 
 template <typename T>
-void DataTypeDecimal<T>::serializeTextCSV(const IColumn& column, size_t row_num, WriteBuffer & ostr) const 
+void DataTypeDecimal<T>::serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     serializeText(column, row_num, ostr);
 }
@@ -140,16 +144,19 @@ MutableColumnPtr DataTypeDecimal<T>::createColumn() const
 }
 
 template <typename T>
-T DataTypeDecimal<T>::getScaleMultiplier(UInt32 scale_) const {
+T DataTypeDecimal<T>::getScaleMultiplier(UInt32 scale_) const
+{
     typename T::NativeType v = 1;
-    for (UInt32 i = 0; i < scale_; i ++) {
+    for (UInt32 i = 0; i < scale_; i++)
+    {
         v = v * 10;
     }
     return v;
 }
 
 template <typename T>
-T DataTypeDecimal<T>::parseFromString(const String & str) const {
+T DataTypeDecimal<T>::parseFromString(const String & str) const
+{
     ReadBufferFromMemory buf(str.data(), str.size());
     T x(0);
     readDecimalText(x, buf, precision, scale);
@@ -157,8 +164,10 @@ T DataTypeDecimal<T>::parseFromString(const String & str) const {
 }
 
 template <typename T>
-bool DataTypeDecimal<T>::equals(const IDataType & rhs) const {
-    if (auto ptr = checkDecimal<T>(rhs)) {
+bool DataTypeDecimal<T>::equals(const IDataType & rhs) const
+{
+    if (auto ptr = checkDecimal<T>(rhs))
+    {
         return ptr->getScale() == scale;
     }
     return false;
@@ -166,26 +175,26 @@ bool DataTypeDecimal<T>::equals(const IDataType & rhs) const {
 
 static DataTypePtr create(const ASTPtr & arguments)
 {
-    if (!arguments || arguments->children.size() != 2) {
+    if (!arguments || arguments->children.size() != 2)
+    {
         throw Exception("Decimal data type family must have exactly two arguments: precision and scale");
     }
     const ASTLiteral * arg0 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg0 || arg0->value.getType() != Field::Types::UInt64 || arg0->value.get<UInt64>() == 0)
-        throw Exception("Decimal data type family must have a number (positive integer) as its argument", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(
+            "Decimal data type family must have a number (positive integer) as its argument", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     const ASTLiteral * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[1].get());
     if (!arg1 || arg1->value.getType() != Field::Types::UInt64)
-        throw Exception("Decimal data type family must have a number (positive integer) as its argument", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception(
+            "Decimal data type family must have a number (positive integer) as its argument", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     return createDecimal(arg0->value.get<UInt64>(), arg1->value.get<UInt64>());
 }
 
-void registerDataTypeDecimal(DataTypeFactory & factory)
-{
-    factory.registerDataType("Decimal", create, DataTypeFactory::CaseInsensitive);
-}
+void registerDataTypeDecimal(DataTypeFactory & factory) { factory.registerDataType("Decimal", create, DataTypeFactory::CaseInsensitive); }
 
 template class DataTypeDecimal<Decimal32>;
 template class DataTypeDecimal<Decimal64>;
 template class DataTypeDecimal<Decimal128>;
 template class DataTypeDecimal<Decimal256>;
 
-}
+} // namespace DB

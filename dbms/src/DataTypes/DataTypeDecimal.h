@@ -1,9 +1,9 @@
 #pragma once
 
-#include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <Common/Exception.h>
 #include <Columns/ColumnDecimal.h>
+#include <Common/Exception.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/IDataType.h>
 #include <IO/WriteHelpers.h>
 
 
@@ -12,7 +12,7 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int ARGUMENT_OUT_OF_BOUND;
 }
 
 // Implements Decimal(P, S), where P is precision, S is scale.
@@ -22,12 +22,13 @@ namespace ErrorCodes
 // Int128 38
 // Int256 65
 
-template<typename T>
+template <typename T>
 class DataTypeDecimal : public IDataType
 {
     static_assert(IsDecimal<T>);
+
 private:
-    PrecType  precision;
+    PrecType precision;
     ScaleType scale;
 
 public:
@@ -40,11 +41,12 @@ public:
     static constexpr size_t maxPrecision() { return maxDecimalPrecision<T>(); }
 
     // If scale is omitted, the default is 0. If precision is omitted, the default is 10.
-    DataTypeDecimal(): DataTypeDecimal(10, 0) {}
+    DataTypeDecimal() : DataTypeDecimal(10, 0) {}
 
     DataTypeDecimal(size_t precision_, size_t scale_) : precision(precision_), scale(scale_)
     {
-        if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale) {
+        if (precision > decimal_max_prec || scale > precision || scale > decimal_max_scale)
+        {
             throw Exception(getName() + "is out of bound", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
     }
@@ -52,21 +54,29 @@ public:
     T getScaleMultiplier(UInt32 scale_) const;
 
     template <typename U1, typename U2>
-    std::tuple<T, T, T> getScales(const U1 & left, const U2 & right, bool is_mul, bool is_div) const {
+    std::tuple<T, T, T> getScales(const U1 & left, const U2 & right, bool is_mul, bool is_div) const
+    {
         ScaleType left_scale = 0, right_scale = 0;
-        if constexpr (IsDecimal<typename U1::FieldType>) {
+        if constexpr (IsDecimal<typename U1::FieldType>)
+        {
             left_scale = left.getScale();
         }
-        if constexpr (IsDecimal<typename U2::FieldType>) {
+        if constexpr (IsDecimal<typename U2::FieldType>)
+        {
             right_scale = right.getScale();
         }
-        if (is_mul) {
+        if (is_mul)
+        {
             ScaleType result_scale = left_scale + right_scale - scale;
             return std::make_tuple(T(1), T(1), getScaleMultiplier(result_scale));
-        } else if (is_div) {
+        }
+        else if (is_div)
+        {
             ScaleType left_result_scale = right_scale - left_scale + scale;
             return std::make_tuple(getScaleMultiplier(left_result_scale), T(1), T(1));
-        } else {
+        }
+        else
+        {
             ScaleType left_result_scale = scale - left_scale;
             ScaleType right_result_scale = scale - right_scale;
             return std::make_tuple(getScaleMultiplier(left_result_scale), getScaleMultiplier(right_result_scale), T(1));
@@ -79,15 +89,9 @@ public:
 
     TypeIndex getTypeId() const override { return TypeId<T>::value; }
 
-    PrecType getPrec() const
-    {
-        return precision;
-    }
+    PrecType getPrec() const { return precision; }
 
-    ScaleType getScale() const
-    {
-        return scale;
-    }
+    ScaleType getScale() const { return scale; }
 
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override;
     void deserializeBinary(Field & field, ReadBuffer & istr) const override;
@@ -118,14 +122,13 @@ public:
 
     T parseFromString(const String & str) const;
 
-    Field getDefault() const override
-    {
-        return DecimalField(T(0), scale);
-    }
+    Field getDefault() const override { return DecimalField(T(0), scale); }
 
     template <typename U>
-    typename T::NativeType scaleFactorFor(const DataTypeDecimal<U> & x) const {
-        if (scale < x.getScale()) {
+    typename T::NativeType scaleFactorFor(const DataTypeDecimal<U> & x) const
+    {
+        if (scale < x.getScale())
+        {
             return 1;
         }
         ScaleType delta = getScale() - x.getScale();
@@ -138,7 +141,7 @@ public:
     bool haveSubtypes() const override { return false; }
     bool isComparable() const override { return true; };
     bool isValueRepresentedByNumber() const override { return true; }
-    bool isValueRepresentedByInteger() const override {return scale == 0;}
+    bool isValueRepresentedByInteger() const override { return scale == 0; }
     bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override { return true; }
     bool haveMaximumSizeOfValue() const override { return true; }
     size_t getSizeOfValueInMemory() const override { return sizeof(T); }
@@ -157,15 +160,20 @@ inline DataTypePtr createDecimal(UInt64 prec, UInt64 scale)
         throw Exception("Wrong precision:" + DB::toString(prec), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
     if (static_cast<UInt64>(scale) > prec)
-        throw Exception("Negative scales and scales larger than precision are not supported. precision:" + DB::toString(prec) + ", scale:" + DB::toString(scale), ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        throw Exception("Negative scales and scales larger than precision are not supported. precision:" + DB::toString(prec)
+                + ", scale:" + DB::toString(scale),
+            ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
-    if (prec <= maxDecimalPrecision<Decimal32>()) {
+    if (prec <= maxDecimalPrecision<Decimal32>())
+    {
         return (std::make_shared<DataTypeDecimal32>(prec, scale));
     }
-    if (prec <= maxDecimalPrecision<Decimal64>()) {
+    if (prec <= maxDecimalPrecision<Decimal64>())
+    {
         return (std::make_shared<DataTypeDecimal64>(prec, scale));
     }
-    if (prec <= maxDecimalPrecision<Decimal128>()) {
+    if (prec <= maxDecimalPrecision<Decimal128>())
+    {
         return (std::make_shared<DataTypeDecimal128>(prec, scale));
     }
     return std::make_shared<DataTypeDecimal256>(prec, scale);
@@ -177,23 +185,25 @@ inline const DataTypeDecimal<T> * checkDecimal(const IDataType & data_type)
     return typeid_cast<const DataTypeDecimal<T> *>(&data_type);
 }
 
-inline bool IsDecimalDataType(const DataTypePtr& type) {
-    return checkDecimal<Decimal32>(*type) || checkDecimal<Decimal64>(*type) || checkDecimal<Decimal128>(*type) || checkDecimal<Decimal256>(*type);
+inline bool IsDecimalDataType(const DataTypePtr & type)
+{
+    return checkDecimal<Decimal32>(*type) || checkDecimal<Decimal64>(*type) || checkDecimal<Decimal128>(*type)
+        || checkDecimal<Decimal256>(*type);
 }
 template <typename T, typename U>
-typename std::enable_if_t<(sizeof(T) >= sizeof(U)), const DataTypeDecimal<T>>
-decimalResultType(const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
+typename std::enable_if_t<(sizeof(T) >= sizeof(U)), const DataTypeDecimal<T>> decimalResultType(
+    const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
 {
     UInt32 scale = (tx.getScale() > ty.getScale() ? tx.getScale() : ty.getScale());
     return DataTypeDecimal<T>(maxDecimalPrecision<T>(), scale);
 }
 
 template <typename T, typename U>
-typename std::enable_if_t<(sizeof(T) < sizeof(U)), const DataTypeDecimal<U>>
-decimalResultType(const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
+typename std::enable_if_t<(sizeof(T) < sizeof(U)), const DataTypeDecimal<U>> decimalResultType(
+    const DataTypeDecimal<T> & tx, const DataTypeDecimal<U> & ty)
 {
     UInt32 scale = (tx.getScale() > ty.getScale() ? tx.getScale() : ty.getScale());
     return DataTypeDecimal<U>(maxDecimalPrecision<U>(), scale);
 }
 
-}
+} // namespace DB
