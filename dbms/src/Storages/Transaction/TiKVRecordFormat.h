@@ -66,7 +66,7 @@ inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, c
     if (cursor != raw_value.size())
         throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
 
-    return std::make_tuple(vec, has_unknown_col_id);
+    return std::make_tuple(std::move(vec), has_unknown_col_id);
 }
 
 // Key format is here:
