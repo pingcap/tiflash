@@ -13,6 +13,10 @@
 namespace DB
 {
 
+class Set;
+using SetPtr = std::shared_ptr<Set>;
+using DAGPreparedSets = std::unordered_map<const tipb::Expr *, SetPtr>;
+
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   *
   */
@@ -24,6 +28,7 @@ private:
     NamesAndTypesList source_columns;
     // all columns after aggregation
     NamesAndTypesList aggregated_columns;
+    DAGPreparedSets prepared_sets;
     Settings settings;
     const Context & context;
     bool after_agg;
@@ -47,6 +52,7 @@ public:
     void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const NamesAndTypesList & getCurrentInputColumns();
+    void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
 };
 
 } // namespace DB
