@@ -133,14 +133,14 @@ void appendSelection(tipb::DAGRequest & dag_request)
     tipb::Expr * value = expr->add_children();
     col->set_tp(tipb::ExprType::ColumnRef);
     std::stringstream ss;
-    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(1, ss);
+    DB::EncodeNumber<Int64>(1, ss);
     col->set_val(ss.str());
     auto * type = col->mutable_field_type();
     type->set_tp(8);
     type->set_flag(0);
     value->set_tp(tipb::ExprType::Int64);
     ss.str("");
-    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(10, ss);
+    DB::EncodeNumber<Int64>(10, ss);
     value->set_val(std::string(ss.str()));
     type = value->mutable_field_type();
     type->set_tp(8);
@@ -161,7 +161,7 @@ void appendAgg(tipb::DAGRequest & dag_request, size_t & result_field_num)
     auto child = agg_func->add_children();
     child->set_tp(tipb::ExprType::ColumnRef);
     std::stringstream ss;
-    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(0, ss);
+    DB::EncodeNumber<Int64>(0, ss);
     child->set_val(ss.str());
     auto f_type = agg_func->mutable_field_type();
     f_type->set_tp(3);
@@ -169,7 +169,7 @@ void appendAgg(tipb::DAGRequest & dag_request, size_t & result_field_num)
     auto group_col = agg->add_group_by();
     group_col->set_tp(tipb::ExprType::ColumnRef);
     ss.str("");
-    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(1, ss);
+    DB::EncodeNumber<Int64>(1, ss);
     group_col->set_val(ss.str());
     f_type = group_col->mutable_field_type();
     f_type->set_tp(8);
@@ -188,7 +188,7 @@ void appendTopN(tipb::DAGRequest & dag_request)
     tipb::Expr * expr1 = byItem->mutable_expr();
     expr1->set_tp(tipb::ExprType::ColumnRef);
     std::stringstream ss;
-    DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(1, ss);
+    DB::EncodeNumber<Int64>(1, ss);
     expr1->set_val(ss.str());
     auto * type = expr1->mutable_field_type();
     type->set_tp(8);

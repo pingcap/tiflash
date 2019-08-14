@@ -25,7 +25,7 @@ ColumnID getColumnID(const tipb::Expr & expr);
 String getName(const tipb::Expr & expr, const NamesAndTypesList & current_input_columns);
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col);
-extern std::unordered_map<tipb::ExprType, String> aggFunMap;
-extern std::unordered_map<tipb::ScalarFuncSig, String> scalarFunMap;
+extern std::unordered_map<tipb::ExprType, String> agg_fun_map;
+extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_fun_map;
 
 } // namespace DB

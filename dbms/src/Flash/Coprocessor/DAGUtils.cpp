@@ -13,38 +13,38 @@ bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprTyp
 
 const String & getAggFunctionName(const tipb::Expr & expr)
 {
-    if (!aggFunMap.count(expr.tp()))
+    if (!agg_fun_map.count(expr.tp()))
     {
         throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.");
     }
-    return aggFunMap[expr.tp()];
+    return agg_fun_map[expr.tp()];
 }
 
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
     {
-        if (!aggFunMap.count(expr.tp()))
+        if (!agg_fun_map.count(expr.tp()))
         {
             throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.");
         }
-        return aggFunMap[expr.tp()];
+        return agg_fun_map[expr.tp()];
     }
     else
     {
-        if (!scalarFunMap.count(expr.sig()))
+        if (!scalar_fun_map.count(expr.sig()))
         {
             throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.");
         }
-        return scalarFunMap[expr.sig()];
+        return scalar_fun_map[expr.sig()];
     }
 }
 
 String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col)
 {
     std::stringstream ss;
-    size_t cursor = 1;
-    Int64 columnId = 0;
+    size_t cursor = 0;
+    Int64 column_id = 0;
     String func_name;
     Field f;
     switch (expr.tp())
@@ -59,34 +59,33 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::Float64:
             return std::to_string(DecodeFloat64(cursor, expr.val()));
         case tipb::ExprType::String:
-            return DecodeCompactBytes(cursor, expr.val());
         case tipb::ExprType::Bytes:
-            return DecodeBytes(cursor, expr.val());
+            return expr.val();
         case tipb::ExprType::ColumnRef:
-            columnId = DecodeInt<Int64>(cursor, expr.val());
-            if (columnId < 0 || columnId >= (ColumnID)input_col.size())
+            column_id = DecodeInt<Int64>(cursor, expr.val());
+            if (column_id < 0 || column_id >= (ColumnID)input_col.size())
             {
                 throw Exception("out of bound");
             }
-            return input_col.getNames()[columnId];
+            return input_col.getNames()[column_id];
         case tipb::ExprType::Count:
         case tipb::ExprType::Sum:
         case tipb::ExprType::Avg:
         case tipb::ExprType::Min:
         case tipb::ExprType::Max:
         case tipb::ExprType::First:
-            if (!aggFunMap.count(expr.tp()))
+            if (!agg_fun_map.count(expr.tp()))
             {
                 throw Exception("not supported");
             }
-            func_name = aggFunMap.find(expr.tp())->second;
+            func_name = agg_fun_map.find(expr.tp())->second;
             break;
         case tipb::ExprType::ScalarFunc:
-            if (!scalarFunMap.count(expr.sig()))
+            if (!scalar_fun_map.count(expr.sig()))
             {
                 throw Exception("not supported");
             }
-            func_name = scalarFunMap.find(expr.sig())->second;
+            func_name = scalar_fun_map.find(expr.sig())->second;
             break;
         default:
             throw Exception("not supported");
@@ -188,6 +187,18 @@ Field decodeLiteral(const tipb::Expr & expr)
     size_t cursor = 0;
     switch (expr.tp())
     {
+        case tipb::ExprType::Null:
+            return Field();
+        case tipb::ExprType::Int64:
+            return DecodeInt<Int64>(cursor, expr.val());
+        case tipb::ExprType::Uint64:
+            return DecodeInt<UInt64>(cursor, expr.val());
+        case tipb::ExprType::Float32:
+        case tipb::ExprType::Float64:
+            return DecodeFloat64(cursor, expr.val());
+        case tipb::ExprType::String:
+        case tipb::ExprType::Bytes:
+            return expr.val();
         case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDecimal:
         case tipb::ExprType::MysqlDuration:
@@ -199,17 +210,17 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::ValueList:
             throw Exception("mysql type literal is not supported yet");
         default:
-            return DecodeDatum(cursor, expr.val());
+            throw Exception("Should not reach here: not a literal expression");
     }
 }
 
 ColumnID getColumnID(const tipb::Expr & expr)
 {
-    size_t cursor = 1;
+    size_t cursor = 0;
     return DecodeInt<Int64>(cursor, expr.val());
 }
 
-std::unordered_map<tipb::ExprType, String> aggFunMap({
+std::unordered_map<tipb::ExprType, String> agg_fun_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "any"},
     //{tipb::ExprType::Avg, ""},
@@ -228,7 +239,7 @@ std::unordered_map<tipb::ExprType, String> aggFunMap({
     //{tipb::ExprType::JsonObjectAgg, ""},
 });
 
-std::unordered_map<tipb::ScalarFuncSig, String> scalarFunMap({
+std::unordered_map<tipb::ScalarFuncSig, String> scalar_fun_map({
     /*
     {tipb::ScalarFuncSig::CastIntAsInt, "cast"},
     {tipb::ScalarFuncSig::CastIntAsReal, "cast"},
