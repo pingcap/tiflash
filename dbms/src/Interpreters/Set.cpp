@@ -279,7 +279,7 @@ void Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bo
     for (int i = 1; i < expr.children_size(); i++)
     {
         auto & child = expr.children(i);
-        // todo support constant expression
+        // todo support constant expression by constant folding
         if (!isLiteralExpr(child))
         {
             throw Exception("Only literal is supported in children of expr `in`", ErrorCodes::COP_BAD_DAG_REQUEST);
