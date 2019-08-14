@@ -37,9 +37,11 @@ static const UInt64 SIGN_MARK = UInt64(1) << 63;
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
-inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read, const std::unordered_set<ColumnID> & all_column_ids)
+inline std::tuple<std::vector<ColumnID>, std::vector<Field>, std::set<ColumnID>, bool> DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read, const std::unordered_set<ColumnID> & all_column_ids)
 {
-    std::vector<Field> vec;
+    std::vector<ColumnID> col_ids;
+    std::vector<Field> fields;
+    std::set<ColumnID> row_all_col_ids;
     const String & raw_value = value.getStr();
     size_t cursor = 0;
     bool has_unknown_col_id = false;
@@ -47,26 +49,31 @@ inline std::tuple<std::vector<Field>, bool> DecodeRow(const TiKVValue & value, c
     {
         Field f = DecodeDatum(cursor, raw_value);
         if (f.isNull())
+        {
+            fields.push_back(std::move(f));
             break;
+        }
         if (!has_unknown_col_id && !all_column_ids.count(f.get<ColumnID>()))
         {
             has_unknown_col_id = true;
         }
-        if (!column_ids_to_read.count(f.get<ColumnID>()))
+        ColumnID col_id = f.get<ColumnID>();
+        row_all_col_ids.insert(col_id);
+        if (!column_ids_to_read.count(col_id))
         {
             SkipDatum(cursor, raw_value);
         }
         else
         {
-            vec.push_back(std::move(f));
-            vec.push_back(DecodeDatum(cursor, raw_value));
+            col_ids.push_back(col_id);
+            fields.push_back(DecodeDatum(cursor, raw_value));
         }
     }
 
     if (cursor != raw_value.size())
         throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
 
-    return std::make_tuple(std::move(vec), has_unknown_col_id);
+    return std::make_tuple(std::move(col_ids), std::move(fields), std::move(row_all_col_ids), has_unknown_col_id);
 }
 
 // Key format is here:

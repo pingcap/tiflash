@@ -176,9 +176,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     const auto & date_lut = DateLUT::instance();
 
-    std::unordered_set<ColumnID> col_id_included;
-
-    const size_t target_col_size = (column_names_to_read.size() - 3) * 2;
+    const size_t target_col_size = column_names_to_read.size() - 3;
 
     Block block;
 
@@ -195,12 +193,16 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
             // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
-            std::vector<Field> row;
+            std::vector<ColumnID> col_ids;
+            std::vector<Field> fields;
+            std::set<ColumnID> row_all_col_ids;
             bool has_unknown_col_id = false;
+            bool all_column_is_null = false;
 
             if (write_type == Region::DelFlag)
             {
-                row.reserve(table_info.columns.size() * 2);
+                col_ids.reserve(target_col_size);
+                fields.reserve(target_col_size);
                 for (const TiDB::ColumnInfo & column : table_info.columns)
                 {
                     if (handle_col_id == column.id)
@@ -209,20 +211,21 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                     if (!column_ids_to_read.count(column.id))
                         continue;
 
-                    row.push_back(Field(column.id));
-                    row.push_back(GenDecodeRow(column.getCodecFlag()));
+                    col_ids.push_back(column.id);
+                    fields.push_back(GenDecodeRow(column.getCodecFlag()));
                 }
             }
             else
-                std::tie(row, has_unknown_col_id) = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, all_column_ids);
+                std::tie(col_ids, fields, row_all_col_ids, has_unknown_col_id) = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, all_column_ids);
 
-            if (row.size() == 1 && row[0].isNull())
+            if (col_ids.empty() && fields.size() == 1 && fields[0].isNull())
             {
                 // all field is null
-                row.clear();
+                fields.clear();
+                all_column_is_null = true;
             }
 
-            if (row.size() & 1)
+            if (col_ids.size() != fields.size())
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
             /// row contains unknown column id
@@ -232,10 +235,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 return std::make_tuple(block, false);
 
             /// Modify `row` by adding missing column values or removing useless column values.
-
-            col_id_included.clear();
-            for (size_t i = 0; i < row.size(); i += 2)
-                col_id_included.emplace(row[i].get<ColumnID>());
+            std::unordered_set<ColumnID> col_id_included(col_ids.begin(), col_ids.end());
 
             // Fill in missing column values.
             for (const TiDB::ColumnInfo & column : table_info.columns)
@@ -245,41 +245,53 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 if (col_id_included.count(column.id))
                     continue;
 
-                if (!force_decode)
+                if (!row_all_col_ids.count(column.id) && !force_decode)
                     return std::make_tuple(block, false);
 
                 if (!column_ids_to_read.count(column.id))
                     continue;
 
-                row.emplace_back(Field(column.id));
-                if (column.hasNoDefaultValueFlag())
+                col_ids.push_back(column.id);
+                if (all_column_is_null)
+                {
+                    if (column.hasNotNullFlag())
+                    {
+                        throw Exception("not null column contains null value", ErrorCodes::LOGICAL_ERROR);
+                    }
+                    else
+                    {
+                        fields.push_back(Field());
+                    }
+                }
+                else if (column.hasNoDefaultValueFlag())
                     // Fill `zero` value if NOT NULL specified or else NULL.
-                    row.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
+                    fields.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
                 else
                     // Fill default value.
-                    row.push_back(column.defaultValueToField());
+                    fields.push_back(column.defaultValueToField());
             }
 
             // Remove values of non-existing columns, which could be data inserted (but not flushed) before DDLs that drop some columns.
             // TODO: May need to log this.
-            for (int i = int(row.size()) - 2; i >= 0; i -= 2)
+            for (int i = int(col_ids.size()) - 1; i >= 0; i--)
             {
-                Field & col_id = row[i];
-                if (column_map.find(col_id.get<ColumnID>()) == column_map.end())
+                ColumnID col_id = col_ids[i];
+                if (column_map.find(col_id) == column_map.end())
                 {
-                    row.erase(row.begin() + i, row.begin() + i + 2);
+                    col_ids.erase(col_ids.begin() + i, col_ids.begin() + i + 1);
+                    fields.erase(fields.begin() + i, fields.begin() + i + 1);
                 }
             }
 
-            if (row.size() != target_col_size)
+            if (col_ids.size() != target_col_size || fields.size() != target_col_size)
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
 
             /// Transform `row` to columnar format.
 
-            for (size_t i = 0; i < row.size(); i += 2)
+            for (size_t i = 0; i < col_ids.size(); i++)
             {
-                Field & col_id = row[i];
-                auto it = column_map.find(col_id.get<ColumnID>());
+                ColumnID col_id = col_ids[i];
+                auto it = column_map.find(col_id);
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
@@ -287,10 +299,10 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 if (tp->isDateOrDateTime()
                     || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isDateOrDateTime()))
                 {
-                    Field & field = row[i + 1];
+                    Field & field = fields[i];
                     if (field.isNull())
                     {
-                        it->second.first->insert(row[i + 1]);
+                        it->second.first->insert(fields[i]);
                         continue;
                     }
                     UInt64 packed = field.get<UInt64>();
@@ -335,7 +347,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 }
                 else
                 {
-                    it->second.first->insert(row[i + 1]);
+                    it->second.first->insert(fields[i]);
 
                     // Check overflow for potential un-synced data type widen,
                     // i.e. schema is old and narrow, meanwhile data is new and wide.
@@ -353,14 +365,14 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                         {
                             // Unsigned checking by bitwise compare.
                             UInt64 inserted = nested_column.get64(inserted_index);
-                            UInt64 orig = row[i + 1].get<UInt64>();
+                            UInt64 orig = fields[i].get<UInt64>();
                             overflow = inserted != orig;
                         }
                         else
                         {
                             // Singed checking by arithmetical cast.
                             Int64 inserted = nested_column.getInt(inserted_index);
-                            Int64 orig = row[i + 1].get<Int64>();
+                            Int64 orig = fields[i].get<Int64>();
                             overflow = inserted != orig;
                         }
                         if (overflow)
@@ -370,7 +382,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                             // Otherwise return false to outer, outer should sync schema and try again.
                             if (force_decode)
                                 throw Exception(
-                                    "Detected overflow for data " + std::to_string(row[i + 1].get<UInt64>()) + " of type " + tp->getName(),
+                                    "Detected overflow for data " + std::to_string(fields[i].get<UInt64>()) + " of type " + tp->getName(),
                                     ErrorCodes::LOGICAL_ERROR);
 
                             return std::make_tuple(block, false);
