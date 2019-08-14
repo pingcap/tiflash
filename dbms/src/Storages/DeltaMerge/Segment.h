@@ -46,6 +46,8 @@ struct DeltaValueSpace
         return (*handle_column)[value_id];
     }
 
+    inline size_t getRows() { return handle_column->size(); }
+
     Columns                        columns;
     ColumnRawPtrs                  columns_ptr;
     PaddedPODArray<Handle> const * handle_column;

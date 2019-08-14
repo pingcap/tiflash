@@ -222,7 +222,7 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
     return page_map;
 }
 
-void PageStorage::read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot)
+void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {

@@ -159,7 +159,7 @@ void readChunkData(MutableColumns &      columns,
     }
 
     PageHandler page_handler = [&](PageId page_id, const Page & page) {
-        size_t index = page_to_index[page_id];
+        size_t index = page_to_index.at(page_id);
 
         ColumnDefine         define = column_defines[index];
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
