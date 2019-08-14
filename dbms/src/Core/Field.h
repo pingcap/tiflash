@@ -83,6 +83,17 @@ public:
         return decimalLess<MaxType>(dec, r.getValue(), scale, r.getScale());
     }
 
+    UInt32 getPrec() const {
+        UInt32 cnt = 0;
+        auto x = dec.value;
+        while(x!=0) {
+            x/=10;
+            cnt++;
+        }
+        if(cnt == 0) cnt = 1;
+        return cnt;
+    }
+
     template <typename U>
     bool operator <= (const DecimalField<U> & r) const
     {

@@ -175,8 +175,6 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
         column_info.tp = TiDB::TypeShort;
     else if (checkDataType<DataTypeUInt32>(nested_type))
         column_info.tp = TiDB::TypeLong;
-    else
-        throw DB::Exception("Invalid ?", ErrorCodes::LOGICAL_ERROR);
 
     // UInt64 is hijacked by the macro expansion, we check it again.
     if (checkDataType<DataTypeUInt64>(nested_type))
