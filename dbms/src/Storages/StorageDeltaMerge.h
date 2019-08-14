@@ -32,6 +32,12 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override
+    {
+        // TODO get table rename done
+        throw Exception("Method rename is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
     void alterFromTiDB(const AlterCommands &params, const TiDB::TableInfo &table_info, const String &database_name, const Context &context);

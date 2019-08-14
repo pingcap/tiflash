@@ -7,6 +7,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageTinyLog.h>
 #include <Storages/AlterCommands.h>
+#include <DataTypes/isLossyCast.h>
 
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -309,29 +310,68 @@ void StorageDeltaMerge::alterFromTiDB(
 }
 
 void StorageDeltaMerge::alter(
-    const AlterCommands & params, const String & database_name, const String & table_name, const Context & context)
+    const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context)
 {
-    for (const auto & param : params)
+    std::unordered_set<String> cols_drop_forbidden;
+    for (const auto & n : pk_column_names)
+        cols_drop_forbidden.insert(n);
+    cols_drop_forbidden.insert(EXTRA_HANDLE_COLUMN_NAME);
+    cols_drop_forbidden.insert(VERSION_COLUMN_NAME);
+    cols_drop_forbidden.insert(TAG_COLUMN_NAME);
+
+    for (const auto & command : commands)
     {
-        if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
+        if (command.type == AlterCommand::MODIFY_PRIMARY_KEY)
         {
-            throw Exception("Storage engine" + getName() + " doesn't support modify primary key.",
-                            ErrorCodes::NOT_IMPLEMENTED);
+            // check that add primary key is forbidden
+            throw Exception("Storage engine " + getName() + " doesn't support modify primary key.",
+                            ErrorCodes::BAD_ARGUMENTS);
+        }
+        else if (command.type == AlterCommand::DROP_COLUMN)
+        {
+            // check that drop primary key is forbidden
+            // check that drop hidden columns is forbidden
+            if (cols_drop_forbidden.count(command.column_name) > 0)
+                throw Exception("Storage engine " + getName() + " doesn't support drop primary key / hidden column: " + command.column_name, ErrorCodes::BAD_ARGUMENTS);
         }
     }
 
     auto lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    // TODO check that add / drop primary key is forbidden
-    // TODO check that drop hidden columns is forbidden
-    // TODO check that lossy changes is forbidden
-    // TODO check that modifying the precision of DECIMAL data types is forbidden
-    // TODO check that changing the UNSIGNED attribute is forbidden
-
-
     // update the metadata in database, so that we can read the new schema using TiFlash's client
     ColumnsDescription new_columns = getColumns();
-    params.apply(new_columns); // apply AlterCommands to `new_columns`
+
+    for (const auto & command : commands)
+    {
+        if (command.type == AlterCommand::MODIFY_COLUMN)
+        {
+            // find the column we are going to modify
+            auto col_iter = command.findColumn(new_columns.ordinary); // just find in ordinary columns
+            if (col_iter->type->isDecimal())
+            {
+                // TODO check that modifying the precision of DECIMAL data types is forbidden
+            }
+            bool is_cast_ok = false;
+            try
+            {
+                is_cast_ok = isLossyCast(col_iter->type, command.data_type);
+            }
+            catch (DB::Exception &e)
+            {
+                is_cast_ok = false;
+            }
+            if (is_cast_ok)
+            {
+                // check that lossy changes is forbidden
+                // check that changing the UNSIGNED attribute is forbidden
+                throw Exception("Storage engine " + getName() + "doesn't support lossy data type modify from " + col_iter->type->getName() + " to " + command.data_type->getName(), ErrorCodes::NOT_IMPLEMENTED);
+            }
+            // TODO change column define
+            store->applyColumnDefineAlter(command);
+        }
+    }
+
+    commands.apply(new_columns); // apply AlterCommands to `new_columns`
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, {});
     setColumns(std::move(new_columns));
 }

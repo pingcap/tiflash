@@ -1,3 +1,5 @@
+#include <utility>
+
 #pragma once
 
 #include <Columns/ColumnVector.h>
@@ -128,7 +130,7 @@ inline void addColumn(Block & block, ColId col_id, String col_name, const DataTy
 {
     ColumnWithTypeAndName column;
     column.column_id = col_id;
-    column.name      = col_name;
+    column.name      = std::move(col_name);
     column.type      = col_type;
     column.column    = col;
     block.insert(column);

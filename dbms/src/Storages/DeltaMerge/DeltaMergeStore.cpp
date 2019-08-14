@@ -475,5 +475,10 @@ void DeltaMergeStore::check(const Context & db_context, const DB::Settings & db_
     }
 }
 
+void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &command)
+{
+    // TODO find column define and then apply alter
+}
+
 } // namespace DM
 } // namespace DB

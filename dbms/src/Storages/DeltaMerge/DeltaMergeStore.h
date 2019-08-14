@@ -8,6 +8,7 @@
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/AlterCommands.h>
 
 namespace DB
 {
@@ -60,6 +61,9 @@ public:
                            UInt64                max_version,
                            size_t                expected_block_size);
 
+    /// Apply `command` on column define
+    void applyColumnDefineAlter(const AlterCommand &command);
+
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
     const ColumnDefines & getTableColumns() { return table_columns; }
@@ -101,7 +105,7 @@ private:
     String      path;
     StoragePool storage_pool;
 
-    String        table_name; // TODO use table_info.name instead
+    String        table_name;
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;
     DataTypePtr   table_handle_real_type;
