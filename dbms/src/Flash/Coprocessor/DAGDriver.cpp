@@ -90,11 +90,11 @@ try
 }
 catch (const RegionException & e)
 {
-    e.rethrow();
+    throw;
 }
 catch (const LockException & e)
 {
-    e.rethrow();
+    throw;
 }
 catch (const Exception & e)
 {

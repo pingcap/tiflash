@@ -228,8 +228,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
             tipb::Expr type_expr;
             type_expr.set_tp(tipb::ExprType::String);
             std::stringstream ss;
-            EncodeCompactBytes(expected_type->getName(), ss);
-            type_expr.set_val(ss.str());
+            type_expr.set_val(expected_type->getName());
             auto type_field_type = type_expr.field_type();
             type_field_type.set_tp(0xfe);
             type_field_type.set_flag(1);
@@ -302,8 +301,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else if (isColumnExpr(expr))
     {
-        ColumnID columnId = getColumnID(expr);
-        if (columnId < 0 || columnId >= (ColumnID)getCurrentInputColumns().size())
+        ColumnID column_id = getColumnID(expr);
+        if (column_id < 0 || column_id >= (ColumnID)getCurrentInputColumns().size())
         {
             throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
@@ -356,8 +355,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         // should be updated to and(casted_arg1_name, arg2_name)
         expr_name = genFuncString(func_name, argument_names);
 
-        const ExpressionAction & applyFunction = ExpressionAction::applyFunction(function_builder, argument_names, expr_name);
-        actions->add(applyFunction);
+        const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, expr_name);
+        actions->add(apply_function);
         // add cast if needed
         expr_name = appendCastIfNeeded(expr, actions, expr_name);
         return expr_name;

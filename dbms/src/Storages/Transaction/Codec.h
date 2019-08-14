@@ -243,7 +243,7 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
         case TiDB::CodecFlagVarInt:
             return DecodeVarInt(cursor, raw_value);
         case TiDB::CodecFlagDuration:
-            throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implemented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDecimal:
             return DecodeDecimal(cursor, raw_value);
         default:
