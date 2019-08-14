@@ -20,30 +20,30 @@ bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprTyp
 
 const String & getAggFunctionName(const tipb::Expr & expr)
 {
-    if (!agg_fun_map.count(expr.tp()))
+    if (!agg_func_map.count(expr.tp()))
     {
         throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
     }
-    return agg_fun_map[expr.tp()];
+    return agg_func_map[expr.tp()];
 }
 
 const String & getFunctionName(const tipb::Expr & expr)
 {
     if (isAggFunctionExpr(expr))
     {
-        if (!agg_fun_map.count(expr.tp()))
+        if (!agg_func_map.count(expr.tp()))
         {
             throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
         }
-        return agg_fun_map[expr.tp()];
+        return agg_func_map[expr.tp()];
     }
     else
     {
-        if (!scalar_fun_map.count(expr.sig()))
+        if (!scalar_func_map.count(expr.sig()))
         {
             throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
         }
-        return scalar_fun_map[expr.sig()];
+        return scalar_func_map[expr.sig()];
     }
 }
 
@@ -81,18 +81,18 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::Min:
         case tipb::ExprType::Max:
         case tipb::ExprType::First:
-            if (!agg_fun_map.count(expr.tp()))
+            if (!agg_func_map.count(expr.tp()))
             {
                 throw Exception(tipb::ExprType_Name(expr.tp()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
             }
-            func_name = agg_fun_map.find(expr.tp())->second;
+            func_name = agg_func_map.find(expr.tp())->second;
             break;
         case tipb::ExprType::ScalarFunc:
-            if (!scalar_fun_map.count(expr.sig()))
+            if (!scalar_func_map.count(expr.sig()))
             {
                 throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
             }
-            func_name = scalar_fun_map.find(expr.sig())->second;
+            func_name = scalar_func_map.find(expr.sig())->second;
             break;
         default:
             throw Exception(tipb::ExprType_Name(expr.tp()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
@@ -226,7 +226,7 @@ ColumnID getColumnID(const tipb::Expr & expr)
 
 bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
 
-std::unordered_map<tipb::ExprType, String> agg_fun_map({
+std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "any"},
     //{tipb::ExprType::Avg, ""},
@@ -245,7 +245,7 @@ std::unordered_map<tipb::ExprType, String> agg_fun_map({
     //{tipb::ExprType::JsonObjectAgg, ""},
 });
 
-std::unordered_map<tipb::ScalarFuncSig, String> scalar_fun_map({
+std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     /*
     {tipb::ScalarFuncSig::CastIntAsInt, "cast"},
     {tipb::ScalarFuncSig::CastIntAsReal, "cast"},
