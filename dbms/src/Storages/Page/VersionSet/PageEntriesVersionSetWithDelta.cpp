@@ -79,14 +79,12 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
 PageEntriesVersionSetWithDelta::VersionPtr           //
 PageEntriesVersionSetWithDelta::compactDeltaAndBase( //
     const PageEntriesVersionSetWithDelta::VersionPtr & old_base,
-    PageEntriesVersionSetWithDelta::VersionPtr &       delta) const
+    const PageEntriesVersionSetWithDelta::VersionPtr & delta) const
 {
     PageEntriesVersionSetWithDelta::VersionPtr base = PageEntriesForDelta::createBase();
     base->copyEntries(*old_base);
     // apply delta edits
-    delta->prev = base;
     base->merge(*delta);
-    delta->clear();
     return base;
 }
 
