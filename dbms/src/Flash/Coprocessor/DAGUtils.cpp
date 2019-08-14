@@ -13,6 +13,7 @@ namespace ErrorCodes
 {
 extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
+extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr); }
@@ -213,7 +214,7 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::ValueList:
             throw Exception(tipb::ExprType_Name(expr.tp()) + "is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         default:
-            throw Exception("Should not reach here: not a literal expression");
+            throw Exception("Should not reach here: not a literal expression", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -758,7 +759,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_fun_map({
     //{tipb::ScalarFuncSig::Instr, "cast"},
     //{tipb::ScalarFuncSig::InstrBinary, "cast"},
 
-    //{tipb::ScalarFuncSig::LTrim, "cast"},
+    {tipb::ScalarFuncSig::LTrim, "ltrim"},
     //{tipb::ScalarFuncSig::Left, "cast"},
     //{tipb::ScalarFuncSig::LeftBinary, "cast"},
     {tipb::ScalarFuncSig::Length, "length"},
@@ -775,7 +776,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_fun_map({
     //{tipb::ScalarFuncSig::OctString, "cast"},
     //{tipb::ScalarFuncSig::Ord, "cast"},
     //{tipb::ScalarFuncSig::Quote, "cast"},
-    //{tipb::ScalarFuncSig::RTrim, "cast"},
+    {tipb::ScalarFuncSig::RTrim, "rtrim"},
     //{tipb::ScalarFuncSig::Repeat, "cast"},
     //{tipb::ScalarFuncSig::Replace, "cast"},
     //{tipb::ScalarFuncSig::Reverse, "cast"},
