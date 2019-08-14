@@ -266,6 +266,7 @@ protected:
                 if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
                 {
                     // Another thread may have done compaction and rebase, then we just release `tail`. In case we may add more code after do compaction on base
+                    ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDeltaRebaseRejected);
                     break;
                 }
             }
@@ -275,7 +276,7 @@ protected:
 
     virtual VersionPtr compactDeltas(const VersionPtr & tail) const = 0;
 
-    virtual VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) const = 0;
+    virtual VersionPtr compactDeltaAndBase(const VersionPtr & old_base, const VersionPtr & delta) const = 0;
 
 public:
     /// Some helper functions

@@ -40,7 +40,7 @@ public:
 
     VersionPtr compactDeltas(const VersionPtr & tail) const override;
 
-    VersionPtr compactDeltaAndBase(const VersionPtr & old_base, VersionPtr & delta) const override;
+    VersionPtr compactDeltaAndBase(const VersionPtr & old_base, const VersionPtr & delta) const override;
 
 private:
     void collectLiveFilesFromVersionList(VersionPtr tail, std::set<VersionPtr> & visited, std::set<PageFileIdAndLevel> & liveFiles) const;
