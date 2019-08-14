@@ -217,7 +217,7 @@ struct BatchCtrl
     void EncodeDatum(std::stringstream & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
-        writeIntBinary(UInt8(flag), ss);
+        EncodeNumber(UInt8(flag), ss);
         switch (flag)
         {
             case TiDB::CodecFlagJson:
