@@ -58,7 +58,7 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         String name = merge_tree->getTableInfo().columns[cid - 1].name;
         output_from_ts.push_back(std::move(name));
     }
-    ss << "FROM " << merge_tree->getTableInfo().db_name << "." << merge_tree->getTableInfo().name << " ";
+    ss << "FROM " << storage->getDatabaseName() << "." << storage->getTableName() << " ";
 }
 
 void DAGStringConverter::buildSelString(const tipb::Selection & sel, std::stringstream & ss)

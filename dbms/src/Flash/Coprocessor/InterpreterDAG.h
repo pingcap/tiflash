@@ -7,6 +7,7 @@
 #pragma GCC diagnostic pop
 
 #include <DataStreams/BlockIO.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
@@ -97,6 +98,8 @@ private:
     /// Table from where to read data, if not subquery.
     TMTStoragePtr storage;
     TableStructureReadLockPtr table_lock;
+
+    std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
     Poco::Logger * log;
 };
