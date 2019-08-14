@@ -82,6 +82,8 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         throw Exception("No column is selected in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
 
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns, context);
+
     if (!dag.hasAggregation())
     {
         // if the dag request does not contain agg, then the final output is
@@ -175,10 +177,9 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    DAGExpressionAnalyzer analyzer(source_columns, context);
     if (dag.hasSelection())
     {
-        analyzer.appendWhere(chain, dag.getSelection(), res.filter_column_name);
+        analyzer->appendWhere(chain, dag.getSelection(), res.filter_column_name);
         res.has_where = true;
         res.before_where = chain.getLastActions();
         chain.addStep();
@@ -186,7 +187,7 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     // There will be either Agg...
     if (dag.hasAggregation())
     {
-        analyzer.appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
+        analyzer->appendAggregation(chain, dag.getAggregation(), res.aggregation_keys, res.aggregate_descriptions);
         res.need_aggregate = true;
         res.before_aggregation = chain.getLastActions();
 
@@ -194,9 +195,9 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         chain.clear();
 
         // add cast if type is not match
-        analyzer.appendAggSelect(chain, dag.getAggregation());
+        analyzer->appendAggSelect(chain, dag.getAggregation());
         //todo use output_offset to reconstruct the final project columns
-        for (auto element : analyzer.getCurrentInputColumns())
+        for (auto element : analyzer->getCurrentInputColumns())
         {
             final_project.emplace_back(element.name, "");
         }
@@ -205,10 +206,10 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
     if (dag.hasTopN())
     {
         res.has_order_by = true;
-        analyzer.appendOrderBy(chain, dag.getTopN(), res.order_column_names);
+        analyzer->appendOrderBy(chain, dag.getTopN(), res.order_column_names);
     }
     // Append final project results if needed.
-    analyzer.appendFinalProject(chain, final_project);
+    analyzer->appendFinalProject(chain, final_project);
     res.before_order_and_select = chain.getLastActions();
     chain.finalize();
     chain.clear();

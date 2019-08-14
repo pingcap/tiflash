@@ -1,10 +1,13 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Columns/ColumnSet.h>
+#include <DataTypes/DataTypeSet.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -250,6 +253,32 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
     return expr_name;
 }
 
+void DAGExpressionAnalyzer::makeExplicitSet(
+    const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name)
+{
+    if (prepared_sets.count(&expr))
+    {
+        return;
+    }
+    DataTypes set_element_types;
+    // todo support tuple in, i.e. (a,b) in ((1,2), (3,4)), currently TiDB convert tuple in into a series of or/and/eq exprs
+    // which means tuple in is never be pushed to coprocessor, but it is quite in-efficient
+    set_element_types.push_back(sample_block.getByName(left_arg_name).type);
+
+    // todo if this is a single value in, then convert it to equal expr
+    SetPtr set = std::make_shared<Set>(SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode));
+    set->createFromDAGExpr(set_element_types, expr, create_ordered_set);
+    prepared_sets[&expr] = std::move(set);
+}
+
+static String getUniqueName(const Block & block, const String & prefix)
+{
+    int i = 1;
+    while (block.has(prefix + toString(i)))
+        ++i;
+    return prefix + toString(i);
+}
+
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
     String expr_name = getName(expr, getCurrentInputColumns());
@@ -287,20 +316,35 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
-        if (func_name == "in" || func_name == "notIn" || func_name == "globalIn" || func_name == "globalNotIn")
-        {
-            // todo support in
-            throw Exception(func_name + " is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
-        }
-
         const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
         Names argument_names;
         DataTypes argument_types;
-        for (auto & child : expr.children())
+
+        if (isInOrGlobalInOperator(func_name))
         {
-            String name = getActions(child, actions);
+            String name = getActions(expr.children(0), actions);
             argument_names.push_back(name);
             argument_types.push_back(actions->getSampleBlock().getByName(name).type);
+            makeExplicitSet(expr, actions->getSampleBlock(), false, name);
+            ColumnWithTypeAndName column;
+            column.type = std::make_shared<DataTypeSet>();
+
+            const SetPtr & set = prepared_sets[&expr];
+
+            column.name = getUniqueName(actions->getSampleBlock(), "___set");
+            column.column = ColumnSet::create(1, set);
+            actions->add(ExpressionAction::addColumn(column));
+            argument_names.push_back(column.name);
+            argument_types.push_back(column.type);
+        }
+        else
+        {
+            for (auto & child : expr.children())
+            {
+                String name = getActions(child, actions);
+                argument_names.push_back(name);
+                argument_types.push_back(actions->getSampleBlock().getByName(name).type);
+            }
         }
 
         // re-construct expr_name, because expr_name generated previously is based on expr tree,

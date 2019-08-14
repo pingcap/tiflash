@@ -1,5 +1,10 @@
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <tipb/expression.pb.h>
+#pragma GCC diagnostic pop
+
 #include <shared_mutex>
 #include <Core/Block.h>
 #include <DataStreams/SizeLimits.h>
@@ -47,6 +52,11 @@ public:
       * 'fill_set_elements' - if true, fill vector of elements. For primary key to work.
       */
     void createFromAST(const DataTypes & types, ASTPtr node, const Context & context, bool fill_set_elements);
+
+    /**
+      * Create a Set from DAG Expr, used when processing DAG Request
+      */
+    void createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements);
 
     /** Create a Set from stream.
       * Call setHeader, then call insertFromBlock for each block.

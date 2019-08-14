@@ -9,13 +9,19 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int COP_BAD_DAG_REQUEST;
+extern const int UNSUPPORTED_METHOD;
+} // namespace ErrorCodes
+
 bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr); }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
 {
     if (!agg_fun_map.count(expr.tp()))
     {
-        throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.");
+        throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
     }
     return agg_fun_map[expr.tp()];
 }
@@ -26,7 +32,7 @@ const String & getFunctionName(const tipb::Expr & expr)
     {
         if (!agg_fun_map.count(expr.tp()))
         {
-            throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.");
+            throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
         }
         return agg_fun_map[expr.tp()];
     }
@@ -34,13 +40,13 @@ const String & getFunctionName(const tipb::Expr & expr)
     {
         if (!scalar_fun_map.count(expr.sig()))
         {
-            throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.");
+            throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", ErrorCodes::UNSUPPORTED_METHOD);
         }
         return scalar_fun_map[expr.sig()];
     }
 }
 
-String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col)
+String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col, bool for_parser)
 {
     std::stringstream ss;
     size_t cursor = 0;
@@ -65,7 +71,7 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
             column_id = DecodeInt<Int64>(cursor, expr.val());
             if (column_id < 0 || column_id >= (ColumnID)input_col.size())
             {
-                throw Exception("out of bound");
+                throw Exception("Column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
             }
             return input_col.getNames()[column_id];
         case tipb::ExprType::Count:
@@ -76,53 +82,50 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::First:
             if (!agg_fun_map.count(expr.tp()))
             {
-                throw Exception("not supported");
+                throw Exception(tipb::ExprType_Name(expr.tp()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
             }
             func_name = agg_fun_map.find(expr.tp())->second;
             break;
         case tipb::ExprType::ScalarFunc:
             if (!scalar_fun_map.count(expr.sig()))
             {
-                throw Exception("not supported");
+                throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
             }
             func_name = scalar_fun_map.find(expr.sig())->second;
             break;
         default:
-            throw Exception("not supported");
+            throw Exception(tipb::ExprType_Name(expr.tp()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
     }
     // build function expr
-    if (func_name == "in")
+    if (isInOrGlobalInOperator(func_name) && for_parser)
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
-        throw Exception("not supported");
+        throw Exception("Function " + func_name + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
     }
-    else
+    ss << func_name << "(";
+    bool first = true;
+    for (const tipb::Expr & child : expr.children())
     {
-        ss << func_name << "(";
-        bool first = true;
-        for (const tipb::Expr & child : expr.children())
+        String s = exprToString(child, input_col, for_parser);
+        if (first)
         {
-            String s = exprToString(child, input_col);
-            if (first)
-            {
-                first = false;
-            }
-            else
-            {
-                ss << ", ";
-            }
-            ss << s;
+            first = false;
         }
-        ss << ") ";
-        return ss.str();
+        else
+        {
+            ss << ", ";
+        }
+        ss << s;
     }
+    ss << ") ";
+    return ss.str();
 }
 
 const String & getTypeName(const tipb::Expr & expr) { return tipb::ExprType_Name(expr.tp()); }
 
 String getName(const tipb::Expr & expr, const NamesAndTypesList & current_input_columns)
 {
-    return exprToString(expr, current_input_columns);
+    return exprToString(expr, current_input_columns, false);
 }
 
 bool isAggFunctionExpr(const tipb::Expr & expr)
@@ -208,7 +211,7 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::MysqlTime:
         case tipb::ExprType::MysqlJson:
         case tipb::ExprType::ValueList:
-            throw Exception("mysql type literal is not supported yet");
+            throw Exception(tipb::ExprType_Name(expr.tp()) + "is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         default:
             throw Exception("Should not reach here: not a literal expression");
     }
@@ -219,6 +222,8 @@ ColumnID getColumnID(const tipb::Expr & expr)
     size_t cursor = 0;
     return DecodeInt<Int64>(cursor, expr.val());
 }
+
+bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
 
 std::unordered_map<tipb::ExprType, String> agg_fun_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},

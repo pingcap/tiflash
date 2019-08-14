@@ -56,6 +56,7 @@ public:
         grpc::ClientContext clientContext;
         clientContext.AddMetadata("user_name", "");
         clientContext.AddMetadata("dag_planner", "optree");
+        clientContext.AddMetadata("dag_expr_field_type_strict_check", "0");
         coprocessor::Response response;
         grpc::Status status = sp->Coprocessor(&clientContext, *rqst, &response);
         if (status.ok())
@@ -64,6 +65,12 @@ public:
             tipb::SelectResponse selectResponse;
             if (selectResponse.ParseFromString(response.data()))
             {
+                if (selectResponse.has_error())
+                {
+                    std::cout << "Coprocessor request failed, error code " << selectResponse.error().code() << " error msg "
+                              << selectResponse.error().msg();
+                    return status;
+                }
                 for (const tipb::Chunk & chunk : selectResponse.chunks())
                 {
                     size_t cursor = 0;
@@ -148,6 +155,66 @@ void appendSelection(tipb::DAGRequest & dag_request)
     type = expr->mutable_field_type();
     type->set_tp(1);
     type->set_flag(1 << 5);
+
+    // selection i in (5,10,11)
+    selection->clear_conditions();
+    expr = selection->add_conditions();
+    expr->set_tp(tipb::ExprType::ScalarFunc);
+    expr->set_sig(tipb::ScalarFuncSig::InInt);
+    col = expr->add_children();
+    col->set_tp(tipb::ExprType::ColumnRef);
+    ss.str("");
+    DB::EncodeNumber<Int64>(1, ss);
+    col->set_val(ss.str());
+    type = col->mutable_field_type();
+    type->set_tp(8);
+    type->set_flag(0);
+    value = expr->add_children();
+    value->set_tp(tipb::ExprType::Int64);
+    ss.str("");
+    DB::EncodeNumber<Int64>(10, ss);
+    value->set_val(std::string(ss.str()));
+    type = value->mutable_field_type();
+    type->set_tp(8);
+    type->set_flag(1);
+    type = expr->mutable_field_type();
+    type->set_tp(1);
+    type->set_flag(1 << 5);
+    value = expr->add_children();
+    value->set_tp(tipb::ExprType::Int64);
+    ss.str("");
+    DB::EncodeNumber<Int64>(5, ss);
+    value->set_val(std::string(ss.str()));
+    type = value->mutable_field_type();
+    type->set_tp(8);
+    type->set_flag(1);
+    type = expr->mutable_field_type();
+    type->set_tp(1);
+    type->set_flag(1 << 5);
+    value = expr->add_children();
+    value->set_tp(tipb::ExprType::Int64);
+    ss.str("");
+    DB::EncodeNumber<Int64>(11, ss);
+    value->set_val(std::string(ss.str()));
+    type = value->mutable_field_type();
+    type->set_tp(8);
+    type->set_flag(1);
+    type = expr->mutable_field_type();
+    type->set_tp(1);
+    type->set_flag(1 << 5);
+
+    // selection i is null
+    /*
+    selection->clear_conditions();
+    expr = selection->add_conditions();
+    expr->set_tp(tipb::ExprType::ScalarFunc);
+    expr->set_sig(tipb::ScalarFuncSig::IntIsNull);
+    col = expr->add_children();
+    col->set_tp(tipb::ExprType::ColumnRef);
+    ss.str("");
+    DB::EncodeNumber<Int64>(1, ss);
+    col->set_val(ss.str());
+     */
 }
 
 void appendAgg(tipb::DAGRequest & dag_request, size_t & result_field_num)
@@ -208,9 +275,9 @@ grpc::Status rpcTest()
     ChannelPtr cp = grpc::CreateChannel("localhost:9093", grpc::InsecureChannelCredentials());
     ClientPtr clientPtr = std::make_shared<FlashClient>(cp);
     size_t result_field_num = 0;
-    bool has_selection = false;
-    bool has_agg = true;
-    bool has_topN = false;
+    bool has_selection = true;
+    bool has_agg = false;
+    bool has_topN = true;
     bool has_limit = false;
     // construct a dag request
     tipb::DAGRequest dagRequest;
