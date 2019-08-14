@@ -1,39 +1,41 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
+#include <DataTypes/isLossyCast.h>
 
 #include <sstream>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>
-
 #pragma GCC diagnostic pop
 
-using namespace DB;
+namespace DB
+{
+namespace tests
+{
 
+DataTypePtr typeFromString(const String &str)
+{
+    auto & data_type_factory = DataTypeFactory::instance();
+    return data_type_factory.get(str);
+}
 
-TEST(data_type, data_type_get_common_type_Test)
+DataTypes typesFromString(const String &str)
+{
+    DataTypes data_types;
+    std::istringstream data_types_stream(str);
+    std::string data_type;
+    while (data_types_stream >> data_type)
+        data_types.push_back(typeFromString(data_type));
+
+    return data_types;
+}
+
+TEST(DataType_test, getLeastSuperType)
 {
     try
     {
-        auto & data_type_factory = DataTypeFactory::instance();
-        auto typeFromString = [& data_type_factory](const std::string & str)
-        {
-            return data_type_factory.get(str);
-        };
-
-        auto typesFromString = [& typeFromString](const std::string & str)
-        {
-            std::istringstream data_types_stream(str);
-            DataTypes data_types;
-            std::string data_type;
-            while (data_types_stream >> data_type)
-                data_types.push_back(typeFromString(data_type));
-
-            return data_types;
-        };
-
         ASSERT_TRUE(getLeastSupertype(typesFromString(""))->equals(*typeFromString("Nothing")));
         ASSERT_TRUE(getLeastSupertype(typesFromString("Nothing"))->equals(*typeFromString("Nothing")));
 
@@ -78,8 +80,48 @@ TEST(data_type, data_type_get_common_type_Test)
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Tuple(Int64) Tuple(UInt64)")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Tuple(Int64, Int8) Tuple(UInt64)")));
         EXPECT_ANY_THROW(getLeastSupertype(typesFromString("Array(Int64) Array(String)")));
+    }
+    catch (const Exception & e)
+    {
+        std::string text = e.displayText();
 
+        bool print_stack_trace = true;
 
+        auto embedded_stack_trace_pos = text.find("Stack trace");
+        if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
+            text.resize(embedded_stack_trace_pos);
+
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+
+        if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
+        {
+            std::cerr << "Stack trace:" << std::endl
+                      << e.getStackTrace().toString();
+        }
+
+        throw;
+    }
+    catch (const Poco::Exception & e)
+    {
+        std::cerr << "Poco::Exception: " << e.displayText() << std::endl;
+        throw;
+    }
+    catch (const std::exception & e)
+    {
+        std::cerr << "std::exception: " << e.what() << std::endl;
+        throw;
+    }
+    catch (...)
+    {
+        std::cerr << "Unknown exception" << std::endl;
+        throw;
+    }
+}
+
+TEST(DataType_test, getMostSubtype)
+{
+    try
+    {
         ASSERT_TRUE(getMostSubtype(typesFromString(""))->equals(*typeFromString("Nothing")));
         ASSERT_TRUE(getMostSubtype(typesFromString("Nothing"))->equals(*typeFromString("Nothing")));
 
@@ -162,3 +204,88 @@ TEST(data_type, data_type_get_common_type_Test)
         throw;
     }
 }
+
+TEST(DataType_test, isLossyCast)
+{
+    try
+    {
+        // same type is not lossy
+        ASSERT_FALSE(isLossyCast(typeFromString("Int8"), typeFromString("Int8")));
+        ASSERT_FALSE(isLossyCast(typeFromString("Int16"), typeFromString("Int16")));
+        ASSERT_FALSE(isLossyCast(typeFromString("Int32"), typeFromString("Int32")));
+        ASSERT_FALSE(isLossyCast(typeFromString("Int64"), typeFromString("Int64")));
+
+        // signed -> unsigned is lossy
+        ASSERT_TRUE(isLossyCast(typeFromString("Int8"), typeFromString("UInt8")));
+        ASSERT_TRUE(isLossyCast(typeFromString("Int8"), typeFromString("UInt16")));
+        ASSERT_TRUE(isLossyCast(typeFromString("Int8"), typeFromString("UInt32")));
+        ASSERT_TRUE(isLossyCast(typeFromString("Int8"), typeFromString("UInt64")));
+
+        // unsigned -> signed is lossy
+        ASSERT_TRUE(isLossyCast(typeFromString("UInt8"), typeFromString("Int8")));
+        ASSERT_TRUE(isLossyCast(typeFromString("UInt8"), typeFromString("Int16")));
+        ASSERT_TRUE(isLossyCast(typeFromString("UInt8"), typeFromString("Int32")));
+        ASSERT_TRUE(isLossyCast(typeFromString("UInt8"), typeFromString("Int64")));
+
+        // nullable -> not null is ok
+        ASSERT_FALSE(isLossyCast(typeFromString("Nullable(UInt32)"), typeFromString("UInt32")));
+        ASSERT_FALSE(isLossyCast(typeFromString("Nullable(UInt16)"), typeFromString("UInt32")));
+
+        // not null -> nullable is ok
+        ASSERT_FALSE(isLossyCast(typeFromString("UInt32"), typeFromString("Nullable(UInt32)")));
+        ASSERT_FALSE(isLossyCast(typeFromString("UInt16"), typeFromString("Nullable(UInt32)")));
+
+        // float32 -> float64 is lossy
+        ASSERT_TRUE(isLossyCast(typeFromString("Float32"), typeFromString("Float64")));
+        // float64 -> float32 is lossy
+        ASSERT_TRUE(isLossyCast(typeFromString("Float64"), typeFromString("Float32")));
+
+        // not support datatime <-> date
+        ASSERT_TRUE(isLossyCast(typeFromString("DateTime"), typeFromString("Date")));
+        ASSERT_TRUE(isLossyCast(typeFromString("Date"), typeFromString("DateTime")));
+
+        // strings
+        ASSERT_FALSE(isLossyCast(typeFromString("FixedString(16)"), typeFromString("FixedString(100)")));
+        ASSERT_TRUE(isLossyCast(typeFromString("String"), typeFromString("FixedString(1024)")));
+        ASSERT_FALSE(isLossyCast(typeFromString("FixedString(16)"), typeFromString("String")));
+    }
+    catch (const Exception & e)
+    {
+        std::string text = e.displayText();
+
+        bool print_stack_trace = true;
+
+        auto embedded_stack_trace_pos = text.find("Stack trace");
+        if (std::string::npos != embedded_stack_trace_pos && !print_stack_trace)
+            text.resize(embedded_stack_trace_pos);
+
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+
+        if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
+        {
+            std::cerr << "Stack trace:" << std::endl
+                      << e.getStackTrace().toString();
+        }
+
+        throw;
+    }
+    catch (const Poco::Exception & e)
+    {
+        std::cerr << "Poco::Exception: " << e.displayText() << std::endl;
+        throw;
+    }
+    catch (const std::exception & e)
+    {
+        std::cerr << "std::exception: " << e.what() << std::endl;
+        throw;
+    }
+    catch (...)
+    {
+        std::cerr << "Unknown exception" << std::endl;
+        throw;
+    }
+}
+
+} // namespace tests
+} // namespace DB
+

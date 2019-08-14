@@ -137,6 +137,7 @@ public:
 
     bool equals(const IDataType & rhs) const override;
 
+    bool isDecimal() const override { return true; }
     bool isParametric() const override { return true; }
     bool haveSubtypes() const override { return false; }
     bool isComparable() const override { return true; };

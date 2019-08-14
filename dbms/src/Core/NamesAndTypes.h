@@ -37,6 +37,8 @@ using NamesAndTypes = std::vector<NameAndTypePair>;
 class NamesAndTypesList : public std::list<NameAndTypePair>
 {
 public:
+    using Iterator = std::list<NameAndTypePair>::iterator;
+
     NamesAndTypesList() {}
 
     NamesAndTypesList(std::initializer_list<NameAndTypePair> init) : std::list<NameAndTypePair>(init) {}
