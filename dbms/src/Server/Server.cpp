@@ -379,8 +379,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             String ignore_dbs = config().getString("raft.ignore_databases");
             Poco::StringTokenizer string_tokens(ignore_dbs, ",");
             std::stringstream ss;
-            for (const auto & string_token : string_tokens)
+            for (auto string_token : string_tokens)
             {
+                string_token = Poco::trimInPlace(string_token);
                 ignore_databases.emplace(string_token);
                 ss << string_token << std::endl;
             }

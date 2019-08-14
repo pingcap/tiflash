@@ -1,4 +1,3 @@
-#include <Debug/MockSchemaSyncer.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -50,50 +49,72 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
     output(ss.str());
 }
 
+void MockTiDBTable::dbgFuncMockTiDBDB(Context &, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 1)
+        throw Exception("Args not matched, should be: database-name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+
+    DatabaseID db_id = MockTiDB::instance().newDataBase(database_name);
+
+    std::stringstream ss;
+    ss << "mock db #" << db_id;
+    output(ss.str());
+}
+
 void MockTiDBTable::dbgFuncMockTiDBPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 3)
+    if (args.size() != 3 && args.size() != 4)
         throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    const String & partition_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+    TableID partition_id = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    bool is_add_part = false;
+    if (args.size() == 4)
+    {
+        is_add_part = typeid_cast<const ASTIdentifier &>(*args[3]).name == "true";
+    }
     auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID partition_id = MockTiDB::instance().newPartition(database_name, table_name, partition_name, tso);
+    MockTiDB::instance().newPartition(database_name, table_name, partition_id, tso, is_add_part);
 
     std::stringstream ss;
     ss << "mock partition #" << partition_id;
     output(ss.str());
 }
 
-void MockTiDBTable::dbgFuncRenameTableForPartition(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void MockTiDBTable::dbgFuncDropTiDBPartition(Context &, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 4)
-        throw Exception("Args not matched, should be: database-name, table-name, partition-name, view-name", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() != 3)
+        throw Exception("Args not matched, should be: database-name, table-name, partition-name", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
-    const String & partition_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
-    const String & new_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
+    TableID partition_id = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
 
-    const auto & table = MockTiDB::instance().getTableByName(database_name, table_name);
-
-    if (!table->isPartitionTable())
-        throw Exception("Table " + database_name + "." + table_name + " is not partition table.", ErrorCodes::LOGICAL_ERROR);
-    TableID partition_id = table->getPartitionIDByName(partition_name);
-    String physical_name = table_name + "_" + std::to_string(partition_id);
-    String rename_stmt = "RENAME TABLE " + database_name + "." + physical_name + " TO " + database_name + "." + new_name;
-
-    ParserRenameQuery parser;
-    ASTPtr ast = parseQuery(parser, rename_stmt.data(), rename_stmt.data() + rename_stmt.size(),
-        "from rename table for partition " + database_name + "." + table_name + "." + partition_name, 0);
-
-    InterpreterRenameQuery interpreter(ast, context);
-    interpreter.execute();
+    MockTiDB::instance().dropPartition(database_name, table_name, partition_id);
 
     std::stringstream ss;
-    ss << "table " << physical_name << " renamed to " << new_name;
+    ss << "drop partition #" << partition_id;
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncDropTiDBDB(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() != 1 && args.size() != 2)
+        throw Exception("Args not matched, should be: database-name [, drop-regions]", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    bool drop_regions = true;
+    if (args.size() == 2)
+        drop_regions = typeid_cast<const ASTIdentifier &>(*args[1]).name == "true";
+
+    MockTiDB::instance().dropDB(context, database_name, drop_regions);
+
+    std::stringstream ss;
+    ss << "dropped db #" << database_name;
     output(ss.str());
 }
 
@@ -123,29 +144,7 @@ void MockTiDBTable::dbgFuncDropTiDBTable(Context & context, const ASTs & args, D
         return;
     }
 
-    TMTContext & tmt = context.getTMTContext();
-    auto & kvstore = tmt.getKVStore();
-    auto & region_table = tmt.getRegionTable();
-
-    if (table->isPartitionTable() && drop_regions)
-    {
-        auto partition_ids = table->getPartitionIDs();
-        std::for_each(partition_ids.begin(), partition_ids.end(), [&](TableID partition_id) {
-            for (auto & e : region_table.getRegionsByTable(partition_id))
-                kvstore->removeRegion(e.first, &region_table);
-
-            region_table.mockDropRegionsInTable(partition_id);
-        });
-    }
-
-    if (drop_regions)
-    {
-        for (auto & e : region_table.getRegionsByTable(table_id))
-            kvstore->removeRegion(e.first, &region_table);
-        region_table.mockDropRegionsInTable(table_id);
-    }
-
-    MockTiDB::instance().dropTable(database_name, table_name);
+    MockTiDB::instance().dropTable(context, database_name, table_name, drop_regions);
 
     std::stringstream ss;
     ss << "dropped table #" << table_id;
