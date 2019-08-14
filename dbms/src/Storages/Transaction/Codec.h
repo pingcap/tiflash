@@ -26,7 +26,7 @@ static const UInt8 ENC_MARKER = static_cast<UInt8>(0xff);
 static const char ENC_ASC_PADDING[ENC_GROUP_SIZE] = {0};
 
 template <typename T>
-T DecodeInt(size_t & cursor, const String & raw_value)
+T DecodeNumber(size_t & cursor, const String & raw_value)
 {
     T res = readBigEndian<T>(&raw_value[cursor]);
     cursor += sizeof(T);
@@ -54,7 +54,7 @@ inline B enforce_cast(A a)
 
 inline Float64 DecodeFloat64(size_t & cursor, const String & raw_value)
 {
-    UInt64 num = DecodeInt<UInt64>(cursor, raw_value);
+    UInt64 num = DecodeNumber<UInt64>(cursor, raw_value);
     if (num & signMask)
         num ^= signMask;
     else
@@ -229,9 +229,9 @@ inline Field DecodeDatum(size_t & cursor, const String & raw_value)
         case TiDB::CodecFlagNil:
             return Field();
         case TiDB::CodecFlagInt:
-            return DecodeInt<Int64>(cursor, raw_value);
+            return DecodeNumber<Int64>(cursor, raw_value);
         case TiDB::CodecFlagUInt:
-            return DecodeInt<UInt64>(cursor, raw_value);
+            return DecodeNumber<UInt64>(cursor, raw_value);
         case TiDB::CodecFlagBytes:
             return DecodeBytes(cursor, raw_value);
         case TiDB::CodecFlagCompactBytes:
@@ -257,14 +257,6 @@ inline void writeIntBinary(const T & x, std::stringstream & ss)
     ss.write(reinterpret_cast<const char *>(&x), sizeof(x));
 }
 
-template <typename T, UInt8 WriteFlag>
-inline void EncodeNumber(T u, std::stringstream & ss)
-{
-    u = toBigEndian(u);
-    writeIntBinary(WriteFlag, ss);
-    writeIntBinary(u, ss);
-}
-
 template <typename T>
 inline void EncodeNumber(T u, std::stringstream & ss)
 {
@@ -279,7 +271,7 @@ inline void EncodeFloat64(Float64 num, std::stringstream & ss)
         u = ~u;
     else
         u |= signMask;
-    return EncodeNumber<UInt64, TiDB::CodecFlagFloat>(u, ss);
+    return EncodeNumber<UInt64>(u, ss);
 }
 
 inline void EncodeBytes(const String & ori_str, std::stringstream & ss)
@@ -307,27 +299,16 @@ inline void EncodeBytes(const String & ori_str, std::stringstream & ss)
 
 inline void EncodeCompactBytes(const String & str, std::stringstream & ss)
 {
-    writeIntBinary(UInt8(TiDB::CodecFlagCompactBytes), ss);
     TiKV::writeVarInt(Int64(str.size()), ss);
     ss.write(str.c_str(), str.size());
 }
 
-inline void EncodeVarInt(Int64 num, std::stringstream & ss)
-{
-    writeIntBinary(UInt8(TiDB::CodecFlagVarInt), ss);
-    TiKV::writeVarInt(num, ss);
-}
+inline void EncodeVarInt(Int64 num, std::stringstream & ss) { TiKV::writeVarInt(num, ss); }
 
-inline void EncodeVarUInt(UInt64 num, std::stringstream & ss)
-{
-    writeIntBinary(UInt8(TiDB::CodecFlagVarUInt), ss);
-    TiKV::writeVarUInt(num, ss);
-}
+inline void EncodeVarUInt(UInt64 num, std::stringstream & ss) { TiKV::writeVarUInt(num, ss); }
 
 inline void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
 {
-    writeIntBinary(UInt8(TiDB::CodecFlagDecimal), ss);
-
     constexpr Int32 decimal_mod = static_cast<const Int32>(1e9);
     PrecType prec = dec.precision;
     ScaleType scale = dec.scale;
@@ -394,6 +375,7 @@ T getFieldValue(const Field & field)
 
 inline void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
 {
+    writeIntBinary(UInt8(flag), ss);
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:
@@ -403,9 +385,9 @@ inline void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringst
         case TiDB::CodecFlagFloat:
             return EncodeFloat64(getFieldValue<Float64>(field), ss);
         case TiDB::CodecFlagUInt:
-            return EncodeNumber<UInt64, TiDB::CodecFlagUInt>(getFieldValue<UInt64>(field), ss);
+            return EncodeNumber<UInt64>(getFieldValue<UInt64>(field), ss);
         case TiDB::CodecFlagInt:
-            return EncodeNumber<Int64, TiDB::CodecFlagInt>(getFieldValue<Int64>(field), ss);
+            return EncodeNumber<Int64>(getFieldValue<Int64>(field), ss);
         case TiDB::CodecFlagVarInt:
             return EncodeVarInt(getFieldValue<Int64>(field), ss);
         case TiDB::CodecFlagVarUInt:
