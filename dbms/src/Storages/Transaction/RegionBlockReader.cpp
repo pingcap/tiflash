@@ -184,7 +184,10 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     if (column_names_to_read.size() > 3)
     {
         unsigned long sum_decode = 0;
+        unsigned long sum_mid = 0;
         unsigned long sum_transform = 0;
+        std::unordered_set<ColumnID> col_id_included;
+        std::unordered_set<ColumnID> row_all_column_ids;
 
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
@@ -199,7 +202,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
             std::vector<ColumnID> col_ids;
             std::vector<Field> fields;
-            std::unordered_set<ColumnID> row_all_column_ids;
 
             if (write_type == Region::DelFlag)
             {
@@ -237,7 +239,9 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
             /// Modify `row` by adding missing column values or removing useless column values.
-            std::unordered_set<ColumnID> col_id_included(col_ids.begin(), col_ids.end());
+            col_id_included.clear();
+            for (size_t i = 0; i < col_ids.size(); i++)
+                col_id_included.emplace(col_ids[i]);
 
             // Fill in missing column values.
             for (const TiDB::ColumnInfo & column : table_info.columns)
@@ -274,7 +278,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             if (col_ids.size() != target_col_size || fields.size() != target_col_size)
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
 
-
+            auto mid_time2 = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
 
             /// Transform `row` to columnar format.
             for (size_t i = 0; i < col_ids.size(); i++)
@@ -383,9 +387,11 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             auto end_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
 
             sum_decode += (mid_time - start_time);
-            sum_transform += (end_time - mid_time);
+            sum_mid += (mid_time2 - mid_time);
+            sum_transform += (end_time - mid_time2);
         }
         std::cout << "decode time: " << sum_decode << "ms" << std::endl;
+        std::cout << "mid time: " << sum_mid << "ms" << std::endl;
         std::cout << "transform time: " << sum_transform << "ms" << std::endl;
     }
 
