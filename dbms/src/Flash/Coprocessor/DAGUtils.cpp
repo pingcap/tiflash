@@ -1,9 +1,8 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 
 #include <Core/Types.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/Codec.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 
 #include <unordered_map>
 
@@ -51,7 +50,6 @@ const String & getFunctionName(const tipb::Expr & expr)
 String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col, bool for_parser)
 {
     std::stringstream ss;
-    size_t cursor = 0;
     Int64 column_id = 0;
     String func_name;
     Field f;
@@ -60,19 +58,21 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::Null:
             return "NULL";
         case tipb::ExprType::Int64:
-            return std::to_string(RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data())));
+            return std::to_string(decodeDAGInt64(expr.val()));
         case tipb::ExprType::Uint64:
-            return std::to_string(DecodeInt<UInt64>(cursor, expr.val()));
+            return std::to_string(decodeDAGUInt64(expr.val()));
         case tipb::ExprType::Float32:
+            return std::to_string(decodeDAGFloat32(expr.val()));
         case tipb::ExprType::Float64:
-            return std::to_string(DecodeFloat64(cursor, expr.val()));
+            return std::to_string(decodeDAGFloat64(expr.val()));
         case tipb::ExprType::String:
+            return decodeDAGString(expr.val());
         case tipb::ExprType::Bytes:
-            return expr.val();
+            return decodeDAGBytes(expr.val());
         case tipb::ExprType::MysqlDecimal:
-            return DecodeDecimal(cursor, expr.val()).toString();
+            return decodeDAGDecimal(expr.val()).toString();
         case tipb::ExprType::ColumnRef:
-            column_id = RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data()));
+            column_id = decodeDAGInt64(expr.val());
             if (column_id < 0 || column_id >= (ColumnID)input_col.size())
             {
                 throw Exception("Column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -191,23 +191,24 @@ bool isColumnExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType:
 
 Field decodeLiteral(const tipb::Expr & expr)
 {
-    size_t cursor = 0;
     switch (expr.tp())
     {
         case tipb::ExprType::Null:
             return Field();
         case tipb::ExprType::Int64:
-            return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data()));
+            return decodeDAGInt64(expr.val());
         case tipb::ExprType::Uint64:
-            return DecodeInt<UInt64>(cursor, expr.val());
+            return decodeDAGUInt64(expr.val());
         case tipb::ExprType::Float32:
+            return Float64(decodeDAGFloat32(expr.val()));
         case tipb::ExprType::Float64:
-            return DecodeFloat64(cursor, expr.val());
+            return decodeDAGFloat64(expr.val());
         case tipb::ExprType::String:
+            return decodeDAGString(expr.val());
         case tipb::ExprType::Bytes:
-            return expr.val();
+            return decodeDAGBytes(expr.val());
         case tipb::ExprType::MysqlDecimal:
-            return DecodeDecimal(cursor, expr.val());
+            return decodeDAGDecimal(expr.val());
         case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDuration:
         case tipb::ExprType::MysqlEnum:
@@ -224,7 +225,7 @@ Field decodeLiteral(const tipb::Expr & expr)
 
 ColumnID getColumnID(const tipb::Expr & expr)
 {
-    auto column_id = RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data()));
+    auto column_id = decodeDAGInt64(expr.val());
     return column_id;
 }
 
