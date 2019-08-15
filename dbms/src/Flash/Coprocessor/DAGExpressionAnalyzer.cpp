@@ -106,7 +106,7 @@ void DAGExpressionAnalyzer::appendAggregation(
     after_agg = true;
 }
 
-bool isUint8Type(const DataTypePtr & type)
+bool isUInt8Type(const DataTypePtr & type)
 {
     if (typeid_cast<const DataTypeUInt8 *>(type.get()))
     {
@@ -115,7 +115,7 @@ bool isUint8Type(const DataTypePtr & type)
     auto * nullable = typeid_cast<const DataTypeNullable *>(type.get());
     if (nullable)
     {
-        return isUint8Type(nullable->getNestedType());
+        return isUInt8Type(nullable->getNestedType());
     }
     return false;
 }
@@ -144,7 +144,7 @@ void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const ti
     ExpressionActionsChain::Step & last_step = chain.steps.back();
     filter_column_name = getActions(filter, last_step.actions);
     auto & filter_column_type = chain.steps.back().actions->getSampleBlock().getByName(filter_column_name).type;
-    if (!isUint8Type(filter_column_type))
+    if (!isUInt8Type(filter_column_type))
     {
         // find the original unit8 column
         auto & last_actions = last_step.actions->getActions();
