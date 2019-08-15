@@ -183,8 +183,12 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     // optimize for only need handle, tso, delmark.
     if (column_names_to_read.size() > 3)
     {
+        unsigned long sum_decode = 0;
+        unsigned long sum_transform = 0;
+
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
+            auto start_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
             std::ignore = handle;
 
             // Ignore data after the start_ts.
@@ -267,6 +271,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
             if (col_ids.size() != target_col_size || fields.size() != target_col_size)
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
+
+            auto mid_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
 
             /// Transform `row` to columnar format.
             for (size_t i = 0; i < col_ids.size(); i++)
@@ -372,8 +378,15 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                     // TODO: Consider other kind of type change? I.e. arbitrary type change.
                 }
             }
+            auto end_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
+
+            sum_decode += (mid_time - start_time);
+            sum_transform += (end_time - mid_time);
         }
+        std::cout << "decode time: " << sum_decode << "ms" << std::endl;
+        std::cout << "transform time: " << sum_transform << "ms" << std::endl;
     }
+    
 
     for (const auto & name : column_names_to_read)
     {
