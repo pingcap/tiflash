@@ -3,8 +3,8 @@
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Codec.h>
-
 #include <Storages/Transaction/TiKVRecordFormat.h>
+
 #include <unordered_map>
 
 namespace DB
