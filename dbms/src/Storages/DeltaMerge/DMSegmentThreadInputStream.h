@@ -11,12 +11,14 @@ class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 {
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
-    DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr & task_pool_,
-                               const ColumnDefines &          columns_to_read_,
-                               const String &                 handle_name_,
-                               const DataTypePtr &            handle_real_type_,
-                               const Context &                context_)
+    DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr &  task_pool_,
+                               const SegmentStreamCreatorPtr & stream_creator_,
+                               const ColumnDefines &           columns_to_read_,
+                               const String &                  handle_name_,
+                               const DataTypePtr &             handle_real_type_,
+                               const Context &                 context_)
         : task_pool(task_pool_),
+          stream_creator(stream_creator_),
           columns_to_read(columns_to_read_),
           header(createHeader(columns_to_read)),
           handle_name(handle_name_),
@@ -34,41 +36,36 @@ protected:
     {
         if (done)
             return {};
-        try
+        while (true)
         {
-            while (true)
+            if (!cur_stream)
             {
-                if (!cur_stream)
+                auto task = task_pool->nextTask();
+                if (!task)
                 {
-                    std::tie(cur_segment_id, cur_stream) = task_pool->nextTask();
-                    if (!cur_stream) // we are done.
-                    {
-                        done = true;
-                        return {};
-                    }
-                    LOG_DEBUG(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
+                    done = true;
+                    return {};
                 }
 
-                Block res = cur_stream->read();
-                if (res)
-                {
-                    if (!res.rows())
-                        continue;
-                    else
-                        return handleBlock(std::move(res));
-                }
-                else
-                {
-                    cur_stream = {};
-                    LOG_DEBUG(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
-                }
+                cur_segment_id = task->segment->segmentId();
+                cur_stream     = stream_creator->create(*task);
+                LOG_DEBUG(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
             }
-        }
-        catch (...)
-        {
-            LOG_ERROR(log, "throw error");
-            DB::tryLogCurrentException("DMSegmentThreadInputStream", "read");
-            throw;
+
+            Block res = cur_stream->read();
+            if (res)
+            {
+                if (!res.rows())
+                    continue;
+                else
+                    return handleBlock(std::move(res));
+            }
+            else
+            {
+                cur_segment_id = 0;
+                cur_stream     = {};
+                LOG_DEBUG(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
+            }
         }
     }
 
@@ -88,12 +85,13 @@ protected:
     }
 
 private:
-    SegmentReadTaskPoolPtr task_pool;
-    ColumnDefines          columns_to_read;
-    Block                  header;
-    String                 handle_name;
-    DataTypePtr            handle_real_type;
-    const Context &        context;
+    SegmentReadTaskPoolPtr  task_pool;
+    SegmentStreamCreatorPtr stream_creator;
+    ColumnDefines           columns_to_read;
+    Block                   header;
+    String                  handle_name;
+    DataTypePtr             handle_real_type;
+    const Context &         context;
 
     bool                done = false;
     BlockInputStreamPtr cur_stream;

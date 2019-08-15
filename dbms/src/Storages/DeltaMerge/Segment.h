@@ -115,7 +115,7 @@ public:
     SegmentPair       split(DMContext & dm_context);
     static SegmentPtr merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
 
-    bool shouldFlush(DMContext & dm_context, bool force = false);
+    bool shouldFlush(DMContext & dm_context, bool force = false) const;
     /// Flush delta into stable. i.e. delta merge.
     SegmentPtr flush(DMContext & dm_context);
 

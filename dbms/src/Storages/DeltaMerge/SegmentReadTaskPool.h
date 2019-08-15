@@ -33,31 +33,31 @@ struct SegmentReadTask
     void addRange(const HandleRange & range) { ranges.push_back(range); }
 };
 
-using SegmentReadTasks = std::vector<SegmentReadTask>;
+class SegmentStreamCreator
+{
+public:
+    virtual ~SegmentStreamCreator()                             = default;
+    virtual BlockInputStreamPtr create(const SegmentReadTask &) = 0;
+};
+
+using SegmentStreamCreatorPtr = std::shared_ptr<SegmentStreamCreator>;
+using SegmentReadTaskPtr      = std::shared_ptr<SegmentReadTask>;
+using SegmentReadTasks        = std::vector<SegmentReadTaskPtr>;
 
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
-    using StreamCreator = std::function<BlockInputStreamPtr(const SegmentReadTask & task)>;
-    SegmentReadTaskPool(SegmentReadTasks && tasks_, StreamCreator creator_) : tasks(std::move(tasks_)), creator(creator_) {}
+    SegmentReadTaskPool(SegmentReadTasks && tasks_) : tasks(std::move(tasks_)) {}
 
-    std::pair<UInt64, BlockInputStreamPtr> nextTask()
+    SegmentReadTaskPtr nextTask()
     {
-        SegmentReadTask * task;
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-
-            if (index == tasks.size())
-                return {0, {}};
-            task = &(tasks[index++]);
-        }
-        return {task->segment->segmentId(), creator(*task)};
+        std::lock_guard lock(mutex);
+        return index == tasks.size() ? SegmentReadTaskPtr() : tasks[index++];
     }
 
 private:
     SegmentReadTasks tasks;
     size_t           index = 0;
-    StreamCreator    creator;
 
     std::mutex mutex;
 };

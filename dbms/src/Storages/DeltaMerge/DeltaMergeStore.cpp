@@ -231,8 +231,11 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         // TODO: Do flush by background threads.
         if (segment->shouldFlush(dm_context, false))
         {
-            auto new_segment    = action.segment->flush(dm_context);
-            segments[range.end] = new_segment;
+            auto new_segment = action.segment->flush(dm_context);
+            {
+                std::shared_lock lock(mutex);
+                segments[range.end] = new_segment;
+            }
         }
     }
 
@@ -257,28 +260,48 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
     {
         std::shared_lock lock(mutex);
 
-        storage_snapshot.reset(new StorageSnapshot(storage_pool));
+        storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
 
         for (const auto & [handle, segment] : segments)
         {
             (void)handle;
-            tasks.emplace_back(SegmentReadTask(segment, segment->getReadSnapshot(), {segment->getRange()}));
+            tasks.emplace_back(std::make_shared<SegmentReadTask>(segment, segment->getReadSnapshot(), HandleRanges{segment->getRange()}));
         }
     }
 
-    auto dm_context     = newDMContext(db_context, db_settings);
-    auto stream_creator = [=](const SegmentReadTask & task) {
-        return task.segment->getInputStreamRaw(dm_context, task.read_snapshot, *storage_snapshot, columns_to_read);
+    auto dm_context = newDMContext(db_context, db_settings);
+
+    class StreamCreator : public SegmentStreamCreator
+    {
+    public:
+        StreamCreator(const DMContext & dm_context_, const StorageSnapshotPtr & storage_snapshot_, const ColumnDefines & columns_to_read_)
+            : dm_context(dm_context_), storage_snapshot(storage_snapshot_), columns_to_read(columns_to_read_)
+        {
+        }
+        ~StreamCreator() override = default;
+
+        BlockInputStreamPtr create(const SegmentReadTask & task) override
+        {
+            return task.segment->getInputStreamRaw(dm_context, task.read_snapshot, *storage_snapshot, columns_to_read);
+        }
+
+    private:
+        DMContext          dm_context;
+        StorageSnapshotPtr storage_snapshot;
+        ColumnDefines      columns_to_read;
     };
 
+    SegmentStreamCreatorPtr stream_creator = std::make_shared<StreamCreator>(dm_context, storage_snapshot, columns_to_read);
+
     size_t final_num_stream = std::min(num_streams, tasks.size());
-    auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks), stream_creator);
+    auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
             read_task_pool,
+            stream_creator,
             columns_to_read,
             table_handle_define.name,
             DataTypePtr{},
@@ -304,7 +327,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         std::shared_lock lock(mutex);
 
         /// FIXME: the creation of storage_snapshot is not atomic!
-        storage_snapshot.reset(new StorageSnapshot(storage_pool));
+        storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
 
         auto range_it = sorted_ranges.begin();
         auto seg_it   = segments.upper_bound(range_it->start);
@@ -323,13 +346,13 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
             auto & seg_range = seg_it->second->getRange();
             if (req_range.intersect(seg_range))
             {
-                if (tasks.empty() || tasks.back().segment != seg_it->second)
+                if (tasks.empty() || tasks.back()->segment != seg_it->second)
                 {
                     auto segment = seg_it->second;
-                    tasks.emplace_back(segment, segment->getReadSnapshot());
+                    tasks.emplace_back(std::make_shared<SegmentReadTask>(segment, segment->getReadSnapshot()));
                 }
 
-                tasks.back().addRange(req_range);
+                tasks.back()->addRange(req_range);
 
                 if (req_range.end < seg_range.end)
                 {
@@ -357,24 +380,56 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 
     auto dm_context = newDMContext(db_context, db_settings);
 
-    auto stream_creator = [=](const SegmentReadTask & task) {
-        return task.segment->getInputStream(dm_context,
-                                            task.read_snapshot,
-                                            *storage_snapshot,
-                                            columns_to_read,
-                                            task.ranges,
-                                            max_version,
-                                            std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
+    class StreamCreator : public SegmentStreamCreator
+    {
+    public:
+        StreamCreator(const DMContext &          dm_context_,
+                      const StorageSnapshotPtr & storage_snapshot_,
+                      const ColumnDefines &      columns_to_read_,
+                      UInt64                     max_version_,
+                      size_t                     expected_block_size_)
+            : dm_context(dm_context_),
+              storage_snapshot(storage_snapshot_),
+              columns_to_read(columns_to_read_),
+              max_version(max_version_),
+              expected_block_size(expected_block_size_)
+        {
+        }
+        ~StreamCreator() override = default;
+
+        BlockInputStreamPtr create(const SegmentReadTask & task) override
+        {
+            return task.segment->getInputStream(dm_context,
+                                                task.read_snapshot,
+                                                *storage_snapshot,
+                                                columns_to_read,
+                                                task.ranges,
+                                                max_version,
+                                                std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
+
+            return task.segment->getInputStreamRaw(dm_context, task.read_snapshot, *storage_snapshot, columns_to_read);
+        }
+
+    private:
+        DMContext          dm_context;
+        StorageSnapshotPtr storage_snapshot;
+        ColumnDefines      columns_to_read;
+        UInt64             max_version;
+        size_t             expected_block_size;
     };
 
+    SegmentStreamCreatorPtr stream_creator
+        = std::make_shared<StreamCreator>(dm_context, storage_snapshot, columns_to_read, max_version, expected_block_size);
+
     size_t final_num_stream = std::min(num_streams, tasks.size());
-    auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks), stream_creator);
+    auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
             read_task_pool,
+            stream_creator,
             columns_to_read,
             table_handle_define.name,
             table_handle_real_type,
