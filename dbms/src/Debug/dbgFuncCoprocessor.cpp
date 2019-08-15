@@ -3,6 +3,7 @@
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
@@ -168,38 +169,37 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
     }
     else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
-        TiDB::CodecFlag codec_flag;
+        std::stringstream ss;
         switch (lit->value.getType())
         {
             case Field::Types::Which::Null:
                 expr->set_tp(tipb::Null);
-                codec_flag = TiDB::CodecFlagNil;
+                // Null literal epxr doesn't need value.
                 break;
             case Field::Types::Which::UInt64:
                 expr->set_tp(tipb::Uint64);
-                codec_flag = TiDB::CodecFlagUInt;
+                encodeDAGUInt64(lit->value.get<UInt64>(), ss);
                 break;
             case Field::Types::Which::Int64:
                 expr->set_tp(tipb::Int64);
-                codec_flag = TiDB::CodecFlagInt;
+                encodeDAGInt64(lit->value.get<Int64>(), ss);
                 break;
             case Field::Types::Which::Float64:
                 expr->set_tp(tipb::Float64);
-                codec_flag = TiDB::CodecFlagFloat;
+                encodeDAGFloat64(lit->value.get<Float64>(), ss);
                 break;
             case Field::Types::Which::Decimal:
                 expr->set_tp(tipb::MysqlDecimal);
-                codec_flag = TiDB::CodecFlagDecimal;
+                encodeDAGDecimal(lit->value.get<Decimal>(), ss);
                 break;
             case Field::Types::Which::String:
                 expr->set_tp(tipb::String);
-                codec_flag = TiDB::CodecFlagCompactBytes;
+                // TODO: Align with TiDB.
+                encodeDAGBytes(lit->value.get<String>(), ss);
                 break;
             default:
                 throw DB::Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
         }
-        std::stringstream ss;
-        DB::EncodeDatum(lit->value, codec_flag, ss);
         expr->set_val(ss.str());
     }
     else
@@ -343,7 +343,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             if (iter == last_output.end())
                 throw DB::Exception("Column not found when pruning: " + pair.first, ErrorCodes::LOGICAL_ERROR);
             std::stringstream ss;
-            DB::EncodeNumber<Int64, TiDB::CodecFlagInt>(iter - last_output.begin(), ss);
+            encodeDAGInt64(iter - last_output.begin(), ss);
             pair.second->set_val(ss.str());
         }
         executor_ctx.output = last_output;
