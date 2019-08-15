@@ -21,6 +21,11 @@ namespace DB
 
 using namespace TiDB;
 
+namespace ErrorCodes
+{
+extern const int DDL_ERROR;
+}
+
 inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
 {
     command.column_name = column_info.name;
@@ -37,7 +42,7 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
     AlterCommands alter_commands;
 
     /// Detect new columns.
-    // TODO: Detect rename or type-changed columns.
+    // TODO: Detect rename columns.
     for (const auto & column_info : table_info.columns)
     {
         const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
@@ -48,7 +53,6 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
         if (orig_column_info == orig_table_info.columns.end())
         {
             // New column.
-            // TODO: support after column.
             command.type = AlterCommand::ADD_COLUMN;
             setAlterCommandColumn(log, command, column_info);
         }
@@ -136,13 +140,17 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
     // Call storage alter to apply schema changes.
     storage->alterForTMT(alter_commands, *table_info, db_name, context);
 
-    if (table_info->is_partition_table)
+    auto & tmt_context = context.getTMTContext();
+
+    if (table_info->isLogicalPartitionTable())
     {
         // create partition table.
         for (auto part_def : table_info->partition.definitions)
         {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
-            storage->alterForTMT(alter_commands, new_table_info, db_name, context);
+            auto part_storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(part_def.id).get());
+            if (part_storage != nullptr)
+                part_storage->alterForTMT(alter_commands, new_table_info, db_name, context);
         }
     }
 
@@ -157,7 +165,7 @@ void SchemaBuilder<Getter>::applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_
     auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_id).get());
     if (storage == nullptr || table_info == nullptr)
     {
-        throw Exception("miss table: " + std::to_string(table_id));
+        throw Exception("miss table: " + std::to_string(table_id), ErrorCodes::DDL_ERROR);
     }
     applyAlterTableImpl(table_info, dbInfo->name, storage);
 }
@@ -180,7 +188,7 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
     auto di = getter.getDatabase(diff.schema_id);
 
     if (di == nullptr)
-        throw Exception("miss database: " + std::to_string(diff.schema_id));
+        throw Exception("miss database: " + std::to_string(diff.schema_id), ErrorCodes::DDL_ERROR);
 
     if (isIgnoreDB(di->name))
     {
@@ -221,15 +229,12 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
         case SchemaActionRenameTable:
         {
             applyRenameTable(di, diff.old_schema_id, diff.table_id);
-        }
-        case SchemaActionAddTablePartition:
-        {
-            //applyAddPartition(di, diff.table_id);
             break;
         }
+        case SchemaActionAddTablePartition:
         case SchemaActionDropTablePartition:
         {
-            //applyDropPartition(di, diff.table_id);
+            applyAlterPartition(di, diff.table_id);
             break;
         }
         default:
@@ -247,6 +252,63 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
     {
         applyCreateTable(di, newTableID);
     }
+}
+
+template <typename Getter>
+void SchemaBuilder<Getter>::applyAlterPartition(TiDB::DBInfoPtr db_info, TableID table_id)
+{
+    auto table_info = getter.getTableInfo(db_info->id, table_id);
+    if (table_info == nullptr)
+    {
+        throw Exception("miss old table id in TiKV " + std::to_string(table_id), ErrorCodes::DDL_ERROR);
+    }
+
+    auto & tmt_context = context.getTMTContext();
+    auto storage = tmt_context.getStorages().get(table_id).get();
+    if (storage == nullptr)
+    {
+        throw Exception("miss table in Flash " + table_info->name, ErrorCodes::DDL_ERROR);
+    }
+    const String & db_name = storage->getDatabaseName();
+    const auto & orig_table_info = storage->getTableInfo();
+    if (!table_info->isLogicalPartitionTable())
+    {
+        throw Exception("miss old table id in Flash " + std::to_string(table_id), ErrorCodes::DDL_ERROR);
+    }
+    const auto & orig_defs = orig_table_info.partition.definitions;
+    const auto & new_defs = table_info->partition.definitions;
+
+    for (auto orig_def : orig_defs)
+    {
+        auto it = std::find_if(
+            new_defs.begin(), new_defs.end(), [&](const PartitionDefinition & new_def) { return new_def.id == orig_def.id; });
+        if (it == new_defs.end())
+        {
+            applyDropTableImpl(db_name, orig_table_info.getPartitionTableName(orig_def.id));
+        }
+    }
+
+    for (auto new_def : new_defs)
+    {
+        auto it = std::find_if(
+            orig_defs.begin(), orig_defs.end(), [&](const PartitionDefinition & orig_def) { return new_def.id == orig_def.id; });
+        if (it == orig_defs.end())
+        {
+            applyCreatePhysicalTableImpl(*db_info, table_info->producePartitionTableInfo(new_def.id));
+        }
+    }
+}
+
+std::vector<std::pair<TableInfoPtr, DBInfoPtr>> collectPartitionTables(TableInfoPtr table_info, DBInfoPtr db_info)
+{
+    std::vector<std::pair<TableInfoPtr, DBInfoPtr>> all_tables;
+    // Collect All partition tables.
+    for (auto part_def : table_info->partition.definitions)
+    {
+        auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
+        all_tables.push_back(std::make_pair(std::make_shared<TableInfo>(new_table_info), db_info));
+    }
+    return all_tables;
 }
 
 template <typename Getter>
@@ -281,6 +343,23 @@ void SchemaBuilder<Getter>::applyRenameTable(DBInfoPtr db_info, DatabaseID old_d
     }
 
     applyRenameTableImpl(old_db_info->name, db_info->name, storage_to_rename->getTableName(), table_info->name);
+
+    storage_to_rename->setTableInfo(*table_info);
+
+    if (table_info->isLogicalPartitionTable())
+    {
+        const auto & table_dbs = collectPartitionTables(table_info, db_info);
+        alterAndRenameTables(table_dbs);
+        for (auto table_db : table_dbs)
+        {
+            auto table = table_db.first;
+            auto part_storage = tmt_context.getStorages().get(table->id).get();
+            if (part_storage != nullptr)
+            {
+                part_storage->setTableInfo(*table);
+            }
+        }
+    }
 }
 
 template <typename Getter>
@@ -460,7 +539,7 @@ template <typename Getter>
 void SchemaBuilder<Getter>::applyCreateTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info)
 {
     table_info.schema_version = target_version;
-    if (table_info.is_partition_table)
+    if (table_info.isLogicalPartitionTable())
     {
         // create partition table.
         for (auto part_def : table_info.partition.definitions)
@@ -478,6 +557,7 @@ void SchemaBuilder<Getter>::applyCreateTableImpl(const TiDB::DBInfo & db_info, T
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropTableImpl(const String & database_name, const String & table_name)
 {
+    LOG_INFO(log, "try to drop table : " + database_name + "." + table_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
     drop_query->table = table_name;
@@ -490,7 +570,7 @@ void SchemaBuilder<Getter>::applyDropTableImpl(const String & database_name, con
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
 {
-    LOG_INFO(log, "try to drop table id : " + std::to_string(table_id));
+    LOG_DEBUG(log, "drop table id :" + std::to_string(table_id));
     String database_name = dbInfo->name;
     auto & tmt_context = context.getTMTContext();
     auto storage_to_drop = tmt_context.getStorages().get(table_id).get();
@@ -500,13 +580,13 @@ void SchemaBuilder<Getter>::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_i
         return;
     }
     const auto & table_info = static_cast<StorageMergeTree *>(storage_to_drop)->getTableInfo();
-    if (table_info.is_partition_table)
+    if (table_info.isLogicalPartitionTable())
     {
         // drop all partition tables.
         for (auto part_def : table_info.partition.definitions)
         {
-            auto new_table_info = table_info.producePartitionTableInfo(part_def.id);
-            applyDropTableImpl(database_name, new_table_info.name);
+            auto new_table_name = table_info.getPartitionTableName(part_def.id);
+            applyDropTableImpl(database_name, new_table_name);
         }
     }
     // and drop logic table.
@@ -640,7 +720,7 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
         resolveRename(this, rename_map, it, visited);
     }
 
-    // Then Alter Table
+    // Then Alter Table.
     for (auto table_db : table_dbs)
     {
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
@@ -661,7 +741,7 @@ void SchemaBuilder<Getter>::createTables(std::vector<std::pair<TableInfoPtr, DBI
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
         if (storage == nullptr)
         {
-            applyCreateTableImpl(*table_db.second, *table_db.first);
+            applyCreatePhysicalTableImpl(*table_db.second, *table_db.first);
         }
     }
 }
@@ -703,6 +783,11 @@ void SchemaBuilder<Getter>::syncAllSchema()
         for (auto table : tables)
         {
             all_tables.push_back(std::make_pair(table, db));
+            if (table->isLogicalPartitionTable())
+            {
+                auto partition_tables = collectPartitionTables(table, db);
+                all_tables.insert(all_tables.end(), partition_tables.begin(), partition_tables.end());
+            }
         }
     }
 
