@@ -1,5 +1,7 @@
+#include <Common/Decimal.h>
 #include <IO/ReadBufferFromString.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/MyTimeParser.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace TiDB
@@ -9,9 +11,6 @@ using DB::WriteBufferFromOwnString;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-// TODO:: Refine Decimal Default Value !!
-// TODO:: Refine Enum Default Value !!
-// TODO:: Refine Date/Datatime/TimeStamp Defalut Value !!
 Field ColumnInfo::defaultValueToField() const
 {
     auto & value = origin_default_value;
@@ -27,16 +26,16 @@ Field ColumnInfo::defaultValueToField() const
         case TypeLong:
         case TypeLongLong:
         case TypeInt24:
+        case TypeBit:
             return value.convert<Int64>();
         // Floating type.
         case TypeFloat:
         case TypeDouble:
             return value.convert<double>();
-        case TypeTimestamp:
-            // FIXME: may be string
-            return value.convert<Int64>();
         case TypeDate:
         case TypeDatetime:
+        case TypeTimestamp:
+            return DB::parseMyDatetime(value.convert<String>());
         case TypeVarchar:
         case TypeTinyBlob:
         case TypeMediumBlob:
@@ -46,9 +45,16 @@ Field ColumnInfo::defaultValueToField() const
         case TypeString:
             return value.convert<String>();
         case TypeEnum:
-            // FIXME: may be int or string
-            return value.convert<String>();
+            return getEnumIndex(value.convert<String>());
         case TypeNull:
+            return Field();
+        case TypeDecimal:
+        case TypeNewDecimal:
+            return getDecimalDefaultValue(value.convert<String>());
+        case TypeTime:
+        case TypeYear:
+        case TypeSet:
+            // TODO support it !
             return Field();
         default:
             throw Exception("Have not proccessed type: " + std::to_string(tp));
@@ -56,8 +62,31 @@ Field ColumnInfo::defaultValueToField() const
     return Field();
 }
 
-Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
-try
+DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const
+{
+    DB::ReadBufferFromString buffer(str);
+    DB::Decimal result;
+    result.precision = flen;
+    result.scale = decimal;
+    DB::readDecimalText(result, buffer);
+    return result;
+}
+
+// FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
+Int64 ColumnInfo::getEnumIndex(const String & default_str) const
+{
+    for (const auto & elem : elems)
+    {
+        if (elem.first == default_str)
+        {
+            return elem.second;
+        }
+    }
+    int num = std::stoi(default_str);
+    return num;
+}
+
+Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
