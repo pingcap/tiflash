@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 
 #include <unordered_map>
 
@@ -59,7 +60,7 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::Null:
             return "NULL";
         case tipb::ExprType::Int64:
-            return std::to_string(DecodeInt<Int64>(cursor, expr.val()));
+            return std::to_string(RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data())));
         case tipb::ExprType::Uint64:
             return std::to_string(DecodeInt<UInt64>(cursor, expr.val()));
         case tipb::ExprType::Float32:
@@ -68,8 +69,10 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::String:
         case tipb::ExprType::Bytes:
             return expr.val();
+        case tipb::ExprType::MysqlDecimal:
+            return DecodeDecimal(cursor, expr.val()).toString();
         case tipb::ExprType::ColumnRef:
-            column_id = DecodeInt<Int64>(cursor, expr.val());
+            column_id = RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data()));
             if (column_id < 0 || column_id >= (ColumnID)input_col.size())
             {
                 throw Exception("Column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -83,19 +86,19 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::First:
             if (!agg_func_map.count(expr.tp()))
             {
-                throw Exception(tipb::ExprType_Name(expr.tp()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
+                throw Exception(tipb::ExprType_Name(expr.tp()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
             }
             func_name = agg_func_map.find(expr.tp())->second;
             break;
         case tipb::ExprType::ScalarFunc:
             if (!scalar_func_map.count(expr.sig()))
             {
-                throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
+                throw Exception(tipb::ScalarFuncSig_Name(expr.sig()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
             }
             func_name = scalar_func_map.find(expr.sig())->second;
             break;
         default:
-            throw Exception(tipb::ExprType_Name(expr.tp()) + "not supported", ErrorCodes::UNSUPPORTED_METHOD);
+            throw Exception(tipb::ExprType_Name(expr.tp()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
     }
     // build function expr
     if (isInOrGlobalInOperator(func_name) && for_parser)
@@ -194,7 +197,7 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::Null:
             return Field();
         case tipb::ExprType::Int64:
-            return DecodeInt<Int64>(cursor, expr.val());
+            return RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data()));
         case tipb::ExprType::Uint64:
             return DecodeInt<UInt64>(cursor, expr.val());
         case tipb::ExprType::Float32:
@@ -203,8 +206,9 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::String:
         case tipb::ExprType::Bytes:
             return expr.val();
-        case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDecimal:
+            return DecodeDecimal(cursor, expr.val());
+        case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDuration:
         case tipb::ExprType::MysqlEnum:
         case tipb::ExprType::MysqlHex:
@@ -212,7 +216,7 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::MysqlTime:
         case tipb::ExprType::MysqlJson:
         case tipb::ExprType::ValueList:
-            throw Exception(tipb::ExprType_Name(expr.tp()) + "is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
+            throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         default:
             throw Exception("Should not reach here: not a literal expression", ErrorCodes::LOGICAL_ERROR);
     }
@@ -220,8 +224,8 @@ Field decodeLiteral(const tipb::Expr & expr)
 
 ColumnID getColumnID(const tipb::Expr & expr)
 {
-    size_t cursor = 0;
-    return DecodeInt<Int64>(cursor, expr.val());
+    auto column_id = RecordKVFormat::decodeInt64(RecordKVFormat::read<UInt64>(expr.val().data()));
+    return column_id;
 }
 
 bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
