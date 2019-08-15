@@ -183,15 +183,11 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     // optimize for only need handle, tso, delmark.
     if (column_names_to_read.size() > 3)
     {
-        unsigned long sum_decode = 0;
-        unsigned long sum_mid = 0;
-        unsigned long sum_transform = 0;
         std::unordered_set<ColumnID> col_id_included;
         std::unordered_set<ColumnID> row_all_column_ids;
 
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
-            auto start_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
             std::ignore = handle;
 
             // Ignore data after the start_ts.
@@ -233,8 +229,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 }
             }
 
-            auto mid_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
-
             if (col_ids.size() != fields.size())
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
@@ -263,22 +257,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                     fields.push_back(column.defaultValueToField());
             }
 
-            // Remove values of non-existing columns, which could be data inserted (but not flushed) before DDLs that drop some columns.
-            // TODO: May need to log this.
-            for (int i = int(col_ids.size()) - 1; i >= 0; i--)
-            {
-                ColumnID col_id = col_ids[i];
-                if (column_map.find(col_id) == column_map.end())
-                {
-                    col_ids.erase(col_ids.begin() + i, col_ids.begin() + i + 1);
-                    fields.erase(fields.begin() + i, fields.begin() + i + 1);
-                }
-            }
-
             if (col_ids.size() != target_col_size || fields.size() != target_col_size)
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
-
-            auto mid_time2 = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
 
             /// Transform `row` to columnar format.
             for (size_t i = 0; i < col_ids.size(); i++)
@@ -384,15 +364,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                     // TODO: Consider other kind of type change? I.e. arbitrary type change.
                 }
             }
-            auto end_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
-
-            sum_decode += (mid_time - start_time);
-            sum_mid += (mid_time2 - mid_time);
-            sum_transform += (end_time - mid_time2);
         }
-        std::cout << "decode time: " << sum_decode << "ms" << std::endl;
-        std::cout << "mid time: " << sum_mid << "ms" << std::endl;
-        std::cout << "transform time: " << sum_transform << "ms" << std::endl;
     }
 
 
