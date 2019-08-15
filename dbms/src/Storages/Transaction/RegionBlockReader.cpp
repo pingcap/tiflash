@@ -220,12 +220,11 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 {
                     return std::make_tuple(block, false);
                 }
-            }
-
-            if (col_ids.empty() && fields.size() == 1 && fields[0].isNull())
-            {
-                // all field is null
-                fields.clear();
+                if (col_ids.empty() && fields.size() == 1 && fields[0].isNull())
+                {
+                    // all field is null
+                    fields.clear();
+                }
             }
 
             if (col_ids.size() != fields.size())
@@ -270,7 +269,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
 
             /// Transform `row` to columnar format.
-
             for (size_t i = 0; i < col_ids.size(); i++)
             {
                 ColumnID col_id = col_ids[i];
