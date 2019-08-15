@@ -39,17 +39,15 @@ private:
 
     void applyCreateSchemaImpl(TiDB::DBInfoPtr db_info);
 
-    void applyCreateTable(TiDB::DBInfoPtr dbInfo, Int64 table_id);
+    void applyCreateTable(TiDB::DBInfoPtr db_info, Int64 table_id);
 
-    void applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id);
+    void applyDropTable(TiDB::DBInfoPtr db_info, Int64 table_id);
 
-    void applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_id);
+    void applyAlterTable(TiDB::DBInfoPtr db_info, Int64 table_id);
 
     void applyAlterTableImpl(TiDB::TableInfoPtr table_info, const String & db_name, StorageMergeTree * storage);
 
-    //void applyAddPartition(TiDB::DBInfoPtr dbInfo, Int64 table_id);
-
-    //void applyDropPartition(TiDB::DBInfoPtr dbInfo, Int64 table_id);
+    void applyAlterPartition(TiDB::DBInfoPtr db_info, Int64 table_id);
 
     void applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info);
 
