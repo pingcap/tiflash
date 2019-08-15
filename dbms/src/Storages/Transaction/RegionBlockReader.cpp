@@ -231,6 +231,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 }
             }
 
+            auto mid_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
+
             if (col_ids.size() != fields.size())
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
@@ -272,7 +274,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             if (col_ids.size() != target_col_size || fields.size() != target_col_size)
                 throw Exception("decode row error.", ErrorCodes::LOGICAL_ERROR);
 
-            auto mid_time = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now().time_since_epoch()).count();
+
 
             /// Transform `row` to columnar format.
             for (size_t i = 0; i < col_ids.size(); i++)
@@ -386,7 +388,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         std::cout << "decode time: " << sum_decode << "ms" << std::endl;
         std::cout << "transform time: " << sum_transform << "ms" << std::endl;
     }
-    
+
 
     for (const auto & name : column_names_to_read)
     {
