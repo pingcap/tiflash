@@ -174,7 +174,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         {
             case Field::Types::Which::Null:
                 expr->set_tp(tipb::Null);
-                // Null literal epxr doesn't need value.
+                // Null literal expr doesn't need value.
                 break;
             case Field::Types::Which::UInt64:
                 expr->set_tp(tipb::Uint64);
