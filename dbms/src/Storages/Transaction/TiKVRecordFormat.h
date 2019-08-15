@@ -37,14 +37,13 @@ static const UInt64 SIGN_MARK = UInt64(1) << 63;
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
-inline std::tuple<std::vector<ColumnID>, std::vector<Field>, std::set<ColumnID>, bool> DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read, const std::unordered_set<ColumnID> & all_column_ids)
+inline std::tuple<std::vector<ColumnID>, std::vector<Field>, std::unordered_set<ColumnID>> DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read)
 {
     std::vector<ColumnID> col_ids;
     std::vector<Field> fields;
-    std::set<ColumnID> row_all_col_ids;
+    std::unordered_set<ColumnID> row_all_column_ids;
     const String & raw_value = value.getStr();
     size_t cursor = 0;
-    bool has_unknown_col_id = false;
     while (cursor < raw_value.size())
     {
         Field f = DecodeDatum(cursor, raw_value);
@@ -53,12 +52,8 @@ inline std::tuple<std::vector<ColumnID>, std::vector<Field>, std::set<ColumnID>,
             fields.push_back(std::move(f));
             break;
         }
-        if (!has_unknown_col_id && !all_column_ids.count(f.get<ColumnID>()))
-        {
-            has_unknown_col_id = true;
-        }
         ColumnID col_id = f.get<ColumnID>();
-        row_all_col_ids.insert(col_id);
+        row_all_column_ids.insert(col_id);
         if (!column_ids_to_read.count(col_id))
         {
             SkipDatum(cursor, raw_value);
@@ -73,7 +68,7 @@ inline std::tuple<std::vector<ColumnID>, std::vector<Field>, std::set<ColumnID>,
     if (cursor != raw_value.size())
         throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
 
-    return std::make_tuple(std::move(col_ids), std::move(fields), std::move(row_all_col_ids), has_unknown_col_id);
+    return std::make_tuple(std::move(col_ids), std::move(fields), std::move(row_all_column_ids));
 }
 
 // Key format is here:

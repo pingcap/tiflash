@@ -126,12 +126,12 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     std::unordered_map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
     std::unordered_set<ColumnID> column_ids_to_read;
-    std::unordered_set<ColumnID> all_column_ids;
+    std::unordered_set<ColumnID> schema_all_column_ids;
     for (const auto & column_info : table_info.columns)
     {
         ColumnID col_id = column_info.id;
         String col_name = column_info.name;
-        all_column_ids.emplace(col_id);
+        schema_all_column_ids.insert(col_id);
         if (std::find(column_names_to_read.begin(), column_names_to_read.end(), col_name) == column_names_to_read.end())
         {
             continue;
@@ -195,9 +195,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
             std::vector<ColumnID> col_ids;
             std::vector<Field> fields;
-            std::set<ColumnID> row_all_col_ids;
-            bool has_unknown_col_id = false;
-            bool all_column_is_null = false;
+            std::unordered_set<ColumnID> row_all_column_ids;
 
             if (write_type == Region::DelFlag)
             {
@@ -216,23 +214,22 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 }
             }
             else
-                std::tie(col_ids, fields, row_all_col_ids, has_unknown_col_id) = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, all_column_ids);
+            {
+                std::tie(col_ids, fields, row_all_column_ids) = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read);
+                if ((schema_all_column_ids != row_all_column_ids) && !force_decode)
+                {
+                    return std::make_tuple(block, false);
+                }
+            }
 
             if (col_ids.empty() && fields.size() == 1 && fields[0].isNull())
             {
                 // all field is null
                 fields.clear();
-                all_column_is_null = true;
             }
 
             if (col_ids.size() != fields.size())
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
-
-            /// row contains unknown column id
-            /// if force_decode is false, the schema may be too old
-            /// if force decode is true, the column may have been dropped and just ignore it
-            if (has_unknown_col_id && !force_decode)
-                return std::make_tuple(block, false);
 
             /// Modify `row` by adding missing column values or removing useless column values.
             std::unordered_set<ColumnID> col_id_included(col_ids.begin(), col_ids.end());
@@ -245,25 +242,11 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 if (col_id_included.count(column.id))
                     continue;
 
-                if (!row_all_col_ids.count(column.id) && !force_decode)
-                    return std::make_tuple(block, false);
-
                 if (!column_ids_to_read.count(column.id))
                     continue;
 
                 col_ids.push_back(column.id);
-                if (all_column_is_null)
-                {
-                    if (column.hasNotNullFlag())
-                    {
-                        throw Exception("not null column contains null value", ErrorCodes::LOGICAL_ERROR);
-                    }
-                    else
-                    {
-                        fields.push_back(Field());
-                    }
-                }
-                else if (column.hasNoDefaultValueFlag())
+                if (column.hasNoDefaultValueFlag())
                     // Fill `zero` value if NOT NULL specified or else NULL.
                     fields.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
                 else
