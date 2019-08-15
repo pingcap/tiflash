@@ -56,6 +56,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
         if (col.name != table_handle_define.name && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             table_columns.emplace_back(col);
     }
+    // update block header
+    header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
 
     DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
     if (!storage_pool.maxMetaPageId())
@@ -475,9 +477,72 @@ void DeltaMergeStore::check(const Context & db_context, const DB::Settings & db_
     }
 }
 
-void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &command)
+Block DeltaMergeStore::genHeaderBlock(const ColumnDefines & raw_columns,
+                                      const ColumnDefine &  handle_define,
+                                      const DataTypePtr &   handle_real_type)
 {
-    // TODO find column define and then apply alter
+    ColumnDefines real_cols = raw_columns;
+    for (auto && col : real_cols)
+    {
+        if (col.id == handle_define.id)
+        {
+            if (handle_real_type)
+                col.type = handle_real_type;
+        }
+    }
+    return toEmptyBlock(real_cols);
+}
+
+void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands & commands)
+{
+    for (const auto & command : commands)
+    {
+        applyColumnDefineAlter(command);
+    }
+
+    // Don't forget to update header
+    header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
+}
+
+void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand & command)
+{
+    if (command.type == AlterCommand::MODIFY_COLUMN)
+    {
+        // find column define and then apply modify
+        bool exist_column = false;
+        for (auto && column_define : table_columns)
+        {
+            if (column_define.name == command.column_name)
+            {
+                exist_column       = true;
+                column_define.type = command.data_type;
+            }
+        }
+        if (!exist_column)
+        {
+            throw Exception(String("Alter column: ") + command.column_name + " is not exists.", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    else if (command.type == AlterCommand::ADD_COLUMN)
+    {
+        // we don't care about `after_column` here
+        // TODO column id should be synced with TiDB
+        ColId col_id = 0;
+        for (const auto & c : table_columns)
+            col_id = std::max(col_id, c.id);
+        col_id = col_id + 1;
+
+        ColumnDefine define(col_id, command.column_name, command.data_type);
+        table_columns.emplace_back(std::move(define));
+    }
+    else if (command.type == AlterCommand::DROP_COLUMN)
+    {
+        // we identify column by name
+        table_columns.erase(std::remove_if(table_columns.begin(),
+                                           table_columns.end(),
+                                           [&](const ColumnDefine & c) { return c.name == command.column_name; }),
+                            table_columns.end());
+    }
 }
 
 } // namespace DM

@@ -2,13 +2,13 @@
 
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Storages/AlterCommands.h>
 
 namespace DB
 {
@@ -61,13 +61,14 @@ public:
                            UInt64                max_version,
                            size_t                expected_block_size);
 
-    /// Apply `command` on column define
-    void applyColumnDefineAlter(const AlterCommand &command);
+    /// Apply `commands` on column define
+    void applyColumnDefineAlters(const AlterCommands & commands);
 
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
-    const ColumnDefines & getTableColumns() { return table_columns; }
-    const ColumnDefine &  getHandle() { return table_handle_define; }
+    const ColumnDefines & getTableColumns() const { return table_columns; }
+    const ColumnDefine &  getHandle() const { return table_handle_define; }
+    const Block &         getHeader() const { return header; }
 
     void check(const Context & db_context, const DB::Settings & db_settings);
 
@@ -99,6 +100,10 @@ private:
                              size_t             offset,
                              size_t             limit);
 
+    void applyColumnDefineAlter(const AlterCommand & command);
+    static Block
+    genHeaderBlock(const ColumnDefines & raw_columns, const ColumnDefine & handle_define, const DataTypePtr & handle_real_type);
+
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
 
@@ -109,6 +114,7 @@ private:
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;
     DataTypePtr   table_handle_real_type;
+    Block         header; // an empty block header
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;

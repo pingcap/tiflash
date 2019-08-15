@@ -126,21 +126,17 @@ inline PaddedPODArray<T> const * getColumnVectorDataPtr(const Block & block, siz
     return toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
-inline void addColumn(Block & block, ColId col_id, String col_name, const DataTypePtr & col_type, const ColumnPtr & col)
+inline void addColumnToBlock(Block & block, ColId col_id, const String &col_name, const DataTypePtr & col_type, const ColumnPtr & col)
 {
-    ColumnWithTypeAndName column;
-    column.column_id = col_id;
-    column.name      = std::move(col_name);
-    column.type      = col_type;
-    column.column    = col;
-    block.insert(column);
+    ColumnWithTypeAndName column(col, col_type, col_name, col_id);
+    block.insert(std::move(column));
 }
 
 inline Block toEmptyBlock(const ColumnDefines & columns)
 {
     Block block;
     for (auto & c : columns)
-        addColumn(block, c.id, c.name, c.type, c.type->createColumn());
+        addColumnToBlock(block, c.id, c.name, c.type, c.type->createColumn());
     return block;
 }
 
