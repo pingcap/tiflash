@@ -94,6 +94,8 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
             {
                 field_type.set_tp(ci.tp());
                 field_type.set_flag(ci.flag());
+                field_type.set_flen(ci.columnlen());
+                field_type.set_decimal(ci.decimal());
                 output_field_types.push_back(field_type);
             }
             return true;

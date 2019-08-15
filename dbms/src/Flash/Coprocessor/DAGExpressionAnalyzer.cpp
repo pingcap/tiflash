@@ -2,7 +2,10 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
@@ -103,6 +106,20 @@ void DAGExpressionAnalyzer::appendAggregation(
     after_agg = true;
 }
 
+bool isUint8Type(const DataTypePtr & type)
+{
+    if (typeid_cast<const DataTypeUInt8 *>(type.get()))
+    {
+        return true;
+    }
+    auto * nullable = typeid_cast<const DataTypeNullable *>(type.get());
+    if (nullable)
+    {
+        return isUint8Type(nullable->getNestedType());
+    }
+    return false;
+}
+
 void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name)
 {
     if (sel.conditions_size() == 0)
@@ -124,7 +141,24 @@ void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const ti
 
     const tipb::Expr & filter = sel.conditions_size() > 1 ? final_condition : sel.conditions(0);
     initChain(chain, getCurrentInputColumns());
-    filter_column_name = getActions(filter, chain.steps.back().actions);
+    ExpressionActionsChain::Step & last_step = chain.steps.back();
+    filter_column_name = getActions(filter, last_step.actions);
+    auto & filter_column_type = chain.steps.back().actions->getSampleBlock().getByName(filter_column_name).type;
+    if (!isUint8Type(filter_column_type))
+    {
+        // find the original unit8 column
+        auto & last_actions = last_step.actions->getActions();
+        for (auto it = last_actions.rbegin(); it != last_actions.rend(); ++it)
+        {
+            if (it->type == ExpressionAction::Type::APPLY_FUNCTION && it->result_name == filter_column_name
+                && it->function->getName() == "CAST")
+            {
+                // for cast function, the casted column is the first argument
+                filter_column_name = it->argument_names[0];
+                break;
+            }
+        }
+    }
     chain.steps.back().required_output.push_back(filter_column_name);
 }
 
