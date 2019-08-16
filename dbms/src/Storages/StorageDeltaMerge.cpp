@@ -45,6 +45,10 @@ StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
 
+    // save schema from TiDB
+    if (table_info_)
+        tidb_table_info = table_info_->get();
+
     std::unordered_set<String> pks;
     for (size_t i = 0; i < primary_expr_ast_->children.size(); ++i)
     {
@@ -321,6 +325,7 @@ void StorageDeltaMerge::check(const Context & context) { store->check(context, c
 void StorageDeltaMerge::alterFromTiDB(
     const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
 {
+    tidb_table_info = table_info;
     alterImpl(params, database_name, table_info.name, std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
 }
 

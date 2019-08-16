@@ -43,6 +43,8 @@ public:
     void alterFromTiDB(
         const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context);
 
+    inline const TiDB::TableInfo & getTableInfo() const { return tidb_table_info; }
+
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
     BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
@@ -78,6 +80,7 @@ private:
     Strings pk_column_names;
     OrderedNameSet hidden_columns;
 
+    TiDB::TableInfo tidb_table_info;
     ColumnID max_column_id_used;
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
