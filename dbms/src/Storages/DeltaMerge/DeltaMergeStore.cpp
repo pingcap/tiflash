@@ -168,8 +168,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         size_t     offset;
         size_t     limit;
 
-        BlockOrDelete update;
-        AppendTaskPtr task;
+        BlockOrDelete update = {};
+        AppendTaskPtr task   = {};
     };
     std::vector<WriteAction> actions;
 
