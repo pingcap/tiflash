@@ -108,19 +108,8 @@ void DAGExpressionAnalyzer::appendAggregation(
 
 bool isUInt8Type(const DataTypePtr & type)
 {
-    if (typeid_cast<const DataTypeUInt8 *>(type.get()))
-    {
-        return true;
-    }
-    if (type->isNullable())
-    {
-        auto * nullable = typeid_cast<const DataTypeNullable *>(type.get());
-        if (typeid_cast<const DataTypeUInt8 *>(nullable->getNestedType().get()))
-        {
-            return true;
-        }
-    }
-    return false;
+    auto non_nullable_type = type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(type)->getNestedType() : type;
+    return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
 }
 
 void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name)
