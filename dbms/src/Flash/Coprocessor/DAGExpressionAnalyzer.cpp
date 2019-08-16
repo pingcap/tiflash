@@ -23,11 +23,6 @@ extern const int COP_BAD_DAG_REQUEST;
 extern const int UNSUPPORTED_METHOD;
 } // namespace ErrorCodes
 
-static String genCastString(const String & org_name, const String & target_type_name)
-{
-    return "cast(" + org_name + ", " + target_type_name + ") ";
-}
-
 static String genFuncString(const String & func_name, const Names & argument_names)
 {
     std::stringstream ss;
@@ -111,29 +106,39 @@ bool isUInt8Type(const DataTypePtr & type)
     return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
 }
 
+String DAGExpressionAnalyzer::applyFunction(const String & func_name, Names & arg_names, ExpressionActionsPtr & actions)
+{
+    const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
+    String result_name = genFuncString(func_name, arg_names);
+    const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, arg_names, result_name);
+    actions->add(apply_function);
+    return result_name;
+}
+
 void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name)
 {
     if (sel.conditions_size() == 0)
     {
         throw Exception("Selection executor without condition exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    tipb::Expr final_condition;
-    if (sel.conditions_size() > 1)
-    {
-        final_condition.set_tp(tipb::ExprType::ScalarFunc);
-        final_condition.set_sig(tipb::ScalarFuncSig::LogicalAnd);
 
-        for (auto & condition : sel.conditions())
-        {
-            auto c = final_condition.add_children();
-            c->ParseFromString(condition.SerializeAsString());
-        }
-    }
-
-    const tipb::Expr & filter = sel.conditions_size() > 1 ? final_condition : sel.conditions(0);
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & last_step = chain.steps.back();
-    filter_column_name = getActions(filter, last_step.actions);
+    Names arg_names;
+    for (auto & condition : sel.conditions())
+    {
+        arg_names.push_back(getActions(condition, last_step.actions));
+    }
+    if (arg_names.size() == 1)
+    {
+        filter_column_name = arg_names[0];
+    }
+    else
+    {
+        // connect all the conditions by logical and
+        filter_column_name = applyFunction("and", arg_names, last_step.actions);
+    }
+
     auto & filter_column_type = chain.steps.back().actions->getSampleBlock().getByName(filter_column_name).type;
     if (!isUInt8Type(filter_column_type))
     {
@@ -257,17 +262,12 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
             auto type_field_type = type_expr.field_type();
             type_field_type.set_tp(0xfe);
             type_field_type.set_flag(1);
-            String name = getActions(type_expr, actions);
-            String cast_name = "CAST";
-            const FunctionBuilderPtr & cast_func_builder = FunctionFactory::instance().get(cast_name, context);
-            String cast_expr_name = genCastString(expr_name, getName(type_expr, getCurrentInputColumns()));
+            getActions(type_expr, actions);
 
             Names cast_argument_names;
             cast_argument_names.push_back(expr_name);
             cast_argument_names.push_back(getName(type_expr, getCurrentInputColumns()));
-            const ExpressionAction & apply_cast_function
-                = ExpressionAction::applyFunction(cast_func_builder, cast_argument_names, cast_expr_name);
-            actions->add(apply_cast_function);
+            String cast_expr_name = applyFunction("CAST", cast_argument_names, actions);
             return cast_expr_name;
         }
         else
@@ -341,7 +341,6 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
-        const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
         Names argument_names;
         DataTypes argument_types;
 
@@ -372,16 +371,13 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             }
         }
 
-        // re-construct expr_name, because expr_name generated previously is based on expr tree,
+        // need to re-construct expr_name, because expr_name generated previously is based on expr tree,
         // but for function call, it's argument name may be changed as an implicit cast func maybe
         // inserted(refer to the logic below), so we need to update the expr_name
         // for example, for a expr and(arg1, arg2), the expr_name is and(arg1_name,arg2_name), but
         // if the arg1 need to be casted to the type passed by dag request, then the expr_name
         // should be updated to and(casted_arg1_name, arg2_name)
-        expr_name = genFuncString(func_name, argument_names);
-
-        const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, argument_names, expr_name);
-        actions->add(apply_function);
+        expr_name = applyFunction(func_name, argument_names, actions);
         // add cast if needed
         expr_name = appendCastIfNeeded(expr, actions, expr_name);
         return expr_name;

@@ -53,6 +53,7 @@ public:
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const NamesAndTypesList & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
+    String applyFunction(const String & func_name, Names & arg_names, ExpressionActionsPtr & actions);
 };
 
 } // namespace DB
