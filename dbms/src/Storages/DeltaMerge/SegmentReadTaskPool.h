@@ -33,16 +33,9 @@ struct SegmentReadTask
     void addRange(const HandleRange & range) { ranges.push_back(range); }
 };
 
-class SegmentStreamCreator
-{
-public:
-    virtual ~SegmentStreamCreator()                             = default;
-    virtual BlockInputStreamPtr create(const SegmentReadTask &) = 0;
-};
-
-using SegmentStreamCreatorPtr = std::shared_ptr<SegmentStreamCreator>;
-using SegmentReadTaskPtr      = std::shared_ptr<SegmentReadTask>;
-using SegmentReadTasks        = std::vector<SegmentReadTaskPtr>;
+using SegmentReadTaskPtr   = std::shared_ptr<SegmentReadTask>;
+using SegmentReadTasks     = std::vector<SegmentReadTaskPtr>;
+using SegmentStreamCreator = std::function<BlockInputStreamPtr(const SegmentReadTask &)>;
 
 class SegmentReadTaskPool : private boost::noncopyable
 {

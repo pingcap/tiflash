@@ -99,7 +99,7 @@ public:
     AppendTaskPtr createAppendTask(const OpContext & context, AppendWriteBatches & wbs, const BlockOrDelete & update);
     void          applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
-    SegmentSnapshot     getReadSnapshot() { return {delta, delta->num_rows()}; }
+    SegmentSnapshot     getReadSnapshot();
     BlockInputStreamPtr getInputStream(const DMContext &       dm_context,
                                        const SegmentSnapshot & segment_snap,
                                        const StorageSnapshot & storage_snaps,

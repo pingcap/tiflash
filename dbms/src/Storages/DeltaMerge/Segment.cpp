@@ -231,6 +231,12 @@ void Segment::check(DMContext & dm_context, const String & when)
     LOG_DEBUG(log, when + ": rows(raw): " + DB::toString(total_rows));
 }
 
+SegmentSnapshot Segment::getReadSnapshot()
+{
+    std::unique_lock lock(read_write_mutex);
+    return {delta, delta->num_rows()};
+}
+
 BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                                             const SegmentSnapshot & segment_snap,
                                             const StorageSnapshot & storage_snaps,
