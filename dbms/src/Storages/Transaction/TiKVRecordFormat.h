@@ -37,11 +37,9 @@ static const UInt64 SIGN_MARK = UInt64(1) << 63;
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
-inline std::tuple<std::vector<ColumnID>, std::vector<Field>, std::unordered_set<ColumnID>> DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read)
+inline void DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read,
+        std::vector<ColumnID> & col_ids, std::vector<Field> & fields,  std::unordered_set<ColumnID> & row_all_column_ids)
 {
-    std::vector<ColumnID> col_ids;
-    std::vector<Field> fields;
-    std::unordered_set<ColumnID> row_all_column_ids;
     const String & raw_value = value.getStr();
     size_t cursor = 0;
     while (cursor < raw_value.size())
@@ -67,8 +65,6 @@ inline std::tuple<std::vector<ColumnID>, std::vector<Field>, std::unordered_set<
 
     if (cursor != raw_value.size())
         throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
-
-    return std::make_tuple(std::move(col_ids), std::move(fields), std::move(row_all_column_ids));
 }
 
 // Key format is here:
