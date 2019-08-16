@@ -14,6 +14,18 @@
 namespace DB
 {
 
+bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
+{
+    try
+    {
+        return !isLossyCast(from, to);
+    }
+    catch (DB::Exception & e)
+    {
+        return false;
+    }
+}
+
 bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
 {
     assert(from != nullptr && to != nullptr);

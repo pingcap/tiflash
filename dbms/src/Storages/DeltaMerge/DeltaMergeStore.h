@@ -61,8 +61,12 @@ public:
                            UInt64                max_version,
                            size_t                expected_block_size);
 
-    /// Apply `commands` on column define
-    void applyColumnDefineAlters(const AlterCommands & commands);
+    void flush(const Context & context);
+
+    /// Apply `commands` on `table_columns`
+    void applyColumnDefineAlters(const AlterCommands &         commands, //
+                                 const OptionTableInfoConstRef table_info,
+                                 ColumnID &                    max_column_id_used);
 
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
@@ -100,9 +104,13 @@ private:
                              size_t             offset,
                              size_t             limit);
 
-    void applyColumnDefineAlter(const AlterCommand & command);
-    static Block
-    genHeaderBlock(const ColumnDefines & raw_columns, const ColumnDefine & handle_define, const DataTypePtr & handle_real_type);
+    void applyColumnDefineAlter(const AlterCommand &          command, //
+                                const OptionTableInfoConstRef table_info,
+                                ColumnID &                    max_column_id_used);
+
+    static Block genHeaderBlock(const ColumnDefines & raw_columns, //
+                                const ColumnDefine &  handle_define,
+                                const DataTypePtr &   handle_real_type);
 
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;

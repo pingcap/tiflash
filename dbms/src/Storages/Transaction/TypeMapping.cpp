@@ -9,6 +9,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -167,4 +168,104 @@ DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
     return base;
 }
 
+ColumnInfo getColumnInfoByDataType(const DataTypePtr &type)
+{
+    ColumnInfo col;
+    DataTypePtr not_null_type;
+    if (const DataTypeNullable * type_nullable = typeid_cast<const DataTypeNullable *>(type.get()))
+    {
+        not_null_type = type_nullable->getNestedType();
+    }
+    else
+    {
+        col.setNotNullFlag();
+        not_null_type = type;
+    }
+
+    // TODO Use TypeIndex in this PR:
+    // https://github.com/pingcap/tics/pull/74/files#diff-bda9a99f5a35beca1528f66a89ad9804R101
+    if (typeid_cast<const DataTypeInt8 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeTiny;
+        return col;
+    }
+    if (typeid_cast<const DataTypeUInt8 *>(not_null_type.get()))
+    {
+        col.setUnsignedFlag();
+        col.tp = TiDB::TypeTiny;
+        return col;
+    }
+    if (typeid_cast<const DataTypeInt16 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeShort;
+        return col;
+    }
+    if (typeid_cast<const DataTypeUInt16 *>(not_null_type.get()))
+    {
+        col.setUnsignedFlag();
+        col.tp = TiDB::TypeShort;
+        return col;
+    }
+    if (typeid_cast<const DataTypeInt32 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeLong;
+        return col;
+    }
+    if (typeid_cast<const DataTypeUInt32 *>(not_null_type.get()))
+    {
+        col.setUnsignedFlag();
+        col.tp = TiDB::TypeLong;
+        return col;
+    }
+    if (typeid_cast<const DataTypeInt64 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeLonglong;
+        return col;
+    }
+    if (typeid_cast<const DataTypeUInt64 *>(not_null_type.get()))
+    {
+        col.setUnsignedFlag();
+        col.tp = TiDB::TypeLonglong;
+        return col;
+    }
+    if (not_null_type->isStringOrFixedString())
+    {
+        col.tp = TiDB::TypeString;
+        return col;
+    }
+    if (typeid_cast<const DataTypeFloat32 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeFloat;
+        return col;
+    }
+    if (typeid_cast<const DataTypeFloat64 *>(not_null_type.get()))
+    {
+        col.setUnsignedFlag();
+        col.tp = TiDB::TypeDouble;
+        return col;
+    }
+    if (typeid_cast<const DataTypeDate *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeDate;
+        return col;
+    }
+    if (typeid_cast<const DataTypeDateTime *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeDatetime;
+        return col;
+    }
+    if (typeid_cast<const DataTypeDecimal *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeDecimal;
+        return col;
+    }
+    if (typeid_cast<const DataTypeNothing *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeNull;
+        return col;
+    }
+    throw Exception("Unknown TiDB type from " + type->getName(), ErrorCodes::NOT_IMPLEMENTED);
+}
+
 } // namespace DB
+

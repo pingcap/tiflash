@@ -4,14 +4,14 @@
 #include <tuple>
 
 #include <Poco/File.h>
+#include <common/logger_useful.h>
 
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
-
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -38,10 +38,10 @@ public:
         throw Exception("Method rename is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
+    void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
     void alterFromTiDB(
-        const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context);
+        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context);
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
@@ -53,11 +53,19 @@ public:
 protected:
     StorageDeltaMerge(const std::string & path_,
         const std::string & name_,
+        const DM::OptionTableInfoConstRef table_info_,
         const ColumnsDescription & columns_,
         const ASTPtr & primary_expr_ast_,
         Context & global_context_);
 
     Block buildInsertBlock(bool is_import, const Block & block);
+
+private:
+    void alterImpl(const AlterCommands & commands,
+        const String & database_name,
+        const String & table_name,
+        const DB::DM::OptionTableInfoConstRef table_info_,
+        const Context & context);
 
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
@@ -69,6 +77,8 @@ private:
 
     Strings pk_column_names;
     OrderedNameSet hidden_columns;
+
+    ColumnID max_column_id_used;
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 

@@ -1,6 +1,6 @@
 #include <Storages/DeltaMerge/Chunk.h>
 
-#include <DataTypes/getLeastSupertype.h>
+#include <DataTypes/isLossyCast.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
@@ -150,14 +150,10 @@ void columnTypeCast(const Page &         page,
                     size_t               rows_limit)
 {
     // sanity check
-    if (!disk_meta.type->isNumber())
+    if (unlikely(!isSupportedDataTypeCast(disk_meta.type, read_define.type)))
     {
-        throw Exception("Only support cast Numeric columns", ErrorCodes::CANNOT_CONVERT_TYPE);
-    }
-    const DataTypePtr least_super_type = getLeastSupertype({read_define.type, disk_meta.type});
-    if (!least_super_type->equals(*read_define.type))
-    {
-        throw Exception("Casting from " + disk_meta.type->getName() + " to " + read_define.type->getName() + " is NOT supported!",
+        throw Exception("Reading mismatch data type chunk. Cast from " + disk_meta.type->getName() + " to " + read_define.type->getName()
+                            + " is NOT supported!",
                         ErrorCodes::CANNOT_CONVERT_TYPE);
     }
 
@@ -170,8 +166,18 @@ void columnTypeCast(const Page &         page,
     // TODO this is awful, can we copy memory by using something like static_cast<> ?
     for (size_t i = 0; i < tmp_col->size(); ++i)
     {
-        col->insert((*tmp_col)[i]);
+        Field f = (*tmp_col)[i];
+        if (f.getType() == Field::Types::Null)
+            col->insertDefault(); // TODO
+        else
+            col->insert(std::move(f));
     }
+
+#ifndef NDEBUG
+    LOG_TRACE(&Poco::Logger::get("Chunk"),
+              "Read " + DB::toString(tmp_col->size()) + " rows from page with off:lim=" + DB::toString(rows_offset) + ":"
+                  + DB::toString(rows_limit));
+#endif
 #else
     auto & memory_array = typeid_cast<ColumnVector<Int32> &>(col).getData();
     auto & disk_data    = typeid_cast<ColumnVector<Int8> &>(*tmp_col).getData();
@@ -183,12 +189,12 @@ void columnTypeCast(const Page &         page,
 #endif
 }
 
-void readChunkData(MutableColumns &        columns,
-                   const Chunk &           chunk,
-                   const ColumnDefines &   column_defines,
-                   PageStorage &           storage,
-                   size_t                  rows_offset,
-                   size_t                  rows_limit)
+void readChunkData(MutableColumns &      columns,
+                   const Chunk &         chunk,
+                   const ColumnDefines & column_defines,
+                   PageStorage &         storage,
+                   size_t                rows_offset,
+                   size_t                rows_limit)
 {
     assert(!chunk.isDeleteRange());
     // Caller should already allocate memory for each column in columns
@@ -209,12 +215,19 @@ void readChunkData(MutableColumns &        columns,
         else
         {
             // new column is not exist in chunk's meta, fill with default value
-            IColumn &   col       = *columns[index];
+            IColumn & col = *columns[index];
+            // TODO this is awful
             for (size_t row_index = 0; row_index < rows_limit; ++row_index)
             {
-                // TODO this is awful
-                ReadBufferFromMemory buf(define.default_value.c_str(), define.default_value.size());
-                define.type->deserializeTextEscaped(col, buf);
+                if (define.default_value.empty())
+                {
+                    col.insertDefault();
+                }
+                else
+                {
+                    ReadBufferFromMemory buf(define.default_value.c_str(), define.default_value.size());
+                    define.type->deserializeTextEscaped(col, buf);
+                }
             }
         }
     }
@@ -230,6 +243,13 @@ void readChunkData(MutableColumns &        columns,
 
         if (read_define.type->equals(*disk_meta.type))
         {
+#ifndef NDEBUG
+            const auto && [first, last] = chunk.getHandleFirstLast();
+            const String disk_col       = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id) + ",type"
+                                          + disk_meta.type->getName() + "]";
+            LOG_TRACE(&Poco::Logger::get("Chunk"),
+                      "Reading chunk[" + DB::toString(first) + "-" + DB::toString(last) + "] " + disk_col);
+#endif
             if (rows_offset == 0)
             {
                 deserializeColumn(col, disk_meta, page, rows_limit);
@@ -245,10 +265,10 @@ void readChunkData(MutableColumns &        columns,
         {
 #ifndef NDEBUG
             const auto && [first, last] = chunk.getHandleFirstLast();
-            const String disk_col
-                = "col[" + DB::toString(read_define.name) + "," + DB::toString(disk_meta.col_id) + "," + disk_meta.type->getName() + "]";
+            const String disk_col       = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id) + ",type"
+                + disk_meta.type->getName() + "]";
             LOG_TRACE(&Poco::Logger::get("Chunk"),
-                      "Reading chunk[" + DB::toString(first) + "," + DB::toString(last) + "] " + disk_col + " as type "
+                      "Reading chunk[" + DB::toString(first) + "-" + DB::toString(last) + "] " + disk_col + " as type "
                           + read_define.type->getName());
 #endif
 
@@ -259,9 +279,7 @@ void readChunkData(MutableColumns &        columns,
 }
 
 
-Block readChunk(const Chunk &           chunk,
-                const ColumnDefines &   read_column_defines,
-                PageStorage &           data_storage)
+Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage)
 {
     if (read_column_defines.empty())
         return {};

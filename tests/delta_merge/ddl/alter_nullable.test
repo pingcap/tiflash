@@ -1,0 +1,30 @@
+>> drop table if exists dm_test
+
+>> create table dm_test (
+        a Int16,
+        b Nullable(Int32),
+        c Nullable(Int32),
+        d Nullable(String),
+        e Nullable(DateTime)
+   ) engine = DeltaMerge(a)
+
+>> insert into table dm_test(a) values(100)
+>> insert into table dm_test values(20000, 2048, 65535, 'Hello TiFlash', '1999-09-09 00:00:00')
+>> select * from dm_test
+┌─────a─┬────b─┬─────c─┬─d─────────────┬───────────────────e─┐
+│   100 │   \N │    \N │ \N            │                  \N │
+│ 20000 │ 2048 │ 65535 │ Hello TiFlash │ 1999-09-09 00:00:00 │
+└───────┴──────┴───────┴───────────────┴─────────────────────┘
+
+>> alter table dm_test MODIFY COLUMN b Int32 default 0
+>> alter table dm_test MODIFY COLUMN c Int64 default 0
+#>> alter table dm_test MODIFY COLUMN d String default ''
+#>> alter table dm_test MODIFY COLUMN e DateTime default '2000-01-01 00:00:00'
+>> select * from dm_test
+┌─────a─┬────b─┬─────c─┬─d─────────────┬───────────────────e─┐
+│   100 │    0 │     0 │ \N            │                  \N │
+│ 20000 │ 2048 │ 65535 │ Hello TiFlash │ 1999-09-09 00:00:00 │
+└───────┴──────┴───────┴───────────────┴─────────────────────┘
+
+## Clean up
+>> drop table if exists dm_test

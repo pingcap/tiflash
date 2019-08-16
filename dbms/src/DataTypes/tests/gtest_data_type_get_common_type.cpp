@@ -230,6 +230,7 @@ TEST(DataType_test, isLossyCast)
         // nullable -> not null is ok
         ASSERT_FALSE(isLossyCast(typeFromString("Nullable(UInt32)"), typeFromString("UInt32")));
         ASSERT_FALSE(isLossyCast(typeFromString("Nullable(UInt16)"), typeFromString("UInt32")));
+        ASSERT_FALSE(isLossyCast(typeFromString("Nullable(Int32)"), typeFromString("Int64")));
 
         // not null -> nullable is ok
         ASSERT_FALSE(isLossyCast(typeFromString("UInt32"), typeFromString("Nullable(UInt32)")));

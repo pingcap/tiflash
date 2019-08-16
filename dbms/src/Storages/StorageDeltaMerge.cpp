@@ -18,7 +18,9 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 
 namespace DB
@@ -29,12 +31,14 @@ constexpr bool TEST_SPLIT = false;
 
 StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     const std::string & name_,
+    const OptionTableInfoConstRef table_info_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
     Context & global_context_)
     : IManageableStorage{columns_},
       path(path_ + "/" + name_),
       name(name_),
+      max_column_id_used(0),
       global_context(global_context_),
       log(&Logger::get("StorageDeltaMerge"))
 {
@@ -53,15 +57,22 @@ StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
 
     size_t pks_combined_bytes = 0;
     auto all_columns = getColumns().getAllPhysical();
-    size_t index = 0;
     ColumnDefines table_column_defines; // column defines used in DeltaMergeStore
     ColumnDefine handle_column_define;
     for (auto & col : all_columns)
     {
-        ColumnDefine column_define;
-        column_define.name = col.name;
-        column_define.type = col.type;
-        column_define.id = index++; // FIXME column-id should synced with TiDB?
+        ColumnDefine column_define(0, col.name, col.type);
+        if (table_info_)
+        {
+            /// If TableInfo from TiDB is not empty, we get column id from TiDB
+            auto col_iter = findColumnInfoInTableInfo(table_info_->get(), column_define.name);
+            column_define.id = col_iter->id;
+        }
+        else
+        {
+            // in test cases, we allocate column_id here
+            column_define.id = max_column_id_used++;
+        }
 
         if (pks.count(col.name))
         {
@@ -208,11 +219,7 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
 {
     auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
     BlockDecorator decorator = std::bind(&StorageDeltaMerge::buildInsertBlock, this, insert_query.is_import, std::placeholders::_1);
-    // FIXME temporay disable cache
-    Settings settings_ = settings;
-    settings_.dm_segment_delta_cache_limit_rows = 0;
-    settings_.dm_segment_delta_cache_limit_bytes = 0;
-    return std::make_shared<DMBlockOutputStream>(store, decorator, global_context, settings_);
+    return std::make_shared<DMBlockOutputStream>(store, decorator, global_context, settings);
 }
 
 
@@ -308,15 +315,35 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::check(const Context & context) { store->check(context, context.getSettingsRef()); }
 
+//==========================================================================================
+// DDL methods.
+//==========================================================================================
 void StorageDeltaMerge::alterFromTiDB(
     const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context)
 {
-    // TODO actually apply table_info from TiDB
-    alter(params, database_name, table_info.name, context);
+    alterImpl(params, database_name, table_info.name, std::optional<std::reference_wrapper<const TiDB::TableInfo>>(table_info), context);
 }
 
 void StorageDeltaMerge::alter(
     const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context)
+{
+    alterImpl(commands, database_name, table_name, std::nullopt, context);
+}
+
+/// If any ddl statement change StorageDeltaMerge's schema,
+/// we need to update the create statement in metadata, so that we can restore table structure next time
+static void updateDeltaMergeTableCreateStatement(            //
+    const String & database_name, const String & table_name, //
+    const ColumnsDescription & columns,
+    const OrderedNameSet & hidden_columns,                                                         //
+    const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
+    const Context & context);
+
+void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
+    const String & database_name,
+    const String & table_name,
+    const OptionTableInfoConstRef table_info,
+    const Context & context)
 {
     std::unordered_set<String> cols_drop_forbidden;
     for (const auto & n : pk_column_names)
@@ -344,6 +371,10 @@ void StorageDeltaMerge::alter(
 
     auto lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
+    /// Force flush on store, so that no chunks with different data type in memory
+    // TODO maybe some ddl do not need to flush cache?
+    store->flush(context);
+
     // update the metadata in database, so that we can read the new schema using TiFlash's client
     ColumnsDescription new_columns = getColumns();
 
@@ -357,16 +388,7 @@ void StorageDeltaMerge::alter(
             {
                 // TODO check that modifying the precision of DECIMAL data types is forbidden
             }
-            bool is_cast_ok = false;
-            try
-            {
-                is_cast_ok = isLossyCast(col_iter->type, command.data_type);
-            }
-            catch (DB::Exception & e)
-            {
-                is_cast_ok = false;
-            }
-            if (is_cast_ok)
+            if (!isSupportedDataTypeCast(col_iter->type, command.data_type))
             {
                 // check that lossy changes is forbidden
                 // check that changing the UNSIGNED attribute is forbidden
@@ -374,60 +396,84 @@ void StorageDeltaMerge::alter(
                         + " to " + command.data_type->getName(),
                     ErrorCodes::NOT_IMPLEMENTED);
             }
+            if (col_iter->type->isNullable() && !command.data_type->isNullable())
+            {
+                // Nullable -> Not nullable, we need a default value for NULL records
+                if (command.default_expression == nullptr)
+                {
+                    throw Exception("Modify col: " + command.column_name + " from " + col_iter->type->getName() + " to "
+                            + command.data_type->getName() + " need a default expr",
+                        ErrorCodes::BAD_ARGUMENTS);
+                }
+            }
         }
     }
 
     commands.apply(new_columns); // apply AlterCommands to `new_columns`
-    {
-        // filter out hidden columns in the `create table statement`
-        ColumnsDescription columns_without_hidden;
-        columns_without_hidden.ordinary = new_columns.ordinary;
-        for (const auto & col : new_columns.materialized)
-            if (!hidden_columns.has(col.name))
-                columns_without_hidden.materialized.emplace_back(col);
-        columns_without_hidden.aliases = new_columns.aliases;
-        columns_without_hidden.defaults = new_columns.defaults;
-        context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, {});
-    }
-    // apply alter to column define in DeltaMergeStore
-    store->applyColumnDefineAlters(commands);
+    // apply alter to store's table column in DeltaMergeStore
+    store->applyColumnDefineAlters(commands, table_info, max_column_id_used);
+    // after update `new_columns` and store's table columns, we need to update create table statement,
+    // so that we can restore table next time.
+    updateDeltaMergeTableCreateStatement(
+        database_name, table_name, new_columns, hidden_columns, table_info, store->getTableColumns(), context);
     setColumns(std::move(new_columns));
 }
 
-namespace ErrorCodes
+void updateDeltaMergeTableCreateStatement(                   //
+    const String & database_name, const String & table_name, //
+    const ColumnsDescription & columns,
+    const OrderedNameSet & hidden_columns,                                                         //
+    const OptionTableInfoConstRef table_info_from_tidb, const ColumnDefines & store_table_columns, //
+    const Context & context)
 {
-extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
-}
+    /// Filter out hidden columns in the `create table statement`
+    ColumnsDescription columns_without_hidden;
+    columns_without_hidden.ordinary = columns.ordinary;
+    for (const auto & col : columns.materialized)
+        if (!hidden_columns.has(col.name))
+            columns_without_hidden.materialized.emplace_back(col);
+    columns_without_hidden.aliases = columns.aliases;
+    columns_without_hidden.defaults = columns.defaults;
 
-static ASTPtr extractKeyExpressionList(IAST & node)
-{
-    const ASTFunction * expr_func = typeid_cast<const ASTFunction *>(&node);
-
-    if (expr_func && expr_func->name == "tuple")
+    /// If TableInfo from TiDB is empty, for example, create DM table for test,
+    /// we refine TableInfo from store's table column, so that we can restore column id next time
+    TiDB::TableInfo table_info_from_store;
+    if (table_info_from_tidb)
     {
-        /// Primary key is specified in tuple.
-        return expr_func->children.at(0);
+        table_info_from_store.schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+        table_info_from_store.name = table_name;
+        for (const auto & column_define : store_table_columns)
+        {
+            if (hidden_columns.has(column_define.name))
+                continue;
+            TiDB::ColumnInfo column_info = getColumnInfoByDataType(column_define.type);
+            column_info.id = column_define.id;
+            column_info.name = column_define.name;
+            column_info.default_value = column_define.default_value;
+            table_info_from_store.columns.emplace_back(std::move(column_info));
+        }
     }
-    else
-    {
-        /// Primary key consists of one column.
-        auto res = std::make_shared<ASTExpressionList>();
-        res->children.push_back(node.ptr());
-        return res;
-    }
-}
 
-void registerStorageDeltaMerge(StorageFactory & factory)
-{
-    factory.registerStorage("DeltaMerge", [](const StorageFactory::Arguments & args) {
-        if (args.engine_args.size() > 1)
-            throw Exception("Engine DeltaMerge expects only one parameter. e.g. engine = DeltaMerge((a, b))");
-        if (args.engine_args.size() < 1)
-            throw Exception(
-                "Engine DeltaMerge needs primary key. e.g. engine = DeltaMerge((a, b))", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        ASTPtr primary_expr_list = extractKeyExpressionList(*args.engine_args[0]);
-        return StorageDeltaMerge::create(args.data_path, args.table_name, args.columns, primary_expr_list, args.context);
-    });
+    // We need to update the JSON field in table ast
+    // engine = DeltaMerge((CounterID, EventDate), '{JSON format table info}')
+    IDatabase::ASTModifier storage_modifier = [&](IAST & ast) {
+        std::shared_ptr<ASTLiteral> literal;
+        if (table_info_from_tidb)
+            literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize(true)));
+        else
+            literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize(true)));
+        auto & storage_ast = typeid_cast<ASTStorage &>(ast);
+        auto & args = typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments);
+        if (args.children.size() == 1)
+            args.children.emplace_back(literal);
+        else if (args.children.size() == 2)
+            args.children.back() = literal;
+        else
+            throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table :" + table_name + "engine=DeltaMerge",
+                ErrorCodes::BAD_ARGUMENTS);
+    };
+
+    context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);
 }
 
 } // namespace DB

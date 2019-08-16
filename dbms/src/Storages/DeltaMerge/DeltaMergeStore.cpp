@@ -493,18 +493,22 @@ Block DeltaMergeStore::genHeaderBlock(const ColumnDefines & raw_columns,
     return toEmptyBlock(real_cols);
 }
 
-void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands & commands)
+void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands &         commands,
+                                              const OptionTableInfoConstRef table_info,
+                                              ColumnID &                    max_column_id_used)
 {
     for (const auto & command : commands)
     {
-        applyColumnDefineAlter(command);
+        applyColumnDefineAlter(command, table_info, max_column_id_used);
     }
 
     // Don't forget to update header
     header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
 }
 
-void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand & command)
+void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          command,
+                                             const OptionTableInfoConstRef table_info,
+                                             ColumnID &                    max_column_id_used)
 {
     if (command.type == AlterCommand::MODIFY_COLUMN)
     {
@@ -516,6 +520,9 @@ void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand & command)
             {
                 exist_column       = true;
                 column_define.type = command.data_type;
+                // TODO change column_define.default_value
+                // column_define.default_value =
+                break;
             }
         }
         if (!exist_column)
@@ -525,23 +532,40 @@ void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand & command)
     }
     else if (command.type == AlterCommand::ADD_COLUMN)
     {
-        // we don't care about `after_column` here
-        // TODO column id should be synced with TiDB
-        ColId col_id = 0;
-        for (const auto & c : table_columns)
-            col_id = std::max(col_id, c.id);
-        col_id = col_id + 1;
+        // we don't care about `after_column` in `table_columns`
 
-        ColumnDefine define(col_id, command.column_name, command.data_type);
-        table_columns.emplace_back(std::move(define));
+        /// If TableInfo from TiDB is not empty, we get column id from TiDB
+        if (table_info)
+        {
+            auto         tidb_col_iter = findColumnInfoInTableInfo(table_info->get(), command.column_name);
+            ColumnDefine define(tidb_col_iter->id, command.column_name, command.data_type);
+            table_columns.emplace_back(std::move(define));
+        }
+        else
+        {
+            // in test cases, we allocate column_id here
+            ColumnDefine define(max_column_id_used++, command.column_name, command.data_type);
+            table_columns.emplace_back(std::move(define));
+        }
     }
     else if (command.type == AlterCommand::DROP_COLUMN)
     {
-        // we identify column by name
+        // identify column by name in `AlterCommand`
         table_columns.erase(std::remove_if(table_columns.begin(),
                                            table_columns.end(),
                                            [&](const ColumnDefine & c) { return c.name == command.column_name; }),
                             table_columns.end());
+    }
+}
+
+void DeltaMergeStore::flush(const Context & db_context)
+{
+    DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
+    for (auto && iter : segments)
+    {
+        // flush and update segment
+        auto new_segment = iter.second->flush(dm_context);
+        iter.second      = new_segment;
     }
 }
 

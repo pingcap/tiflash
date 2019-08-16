@@ -50,6 +50,7 @@ protected:
             Block res = cur_stream->read();
             if (res)
             {
+                LOG_TRACE(log, "Read block with " + DB::toString(res.rows()) + " rows");
                 if (!res.rows())
                     continue;
                 else

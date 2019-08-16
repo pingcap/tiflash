@@ -13,6 +13,11 @@
 #include <Core/Types.h>
 #include <type_traits>
 
+namespace TiDB
+{
+struct TableInfo;
+} // namespace TiDB
+
 namespace DB
 {
 namespace DM
@@ -57,6 +62,8 @@ using ColId  = Int64;
 
 using ColIds     = std::vector<ColId>;
 using HandlePair = std::pair<Handle, Handle>;
+
+using OptionTableInfoConstRef = std::optional<std::reference_wrapper<const TiDB::TableInfo>>;
 
 struct ColumnDefine
 {

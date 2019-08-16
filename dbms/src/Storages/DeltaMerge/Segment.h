@@ -90,6 +90,9 @@ public:
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 
+    /// Flush delta into stable. i.e. delta merge / ddl.
+    SegmentPtr flush(DMContext & dm_context);
+
     SegmentPair split(DMContext & dm_context);
 
     static SegmentPtr merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
@@ -162,8 +165,6 @@ private:
 
     bool shouldFlush(DMContext & dm_context, bool force = false);
 
-    /// Flush delta into stable. i.e. delta merge.
-    SegmentPtr flush(DMContext & dm_context);
     /// Make sure that all delta chunks have been placed.
     DeltaIndexPtr
     ensurePlace(const DMContext & dm_context, const DiskValueSpacePtr & to_place_delta, const DeltaValueSpacePtr & delta_value_space);

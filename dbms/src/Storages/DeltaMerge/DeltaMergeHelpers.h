@@ -13,6 +13,7 @@
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -281,6 +282,18 @@ template <typename T>
 inline String rangeToString(const Range<T> & range)
 {
     return rangeToString<T, true>(range.start, range.end);
+}
+
+/// find column from `table_info.columns` or throw exception
+inline std::vector<TiDB::ColumnInfo>::const_iterator findColumnInfoInTableInfo(const TiDB::TableInfo & table_info, const String & column_name)
+{
+    auto iter = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const TiDB::ColumnInfo & column_info) {
+        return column_info.name == column_name;
+    });
+    if (iter == table_info.columns.end())
+        throw Exception("Wrong column name. Cannot find column " + column_name + " in `table_info`",
+                        ErrorCodes::ILLEGAL_COLUMN);
+    return iter;
 }
 
 } // namespace DM
