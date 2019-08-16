@@ -417,7 +417,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
     if (!status)
         return;
 
-    //flushRegion(table_id, region_id, cache_bytes, false);
+    flushRegion(table_id, region_id, cache_bytes, false);
 
     func_update_region([&](InternalRegion & region) -> bool {
         region.pause_flush = false;
@@ -443,8 +443,8 @@ bool RegionTable::tryFlushRegions()
         });
     }
 
-//    for (auto & [id, cache_bytes] : to_flush)
-//        flushRegion(id.first, id.second, cache_bytes);
+    for (auto & [id, cache_bytes] : to_flush)
+        flushRegion(id.first, id.second, cache_bytes);
 
     { // Now reset status information.
         Timepoint now = Clock::now();
