@@ -86,7 +86,7 @@ using JsonObjectPtr = Poco::JSON::Object::Ptr;
 JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value);
 JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value);
 inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value);
-inline const String decodeString(size_t & cursor, const String & raw_value);
+inline String decodeString(size_t & cursor, const String & raw_value);
 JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value);
 
 // Below funcs decode via relative offset and base offset does not move
@@ -198,7 +198,7 @@ inline String decodeString(size_t base, const String & raw_value, size_t length)
     return String(raw_value, base, length);
 }
 
-inline const String decodeString(size_t & cursor, const String & raw_value)
+inline String decodeString(size_t & cursor, const String & raw_value)
 {
     size_t length = DecodeVarUInt(cursor, raw_value);
     const String & val = String(raw_value, cursor, length);
