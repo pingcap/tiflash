@@ -232,9 +232,9 @@ ColumnID getColumnID(const tipb::Expr & expr)
 
 bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
 
-// for some historical or unknown reasons, TiDB might set a invalidate
-// field type. This function check if the expr has a validate field type
-// so far the known invalidate field types are:
+// for some historical or unknown reasons, TiDB might set a invalid
+// field type. This function checks if the expr has a valid field type
+// so far the known invalid field types are:
 // 1. decimal type with scale -1
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
