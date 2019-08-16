@@ -3,8 +3,8 @@
 #include <Core/Types.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Interpreters/Context.h>
-
 #include <Storages/Transaction/TiDB.h>
+
 #include <unordered_map>
 
 namespace DB
@@ -233,7 +233,7 @@ ColumnID getColumnID(const tipb::Expr & expr)
 bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
 
 // for some historical or unknown reasons, TiDB might set a invalidate
-// field type this function check if the expr has a validate field type
+// field type. This function check if the expr has a validate field type
 // so far the known invalidate field types are:
 // 1. decimal type with scale -1
 bool exprHasValidFieldType(const tipb::Expr & expr)
