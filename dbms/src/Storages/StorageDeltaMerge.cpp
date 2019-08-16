@@ -471,7 +471,7 @@ void updateDeltaMergeTableCreateStatement(                   //
     /// If TableInfo from TiDB is empty, for example, create DM table for test,
     /// we refine TableInfo from store's table column, so that we can restore column id next time
     TiDB::TableInfo table_info_from_store;
-    if (table_info_from_tidb)
+    if (!table_info_from_tidb)
     {
         table_info_from_store.schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
         table_info_from_store.name = table_name;

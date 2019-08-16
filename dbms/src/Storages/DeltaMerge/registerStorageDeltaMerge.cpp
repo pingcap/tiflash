@@ -57,10 +57,11 @@ void registerStorageDeltaMerge(StorageFactory & factory)
 
         ASTPtr primary_expr_list = extractKeyExpressionList(*args.engine_args[0]);
 
+        TiDB::TableInfo info;
+        // Note: if `table_info_json` is not empty, `table_info` store a ref to `info`
         std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info = std::nullopt;
         if (args.engine_args.size() == 2)
         {
-            TiDB::TableInfo info;
             auto ast = typeid_cast<const ASTLiteral *>(args.engine_args[1].get());
             if (ast && ast->value.getType() == Field::Types::String)
             {
@@ -69,11 +70,13 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 {
                     // TODO: examine if this unescaping is necessary. the same as TxnMergeTree.
                     info.deserialize(table_info_json, true);
+                    if (unlikely(info.columns.empty()))
+                        throw Exception("Engine DeltaMerge table info is invalid. # of columns = 0", ErrorCodes::BAD_ARGUMENTS);
                     table_info = info;
                 }
             }
             else
-                throw Exception("Table info must be a string" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("Engine DeltaMerge table info must be a string" + getDeltaMergeVerboseHelp(), ErrorCodes::BAD_ARGUMENTS);
         }
         return StorageDeltaMerge::create(args.data_path, args.table_name, table_info, args.columns, primary_expr_list, args.context);
     });
