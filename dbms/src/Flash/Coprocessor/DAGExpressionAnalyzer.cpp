@@ -112,10 +112,13 @@ bool isUInt8Type(const DataTypePtr & type)
     {
         return true;
     }
-    auto * nullable = typeid_cast<const DataTypeNullable *>(type.get());
-    if (nullable)
+    if (type->isNullable())
     {
-        return isUInt8Type(nullable->getNestedType());
+        auto * nullable = typeid_cast<const DataTypeNullable *>(type.get());
+        if (typeid_cast<const DataTypeUInt8 *>(nullable->getNestedType().get()))
+        {
+            return true;
+        }
     }
     return false;
 }
