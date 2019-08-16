@@ -125,10 +125,12 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     ColumnID handle_col_id = InvalidColumnID;
 
     std::unordered_map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
+    std::unordered_map<ColumnID, size_t> column_id_to_info_index_map;
     std::unordered_set<ColumnID> column_ids_to_read;
     std::unordered_set<ColumnID> schema_all_column_ids;
-    for (const auto & column_info : table_info.columns)
+    for (size_t i = 0; i < table_info.columns.size(); i++)
     {
+        auto & column_info = table_info.columns[i];
         ColumnID col_id = column_info.id;
         String col_name = column_info.name;
         schema_all_column_ids.insert(col_id);
@@ -136,13 +138,19 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         {
             continue;
         }
-        column_ids_to_read.emplace(col_id);
         auto ch_col = columns.getPhysical(col_name);
         column_map[col_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
         column_map[col_id].first->reserve(data_list.size());
         if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
             handle_col_id = col_id;
+        else
+        {
+            column_ids_to_read.emplace(col_id);
+            column_id_to_info_index_map.emplace(std::make_pair(col_id, i));
+        }
     }
+    if (column_names_to_read.size() - 3 != column_ids_to_read.size())
+        throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
 
     if (!table_info.pk_is_handle)
     {
@@ -203,13 +211,9 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             {
                 col_ids.reserve(target_col_size);
                 fields.reserve(target_col_size);
-                for (const TiDB::ColumnInfo & column : table_info.columns)
+                for (auto col_id : column_ids_to_read)
                 {
-                    if (handle_col_id == column.id)
-                        continue;
-
-                    if (!column_ids_to_read.count(column.id))
-                        continue;
+                    const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
 
                     col_ids.push_back(column.id);
                     fields.push_back(GenDecodeRow(column.getCodecFlag()));
@@ -238,16 +242,12 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 col_id_included.emplace(col_ids[i]);
 
             // Fill in missing column values.
-            for (const TiDB::ColumnInfo & column : table_info.columns)
+            for (auto col_id : column_ids_to_read)
             {
-                if (handle_col_id == column.id)
-                    continue;
-                if (col_id_included.count(column.id))
+                if (col_id_included.count(col_id))
                     continue;
 
-                if (!column_ids_to_read.count(column.id))
-                    continue;
-
+                const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
                 col_ids.push_back(column.id);
                 if (column.hasNoDefaultValueFlag())
                     // Fill `zero` value if NOT NULL specified or else NULL.
