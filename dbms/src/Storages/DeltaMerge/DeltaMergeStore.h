@@ -61,6 +61,9 @@ public:
                            UInt64                max_version,
                            size_t                expected_block_size);
 
+    /// Force flush all data to disk.
+    /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
+    /// and no other threads is able to read / write at the same time.
     void flush(const Context & context);
 
     /// Apply `commands` on `table_columns`

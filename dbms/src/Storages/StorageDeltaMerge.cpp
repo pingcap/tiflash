@@ -22,9 +22,13 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/Transaction/TypeMapping.h>
 
-
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int DIRECTORY_ALREADY_EXISTS;
+}
+
 using namespace DM;
 
 constexpr bool TEST_SPLIT = false;
@@ -422,6 +426,30 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     updateDeltaMergeTableCreateStatement(
         database_name, table_name, new_columns, hidden_columns, table_info, store->getTableColumns(), context);
     setColumns(std::move(new_columns));
+}
+
+void StorageDeltaMerge::rename(const String & new_path_to_db, const String & /*new_database_name*/, const String & new_table_name)
+{
+    const String new_path = new_path_to_db + "/" + new_table_name;
+
+    // flush store and then reset store to new path
+    store->flush(global_context);
+    ColumnDefines table_column_defines = store->getTableColumns();
+    ColumnDefine handle_column_define = store->getHandle();
+    // TODO inherit the `settings` from old store
+    store = {};
+
+    if (Poco::File{new_path}.exists())
+        throw Exception{"Target path already exists: " + new_path,
+            /// @todo existing target can also be a file, not directory
+            ErrorCodes::DIRECTORY_ALREADY_EXISTS};
+
+    Poco::File(path).renameTo(new_path);
+    store = std::make_shared<DeltaMergeStore>(global_context, new_path, new_table_name, std::move(table_column_defines),
+        std::move(handle_column_define), DeltaMergeStore::Settings());
+
+    path = new_path;
+    name = new_table_name;
 }
 
 void updateDeltaMergeTableCreateStatement(                   //
