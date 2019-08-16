@@ -76,9 +76,9 @@ constexpr UInt8 LITERAL_NIL = 0x00;       // LiteralNil represents JSON null.
 constexpr UInt8 LITERAL_TRUE = 0x01;      // LiteralTrue represents JSON true.
 constexpr UInt8 LITERAL_FALSE = 0x02;     // LiteralFalse represents JSON false.
 
-constexpr int VALUE_ENTRY_SIZE = 5;
-constexpr int KEY_ENTRY_LENGTH = 6;
-constexpr int PREFIX_LENGTH = 8;
+constexpr size_t VALUE_ENTRY_SIZE = 5;
+constexpr size_t KEY_ENTRY_LENGTH = 6;
+constexpr size_t PREFIX_LENGTH = 8;
 
 using JsonArrayPtr = Poco::JSON::Array::Ptr;
 using JsonObjectPtr = Poco::JSON::Object::Ptr;
@@ -91,7 +91,7 @@ JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value);
 
 // Below funcs decode via relative offset and base offset does not move
 JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_offset);
-inline const String decodeString(size_t base, const String & raw_value, size_t length);
+inline String decodeString(size_t base, const String & raw_value, size_t length);
 
 
 template <typename T>
@@ -104,12 +104,12 @@ inline T decodeNumeric(size_t & cursor, const String & raw_value)
 
 JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
 {
-    long elementCount = decodeNumeric<UInt32>(cursor, raw_value);
+    UInt32 element_count = decodeNumeric<UInt32>(cursor, raw_value);
     size_t size = decodeNumeric<UInt32>(cursor, raw_value);
     size_t base = cursor;
     JsonObjectPtr objPtr = new Poco::JSON::Object();
 
-    for (int i = 0; i < elementCount; i++)
+    for (UInt32 i = 0; i < element_count; i++)
     {
         // offset points to head of string content instead of length so - 2
         size_t entry_base = base + i * KEY_ENTRY_LENGTH;
@@ -117,7 +117,7 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
         size_t key_length = decodeNumeric<UInt16>(entry_base, raw_value);
         String key = decodeString(key_offset, raw_value, key_length);
 
-        JsonVar val = decodeValueEntry(base, raw_value, elementCount * KEY_ENTRY_LENGTH + i * VALUE_ENTRY_SIZE);
+        JsonVar val = decodeValueEntry(base, raw_value, element_count * KEY_ENTRY_LENGTH + i * VALUE_ENTRY_SIZE);
         objPtr->set(key, val);
     }
     cursor += size - 8;
@@ -127,11 +127,11 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
 
 JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value)
 {
-    long elementCount = decodeNumeric<UInt32>(cursor, raw_value);
+    UInt32 element_count = decodeNumeric<UInt32>(cursor, raw_value);
     size_t size = decodeNumeric<UInt32>(cursor, raw_value);
 
     JsonArrayPtr arrayPtr = new Poco::JSON::Array();
-    for (int i = 0; i < elementCount; i++)
+    for (UInt32 i = 0; i < element_count; i++)
     {
         JsonVar val = decodeValueEntry(cursor, raw_value, VALUE_ENTRY_SIZE * i);
         arrayPtr->add(val);
@@ -193,7 +193,7 @@ inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value)
     }
 }
 
-inline const String decodeString(size_t base, const String & raw_value, size_t length)
+inline String decodeString(size_t base, const String & raw_value, size_t length)
 {
     return String(raw_value, base, length);
 }
@@ -204,14 +204,6 @@ inline const String decodeString(size_t & cursor, const String & raw_value)
     const String & val = String(raw_value, cursor, length);
     cursor += length;
     return val;
-}
-
-template <typename T>
-String stringify(T value)
-{
-    std::ostringstream os;
-    value->stringify(os);
-    return os.str();
 }
 
 String DecodeJsonAsString(size_t & cursor, const String & raw_value)
