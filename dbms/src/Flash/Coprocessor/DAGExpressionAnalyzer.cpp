@@ -2,7 +2,6 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
-#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypesNumber.h>
