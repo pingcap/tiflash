@@ -241,24 +241,27 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
             /// Modify `row` by adding missing column values or removing useless column values.
-            col_id_included.clear();
-            for (size_t i = 0; i < col_ids.size(); i++)
-                col_id_included.emplace(col_ids[i]);
-
-            // Fill in missing column values.
-            for (auto col_id : column_ids_to_read)
+            if (col_ids.size() != column_ids_to_read.size())
             {
-                if (col_id_included.count(col_id))
-                    continue;
+                col_id_included.clear();
+                for (size_t i = 0; i < col_ids.size(); i++)
+                    col_id_included.emplace(col_ids[i]);
 
-                const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
-                col_ids.push_back(column.id);
-                if (column.hasNoDefaultValueFlag())
-                    // Fill `zero` value if NOT NULL specified or else NULL.
-                    fields.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
-                else
-                    // Fill default value.
-                    fields.push_back(column.defaultValueToField());
+                // Fill in missing column values.
+                for (auto col_id : column_ids_to_read)
+                {
+                    if (col_id_included.count(col_id))
+                        continue;
+
+                    const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
+                    col_ids.push_back(column.id);
+                    if (column.hasNoDefaultValueFlag())
+                        // Fill `zero` value if NOT NULL specified or else NULL.
+                        fields.push_back(column.hasNotNullFlag() ? GenDecodeRow(column.getCodecFlag()) : Field());
+                    else
+                        // Fill default value.
+                        fields.push_back(column.defaultValueToField());
+                }
             }
 
             if (col_ids.size() != target_col_size || fields.size() != target_col_size)
