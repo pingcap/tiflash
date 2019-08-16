@@ -349,10 +349,10 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
 {
     if (field.isNull())
     {
-        EncodeNumber(UInt8(TiDB::CodecFlagNil), ss);
+        ss << UInt8(TiDB::CodecFlagNil);
         return;
     }
-    EncodeNumber(UInt8(flag), ss);
+    ss << UInt8(flag);
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:
