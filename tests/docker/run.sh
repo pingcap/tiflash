@@ -24,4 +24,3 @@ docker-compose down
 docker-compose up -d --scale tics0=0 --scale tiflash0=0 --scale tikv-learner0=0 --scale tikv0=0 --scale tidb0=0 --scale pd0=0 --scale tiflash-cluster-manager0=0
 docker-compose exec -T tics-gtest bash -c 'cd /tests && ./run-gtest.sh'
 docker-compose down
-
