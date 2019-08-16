@@ -52,6 +52,7 @@ public:
     void updateRegionTableBySnapshot(RegionTable & region_table);
 
 private:
+    friend class MockTiDB;
     friend struct MockTiDBTable;
     void removeRegion(const RegionID region_id, RegionTable * region_table);
 

@@ -1,3 +1,5 @@
+#include <Debug/MockTiDB.h>
+
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -7,10 +9,10 @@
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-
 #include <Functions/FunctionHelpers.h>
-
-#include <Debug/MockTiDB.h>
+#include <Interpreters/Context.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -28,8 +30,57 @@ Table::Table(const String & database_name_, const String & table_name_, TableInf
 
 MockTiDB::MockTiDB() { databases["default"] = 0; }
 
-void MockTiDB::dropDB(const String & database_name)
+TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_name, const String & table_name, bool drop_regions)
 {
+    String qualified_name = database_name + "." + table_name;
+    auto it_by_name = tables_by_name.find(qualified_name);
+    if (it_by_name == tables_by_name.end())
+        return nullptr;
+
+    auto & kvstore = context.getTMTContext().getKVStore();
+    auto & region_table = context.getTMTContext().getRegionTable();
+
+    auto table = it_by_name->second;
+    if (table->isPartitionTable())
+    {
+        for (const auto & partition : table->table_info.partition.definitions)
+        {
+            tables_by_id.erase(partition.id);
+            if (drop_regions)
+            {
+                for (auto & e : region_table.getRegionsByTable(partition.id))
+                    kvstore->removeRegion(e.first, &region_table);
+                region_table.mockDropRegionsInTable(partition.id);
+            }
+        }
+    }
+    tables_by_id.erase(table->id());
+
+    tables_by_name.erase(it_by_name);
+
+    if (drop_regions)
+    {
+        for (auto & e : region_table.getRegionsByTable(table->id()))
+            kvstore->removeRegion(e.first, &region_table);
+        region_table.mockDropRegionsInTable(table->id());
+    }
+
+    return table;
+}
+
+void MockTiDB::dropDB(Context & context, const String & database_name, bool drop_regions)
+{
+    std::lock_guard lock(tables_mutex);
+
+    std::vector<String> table_names;
+    std::for_each(tables_by_id.begin(), tables_by_id.end(), [&](const auto & pair) {
+        if (pair.second->table_info.db_name == database_name)
+            table_names.emplace_back(pair.second->table_info.name);
+    });
+
+    for (const auto & table_name : table_names)
+        dropTableInternal(context, database_name, table_name, drop_regions);
+
     version++;
 
     SchemaDiff diff;
@@ -44,38 +95,22 @@ void MockTiDB::dropDB(const String & database_name)
     databases.erase(database_name);
 }
 
-void MockTiDB::dropTable(const String & database_name, const String & table_name, bool is_drop_db)
+void MockTiDB::dropTable(Context & context, const String & database_name, const String & table_name, bool drop_regions)
 {
     std::lock_guard lock(tables_mutex);
 
-    String qualified_name = database_name + "." + table_name;
-    auto it_by_name = tables_by_name.find(qualified_name);
-    if (it_by_name == tables_by_name.end())
+    auto table = dropTableInternal(context, database_name, table_name, drop_regions);
+    if (!table)
         return;
 
-    const auto & table = it_by_name->second;
-    if (table->isPartitionTable())
-    {
-        for (const auto & partition : table->table_info.partition.definitions)
-        {
-            tables_by_id.erase(partition.id);
-        }
-    }
-    tables_by_id.erase(table->id());
+    version++;
 
-    tables_by_name.erase(it_by_name);
-
-    if (!is_drop_db)
-    {
-        version++;
-
-        SchemaDiff diff;
-        diff.type = SchemaActionDropTable;
-        diff.schema_id = table->table_info.db_id;
-        diff.table_id = table->id();
-        diff.version = version;
-        version_diff[version] = diff;
-    }
+    SchemaDiff diff;
+    diff.type = SchemaActionDropTable;
+    diff.schema_id = table->table_info.db_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
 }
 
 ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
@@ -199,7 +234,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     return table->table_info.id;
 }
 
-TableID MockTiDB::newPartition(const String & database_name, const String & table_name, const String & partition_name, Timestamp tso)
+void MockTiDB::newPartition(const String & database_name, const String & table_name, TableID partition_id, Timestamp tso, bool is_add_part)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -207,26 +242,57 @@ TableID MockTiDB::newPartition(const String & database_name, const String & tabl
     TableInfo & table_info = table->table_info;
 
     const auto & part_def = find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(),
-        [&partition_name](PartitionDefinition & part_def) { return part_def.name == partition_name; });
+        [&partition_id](PartitionDefinition & part_def) { return part_def.id == partition_id; });
     if (part_def != table_info.partition.definitions.end())
-        throw Exception(
-            "Mock TiDB table " + database_name + "." + table_name + " already has partition " + partition_name, ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Mock TiDB table " + database_name + "." + table_name + " already has partition " + std::to_string(partition_id),
+            ErrorCodes::LOGICAL_ERROR);
 
     table_info.is_partition_table = true;
     table_info.partition.enable = true;
     table_info.partition.num++;
-    TableID partition_id = table_info.id + table_info.partition.num;
     PartitionDefinition partition_def;
     partition_def.id = partition_id;
-    partition_def.name = partition_name;
+    partition_def.name = std::to_string(partition_id);
     table_info.partition.definitions.emplace_back(partition_def);
     table_info.update_timestamp = tso;
 
-    // Map the same table object with partition ID as key, so mock schema syncer behaves the same as TiDB,
-    // i.e. gives the table info by partition ID.
-    tables_by_id.emplace(partition_id, table);
+    if (is_add_part)
+    {
+        version++;
 
-    return partition_id;
+        SchemaDiff diff;
+        diff.type = SchemaActionAddTablePartition;
+        diff.schema_id = table->table_info.db_id;
+        diff.table_id = table->id();
+        diff.version = version;
+        version_diff[version] = diff;
+    }
+}
+
+void MockTiDB::dropPartition(const String & database_name, const String & table_name, TableID partition_id)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    TableInfo & table_info = table->table_info;
+
+    const auto & part_def = find_if(table_info.partition.definitions.begin(), table_info.partition.definitions.end(),
+        [&partition_id](PartitionDefinition & part_def) { return part_def.id == partition_id; });
+    if (part_def == table_info.partition.definitions.end())
+        throw Exception("Mock TiDB table " + database_name + "." + table_name + " already drop partition " + std::to_string(partition_id),
+            ErrorCodes::LOGICAL_ERROR);
+
+    table_info.partition.num--;
+    table_info.partition.definitions.erase(part_def);
+
+    version++;
+
+    SchemaDiff diff;
+    diff.type = SchemaActionDropTablePartition;
+    diff.schema_id = table->table_info.db_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
 }
 
 void MockTiDB::addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column)
@@ -359,13 +425,6 @@ TablePtr MockTiDB::getTableByName(const String & database_name, const String & t
     std::lock_guard lock(tables_mutex);
 
     return getTableByNameInternal(database_name, table_name);
-}
-
-void MockTiDB::traverseTables(std::function<void(TablePtr)> f)
-{
-    std::lock_guard lock(tables_mutex);
-
-    std::for_each(tables_by_id.begin(), tables_by_id.end(), [&](const auto & pair) { f(pair.second); });
 }
 
 TablePtr MockTiDB::getTableByNameInternal(const String & database_name, const String & table_name)
