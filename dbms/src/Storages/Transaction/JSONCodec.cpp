@@ -107,7 +107,7 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
     UInt32 element_count = decodeNumeric<UInt32>(cursor, raw_value);
     size_t size = decodeNumeric<UInt32>(cursor, raw_value);
     size_t base = cursor;
-    JsonObjectPtr objPtr = new Poco::JSON::Object();
+    JsonObjectPtr obj_ptr = new Poco::JSON::Object();
 
     for (UInt32 i = 0; i < element_count; i++)
     {
@@ -118,11 +118,11 @@ JsonObjectPtr decodeObject(size_t & cursor, const String & raw_value)
         String key = decodeString(key_offset, raw_value, key_length);
 
         JsonVar val = decodeValueEntry(base, raw_value, element_count * KEY_ENTRY_LENGTH + i * VALUE_ENTRY_SIZE);
-        objPtr->set(key, val);
+        obj_ptr->set(key, val);
     }
     cursor += size - 8;
 
-    return objPtr;
+    return obj_ptr;
 }
 
 JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value)
@@ -130,14 +130,14 @@ JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value)
     UInt32 element_count = decodeNumeric<UInt32>(cursor, raw_value);
     size_t size = decodeNumeric<UInt32>(cursor, raw_value);
 
-    JsonArrayPtr arrayPtr = new Poco::JSON::Array();
+    JsonArrayPtr array_ptr = new Poco::JSON::Array();
     for (UInt32 i = 0; i < element_count; i++)
     {
         JsonVar val = decodeValueEntry(cursor, raw_value, VALUE_ENTRY_SIZE * i);
-        arrayPtr->add(val);
+        array_ptr->add(val);
     }
     cursor += size - 8;
-    return arrayPtr;
+    return array_ptr;
 }
 
 JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_entry_offset)
