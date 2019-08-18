@@ -372,6 +372,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
 
     if (already_read_rows < rows_limit)
     {
+        /// TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
+
         // chunk_index could be larger than chunk_cache_start.
         size_t cache_rows_offset = 0;
         for (size_t i = chunk_cache_start; i < chunk_index; ++i)
@@ -380,10 +382,11 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
         for (size_t index = 0; index < read_column_defines.size(); ++index)
         {
             const ColumnDefine & define    = read_column_defines[index];
-            auto &               cache_col = cache.at(define.id); // TODO define.id maybe not here
+            auto &               cache_col = cache.at(define.id); // TODO new inserted col'id don't exist in cache.
 
             size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
 
+            // TODO columns[index].type maybe not consisted with cache_col after ddl.
             columns[index]->insertRangeFrom(*cache_col, cache_rows_offset + rows_offset_in_chunk, rows_limit - already_read_rows);
         }
     }
@@ -428,6 +431,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
         else
         {
             // Read from cache
+
+            /// TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
             size_t cache_rows_offset = 0;
             for (size_t i = chunk_cache_start; i < chunk_index; ++i)
                 cache_rows_offset += chunks[i].getRows();
