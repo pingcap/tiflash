@@ -109,6 +109,13 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
 }
 
 template <typename T>
+inline PaddedPODArray<T> * toMutableColumnVectorDataPtr(const MutableColumnPtr & column)
+{
+    ColumnVector<T> & c = typeid_cast<ColumnVector<T> &>(*(column));
+    return &c.getData();
+}
+
+template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
 {
     const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
@@ -143,7 +150,7 @@ inline Block toEmptyBlock(const ColumnDefines & columns)
 
 inline void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context)
 {
-    auto * to_type_ptr = &(*to_type);
+    const IDataType * to_type_ptr = to_type.get();
 
     if (checkDataType<DataTypeUInt8>(to_type_ptr))
         FunctionToUInt8::create(context)->execute(block, {pos}, pos);

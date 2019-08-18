@@ -142,6 +142,20 @@ void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & p
                                                         {});
 }
 
+template <typename TypeFrom, typename TypeTo>
+void castAndAppendToColumn(MutableColumnPtr & from_col, //
+                           MutableColumnPtr & to_col,
+                           size_t             rows_offset,
+                           size_t             rows_limit)
+{
+    PaddedPODArray<TypeTo> *         memory_array_ptr = toMutableColumnVectorDataPtr<TypeTo>(to_col);
+    const PaddedPODArray<TypeFrom> & disk_array       = toColumnVectorData<TypeFrom>(from_col->getPtr());
+    for (size_t i = 0; i < rows_limit; ++i)
+    {
+        (*memory_array_ptr)[i + rows_offset] = static_cast<UInt64>(disk_array[i]);
+    }
+}
+
 void columnTypeCast(const Page &         page,
                     const ColumnDefine & read_define,
                     const ColumnMeta &   disk_meta,
@@ -162,7 +176,7 @@ void columnTypeCast(const Page &         page,
     deserializeColumn(*tmp_col, disk_meta, page, rows_offset + rows_limit);
 
     // cast to current DataType
-#if 1
+#if 0
     // TODO this is awful, can we copy memory by using something like static_cast<> ?
     for (size_t i = 0; i < tmp_col->size(); ++i)
     {
@@ -173,18 +187,87 @@ void columnTypeCast(const Page &         page,
             col->insert(std::move(f));
     }
 
-#ifndef NDEBUG
-    LOG_TRACE(&Poco::Logger::get("Chunk"),
-              "Read " + DB::toString(tmp_col->size()) + " rows from page with off:lim=" + DB::toString(rows_offset) + ":"
-                  + DB::toString(rows_limit));
-#endif
 #else
-    auto & memory_array = typeid_cast<ColumnVector<Int32> &>(col).getData();
-    auto & disk_data    = typeid_cast<ColumnVector<Int8> &>(*tmp_col).getData();
-    for (size_t i = 0; i < rows_limit; ++i)
+    // TODO handle nullable DataType -> non-null DataType
+    // TODO handle non-null DataType -> nullable DataType
+
+    if (checkDataType<DataTypeUInt32>(disk_meta.type.get()))
     {
-        // implicit cast from disk_meta.type to read_define.type
-        memory_array[i + rows_offset] = disk_data[i];
+        using FromType = UInt32;
+        if (checkDataType<DataTypeUInt64>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, UInt64>(tmp_col, col, rows_offset, rows_limit);
+        }
+    }
+    else if (checkDataType<DataTypeInt32>(disk_meta.type.get()))
+    {
+        using FromType = Int32;
+        if (checkDataType<DataTypeInt64>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, Int64>(tmp_col, col, rows_offset, rows_limit);
+        }
+    }
+    else if (checkDataType<DataTypeUInt16>(disk_meta.type.get()))
+    {
+        using FromType = UInt16;
+        if (checkDataType<DataTypeUInt32>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, UInt32>(tmp_col, col, rows_offset, rows_limit);
+        }
+        else if (checkDataType<DataTypeUInt64>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, UInt64>(tmp_col, col, rows_offset, rows_limit);
+        }
+    }
+    else if (checkDataType<DataTypeInt16>(disk_meta.type.get()))
+    {
+        using FromType = Int16;
+        if (checkDataType<DataTypeInt32>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, Int32>(tmp_col, col, rows_offset, rows_limit);
+        }
+        else if (checkDataType<DataTypeInt64>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, Int64>(tmp_col, col, rows_offset, rows_limit);
+        }
+    }
+    else if (checkDataType<DataTypeUInt8>(disk_meta.type.get()))
+    {
+        using FromType = UInt8;
+        if (checkDataType<DataTypeUInt16>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, UInt16>(tmp_col, col, rows_offset, rows_limit);
+        }
+        else if (checkDataType<DataTypeUInt32>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, UInt32>(tmp_col, col, rows_offset, rows_limit);
+        }
+        else if (checkDataType<DataTypeUInt64>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, UInt64>(tmp_col, col, rows_offset, rows_limit);
+        }
+    }
+    else if (checkDataType<DataTypeInt8>(disk_meta.type.get()))
+    {
+        using FromType = Int8;
+        if (checkDataType<DataTypeInt16>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, Int16>(tmp_col, col, rows_offset, rows_limit);
+        }
+        else if (checkDataType<DataTypeInt32>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, Int32>(tmp_col, col, rows_offset, rows_limit);
+        }
+        else if (checkDataType<DataTypeInt64>(read_define.type.get()))
+        {
+            castAndAppendToColumn<FromType, Int64>(tmp_col, col, rows_offset, rows_limit);
+        }
+    }
+    else
+    {
+        throw Exception("Reading mismatch data type chunk. Cast and assign from " + disk_meta.type->getName() + " to "
+                            + read_define.type->getName() + " is NOT supported!",
+                        ErrorCodes::CANNOT_CONVERT_TYPE);
     }
 #endif
 }
@@ -216,19 +299,10 @@ void readChunkData(MutableColumns &      columns,
         {
             // new column is not exist in chunk's meta, fill with default value
             IColumn & col = *columns[index];
-            // TODO this is awful
-            for (size_t row_index = 0; row_index < rows_limit; ++row_index)
-            {
-                if (define.default_value.empty())
-                {
-                    col.insertDefault();
-                }
-                else
-                {
-                    ReadBufferFromMemory buf(define.default_value.c_str(), define.default_value.size());
-                    define.type->deserializeTextEscaped(col, buf);
-                }
-            }
+            // TODO read default value from `define.default_value`
+            // do something like define.type->deserializeTextEscaped(col, buf);
+            ColumnPtr tmp_col = define.type->createColumnConstWithDefaultValue(rows_offset + rows_limit)->convertToFullColumnIfConst();
+            col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
         }
     }
 
@@ -243,13 +317,6 @@ void readChunkData(MutableColumns &      columns,
 
         if (read_define.type->equals(*disk_meta.type))
         {
-#ifndef NDEBUG
-            const auto && [first, last] = chunk.getHandleFirstLast();
-            const String disk_col       = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id) + ",type"
-                                          + disk_meta.type->getName() + "]";
-            LOG_TRACE(&Poco::Logger::get("Chunk"),
-                      "Reading chunk[" + DB::toString(first) + "-" + DB::toString(last) + "] " + disk_col);
-#endif
             if (rows_offset == 0)
             {
                 deserializeColumn(col, disk_meta, page, rows_limit);

@@ -21,7 +21,6 @@ namespace DM
 static constexpr size_t CHUNK_SERIALIZE_BUFFER_SIZE = 65536;
 
 
-// TODO: version des/ser
 struct ColumnMeta
 {
     ColId       col_id;
