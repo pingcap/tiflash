@@ -55,7 +55,7 @@ inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
         {
             const auto h1 = std::get<0>(data_list.front());
             const auto h2 = std::get<0>(data_list.back());
-            if ((h1 ^ h2) & RecordKVFormat::SIGN_MARK)
+            if ((h1 ^ h2) & SIGN_MASK)
                 need_check = true;
         }
 
@@ -66,7 +66,7 @@ inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
             {
                 const auto handle = std::get<0>(*it);
 
-                if (handle & RecordKVFormat::SIGN_MARK)
+                if (handle & SIGN_MASK)
                     ++it;
                 else
                     break;
