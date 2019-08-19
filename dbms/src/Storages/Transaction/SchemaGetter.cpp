@@ -36,7 +36,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeNumber<UInt64>(UInt64(StringData), stream);
+        EncodeUInt<UInt64>(UInt64(StringData), stream);
 
         return stream.str();
     }
@@ -48,7 +48,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeNumber<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(UInt64(HashData), stream);
         EncodeBytes(field, stream);
 
         return stream.str();
@@ -61,7 +61,7 @@ struct TxnStructure
         stream.write(metaPrefix, 1);
 
         EncodeBytes(key, stream);
-        EncodeNumber<UInt64>(UInt64(HashData), stream);
+        EncodeUInt<UInt64>(UInt64(HashData), stream);
         return stream.str();
     }
 
@@ -77,7 +77,7 @@ struct TxnStructure
         idx += 1;
         String decode_key = DecodeBytes(idx, key);
 
-        UInt64 tp = DecodeNumber<UInt64>(idx, key);
+        UInt64 tp = DecodeUInt<UInt64>(idx, key);
         if (char(tp) != HashData)
         {
             throw Exception("invalid encoded hash data key flag:" + std::to_string(tp), ErrorCodes::SCHEMA_SYNC_ERROR);
