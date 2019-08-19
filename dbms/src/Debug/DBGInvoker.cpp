@@ -2,6 +2,7 @@
 #include <thread>
 
 #include <DataStreams/StringStreamBlockInputStream.h>
+#include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
@@ -66,6 +67,8 @@ DBGInvoker::DBGInvoker()
     regFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regFunc("refresh_schemas", dbgFuncRefreshSchemas);
     regFunc("reset_schemas", dbgFuncResetSchemas);
+
+    regFunc("dump_region_table", ClusterManage::dumpRegionTable);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
