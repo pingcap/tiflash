@@ -49,7 +49,8 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
             auto mmt = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -91,7 +92,8 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
@@ -208,6 +210,24 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
     }
 }
 
+void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter, std::unordered_set<String> & referred_columns,
+    std::unordered_map<String, tipb::Expr *> & col_ref_map)
+{
+    if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
+    {
+        if (func->name == "and")
+        {
+            for (auto & child : func->arguments->children)
+            {
+                compileFilter(input, child, filter, referred_columns, col_ref_map);
+            }
+            return;
+        }
+    }
+    tipb::Expr * cond = filter->add_conditions();
+    compileExpr(input, ast, cond, referred_columns, col_ref_map);
+}
+
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts)
 {
@@ -274,9 +294,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         tipb::Executor * filter_exec = dag_request.add_executors();
         filter_exec->set_tp(tipb::ExecType::TypeSelection);
         tipb::Selection * filter = filter_exec->mutable_selection();
-        tipb::Expr * cond = filter->add_conditions();
         std::unordered_map<String, tipb::Expr *> col_ref_map;
-        compileExpr(executor_ctx_map[last_executor].output, ast_query.where_expression, cond, referred_columns, col_ref_map);
+        compileFilter(executor_ctx_map[last_executor].output, ast_query.where_expression, filter, referred_columns, col_ref_map);
         executor_ctx_map.emplace(filter_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
         last_executor = filter_exec;
     }
