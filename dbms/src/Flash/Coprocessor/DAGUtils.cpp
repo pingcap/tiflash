@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Interpreters/Context.h>
+#include <Storages/Transaction/TiDB.h>
 
 #include <unordered_map>
 
@@ -230,6 +231,15 @@ ColumnID getColumnID(const tipb::Expr & expr)
 }
 
 bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
+
+// for some historical or unknown reasons, TiDB might set a invalid
+// field type. This function checks if the expr has a valid field type
+// so far the known invalid field types are:
+// 1. decimal type with scale -1
+bool exprHasValidFieldType(const tipb::Expr & expr)
+{
+    return expr.has_field_type() && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1);
+}
 
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
