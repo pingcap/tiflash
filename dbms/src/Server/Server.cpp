@@ -119,6 +119,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
         config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
     }
 
+    std::vector<String> all_fast_path;
+    if (config().has("fast_path"))
+    {
+        String fast_paths = config().getString("fast_path");
+        Poco::trimInPlace(fast_paths);
+        if (!fast_paths.empty())
+        {
+            Poco::StringTokenizer string_tokens(fast_paths, ";");
+            for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+            {
+                all_fast_path.push_back(getCanonicalPath(std::string(*it)));
+                LOG_DEBUG(log, "Fast data part candidate path: " << std::string(*it));
+            }
+        }
+    }
     String paths = config().getString("path");
     std::vector<String> all_path;
     Poco::trimInPlace(paths);
@@ -132,7 +147,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setAllPath(all_path);
     {
-        global_context->initializePartPathSelector(global_context->getAllPath());
+        global_context->initializePartPathSelector(global_context->getAllPath(), std::move(all_fast_path));
     }
 
     std::string path = global_context->getAllPath()[0];

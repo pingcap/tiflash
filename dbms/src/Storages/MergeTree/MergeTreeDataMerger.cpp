@@ -113,7 +113,7 @@ void MergeTreeDataMerger::FuturePart::assign(MergeTreeData::DataPartsVector part
     }
     else
         name = part_info.getPartName();
-    path = parts[0]->storage.context.getPartPathSelector().getPathForPart(parts[0]->storage, name);
+    path = parts[0]->storage.context.getPartPathSelector().getPathForPart(parts[0]->storage, name, part_info);
 }
 
 MergeTreeDataMerger::MergeTreeDataMerger(MergeTreeData & data_, const BackgroundProcessingPool & pool_)

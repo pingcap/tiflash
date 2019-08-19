@@ -1431,12 +1431,12 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
 }
 
-void Context::initializePartPathSelector(const std::vector<std::string> & all_path)
+void Context::initializePartPathSelector(const std::vector<std::string> & all_path, std::vector<std::string> && all_fast_path)
 {
     auto lock = getLock();
     if (shared->part_path_selector_ptr)
         throw Exception("PartPathSelector instance has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->part_path_selector_ptr = std::make_shared<PartPathSelector>(all_path);
+    shared->part_path_selector_ptr = std::make_shared<PartPathSelector>(all_path, std::move(all_fast_path));
 }
 
 PartPathSelector & Context::getPartPathSelector()

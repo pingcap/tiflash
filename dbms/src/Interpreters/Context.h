@@ -373,7 +373,7 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePartPathSelector(const std::vector<std::string> & all_path);
+    void initializePartPathSelector(const std::vector<std::string> & all_path, std::vector<std::string> && all_fast_path);
     PartPathSelector & getPartPathSelector();
 
     Clusters & getClusters() const;

@@ -1,11 +1,38 @@
+#include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Storages/PartPathSelector.h>
 #include <common/likely.h>
+#include <map>
 
 namespace DB
 {
-const String PartPathSelector::getPathForPart(MergeTreeData & data, const String & part_name) const
+const String PartPathSelector::getPathForPart(MergeTreeData & data, const String & part_name,
+        const MergeTreePartInfo & info, int part_size=0) const
 {
+    if (!all_fast_path.empty())
+    {
+        size_t max_available_space = DiskSpaceMonitor::getUnreservedFreeSpace(all_fast_path[0]);
+        std::string & result_path = all_fast_path[0];
+        for (auto & path : all_fast_path)
+        {
+            size_t s = DiskSpaceMonitor::getUnreservedFreeSpace(path);
+            if (s > max_available_space)
+            {
+                max_available_space = s;
+                result_path = path;
+            }
+        }
+        if (info.level == 0)
+        {
+            return result_path;
+        }
+        else if (max_available_space >= min_space_reserved_for_level_zero_parts
+            && part_size <= max_part_ratio * max_available_space)
+        {
+            return result_path;
+        }
+    }
     if (all_path.size() == 1)
     {
         return all_path[0];
