@@ -12,7 +12,7 @@ static const size_t ENC_GROUP_SIZE = 8;
 static const UInt8 ENC_MARKER = static_cast<UInt8>(0xff);
 static const char ENC_ASC_PADDING[ENC_GROUP_SIZE] = {0};
 
-static const UInt64 SIGN_MARK = UInt64(1) << 63;
+static const UInt64 SIGN_MASK = UInt64(1) << 63;
 
 template <typename T>
 inline std::enable_if_t<std::is_unsigned_v<T>, T> DecodeUInt(size_t & cursor, const String & raw_value)
@@ -24,7 +24,7 @@ inline std::enable_if_t<std::is_unsigned_v<T>, T> DecodeUInt(size_t & cursor, co
 
 inline Int64 DecodeInt64(size_t & cursor, const String & raw_value)
 {
-    return static_cast<Int64>(DecodeUInt<UInt64>(cursor, raw_value) ^ SIGN_MARK);
+    return static_cast<Int64>(DecodeUInt<UInt64>(cursor, raw_value) ^ SIGN_MASK);
 }
 
 Float64 DecodeFloat64(size_t & cursor, const String & raw_value);
@@ -48,7 +48,7 @@ inline std::enable_if_t<std::is_unsigned_v<T>, void> EncodeUInt(T u, std::string
     ss.write(reinterpret_cast<const char *>(&u), sizeof(u));
 }
 
-inline void EncodeInt64(Int64 i, std::stringstream & ss) { EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MARK, ss); }
+inline void EncodeInt64(Int64 i, std::stringstream & ss) { EncodeUInt<UInt64>(static_cast<UInt64>(i) ^ SIGN_MASK, ss); }
 
 void EncodeFloat64(Float64 num, std::stringstream & ss);
 

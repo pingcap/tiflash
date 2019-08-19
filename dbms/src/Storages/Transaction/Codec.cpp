@@ -37,8 +37,8 @@ inline B enforce_cast(A a)
 Float64 DecodeFloat64(size_t & cursor, const String & raw_value)
 {
     UInt64 num = DecodeUInt<UInt64>(cursor, raw_value);
-    if (num & SIGN_MARK)
-        num ^= SIGN_MARK;
+    if (num & SIGN_MASK)
+        num ^= SIGN_MASK;
     else
         num = ~num;
     return enforce_cast<Float64>(num);
@@ -236,10 +236,10 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
 void EncodeFloat64(Float64 num, std::stringstream & ss)
 {
     UInt64 u = enforce_cast<UInt64>(num);
-    if (u & SIGN_MARK)
+    if (u & SIGN_MASK)
         u = ~u;
     else
-        u |= SIGN_MARK;
+        u |= SIGN_MASK;
     return EncodeUInt<UInt64>(u, ss);
 }
 
