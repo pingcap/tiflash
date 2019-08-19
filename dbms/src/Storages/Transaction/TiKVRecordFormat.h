@@ -32,8 +32,6 @@ static const char SHORT_VALUE_PREFIX = 'v';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
-static const UInt64 SIGN_MARK = UInt64(1) << 63;
-
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 

@@ -11,9 +11,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-constexpr UInt64 signMask = UInt64(1) << 63;
-constexpr UInt32 signMask32 = UInt32(1) << 31;
-
 constexpr int digitsPerWord = 9;
 constexpr int wordSize = 4;
 const int dig2Bytes[10] = {0, 1, 1, 2, 2, 3, 3, 4, 4, 4};
@@ -39,9 +36,9 @@ inline B enforce_cast(A a)
 
 Float64 DecodeFloat64(size_t & cursor, const String & raw_value)
 {
-    UInt64 num = DecodeNumber<UInt64>(cursor, raw_value);
-    if (num & signMask)
-        num ^= signMask;
+    UInt64 num = DecodeUInt<UInt64>(cursor, raw_value);
+    if (num & SIGN_MARK)
+        num ^= SIGN_MARK;
     else
         num = ~num;
     return enforce_cast<Float64>(num);
@@ -214,9 +211,9 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
         case TiDB::CodecFlagNil:
             return Field();
         case TiDB::CodecFlagInt:
-            return DecodeNumber<Int64>(cursor, raw_value);
+            return DecodeInt64(cursor, raw_value);
         case TiDB::CodecFlagUInt:
-            return DecodeNumber<UInt64>(cursor, raw_value);
+            return DecodeUInt<UInt64>(cursor, raw_value);
         case TiDB::CodecFlagBytes:
             return DecodeBytes(cursor, raw_value);
         case TiDB::CodecFlagCompactBytes:
@@ -239,11 +236,11 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
 void EncodeFloat64(Float64 num, std::stringstream & ss)
 {
     UInt64 u = enforce_cast<UInt64>(num);
-    if (u & signMask)
+    if (u & SIGN_MARK)
         u = ~u;
     else
-        u |= signMask;
-    return EncodeNumber<UInt64>(u, ss);
+        u |= SIGN_MARK;
+    return EncodeUInt<UInt64>(u, ss);
 }
 
 void EncodeBytes(const String & ori_str, std::stringstream & ss)
@@ -279,53 +276,7 @@ void EncodeVarInt(Int64 num, std::stringstream & ss) { TiKV::writeVarInt(num, ss
 
 void EncodeVarUInt(UInt64 num, std::stringstream & ss) { TiKV::writeVarUInt(num, ss); }
 
-void EncodeDecimal(const Decimal & dec, std::stringstream & ss)
-{
-    constexpr Int32 decimal_mod = static_cast<const Int32>(1e9);
-    PrecType prec = dec.precision;
-    ScaleType scale = dec.scale;
-    EncodeNumber(UInt8(prec), ss);
-    EncodeNumber(UInt8(scale), ss);
-    int256_t value = dec.value;
-    bool neg = false;
-    if (value < 0)
-    {
-        neg = true;
-        value = -value;
-    }
-    if (scale % 9 != 0)
-    {
-        ScaleType padding = static_cast<ScaleType>(9 - scale % 9);
-        while (padding > 0)
-        {
-            padding--;
-            value *= 10;
-        }
-    }
-    std::vector<Int32> v;
-    Int8 words = getWords(prec, scale);
-
-    for (Int8 i = 0; i < words; i++)
-    {
-        v.push_back(static_cast<Int32>(value % decimal_mod));
-        value /= decimal_mod;
-    }
-    reverse(v.begin(), v.end());
-
-    if (value > 0)
-        throw Exception("Value is overflow! (EncodeDecimal)", ErrorCodes::LOGICAL_ERROR);
-
-    v[0] |= signMask32;
-    if (neg)
-    {
-        for (size_t i = 0; i < v.size(); i++)
-            v[i] = ~v[i];
-    }
-    for (size_t i = 0; i < v.size(); i++)
-    {
-        EncodeNumber(v[i], ss);
-    }
-}
+void EncodeDecimal(const Decimal &, std::stringstream &) { throw Exception("To be implemented", ErrorCodes::LOGICAL_ERROR); }
 
 template <typename T>
 inline T getFieldValue(const Field & field)
@@ -357,9 +308,9 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
         case TiDB::CodecFlagFloat:
             return EncodeFloat64(getFieldValue<Float64>(field), ss);
         case TiDB::CodecFlagUInt:
-            return EncodeNumber<UInt64>(getFieldValue<UInt64>(field), ss);
+            return EncodeUInt<UInt64>(getFieldValue<UInt64>(field), ss);
         case TiDB::CodecFlagInt:
-            return EncodeNumber<Int64>(getFieldValue<Int64>(field), ss);
+            return EncodeInt64(getFieldValue<Int64>(field), ss);
         case TiDB::CodecFlagVarInt:
             return EncodeVarInt(getFieldValue<Int64>(field), ss);
         case TiDB::CodecFlagVarUInt:
