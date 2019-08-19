@@ -1,10 +1,10 @@
-#include <Storages/Transaction/JSONCodec.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/JSONCodec.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <Poco/JSON/Object.h>
 #include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
 #pragma GCC diagnostic pop
 
 /**
@@ -196,10 +196,7 @@ inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value)
     }
 }
 
-inline String decodeString(size_t base, const String & raw_value, size_t length)
-{
-    return String(raw_value, base, length);
-}
+inline String decodeString(size_t base, const String & raw_value, size_t length) { return String(raw_value, base, length); }
 
 inline String decodeString(size_t & cursor, const String & raw_value)
 {
@@ -248,9 +245,9 @@ String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
             throw Exception("DecodeJsonBinary: Unknown JSON Element Type:" + std::to_string(type), ErrorCodes::LOGICAL_ERROR);
     }
 
-    size ++;
+    size++;
     cursor = base + size;
     return raw_value.substr(base, size);
 }
 
-}
+} // namespace DB
