@@ -103,17 +103,17 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
         case tipb::ExecType::TypeAggregation:
             for (auto & expr : executor.aggregation().agg_func())
             {
-                if (!expr.has_field_type())
+                if (!exprHasValidFieldType(expr))
                 {
-                    throw Exception("Agg expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+                    throw Exception("Agg expression without valid field type", ErrorCodes::COP_BAD_DAG_REQUEST);
                 }
                 output_field_types.push_back(expr.field_type());
             }
             for (auto & expr : executor.aggregation().group_by())
             {
-                if (!expr.has_field_type())
+                if (!exprHasValidFieldType(expr))
                 {
-                    throw Exception("Group by expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+                    throw Exception("Group by expression without valid field type", ErrorCodes::COP_BAD_DAG_REQUEST);
                 }
                 output_field_types.push_back(expr.field_type());
             }

@@ -245,7 +245,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
     {
         throw Exception("Expression without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    if (expr.has_field_type() && isFunctionExpr(expr))
+    if (exprHasValidFieldType(expr) && isFunctionExpr(expr))
     {
         DataTypePtr expected_type = getDataTypeByFieldType(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
@@ -314,7 +314,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     if (isLiteralExpr(expr))
     {
         Field value = decodeLiteral(expr);
-        DataTypePtr type = expr.has_field_type() ? getDataTypeByFieldType(expr.field_type()) : applyVisitor(FieldToDataType(), value);
+        DataTypePtr type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : applyVisitor(FieldToDataType(), value);
 
         ColumnWithTypeAndName column;
         column.column = type->createColumnConst(1, convertFieldToType(value, *type));

@@ -26,6 +26,7 @@ String getName(const tipb::Expr & expr, const NamesAndTypesList & current_input_
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col, bool for_parser = true);
 bool isInOrGlobalInOperator(const String & name);
+bool exprHasValidFieldType(const tipb::Expr & expr);
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
 extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
 
