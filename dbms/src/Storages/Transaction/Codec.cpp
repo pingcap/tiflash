@@ -133,17 +133,7 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 
 void SkipVarUInt(size_t & cursor, const String & raw_value)
 {
-    for (int i = 0; cursor < raw_value.size(); i++)
-    {
-        UInt64 v = raw_value[cursor++];
-        if (v < 0x80)
-        {
-            if (i > 9 || (i == 9 && v > 1))
-                throw Exception("Overflow when DecodeVarUInt", ErrorCodes::LOGICAL_ERROR);
-            return;
-        }
-    }
-    throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
+    std::ignore = DecodeVarUInt(cursor, raw_value);
 }
 
 inline Int8 getWords(PrecType prec, ScaleType scale)
