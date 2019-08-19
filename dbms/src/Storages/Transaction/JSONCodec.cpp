@@ -1,8 +1,11 @@
-#include "JSONCodec.h"
-#include "Codec.h"
+#include <Storages/Transaction/JSONCodec.h>
+#include <Storages/Transaction/Codec.h>
 
-
-
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Array.h>
+#pragma GCC diagnostic pop
 
 /**
  * https://github.com/pingcap/tidb/blob/release-3.0/types/json/binary.go
@@ -59,11 +62,12 @@
 namespace DB
 {
 
-
 namespace ErrorCodes
 {
 extern const int LOGICAL_ERROR;
 }
+
+using JsonVar = Poco::Dynamic::Var;
 
 constexpr UInt8 TYPE_CODE_OBJECT = 0x01;  // TypeCodeObject indicates the JSON is an object.
 constexpr UInt8 TYPE_CODE_ARRAY = 0x03;   // TypeCodeArray indicates the JSON is an array.
@@ -92,7 +96,6 @@ JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value);
 // Below funcs decode via relative offset and base offset does not move
 JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_offset);
 inline String decodeString(size_t base, const String & raw_value, size_t length);
-
 
 template <typename T>
 inline T decodeNumeric(size_t & cursor, const String & raw_value)
@@ -142,7 +145,7 @@ JsonArrayPtr decodeArray(size_t & cursor, const String & raw_value)
 
 JsonVar decodeValueEntry(size_t base, const String & raw_value, size_t value_entry_offset)
 {
-    int type = raw_value[base + value_entry_offset];
+    UInt8 type = raw_value[base + value_entry_offset];
     size_t abs_entry_offset = base + value_entry_offset + 1;
 
     if (type == TYPE_CODE_LITERAL)
@@ -179,7 +182,7 @@ JsonVar decodeValue(UInt8 type, size_t & cursor, const String & raw_value)
 
 inline JsonVar decodeLiteral(size_t & cursor, const String & raw_value)
 {
-    int type = raw_value[cursor++];
+    UInt8 type = raw_value[cursor++];
     switch (type)
     {
         case LITERAL_FALSE:
