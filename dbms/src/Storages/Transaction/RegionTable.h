@@ -203,6 +203,7 @@ public:
         DB::HandleRange<HandleID> & handle_range);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
+    size_t getRegionCountByTable(const TableID table_id) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;
