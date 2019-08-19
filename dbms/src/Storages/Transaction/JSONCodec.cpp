@@ -201,7 +201,7 @@ inline String decodeString(size_t base, const String & raw_value, size_t length)
 inline String decodeString(size_t & cursor, const String & raw_value)
 {
     size_t length = DecodeVarUInt(cursor, raw_value);
-    const String & val = String(raw_value, cursor, length);
+    String val = String(raw_value, cursor, length);
     cursor += length;
     return val;
 }
