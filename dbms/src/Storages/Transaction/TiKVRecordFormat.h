@@ -40,7 +40,7 @@ inline bool DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID
 {
     const String & raw_value = value.getStr();
     size_t cursor = 0;
-    bool schema_not_match = false;
+    bool schema_is_match = true;
     size_t column_cnt = 0;
     while (cursor < raw_value.size())
     {
@@ -54,7 +54,7 @@ inline bool DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID
         column_cnt++;
         if (!schema_all_column_ids.count(col_id))
         {
-            schema_not_match = true;
+            schema_is_match = false;
         }
         if (!column_ids_to_read.count(col_id))
         {
@@ -68,12 +68,12 @@ inline bool DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID
     }
     if (column_cnt != schema_all_column_ids.size())
     {
-        schema_not_match = true;
+        schema_is_match = false;
     }
 
     if (cursor != raw_value.size())
         throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
-    return schema_not_match;
+    return schema_is_match;
 }
 
 // Key format is here:
