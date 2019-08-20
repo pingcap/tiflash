@@ -246,7 +246,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             {
                 std::unordered_set<ColumnID> decoded_col_ids_set(decoded_col_ids.begin(), decoded_col_ids.end());
 
-                // Fill in missing column values.
                 for (auto col_id : column_ids_to_read)
                 {
                     if (decoded_col_ids_set.count(col_id))
