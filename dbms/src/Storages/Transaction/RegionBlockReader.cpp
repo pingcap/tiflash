@@ -198,7 +198,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         std::vector<Field> fields;
         col_ids.reserve(target_col_size);
         fields.reserve(target_col_size);
-        bool schema_not_match = false;
 
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
@@ -224,7 +223,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             }
             else
             {
-                schema_not_match = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, col_ids, fields, schema_all_column_ids);
+                bool schema_not_match = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, col_ids, fields, schema_all_column_ids);
                 if (schema_not_match && !force_decode)
                 {
                     return std::make_tuple(block, false);
