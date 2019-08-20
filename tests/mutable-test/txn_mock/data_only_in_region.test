@@ -68,5 +68,15 @@
 │    1205 │
 └─────────┘
 
+=> select count(col_1) from default.test
+┌─count(col_1)─┐
+│         1205 │
+└──────────────┘
+
+=> select count(col_2) from default.test
+┌─count(col_2)─┐
+│         1205 │
+└──────────────┘
+
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
