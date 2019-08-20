@@ -29,8 +29,8 @@ extern const int BAD_ARGUMENTS;
 extern const int LOGICA_ERROR;
 } // namespace ErrorCodes
 
-using DAGField = std::pair<String, tipb::FieldType>;
-using DAGSchema = std::vector<DAGField>;
+using DAGColumnInfo = std::pair<String, ColumnInfo>;
+using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TiDB::TableInfo(const String &, const String &)>;
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts);
@@ -113,6 +113,26 @@ struct ExecutorCtx
     std::unordered_map<String, tipb::Expr *> col_ref_map;
 };
 
+tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
+{
+    tipb::FieldType ret;
+    ret.set_tp(ci.tp);
+    ret.set_flag(ci.flag);
+    ret.set_flen(ci.flen);
+    ret.set_decimal(ci.decimal);
+    return ret;
+}
+
+ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
+{
+    ColumnInfo ret;
+    ret.tp = static_cast<TiDB::TP>(field_type.tp());
+    ret.flag = field_type.flag();
+    ret.flen = field_type.flen();
+    ret.decimal = field_type.decimal();
+    return ret;
+}
+
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
     std::unordered_map<String, tipb::Expr *> & col_ref_map)
 {
@@ -122,7 +142,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         if (ft == input.end())
             throw DB::Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         expr->set_tp(tipb::ColumnRef);
-        *(expr->mutable_field_type()) = (*ft).second;
+        *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
 
         referred_columns.emplace((*ft).first);
         col_ref_map.emplace((*ft).first, expr);
@@ -277,12 +297,13 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         DAGSchema ts_output;
         for (const auto & column_info : table_info.columns)
         {
-            tipb::FieldType field_type;
-            field_type.set_tp(column_info.tp);
-            field_type.set_flag(column_info.flag);
-            field_type.set_flen(column_info.flen);
-            field_type.set_decimal(column_info.decimal);
-            ts_output.emplace_back(std::make_pair(column_info.name, std::move(field_type)));
+            ColumnInfo ci;
+            ci.tp = column_info.tp;
+            ci.flag = column_info.flag;
+            ci.flen = column_info.flen;
+            ci.decimal = column_info.flen;
+            ci.elems = column_info.elems;
+            ts_output.emplace_back(std::make_pair(column_info.name, std::move(ci)));
         }
         executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, tipb::Expr *>{}});
         last_executor = ts_exec;
@@ -342,14 +363,21 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                                           [&](const auto & field) { return referred_columns.count(field.first) == 0; }),
                 executor_ctx.output.end());
 
-            for (const auto & field : executor_ctx.output)
+            for (const auto & info : executor_ctx.output)
             {
                 tipb::ColumnInfo * ci = ts->add_columns();
-                ci->set_column_id(table_info.getColumnID(field.first));
-                ci->set_tp(field.second.tp());
-                ci->set_flag(field.second.flag());
-                ci->set_columnlen(field.second.flen());
-                ci->set_decimal(field.second.decimal());
+                ci->set_column_id(table_info.getColumnID(info.first));
+                ci->set_tp(info.second.tp);
+                ci->set_flag(info.second.flag);
+                ci->set_columnlen(info.second.flen);
+                ci->set_decimal(info.second.decimal);
+                if (info.second.elems.size() != 0)
+                {
+                    for (auto & pair : info.second.elems)
+                    {
+                        ci->add_elems(pair.first);
+                    }
+                }
             }
 
             return;
@@ -418,7 +446,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                     throw DB::Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
                 }
 
-                schema.emplace_back(std::make_pair(func->getColumnName(), agg_func->field_type()));
+                schema.emplace_back(std::make_pair(func->getColumnName(), fieldTypeToColumnInfo(agg_func->field_type())));
             }
 
             if (has_gby)
@@ -427,7 +455,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                 {
                     tipb::Expr * gby = agg->add_group_by();
                     compileExpr(executor_ctx_map[last_executor].output, child, gby, referred_columns, col_ref_map);
-                    schema.emplace_back(std::make_pair(child->getColumnName(), gby->field_type()));
+                    schema.emplace_back(std::make_pair(child->getColumnName(), fieldTypeToColumnInfo(gby->field_type())));
                 }
             }
 
@@ -520,7 +548,7 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
         for (auto & field : schema)
         {
             const auto & name = field.first;
-            auto data_type = getDataTypeByFieldType(field.second);
+            auto data_type = getDataTypeByColumnInfo(field.second);
             ColumnWithTypeAndName col(data_type, name);
             col.column->assumeMutable()->reserve(rows.size());
             columns.emplace_back(std::move(col));
