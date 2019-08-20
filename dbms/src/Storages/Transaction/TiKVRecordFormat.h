@@ -36,7 +36,7 @@ static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
 inline bool DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read,
-        std::vector<ColumnID> & col_ids, std::vector<Field> & fields, std::unordered_set<ColumnID> & schema_all_column_ids)
+        std::vector<ColumnID> & col_ids, std::vector<Field> & fields, const std::unordered_set<ColumnID> & schema_all_column_ids)
 {
     const String & raw_value = value.getStr();
     size_t cursor = 0;
