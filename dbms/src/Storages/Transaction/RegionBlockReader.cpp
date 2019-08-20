@@ -170,7 +170,9 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
 
-    std::unordered_map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
+    using ColTypePair = std::pair<MutableColumnPtr, NameAndTypePair>;
+    google::dense_hash_map<ColumnID, std::shared_ptr<ColTypePair>> column_map;
+    column_map.set_empty_key(EmptyColumnID);
 
     google::dense_hash_map<ColumnID, size_t> column_id_to_info_index_map;
     column_id_to_info_index_map.set_empty_key(EmptyColumnID);
@@ -192,8 +194,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             continue;
         }
         auto ch_col = columns.getPhysical(col_name);
-        column_map[col_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
-        column_map[col_id].first->reserve(data_list.size());
+        column_map.insert(std::make_pair(col_id, std::make_shared<ColTypePair>(ch_col.type->createColumn(), ch_col)));
+        column_map[col_id]->first->reserve(data_list.size());
         if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
             handle_col_id = col_id;
         else
@@ -208,11 +210,11 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     if (!table_info.pk_is_handle)
     {
         auto ch_col = columns.getPhysical(MutableSupport::tidb_pk_column_name);
-        column_map[handle_col_id] = std::make_pair(ch_col.type->createColumn(), ch_col);
-        column_map[handle_col_id].first->reserve(data_list.size());
+        column_map.insert(std::make_pair(handle_col_id, std::make_shared<ColTypePair>(ch_col.type->createColumn(), ch_col)));
+        column_map[handle_col_id]->first->reserve(data_list.size());
     }
 
-    const TMTPKType pk_type = getTMTPKType(*column_map[handle_col_id].second.type);
+    const TMTPKType pk_type = getTMTPKType(*column_map[handle_col_id]->second.type);
 
     if (pk_type == TMTPKType::UINT64)
         ReorderRegionDataReadList(data_list);
@@ -232,7 +234,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 break;
         }
 
-        func(*delmark_col, *version_col, column_map[handle_col_id].first, data_list, start_ts);
+        func(*delmark_col, *version_col, column_map[handle_col_id]->first, data_list, start_ts);
     }
 
     const auto & date_lut = DateLUT::instance();
@@ -330,14 +332,16 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
-                const auto & tp = it->second.second.type;
+                auto & name_type = it->second->second;
+                auto & mut_col = it->second->first;
+                const auto & tp = name_type.type;
                 if (tp->isDateOrDateTime()
                     || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isDateOrDateTime()))
                 {
                     Field & field = decoded_fields[i];
                     if (field.isNull())
                     {
-                        it->second.first->insert(decoded_fields[i]);
+                        mut_col->insert(decoded_fields[i]);
                         continue;
                     }
                     UInt64 packed = field.get<UInt64>();
@@ -371,27 +375,26 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                             }
                             datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
                         }
-                        it->second.first->insert(static_cast<Int64>(datetime));
+                        mut_col->insert(static_cast<Int64>(datetime));
                     }
                     else
                     {
                         auto date = date_lut.makeDayNum(year, month, day);
                         Field date_field(static_cast<Int64>(date));
-                        it->second.first->insert(date_field);
+                        mut_col->insert(date_field);
                     }
                 }
                 else
                 {
-                    it->second.first->insert(decoded_fields[i]);
+                    mut_col->insert(decoded_fields[i]);
 
                     // Check overflow for potential un-synced data type widen,
                     // i.e. schema is old and narrow, meanwhile data is new and wide.
                     // So far only integers is possible of overflow.
-                    auto nested_tp = tp->isNullable() ? dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType() : tp;
-                    auto & orig_column = *it->second.first;
-                    auto & nested_column = it->second.first->isColumnNullable()
-                        ? dynamic_cast<ColumnNullable &>(*it->second.first).getNestedColumn()
-                        : *it->second.first;
+                    auto & nested_tp = tp->isNullable() ? dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType() : tp;
+                    auto & orig_column = *mut_col;
+                    auto & nested_column
+                        = mut_col->isColumnNullable() ? dynamic_cast<ColumnNullable &>(*mut_col).getNestedColumn() : *mut_col;
                     auto inserted_index = orig_column.size() - 1;
                     if (!orig_column.isNullAt(inserted_index) && nested_tp->isInteger())
                     {
@@ -443,7 +446,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         else
         {
             Int64 col_id = table_info.getColumnID(name);
-            block.insert({std::move(column_map[col_id].first), column_map[col_id].second.type, name});
+            block.insert({std::move(column_map[col_id]->first), column_map[col_id]->second.type, name});
         }
     }
 

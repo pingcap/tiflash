@@ -44,9 +44,9 @@ Float64 DecodeFloat64(size_t & cursor, const String & raw_value)
     return enforce_cast<Float64>(num);
 }
 
-String DecodeBytes(size_t & cursor, const String & raw_value)
+template <typename StringStream>
+void DecodeBytes(size_t & cursor, const String & raw_value, StringStream & ss)
 {
-    std::stringstream ss;
     while (true)
     {
         size_t next_cursor = cursor + 9;
@@ -62,25 +62,24 @@ String DecodeBytes(size_t & cursor, const String & raw_value)
         if (pad_size != 0)
             break;
     }
+}
+
+String DecodeBytes(size_t & cursor, const String & raw_value)
+{
+    std::stringstream ss;
+    DecodeBytes(cursor, raw_value, ss);
     return ss.str();
 }
 
+struct NullStringStream
+{
+    void write(const char *, size_t) {}
+};
+
 void SkipBytes(size_t & cursor, const String & raw_value)
 {
-    while (true)
-    {
-        size_t next_cursor = cursor + 9;
-        if (next_cursor > raw_value.size())
-            throw Exception("Wrong format, cursor over buffer size. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
-        UInt8 marker = (UInt8)raw_value[cursor + 8];
-        UInt8 pad_size = ENC_MARKER - marker;
-
-        if (pad_size > 8)
-            throw Exception("Wrong format, too many padding bytes. (DecodeBytes)", ErrorCodes::LOGICAL_ERROR);
-        cursor = next_cursor;
-        if (pad_size != 0)
-            break;
-    }
+    NullStringStream ss;
+    DecodeBytes(cursor, raw_value, ss);
 }
 
 String DecodeCompactBytes(size_t & cursor, const String & raw_value)
@@ -104,10 +103,7 @@ Int64 DecodeVarInt(size_t & cursor, const String & raw_value)
     return (v & 1) ? ~vx : vx;
 }
 
-void SkipVarInt(size_t & cursor, const String & raw_value)
-{
-    SkipVarUInt(cursor, raw_value);
-}
+void SkipVarInt(size_t & cursor, const String & raw_value) { SkipVarUInt(cursor, raw_value); }
 
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 {
@@ -128,10 +124,7 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
     throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
 }
 
-void SkipVarUInt(size_t & cursor, const String & raw_value)
-{
-    std::ignore = DecodeVarUInt(cursor, raw_value);
-}
+void SkipVarUInt(size_t & cursor, const String & raw_value) { std::ignore = DecodeVarUInt(cursor, raw_value); }
 
 inline Int8 getWords(PrecType prec, ScaleType scale)
 {
