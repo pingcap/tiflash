@@ -25,7 +25,7 @@ protected:
         if (file.exists())
             file.remove(true);
 
-        context = DMTestEnv::getContext();
+        context = std::make_unique<Context>(DMTestEnv::getContext());
         store   = reload();
     }
 
@@ -35,7 +35,7 @@ protected:
         ColumnDefine  handle_column_define = cols[0];
 
         DeltaMergeStorePtr s
-            = std::make_shared<DeltaMergeStore>(context, path, name, cols, handle_column_define, DeltaMergeStore::Settings());
+            = std::make_shared<DeltaMergeStore>(*context, path, name, cols, handle_column_define, DeltaMergeStore::Settings());
         return s;
     }
 
@@ -46,8 +46,8 @@ private:
     String path;
 
 protected:
-    Context            context;
-    DeltaMergeStorePtr store;
+    std::unique_ptr<Context> context;
+    DeltaMergeStorePtr       store;
 };
 
 TEST_F(DeltaMergeStore_test, Create)
@@ -108,7 +108,7 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
             }
             block.insert(col2);
         }
-        store->write(context, context.getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), block);
     }
 
     {
@@ -119,8 +119,8 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
 
         // read all columns from store
         const auto &        columns = store->getTableColumns();
-        BlockInputStreamPtr in      = store->read(context,
-                                             context.getSettingsRef(),
+        BlockInputStreamPtr in      = store->read(*context,
+                                             context->getSettingsRef(),
                                              columns,
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
@@ -195,7 +195,7 @@ TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
             }
             block.insert(col2);
         }
-        store->write(context, context.getSettingsRef(), block);
+        store->write(*context, context->getSettingsRef(), block);
     }
 
     {
@@ -206,8 +206,8 @@ TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
     {
         // read all columns from store
         const auto &      columns = store->getTableColumns();
-        BlockInputStreams ins     = store->read(context,
-                                            context.getSettingsRef(),
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
                                             columns,
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
@@ -217,8 +217,8 @@ TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
         BlockInputStreamPtr & in = ins[0];
         {
             // check col type
-            const Block head = in->getHeader();
-            const auto  col  = head.getByName(col_name_ddl_change_type);
+            const Block  head = in->getHeader();
+            const auto & col  = head.getByName(col_name_ddl_change_type);
             ASSERT_EQ(col.name, col_name_ddl_change_type);
             ASSERT_EQ(col.column_id, col_id_ddl_change_type);
             ASSERT_TRUE(col.type->equals(*DataTypeFactory::instance().get("Int32")));

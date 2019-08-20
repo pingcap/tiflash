@@ -1,18 +1,21 @@
-#include <gtest/gtest.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
 namespace tests
 {
 
-DataTypePtr typeFromString(const String &str)
+namespace
+{
+DataTypePtr typeFromString(const String & str)
 {
     auto & data_type_factory = DataTypeFactory::instance();
     return data_type_factory.get(str);
 }
+} // namespace
 
 
 TEST(TypeMapping_test, ColumnInfoToDataType)
@@ -25,14 +28,12 @@ TEST(TypeMapping_test, DataTypeToColumnInfo)
     try
     {
         TiDB::ColumnInfo column_info;
-        const Strings numeric_types = {
-                "Int8", "Int16", "Int32", "Int64"
-        };
-        for (const auto &numeric_type : numeric_types)
+        const Strings numeric_types = {"Int8", "Int16", "Int32", "Int64"};
+        for (const auto & numeric_type : numeric_types)
         {
-            for (bool sign: {false, true})
+            for (bool sign : {false, true})
             {
-                for (bool nullable: {false, true})
+                for (bool nullable : {false, true})
                 {
                     String actual_test_type = numeric_type;
                     if (!sign)
@@ -58,7 +59,6 @@ TEST(TypeMapping_test, DataTypeToColumnInfo)
 
         column_info = getColumnInfoByDataType(typeFromString("String"));
         ASSERT_EQ(column_info.tp, TiDB::TypeString);
-
     }
     catch (const Exception & e)
     {
@@ -74,8 +74,7 @@ TEST(TypeMapping_test, DataTypeToColumnInfo)
 
         if (print_stack_trace && std::string::npos == embedded_stack_trace_pos)
         {
-            std::cerr << "Stack trace:" << std::endl
-                      << e.getStackTrace().toString();
+            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
         }
 
         throw;

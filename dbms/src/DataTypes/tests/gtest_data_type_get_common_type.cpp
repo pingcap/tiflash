@@ -15,6 +15,8 @@ namespace DB
 namespace tests
 {
 
+namespace
+{
 DataTypePtr typeFromString(const String & str)
 {
     auto & data_type_factory = DataTypeFactory::instance();
@@ -31,6 +33,7 @@ DataTypes typesFromString(const String & str)
 
     return data_types;
 }
+} // namespace
 
 TEST(DataType_test, getLeastSuperType)
 {

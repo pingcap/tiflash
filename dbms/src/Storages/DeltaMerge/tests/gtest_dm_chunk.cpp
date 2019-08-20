@@ -97,11 +97,14 @@ TEST(DeleteRange_test, Seri)
     EXPECT_EQ(deseri_range.end, range.end);
 }
 
+namespace
+{
 DataTypePtr typeFromString(const String & str)
 {
     auto & data_type_factory = DataTypeFactory::instance();
     return data_type_factory.get(str);
 }
+} // namespace
 
 TEST(ChunkColumnCast_test, CastNumeric)
 {
@@ -194,9 +197,9 @@ TEST(ChunkColumnCast_test, DISABLED_CastNullableToNotNullWithNonZeroDefaultValue
 
     for (const String & to_type : to_types)
     {
-        DataTypePtr      read_data_type = typeFromString(to_type);
-        ColumnDefine     read_define(0, "c", read_data_type);
-        read_define.default_value = "5";
+        DataTypePtr  read_data_type = typeFromString(to_type);
+        ColumnDefine read_define(0, "c", read_data_type);
+        read_define.default_value      = "5";
         MutableColumnPtr memory_column = read_data_type->createColumn();
         memory_column->reserve(3);
 
