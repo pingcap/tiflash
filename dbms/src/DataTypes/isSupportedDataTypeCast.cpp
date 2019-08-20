@@ -16,26 +16,16 @@ namespace DB
 
 bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
 {
-    try
-    {
-        return !isLossyCast(from, to);
-    }
-    catch (DB::Exception & e)
-    {
-        return false;
-    }
-}
-
-bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
-{
     assert(from != nullptr && to != nullptr);
     /// `to` is equal to `from`
     if (to->equals(*from))
     {
-        return false;
+        // TODO: maybe buggy in DataTypeDecimal after merge https://github.com/pingcap/tics/pull/74
+        // https://github.com/pingcap/tics/pull/74/files#diff-bf73e8ba09a6ec5c3814166d71be8666R167
+        return true;
     }
 
-    /// For Nullable
+    /// For Nullable, unwrap DataTypeNullable
     {
         bool has_nullable = false;
         DataTypePtr from_not_null;
@@ -61,7 +51,7 @@ bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
         }
 
         if (has_nullable)
-            return isLossyCast(from_not_null, to_not_null);
+            return isSupportedDataTypeCast(from_not_null, to_not_null);
     }
 
     /// For numeric types (integer, floats)
@@ -70,19 +60,19 @@ bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
         /// int <-> float, or float32 <-> float64, is not supported
         if (!from->isInteger() || !to->isInteger())
         {
-            return true;
+            return false;
         }
-        /// Change from signed to unsigned, or vice versa, is lossy
+        /// Change from signed to unsigned, or vice versa, is not supported
         // use xor(^)
-        if (from->isUnsignedInteger() ^ to->isUnsignedInteger())
+        if ((from->isUnsignedInteger()) ^ (to->isUnsignedInteger()))
         {
-            return true;
+            return false;
         }
 
         /// Both signed or unsigned, compare the sizeof(Type)
         size_t from_sz = from->getSizeOfValueInMemory();
         size_t to_sz = to->getSizeOfValueInMemory();
-        return from_sz > to_sz;
+        return from_sz <= to_sz;
     }
 
     /// For String / FixedString
@@ -94,13 +84,13 @@ bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
         size_t to_sz = std::numeric_limits<size_t>::max();
         if (const DataTypeFixedString * type_fixed_str = typeid_cast<const DataTypeFixedString *>(to.get()))
             to_sz = type_fixed_str->getN();
-        return from_sz > to_sz;
+        return from_sz <= to_sz;
     }
 
     /// For Date and DateTime, not supported
     if (from->isDateOrDateTime() || to->isDateOrDateTime())
     {
-        return true;
+        return false;
     }
 
     if (from->isDecimal() || to->isDecimal())
@@ -108,16 +98,12 @@ bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
         if (from->isDecimal() && to->isDecimal())
         {
             // not support change Decimal to other type, neither other type to Decimal
-            return true;
+            return false;
         }
+        // check that modifying the precision of DECIMAL data types is forbidden
         const auto * dec_from = typeid_cast<const DataTypeDecimal *>(from.get());
         const auto * dec_to = typeid_cast<const DataTypeDecimal *>(to.get());
-        if (dec_from->getPrec() == dec_to->getPrec() && dec_from->getScale() == dec_to->getPrec())
-            return false;
-        else
-            return true;
-
-        // TODO check that modifying the precision of DECIMAL data types is forbidden
+        return dec_from->getPrec() == dec_to->getPrec() && dec_from->getScale() == dec_to->getPrec();
     }
 
     // TODO enums, set?
@@ -133,16 +119,16 @@ bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
     // Cast to Array / from Array is not supported
     if (typeid_cast<const DataTypeArray *>(from.get()) || typeid_cast<const DataTypeArray *>(to.get()))
     {
-        throw Exception("Cast from " + from->getName() + " to " + to->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+        return false;
     }
 
     // Cast to Tuple / from Tuple is not supported
     if (typeid_cast<const DataTypeTuple *>(from.get()) || typeid_cast<const DataTypeTuple *>(to.get()))
     {
-        throw Exception("Cast from " + from->getName() + " to " + to->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+        return false;
     }
 
-    throw Exception("Cast from " + from->getName() + " to " + to->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
+    return false;
 }
 
 } // namespace DB
