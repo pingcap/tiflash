@@ -7,8 +7,6 @@
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
 
 # Data.
-# todo add Enum type
-#=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Enum16(\'male\' = 1, \'female\' = 2, \'both\' = 3, \'unknown\' = 4)')
 => DBGInvoke __refresh_schemas()
 => DBGInvoke __put_region(4, 0, 100, default, test)
