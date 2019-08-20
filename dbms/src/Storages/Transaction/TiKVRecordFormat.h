@@ -14,7 +14,6 @@
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
 
-
 namespace DB
 {
 
@@ -34,47 +33,6 @@ static const size_t SHORT_VALUE_MAX_LEN = 64;
 
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
-
-inline bool DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read,
-        std::vector<ColumnID> & col_ids, std::vector<Field> & fields, const std::unordered_set<ColumnID> & schema_all_column_ids)
-{
-    const String & raw_value = value.getStr();
-    size_t cursor = 0;
-    bool schema_matches = true;
-    size_t column_cnt = 0;
-    while (cursor < raw_value.size())
-    {
-        Field f = DecodeDatum(cursor, raw_value);
-        if (f.isNull())
-        {
-            fields.emplace_back(std::move(f));
-            break;
-        }
-        ColumnID col_id = f.get<ColumnID>();
-        column_cnt++;
-        if (!schema_all_column_ids.count(col_id))
-        {
-            schema_matches = false;
-        }
-        if (!column_ids_to_read.count(col_id))
-        {
-            SkipDatum(cursor, raw_value);
-        }
-        else
-        {
-            col_ids.push_back(col_id);
-            fields.emplace_back(DecodeDatum(cursor, raw_value));
-        }
-    }
-    if (column_cnt != schema_all_column_ids.size())
-    {
-        schema_matches = false;
-    }
-
-    if (cursor != raw_value.size())
-        throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
-    return schema_matches;
-}
 
 // Key format is here:
 // https://docs.google.com/document/d/1J9Dsp8l5Sbvzjth77hK8yx3SzpEJ4SXaR_wIvswRhro/edit
