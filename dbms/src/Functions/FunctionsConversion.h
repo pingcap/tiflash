@@ -103,6 +103,36 @@ struct ConvertImpl
     }
 };
 
+template <typename DecimalDataType, typename ToDataType, typename Name>
+struct ConvertFromDecimal
+{
+    using DecimalFieldType = typename DecimalDataType::FieldType;
+    using ToFieldType = typename ToDataType::FieldType;
+    static void execute(Block & block [[maybe_unused]], const ColumnNumbers & arguments [[maybe_unused]], size_t result [[maybe_unused]])
+    {
+        if constexpr (std::is_integral_v<ToFieldType> || std::is_floating_point_v<ToFieldType>)
+        {
+            const auto * col_from = checkAndGetColumn<ColumnDecimal<DecimalFieldType>>(block.getByPosition(arguments[0]).column.get());
+            auto col_to = ColumnVector<ToFieldType>::create();
+
+            typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
+            size_t size = col_from->size();
+            vec_to.resize(size);
+
+            for (size_t i = 0; i < size; ++i) {
+                const auto & field = (*col_from)[i].template safeGet<DecimalField<DecimalFieldType>>();
+                vec_to[i] = static_cast<ToFieldType>(field);
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else
+            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                    + " of first argument of function " + Name::name,
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
+
 template <typename FromDataType, typename Name, typename ToFieldType>
 struct ConvertToDecimalImpl
 {
@@ -861,6 +891,10 @@ private:
         else if (checkDataType<DataTypeFixedString>(from_type)) ConvertImpl<DataTypeFixedString, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeEnum8>(from_type)) ConvertImpl<DataTypeEnum8, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeEnum16>(from_type)) ConvertImpl<DataTypeEnum16, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal32>(from_type)) ConvertFromDecimal<DataTypeDecimal32, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal64>(from_type)) ConvertFromDecimal<DataTypeDecimal64, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal128>(from_type)) ConvertFromDecimal<DataTypeDecimal128, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal256>(from_type)) ConvertFromDecimal<DataTypeDecimal256, ToDataType, Name>::execute(block, arguments, result);
         else
         {
             /// Generic conversion of any type to String.
