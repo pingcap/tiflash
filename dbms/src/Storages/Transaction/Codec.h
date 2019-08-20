@@ -41,6 +41,18 @@ Decimal DecodeDecimal(size_t & cursor, const String & raw_value);
 
 Field DecodeDatum(size_t & cursor, const String & raw_value);
 
+void SkipBytes(size_t & cursor, const String & raw_value);
+
+void SkipCompactBytes(size_t & cursor, const String & raw_value);
+
+void SkipVarInt(size_t & cursor, const String & raw_value);
+
+void SkipVarUInt(size_t & cursor, const String & raw_value);
+
+void SkipDecimal(size_t & cursor, const String & raw_value);
+
+void SkipDatum(size_t & cursor, const String & raw_value);
+
 template <typename T>
 inline std::enable_if_t<std::is_unsigned_v<T>, void> EncodeUInt(T u, std::stringstream & ss)
 {

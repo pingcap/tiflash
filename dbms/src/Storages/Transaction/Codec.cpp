@@ -44,9 +44,9 @@ Float64 DecodeFloat64(size_t & cursor, const String & raw_value)
     return enforce_cast<Float64>(num);
 }
 
-String DecodeBytes(size_t & cursor, const String & raw_value)
+template <typename StringStream>
+void DecodeBytes(size_t & cursor, const String & raw_value, StringStream & ss)
 {
-    std::stringstream ss;
     while (true)
     {
         size_t next_cursor = cursor + 9;
@@ -62,7 +62,24 @@ String DecodeBytes(size_t & cursor, const String & raw_value)
         if (pad_size != 0)
             break;
     }
+}
+
+String DecodeBytes(size_t & cursor, const String & raw_value)
+{
+    std::stringstream ss;
+    DecodeBytes(cursor, raw_value, ss);
     return ss.str();
+}
+
+struct NullStringStream
+{
+    void write(const char *, size_t) {}
+};
+
+void SkipBytes(size_t & cursor, const String & raw_value)
+{
+    NullStringStream ss;
+    DecodeBytes(cursor, raw_value, ss);
 }
 
 String DecodeCompactBytes(size_t & cursor, const String & raw_value)
@@ -73,12 +90,20 @@ String DecodeCompactBytes(size_t & cursor, const String & raw_value)
     return res;
 }
 
+void SkipCompactBytes(size_t & cursor, const String & raw_value)
+{
+    size_t size = DecodeVarInt(cursor, raw_value);
+    cursor += size;
+}
+
 Int64 DecodeVarInt(size_t & cursor, const String & raw_value)
 {
     UInt64 v = DecodeVarUInt(cursor, raw_value);
     Int64 vx = v >> 1;
     return (v & 1) ? ~vx : vx;
 }
+
+void SkipVarInt(size_t & cursor, const String & raw_value) { SkipVarUInt(cursor, raw_value); }
 
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 {
@@ -98,6 +123,8 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
     }
     throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
 }
+
+void SkipVarUInt(size_t & cursor, const String & raw_value) { std::ignore = DecodeVarUInt(cursor, raw_value); }
 
 inline Int8 getWords(PrecType prec, ScaleType scale)
 {
@@ -204,6 +231,15 @@ Decimal DecodeDecimal(size_t & cursor, const String & raw_value)
     return Decimal(value, prec, frac);
 }
 
+void SkipDecimal(size_t & cursor, const String & raw_value)
+{
+    PrecType prec = raw_value[cursor++];
+    ScaleType frac = raw_value[cursor++];
+
+    int binSize = getBytes(prec, frac);
+    cursor += binSize;
+}
+
 Field DecodeDatum(size_t & cursor, const String & raw_value)
 {
     switch (raw_value[cursor++])
@@ -228,6 +264,43 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
             throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDecimal:
             return DecodeDecimal(cursor, raw_value);
+        default:
+            throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void SkipDatum(size_t & cursor, const String & raw_value)
+{
+    switch (raw_value[cursor++])
+    {
+        case TiDB::CodecFlagNil:
+            return;
+        case TiDB::CodecFlagInt:
+            cursor += sizeof(Int64);
+            return;
+        case TiDB::CodecFlagUInt:
+            cursor += sizeof(UInt64);
+            return;
+        case TiDB::CodecFlagBytes:
+            SkipBytes(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagCompactBytes:
+            SkipCompactBytes(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagFloat:
+            cursor += sizeof(UInt64);
+            return;
+        case TiDB::CodecFlagVarUInt:
+            SkipVarUInt(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagVarInt:
+            SkipVarInt(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagDuration:
+            throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+        case TiDB::CodecFlagDecimal:
+            SkipDecimal(cursor, raw_value);
+            return;
         default:
             throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }
