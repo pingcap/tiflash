@@ -245,6 +245,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     if (column_names_to_read.size() > 3)
     {
         google::dense_hash_set<ColumnID> col_id_included;
+        col_id_included.set_empty_key(EmptyColumnID);
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
         std::vector<ColumnID> col_ids;
