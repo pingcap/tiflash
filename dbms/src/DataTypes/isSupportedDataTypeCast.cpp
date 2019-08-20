@@ -103,6 +103,23 @@ bool isLossyCast(const DataTypePtr &from, const DataTypePtr &to)
         return true;
     }
 
+    if (from->isDecimal() || to->isDecimal())
+    {
+        if (from->isDecimal() && to->isDecimal())
+        {
+            // not support change Decimal to other type, neither other type to Decimal
+            return true;
+        }
+        const auto * dec_from = typeid_cast<const DataTypeDecimal *>(from.get());
+        const auto * dec_to = typeid_cast<const DataTypeDecimal *>(to.get());
+        if (dec_from->getPrec() == dec_to->getPrec() && dec_from->getScale() == dec_to->getPrec())
+            return false;
+        else
+            return true;
+
+        // TODO check that modifying the precision of DECIMAL data types is forbidden
+    }
+
     // TODO enums, set?
 
     /// some DataTypes that support in ClickHouse but not in TiDB

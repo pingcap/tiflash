@@ -393,10 +393,6 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
         {
             // find the column we are going to modify
             auto col_iter = command.findColumn(new_columns.ordinary); // just find in ordinary columns
-            if (col_iter->type->isDecimal())
-            {
-                // TODO check that modifying the precision of DECIMAL data types is forbidden
-            }
             if (!isSupportedDataTypeCast(col_iter->type, command.data_type))
             {
                 // check that lossy changes is forbidden
@@ -482,7 +478,8 @@ void updateDeltaMergeTableCreateStatement(                   //
             TiDB::ColumnInfo column_info = getColumnInfoByDataType(column_define.type);
             column_info.id = column_define.id;
             column_info.name = column_define.name;
-            column_info.default_value = column_define.default_value;
+            column_info.origin_default_value = column_define.default_value;
+            column_info.has_origin_default_value = true;
             table_info_from_store.columns.emplace_back(std::move(column_info));
         }
     }
