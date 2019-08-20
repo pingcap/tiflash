@@ -240,7 +240,11 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 throw Exception("row size is wrong.", ErrorCodes::LOGICAL_ERROR);
 
             /// Modify `row` by adding missing column values or removing useless column values.
-            if (col_ids.size() != column_ids_to_read.size())
+            if (unlikely(col_ids.size() > column_ids_to_read.size()))
+            {
+                throw Exception("read unexpected columns.", ErrorCodes::LOGICAL_ERROR);
+            }
+            if (col_ids.size() < column_ids_to_read.size())
             {
                 col_id_included.clear();
                 for (size_t i = 0; i < col_ids.size(); i++)
