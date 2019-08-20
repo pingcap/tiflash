@@ -209,8 +209,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             decoded_fields.clear();
             if (write_type == Region::DelFlag)
             {
-                decoded_col_ids.reserve(target_col_size);
-                decoded_fields.reserve(target_col_size);
                 for (auto col_id : column_ids_to_read)
                 {
                     const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
