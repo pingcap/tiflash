@@ -2,6 +2,7 @@
 #include <thread>
 
 #include <DataStreams/StringStreamBlockInputStream.h>
+#include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncMockTiDBData.h>
@@ -67,6 +68,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
+    regSchemalessFunc("dump_region_table", ClusterManage::dumpRegionTable);
 
     regSchemafulFunc("dag", dbgFuncDAG);
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);
