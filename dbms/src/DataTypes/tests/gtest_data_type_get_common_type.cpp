@@ -214,6 +214,11 @@ TEST(DataType_test, isLossyCast)
         ASSERT_FALSE(isLossyCast(typeFromString("Int16"), typeFromString("Int16")));
         ASSERT_FALSE(isLossyCast(typeFromString("Int32"), typeFromString("Int32")));
         ASSERT_FALSE(isLossyCast(typeFromString("Int64"), typeFromString("Int64")));
+        ASSERT_FALSE(isLossyCast(typeFromString("DateTime"), typeFromString("DateTime")));
+        ASSERT_FALSE(isLossyCast(typeFromString("Date"), typeFromString("Date")));
+        ASSERT_FALSE(isLossyCast(typeFromString("Decimal"), typeFromString("Decimal")));
+        ASSERT_FALSE(isLossyCast(typeFromString("String"), typeFromString("String")));
+        ASSERT_FALSE(isLossyCast(typeFromString("FixedString(16)"), typeFromString("FixedString(16)")));
 
         // signed -> unsigned is lossy
         ASSERT_TRUE(isLossyCast(typeFromString("Int8"), typeFromString("UInt8")));

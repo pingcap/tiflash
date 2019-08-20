@@ -53,9 +53,15 @@ Code: 36. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: Storage en
 │ 1 │ 0 │ 0 │ \N │
 └───┴───┴───┴────┘
 
-# modify column data type
 >> insert into table dm_test values(2, 1024, 65535, 4096)
 >> insert into table dm_test(a,b,c) values(3, 2048, 65536)
+>> select * from dm_test
+┌─a─┬────b─┬─────c─┬────d─┐
+│ 1 │    0 │     0 │   \N │
+│ 2 │ 1024 │ 65535 │ 4096 │
+│ 3 │ 2048 │ 65536 │   \N │
+└───┴──────┴───────┴──────┘
+# modify column 'c' data type from Int32 -> Int64
 >> alter table dm_test modify column c Int64
 >> select * from dm_test
 ┌─a─┬────b─┬─────c─┬────d─┐

@@ -68,10 +68,7 @@ public:
         return bytes;
     }
 
-    bool hasColumn(ColId col_id) const
-    {
-        return columns.count(col_id) > 0;
-    }
+    bool hasColumn(ColId col_id) const { return columns.count(col_id) > 0; }
 
     const ColumnMeta & getColumn(ColId col_id) const
     {
@@ -126,6 +123,13 @@ void readChunkData(MutableColumns &      columns,
 
 
 Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage);
+
+void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
+                                       const ColumnPtr &    disk_col,
+                                       const ColumnDefine & read_define,
+                                       MutableColumnPtr     memory_col,
+                                       size_t               rows_offset,
+                                       size_t               rows_limit);
 
 
 } // namespace DM
