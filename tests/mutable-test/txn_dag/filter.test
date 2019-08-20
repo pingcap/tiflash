@@ -32,6 +32,12 @@
 │   777 │ test2 │   777 │
 └───────┴───────┴───────┘
 
+# Mock DAG read, where and.
+=> DBGInvoke mock_dag('select col_2, col_1, col_2 from default.test where col_1 = \'test2\' and col_2 = 777', 4)
+┌─col_2─┬─col_1─┬─col_2─┐
+│   777 │ test2 │   777 │
+└───────┴───────┴───────┘
+
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test

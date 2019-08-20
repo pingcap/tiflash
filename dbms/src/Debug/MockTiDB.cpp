@@ -138,6 +138,15 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
         column_info.flen = decimal_type->getPrec();
         column_info.decimal = decimal_type->getScale();
     }
+    if (checkDataType<DataTypeEnum16>(nested_type))
+    {
+        auto enum16_type = checkAndGetDataType<DataTypeEnum16>(nested_type);
+        column_info.tp = TiDB::TypeEnum;
+        for (auto & element : enum16_type->getValues())
+        {
+            column_info.elems.emplace_back(element.first, element.second);
+        }
+    }
 
 #ifdef M
 #error "Please undefine macro M first."
