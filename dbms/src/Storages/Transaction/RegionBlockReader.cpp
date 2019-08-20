@@ -9,6 +9,8 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
+#include <sparsehash/dense_hash_map>
+#include <sparsehash/dense_hash_set>
 
 namespace DB
 {
@@ -112,6 +114,48 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
     }
 }
 
+inline bool DecodeRow(const TiKVValue & value, const google::dense_hash_set<ColumnID> & column_ids_to_read, std::vector<ColumnID> & col_ids,
+    std::vector<Field> & fields, const google::dense_hash_set<ColumnID> & schema_all_column_ids)
+{
+    const String & raw_value = value.getStr();
+    size_t cursor = 0;
+    bool schema_is_match = true;
+    size_t column_cnt = 0;
+    while (cursor < raw_value.size())
+    {
+        Field f = DecodeDatum(cursor, raw_value);
+        if (f.isNull())
+        {
+            fields.push_back(std::move(f));
+            break;
+        }
+        ColumnID col_id = f.get<ColumnID>();
+        column_cnt++;
+        if (!schema_all_column_ids.count(col_id))
+        {
+            schema_is_match = false;
+        }
+        if (!column_ids_to_read.count(col_id))
+        {
+            SkipDatum(cursor, raw_value);
+        }
+        else
+        {
+            col_ids.push_back(col_id);
+            fields.push_back(DecodeDatum(cursor, raw_value));
+        }
+    }
+    if (column_cnt != schema_all_column_ids.size())
+    {
+        schema_is_match = false;
+    }
+
+    if (cursor != raw_value.size())
+        throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
+    return schema_is_match;
+}
+
+
 std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
@@ -124,10 +168,19 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
     ColumnID handle_col_id = InvalidColumnID;
 
+    constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
+
     std::unordered_map<ColumnID, std::pair<MutableColumnPtr, NameAndTypePair>> column_map;
-    std::unordered_map<ColumnID, size_t> column_id_to_info_index_map;
-    std::unordered_set<ColumnID> column_ids_to_read;
-    std::unordered_set<ColumnID> schema_all_column_ids;
+
+    google::dense_hash_map<ColumnID, size_t> column_id_to_info_index_map;
+    column_id_to_info_index_map.set_empty_key(EmptyColumnID);
+
+    google::dense_hash_set<ColumnID> column_ids_to_read;
+    column_ids_to_read.set_empty_key(EmptyColumnID);
+
+    google::dense_hash_set<ColumnID> schema_all_column_ids;
+    schema_all_column_ids.set_empty_key(EmptyColumnID);
+
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
         auto & column_info = table_info.columns[i];
@@ -145,8 +198,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             handle_col_id = col_id;
         else
         {
-            column_ids_to_read.emplace(col_id);
-            column_id_to_info_index_map.emplace(std::make_pair(col_id, i));
+            column_ids_to_read.insert(col_id);
+            column_id_to_info_index_map.insert(std::make_pair(col_id, i));
         }
     }
     if (column_names_to_read.size() - 3 != column_ids_to_read.size())
@@ -191,7 +244,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     // optimize for only need handle, tso, delmark.
     if (column_names_to_read.size() > 3)
     {
-        std::unordered_set<ColumnID> col_id_included;
+        google::dense_hash_set<ColumnID> col_id_included;
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
         std::vector<ColumnID> col_ids;
@@ -247,7 +300,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             {
                 col_id_included.clear();
                 for (size_t i = 0; i < col_ids.size(); i++)
-                    col_id_included.emplace(col_ids[i]);
+                    col_id_included.insert(col_ids[i]);
 
                 // Fill in missing column values.
                 for (auto col_id : column_ids_to_read)
