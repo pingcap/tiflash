@@ -546,4 +546,15 @@ TableIDSet RegionTable::getAllMappedTables(const RegionID region_id) const
     return {};
 }
 
+void RegionTable::dumpRegionsByTable(const TableID table_id, size_t & count, InternalRegions * regions) const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    if (auto it = tables.find(table_id); it != tables.end())
+    {
+        count = it->second.regions.size();
+        if (regions)
+            *regions = it->second.regions;
+    }
+}
+
 } // namespace DB
