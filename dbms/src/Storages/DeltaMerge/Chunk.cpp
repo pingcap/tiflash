@@ -213,7 +213,7 @@ void readChunkData(MutableColumns &      columns,
             {
                 throw Exception("Reading mismatch data type chunk. Cast from " + disk_meta.type->getName() + " to "
                                     + read_define.type->getName() + " is NOT supported!",
-                                ErrorCodes::CANNOT_CONVERT_TYPE);
+                                ErrorCodes::NOT_IMPLEMENTED);
             }
 
             // read from disk according as chunk meta
@@ -282,8 +282,9 @@ void castAndAppendToColumn(const ColumnPtr &    from_col, //
     {
         for (size_t i = 0; i < rows_limit; ++i)
         {
-            if (null_map->getInt(i) == static_cast<Int64>(i))
+            if (null_map->getInt(i) != 0)
             {
+                // `from_col[i]` is "NULL", fill `to_col[rows_offset + i]` with default value
                 // TODO read default value from ColumnDefine
                 (void)read_define;
                 //read_define.type->deserializeTextEscaped(col, read_define.default);
@@ -506,7 +507,12 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
 
     ColumnDefine read_define_not_null(read_define);
     read_define_not_null.type = read_type_not_null;
-    if (!castNumericColumnAccordingToColumnDefine(
+    if (disk_type_not_null->equals(*read_type_not_null))
+    {
+        // just change from nullable -> not null / not null -> nullable
+        memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
+    }
+    else if (!castNumericColumnAccordingToColumnDefine(
             disk_type_not_null, disk_col_not_null, read_define_not_null, null_map, memory_col_not_null, rows_offset, rows_limit))
     {
         throw Exception("Reading mismatch data type chunk. Cast and assign from " + disk_type->getName() + " to " + read_type->getName()
