@@ -276,7 +276,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             }
             else
             {
-                bool schema_is_match = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, col_ids, fields, schema_all_column_ids);
+                bool schema_is_match = DecodeRow(*value_ptr, column_ids_to_read, col_ids, fields, schema_all_column_ids);
                 if (!schema_is_match && !force_decode)
                 {
                     return std::make_tuple(block, false);
