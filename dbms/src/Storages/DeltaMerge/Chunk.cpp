@@ -1,6 +1,6 @@
 #include <Storages/DeltaMerge/Chunk.h>
 
-#include <DataTypes/isLossyCast.h>
+#include <DataTypes/isSupportedDataTypeCast.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>

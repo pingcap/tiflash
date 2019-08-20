@@ -1,7 +1,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/getMostSubtype.h>
-#include <DataTypes/isLossyCast.h>
+#include <DataTypes/isSupportedDataTypeCast.h>
 
 #include <sstream>
 

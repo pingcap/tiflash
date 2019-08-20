@@ -1,4 +1,4 @@
-#include <DataTypes/isLossyCast.h>
+#include <DataTypes/isSupportedDataTypeCast.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeArray.h>

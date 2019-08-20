@@ -3,7 +3,7 @@
 #include <gperftools/malloc_extension.h>
 
 #include <DataStreams/IBlockOutputStream.h>
-#include <DataTypes/isLossyCast.h>
+#include <DataTypes/isSupportedDataTypeCast.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
