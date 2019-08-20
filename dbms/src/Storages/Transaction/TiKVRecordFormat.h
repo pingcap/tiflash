@@ -37,11 +37,13 @@ static const UInt64 SIGN_MARK = UInt64(1) << 63;
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
 
-inline void DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read,
-        std::vector<ColumnID> & col_ids, std::vector<Field> & fields,  std::unordered_set<ColumnID> & row_all_column_ids)
+inline bool DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID> & column_ids_to_read,
+        std::vector<ColumnID> & col_ids, std::vector<Field> & fields, std::unordered_set<ColumnID> schema_all_column_ids)
 {
     const String & raw_value = value.getStr();
     size_t cursor = 0;
+    bool schema_not_match = false;
+    size_t column_cnt = 0;
     while (cursor < raw_value.size())
     {
         Field f = DecodeDatum(cursor, raw_value);
@@ -51,7 +53,11 @@ inline void DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID
             break;
         }
         ColumnID col_id = f.get<ColumnID>();
-        row_all_column_ids.insert(col_id);
+        column_cnt++;
+        if (!schema_all_column_ids.count(col_id))
+        {
+            schema_not_match = true;
+        }
         if (!column_ids_to_read.count(col_id))
         {
             SkipDatum(cursor, raw_value);
@@ -62,9 +68,14 @@ inline void DecodeRow(const TiKVValue & value, const std::unordered_set<ColumnID
             fields.push_back(DecodeDatum(cursor, raw_value));
         }
     }
+    if (column_cnt != schema_all_column_ids.size())
+    {
+        schema_not_match = true;
+    }
 
     if (cursor != raw_value.size())
         throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
+    return schema_not_match;
 }
 
 // Key format is here:

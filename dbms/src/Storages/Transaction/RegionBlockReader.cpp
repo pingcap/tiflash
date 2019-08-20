@@ -192,13 +192,13 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     if (column_names_to_read.size() > 3)
     {
         std::unordered_set<ColumnID> col_id_included;
-        std::unordered_set<ColumnID> row_all_column_ids;
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
         std::vector<ColumnID> col_ids;
         std::vector<Field> fields;
         col_ids.reserve(target_col_size);
         fields.reserve(target_col_size);
+        bool schema_not_match = false;
 
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
@@ -224,9 +224,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             }
             else
             {
-                row_all_column_ids.clear();
-                RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, col_ids, fields, row_all_column_ids);
-                if ((schema_all_column_ids != row_all_column_ids) && !force_decode)
+                schema_not_match = RecordKVFormat::DecodeRow(*value_ptr, column_ids_to_read, col_ids, fields, schema_all_column_ids);
+                if (schema_not_match && !force_decode)
                 {
                     return std::make_tuple(block, false);
                 }
