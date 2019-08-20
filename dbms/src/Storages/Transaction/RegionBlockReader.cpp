@@ -218,7 +218,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                     const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
 
                     col_ids.push_back(column.id);
-                    fields.push_back(GenDecodeRow(column.getCodecFlag()));
+                    fields.emplace_back(GenDecodeRow(column.getCodecFlag()));
                 }
             }
             else
