@@ -32,6 +32,8 @@ private:
     Settings settings;
     const Context & context;
     bool after_agg;
+    Int32 implicit_cast_count;
+    Poco::Logger * log;
 
 public:
     DAGExpressionAnalyzer(const NamesAndTypesList & source_columns_, const Context & context_);
@@ -54,6 +56,7 @@ public:
     const NamesAndTypesList & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     String applyFunction(const String & func_name, Names & arg_names, ExpressionActionsPtr & actions);
+    Int32 getImplicitCastCount() { return implicit_cast_count; };
 };
 
 } // namespace DB
