@@ -495,8 +495,13 @@ Block DeltaMergeStore::genHeaderBlock(const ColumnDefines & raw_columns,
 
 void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands &         commands,
                                               const OptionTableInfoConstRef table_info,
-                                              ColumnID &                    max_column_id_used)
+                                              ColumnID &                    max_column_id_used,
+                                              const Context &               context)
 {
+    /// Force flush on store, so that no chunks with different data type in memory
+    // TODO maybe some ddl do not need to flush cache? eg. just change default value
+    this->flush(context);
+
     for (const auto & command : commands)
     {
         applyColumnDefineAlter(command, table_info, max_column_id_used);

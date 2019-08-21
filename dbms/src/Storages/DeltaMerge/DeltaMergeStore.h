@@ -69,7 +69,8 @@ public:
     /// Apply `commands` on `table_columns`
     void applyColumnDefineAlters(const AlterCommands &         commands, //
                                  const OptionTableInfoConstRef table_info,
-                                 ColumnID &                    max_column_id_used);
+                                 ColumnID &                    max_column_id_used,
+                                 const Context &               context);
 
     void setMinDataVersion(UInt64 version) { min_version = version; }
 

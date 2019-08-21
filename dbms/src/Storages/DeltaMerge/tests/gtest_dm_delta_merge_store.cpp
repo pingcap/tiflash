@@ -76,14 +76,14 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
         ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
         ColumnDefine  cd(2, "col2", std::make_shared<DataTypeString>());
         table_column_defines.emplace_back(cd);
-        reload(table_column_defines);
+        store = reload(table_column_defines);
     }
 
     {
         // check column structure
         const auto & cols = store->getTableColumns();
         ASSERT_EQ(cols.size(), 4UL);
-        auto & str_col = cols[3];
+        const auto & str_col = cols[3];
         ASSERT_EQ(str_col.name, "col2");
         ASSERT_EQ(str_col.id, 2);
         ASSERT_TRUE(str_col.type->equals(*DataTypeFactory::instance().get("String")));
@@ -156,24 +156,25 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
 }
 
 TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
+try
 {
     const String col_name_ddl_change_type = "i8";
     const ColId  col_id_ddl_change_type   = 2;
     {
         ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(col_id_ddl_change_type, col_name_ddl_change_type, std::make_shared<DataTypeInt8>());
+        ColumnDefine  cd(col_id_ddl_change_type, col_name_ddl_change_type, DataTypeFactory::instance().get("Int8"));
         table_column_defines.emplace_back(cd);
-        reload(table_column_defines);
+        store = reload(table_column_defines);
     }
 
     {
         // check column structure
         const auto & cols = store->getTableColumns();
         ASSERT_EQ(cols.size(), 4UL);
-        auto & str_col = cols[3];
+        const auto & str_col = cols[3];
         ASSERT_EQ(str_col.name, col_name_ddl_change_type);
-        ASSERT_EQ(str_col.id, 2);
-        ASSERT_TRUE(str_col.type->equals(*DataTypeFactory::instance().get("String")));
+        ASSERT_EQ(str_col.id, col_id_ddl_change_type);
+        ASSERT_TRUE(str_col.type->equals(*DataTypeFactory::instance().get("Int8")));
     }
 
     const size_t num_rows_write = 500;
@@ -200,7 +201,16 @@ TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
 
     {
         // DDL change col from i8 -> i32
-        // store->alterFromTiDB();
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type = AlterCommand::MODIFY_COLUMN;
+            com.data_type = DataTypeFactory::instance().get("Int32");
+            com.column_name = col_name_ddl_change_type;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _ignored = 0;
+        store->applyColumnDefineAlters(commands, std::nullopt, _ignored, *context);
     }
 
     {
@@ -251,6 +261,18 @@ TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
 }
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

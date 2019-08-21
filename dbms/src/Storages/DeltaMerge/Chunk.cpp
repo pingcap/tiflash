@@ -201,7 +201,7 @@ void readChunkData(MutableColumns &      columns,
         {
 #ifndef NDEBUG
             const auto && [first, last] = chunk.getHandleFirstLast();
-            const String disk_col_str   = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id) + ",type"
+            const String disk_col_str   = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id) + ",type:"
                 + disk_meta.type->getName() + "]";
             LOG_TRACE(&Poco::Logger::get("Chunk"),
                       "Reading chunk[" + DB::toString(first) + "-" + DB::toString(last) + "] " + disk_col_str + " as type "
@@ -248,13 +248,8 @@ Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, 
     Block res;
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
-        ColumnWithTypeAndName col;
         const ColumnDefine &  define = read_column_defines[index];
-        col.type                     = define.type;
-        col.name                     = define.name;
-        col.column_id                = define.id;
-        col.column                   = std::move(columns[index]);
-
+        ColumnWithTypeAndName col(std::move(columns[index]), define.type, define.name, define.id);
         res.insert(std::move(col));
     }
     return res;
@@ -272,7 +267,7 @@ void castAndAppendToColumn(const ColumnPtr &    from_col, //
                            size_t               rows_offset,
                            size_t               rows_limit)
 {
-    const PaddedPODArray<TypeFrom> & from_array       = toColumnVectorData<TypeFrom>(from_col);
+    const PaddedPODArray<TypeFrom> & from_array   = toColumnVectorData<TypeFrom>(from_col);
     PaddedPODArray<TypeTo> *         to_array_ptr = toMutableColumnVectorDataPtr<TypeTo>(to_col);
     for (size_t i = 0; i < rows_limit; ++i)
     {
@@ -294,7 +289,7 @@ void castAndAppendToColumn(const ColumnPtr &    from_col, //
     }
 }
 
-bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not_null,
+bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not_null_,
                                               const ColumnPtr &    disk_col_not_null,
                                               const ColumnDefine & read_define,
                                               const ColumnPtr &    null_map,
@@ -303,11 +298,18 @@ bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not
                                               size_t               rows_limit)
 {
     /// Caller should ensure that type is not nullable
+    assert(disk_type_not_null_ != nullptr);
+    assert(disk_col_not_null != nullptr);
+    assert(read_define.type != nullptr);
+    assert(memory_col_not_null != nullptr);
+    const IDataType * disk_type_not_null = disk_type_not_null_.get();
     const IDataType * read_type_not_null = read_define.type.get();
-    assert(!disk_type_not_null->isNullable());
+
+    /// Caller should ensure nullable is unwrapped
+    assert(!disk_type_not_null_->isNullable());
     assert(!read_type_not_null->isNullable());
 
-    if (checkDataType<DataTypeUInt32>(disk_type_not_null.get()))
+    if (checkDataType<DataTypeUInt32>(disk_type_not_null))
     {
         using FromType = UInt32;
         if (checkDataType<DataTypeUInt64>(read_type_not_null))
@@ -321,7 +323,7 @@ bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not
             return true;
         }
     }
-    else if (checkDataType<DataTypeInt32>(disk_type_not_null.get()))
+    else if (checkDataType<DataTypeInt32>(disk_type_not_null))
     {
         using FromType = Int32;
         if (checkDataType<DataTypeInt64>(read_type_not_null))
@@ -335,7 +337,7 @@ bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not
             return true;
         }
     }
-    else if (checkDataType<DataTypeUInt16>(disk_type_not_null.get()))
+    else if (checkDataType<DataTypeUInt16>(disk_type_not_null))
     {
         using FromType = UInt16;
         if (checkDataType<DataTypeUInt32>(read_type_not_null))
@@ -354,7 +356,7 @@ bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not
             return true;
         }
     }
-    else if (checkDataType<DataTypeInt16>(disk_type_not_null.get()))
+    else if (checkDataType<DataTypeInt16>(disk_type_not_null))
     {
         using FromType = Int16;
         if (checkDataType<DataTypeInt32>(read_type_not_null))
@@ -373,7 +375,7 @@ bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not
             return true;
         }
     }
-    else if (checkDataType<DataTypeUInt8>(disk_type_not_null.get()))
+    else if (checkDataType<DataTypeUInt8>(disk_type_not_null))
     {
         using FromType = UInt8;
         if (checkDataType<DataTypeUInt32>(read_type_not_null))
@@ -397,7 +399,7 @@ bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not
             return true;
         }
     }
-    else if (checkDataType<DataTypeInt8>(disk_type_not_null.get()))
+    else if (checkDataType<DataTypeInt8>(disk_type_not_null))
     {
         using FromType = Int8;
         if (checkDataType<DataTypeInt32>(read_type_not_null))
@@ -513,7 +515,7 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
         memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
     }
     else if (!castNumericColumnAccordingToColumnDefine(
-            disk_type_not_null, disk_col_not_null, read_define_not_null, null_map, memory_col_not_null, rows_offset, rows_limit))
+                 disk_type_not_null, disk_col_not_null, read_define_not_null, null_map, memory_col_not_null, rows_offset, rows_limit))
     {
         throw Exception("Reading mismatch data type chunk. Cast and assign from " + disk_type->getName() + " to " + read_type->getName()
                             + " is NOT supported!",

@@ -380,10 +380,6 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
 
     auto lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    /// Force flush on store, so that no chunks with different data type in memory
-    // TODO maybe some ddl do not need to flush cache?
-    store->flush(context);
-
     // update the metadata in database, so that we can read the new schema using TiFlash's client
     ColumnsDescription new_columns = getColumns();
 
@@ -416,7 +412,7 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
 
     commands.apply(new_columns); // apply AlterCommands to `new_columns`
     // apply alter to store's table column in DeltaMergeStore
-    store->applyColumnDefineAlters(commands, table_info, max_column_id_used);
+    store->applyColumnDefineAlters(commands, table_info, max_column_id_used, context);
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(

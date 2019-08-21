@@ -65,16 +65,6 @@ inline const ColumnWithTypeAndName & getByColumnId(const Block & block, ColId co
     throw Exception("Column with column id " + DB::toString(col_id) + " not found");
 }
 
-inline ColumnWithTypeAndName createColumnWithTypeAndName(const ColumnPtr & column, const DataTypePtr & type, const String & name, ColId id)
-{
-    ColumnWithTypeAndName c;
-    c.column    = column;
-    c.type      = type;
-    c.name      = name;
-    c.column_id = id;
-    return c;
-}
-
 inline SortDescription getPkSort(const ColumnDefine & handle)
 {
     SortDescription sort;
@@ -261,11 +251,7 @@ inline Block createHeader(const ColumnDefines & col_defines)
     Block header;
     for (auto & d : col_defines)
     {
-        ColumnWithTypeAndName col;
-        col.name      = d.name;
-        col.type      = d.type;
-        col.column_id = d.id;
-        col.column    = d.type->createColumn();
+        ColumnWithTypeAndName col(d.type->createColumn(), d.type, d.name, d.id);
         header.insert(std::move(col));
     }
     return header;

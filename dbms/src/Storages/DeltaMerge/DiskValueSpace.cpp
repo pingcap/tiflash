@@ -372,7 +372,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
 
     if (already_read_rows < rows_limit)
     {
-        /// TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
+        // TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
 
         // chunk_index could be larger than chunk_cache_start.
         size_t cache_rows_offset = 0;
@@ -395,13 +395,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
         const ColumnDefine &  define = read_column_defines[index];
-        ColumnWithTypeAndName col;
-        col.type      = define.type;
-        col.name      = define.name;
-        col.column_id = define.id;
-        col.column    = std::move(columns[index]);
-
-        res.insert(col);
+        ColumnWithTypeAndName col(std::move(columns[index]), define.type, define.name, define.id);
+        res.insert(std::move(col));
     }
     return res;
 }
@@ -432,7 +427,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
         {
             // Read from cache
 
-            /// TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
+            // TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
             size_t cache_rows_offset = 0;
             for (size_t i = chunk_cache_start; i < chunk_index; ++i)
                 cache_rows_offset += chunks[i].getRows();
@@ -450,13 +445,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
         const ColumnDefine &  define = read_column_defines[index];
-        ColumnWithTypeAndName col;
-        col.type      = define.type;
-        col.name      = define.name;
-        col.column_id = define.id;
-        col.column    = std::move(columns[index]);
-
-        res.insert(col);
+        ColumnWithTypeAndName col(std::move(columns[index]), define.type, define.name, define.id);
+        res.insert(std::move(col));
     }
     return res;
 }
