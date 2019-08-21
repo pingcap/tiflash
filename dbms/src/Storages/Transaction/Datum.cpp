@@ -124,4 +124,7 @@ std::enable_if_t<flat, Dummy> Datum<flat>::overflow(const ColumnInfo & column_in
     }
 }
 
+template class Datum<true>;
+template class Datum<false>;
+
 } // namespace TiDB
