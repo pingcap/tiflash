@@ -7,6 +7,15 @@
 namespace DB
 {
 
+struct CFKeyHasher
+{
+    size_t operator()(const std::tuple<HandleID, Timestamp> & k) const noexcept
+    {
+        size_t res = std::get<0>(k) << 24 | (std::get<1>(k) << 40 >> 40);
+        return res;
+    }
+};
+
 struct RegionWriteCFDataTrait
 {
     using DecodedWriteCFValue = RecordKVFormat::DecodedWriteCFValue;
@@ -32,7 +41,7 @@ struct RegionDefaultCFDataTrait
 {
     using Key = std::tuple<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
-    using Map = std::map<Key, Value>;
+    using Map = std::unordered_map<Key, Value, CFKeyHasher>;
 
     static std::pair<Key, Value> genKVPair(TiKVKey && key, const String & raw_key, TiKVValue && value)
     {
@@ -48,7 +57,7 @@ struct RegionLockCFDataTrait
     using DecodedLockCFValue = RecordKVFormat::DecodedLockCFValue;
     using Key = HandleID;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedLockCFValue>;
-    using Map = std::map<Key, Value>;
+    using Map = std::unordered_map<Key, Value>;
 
     static std::pair<Key, Value> genKVPair(TiKVKey && key, const String & raw_key, TiKVValue && value)
     {
