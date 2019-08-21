@@ -18,7 +18,7 @@ public:
     }
 
     String getName() const override { return "Chunk"; }
-    Block  getHeader() const override { return createHeader(read_columns); }
+    Block  getHeader() const override { return toEmptyBlock(read_columns); }
 
     Block read() override
     {

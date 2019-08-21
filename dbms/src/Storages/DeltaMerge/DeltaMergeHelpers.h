@@ -246,17 +246,6 @@ inline size_t blockBytes(const Block & block)
     return bytes;
 }
 
-inline Block createHeader(const ColumnDefines & col_defines)
-{
-    Block header;
-    for (auto & d : col_defines)
-    {
-        ColumnWithTypeAndName col(d.type->createColumn(), d.type, d.name, d.id);
-        header.insert(std::move(col));
-    }
-    return header;
-}
-
 template <class T, bool right_open = true>
 inline String rangeToString(T start, T end)
 {

@@ -18,7 +18,7 @@ public:
                                const Context &                context_)
         : task_pool(task_pool_),
           columns_to_read(columns_to_read_),
-          header(createHeader(columns_to_read)),
+          header(toEmptyBlock(columns_to_read)),
           handle_name(handle_name_),
           handle_real_type(handle_real_type_),
           context(context_),
@@ -50,7 +50,6 @@ protected:
             Block res = cur_stream->read();
             if (res)
             {
-                LOG_TRACE(log, "Read block with " + DB::toString(res.rows()) + " rows");
                 if (!res.rows())
                     continue;
                 else
