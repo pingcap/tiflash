@@ -212,8 +212,18 @@ String DecodeJsonAsString(size_t & cursor, const String & raw_value)
     return decodeValue(type, cursor, raw_value);
 }
 
+template<bool doDecode>
+struct need_decode{};
 
-String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
+
+template<>
+struct need_decode<true>{ typedef String type; };
+
+template<>
+struct need_decode<false>{ typedef void type; };
+
+template <bool doDecode>
+typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & raw_value)
 {
     size_t base = cursor;
     UInt8 type = raw_value[cursor++];
@@ -247,7 +257,20 @@ String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
 
     size++;
     cursor = base + size;
-    return raw_value.substr(base, size);
+    if (!doDecode)
+        return static_cast<typename need_decode<doDecode>::type>(0);
+    else
+        return static_cast<typename need_decode<doDecode>::type>(raw_value.substr(base, size));
+}
+
+void SkipJson(size_t & cursor, const String & raw_value)
+{
+    DecodeJson<false>(cursor, raw_value);
+}
+
+String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
+{
+    return DecodeJson<true>(cursor, raw_value);
 }
 
 } // namespace DB

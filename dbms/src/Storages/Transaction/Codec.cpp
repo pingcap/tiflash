@@ -304,6 +304,9 @@ void SkipDatum(size_t & cursor, const String & raw_value)
         case TiDB::CodecFlagDecimal:
             SkipDecimal(cursor, raw_value);
             return;
+        case TiDB::CodecFlagJson:
+            SkipJson(cursor, raw_value);
+            return;
         default:
             throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
     }
