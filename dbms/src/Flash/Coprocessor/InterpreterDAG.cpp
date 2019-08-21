@@ -514,6 +514,9 @@ BlockIO InterpreterDAG::execute()
 
     BlockIO res;
     res.in = pipeline.firstStream();
+
+    LOG_DEBUG(
+        log, __PRETTY_FUNCTION__ << " Convert DAG request to BlockIO, adding " << analyzer->getImplicitCastCount() << " implicit cast");
     return res;
 }
 } // namespace DB
