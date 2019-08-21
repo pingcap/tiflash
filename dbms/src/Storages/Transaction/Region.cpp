@@ -670,7 +670,7 @@ void Region::tryDecodeDefaultCF()
         auto & decoded_row_info = val->extraInfo();
         if (decoded_row_info.load())
             continue;
-        DecodedRow * decoded_row = ValueExtraInfo<false>::computeDecodedRow(val->getStr());
+        DecodedRow * decoded_row = ValueExtraInfo<>::computeDecodedRow(val->getStr());
         decoded_row_info.atomicUpdate(decoded_row);
     }
 }
