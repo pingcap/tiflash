@@ -166,12 +166,23 @@ void readChunkData(MutableColumns &      columns,
         }
         else
         {
-            // new column is not exist in chunk's meta, fill with default value
+            // New column is not exist in chunk's meta, fill with default value
             IColumn & col = *columns[index];
-            // TODO read default value from `define.default_value`
-            // do something like define.type->deserializeTextEscaped(col, buf);
-            ColumnPtr tmp_col = define.type->createColumnConstWithDefaultValue(rows_offset + rows_limit)->convertToFullColumnIfConst();
-            col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
+
+            if (define.default_value.empty())
+            {
+                ColumnPtr tmp_col = define.type->createColumnConstWithDefaultValue(rows_limit)->convertToFullColumnIfConst();
+                col.insertRangeFrom(*tmp_col, 0, rows_limit);
+            }
+            else
+            {
+                // read default value from `define.default_value`
+                MutableColumnPtr tmp_col = define.type->createColumn();
+                ReadBufferFromMemory buff(define.default_value.c_str(), define.default_value.size());
+                define.type->deserializeTextEscaped(*tmp_col, buff);
+                ColumnPtr tmp_full_col = tmp_col->replicate(IColumn::Offsets(1, rows_limit));
+                col.insertRangeFrom(*tmp_full_col, 0, rows_limit);
+            }
         }
     }
 
@@ -201,8 +212,8 @@ void readChunkData(MutableColumns &      columns,
         {
 #ifndef NDEBUG
             const auto && [first, last] = chunk.getHandleFirstLast();
-            const String disk_col_str   = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id) + ",type:"
-                + disk_meta.type->getName() + "]";
+            const String disk_col_str   = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id)
+                + ",type:" + disk_meta.type->getName() + "]";
             LOG_TRACE(&Poco::Logger::get("Chunk"),
                       "Reading chunk[" + DB::toString(first) + "-" + DB::toString(last) + "] " + disk_col_str + " as type "
                           + read_define.type->getName());
@@ -267,23 +278,48 @@ void castAndAppendToColumn(const ColumnPtr &    from_col, //
                            size_t               rows_offset,
                            size_t               rows_limit)
 {
+    // Caller should ensure that from_col / to_col
+    // * is numeric
+    // * no nullable wrapper
+    // * both signed or unsigned
+    static_assert(std::is_integral_v<TypeFrom>);
+    static_assert(std::is_integral_v<TypeTo>);
+    constexpr bool is_both_signed_or_unsigned = !(std::is_unsigned_v<TypeFrom> ^ std::is_unsigned_v<TypeTo>);
+    static_assert(is_both_signed_or_unsigned);
+    assert(from_col != nullptr);
+    assert(to_col != nullptr);
+    assert(from_col->isNumeric());
+    assert(to_col->isNumeric());
+    assert(!from_col->isColumnNullable());
+    assert(!to_col->isColumnNullable());
+    assert(!from_col->isColumnConst());
+    assert(!to_col->isColumnConst());
+
     const PaddedPODArray<TypeFrom> & from_array   = toColumnVectorData<TypeFrom>(from_col);
     PaddedPODArray<TypeTo> *         to_array_ptr = toMutableColumnVectorDataPtr<TypeTo>(to_col);
     for (size_t i = 0; i < rows_limit; ++i)
     {
         (*to_array_ptr).emplace_back(static_cast<TypeTo>(from_array[i]));
     }
-    if (null_map)
+
+    if (unlikely(null_map))
     {
+        /// We are applying cast from nullable to not null, scan to fill "NULL" with default value
+
+        TypeTo default_value = 0; // if read_define.default_value is empty, fill with 0
+        if (!read_define.default_value.empty())
+        {
+            // parse from text
+            ReadBufferFromMemory buff(read_define.default_value.c_str(), read_define.default_value.size());
+            readIntTextUnsafe(default_value, buff);
+        }
+
         for (size_t i = 0; i < rows_limit; ++i)
         {
             if (null_map->getInt(i) != 0)
             {
                 // `from_col[i]` is "NULL", fill `to_col[rows_offset + i]` with default value
-                // TODO read default value from ColumnDefine
-                (void)read_define;
-                //read_define.type->deserializeTextEscaped(col, read_define.default);
-                (*to_array_ptr)[rows_offset + i] = static_cast<TypeTo>(0);
+                (*to_array_ptr)[rows_offset + i] = static_cast<TypeTo>(default_value);
             }
         }
     }
@@ -302,11 +338,12 @@ bool castNumericColumnAccordingToColumnDefine(const DataTypePtr &  disk_type_not
     assert(disk_col_not_null != nullptr);
     assert(read_define.type != nullptr);
     assert(memory_col_not_null != nullptr);
+
     const IDataType * disk_type_not_null = disk_type_not_null_.get();
     const IDataType * read_type_not_null = read_define.type.get();
 
     /// Caller should ensure nullable is unwrapped
-    assert(!disk_type_not_null_->isNullable());
+    assert(!disk_type_not_null->isNullable());
     assert(!read_type_not_null->isNullable());
 
     if (checkDataType<DataTypeUInt32>(disk_type_not_null))
@@ -435,20 +472,20 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
                                        size_t               rows_offset,
                                        size_t               rows_limit)
 {
-    // cast to current DataType
 #if 0
-    // TODO this is awful, can we copy memory by using something like static_cast<> ?
+    // A simple but awful version using Field.
     for (size_t i = 0; i < disk_col->size(); ++i)
     {
         Field f = (*disk_col)[i];
         if (f.getType() == Field::Types::Null)
-            memory_col->insertDefault(); // TODO
+            memory_col->insertDefault();
         else
             memory_col->insert(std::move(f));
     }
 #else
     const DataTypePtr & read_type = read_define.type;
 
+    // Unwrap nullable(what)
     ColumnPtr        disk_col_not_null;
     MutableColumnPtr memory_col_not_null;
     ColumnPtr        null_map;
@@ -486,7 +523,7 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
     }
     else if (disk_type->isNullable() && !read_type->isNullable())
     {
-        // nullable -> not null, fill with default value
+        // nullable -> not null, fill "NULL" values with default value later
         const auto & disk_nullable_col = typeid_cast<const ColumnNullable &>(*disk_col);
         null_map                       = disk_nullable_col.getNullMapColumnPtr();
         disk_col_not_null              = disk_nullable_col.getNestedColumnPtr();
@@ -513,13 +550,30 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
     {
         // just change from nullable -> not null / not null -> nullable
         memory_col_not_null->insertRangeFrom(*disk_col_not_null, rows_offset, rows_limit);
+
+        if (null_map)
+        {
+            /// We are applying cast from nullable to not null, scan to fill "NULL" with default value
+
+            for (size_t i = 0; i < rows_limit; ++i)
+            {
+                if (unlikely(null_map->getInt(i) != 0))
+                {
+                    // `from_col[i]` is "NULL", fill `to_col[rows_offset + i]` with default value
+                    // TiDB/MySQL don't support this, should not call here.
+                    throw Exception("Reading mismatch data type chunk. Cast from " + disk_type->getName() + " to " + read_type->getName()
+                                        + " with \"NULL\" value is NOT supported!",
+                                    ErrorCodes::NOT_IMPLEMENTED);
+                }
+            }
+        }
     }
     else if (!castNumericColumnAccordingToColumnDefine(
                  disk_type_not_null, disk_col_not_null, read_define_not_null, null_map, memory_col_not_null, rows_offset, rows_limit))
     {
         throw Exception("Reading mismatch data type chunk. Cast and assign from " + disk_type->getName() + " to " + read_type->getName()
                             + " is NOT supported!",
-                        ErrorCodes::CANNOT_CONVERT_TYPE);
+                        ErrorCodes::NOT_IMPLEMENTED);
     }
 #endif
 }

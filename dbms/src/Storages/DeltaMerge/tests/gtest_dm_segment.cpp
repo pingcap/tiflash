@@ -41,7 +41,6 @@ protected:
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Logger::root().setChannel(formatting_channel);
         Logger::root().setLevel("trace");
-
     }
 
     void SetUp() override
@@ -54,8 +53,8 @@ protected:
 
     SegmentPtr reload(ColumnDefines && pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
-        storage_pool    = std::make_unique<StoragePool>(path);
-        *db_context     = DMTestEnv::getContext(db_settings);
+        storage_pool       = std::make_unique<StoragePool>(path);
+        *db_context        = DMTestEnv::getContext(db_settings);
         ColumnDefines cols = pre_define_columns.empty() ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
@@ -64,34 +63,27 @@ protected:
     }
 
     // setColumns should update dm_context at the same time
-    void setColumns(const ColumnDefines &columns)
+    void setColumns(const ColumnDefines & columns)
     {
         table_columns_ = columns;
 
         dm_context_ = std::make_unique<DMContext>(
-                DMContext{.db_context        = *db_context,
-                        .storage_pool        = *storage_pool,
-                        .table_columns       = table_columns_,
-                        .table_handle_define = table_columns_.at(0),
-                        .min_version         = 0,
+            DMContext{.db_context          = *db_context,
+                      .storage_pool        = *storage_pool,
+                      .table_columns       = table_columns_,
+                      .table_handle_define = table_columns_.at(0),
+                      .min_version         = 0,
 
-                        .not_compress            = settings.not_compress_columns,
-                        .delta_limit_rows        = db_context->getSettingsRef().dm_segment_delta_limit_rows,
-                        .delta_limit_bytes       = db_context->getSettingsRef().dm_segment_delta_limit_bytes,
-                        .delta_cache_limit_rows  = db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
-                        .delta_cache_limit_bytes = db_context->getSettingsRef().dm_segment_delta_cache_limit_bytes});
-
+                      .not_compress            = settings.not_compress_columns,
+                      .delta_limit_rows        = db_context->getSettingsRef().dm_segment_delta_limit_rows,
+                      .delta_limit_bytes       = db_context->getSettingsRef().dm_segment_delta_limit_bytes,
+                      .delta_cache_limit_rows  = db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
+                      .delta_cache_limit_bytes = db_context->getSettingsRef().dm_segment_delta_cache_limit_bytes});
     }
 
-    const ColumnDefines &tableColumns() const
-    {
-        return table_columns_;
-    }
+    const ColumnDefines & tableColumns() const { return table_columns_; }
 
-    DMContext &dmContext()
-    {
-        return *dm_context_;
-    }
+    DMContext & dmContext() { return *dm_context_; }
 
 private:
     std::unique_ptr<Context> db_context;
@@ -105,8 +97,8 @@ private:
     DM::DeltaMergeStore::Settings settings;
     /// dm_context
     std::unique_ptr<DMContext> dm_context_;
-protected:
 
+protected:
     // the segment we are going to test
     SegmentPtr segment;
 };
@@ -349,10 +341,11 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
 
 TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
 {
-    const String       new_column_name    = "i8";
-    const ColumnID     new_column_id      = 4;
-    ColumnDefine new_column_define(new_column_id, new_column_name, DataTypeFactory::instance().get("Int8"));
-    new_column_define.default_value = "16";
+    const String   new_column_name = "i8";
+    const ColumnID new_column_id   = 4;
+    ColumnDefine   new_column_define(new_column_id, new_column_name, DataTypeFactory::instance().get("Int8"));
+    const Int8     new_column_default_value_int = 16;
+    new_column_define.default_value = DB::toString(new_column_default_value_int);
 
     {
         ColumnDefines columns_before_ddl = DMTestEnv::getDefaultColumns();
@@ -401,8 +394,8 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
             ASSERT_EQ(col.column_id, new_column_define.id);
             for (size_t i = 0; i < block.rows(); ++i)
             {
-                auto       value    = col.column->getInt(i);
-                ASSERT_EQ(value, 16);
+                auto value = col.column->getInt(i);
+                ASSERT_EQ(value, new_column_default_value_int) << "at row:" << i;
             }
         }
         in->readSuffix();
