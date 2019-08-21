@@ -14,7 +14,6 @@
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
 
-
 namespace DB
 {
 
@@ -34,22 +33,6 @@ static const size_t SHORT_VALUE_MAX_LEN = 64;
 
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
-
-inline std::vector<Field> DecodeRow(const TiKVValue & value)
-{
-    std::vector<Field> vec;
-    const String & raw_value = value.getStr();
-    size_t cursor = 0;
-    while (cursor < raw_value.size())
-    {
-        vec.push_back(DecodeDatum(cursor, raw_value));
-    }
-
-    if (cursor != raw_value.size())
-        throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
-
-    return vec;
-}
 
 // Key format is here:
 // https://docs.google.com/document/d/1J9Dsp8l5Sbvzjth77hK8yx3SzpEJ4SXaR_wIvswRhro/edit
