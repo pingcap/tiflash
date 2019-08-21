@@ -5,6 +5,8 @@
 #include <Storages/DeltaMerge/Chunk.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 
@@ -36,17 +38,15 @@ struct DeltaValueSpace
         }
     }
 
-    inline void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
+    void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
     {
         des.insertFrom(*(columns_ptr[column_index]), value_id);
     }
 
-    inline Handle getHandle(size_t value_id) //
+    Handle getHandle(size_t value_id) //
     {
         return (*handle_column)[value_id];
     }
-
-    inline size_t getRows() { return handle_column->size(); }
 
     Columns                        columns;
     ColumnRawPtrs                  columns_ptr;
@@ -104,6 +104,7 @@ public:
                                        const StorageSnapshot & storage_snaps,
                                        const ColumnDefines &   columns_to_read,
                                        const HandleRanges &    read_ranges,
+                                       const RSOperatorPtr &   filter,
                                        UInt64                  max_version,
                                        size_t                  expected_block_size);
     BlockInputStreamPtr getInputStreamRaw(const DMContext &       dm_context,
@@ -173,6 +174,7 @@ private:
     BlockInputStreamPtr getPlacedStream(const PageReader &         data_page_reader,
                                         const HandleRanges &       read_ranges,
                                         const ColumnDefines &      read_columns,
+                                        const RSOperatorPtr &      filter,
                                         const DeltaValueSpacePtr & delta_value_space,
                                         const IndexIterator &      delta_index_begin,
                                         const IndexIterator &      delta_index_end,
@@ -210,6 +212,8 @@ private:
                      const HandleRange &        delete_range);
 
     Handle getSplitPoint(DMContext & dm_context, const PageReader & data_page_reader, const ReadInfo & read_info);
+
+    MinMaxIndexPtr getMinMax(const ColumnDefine & column_define);
 
     size_t estimatedRows();
     size_t estimatedBytes();

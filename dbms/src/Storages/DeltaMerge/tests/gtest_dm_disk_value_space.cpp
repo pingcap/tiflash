@@ -48,8 +48,8 @@ protected:
         dm_context = std::make_unique<DMContext>(
             DMContext{.db_context          = context,
                       .storage_pool        = *storage_pool,
-                      .table_columns       = table_columns,
-                      .table_handle_define = table_handle_define,
+                      .store_columns       = table_columns,
+                      .sort_column = table_handle_define,
                       .min_version         = 0,
 
                       .not_compress            = settings.not_compress_columns,
