@@ -74,7 +74,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     }
 
     // context may be null in test cases.
-    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr);
+    return kvstore->onSnapshot(new_region, context);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)

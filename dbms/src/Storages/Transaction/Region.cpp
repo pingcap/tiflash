@@ -288,8 +288,8 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                     auto & key = *put.mutable_key();
                     auto & value = *put.mutable_value();
 
-                    auto & tikv_key = static_cast<TiKVKey &>(key);
-                    auto & tikv_value = static_cast<TiKVValue &>(value);
+                    auto tikv_key = TiKVKey(std::move(key));
+                    auto tikv_value = TiKVValue(std::move(value));
 
                     try
                     {
@@ -312,10 +312,10 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                 }
                 case raft_cmdpb::CmdType::Delete:
                 {
-                    const auto & del = req.delete_();
+                    auto & del = *req.mutable_delete_();
 
-                    auto & key = del.key();
-                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
+                    auto & key = *del.mutable_key();
+                    auto tikv_key = TiKVKey(std::move(key));
 
                     try
                     {
@@ -343,10 +343,10 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                     break;
                 case raft_cmdpb::CmdType::DeleteRange:
                 {
-                    const auto & delete_range = req.delete_range();
+                    auto & delete_range = *req.mutable_delete_range();
                     const auto & cf = delete_range.cf();
-                    const auto & start = static_cast<const TiKVKey &>(delete_range.start_key());
-                    const auto & end = static_cast<const TiKVKey &>(delete_range.end_key());
+                    const auto & start = TiKVKey(std::move(*delete_range.mutable_start_key()));
+                    const auto & end = TiKVKey(std::move(*delete_range.mutable_end_key()));
 
                     LOG_INFO(log,
                         toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
@@ -470,14 +470,14 @@ void Region::decDirtyFlag(size_t x) const { dirty_flag -= x; }
 
 void Region::incDirtyFlag() { dirty_flag++; }
 
-std::unique_ptr<Region::CommittedScanner> Region::createCommittedScanner(TableID expected_table_id)
+Region::CommittedScanner Region::createCommittedScanner(TableID expected_table_id)
 {
-    return std::make_unique<Region::CommittedScanner>(this->shared_from_this(), expected_table_id);
+    return Region::CommittedScanner(this->shared_from_this(), expected_table_id);
 }
 
-std::unique_ptr<Region::CommittedRemover> Region::createCommittedRemover(TableID expected_table_id)
+Region::CommittedRemover Region::createCommittedRemover(TableID expected_table_id)
 {
-    return std::make_unique<Region::CommittedRemover>(this->shared_from_this(), expected_table_id);
+    return Region::CommittedRemover(this->shared_from_this(), expected_table_id);
 }
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
@@ -654,5 +654,28 @@ void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, co
 }
 
 std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
+
+void Region::tryDecodeDefaultCF() const
+{
+    std::vector<std::shared_ptr<const TiKVValue>> values;
+    {
+        std::shared_lock<std::shared_mutex> lock(mutex);
+        const auto & default_cf_map = data.defaultCF().getData();
+        values.reserve(data.defaultCF().getSize());
+        for (auto cf_it = default_cf_map.begin(); cf_it != default_cf_map.end(); ++cf_it)
+        {
+            for (const auto & v : cf_it->second)
+                values.emplace_back(std::get<1>(v.second));
+        }
+    }
+    for (const auto & val : values)
+    {
+        auto & decoded_row_info = val->extraInfo();
+        if (decoded_row_info.load())
+            continue;
+        DecodedRow * decoded_row = ValueExtraInfo<false>::computeDecodedRow(val->getStr());
+        decoded_row_info.atomicUpdate(decoded_row);
+    }
+}
 
 } // namespace DB

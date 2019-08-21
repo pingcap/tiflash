@@ -114,8 +114,8 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
     }
 }
 
-inline bool DecodeRow(const TiKVValue & value, const google::dense_hash_set<ColumnID> & column_ids_to_read, std::vector<ColumnID> & col_ids,
-    std::vector<Field> & fields, const google::dense_hash_set<ColumnID> & schema_all_column_ids)
+inline bool DecodeRowSkip(const TiKVValue & value, const google::dense_hash_set<ColumnID> & column_ids_to_read,
+    std::vector<ColumnID> & col_ids, std::vector<Field> & fields, const google::dense_hash_set<ColumnID> & schema_all_column_ids)
 {
     const String & raw_value = value.getStr();
     size_t cursor = 0;
@@ -125,10 +125,8 @@ inline bool DecodeRow(const TiKVValue & value, const google::dense_hash_set<Colu
     {
         Field f = DecodeDatum(cursor, raw_value);
         if (f.isNull())
-        {
-            fields.emplace_back(std::move(f));
             break;
-        }
+
         ColumnID col_id = f.get<ColumnID>();
         column_cnt++;
         if (!schema_all_column_ids.count(col_id))
@@ -153,6 +151,37 @@ inline bool DecodeRow(const TiKVValue & value, const google::dense_hash_set<Colu
     if (cursor != raw_value.size())
         throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
     return schema_matches;
+}
+
+inline bool DecodeRow(const TiKVValue & value, const google::dense_hash_set<ColumnID> & column_ids_to_read, std::vector<ColumnID> & col_ids,
+    std::vector<Field> & fields, const google::dense_hash_set<ColumnID> & schema_all_column_ids)
+{
+    auto & decoded_row_info = value.extraInfo();
+    const DecodedRow * id_fields_ptr = decoded_row_info.load();
+    if (id_fields_ptr)
+    {
+        bool schema_matches = true;
+
+        const DecodedRow & id_fields = *id_fields_ptr;
+        for (const auto & ele : id_fields)
+        {
+            const auto & col_id = ele.col_id;
+            if (!schema_all_column_ids.count(col_id))
+            {
+                schema_matches = false;
+            }
+            if (column_ids_to_read.count(col_id))
+            {
+                col_ids.push_back(col_id);
+                fields.push_back(ele.field);
+            }
+        }
+        return schema_matches;
+    }
+    else
+    {
+        return DecodeRowSkip(value, column_ids_to_read, col_ids, fields, schema_all_column_ids);
+    }
 }
 
 
@@ -282,7 +311,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                 {
                     return std::make_tuple(block, false);
                 }
-                if (decoded_col_ids.empty() && decoded_fields.size() == 1 && decoded_fields[0].isNull())
+                if (decoded_col_ids.empty())
                 {
                     // all field is null
                     decoded_fields.clear();

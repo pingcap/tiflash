@@ -103,8 +103,8 @@ public:
 
     RaftCommandResult onCommand(enginepb::CommandRequest && cmd);
 
-    std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
-    std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
+    CommittedScanner createCommittedScanner(TableID expected_table_id);
+    CommittedRemover createCommittedRemover(TableID expected_table_id);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
@@ -163,6 +163,8 @@ public:
     void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
 
     static ColumnFamilyType getCf(const std::string & cf);
+
+    void tryDecodeDefaultCF() const;
 
 private:
     Region() = delete;
