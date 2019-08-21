@@ -3,6 +3,7 @@
 #include <Common/Decimal.h>
 #include <Core/Field.h>
 #include <IO/Endian.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -39,7 +40,7 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value);
 
 Decimal DecodeDecimal(size_t & cursor, const String & raw_value);
 
-Field DecodeDatum(size_t & cursor, const String & raw_value);
+TiDB::Datum<true> DecodeDatum(size_t & cursor, const String & raw_value);
 
 void SkipBytes(size_t & cursor, const String & raw_value);
 
@@ -74,6 +75,6 @@ void EncodeVarUInt(UInt64 num, std::stringstream & ss);
 
 void EncodeDecimal(const Decimal & dec, std::stringstream & ss);
 
-void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss);
+void EncodeDatum(const TiDB::Datum<false> & datum, TiDB::CodecFlag flag, std::stringstream & ss);
 
 } // namespace DB

@@ -11,6 +11,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
+using TiDB::Datum;
+
 constexpr int digitsPerWord = 9;
 constexpr int wordSize = 4;
 const int dig2Bytes[10] = {0, 1, 1, 2, 2, 3, 3, 4, 4, 4};
@@ -240,12 +242,12 @@ void SkipDecimal(size_t & cursor, const String & raw_value)
     cursor += binSize;
 }
 
-Field DecodeDatum(size_t & cursor, const String & raw_value)
+Datum<true> DecodeDatum(size_t & cursor, const String & raw_value)
 {
     switch (raw_value[cursor++])
     {
         case TiDB::CodecFlagNil:
-            return Field();
+            return Datum<true>();
         case TiDB::CodecFlagInt:
             return DecodeInt64(cursor, raw_value);
         case TiDB::CodecFlagUInt:
@@ -351,45 +353,45 @@ void EncodeVarUInt(UInt64 num, std::stringstream & ss) { TiKV::writeVarUInt(num,
 
 void EncodeDecimal(const Decimal &, std::stringstream &) { throw Exception("To be implemented", ErrorCodes::LOGICAL_ERROR); }
 
-template <typename T>
-inline T getFieldValue(const Field & field)
-{
-    switch (field.getType())
-    {
-        case Field::Types::UInt64:
-            return static_cast<T>(field.get<UInt64>());
-        case Field::Types::Int64:
-            return static_cast<T>(field.get<Int64>());
-        case Field::Types::Float64:
-            return static_cast<T>(field.get<Float64>());
-        case Field::Types::Decimal:
-            return static_cast<T>(field.get<Decimal>());
-        default:
-            throw Exception("Unsupport (getFieldValue): " + std::string(field.getTypeName()), ErrorCodes::LOGICAL_ERROR);
-    }
-}
+//template <typename T>
+//inline T getFieldValue(const Field & field)
+//{
+//    switch (field.getType())
+//    {
+//        case Field::Types::UInt64:
+//            return static_cast<T>(field.get<UInt64>());
+//        case Field::Types::Int64:
+//            return static_cast<T>(field.get<Int64>());
+//        case Field::Types::Float64:
+//            return static_cast<T>(field.get<Float64>());
+//        case Field::Types::Decimal:
+//            return static_cast<T>(field.get<Decimal>());
+//        default:
+//            throw Exception("Unsupport (getFieldValue): " + std::string(field.getTypeName()), ErrorCodes::LOGICAL_ERROR);
+//    }
+//}
 
-void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
+void EncodeDatum(const Datum<false> & datum, TiDB::CodecFlag flag, std::stringstream & ss)
 {
     ss << UInt8(flag);
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:
-            return EncodeDecimal(getFieldValue<Decimal>(field), ss);
+            return EncodeDecimal(datum.safeGet<Decimal>(), ss);
         case TiDB::CodecFlagCompactBytes:
-            return EncodeCompactBytes(field.get<String>(), ss);
+            return EncodeCompactBytes(datum.safeGet<String>(), ss);
         case TiDB::CodecFlagFloat:
-            return EncodeFloat64(getFieldValue<Float64>(field), ss);
+            return EncodeFloat64(datum.safeGet<Float64>(), ss);
         case TiDB::CodecFlagUInt:
-            return EncodeUInt<UInt64>(getFieldValue<UInt64>(field), ss);
+            return EncodeUInt<UInt64>(datum.safeGet<UInt64>(), ss);
         case TiDB::CodecFlagInt:
-            return EncodeInt64(getFieldValue<Int64>(field), ss);
+            return EncodeInt64(datum.safeGet<Int64>(), ss);
         case TiDB::CodecFlagVarInt:
-            return EncodeVarInt(getFieldValue<Int64>(field), ss);
+            return EncodeVarInt(datum.safeGet<Int64>(), ss);
         case TiDB::CodecFlagVarUInt:
-            return EncodeVarUInt(getFieldValue<UInt64>(field), ss);
+            return EncodeVarUInt(datum.safeGet<UInt64>(), ss);
         default:
-            throw Exception("Not implented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unimplemented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
     }
 }
 

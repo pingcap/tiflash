@@ -64,8 +64,10 @@ inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector
     for (size_t i = 0; i < fields.size(); i++)
     {
         const TiDB::ColumnInfo & column = table_info.columns[i];
-        EncodeDatum(Field(column.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column.getCodecFlag(), ss);
+        EncodeInt64(column.id, ss);
+        TiDB::Datum<false> datum(fields[i]);
+        datum.flatten(column.tp);
+        EncodeDatum(datum, column.getCodecFlag(), ss);
     }
     return TiKVValue(ss.str());
 }
