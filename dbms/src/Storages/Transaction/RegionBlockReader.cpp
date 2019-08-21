@@ -6,6 +6,7 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DateTimeInfo.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
@@ -276,17 +277,7 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                         continue;
                     }
                     UInt64 packed = field.get<UInt64>();
-                    UInt64 ymdhms = packed >> 24;
-                    UInt64 ymd = ymdhms >> 17;
-                    int day = int(ymd & ((1 << 5) - 1));
-                    int ym = ymd >> 5;
-                    int month = int(ym % 13);
-                    int year = int(ym / 13);
-
-                    UInt64 hms = ymdhms & ((1 << 17) - 1);
-                    int second = int(hms & ((1 << 6) - 1));
-                    int minute = int((hms >> 6) & ((1 << 6) - 1));
-                    int hour = int(hms >> 12);
+                    DateTimeInfo info(packed);
 
                     if (typeid_cast<const DataTypeDateTime *>(tp.get())
                         || (tp->isNullable()
@@ -294,23 +285,23 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
                                       dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType().get())))
                     {
                         time_t datetime;
-                        if (unlikely(year == 0))
+                        if (unlikely(info.year == 0))
                             datetime = 0;
                         else
                         {
-                            if (unlikely(month == 0 || day == 0))
+                            if (unlikely(info.month == 0 || info.day == 0))
                             {
-                                throw Exception("wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " "
-                                        + std::to_string(day) + ".",
+                                throw Exception("wrong datetime format: " + std::to_string(info.year) + " " + std::to_string(info.month) + " "
+                                        + std::to_string(info.day) + ".",
                                     ErrorCodes::LOGICAL_ERROR);
                             }
-                            datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+                            datetime = date_lut.makeDateTime(info.year, info.month, info.day, info.hour, info.minute, info.second);
                         }
                         it->second.first->insert(static_cast<Int64>(datetime));
                     }
                     else
                     {
-                        auto date = date_lut.makeDayNum(year, month, day);
+                        auto date = date_lut.makeDayNum(info.year, info.month, info.day);
                         Field date_field(static_cast<Int64>(date));
                         it->second.first->insert(date_field);
                     }

@@ -1,7 +1,14 @@
 #include <Storages/Transaction/Codec.h>
 
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/IDataType.h>
+#include <Storages/Transaction/DateTimeInfo.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
@@ -296,7 +303,23 @@ inline T getFieldValue(const Field & field)
     }
 }
 
-void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
+void EncodeDateTime(const Field & field, const DataTypePtr & ch_type, std::stringstream & ss)
+{
+    UInt64 packed_value;
+    auto * date_type = typeid_cast<const DataTypeDate *>(ch_type.get());
+    if (date_type != nullptr)
+    {
+        packed_value = DateTimeInfo(getFieldValue<UInt32>(field)).packedToUInt64();
+    }
+    else
+    {
+        auto * date_time_type = typeid_cast<const DataTypeDateTime *>(ch_type.get());
+        packed_value = DateTimeInfo(getFieldValue<UInt64>(field), date_time_type->getTimeZone()).packedToUInt64();
+    }
+    EncodeUInt<UInt64>(packed_value, ss);
+}
+
+void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss, const DataTypePtr & ch_type)
 {
     if (field.isNull())
     {
@@ -304,6 +327,9 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
         return;
     }
     ss << UInt8(flag);
+    auto non_nullable_type = ch_type == nullptr
+        ? nullptr
+        : (ch_type->isNullable() ? std::dynamic_pointer_cast<const DataTypeNullable>(ch_type)->getNestedType() : ch_type);
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:
@@ -313,6 +339,10 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
         case TiDB::CodecFlagFloat:
             return EncodeFloat64(getFieldValue<Float64>(field), ss);
         case TiDB::CodecFlagUInt:
+            if (non_nullable_type != nullptr && non_nullable_type->isDateOrDateTime())
+            {
+                return EncodeDateTime(field, non_nullable_type, ss);
+            }
             return EncodeUInt<UInt64>(getFieldValue<UInt64>(field), ss);
         case TiDB::CodecFlagInt:
             return EncodeInt64(getFieldValue<Int64>(field), ss);

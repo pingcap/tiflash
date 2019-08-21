@@ -72,7 +72,7 @@ void DAGBlockOutputStream::write(const Block & block)
         for (size_t j = 0; j < block.columns(); j++)
         {
             auto field = (*block.getByPosition(j).column.get())[i];
-            EncodeDatum(field, getCodecFlagByFieldType(result_field_types[j]), current_ss);
+            EncodeDatum(field, getCodecFlagByFieldType(result_field_types[j]), current_ss, block.getByPosition(j).type);
         }
         // Encode current row
         records_per_chunk++;
