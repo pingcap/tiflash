@@ -4,19 +4,19 @@
 #include <IO/ReadHelpers.h>
 
 #include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesNumber.h>
 
-#include <Core/AccurateComparison.h>
 #include <Common/FieldVisitors.h>
-#include <Common/typeid_cast.h>
 #include <Common/NaNUtils.h>
+#include <Common/typeid_cast.h>
+#include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeUUID.h>
 
 
@@ -25,9 +25,9 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int LOGICAL_ERROR;
-    extern const int TYPE_MISMATCH;
-}
+extern const int LOGICAL_ERROR;
+extern const int TYPE_MISMATCH;
+} // namespace ErrorCodes
 
 
 /** Checking for a `Field from` of `From` type falls to a range of values of type `To`.
@@ -57,6 +57,14 @@ static Field convertNumericTypeImpl(const Field & from)
     return Field(typename NearestFieldType<To>::Type(value));
 }
 
+template <typename From, typename To>
+static Field convertDecimalTypeImpl(const Field & from)
+{
+    auto decimal_field = from.safeGet<DecimalField<From>>();
+    // FIXME:: There is some bugs when `to` is int;
+    return Field(typename NearestFieldType<To>::Type(static_cast<To>(decimal_field)));
+}
+
 template <typename To>
 static Field convertNumericType(const Field & from, const IDataType & type)
 {
@@ -66,12 +74,18 @@ static Field convertNumericType(const Field & from, const IDataType & type)
         return convertNumericTypeImpl<Int64, To>(from);
     if (from.getType() == Field::Types::Float64)
         return convertNumericTypeImpl<Float64, To>(from);
-    //    TODO:: Support decimal again.
-//    if (from.getType() == Field::Types::Decimal)
-//        return convertNumericTypeImpl<Decimal, To>(from);
+    if (from.getType() == Field::Types::Decimal32)
+        return convertDecimalTypeImpl<Decimal32, To>(from);
+    if (from.getType() == Field::Types::Decimal64)
+        return convertDecimalTypeImpl<Decimal64, To>(from);
+    if (from.getType() == Field::Types::Decimal128)
+        return convertDecimalTypeImpl<Decimal128, To>(from);
+    if (from.getType() == Field::Types::Decimal256)
+        return convertDecimalTypeImpl<Decimal256, To>(from);
 
-    throw Exception("Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: "
-        + Field::Types::toString(from.getType()), ErrorCodes::TYPE_MISMATCH);
+    throw Exception(
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(from.getType()),
+        ErrorCodes::TYPE_MISMATCH);
 }
 
 template <typename From, typename To>
@@ -96,20 +110,24 @@ static Field convertStringToDecimalType(const Field & from, const DataTypeDecima
 }
 
 template <typename From, typename To>
-static Field convertDecimalToDecimalType(const Field & from, const DataTypeDecimal<To> & type) {
+static Field convertDecimalToDecimalType(const Field & from, const DataTypeDecimal<To> & type)
+{
     // TODO:: Refine this, Consider overflow!!
-    if constexpr (sizeof (From) <= sizeof (To)) {
+    if constexpr (sizeof(From) <= sizeof(To))
+    {
         auto field = from.get<DecimalField<From>>();
-        if (field.getScale() <= type.getScale()) {
+        if (field.getScale() <= type.getScale())
+        {
             ScaleType scale = type.getScale() - field.getScale();
-            using ResultType = typename To::NativeType ;
+            using ResultType = typename To::NativeType;
             auto scaler = getScaleMultiplier<To>(scale);
             ResultType result = static_cast<ResultType>(field.getValue().value) * scaler;
             return DecimalField<To>(To(result), type.getScale());
         }
     }
-    throw Exception("Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: "
-        + Field::Types::toString(from.getType()), ErrorCodes::TYPE_MISMATCH);
+    throw Exception(
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(from.getType()),
+        ErrorCodes::TYPE_MISMATCH);
 }
 
 template <typename To>
@@ -130,8 +148,9 @@ static Field convertDecimalType(const Field & from, const To & type)
     if (from.getType() == Field::Types::Decimal256)
         return convertDecimalToDecimalType<Decimal256>(from, type);
 
-    throw Exception("Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: "
-        + Field::Types::toString(from.getType()), ErrorCodes::TYPE_MISMATCH);
+    throw Exception(
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(from.getType()),
+        ErrorCodes::TYPE_MISMATCH);
 }
 
 DayNum_t stringToDate(const String & s)
@@ -175,20 +194,34 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
 {
     if (type.isValueRepresentedByNumber())
     {
-        if (typeid_cast<const DataTypeUInt8 *>(&type)) return convertNumericType<UInt8>(src, type);
-        if (typeid_cast<const DataTypeUInt16 *>(&type)) return convertNumericType<UInt16>(src, type);
-        if (typeid_cast<const DataTypeUInt32 *>(&type)) return convertNumericType<UInt32>(src, type);
-        if (typeid_cast<const DataTypeUInt64 *>(&type)) return convertNumericType<UInt64>(src, type);
-        if (typeid_cast<const DataTypeInt8 *>(&type))  return convertNumericType<Int8>(src, type);
-        if (typeid_cast<const DataTypeInt16 *>(&type)) return convertNumericType<Int16>(src, type);
-        if (typeid_cast<const DataTypeInt32 *>(&type)) return convertNumericType<Int32>(src, type);
-        if (typeid_cast<const DataTypeInt64 *>(&type)) return convertNumericType<Int64>(src, type);
-        if (typeid_cast<const DataTypeFloat32 *>(&type)) return convertNumericType<Float32>(src, type);
-        if (typeid_cast<const DataTypeFloat64 *>(&type)) return convertNumericType<Float64>(src, type);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal32 *>(&type)) return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal64 *>(&type)) return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal128 *>(&type)) return convertDecimalType(src, *ptype);
-        if (auto * ptype = typeid_cast<const DataTypeDecimal256 *>(&type)) return convertDecimalType(src, *ptype);
+        if (typeid_cast<const DataTypeUInt8 *>(&type))
+            return convertNumericType<UInt8>(src, type);
+        if (typeid_cast<const DataTypeUInt16 *>(&type))
+            return convertNumericType<UInt16>(src, type);
+        if (typeid_cast<const DataTypeUInt32 *>(&type))
+            return convertNumericType<UInt32>(src, type);
+        if (typeid_cast<const DataTypeUInt64 *>(&type))
+            return convertNumericType<UInt64>(src, type);
+        if (typeid_cast<const DataTypeInt8 *>(&type))
+            return convertNumericType<Int8>(src, type);
+        if (typeid_cast<const DataTypeInt16 *>(&type))
+            return convertNumericType<Int16>(src, type);
+        if (typeid_cast<const DataTypeInt32 *>(&type))
+            return convertNumericType<Int32>(src, type);
+        if (typeid_cast<const DataTypeInt64 *>(&type))
+            return convertNumericType<Int64>(src, type);
+        if (typeid_cast<const DataTypeFloat32 *>(&type))
+            return convertNumericType<Float32>(src, type);
+        if (typeid_cast<const DataTypeFloat64 *>(&type))
+            return convertNumericType<Float64>(src, type);
+        if (auto * ptype = typeid_cast<const DataTypeDecimal32 *>(&type))
+            return convertDecimalType(src, *ptype);
+        if (auto * ptype = typeid_cast<const DataTypeDecimal64 *>(&type))
+            return convertDecimalType(src, *ptype);
+        if (auto * ptype = typeid_cast<const DataTypeDecimal128 *>(&type))
+            return convertDecimalType(src, *ptype);
+        if (auto * ptype = typeid_cast<const DataTypeDecimal256 *>(&type))
+            return convertDecimalType(src, *ptype);
 
         const bool is_date = typeid_cast<const DataTypeDate *>(&type);
         bool is_datetime = false;
@@ -260,8 +293,9 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
             size_t dst_tuple_size = type_tuple->getElements().size();
 
             if (dst_tuple_size != src_tuple_size)
-                throw Exception("Bad size of tuple in IN or VALUES section. Expected size: "
-                    + toString(dst_tuple_size) + ", actual size: " + toString(src_tuple_size), ErrorCodes::TYPE_MISMATCH);
+                throw Exception("Bad size of tuple in IN or VALUES section. Expected size: " + toString(dst_tuple_size)
+                        + ", actual size: " + toString(src_tuple_size),
+                    ErrorCodes::TYPE_MISMATCH);
 
             TupleBackend res(dst_tuple_size);
             for (size_t i = 0; i < dst_tuple_size; ++i)
@@ -271,11 +305,12 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
         }
     }
 
-    throw Exception("Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: "
-        + Field::Types::toString(src.getType()), ErrorCodes::TYPE_MISMATCH);
+    throw Exception(
+        "Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: " + Field::Types::toString(src.getType()),
+        ErrorCodes::TYPE_MISMATCH);
 }
 
-}
+} // namespace
 
 Field convertFieldToType(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint)
 {
@@ -296,4 +331,4 @@ Field convertFieldToType(const Field & from_value, const IDataType & to_type, co
 }
 
 
-}
+} // namespace DB
