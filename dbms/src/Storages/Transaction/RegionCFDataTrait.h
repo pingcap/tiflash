@@ -9,9 +9,10 @@ namespace DB
 
 struct CFKeyHasher
 {
-    size_t operator()(const std::tuple<HandleID, Timestamp> & k) const noexcept
+    size_t operator()(const std::pair<HandleID, Timestamp> & k) const noexcept
     {
-        size_t res = std::get<0>(k) << 24 | (std::get<1>(k) << 40 >> 40);
+        const static Timestamp mask = std::numeric_limits<Timestamp>::max() << 40 >> 40;
+        size_t res = k.first << 24 | (k.second & mask);
         return res;
     }
 };
