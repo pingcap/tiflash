@@ -72,41 +72,61 @@ TEST_F(DeltaMergeStore_test, Create)
 
 TEST_F(DeltaMergeStore_test, SimpleWriteRead)
 {
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
     {
         ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(2, "col2", std::make_shared<DataTypeString>());
-        table_column_defines.emplace_back(cd);
+        table_column_defines.emplace_back(col_str_define);
+        table_column_defines.emplace_back(col_i8_define);
         store = reload(table_column_defines);
     }
 
     {
         // check column structure
         const auto & cols = store->getTableColumns();
-        ASSERT_EQ(cols.size(), 4UL);
+        ASSERT_EQ(cols.size(), 5UL);
         const auto & str_col = cols[3];
-        ASSERT_EQ(str_col.name, "col2");
-        ASSERT_EQ(str_col.id, 2);
-        ASSERT_TRUE(str_col.type->equals(*DataTypeFactory::instance().get("String")));
+        ASSERT_EQ(str_col.name, col_str_define.name);
+        ASSERT_EQ(str_col.id, col_str_define.id);
+        ASSERT_TRUE(str_col.type->equals(*col_str_define.type));
+        const auto & i8_col = cols[4];
+        ASSERT_EQ(i8_col.name, col_i8_define.name);
+        ASSERT_EQ(i8_col.id, col_i8_define.id);
+        ASSERT_TRUE(i8_col.type->equals(*col_i8_define.type));
     }
 
-    const size_t num_rows_write = 500;
+    const size_t num_rows_write = 128;
     {
         // write to store
         Block block;
         {
-            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, true);
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of col2:String for test
-            ColumnWithTypeAndName col2(std::make_shared<DataTypeString>(), "col2");
+            ColumnWithTypeAndName col2(col_str_define.type, col_str_define.name);
             {
                 IColumn::MutablePtr m_col2 = col2.type->createColumn();
                 for (size_t i = 0; i < num_rows_write; i++)
                 {
-                    Field field("a", 1);
+                    String s = DB::toString(i);
+                    Field  field(s.c_str(), s.size());
                     m_col2->insert(field);
                 }
                 col2.column = std::move(m_col2);
             }
-            block.insert(col2);
+            block.insert(std::move(col2));
+
+            // Add a column of i8:Int8 for test
+            ColumnWithTypeAndName i8(col_i8_define.type, col_i8_define.name);
+            {
+                IColumn::MutablePtr m_i8 = i8.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                    m_i8->insert(Field(num));
+                }
+                i8.column = std::move(m_i8);
+            }
+            block.insert(std::move(i8));
         }
         store->write(*context, context->getSettingsRef(), block);
     }
@@ -142,10 +162,16 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
                         //printf("pk:%lld\n", c->getInt(i));
                         EXPECT_EQ(c->getInt(i), i);
                     }
-                    else if (iter.name == "col2")
+                    else if (iter.name == col_str_define.name)
                     {
-                        //printf("col2:%s\n", c->getDataAt(i).data);
-                        EXPECT_EQ(c->getDataAt(i), "a");
+                        //printf("%s:%s\n", col_str_define.name.c_str(), c->getDataAt(i).data);
+                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
+                    }
+                    else if (iter.name == col_i8_define.name)
+                    {
+                        //printf("%s:%lld\n", col_i8_define.name.c_str(), c->getInt(i));
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
                     }
                 }
             }
@@ -158,11 +184,13 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
 TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
 try
 {
-    const String col_name_ddl_change_type = "i8";
-    const ColId  col_id_ddl_change_type   = 2;
+    const String      col_name_ddl        = "i8";
+    const ColId       col_id_ddl          = 2;
+    const DataTypePtr col_type_before_ddl = DataTypeFactory::instance().get("Int8");
+    const DataTypePtr col_type_after_ddl  = DataTypeFactory::instance().get("Int32");
     {
         ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(col_id_ddl_change_type, col_name_ddl_change_type, DataTypeFactory::instance().get("Int8"));
+        ColumnDefine  cd(col_id_ddl, col_name_ddl, col_type_before_ddl);
         table_column_defines.emplace_back(cd);
         store = reload(table_column_defines);
     }
@@ -172,25 +200,25 @@ try
         const auto & cols = store->getTableColumns();
         ASSERT_EQ(cols.size(), 4UL);
         const auto & str_col = cols[3];
-        ASSERT_EQ(str_col.name, col_name_ddl_change_type);
-        ASSERT_EQ(str_col.id, col_id_ddl_change_type);
-        ASSERT_TRUE(str_col.type->equals(*DataTypeFactory::instance().get("Int8")));
+        ASSERT_EQ(str_col.name, col_name_ddl);
+        ASSERT_EQ(str_col.id, col_id_ddl);
+        ASSERT_TRUE(str_col.type->equals(*col_type_before_ddl));
     }
 
-    const size_t num_rows_write = 500;
+    const size_t num_rows_write = 128;
     {
         // write to store
         Block block;
         {
-            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, true);
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of col2:String for test
-            ColumnWithTypeAndName col2(std::make_shared<DataTypeInt8>(), col_name_ddl_change_type);
+            ColumnWithTypeAndName col2(std::make_shared<DataTypeInt8>(), col_name_ddl);
             {
                 IColumn::MutablePtr m_col2 = col2.type->createColumn();
                 for (size_t i = 0; i < num_rows_write; i++)
                 {
-                    Field field = static_cast<NearestFieldType<Int8>::Type>(i);
-                    m_col2->insert(field);
+                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                    m_col2->insert(Field(num));
                 }
                 col2.column = std::move(m_col2);
             }
@@ -204,9 +232,9 @@ try
         AlterCommands commands;
         {
             AlterCommand com;
-            com.type = AlterCommand::MODIFY_COLUMN;
-            com.data_type = DataTypeFactory::instance().get("Int32");
-            com.column_name = col_name_ddl_change_type;
+            com.type        = AlterCommand::MODIFY_COLUMN;
+            com.data_type   = col_type_after_ddl;
+            com.column_name = col_name_ddl;
             commands.emplace_back(std::move(com));
         }
         ColumnID _ignored = 0;
@@ -228,10 +256,10 @@ try
         {
             // check col type
             const Block  head = in->getHeader();
-            const auto & col  = head.getByName(col_name_ddl_change_type);
-            ASSERT_EQ(col.name, col_name_ddl_change_type);
-            ASSERT_EQ(col.column_id, col_id_ddl_change_type);
-            ASSERT_TRUE(col.type->equals(*DataTypeFactory::instance().get("Int32")));
+            const auto & col  = head.getByName(col_name_ddl);
+            ASSERT_EQ(col.name, col_name_ddl);
+            ASSERT_EQ(col.column_id, col_id_ddl);
+            ASSERT_TRUE(col.type->equals(*col_type_after_ddl));
         }
 
         size_t num_rows_read = 0;
@@ -249,10 +277,11 @@ try
                         //printf("pk:%lld\n", c->getInt(i));
                         EXPECT_EQ(c->getInt(i), i);
                     }
-                    else if (iter.name == "i8")
+                    else if (iter.name == col_name_ddl)
                     {
                         //printf("col2:%s\n", c->getDataAt(i).data);
-                        EXPECT_EQ(c->getInt(i), i);
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
                     }
                 }
             }
