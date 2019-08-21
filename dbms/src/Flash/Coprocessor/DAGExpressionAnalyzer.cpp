@@ -45,11 +45,13 @@ static String genFuncString(const String & func_name, const Names & argument_nam
 }
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(const NamesAndTypesList & source_columns_, const Context & context_)
-    : source_columns(source_columns_), context(context_), log(&Logger::get("DAGExpressionAnalyzer"))
+    : source_columns(source_columns_),
+      context(context_),
+      after_agg(false),
+      implicit_cast_count(0),
+      log(&Logger::get("DAGExpressionAnalyzer"))
 {
     settings = context.getSettings();
-    after_agg = false;
-    implicit_cast_count = 0;
 }
 
 void DAGExpressionAnalyzer::appendAggregation(
