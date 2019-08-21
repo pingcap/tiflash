@@ -120,7 +120,7 @@ struct ConvertFromDecimal
             vec_to.resize(size);
 
             for (size_t i = 0; i < size; ++i) {
-                const auto & field = (*col_from)[i].template safeGet<DecimalField<DecimalFieldType>>();
+                auto field = (*col_from)[i].template safeGet<DecimalField<DecimalFieldType>>();
                 vec_to[i] = static_cast<ToFieldType>(field);
             }
 

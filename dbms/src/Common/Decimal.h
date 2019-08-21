@@ -273,7 +273,7 @@ std::enable_if_t<IsDecimal<T>, U> ToDecimal(T /*value*/, ScaleType /*scale*/) {
 
 template<typename T, typename U>
 std::enable_if_t<IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, ScaleType scale) {
-    auto value = static_cast<typename U::NativeType> (v.value);
+    auto value = Int256(v.value);
     if (v_scale <= scale) {
         for (ScaleType i = v_scale; i < scale; i++)
             value *= 10;
@@ -290,7 +290,7 @@ std::enable_if_t<IsDecimal<T>, U> ToDecimal(const T & v, ScaleType v_scale, Scal
                 value ++;
         }
     }
-    return value;
+    return static_cast<typename U::NativeType>(value);
 }
 
 template<typename T, typename U>
