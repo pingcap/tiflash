@@ -19,7 +19,7 @@ struct CFKeyHasher
 struct RegionWriteCFDataTrait
 {
     using DecodedWriteCFValue = RecordKVFormat::DecodedWriteCFValue;
-    using Key = std::tuple<HandleID, Timestamp>;
+    using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedWriteCFValue>;
     using Map = std::map<Key, Value>;
 
@@ -39,9 +39,9 @@ struct RegionWriteCFDataTrait
 
 struct RegionDefaultCFDataTrait
 {
-    using Key = std::tuple<HandleID, Timestamp>;
+    using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
-    using Map = std::unordered_map<Key, Value, CFKeyHasher>;
+    using Map = std::map<Key, Value>;
 
     static std::pair<Key, Value> genKVPair(TiKVKey && key, const String & raw_key, TiKVValue && value)
     {
