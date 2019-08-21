@@ -542,7 +542,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
     if (handle_map.empty())
         return;
 
-    auto & region_data = data.writeCFMute().getDataMut();
+    auto & region_data = data.writeCF().getDataMut();
     auto & write_map = region_data[table_id];
 
     size_t deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
@@ -655,18 +655,15 @@ void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, co
 
 std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
 
-void Region::tryDecodeDefaultCF() const
+void Region::tryDecodeDefaultCF()
 {
-    std::vector<std::shared_ptr<const TiKVValue>> values;
+    std::deque<std::shared_ptr<const TiKVValue>> values;
     {
-        std::shared_lock<std::shared_mutex> lock(mutex);
-        const auto & default_cf_map = data.defaultCF().getData();
-        values.reserve(data.defaultCF().getSize());
-        for (auto cf_it = default_cf_map.begin(); cf_it != default_cf_map.end(); ++cf_it)
-        {
-            for (const auto & v : cf_it->second)
-                values.emplace_back(std::get<1>(v.second));
-        }
+        std::unique_lock<std::shared_mutex> lock(mutex);
+        auto & queue = data.defaultCF().getExtra().queue;
+        if (queue.empty())
+            return;
+        queue.swap(values);
     }
     for (const auto & val : values)
     {

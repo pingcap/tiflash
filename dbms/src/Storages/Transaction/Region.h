@@ -70,7 +70,7 @@ public:
     public:
         CommittedRemover(const RegionPtr & store_, TableID expected_table_id_) : store(store_), lock(store_->mutex)
         {
-            auto & data = store->data.writeCFMute().getDataMut();
+            auto & data = store->data.writeCF().getDataMut();
             write_cf_data_it = data.find(expected_table_id_);
             found = write_cf_data_it != data.end();
         }
@@ -164,7 +164,7 @@ public:
 
     static ColumnFamilyType getCf(const std::string & cf);
 
-    void tryDecodeDefaultCF() const;
+    void tryDecodeDefaultCF();
 
 private:
     Region() = delete;

@@ -41,6 +41,8 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
     std::ignore = it;
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(kv_pair.second).toHex(), ErrorCodes::LOGICAL_ERROR);
+
+    extra.add(std::get<1>(it->second));
     return table_id;
 }
 
@@ -297,6 +299,12 @@ void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVK
         else
             ++data_it;
     }
+}
+
+template <typename Trait>
+ExtraCFData<Trait> & RegionCFDataBase<Trait>::getExtra()
+{
+    return extra;
 }
 
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
