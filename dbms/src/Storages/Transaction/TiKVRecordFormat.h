@@ -14,7 +14,6 @@
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
 
-
 namespace DB
 {
 
@@ -32,26 +31,8 @@ static const char SHORT_VALUE_PREFIX = 'v';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
-static const UInt64 SIGN_MARK = UInt64(1) << 63;
-
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
-
-inline std::vector<Field> DecodeRow(const TiKVValue & value)
-{
-    std::vector<Field> vec;
-    const String & raw_value = value.getStr();
-    size_t cursor = 0;
-    while (cursor < raw_value.size())
-    {
-        vec.push_back(DecodeDatum(cursor, raw_value));
-    }
-
-    if (cursor != raw_value.size())
-        throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
-
-    return vec;
-}
 
 // Key format is here:
 // https://docs.google.com/document/d/1J9Dsp8l5Sbvzjth77hK8yx3SzpEJ4SXaR_wIvswRhro/edit
@@ -65,7 +46,7 @@ inline TiKVKey encodeAsTiKVKey(const String & ori_str)
 
 inline UInt64 encodeUInt64(const UInt64 x) { return toBigEndian(x); }
 
-inline UInt64 encodeInt64(const Int64 x) { return encodeUInt64(static_cast<UInt64>(x) ^ SIGN_MARK); }
+inline UInt64 encodeInt64(const Int64 x) { return encodeUInt64(static_cast<UInt64>(x) ^ SIGN_MASK); }
 
 inline UInt64 encodeUInt64Desc(const UInt64 x) { return encodeUInt64(~x); }
 
@@ -73,7 +54,7 @@ inline UInt64 decodeUInt64(const UInt64 x) { return toBigEndian(x); }
 
 inline UInt64 decodeUInt64Desc(const UInt64 x) { return ~decodeUInt64(x); }
 
-inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MARK); }
+inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MASK); }
 
 inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields)
 {

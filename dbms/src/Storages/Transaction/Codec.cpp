@@ -12,9 +12,6 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-constexpr UInt64 signMask = UInt64(1) << 63;
-constexpr UInt32 signMask32 = UInt32(1) << 31;
-
 constexpr int digitsPerWord = 9;
 constexpr int wordSize = 4;
 constexpr int dig2Bytes[10] = {0, 1, 1, 2, 2, 3, 3, 4, 4, 4};
@@ -41,17 +38,17 @@ inline B enforce_cast(A a)
 
 Float64 DecodeFloat64(size_t & cursor, const String & raw_value)
 {
-    UInt64 num = DecodeNumber<UInt64>(cursor, raw_value);
-    if (num & signMask)
-        num ^= signMask;
+    UInt64 num = DecodeUInt<UInt64>(cursor, raw_value);
+    if (num & SIGN_MASK)
+        num ^= SIGN_MASK;
     else
         num = ~num;
     return enforce_cast<Float64>(num);
 }
 
-String DecodeBytes(size_t & cursor, const String & raw_value)
+template <typename StringStream>
+void DecodeBytes(size_t & cursor, const String & raw_value, StringStream & ss)
 {
-    std::stringstream ss;
     while (true)
     {
         size_t next_cursor = cursor + 9;
@@ -67,7 +64,24 @@ String DecodeBytes(size_t & cursor, const String & raw_value)
         if (pad_size != 0)
             break;
     }
+}
+
+String DecodeBytes(size_t & cursor, const String & raw_value)
+{
+    std::stringstream ss;
+    DecodeBytes(cursor, raw_value, ss);
     return ss.str();
+}
+
+struct NullStringStream
+{
+    void write(const char *, size_t) {}
+};
+
+void SkipBytes(size_t & cursor, const String & raw_value)
+{
+    NullStringStream ss;
+    DecodeBytes(cursor, raw_value, ss);
 }
 
 String DecodeCompactBytes(size_t & cursor, const String & raw_value)
@@ -78,12 +92,20 @@ String DecodeCompactBytes(size_t & cursor, const String & raw_value)
     return res;
 }
 
+void SkipCompactBytes(size_t & cursor, const String & raw_value)
+{
+    size_t size = DecodeVarInt(cursor, raw_value);
+    cursor += size;
+}
+
 Int64 DecodeVarInt(size_t & cursor, const String & raw_value)
 {
     UInt64 v = DecodeVarUInt(cursor, raw_value);
     Int64 vx = v >> 1;
     return (v & 1) ? ~vx : vx;
 }
+
+void SkipVarInt(size_t & cursor, const String & raw_value) { SkipVarUInt(cursor, raw_value); }
 
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 {
@@ -103,6 +125,8 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
     }
     throw Exception("Wrong format. (DecodeVarUInt)", ErrorCodes::LOGICAL_ERROR);
 }
+
+void SkipVarUInt(size_t & cursor, const String & raw_value) { std::ignore = DecodeVarUInt(cursor, raw_value); }
 
 inline Int8 getWords(PrecType prec, ScaleType scale)
 {
@@ -236,6 +260,15 @@ Field DecodeDecimal(size_t & cursor, const String & raw_value)
     }
 }
 
+void SkipDecimal(size_t & cursor, const String & raw_value)
+{
+    PrecType prec = raw_value[cursor++];
+    ScaleType frac = raw_value[cursor++];
+
+    int binSize = getBytes(prec, frac);
+    cursor += binSize;
+}
+
 Field DecodeDatum(size_t & cursor, const String & raw_value)
 {
     switch (raw_value[cursor++])
@@ -243,9 +276,9 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
         case TiDB::CodecFlagNil:
             return Field();
         case TiDB::CodecFlagInt:
-            return DecodeNumber<Int64>(cursor, raw_value);
+            return DecodeInt64(cursor, raw_value);
         case TiDB::CodecFlagUInt:
-            return DecodeNumber<UInt64>(cursor, raw_value);
+            return DecodeUInt<UInt64>(cursor, raw_value);
         case TiDB::CodecFlagBytes:
             return DecodeBytes(cursor, raw_value);
         case TiDB::CodecFlagCompactBytes:
@@ -265,14 +298,51 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
     }
 }
 
+void SkipDatum(size_t & cursor, const String & raw_value)
+{
+    switch (raw_value[cursor++])
+    {
+        case TiDB::CodecFlagNil:
+            return;
+        case TiDB::CodecFlagInt:
+            cursor += sizeof(Int64);
+            return;
+        case TiDB::CodecFlagUInt:
+            cursor += sizeof(UInt64);
+            return;
+        case TiDB::CodecFlagBytes:
+            SkipBytes(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagCompactBytes:
+            SkipCompactBytes(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagFloat:
+            cursor += sizeof(UInt64);
+            return;
+        case TiDB::CodecFlagVarUInt:
+            SkipVarUInt(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagVarInt:
+            SkipVarInt(cursor, raw_value);
+            return;
+        case TiDB::CodecFlagDuration:
+            throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+        case TiDB::CodecFlagDecimal:
+            SkipDecimal(cursor, raw_value);
+            return;
+        default:
+            throw Exception("Unknown Type:" + std::to_string(raw_value[cursor - 1]), ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 void EncodeFloat64(Float64 num, std::stringstream & ss)
 {
     UInt64 u = enforce_cast<UInt64>(num);
-    if (u & signMask)
+    if (u & SIGN_MASK)
         u = ~u;
     else
-        u |= signMask;
-    return EncodeNumber<UInt64>(u, ss);
+        u |= SIGN_MASK;
+    return EncodeUInt<UInt64>(u, ss);
 }
 
 void EncodeBytes(const String & ori_str, std::stringstream & ss)
@@ -339,8 +409,7 @@ void EncodeDecimal(const T & dec, PrecType prec, ScaleType frac, std::stringstre
     static_assert(IsDecimal<T>);
 
     constexpr Int32 decimal_mod = powers10[digitsPerWord];
-    EncodeNumber(UInt8(prec), ss);
-    EncodeNumber(UInt8(frac), ss);
+    ss << UInt8(prec) << UInt8(frac);
 
     int digitsInt = prec - frac;
     int wordsInt = digitsInt / digitsPerWord;
@@ -419,7 +488,7 @@ inline T getFieldValue(const Field & field)
 
 void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
 {
-    EncodeNumber(UInt8(flag), ss);
+    ss << UInt8(flag);
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:
@@ -448,9 +517,9 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
         case TiDB::CodecFlagFloat:
             return EncodeFloat64(getFieldValue<Float64>(field), ss);
         case TiDB::CodecFlagUInt:
-            return EncodeNumber<UInt64>(getFieldValue<UInt64>(field), ss);
+            return EncodeUInt<UInt64>(getFieldValue<UInt64>(field), ss);
         case TiDB::CodecFlagInt:
-            return EncodeNumber<Int64>(getFieldValue<Int64>(field), ss);
+            return EncodeInt64(getFieldValue<Int64>(field), ss);
         case TiDB::CodecFlagVarInt:
             return EncodeVarInt(getFieldValue<Int64>(field), ss);
         case TiDB::CodecFlagVarUInt:

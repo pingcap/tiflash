@@ -217,7 +217,7 @@ struct BatchCtrl
     void EncodeDatum(std::stringstream & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
-        EncodeNumber(UInt8(flag), ss);
+        ss << UInt8(flag);
         switch (flag)
         {
             case TiDB::CodecFlagJson:
@@ -239,9 +239,9 @@ struct BatchCtrl
             case TiDB::CodecFlagFloat:
                 return EncodeFloat64(Float64(magic_num) / 1111.1, ss);
             case TiDB::CodecFlagUInt:
-                return EncodeNumber<UInt64>(UInt64(magic_num), ss);
+                return EncodeUInt<UInt64>(UInt64(magic_num), ss);
             case TiDB::CodecFlagInt:
-                return EncodeNumber<Int64>(Int64(magic_num), ss);
+                return EncodeInt64(Int64(magic_num), ss);
             case TiDB::CodecFlagVarInt:
                 return EncodeVarInt(Int64(magic_num), ss);
             case TiDB::CodecFlagVarUInt:
