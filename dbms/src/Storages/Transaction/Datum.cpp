@@ -56,7 +56,7 @@ std::enable_if_t<flat, Dummy> Datum<flat>::unflatten(TiDB::TP tp)
                 }
                 date_time = date_lut.makeDateTime(year, month, day, hour, minute, second);
             }
-            *this = static_cast<Int64>(date_time);
+            Field::operator=(static_cast<Int64>(date_time));
         }
     }
 }
@@ -71,7 +71,7 @@ std::enable_if_t<!flat, Dummy> Datum<flat>::flatten(TiDB::TP tp)
     if (tp == TiDB::TypeDate || tp == TiDB::TypeDatetime)
     {
         DateLUTImpl::Values values;
-        UInt8 hour, minute, second = 0;
+        UInt8 hour = 0, minute = 0, second = 0;
         const auto & date_lut = DateLUT::instance();
         if (tp == TiDB::TypeDate)
         {
@@ -88,12 +88,12 @@ std::enable_if_t<!flat, Dummy> Datum<flat>::flatten(TiDB::TP tp)
         }
         UInt64 ymd = ((UInt64)values.year * 13 + values.month) << 5 | values.day_of_month;
         UInt64 hms = (UInt64)hour << 12 | minute << 6 | second;
-        *this = (ymd << 17 | hms) << 24;
+        Field::operator=((ymd << 17 | hms) << 24);
     }
 }
 
 template <typename T>
-bool overflow(const Datum<true> & datum, const ColumnInfo & column_info)
+bool integerOverflow(const Datum<true> & datum, const ColumnInfo & column_info)
 {
     if (column_info.hasUnsignedFlag())
         // Unsigned checking by bitwise compare.
@@ -113,18 +113,19 @@ std::enable_if_t<flat, Dummy> Datum<flat>::overflow(const ColumnInfo & column_in
     switch (column_info.tp)
     {
         case TypeTiny:
-            return overflow<Int8>(*this, column_info);
+            return integerOverflow<Int8>(*this, column_info);
         case TypeShort:
-            return overflow<Int16>(*this, column_info);
+            return integerOverflow<Int16>(*this, column_info);
         case TypeLong:
         case TypeInt24:
-            return overflow<Int32>(*this, column_info);
+            return integerOverflow<Int32>(*this, column_info);
         default:
             return false;
     }
 }
 
-template class Datum<true>;
-template class Datum<false>;
+template void Datum<true>::unflatten(TP);
+template void Datum<false>::flatten(TP);
+template bool Datum<true>::overflow<bool>(const ColumnInfo &);
 
 } // namespace TiDB
