@@ -43,27 +43,6 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
 
     /// Detect new columns.
     // TODO: Detect rename columns.
-    for (const auto & column_info : table_info.columns)
-    {
-        const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
-            orig_table_info.columns.end(),
-            [&](const TiDB::ColumnInfo & orig_column_info_) { return orig_column_info_.id == column_info.id; });
-
-        AlterCommand command;
-        if (orig_column_info == orig_table_info.columns.end())
-        {
-            // New column.
-            command.type = AlterCommand::ADD_COLUMN;
-            setAlterCommandColumn(log, command, column_info);
-        }
-        else
-        {
-            // Column unchanged.
-            continue;
-        }
-
-        alter_commands.emplace_back(std::move(command));
-    }
 
     /// Detect dropped columns.
     for (const auto & orig_column_info : orig_table_info.columns)
@@ -78,6 +57,28 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
             // Dropped column.
             command.type = AlterCommand::DROP_COLUMN;
             command.column_name = orig_column_info.name;
+        }
+        else
+        {
+            // Column unchanged.
+            continue;
+        }
+
+        alter_commands.emplace_back(std::move(command));
+    }
+
+    for (const auto & column_info : table_info.columns)
+    {
+        const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
+            orig_table_info.columns.end(),
+            [&](const TiDB::ColumnInfo & orig_column_info_) { return orig_column_info_.id == column_info.id; });
+
+        AlterCommand command;
+        if (orig_column_info == orig_table_info.columns.end())
+        {
+            // New column.
+            command.type = AlterCommand::ADD_COLUMN;
+            setAlterCommandColumn(log, command, column_info);
         }
         else
         {
