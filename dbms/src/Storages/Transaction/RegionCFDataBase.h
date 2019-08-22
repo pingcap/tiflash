@@ -2,7 +2,7 @@
 
 #include <map>
 
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/ExtraCFData.h>
 
 namespace DB
 {
@@ -69,12 +69,15 @@ struct RegionCFDataBase
 
     void deleteRange(const TiKVKey & start_key, const TiKVKey & end_key);
 
+    ExtraCFData<Trait> & getExtra();
+
 private:
     static bool shouldIgnoreInsert(const Value & value);
     static bool shouldIgnoreRemove(const Value & value);
 
 private:
     Data data;
+    ExtraCFData<Trait> extra;
 };
 
 } // namespace DB
