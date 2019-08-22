@@ -34,6 +34,8 @@ public:
 
     const char * getFamilyName() const override { return "FixedString"; }
 
+    TypeIndex getTypeId() const override { return TypeIndex::FixedString; }
+
     size_t getN() const
     {
         return n;

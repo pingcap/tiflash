@@ -103,26 +103,25 @@ struct ConvertImpl
     }
 };
 
-template <typename FromDataType, typename Name>
-struct ConvertToDecimalImpl
+template <typename DecimalDataType, typename ToDataType, typename Name>
+struct ConvertFromDecimal
 {
-    using FromFieldType = typename FromDataType::FieldType;
-    using ToFieldType = Decimal;
-
-    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec, ScaleType scale)
+    using DecimalFieldType = typename DecimalDataType::FieldType;
+    using ToFieldType = typename ToDataType::FieldType;
+    static void execute(Block & block [[maybe_unused]], const ColumnNumbers & arguments [[maybe_unused]], size_t result [[maybe_unused]])
     {
-        if (const ColumnVector<FromFieldType> * col_from
-            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+        if constexpr (std::is_integral_v<ToFieldType> || std::is_floating_point_v<ToFieldType>)
         {
+            const auto * col_from = checkAndGetColumn<ColumnDecimal<DecimalFieldType>>(block.getByPosition(arguments[0]).column.get());
             auto col_to = ColumnVector<ToFieldType>::create();
 
-            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
             typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
-            size_t size = vec_from.size();
+            size_t size = col_from->size();
             vec_to.resize(size);
 
             for (size_t i = 0; i < size; ++i) {
-                vec_to[i] = ToDecimal(vec_from[i], prec, scale);
+                auto field = (*col_from)[i].template safeGet<DecimalField<DecimalFieldType>>();
+                vec_to[i] = static_cast<ToFieldType>(field);
             }
 
             block.getByPosition(result).column = std::move(col_to);
@@ -134,13 +133,60 @@ struct ConvertToDecimalImpl
     }
 };
 
+template <typename FromDataType, typename Name, typename ToFieldType>
+struct ConvertToDecimalImpl
+{
+    using FromFieldType = typename FromDataType::FieldType;
+
+    static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType prec[[maybe_unused]], ScaleType scale)
+    {
+        if constexpr (IsDecimal<FromFieldType>) {
+            const auto * col_from = checkAndGetColumn<ColumnDecimal<FromFieldType>>(block.getByPosition(arguments[0]).column.get());
+            auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
+
+            const typename ColumnDecimal<FromFieldType>::Container & vec_from = col_from->getData();
+            typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
+            size_t size = vec_from.size();
+            vec_to.resize(size);
+
+            for (size_t i = 0; i < size; ++i) {
+                vec_to[i] = ToDecimal<FromFieldType, ToFieldType>(vec_from[i], vec_from.getScale(), scale);
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else {
+            if (const ColumnVector<FromFieldType> * col_from
+                = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+            {
+                auto col_to = ColumnDecimal<ToFieldType>::create(0, scale);
+
+                const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+                typename ColumnDecimal<ToFieldType>::Container & vec_to = col_to->getData();
+                size_t size = vec_from.size();
+                vec_to.resize(size);
+
+                for (size_t i = 0; i < size; ++i) {
+                    vec_to[i] = ToDecimal<FromFieldType, ToFieldType>(vec_from[i], scale);
+                }
+
+                block.getByPosition(result).column = std::move(col_to);
+            }
+            else
+                throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                        + " of first argument of function " + Name::name,
+                    ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+};
+
 /** Throw exception with verbose message when string value is not parsed completely.
   */
 void throwExceptionForIncompletelyParsedValue(ReadBuffer & read_buffer, Block & block, size_t result);
 
 
-template<typename Name>
-struct ConvertToDecimalImpl<DataTypeString, Name> 
+template<typename Name, typename ToDataType>
+struct ConvertToDecimalImpl<DataTypeString, Name, ToDataType>
 {
     static void execute(Block & block, const ColumnNumbers & arguments, size_t result, PrecType, ScaleType)
     {
@@ -845,7 +891,10 @@ private:
         else if (checkDataType<DataTypeFixedString>(from_type)) ConvertImpl<DataTypeFixedString, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeEnum8>(from_type)) ConvertImpl<DataTypeEnum8, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeEnum16>(from_type)) ConvertImpl<DataTypeEnum16, ToDataType, Name>::execute(block, arguments, result);
-        else if (checkDataType<DataTypeDecimal>(from_type)) ConvertImpl<DataTypeDecimal, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal32>(from_type)) ConvertFromDecimal<DataTypeDecimal32, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal64>(from_type)) ConvertFromDecimal<DataTypeDecimal64, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal128>(from_type)) ConvertFromDecimal<DataTypeDecimal128, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeDecimal256>(from_type)) ConvertFromDecimal<DataTypeDecimal256, ToDataType, Name>::execute(block, arguments, result);
         else
         {
             /// Generic conversion of any type to String.
@@ -940,12 +989,13 @@ public:
     }
 };
 
+template<typename T>
 class FunctionToDecimal : public IFunction
 {
 public:
     struct NameToDecimal { static constexpr auto name = "toDecimal"; };
     static constexpr auto name = "toDecimal";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionToDecimal>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionToDecimal<T>>(); };
 
     String getName() const override
     {
@@ -956,7 +1006,7 @@ public:
     {
         const size_t prec = arguments[1].column->getUInt(0);
         const size_t scale = arguments[2].column->getUInt(0);
-        return std::make_shared<DataTypeDecimal>(prec, scale);
+        return std::make_shared<DataTypeDecimal<T>>(prec, scale);
     }
 
     // This function seems not to be called.
@@ -971,19 +1021,22 @@ public:
     {
         const IDataType * from_type = block.getByPosition(arguments[0]).type.get();
 
-        if      (checkDataType<DataTypeUInt8>(from_type)) ConvertToDecimalImpl<DataTypeUInt8, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeUInt16>(from_type)) ConvertToDecimalImpl<DataTypeUInt16, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeUInt32>(from_type)) ConvertToDecimalImpl<DataTypeUInt32, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeUInt64>(from_type)) ConvertToDecimalImpl<DataTypeUInt64, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeInt8>(from_type)) ConvertToDecimalImpl<DataTypeInt8, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeInt16>(from_type)) ConvertToDecimalImpl<DataTypeInt16, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeInt32>(from_type)) ConvertToDecimalImpl<DataTypeInt32, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeInt64>(from_type)) ConvertToDecimalImpl<DataTypeInt64, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeFloat32>(from_type)) ConvertToDecimalImpl<DataTypeFloat32, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeFloat64>(from_type)) ConvertToDecimalImpl<DataTypeFloat64, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeString>(from_type)) ConvertToDecimalImpl<DataTypeString, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        if      (checkDataType<DataTypeUInt8>(from_type)) ConvertToDecimalImpl<DataTypeUInt8, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeUInt16>(from_type)) ConvertToDecimalImpl<DataTypeUInt16, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeUInt32>(from_type)) ConvertToDecimalImpl<DataTypeUInt32, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeUInt64>(from_type)) ConvertToDecimalImpl<DataTypeUInt64, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt8>(from_type)) ConvertToDecimalImpl<DataTypeInt8, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt16>(from_type)) ConvertToDecimalImpl<DataTypeInt16, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt32>(from_type)) ConvertToDecimalImpl<DataTypeInt32, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeInt64>(from_type)) ConvertToDecimalImpl<DataTypeInt64, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeFloat32>(from_type)) ConvertToDecimalImpl<DataTypeFloat32, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeFloat64>(from_type)) ConvertToDecimalImpl<DataTypeFloat64, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeString>(from_type)) ConvertToDecimalImpl<DataTypeString, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
         //else if (checkDataType<DataTypeFixedString>(from_type)) ConvertToDecimalImpl<DataTypeFixedString, NameToDecimal>::execute(block, arguments, result, prec, scale);
-        else if (checkDataType<DataTypeDecimal>(from_type)) ConvertToDecimalImpl<DataTypeDecimal, NameToDecimal>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeDecimal32>(from_type)) ConvertToDecimalImpl<DataTypeDecimal32, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeDecimal64>(from_type)) ConvertToDecimalImpl<DataTypeDecimal64, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeDecimal128>(from_type)) ConvertToDecimalImpl<DataTypeDecimal128, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
+        else if (checkDataType<DataTypeDecimal256>(from_type)) ConvertToDecimalImpl<DataTypeDecimal256, NameToDecimal, T>::execute(block, arguments, result, prec, scale);
         else
             throw Exception("Illegal type " + block.getByPosition(arguments[0]).type->getName() + " of argument of function " + name,
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -1233,7 +1286,10 @@ template <> struct FunctionTo<DataTypeInt32> { using Type = FunctionToInt32; };
 template <> struct FunctionTo<DataTypeInt64> { using Type = FunctionToInt64; };
 template <> struct FunctionTo<DataTypeFloat32> { using Type = FunctionToFloat32; };
 template <> struct FunctionTo<DataTypeFloat64> { using Type = FunctionToFloat64; };
-template <> struct FunctionTo<DataTypeDecimal> { using Type = FunctionToDecimal; };
+template <> struct FunctionTo<DataTypeDecimal32> { using Type = FunctionToDecimal<Decimal32>; };
+template <> struct FunctionTo<DataTypeDecimal64> { using Type = FunctionToDecimal<Decimal64>; };
+template <> struct FunctionTo<DataTypeDecimal128> { using Type = FunctionToDecimal<Decimal128>; };
+template <> struct FunctionTo<DataTypeDecimal256> { using Type = FunctionToDecimal<Decimal256>; };
 template <> struct FunctionTo<DataTypeDate> { using Type = FunctionToDate; };
 template <> struct FunctionTo<DataTypeDateTime> { using Type = FunctionToDateTime; };
 template <> struct FunctionTo<DataTypeUUID> { using Type = FunctionToUUID; };
@@ -1399,11 +1455,12 @@ private:
         };
     }
 
+    template <typename Type>
     static WrapperType createDecimalWrapper(PrecType prec, ScaleType scale)
     {
         return [prec, scale] (Block & block, const ColumnNumbers & arguments, const size_t result)
         {
-            FunctionToDecimal::execute(block, arguments, result, prec, scale);
+            FunctionToDecimal<Type>::execute(block, arguments, result, prec, scale);
         };
     }
 
@@ -1774,8 +1831,14 @@ private:
             return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeFloat64>(to_type.get()))
             return createWrapper(from_type, to_actual_type);
-        else if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal>(to_type.get()))
-            return createDecimalWrapper(decimal_type->getPrec(), decimal_type->getScale());
+        else if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal32>(to_type.get()))
+            return createDecimalWrapper<Decimal32>(decimal_type->getPrec(), decimal_type->getScale());
+        else if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal64>(to_type.get()))
+            return createDecimalWrapper<Decimal64>(decimal_type->getPrec(), decimal_type->getScale());
+        else if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal128>(to_type.get()))
+            return createDecimalWrapper<Decimal128>(decimal_type->getPrec(), decimal_type->getScale());
+        else if (const auto decimal_type = checkAndGetDataType<DataTypeDecimal256>(to_type.get()))
+            return createDecimalWrapper<Decimal256>(decimal_type->getPrec(), decimal_type->getScale());
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeDate>(to_type.get()))
             return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeDateTime>(to_type.get()))

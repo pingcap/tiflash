@@ -37,7 +37,7 @@ Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
 
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value);
 
-Decimal DecodeDecimal(size_t & cursor, const String & raw_value);
+Field DecodeDecimal(size_t & cursor, const String & raw_value);
 
 Field DecodeDatum(size_t & cursor, const String & raw_value);
 
@@ -72,7 +72,8 @@ void EncodeVarInt(Int64 num, std::stringstream & ss);
 
 void EncodeVarUInt(UInt64 num, std::stringstream & ss);
 
-void EncodeDecimal(const Decimal & dec, std::stringstream & ss);
+template <typename T>
+void EncodeDecimal(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss);
 
 void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss);
 
