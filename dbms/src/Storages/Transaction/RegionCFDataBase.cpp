@@ -10,10 +10,16 @@ const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
     return *std::get<0>(val);
 }
 
+template <typename Value>
+const std::shared_ptr<const TiKVValue> & getTiKVValuePtr(const Value & val)
+{
+    return std::get<1>(val);
+}
+
 template <typename Trait>
 const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 {
-    return *std::get<1>(val);
+    return *getTiKVValuePtr<Value>(val);
 }
 
 template <typename Trait>

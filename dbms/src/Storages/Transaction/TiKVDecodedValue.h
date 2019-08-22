@@ -6,17 +6,17 @@ namespace DB
 {
 class Field;
 
-struct DecodedRowEle
+struct DecodedRowElement
 {
-    Int64 col_id;
-    Field field;
+    const Int64 col_id;
+    const Field field;
 
-    DecodedRowEle(const Int64 col_id_, Field && field_) : col_id(col_id_), field(std::move(field_)) {}
+    DecodedRowElement(const Int64 col_id_, Field && field_) : col_id(col_id_), field(std::move(field_)) {}
 
-    bool operator<(const DecodedRowEle & e) const { return col_id < e.col_id; }
+    bool operator<(const DecodedRowElement & e) const { return col_id < e.col_id; }
 };
 
-using DecodedRow = std::vector<DecodedRowEle>;
+using DecodedRow = std::vector<DecodedRowElement>;
 
 template <bool is_key = false>
 struct ValueExtraInfo
