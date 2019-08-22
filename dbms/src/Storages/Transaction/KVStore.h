@@ -33,7 +33,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, RegionTable * region_table);
+    bool onSnapshot(RegionPtr new_region, Context * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
 

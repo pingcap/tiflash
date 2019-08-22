@@ -231,8 +231,8 @@ struct BatchCtrl
             case TiDB::CodecFlagBytes:
                 memset(default_str.data(), target, default_str.size());
                 return EncodeBytes(default_str, ss);
-            case TiDB::CodecFlagDecimal:
-                return EncodeDecimal(Decimal(magic_num), ss);
+            //case TiDB::CodecFlagDecimal:
+            //    return EncodeDecimal(Decimal(magic_num), ss);
             case TiDB::CodecFlagCompactBytes:
                 memset(default_str.data(), target, default_str.size());
                 return EncodeCompactBytes(default_str, ss);
@@ -311,7 +311,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStore()->onSnapshot(region, &tmt.getRegionTable());
+        tmt.getKVStore()->onSnapshot(region, &context);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
