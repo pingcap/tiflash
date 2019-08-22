@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/Transaction/SerializationHelper.h>
+#include <Storages/Transaction/TiKVDecodedValue.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -63,17 +64,19 @@ public:
 
     static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
 
+    ValueExtraInfo<is_key> & extraInfo() const { return extra; }
+
 private:
     StringObject(const Base & str_) : Base(str_) {}
     StringObject(const StringObject & obj) = delete;
     size_t size() const = delete;
+
+private:
+    mutable ValueExtraInfo<is_key> extra;
 };
 
 using TiKVKey = StringObject<true>;
 using TiKVValue = StringObject<false>;
 using TiKVKeyValue = std::pair<TiKVKey, TiKVValue>;
-
-static_assert(sizeof(TiKVKey) == sizeof(std::string));
-static_assert(sizeof(TiKVValue) == sizeof(std::string));
 
 } // namespace DB

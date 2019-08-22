@@ -18,6 +18,7 @@ using KVStorePtr = std::shared_ptr<KVStore>;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
+using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
 class RaftService final : public enginepb::Engine::Service, public std::enable_shared_from_this<RaftService>, private boost::noncopyable
 {
@@ -27,6 +28,7 @@ public:
     ~RaftService() final;
 
     void addRegionToFlush(const Region & region);
+    void addRegionToDecode(const RegionPtr & region);
 
 private:
     grpc::Status ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream) override;
@@ -46,12 +48,14 @@ private:
 
     Logger * log;
 
-    std::mutex mutex;
+    std::mutex region_mutex;
     std::queue<RegionID> regions_to_flush;
+    RegionMap regions_to_decode;
 
     BackgroundProcessingPool::TaskHandle persist_handle;
     BackgroundProcessingPool::TaskHandle table_flush_handle;
     BackgroundProcessingPool::TaskHandle region_flush_handle;
+    BackgroundProcessingPool::TaskHandle region_decode_handle;
 };
 
 } // namespace DB
