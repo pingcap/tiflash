@@ -48,7 +48,7 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(kv_pair.second).toHex(), ErrorCodes::LOGICAL_ERROR);
 
-    extra.add(std::get<1>(it->second));
+    extra.add(getTiKVValuePtr(it->second));
     return table_id;
 }
 
@@ -167,13 +167,14 @@ size_t RegionCFDataBase<Trait>::getSize() const
 }
 
 template <typename Trait>
-RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data))
+RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data)), extra(std::move(region.extra))
 {}
 
 template <typename Trait>
 RegionCFDataBase<Trait> & RegionCFDataBase<Trait>::operator=(RegionCFDataBase && region)
 {
     data = std::move(region.data);
+    extra = std::move(region.extra);
     return *this;
 }
 

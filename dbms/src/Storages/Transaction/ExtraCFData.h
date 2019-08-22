@@ -19,6 +19,8 @@ struct ExtraCFData<RegionDefaultCFDataTrait>
     using Queue = std::deque<std::shared_ptr<const TiKVValue>>;
     mutable std::mutex default_cf_decode_mutex;
 
+    ExtraCFData() = default;
+
     void add(const std::shared_ptr<const TiKVValue> & e)
     {
         std::lock_guard<std::mutex> lock(default_cf_decode_mutex);
@@ -34,6 +36,28 @@ struct ExtraCFData<RegionDefaultCFDataTrait>
         Queue res;
         queue.swap(res);
         return res;
+    }
+
+    ExtraCFData(const ExtraCFData & src) = delete;
+
+    ExtraCFData(ExtraCFData && src) { mergeFrom(src); }
+
+    ExtraCFData & operator=(ExtraCFData && src)
+    {
+        mergeFrom(src);
+        return *this;
+    }
+
+private:
+    void mergeFrom(ExtraCFData & src)
+    {
+        auto res = src.popAll();
+        if (res)
+        {
+            std::lock_guard<std::mutex> lock(default_cf_decode_mutex);
+            for (auto && e : *res)
+                queue.emplace_back(std::move(e));
+        }
     }
 
 private:
