@@ -61,8 +61,8 @@ template <typename T>
 struct DecimalType : public std::false_type
 {
 };
-template <>
-struct DecimalType<DataTypeDecimal> : public std::true_type
+template <typename T>
+struct DecimalType<DataTypeDecimal<T>> : public std::true_type
 {
 };
 template <typename T>
@@ -116,7 +116,7 @@ std::enable_if_t<IsSignedType<T>, DataTypePtr> getDataTypeByColumnInfoBase(const
 template <typename T, bool should_widen>
 std::enable_if_t<IsDecimalType<T>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
 {
-    DataTypePtr t = std::make_shared<T>(column_info.flen, column_info.decimal);
+    DataTypePtr t = createDecimal(column_info.flen, column_info.decimal);
 
     if (should_widen)
     {

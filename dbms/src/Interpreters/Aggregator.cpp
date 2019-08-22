@@ -461,8 +461,8 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             return AggregatedDataVariants::Type::key64;
         if (size_of_field == 16)
             return AggregatedDataVariants::Type::keys128;
-        if (size_of_field == sizeof(Decimal))
-            return AggregatedDataVariants::Type::key_decimal;
+        if (size_of_field == sizeof(Decimal256))
+            return AggregatedDataVariants::Type::key_int256;
         throw Exception("Logical error: numeric column has sizeOfField not in 1, 2, 4, 8, 16.", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -599,8 +599,6 @@ void NO_INLINE Aggregator::executeImplCase(
                     prev_key = key;
             }
 
-//            if constexpr(std::is_same_v<Method::Key, DB::Decimal>)
- //               std::cout<<(int)key.value<<std::endl;
             method.data.emplace(key, it, inserted);
         }
         else

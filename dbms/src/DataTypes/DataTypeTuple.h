@@ -31,6 +31,8 @@ public:
     std::string getName() const override;
     const char * getFamilyName() const override { return "Tuple"; }
 
+    TypeIndex getTypeId() const override { return TypeIndex::Tuple; }
+
     bool canBeInsideNullable() const override { return false; }
 
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override;

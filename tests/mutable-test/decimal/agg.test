@@ -1,0 +1,44 @@
+>> drop table if exists test
+
+>> create table test (i Int64, d decimal(19, 4)) engine = MutableMergeTree((i), 8192)
+
+>> insert into test values (0, 3.1415926), (1, 3.12222), (2, 3.1416)
+
+>> select d from test order by i
+┌─d──────┐
+│ 3.1416 │
+│ 3.1222 │
+│ 3.1416 │
+└────────┘
+
+>> select count(d) from test
+┌─count(d)─┐
+│        3 │
+└──────────┘
+
+>> select count(distinct d) from test
+┌─uniqExact(d)─┐
+│            2 │
+└──────────────┘
+
+>> select min(d) from test
+┌─min(d)─┐
+│ 3.1222 │
+└────────┘
+
+>> select max(d) from test
+┌─max(d)─┐
+│ 3.1416 │
+└────────┘
+
+>> select sum(d) from test
+┌─sum(d)─┐
+│ 9.4054 │
+└────────┘
+
+>> select avg(d) from test
+┌─avg(d)─────┐
+│ 3.13513333 │
+└────────────┘
+
+>> drop table if exists test
