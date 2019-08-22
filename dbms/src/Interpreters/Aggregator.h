@@ -26,7 +26,7 @@
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnDecimal.h>
+#include <Common/Decimal.h>
 
 
 namespace DB
@@ -65,14 +65,14 @@ using AggregatedDataWithUInt8Key = HashMap<UInt64, AggregateDataPtr, TrivialHash
 using AggregatedDataWithUInt16Key = HashMap<UInt64, AggregateDataPtr, TrivialHash, HashTableFixedGrower<16>>;
 
 using AggregatedDataWithUInt64Key = HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using AggregatedDataWithDecimal = HashMap<Decimal, AggregateDataPtr, HashCRC32<Decimal>>;
+using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
 using AggregatedDataHashed = HashMap<UInt128, std::pair<StringRef*, AggregateDataPtr>, UInt128TrivialHash>;
 
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using AggregatedDataWithDecimalKeyTwoLevel = TwoLevelHashMap<Decimal, AggregateDataPtr, HashCRC32<Decimal>>;
+using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, UInt128HashCRC32>;
 using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, UInt256HashCRC32>;
@@ -130,9 +130,9 @@ struct AggregationMethodOneNumber
             StringRefs & /*keys*/,        /// Here references to key data in columns can be written. They can be used in the future.
             Arena & /*pool*/) const
         {
-            if constexpr(std::is_same_v<FieldType, Decimal>) {
+            if constexpr(std::is_same_v<FieldType, Int256>) {
                 return vec[i];
-            } else{
+            } else {
                 return unionCastToUInt64(vec[i]);
             }
         }
@@ -160,7 +160,7 @@ struct AggregationMethodOneNumber
       */
     static void insertKeyIntoColumns(const typename Data::value_type & value, MutableColumns & key_columns, size_t /*keys_size*/, const Sizes & /*key_sizes*/)
     {
-        static_cast<ColumnVector<FieldType> *>(key_columns[0].get())->insertData(reinterpret_cast<const char *>(&value.first), sizeof(value.first));
+        static_cast<ColumnVectorHelper *>(key_columns[0].get())->insertRawData<sizeof(FieldType)>(reinterpret_cast<const char *>(&value.first));
     }
 };
 
@@ -731,7 +731,7 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>>         key32;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>>         key64;
-    std::unique_ptr<AggregationMethodOneNumber<Decimal, AggregatedDataWithDecimal>>      key_decimal;
+    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>>      key_int256;
     std::unique_ptr<AggregationMethodString<AggregatedDataWithStringKey>>                    key_string;
     std::unique_ptr<AggregationMethodFixedString<AggregatedDataWithStringKey>>               key_fixed_string;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128>>                   keys128;
@@ -742,7 +742,7 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     std::unique_ptr<AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>> key32_two_level;
     std::unique_ptr<AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>> key64_two_level;
-    std::unique_ptr<AggregationMethodOneNumber<Decimal, AggregatedDataWithDecimalKeyTwoLevel>> key_decimal_two_level;
+    std::unique_ptr<AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>> key_int256_two_level;
     std::unique_ptr<AggregationMethodString<AggregatedDataWithStringKeyTwoLevel>>            key_string_two_level;
     std::unique_ptr<AggregationMethodFixedString<AggregatedDataWithStringKeyTwoLevel>>       key_fixed_string_two_level;
     std::unique_ptr<AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>>           keys128_two_level;
@@ -775,13 +775,13 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key_fixed_string,           false) \
         M(keys128,                    false) \
         M(keys256,                    false) \
-        M(key_decimal,                    false) \
+        M(key_int256,                    false) \
         M(hashed,                     false) \
         M(concat,                     false) \
         M(serialized,                 false) \
         M(key32_two_level,            true) \
         M(key64_two_level,            true) \
-        M(key_decimal_two_level,            true) \
+        M(key_int256_two_level,            true) \
         M(key_string_two_level,       true) \
         M(key_fixed_string_two_level, true) \
         M(keys128_two_level,          true) \
@@ -910,7 +910,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     #define APPLY_FOR_VARIANTS_CONVERTIBLE_TO_TWO_LEVEL(M) \
         M(key32)            \
         M(key64)            \
-        M(key_decimal)            \
+        M(key_int256)            \
         M(key_string)       \
         M(key_fixed_string) \
         M(keys128)          \
@@ -957,7 +957,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         M(key32_two_level)            \
         M(key64_two_level)            \
         M(key_string_two_level)       \
-        M(key_decimal_two_level)       \
+        M(key_int256_two_level)       \
         M(key_fixed_string_two_level) \
         M(keys128_two_level)          \
         M(keys256_two_level)          \
@@ -1167,6 +1167,8 @@ protected:
     Sizes offsets_of_aggregate_states;    /// The offset to the n-th aggregate function in a row of aggregate functions.
     size_t total_size_of_aggregate_states = 0;    /// The total size of the row from the aggregate functions.
 
+    // add info to track alignment requirement
+    // If there are states whose alignment are v1, ..vn, align_aggregate_states will be max(v1, ... vn)
     size_t align_aggregate_states = 1;
 
     bool all_aggregates_has_trivial_destructor = false;

@@ -113,6 +113,21 @@ void MockTiDB::dropTable(Context & context, const String & database_name, const 
     version_diff[version] = diff;
 }
 
+template <typename T>
+bool tryGetDecimalType(const IDataType * nested_type, ColumnInfo & column_info)
+{
+    using TypeDec = DataTypeDecimal<T>;
+    if (checkDataType<TypeDec>(nested_type))
+    {
+        auto decimal_type = checkAndGetDataType<TypeDec>(nested_type);
+        column_info.flen = decimal_type->getPrec();
+        column_info.decimal = decimal_type->getScale();
+        column_info.tp = TiDB::TypeNewDecimal;
+        return true;
+    }
+    return false;
+}
+
 ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
 {
     ColumnInfo column_info;
@@ -132,11 +147,17 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
     {
         column_info.setUnsignedFlag();
     }
-    if (checkDataType<DataTypeDecimal>(nested_type))
+    else if (tryGetDecimalType<Decimal32>(nested_type, column_info))
     {
-        auto decimal_type = checkAndGetDataType<DataTypeDecimal>(nested_type);
-        column_info.flen = decimal_type->getPrec();
-        column_info.decimal = decimal_type->getScale();
+    }
+    else if (tryGetDecimalType<Decimal64>(nested_type, column_info))
+    {
+    }
+    else if (tryGetDecimalType<Decimal128>(nested_type, column_info))
+    {
+    }
+    else if (tryGetDecimalType<Decimal256>(nested_type, column_info))
+    {
     }
 
 #ifdef M
@@ -154,8 +175,6 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
         column_info.tp = TiDB::TypeShort;
     else if (checkDataType<DataTypeUInt32>(nested_type))
         column_info.tp = TiDB::TypeLong;
-    else
-        throw DB::Exception("Invalid ?", ErrorCodes::LOGICAL_ERROR);
 
     // UInt64 is hijacked by the macro expansion, we check it again.
     if (checkDataType<DataTypeUInt64>(nested_type))
