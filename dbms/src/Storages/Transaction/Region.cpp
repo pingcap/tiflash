@@ -659,7 +659,6 @@ void Region::tryDecodeDefaultCF()
 {
     ExtraCFData<RegionDefaultCFDataTrait>::Queue values;
     {
-        std::shared_lock<std::shared_mutex> lock(mutex);
         auto res = data.defaultCF().getExtra().popAll();
         if (!res)
             return;
