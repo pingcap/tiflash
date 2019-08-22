@@ -55,6 +55,8 @@ private:
     ValueToNameMap value_to_name_map;
     std::string name;
 
+    TypeIndex getTypeId() const override { return sizeof(FieldType) == 1 ? TypeIndex::Enum8 : TypeIndex::Enum16; }
+
     static std::string generateName(const Values & values);
     void fillMaps();
 

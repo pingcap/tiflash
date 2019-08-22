@@ -2,7 +2,7 @@
 
 #include <cmath>
 
-#include <Columns/IColumn.h>
+#include <Columns/ColumnVectorHelper.h>
 
 
 namespace DB
@@ -120,10 +120,11 @@ template <> inline UInt64 unionCastToUInt64(Float32 x)
 /** A template for columns that use a simple array to store.
   */
 template <typename T>
-class ColumnVector final : public COWPtrHelper<IColumn, ColumnVector<T>>
+class ColumnVector final : public COWPtrHelper<ColumnVectorHelper, ColumnVector<T>>
 {
+    static_assert(!IsDecimal<T>);
 private:
-    friend class COWPtrHelper<IColumn, ColumnVector<T>>;
+    friend class COWPtrHelper<ColumnVectorHelper, ColumnVector<T>>;
 
     using Self = ColumnVector<T>;
 

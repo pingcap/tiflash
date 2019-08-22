@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Common/Decimal.h>
 #include <type_traits>
 
 
@@ -112,9 +113,9 @@ template <typename A> struct ResultOfNegate
         std::is_signed_v<A> ? sizeof(A) : nextSize(sizeof(A))>::Type;
 };
 
-template <> struct ResultOfNegate<Decimal>
+template <typename T> struct ResultOfNegate<Decimal<T>>
 {
-    using Type = Decimal;
+    using Type = Decimal<T>;
 };
 
 template <typename A> struct ResultOfAbs
@@ -125,9 +126,9 @@ template <typename A> struct ResultOfAbs
         sizeof(A)>::Type;
 };
 
-template <> struct ResultOfAbs<Decimal>
+template <typename T> struct ResultOfAbs<Decimal<T>>
 {
-    using Type = Decimal;
+    using Type = Decimal<T>;
 };
 
 /** For bitwise operations, an integer is obtained with number of bits is equal to the maximum of the arguments.
@@ -148,9 +149,9 @@ template <typename A> struct ResultOfBitNot
         sizeof(A)>::Type;
 };
 
-template <> struct ResultOfBitNot<Decimal>
+template <typename T> struct ResultOfBitNot<Decimal<T>>
 {
-    using Type = Decimal;
+    using Type = Decimal<T>;
 };
 
 /** Type casting for `if` function:
@@ -190,6 +191,9 @@ template <typename A> struct ToInteger
         false,
         std::is_floating_point_v<A> ? 8 : sizeof(A)>::Type;
 };
+
+template <> struct ToInteger <Int256> {using Type = Int256;};
+template <> struct ToInteger <Int128> {using Type = Int128;};
 
 
 // CLICKHOUSE-29. The same depth, different signs

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/FieldVisitors.h>
-
+#include <DataTypes/DataTypeDecimal.h>
 
 namespace DB
 {
@@ -24,7 +24,11 @@ public:
     DataTypePtr operator() (const String & x) const;
     DataTypePtr operator() (const Array & x) const;
     DataTypePtr operator() (const Tuple & x) const;
-    DataTypePtr operator() (const Decimal & x) const;
+    template<typename T>
+    DataTypePtr operator() (const DecimalField<T> & x) const {
+        PrecType prec = maxDecimalPrecision<T>();
+        return std::make_shared<DataTypeDecimal<T>>(prec, x.getScale());
+    }
 };
 
 }
