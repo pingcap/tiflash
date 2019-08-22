@@ -62,7 +62,19 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
         region->tryDecodeDefaultCF();
         return true;
     });
+
     LOG_INFO(log, "Raft service listening on [" << address << "]");
+
+    {
+        std::vector<RegionPtr> regions;
+        kvstore->traverseRegions([&regions](RegionID, const RegionPtr & region) {
+            if (region->dataSize())
+                regions.emplace_back(region);
+        });
+
+        for (const auto & region : regions)
+            addRegionToDecode(region);
+    }
 }
 
 void RaftService::addRegionToFlush(const Region & region)
