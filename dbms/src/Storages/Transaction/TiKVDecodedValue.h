@@ -56,6 +56,9 @@ struct ValueExtraInfo
             decoded_row.emplace_back(col_id, DecodeDatum(cursor, raw_value));
         }
 
+        if (cursor != raw_value.size())
+            throw Exception("ComputeDecodedRow cursor is not end in ", ErrorCodes::LOGICAL_ERROR);
+
         DecodedRow * res = new DecodedRow(std::move(decoded_row));
         return res;
     }
