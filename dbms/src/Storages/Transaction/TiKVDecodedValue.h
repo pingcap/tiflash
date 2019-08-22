@@ -64,6 +64,7 @@ struct ValueExtraInfo
 
 private:
     ValueExtraInfo(const ValueExtraInfo &) = delete;
+    ValueExtraInfo(ValueExtraInfo &&) = delete;
 
 private:
     mutable std::atomic<void *> decoded{nullptr};
