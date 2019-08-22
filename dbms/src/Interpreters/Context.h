@@ -144,13 +144,11 @@ public:
 
     ~Context();
 
-    const std::vector<String> & getAllPath() const;
     String getPath() const;
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
 
-    void setAllPath(const std::vector<String> & paths);
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
@@ -373,7 +371,7 @@ public:
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
 
-    void initializePartPathSelector(const std::vector<std::string> & all_path, std::vector<std::string> && all_fast_path);
+    void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
     PartPathSelector & getPartPathSelector();
 
     Clusters & getClusters() const;

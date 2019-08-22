@@ -153,7 +153,7 @@ size_t MergeTreeDataMerger::getMaxPartsSizeForMerge(size_t pool_size, size_t poo
             static_cast<double>(free_entries) / data.settings.number_of_free_entries_in_pool_to_lower_max_size_of_merge);
 
     size_t max_parts_size = max_size;
-    for (auto & path : data.context.getAllPath())
+    for (auto & path : data.context.getPartPathSelector().getAllPath())
     {
         auto s = static_cast<size_t>(DiskSpaceMonitor::getUnreservedFreeSpace(path) / DISK_USAGE_COEFFICIENT_TO_SELECT);
         if (s < max_parts_size)

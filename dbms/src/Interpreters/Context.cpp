@@ -115,7 +115,6 @@ struct ContextShared
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
 
-    std::vector<String> paths;                              /// Path to all candidate data directory
     String path;                                            /// Path to the primary data directory, with a slash at the end.
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
@@ -482,12 +481,6 @@ DatabasePtr Context::tryGetDatabase(const String & database_name)
     return it->second;
 }
 
-const std::vector<String> & Context::getAllPath() const
-{
-    auto lock = getLock();
-    return shared->paths;
-}
-
 String Context::getPath() const
 {
     auto lock = getLock();
@@ -510,12 +503,6 @@ String Context::getUserFilesPath() const
 {
     auto lock = getLock();
     return shared->user_files_path;
-}
-
-void Context::setAllPath(const std::vector<String> & paths_)
-{
-    auto lock = getLock();
-    shared->paths = paths_;
 }
 
 void Context::setPath(const String & path)
@@ -1431,12 +1418,12 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
     shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
 }
 
-void Context::initializePartPathSelector(const std::vector<std::string> & all_path, std::vector<std::string> && all_fast_path)
+void Context::initializePartPathSelector(std::vector<std::string> && all_normal_path, std::vector<std::string> && all_fast_path)
 {
     auto lock = getLock();
     if (shared->part_path_selector_ptr)
         throw Exception("PartPathSelector instance has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->part_path_selector_ptr = std::make_shared<PartPathSelector>(all_path, std::move(all_fast_path));
+    shared->part_path_selector_ptr = std::make_shared<PartPathSelector>(std::move(all_normal_path), std::move(all_fast_path));
 }
 
 PartPathSelector & Context::getPartPathSelector()

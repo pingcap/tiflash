@@ -129,34 +129,30 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Poco::StringTokenizer string_tokens(fast_paths, ";");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
-                all_fast_path.push_back(getCanonicalPath(std::string(*it)));
+                all_fast_path.emplace_back(getCanonicalPath(std::string(*it)));
                 LOG_DEBUG(log, "Fast data part candidate path: " << std::string(*it));
             }
         }
     }
     String paths = config().getString("path");
-    std::vector<String> all_path;
+    std::vector<String> all_normal_path;
     Poco::trimInPlace(paths);
     if (paths.empty())
         throw Exception("path configuration parameter is empty");
     Poco::StringTokenizer string_tokens(paths, ";");
     for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
     {
-        all_path.push_back(getCanonicalPath(std::string(*it)));
+        all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
         LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
     }
-    global_context->setAllPath(all_path);
-    {
-        global_context->initializePartPathSelector(global_context->getAllPath(), std::move(all_fast_path));
-    }
 
-    std::string path = global_context->getAllPath()[0];
+    std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
-
     global_context->setPath(path);
+    global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
 
     /// Create directories for 'path' and for default database, if not exist.
-    for (const String & candidate_path : global_context->getAllPath())
+    for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
     {
         Poco::File(candidate_path + "data/" + default_database).createDirectories();
     }
