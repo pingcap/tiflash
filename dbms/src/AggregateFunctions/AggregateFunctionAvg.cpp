@@ -49,9 +49,9 @@ AggregateFunctionPtr createAggregateFunctionAvg(const std::string & name, const 
     else if ((res = createAggregateFunctionAvgForDecimal<DataTypeDecimal256>(p)) != nullptr)
         return res;
     else
-        res = AggregateFunctionPtr(createWithNumericType<AggregateFunctionAvg>(*argument_types[0]));
+        res = AggregateFunctionPtr(createWithNumericType<AggregateFunctionAvg>(*p));
     if (!res)
-        throw Exception("Illegal type " + argument_types[0]->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("Illegal type " + p->getName() + " of argument for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
     return res;
 }
