@@ -255,7 +255,7 @@ int main(int, char **)
         std::string s = "1234";
         s[0] = char(1);
         s[3] = char(111);
-        auto & key = static_cast<const TiKVKey &>(s);
+        const auto & key = TiKVKey(s.data(), s.size());
         assert(key.toHex() == "[1 32 33 6f]");
     }
 

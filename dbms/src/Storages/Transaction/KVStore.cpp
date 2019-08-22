@@ -69,7 +69,7 @@ void KVStore::traverseRegions(std::function<void(RegionID region_id, const Regio
         callback(it->first, it->second);
 }
 
-bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
+bool KVStore::onSnapshot(RegionPtr new_region, Context * context)
 {
     RegionID region_id = new_region->id();
     {
@@ -99,11 +99,14 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
             std::lock_guard<std::mutex> lock(mutex());
             regions().emplace(region_id, new_region);
         }
+
+        if (context)
+            context->getRaftService().addRegionToDecode(new_region);
     }
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
-    if (region_table)
-        region_table->applySnapshotRegion(*new_region);
+    if (context)
+        context->getTMTContext().getRegionTable().applySnapshotRegion(*new_region);
 
     return true;
 }
@@ -112,6 +115,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 {
     TMTContext * tmt_context = raft_ctx.context ? &(raft_ctx.context->getTMTContext()) : nullptr;
     RegionTable * region_table = tmt_context ? &(tmt_context->getRegionTable()) : nullptr;
+    RaftService * raft_service = raft_ctx.context ? &(raft_ctx.context->getRaftService()) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
 
@@ -176,7 +180,6 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
-            auto & raft_service = raft_ctx.context->getRaftService();
             {
                 std::lock_guard<std::mutex> lock(mutex());
 
@@ -200,10 +203,10 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 for (const auto & new_region : split_regions)
                 {
                     region_table->updateRegionForSplit(*new_region, curr_region_id);
-                    raft_service.addRegionToFlush(*new_region);
+                    raft_service->addRegionToFlush(*new_region);
                 }
                 region_table->shrinkRegionRange(curr_region);
-                raft_service.addRegionToFlush(curr_region);
+                raft_service->addRegionToFlush(curr_region);
             }
 
             {
@@ -247,6 +250,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 break;
             case RaftCommandResult::Type::UpdateTableID:
                 handle_update_table_ids(result.table_ids);
+                raft_service->addRegionToDecode(curr_region_ptr);
                 break;
             case RaftCommandResult::Type::Default:
                 persist_and_sync();

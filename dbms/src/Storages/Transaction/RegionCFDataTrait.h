@@ -7,10 +7,20 @@
 namespace DB
 {
 
+struct CFKeyHasher
+{
+    size_t operator()(const std::pair<HandleID, Timestamp> & k) const noexcept
+    {
+        const static Timestamp mask = std::numeric_limits<Timestamp>::max() << 40 >> 40;
+        size_t res = k.first << 24 | (k.second & mask);
+        return res;
+    }
+};
+
 struct RegionWriteCFDataTrait
 {
     using DecodedWriteCFValue = RecordKVFormat::DecodedWriteCFValue;
-    using Key = std::tuple<HandleID, Timestamp>;
+    using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedWriteCFValue>;
     using Map = std::map<Key, Value>;
 
@@ -30,7 +40,7 @@ struct RegionWriteCFDataTrait
 
 struct RegionDefaultCFDataTrait
 {
-    using Key = std::tuple<HandleID, Timestamp>;
+    using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
     using Map = std::map<Key, Value>;
 
@@ -48,7 +58,7 @@ struct RegionLockCFDataTrait
     using DecodedLockCFValue = RecordKVFormat::DecodedLockCFValue;
     using Key = HandleID;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedLockCFValue>;
-    using Map = std::map<Key, Value>;
+    using Map = std::unordered_map<Key, Value>;
 
     static std::pair<Key, Value> genKVPair(TiKVKey && key, const String & raw_key, TiKVValue && value)
     {
