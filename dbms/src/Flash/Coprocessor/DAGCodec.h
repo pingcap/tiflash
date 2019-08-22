@@ -21,5 +21,6 @@ Float64 decodeDAGFloat64(const String &);
 String decodeDAGString(const String &);
 String decodeDAGBytes(const String &);
 Decimal decodeDAGDecimal(const String &);
+Int64 decodeDAGDateTime(const String &);
 
 } // namespace DB

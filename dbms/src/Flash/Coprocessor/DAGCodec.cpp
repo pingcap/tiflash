@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DateTimeInfo.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 
 namespace DB
@@ -60,6 +61,14 @@ Decimal decodeDAGDecimal(const String & s)
 {
     size_t cursor = 0;
     return DecodeDecimal(cursor, s);
+}
+
+Int64 decodeDAGDateTime(const String & s)
+{
+    UInt64 packed = decodeDAGUInt64(s);
+    DateTimeInfo info(packed);
+    // todo use the time zone info in dag request
+    return DateLUT::instance().makeDateTime(info.year, info.month, info.day, info.hour, info.minute, info.second);
 }
 
 } // namespace DB

@@ -72,6 +72,8 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
             return decodeDAGBytes(expr.val());
         case tipb::ExprType::MysqlDecimal:
             return decodeDAGDecimal(expr.val()).toString();
+        case tipb::ExprType::MysqlTime:
+            return std::to_string(decodeDAGDateTime(expr.val()));
         case tipb::ExprType::ColumnRef:
             column_id = decodeDAGInt64(expr.val());
             if (column_id < 0 || column_id >= (ColumnID)input_col.size())
@@ -210,12 +212,13 @@ Field decodeLiteral(const tipb::Expr & expr)
             return decodeDAGBytes(expr.val());
         case tipb::ExprType::MysqlDecimal:
             return decodeDAGDecimal(expr.val());
+        case tipb::ExprType::MysqlTime:
+            return decodeDAGDateTime(expr.val());
         case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDuration:
         case tipb::ExprType::MysqlEnum:
         case tipb::ExprType::MysqlHex:
         case tipb::ExprType::MysqlSet:
-        case tipb::ExprType::MysqlTime:
         case tipb::ExprType::MysqlJson:
         case tipb::ExprType::ValueList:
             throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);

@@ -4,18 +4,18 @@
 
 namespace DB
 {
-DateTimeInfo::DateTimeInfo(UInt32 ch_raw_data)
+DateTimeInfo::DateTimeInfo(UInt32 ch_date_raw_data)
 {
-    DayNum_t day_num(ch_raw_data);
+    DayNum_t day_num(ch_date_raw_data);
     LocalDate local_date(day_num);
     year = local_date.year();
     month = local_date.month();
     day = local_date.day();
     hour = minute = second = 0;
 }
-DateTimeInfo::DateTimeInfo(UInt64 ch_raw_data, const DateLUTImpl & date_lut)
+DateTimeInfo::DateTimeInfo(Int64 ch_datetime_raw_data, const DateLUTImpl & date_lut)
 {
-    time_t date_time = ch_raw_data;
+    time_t date_time = ch_datetime_raw_data;
     const auto & values = date_lut.getValues(date_time);
     year = values.year;
     month = values.month;

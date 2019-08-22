@@ -314,7 +314,7 @@ void EncodeDateTime(const Field & field, const DataTypePtr & ch_type, std::strin
     else
     {
         auto * date_time_type = typeid_cast<const DataTypeDateTime *>(ch_type.get());
-        packed_value = DateTimeInfo(getFieldValue<UInt64>(field), date_time_type->getTimeZone()).packedToUInt64();
+        packed_value = DateTimeInfo(getFieldValue<Int64>(field), date_time_type->getTimeZone()).packedToUInt64();
     }
     EncodeUInt<UInt64>(packed_value, ss);
 }
