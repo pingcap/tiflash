@@ -11,9 +11,7 @@ namespace DB
 class MergeTreeData;
 struct MergeTreePartInfo;
 using String = std::string;
-struct PartPathSelectorSetting {
 
-};
 class PartPathSelector
 {
 public:
