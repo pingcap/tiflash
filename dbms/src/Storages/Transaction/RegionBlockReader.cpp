@@ -9,7 +9,6 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
-#include <DataTypes/DataTypeDecimal.h>
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
 
@@ -30,18 +29,18 @@ static Field GenDecodeRow(const TiDB::ColumnInfo & col_info)
         case TiDB::CodecFlagBytes:
             return Field(String());
         case TiDB::CodecFlagDecimal:
-            {
-                auto type = createDecimal(col_info.flen, col_info.decimal);
-                if (checkDecimal<Decimal32>(*type))
-                    return Field(DecimalField<Decimal32>(Decimal32(), col_info.decimal));
-                else if (checkDecimal<Decimal64>(*type))
-                    return Field(DecimalField<Decimal64>(Decimal64(), col_info.decimal));
-                else if (checkDecimal<Decimal128>(*type))
-                    return Field(DecimalField<Decimal128>(Decimal128(), col_info.decimal));
-                else
-                    return Field(DecimalField<Decimal256>(Decimal256(), col_info.decimal));
-            }
-            break;
+        {
+            auto type = createDecimal(col_info.flen, col_info.decimal);
+            if (checkDecimal<Decimal32>(*type))
+                return Field(DecimalField<Decimal32>(Decimal32(), col_info.decimal));
+            else if (checkDecimal<Decimal64>(*type))
+                return Field(DecimalField<Decimal64>(Decimal64(), col_info.decimal));
+            else if (checkDecimal<Decimal128>(*type))
+                return Field(DecimalField<Decimal128>(Decimal128(), col_info.decimal));
+            else
+                return Field(DecimalField<Decimal256>(Decimal256(), col_info.decimal));
+        }
+        break;
         case TiDB::CodecFlagCompactBytes:
             return Field(String());
         case TiDB::CodecFlagFloat:
