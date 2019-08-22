@@ -657,13 +657,13 @@ std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange()
 
 void Region::tryDecodeDefaultCF()
 {
-    std::deque<std::shared_ptr<const TiKVValue>> values;
+    ExtraCFData<RegionDefaultCFDataTrait>::Queue values;
     {
-        std::unique_lock<std::shared_mutex> lock(mutex);
-        auto & queue = data.defaultCF().getExtra().queue;
-        if (queue.empty())
+        std::shared_lock<std::shared_mutex> lock(mutex);
+        auto res = data.defaultCF().getExtra().popAll();
+        if (!res)
             return;
-        queue.swap(values);
+        values = std::move(*res);
     }
     for (const auto & val : values)
     {
