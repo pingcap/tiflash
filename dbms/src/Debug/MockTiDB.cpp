@@ -25,7 +25,7 @@ using Table = MockTiDB::Table;
 using TablePtr = MockTiDB::TablePtr;
 
 Table::Table(const String & database_name_, const String & table_name_, TableInfo && table_info_)
-    : table_info(std::move(table_info_)), database_name(database_name_), table_name(table_name_)
+    : table_info(std::move(table_info_)), database_name(database_name_), table_name(table_name_), col_id(table_info_.columns.size())
 {}
 
 MockTiDB::MockTiDB() { databases["default"] = 0; }
@@ -325,7 +325,7 @@ void MockTiDB::addColumnToTable(const String & database_name, const String & tab
         != columns.end())
         throw Exception("Column " + column.name + " already exists in TiDB table " + qualified_name, ErrorCodes::LOGICAL_ERROR);
 
-    ColumnInfo column_info = getColumnInfoFromColumn(column, columns.back().id + 1);
+    ColumnInfo column_info = getColumnInfoFromColumn(column, table->allocColumnID());
     columns.emplace_back(column_info);
 
     version++;
