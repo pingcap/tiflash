@@ -77,6 +77,7 @@ public:
     const ColumnDefines & getTableColumns() const { return table_columns; }
     const ColumnDefine &  getHandle() const { return table_handle_define; }
     const Block &         getHeader() const { return header; }
+    const Settings &      getSettings() const { return settings; }
 
     void check(const Context & db_context, const DB::Settings & db_settings);
 
