@@ -76,7 +76,10 @@ private:
     Strings pk_column_names;
     OrderedNameSet hidden_columns;
 
+    // The table schema synced from TiDB
     TiDB::TableInfo tidb_table_info;
+
+    // Used to allocate new column-id when this table is NOT synced from TiDB
     ColumnID max_column_id_used;
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!

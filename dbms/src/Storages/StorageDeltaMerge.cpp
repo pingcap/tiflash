@@ -378,7 +378,8 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
         }
     }
 
-    auto lock = lockStructureForAlter(__PRETTY_FUNCTION__);
+    auto table_soft_lock = lockDataForAlter(__PRETTY_FUNCTION__);
+    auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
     // update the metadata in database, so that we can read the new schema using TiFlash's client
     ColumnsDescription new_columns = getColumns();
@@ -396,16 +397,6 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
                 throw Exception("Storage engine " + getName() + "doesn't support lossy data type modify from " + col_iter->type->getName()
                         + " to " + command.data_type->getName(),
                     ErrorCodes::NOT_IMPLEMENTED);
-            }
-            if (col_iter->type->isNullable() && !command.data_type->isNullable())
-            {
-                // Nullable -> Not nullable, we need a default value for NULL records
-                if (command.default_expression == nullptr)
-                {
-                    throw Exception("Modify col: " + command.column_name + " from " + col_iter->type->getName() + " to "
-                            + command.data_type->getName() + " need a default expr",
-                        ErrorCodes::BAD_ARGUMENTS);
-                }
             }
         }
     }
