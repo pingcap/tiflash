@@ -207,9 +207,7 @@ Datum<Trait> makeDatum(const Field & field, TP tp)
     throw DB::Exception("Shouldn't reach here", DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-template <>
-Datum<IFlatTrait> makeDatum<IFlatTrait>(const Field &, TP);
-template <>
-Datum<INonFlatTrait> makeDatum<INonFlatTrait>(const Field &, TP);
+template Datum<IFlatTrait> makeDatum<IFlatTrait>(const Field &, TP);
+template Datum<INonFlatTrait> makeDatum<INonFlatTrait>(const Field &, TP);
 
 }; // namespace TiDB
