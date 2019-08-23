@@ -1,8 +1,5 @@
-#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/TMTPKType.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
@@ -378,7 +375,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                 DatumFlat datum(field, column_info.tp);
                 const Field & unflattened = datum.field();
-                if (datum.isOverflow(column_info))
+                if (datum.overflow(column_info))
                 {
                     // Overflow detected, fatal if force_decode is true,
                     // as schema being newer and narrow shouldn't happen.

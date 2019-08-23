@@ -33,7 +33,7 @@ public:
     DatumFlat(const DB::Field & field, TP tp);
 
     /// Checks overflow for schema mismatch detection.
-    bool isOverflow(const ColumnInfo & column_info);
+    bool overflow(const ColumnInfo & column_info);
 };
 
 /// Bumpy datum that needs flatten, emits the flat representation (in field).
