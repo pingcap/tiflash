@@ -1,4 +1,5 @@
 #include <Storages/Transaction/Datum.h>
+
 #include <ext/bit_cast.h>
 
 namespace DB::ErrorCodes
@@ -11,16 +12,42 @@ namespace TiDB
 
 using DB::Field;
 
-template <bool flat>
-template <typename Dummy>
-std::enable_if_t<flat, Dummy> Datum<flat>::unflatten(TiDB::TP tp)
+template <TP tp, typename = void>
+struct FlatTrait : public IFlatTrait
 {
-    if (isNull())
-        return;
+    FlatTrait(const Field & field_) : field(field_) {}
 
-    if (tp == TiDB::TypeDate || tp == TiDB::TypeDatetime)
+protected:
+    operator const Field &() override { return field; }
+
+private:
+    const Field & field;
+};
+
+template <TP tp, typename = void>
+struct NonFlatTrait : public INonFlatTrait
+{
+    NonFlatTrait(const Field & field_) : field(field_) {}
+
+protected:
+    operator const Field &() override { return field; }
+
+private:
+    const Field & field;
+};
+
+template <TP tp>
+struct FlatTrait<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime>::type> : public IFlatTrait
+{
+    FlatTrait(const Field & field_) : field(field_) {}
+
+protected:
+    void unflatten() override
     {
-        UInt64 packed = get<UInt64>();
+        if (field.isNull())
+            return;
+
+        UInt64 packed = field.get<UInt64>();
         UInt64 ymdhms = packed >> 24;
         UInt64 ymd = ymdhms >> 17;
         UInt8 day = UInt8(ymd & ((1 << 5) - 1));
@@ -35,10 +62,10 @@ std::enable_if_t<flat, Dummy> Datum<flat>::unflatten(TiDB::TP tp)
 
         const auto & date_lut = DateLUT::instance();
 
-        if (tp == TiDB::TypeDate)
+        if constexpr (tp == TypeDate)
         {
             auto date = date_lut.makeDayNum(year, month, day);
-            *this = static_cast<Int64>(date);
+            field = static_cast<Int64>(date);
         }
         else
         {
@@ -56,31 +83,38 @@ std::enable_if_t<flat, Dummy> Datum<flat>::unflatten(TiDB::TP tp)
                 }
                 date_time = date_lut.makeDateTime(year, month, day, hour, minute, second);
             }
-            Field::operator=(static_cast<Int64>(date_time));
+            field = static_cast<Int64>(date_time);
         }
     }
-}
 
-template <bool flat>
-template <typename Dummy>
-std::enable_if_t<!flat, Dummy> Datum<flat>::flatten(TiDB::TP tp)
+    operator const Field &() override { return field; }
+
+private:
+    Field field;
+};
+
+template <TP tp>
+struct NonFlatTrait<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime>::type> : INonFlatTrait
 {
-    if (isNull())
-        return;
+    NonFlatTrait(const Field & field_) : field(field_) {}
 
-    if (tp == TiDB::TypeDate || tp == TiDB::TypeDatetime)
+protected:
+    void flatten() override
     {
+        if (field.isNull())
+            return;
+
         DateLUTImpl::Values values;
         UInt8 hour = 0, minute = 0, second = 0;
         const auto & date_lut = DateLUT::instance();
-        if (tp == TiDB::TypeDate)
+        if constexpr (tp == TypeDate)
         {
-            DayNum_t day_num(static_cast<UInt32>(get<UInt64>()));
+            DayNum_t day_num(static_cast<UInt32>(field.get<UInt64>()));
             values = date_lut.getValues(day_num);
         }
         else
         {
-            time_t date_time(static_cast<UInt64>(get<UInt64>()));
+            time_t date_time(static_cast<UInt64>(field.get<UInt64>()));
             values = date_lut.getValues(date_time);
             hour = date_lut.toHour(date_time);
             minute = date_lut.toMinute(date_time);
@@ -88,44 +122,89 @@ std::enable_if_t<!flat, Dummy> Datum<flat>::flatten(TiDB::TP tp)
         }
         UInt64 ymd = ((UInt64)values.year * 13 + values.month) << 5 | values.day_of_month;
         UInt64 hms = (UInt64)hour << 12 | minute << 6 | second;
-        Field::operator=((ymd << 17 | hms) << 24);
+        field = (ymd << 17 | hms) << 24;
     }
-}
 
-template <typename T>
-bool integerOverflow(const Datum<true> & datum, const ColumnInfo & column_info)
+    operator const DB::Field &() override { return field; }
+
+private:
+    Field field;
+};
+
+template <TP tp>
+struct FlatTrait<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
+    : public IFlatTrait
 {
-    if (column_info.hasUnsignedFlag())
-        // Unsigned checking by bitwise compare.
-        return datum.get<UInt64>() != ext::bit_cast<UInt64>(static_cast<std::make_unsigned_t<T>>(datum.get<UInt64>()));
-    else
-        // Singed checking by arithmetical cast.
-        return datum.get<Int64>() != static_cast<Int64>(static_cast<std::make_signed_t<T>>(datum.get<Int64>()));
-}
+    FlatTrait(const Field & field_) : field(field_) {}
 
-template <bool flat>
-template <typename Dummy>
-std::enable_if_t<flat, Dummy> Datum<flat>::overflow(const ColumnInfo & column_info)
-{
-    if (isNull())
-        return false;
-
-    switch (column_info.tp)
+    bool overflow(const ColumnInfo & column_info) const override
     {
-        case TypeTiny:
-            return integerOverflow<Int8>(*this, column_info);
-        case TypeShort:
-            return integerOverflow<Int16>(*this, column_info);
-        case TypeLong:
-        case TypeInt24:
-            return integerOverflow<Int32>(*this, column_info);
-        default:
+        if (field.isNull())
             return false;
+
+        if constexpr (tp == TypeTiny)
+            return concreteOverflow<Int8>(column_info);
+
+        if constexpr (tp == TypeShort)
+            return concreteOverflow<Int16>(column_info);
+
+        if constexpr (tp == TypeLong || tp == TypeInt24)
+            return concreteOverflow<Int32>(column_info);
+    }
+
+protected:
+    operator const DB::Field &() override { return field; }
+
+    template <typename T>
+    inline bool concreteOverflow(const ColumnInfo & column_info) const
+    {
+        if (column_info.hasUnsignedFlag())
+            // Unsigned checking by bitwise compare.
+            return field.get<UInt64>() != ext::bit_cast<UInt64>(static_cast<std::make_unsigned_t<T>>(field.get<UInt64>()));
+        else
+            // Singed checking by arithmetical cast.
+            return field.get<Int64>() != static_cast<Int64>(static_cast<std::make_signed_t<T>>(field.get<Int64>()));
+    }
+
+private:
+    const Field & field;
+};
+
+template <typename Trait, TP tp, typename = void>
+struct ConcreteTrait;
+template <typename Trait, TP tp>
+struct ConcreteTrait<Trait, tp, typename std::enable_if<std::is_same<Trait, IFlatTrait>::value>::type>
+{
+    using Type = FlatTrait<tp>;
+};
+template <typename Trait, TP tp>
+struct ConcreteTrait<Trait, tp, typename std::enable_if<!std::is_same<Trait, IFlatTrait>::value>::type>
+{
+    using Type = NonFlatTrait<tp>;
+};
+
+template <typename Trait>
+Datum<Trait> makeDatum(const Field & field, TP tp)
+{
+    switch (tp)
+    {
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(tt, v, cf, ct, w) \
+    case Type##tt:          \
+        return Datum<Trait>(std::make_shared<typename ConcreteTrait<Trait, Type##tt>::Type>(field));
+        COLUMN_TYPES(M)
+#undef M
     }
 }
 
-template void Datum<true>::unflatten(TP);
-template void Datum<false>::flatten(TP);
-template bool Datum<true>::overflow<bool>(const ColumnInfo &);
+const Field & foo(const Field & field, TP tp)
+{
+    Datum<IFlatTrait> d1 = makeDatum<IFlatTrait>(field, tp);
+    d1.trait->overflow(ColumnInfo());
+    Datum<INonFlatTrait> d2 = makeDatum<INonFlatTrait>(field, tp);
+    return d2.field;
+}
 
-} // namespace TiDB
+}; // namespace TiDB
