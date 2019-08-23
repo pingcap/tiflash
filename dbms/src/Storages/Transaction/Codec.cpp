@@ -99,15 +99,6 @@ void SkipCompactBytes(size_t & cursor, const String & raw_value)
     cursor += size;
 }
 
-Int64 DecodeVarInt(size_t & cursor, const String & raw_value)
-{
-    UInt64 v = DecodeVarUInt(cursor, raw_value);
-    Int64 vx = v >> 1;
-    return (v & 1) ? ~vx : vx;
-}
-
-void SkipVarInt(size_t & cursor, const String & raw_value) { SkipVarUInt(cursor, raw_value); }
-
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 {
     UInt64 res = 0;
@@ -128,6 +119,15 @@ UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value)
 }
 
 void SkipVarUInt(size_t & cursor, const String & raw_value) { std::ignore = DecodeVarUInt(cursor, raw_value); }
+
+Int64 DecodeVarInt(size_t & cursor, const String & raw_value)
+{
+    UInt64 v = DecodeVarUInt(cursor, raw_value);
+    Int64 vx = v >> 1;
+    return (v & 1) ? ~vx : vx;
+}
+
+void SkipVarInt(size_t & cursor, const String & raw_value) { SkipVarUInt(cursor, raw_value); }
 
 inline Int8 getWords(PrecType prec, ScaleType scale)
 {
@@ -329,7 +329,7 @@ void SkipDatum(size_t & cursor, const String & raw_value)
             SkipVarInt(cursor, raw_value);
             return;
         case TiDB::CodecFlagDuration:
-            throw Exception("Not implented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implemented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
         case TiDB::CodecFlagDecimal:
             SkipDecimal(cursor, raw_value);
             return;
@@ -380,9 +380,9 @@ void EncodeCompactBytes(const String & str, std::stringstream & ss)
     ss.write(str.c_str(), str.size());
 }
 
-void EncodeVarInt(Int64 num, std::stringstream & ss) { TiKV::writeVarInt(num, ss); }
-
 void EncodeVarUInt(UInt64 num, std::stringstream & ss) { TiKV::writeVarUInt(num, ss); }
+
+void EncodeVarInt(Int64 num, std::stringstream & ss) { TiKV::writeVarInt(num, ss); }
 
 inline void writeWord(String & buf, Int32 word, int size)
 {
@@ -531,7 +531,7 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
         case TiDB::CodecFlagVarUInt:
             return EncodeVarUInt(getFieldValue<UInt64>(field), ss);
         default:
-            throw Exception("Not implented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implemented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
     }
 }
 

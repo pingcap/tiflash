@@ -55,11 +55,6 @@ protected:
         UInt8 month = UInt8(ym % 13);
         UInt16 year = UInt16(ym / 13);
 
-        UInt64 hms = ymdhms & ((1 << 17) - 1);
-        UInt8 second = UInt8(hms & ((1 << 6) - 1));
-        UInt8 minute = UInt8((hms >> 6) & ((1 << 6) - 1));
-        UInt8 hour = UInt8(hms >> 12);
-
         const auto & date_lut = DateLUT::instance();
 
         if constexpr (tp == TypeDate)
@@ -81,6 +76,11 @@ protected:
                         "wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " " + std::to_string(day) + ".",
                         DB::ErrorCodes::LOGICAL_ERROR);
                 }
+                UInt64 hms = ymdhms & ((1 << 17) - 1);
+                UInt8 second = UInt8(hms & ((1 << 6) - 1));
+                UInt8 minute = UInt8((hms >> 6) & ((1 << 6) - 1));
+                UInt8 hour = UInt8(hms >> 12);
+
                 date_time = date_lut.makeDateTime(year, month, day, hour, minute, second);
             }
             field = static_cast<Int64>(date_time);
@@ -197,6 +197,8 @@ Datum<Trait> makeDatum(const Field & field, TP tp)
         COLUMN_TYPES(M)
 #undef M
     }
+
+    throw DB::Exception("Shouldn't reach here", DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 const Field & foo(const Field & field, TP tp)
