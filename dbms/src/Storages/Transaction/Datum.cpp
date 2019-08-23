@@ -106,7 +106,7 @@ inline bool integerOverflow(const Field & field, const ColumnInfo & column_info)
         // Unsigned checking by bitwise compare.
         return field.get<UInt64>() != ext::bit_cast<UInt64>(static_cast<std::make_unsigned_t<T>>(field.get<UInt64>()));
     else
-        // Singed checking by arithmetical cast.
+        // Signed checking by arithmetical cast.
         return field.get<Int64>() != static_cast<Int64>(static_cast<std::make_signed_t<T>>(field.get<Int64>()));
 }
 
