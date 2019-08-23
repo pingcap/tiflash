@@ -12,6 +12,7 @@ namespace TiDB
 
 using DB::Field;
 
+/// Flat trait for datum that doesn't have flat representation, stores field ref to save a copy, does nothing when unflatten.
 template <TP tp, typename = void>
 struct FlatTrait : public IFlatTrait
 {
@@ -24,6 +25,7 @@ private:
     const Field & field;
 };
 
+/// Non-flat trait for datum that doesn't have flat representation, stores field ref to save a copy, does nothing when flatten.
 template <TP tp, typename = void>
 struct NonFlatTrait : public INonFlatTrait
 {
@@ -36,6 +38,7 @@ private:
     const Field & field;
 };
 
+/// Specialized flat trait for date/datetime, inevitably stores field copy as unflatten needs to modify the field value.
 template <TP tp>
 struct FlatTrait<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime>::type> : public IFlatTrait
 {
@@ -93,6 +96,7 @@ private:
     Field field;
 };
 
+/// Specialized non-flat trait for date/datetime, inevitably stores field copy as flatten needs to modify the field value.
 template <TP tp>
 struct NonFlatTrait<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime>::type> : INonFlatTrait
 {
@@ -131,6 +135,7 @@ private:
     Field field;
 };
 
+/// Specialized flat trait for integer types less than 64b, check overflow.
 template <TP tp>
 struct FlatTrait<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
     : public IFlatTrait
@@ -170,6 +175,7 @@ private:
     const Field & field;
 };
 
+/// Extractors for concrete trait types.
 template <typename Trait, TP tp, typename = void>
 struct ConcreteTrait;
 template <typename Trait, TP tp>
@@ -199,14 +205,6 @@ Datum<Trait> makeDatum(const Field & field, TP tp)
     }
 
     throw DB::Exception("Shouldn't reach here", DB::ErrorCodes::LOGICAL_ERROR);
-}
-
-const Field & foo(const Field & field, TP tp)
-{
-    Datum<IFlatTrait> d1 = makeDatum<IFlatTrait>(field, tp);
-    d1.trait->overflow(ColumnInfo());
-    Datum<INonFlatTrait> d2 = makeDatum<INonFlatTrait>(field, tp);
-    return d2.field;
 }
 
 }; // namespace TiDB
