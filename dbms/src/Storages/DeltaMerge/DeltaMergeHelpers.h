@@ -273,7 +273,7 @@ inline std::vector<TiDB::ColumnInfo>::const_iterator findColumnInfoInTableInfo(c
         return column_info.name == column_name;
     });
     if (iter == table_info.columns.end())
-        throw Exception("Wrong column name. Cannot find column " + column_name + " in `table_info`",
+        throw Exception("Invalid column name. Cannot find column " + column_name + " in `table_info`",
                         ErrorCodes::ILLEGAL_COLUMN);
     return iter;
 }
