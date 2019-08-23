@@ -10,10 +10,16 @@ const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
     return *std::get<0>(val);
 }
 
+template <typename Value>
+const std::shared_ptr<const TiKVValue> & getTiKVValuePtr(const Value & val)
+{
+    return std::get<1>(val);
+}
+
 template <typename Trait>
 const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 {
-    return *std::get<1>(val);
+    return *getTiKVValuePtr<Value>(val);
 }
 
 template <typename Trait>
@@ -41,6 +47,8 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
     std::ignore = it;
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(kv_pair.second).toHex(), ErrorCodes::LOGICAL_ERROR);
+
+    extra.add(getTiKVValuePtr(it->second));
     return table_id;
 }
 
@@ -159,13 +167,14 @@ size_t RegionCFDataBase<Trait>::getSize() const
 }
 
 template <typename Trait>
-RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data))
+RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data)), extra(std::move(region.extra))
 {}
 
 template <typename Trait>
 RegionCFDataBase<Trait> & RegionCFDataBase<Trait>::operator=(RegionCFDataBase && region)
 {
     data = std::move(region.data);
+    extra = std::move(region.extra);
     return *this;
 }
 
@@ -297,6 +306,12 @@ void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVK
         else
             ++data_it;
     }
+}
+
+template <typename Trait>
+ExtraCFData<Trait> & RegionCFDataBase<Trait>::getExtra()
+{
+    return extra;
 }
 
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
