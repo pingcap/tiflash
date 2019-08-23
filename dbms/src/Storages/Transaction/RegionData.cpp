@@ -178,7 +178,8 @@ void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
     region_data.cf_data_size += total_size;
 }
 
-RegionWriteCFData & RegionData::writeCFMute() { return write_cf; }
+RegionWriteCFData & RegionData::writeCF() { return write_cf; }
+RegionDefaultCFData & RegionData::defaultCF() { return default_cf; }
 
 const RegionWriteCFData & RegionData::writeCF() const { return write_cf; }
 const RegionDefaultCFData & RegionData::defaultCF() const { return default_cf; }
