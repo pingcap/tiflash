@@ -395,7 +395,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                     return std::make_tuple(block, false);
                 }
                 auto & mut_col = it->second->first;
-                mut_col->insert(field);
+                mut_col->insert(unflattened);
             }
         }
     }
