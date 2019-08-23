@@ -22,7 +22,7 @@ extern const int LOGICAL_ERROR;
 }
 
 using TiDB::ColumnInfo;
-using TiDB::Datum;
+using TiDB::DatumFlat;
 using TiDB::TableInfo;
 
 static Field GenDecodeRow(const ColumnInfo & col_info)
@@ -376,10 +376,9 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
-                // Use Datum to unflatten the field.
-                Datum<TiDB::IFlatTrait> datum = TiDB::makeDatum<TiDB::IFlatTrait>(field, column_info.tp);
-                const Field & unflattened = datum.field;
-                if (datum.trait->overflow(column_info))
+                DatumFlat datum(field, column_info.tp);
+                const Field & unflattened = datum.field();
+                if (datum.isOverflow(column_info))
                 {
                     // Overflow detected, fatal if force_decode is true,
                     // as schema being newer and narrow shouldn't happen.
