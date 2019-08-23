@@ -265,9 +265,9 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
             type_expr.set_tp(tipb::ExprType::String);
             std::stringstream ss;
             type_expr.set_val(expected_type->getName());
-            auto type_field_type = type_expr.field_type();
-            type_field_type.set_tp(0xfe);
-            type_field_type.set_flag(1);
+            auto * type_field_type = type_expr.mutable_field_type();
+            type_field_type->set_tp(0xfe);
+            type_field_type->set_flag(1);
             getActions(type_expr, actions);
 
             Names cast_argument_names;

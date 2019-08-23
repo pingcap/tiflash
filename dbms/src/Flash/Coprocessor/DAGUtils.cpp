@@ -73,7 +73,15 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::MysqlDecimal:
             return decodeDAGDecimal(expr.val()).toString();
         case tipb::ExprType::MysqlTime:
-            return std::to_string(decodeDAGDateTime(expr.val()));
+            // todo use the time zone info in dag request
+            if (expr.has_field_type() && expr.field_type().tp() == TiDB::TypeDate)
+            {
+                return std::to_string((UInt64)decodeDAGDateTime(expr.val()).makeDayNum(DateLUT::instance()));
+            }
+            else
+            {
+                return std::to_string(decodeDAGDateTime(expr.val()).makeDateTime(DateLUT::instance()));
+            }
         case tipb::ExprType::ColumnRef:
             column_id = decodeDAGInt64(expr.val());
             if (column_id < 0 || column_id >= (ColumnID)input_col.size())
@@ -213,7 +221,15 @@ Field decodeLiteral(const tipb::Expr & expr)
         case tipb::ExprType::MysqlDecimal:
             return decodeDAGDecimal(expr.val());
         case tipb::ExprType::MysqlTime:
-            return decodeDAGDateTime(expr.val());
+            // todo use the time zone info in dag request
+            if (expr.has_field_type() && expr.field_type().tp() == TiDB::TypeDate)
+            {
+                return (UInt64)decodeDAGDateTime(expr.val()).makeDayNum(DateLUT::instance());
+            }
+            else
+            {
+                return (Int64)decodeDAGDateTime(expr.val()).makeDateTime(DateLUT::instance());
+            }
         case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDuration:
         case tipb::ExprType::MysqlEnum:

@@ -2,6 +2,7 @@
 
 #include <Common/Decimal.h>
 #include <Core/Field.h>
+#include <Storages/Transaction/DateTimeInfo.h>
 
 namespace DB
 {
@@ -21,6 +22,6 @@ Float64 decodeDAGFloat64(const String &);
 String decodeDAGString(const String &);
 String decodeDAGBytes(const String &);
 Decimal decodeDAGDecimal(const String &);
-Int64 decodeDAGDateTime(const String &);
+DateTimeInfo decodeDAGDateTime(const String &);
 
 } // namespace DB

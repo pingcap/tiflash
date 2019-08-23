@@ -39,6 +39,10 @@ DateTimeInfo::DateTimeInfo(UInt64 tidb_raw_data)
     hour = UInt8(hms >> 12);
 }
 
+DayNum_t DateTimeInfo::makeDayNum(const DateLUTImpl & date_lut) { return date_lut.makeDayNum(year, month, day); }
+
+time_t DateTimeInfo::makeDateTime(const DateLUTImpl & date_lut) { return date_lut.makeDateTime(year, month, day, hour, minute, second); }
+
 UInt64 DateTimeInfo::packedToUInt64()
 {
     UInt64 ymd = ((UInt64)year * 13 + month) << 5 | day;

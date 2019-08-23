@@ -63,12 +63,11 @@ Decimal decodeDAGDecimal(const String & s)
     return DecodeDecimal(cursor, s);
 }
 
-Int64 decodeDAGDateTime(const String & s)
+DateTimeInfo decodeDAGDateTime(const String & s)
 {
     UInt64 packed = decodeDAGUInt64(s);
     DateTimeInfo info(packed);
-    // todo use the time zone info in dag request
-    return DateLUT::instance().makeDateTime(info.year, info.month, info.day, info.hour, info.minute, info.second);
+    return info;
 }
 
 } // namespace DB

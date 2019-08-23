@@ -10,10 +10,12 @@ class DateTimeInfo
 // todo use time zone info in DAG request
 {
 public:
-    DateTimeInfo(UInt32 ch_date_raw_data);
+    explicit DateTimeInfo(UInt32 ch_date_raw_data);
     DateTimeInfo(Int64 ch_datetime_raw_data, const DateLUTImpl & date_lut);
-    DateTimeInfo(UInt64 tidb_raw_data);
+    explicit DateTimeInfo(UInt64 tidb_raw_data);
     UInt64 packedToUInt64();
+    DayNum_t makeDayNum(const DateLUTImpl & date_lut);
+    time_t makeDateTime(const DateLUTImpl & date_lut);
 
     UInt16 year = 0;
     UInt8 month = 0;
