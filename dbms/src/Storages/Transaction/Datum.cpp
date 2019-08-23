@@ -184,7 +184,7 @@ struct ConcreteTrait<Trait, tp, typename std::enable_if<std::is_same<Trait, IFla
     using Type = FlatTrait<tp>;
 };
 template <typename Trait, TP tp>
-struct ConcreteTrait<Trait, tp, typename std::enable_if<!std::is_same<Trait, IFlatTrait>::value>::type>
+struct ConcreteTrait<Trait, tp, typename std::enable_if<std::is_same<Trait, INonFlatTrait>::value>::type>
 {
     using Type = NonFlatTrait<tp>;
 };
@@ -206,5 +206,10 @@ Datum<Trait> makeDatum(const Field & field, TP tp)
 
     throw DB::Exception("Shouldn't reach here", DB::ErrorCodes::LOGICAL_ERROR);
 }
+
+template <>
+Datum<IFlatTrait> makeDatum<IFlatTrait>(const Field &, TP);
+template <>
+Datum<INonFlatTrait> makeDatum<INonFlatTrait>(const Field &, TP);
 
 }; // namespace TiDB
