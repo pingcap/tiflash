@@ -70,7 +70,7 @@ public:
     public:
         CommittedRemover(const RegionPtr & store_, TableID expected_table_id_) : store(store_), lock(store_->mutex)
         {
-            auto & data = store->data.writeCFMute().getDataMut();
+            auto & data = store->data.writeCF().getDataMut();
             write_cf_data_it = data.find(expected_table_id_);
             found = write_cf_data_it != data.end();
         }
@@ -103,8 +103,8 @@ public:
 
     RaftCommandResult onCommand(enginepb::CommandRequest && cmd);
 
-    std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
-    std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
+    CommittedScanner createCommittedScanner(TableID expected_table_id);
+    CommittedRemover createCommittedRemover(TableID expected_table_id);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
@@ -163,6 +163,8 @@ public:
     void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
 
     static ColumnFamilyType getCf(const std::string & cf);
+
+    void tryPreDecodeTiKVValue();
 
 private:
     Region() = delete;

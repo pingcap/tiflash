@@ -122,26 +122,6 @@ MutableColumnPtr ColumnVector<T>::cloneResized(size_t size) const
     return std::move(res);
 }
 
-template <>
-MutableColumnPtr ColumnVector<Decimal>::cloneResized(size_t size) const
-{
-    auto res = this->create();
-
-    if (size > 0)
-    {
-        auto & new_col = static_cast<Self &>(*res);
-        new_col.data.resize(size);
-
-        size_t count = std::min(this->size(), size);
-        memcpy(&new_col.data[0], &data[0], count * sizeof(data[0]));
-
-        if (size > count)
-            memset(&new_col.data[count], 0, size - count);
-    }
-
-    return std::move(res);
-}
-
 template <typename T>
 UInt64 ColumnVector<T>::get64(size_t n) const
 {
@@ -158,24 +138,6 @@ template <typename T>
 Int64 ColumnVector<T>::getInt(size_t n) const
 {
     return Int64(data[n]);
-}
-
-template <>
-UInt64 ColumnVector<Decimal>::get64(size_t n) const
-{
-    return IColumn::get64(n);
-}
-
-template <>
-UInt64 ColumnVector<Decimal>::getUInt(size_t n) const
-{
-    return IColumn::getUInt(n);
-}
-
-template <>
-Int64 ColumnVector<Decimal>::getInt(size_t n) const
-{
-    return IColumn::getInt(n);
 }
 
 template <typename T>
@@ -359,45 +321,6 @@ void ColumnVector<T>::getExtremes(Field & min, Field & max) const
     max = typename NearestFieldType<T>::Type(cur_max);
 }
 
-template <>
-void ColumnVector<Decimal>::getExtremes(Field & min, Field & max) const
-{
-    size_t size = data.size();
-
-    if (size == 0)
-    {
-        min = Decimal();
-        max = Decimal();
-        return;
-    }
-
-    bool has_value = false;
-
-    Decimal cur_min, cur_max;
-
-    for (const Decimal x : data)
-    {
-        if (isNaN(x))
-            continue;
-
-        if (!has_value)
-        {
-            cur_min = x;
-            cur_max = x;
-            has_value = true;
-            continue;
-        }
-
-        if (x < cur_min)
-            cur_min = x;
-        else if (x > cur_max)
-            cur_max = x;
-    }
-
-    min = cur_min;
-    max = cur_max;
-}
-
 /// Explicit template instantiations - to avoid code bloat in headers.
 template class ColumnVector<UInt8>;
 template class ColumnVector<UInt16>;
@@ -410,5 +333,4 @@ template class ColumnVector<Int32>;
 template class ColumnVector<Int64>;
 template class ColumnVector<Float32>;
 template class ColumnVector<Float64>;
-template class ColumnVector<Decimal>;
 }

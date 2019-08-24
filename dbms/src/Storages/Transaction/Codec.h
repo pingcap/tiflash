@@ -33,13 +33,15 @@ String DecodeBytes(size_t & cursor, const String & raw_value);
 
 String DecodeCompactBytes(size_t & cursor, const String & raw_value);
 
-Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
-
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value);
 
-Decimal DecodeDecimal(size_t & cursor, const String & raw_value);
+Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
+
+Field DecodeDecimal(size_t & cursor, const String & raw_value);
 
 Field DecodeDatum(size_t & cursor, const String & raw_value);
+
+void SkipDatum(size_t & cursor, const String & raw_value);
 
 template <typename T>
 inline std::enable_if_t<std::is_unsigned_v<T>, void> EncodeUInt(T u, std::stringstream & ss)
@@ -56,11 +58,12 @@ void EncodeBytes(const String & ori_str, std::stringstream & ss);
 
 void EncodeCompactBytes(const String & str, std::stringstream & ss);
 
-void EncodeVarInt(Int64 num, std::stringstream & ss);
-
 void EncodeVarUInt(UInt64 num, std::stringstream & ss);
 
-void EncodeDecimal(const Decimal & dec, std::stringstream & ss);
+void EncodeVarInt(Int64 num, std::stringstream & ss);
+
+template <typename T>
+void EncodeDecimal(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss);
 
 void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss);
 

@@ -9,11 +9,11 @@
 #include <IO/Endian.h>
 
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
-
 
 namespace DB
 {
@@ -34,22 +34,6 @@ static const size_t SHORT_VALUE_MAX_LEN = 64;
 
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
-
-inline std::vector<Field> DecodeRow(const TiKVValue & value)
-{
-    std::vector<Field> vec;
-    const String & raw_value = value.getStr();
-    size_t cursor = 0;
-    while (cursor < raw_value.size())
-    {
-        vec.push_back(DecodeDatum(cursor, raw_value));
-    }
-
-    if (cursor != raw_value.size())
-        throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
-
-    return vec;
-}
 
 // Key format is here:
 // https://docs.google.com/document/d/1J9Dsp8l5Sbvzjth77hK8yx3SzpEJ4SXaR_wIvswRhro/edit
@@ -80,9 +64,10 @@ inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector
     std::stringstream ss;
     for (size_t i = 0; i < fields.size(); i++)
     {
-        const TiDB::ColumnInfo & column = table_info.columns[i];
-        EncodeDatum(Field(column.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column.getCodecFlag(), ss);
+        const TiDB::ColumnInfo & column_info = table_info.columns[i];
+        EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
+        TiDB::DatumBumpy datum = TiDB::DatumBumpy(fields[i], column_info.tp);
+        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
     }
     return TiKVValue(ss.str());
 }

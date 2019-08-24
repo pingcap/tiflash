@@ -177,7 +177,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
                 std::ignore = write_type;
                 std::ignore = value;
 
-                remover->remove({handle, commit_ts});
+                remover.remove({handle, commit_ts});
             }
         }
 
