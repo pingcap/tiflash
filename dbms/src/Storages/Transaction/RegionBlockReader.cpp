@@ -1,11 +1,9 @@
-#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/TMTPKType.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
@@ -20,7 +18,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-static Field GenDecodeRow(const TiDB::ColumnInfo & col_info)
+using TiDB::ColumnInfo;
+using TiDB::DatumFlat;
+using TiDB::TableInfo;
+
+static Field GenDecodeRow(const ColumnInfo & col_info)
 {
     switch (col_info.getCodecFlag())
     {
@@ -218,7 +220,7 @@ bool DecodeRow(const TiKVValue & value, const ColumnIdToInfoIndexMap & column_id
 }
 
 
-std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
+std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
     RegionDataReadInfoList & data_list,
@@ -296,8 +298,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
         func(*delmark_col, *version_col, column_map[handle_col_id]->first, data_list, start_ts);
     }
-
-    const auto & date_lut = DateLUT::instance();
 
     const size_t target_col_size = column_names_to_read.size() - 3;
 
@@ -382,106 +382,31 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             {
                 const ColumnID & col_id = iter->col_id;
                 const Field & field = iter->field;
+                const ColumnInfo & column_info = table_info.columns[column_id_to_info_index[col_id]];
 
                 auto it = column_map.find(col_id);
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
-                auto & name_type = it->second->second;
+                DatumFlat datum(field, column_info.tp);
+                const Field & unflattened = datum.field();
+                if (datum.overflow(column_info))
+                {
+                    // Overflow detected, fatal if force_decode is true,
+                    // as schema being newer and narrow shouldn't happen.
+                    // Otherwise return false to outer, outer should sync schema and try again.
+                    if (force_decode)
+                    {
+                        const auto & data_type = it->second->second.type;
+                        throw Exception("Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>()) + " of column "
+                                + column_info.name + " with type " + data_type->getName(),
+                            ErrorCodes::LOGICAL_ERROR);
+                    }
+
+                    return std::make_tuple(block, false);
+                }
                 auto & mut_col = it->second->first;
-                const auto & tp = name_type.type;
-                if (tp->isDateOrDateTime()
-                    || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isDateOrDateTime()))
-                {
-                    if (field.isNull())
-                    {
-                        mut_col->insert(field);
-                        continue;
-                    }
-                    UInt64 packed = field.get<UInt64>();
-                    UInt64 ymdhms = packed >> 24;
-                    UInt64 ymd = ymdhms >> 17;
-                    int day = int(ymd & ((1 << 5) - 1));
-                    int ym = ymd >> 5;
-                    int month = int(ym % 13);
-                    int year = int(ym / 13);
-
-                    UInt64 hms = ymdhms & ((1 << 17) - 1);
-                    int second = int(hms & ((1 << 6) - 1));
-                    int minute = int((hms >> 6) & ((1 << 6) - 1));
-                    int hour = int(hms >> 12);
-
-                    if (typeid_cast<const DataTypeDateTime *>(tp.get())
-                        || (tp->isNullable()
-                               && typeid_cast<const DataTypeDateTime *>(
-                                      dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType().get())))
-                    {
-                        time_t datetime;
-                        if (unlikely(year == 0))
-                            datetime = 0;
-                        else
-                        {
-                            if (unlikely(month == 0 || day == 0))
-                            {
-                                throw Exception("wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " "
-                                        + std::to_string(day) + ".",
-                                    ErrorCodes::LOGICAL_ERROR);
-                            }
-                            datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-                        }
-                        mut_col->insert(static_cast<Int64>(datetime));
-                    }
-                    else
-                    {
-                        auto date = date_lut.makeDayNum(year, month, day);
-                        Field date_field(static_cast<Int64>(date));
-                        mut_col->insert(date_field);
-                    }
-                }
-                else
-                {
-                    mut_col->insert(field);
-
-                    // Check overflow for potential un-synced data type widen,
-                    // i.e. schema is old and narrow, meanwhile data is new and wide.
-                    // So far only integers is possible of overflow.
-                    auto & nested_tp = tp->isNullable() ? dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType() : tp;
-                    auto & orig_column = *mut_col;
-                    auto & nested_column
-                        = mut_col->isColumnNullable() ? dynamic_cast<ColumnNullable &>(*mut_col).getNestedColumn() : *mut_col;
-                    auto inserted_index = orig_column.size() - 1;
-                    if (!orig_column.isNullAt(inserted_index) && nested_tp->isInteger())
-                    {
-                        bool overflow = false;
-                        if (nested_tp->isUnsignedInteger())
-                        {
-                            // Unsigned checking by bitwise compare.
-                            UInt64 inserted = nested_column.get64(inserted_index);
-                            UInt64 orig = field.get<UInt64>();
-                            overflow = inserted != orig;
-                        }
-                        else
-                        {
-                            // Singed checking by arithmetical cast.
-                            Int64 inserted = nested_column.getInt(inserted_index);
-                            Int64 orig = field.get<Int64>();
-                            overflow = inserted != orig;
-                        }
-                        if (overflow)
-                        {
-                            // Overflow detected, fatal if force_decode is true,
-                            // as schema being newer and narrow shouldn't happen.
-                            // Otherwise return false to outer, outer should sync schema and try again.
-                            if (force_decode)
-                                throw Exception(
-                                    "Detected overflow for data " + std::to_string(field.get<UInt64>()) + " of type " + tp->getName(),
-                                    ErrorCodes::LOGICAL_ERROR);
-
-                            return std::make_tuple(block, false);
-                        }
-                    }
-                    // TODO: Consider other kind of type change? I.e. arbitrary type change.
-                }
+                mut_col->insert(unflattened);
             }
         }
     }
