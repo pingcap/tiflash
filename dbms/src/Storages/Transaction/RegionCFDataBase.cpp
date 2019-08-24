@@ -48,7 +48,10 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(kv_pair.second).toHex(), ErrorCodes::LOGICAL_ERROR);
 
-    extra.add(getTiKVValuePtr(it->second));
+    if constexpr (std::is_same_v<Trait, RegionWriteCFDataTrait>)
+        extra.add(Trait::getRowRawValuePtr(it->second));
+    else
+        extra.add(getTiKVValuePtr(it->second));
     return table_id;
 }
 
