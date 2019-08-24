@@ -382,7 +382,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
             {
                 const ColumnID & col_id = iter->col_id;
                 const Field & field = iter->field;
-                const ColumnInfo & column_info = table_info.columns[column_id_to_info_index_map[col_id]];
+                const ColumnInfo & column_info = table_info.columns[column_id_to_info_index[col_id]];
 
                 auto it = column_map.find(col_id);
                 if (it == column_map.end())
