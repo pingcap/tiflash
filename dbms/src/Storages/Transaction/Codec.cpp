@@ -410,7 +410,7 @@ inline void writeWord(String & buf, Int32 word, int size)
 }
 
 template <typename T>
-void EncodeDecimal(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss)
+void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss)
 {
     static_assert(IsDecimal<T>);
 
@@ -476,19 +476,31 @@ void EncodeDecimal(const T & dec, PrecType prec, ScaleType frac, std::stringstre
     ss.write(buf.c_str(), buf.size());
 }
 
-template <typename T>
-inline T getFieldValue(const Field & field)
+void EncodeDecimal(const Field & field, std::stringstream & ss)
 {
-    switch (field.getType())
+    if (field.getType() == Field::Types::Decimal32)
     {
-        case Field::Types::UInt64:
-            return static_cast<T>(field.get<UInt64>());
-        case Field::Types::Int64:
-            return static_cast<T>(field.get<Int64>());
-        case Field::Types::Float64:
-            return static_cast<T>(field.get<Float64>());
-        default:
-            throw Exception("Unsupport (getFieldValue): " + std::string(field.getTypeName()), ErrorCodes::LOGICAL_ERROR);
+        auto decimal_field = field.get<DecimalField<Decimal32>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
+    else if (field.getType() == Field::Types::Decimal64)
+    {
+        auto decimal_field = field.get<DecimalField<Decimal64>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
+    else if (field.getType() == Field::Types::Decimal128)
+    {
+        auto decimal_field = field.get<DecimalField<Decimal128>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
+    else if (field.getType() == Field::Types::Decimal256)
+    {
+        auto decimal_field = field.get<DecimalField<Decimal256>>();
+        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
+    else
+    {
+        throw Exception("Not a decimal when decoding decimal", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -503,46 +515,27 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:
-            if (field.getType() == Field::Types::Decimal32)
-            {
-                auto decimal_field = field.get<DecimalField<Decimal32>>();
-                return EncodeDecimal(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
-            }
-            else if (field.getType() == Field::Types::Decimal64)
-            {
-                auto decimal_field = field.get<DecimalField<Decimal64>>();
-                return EncodeDecimal(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
-            }
-            else if (field.getType() == Field::Types::Decimal128)
-            {
-                auto decimal_field = field.get<DecimalField<Decimal128>>();
-                return EncodeDecimal(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
-            }
-            else
-            {
-                auto decimal_field = field.get<DecimalField<Decimal256>>();
-                return EncodeDecimal(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
-            }
+            return EncodeDecimal(field, ss);
         case TiDB::CodecFlagCompactBytes:
-            return EncodeCompactBytes(field.get<String>(), ss);
+            return EncodeCompactBytes(field.safeGet<String>(), ss);
         case TiDB::CodecFlagFloat:
-            return EncodeFloat64(getFieldValue<Float64>(field), ss);
+            return EncodeFloat64(field.safeGet<Float64>(), ss);
         case TiDB::CodecFlagUInt:
-            return EncodeUInt<UInt64>(getFieldValue<UInt64>(field), ss);
+            return EncodeUInt<UInt64>(field.safeGet<UInt64>(), ss);
         case TiDB::CodecFlagInt:
-            return EncodeInt64(getFieldValue<Int64>(field), ss);
+            return EncodeInt64(field.safeGet<Int64>(), ss);
         case TiDB::CodecFlagVarInt:
-            return EncodeVarInt(getFieldValue<Int64>(field), ss);
+            return EncodeVarInt(field.safeGet<Int64>(), ss);
         case TiDB::CodecFlagVarUInt:
-            return EncodeVarUInt(getFieldValue<UInt64>(field), ss);
+            return EncodeVarUInt(field.safeGet<UInt64>(), ss);
         default:
             throw Exception("Not implemented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-template void EncodeDecimal<Decimal32>(const Decimal32 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimal<Decimal64>(const Decimal64 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimal<Decimal128>(const Decimal128 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimal<Decimal256>(const Decimal256 &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal32>(const Decimal32 &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal64>(const Decimal64 &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal128>(const Decimal128 &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal256>(const Decimal256 &, PrecType, ScaleType, std::stringstream & ss);
 
 } // namespace DB

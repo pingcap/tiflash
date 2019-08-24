@@ -49,8 +49,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(
-        context, query,
+    auto [table_id, schema, dag_request] = compileQuery(context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
             auto mmt = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -92,8 +91,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(
-        context, query,
+    auto [table_id, schema, dag_request] = compileQuery(context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
@@ -210,9 +208,12 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                 expr->set_tp(tipb::Float64);
                 encodeDAGFloat64(lit->value.get<Float64>(), ss);
                 break;
-            case Field::Types::Which::Decimal:
+            case Field::Types::Which::Decimal32:
+            case Field::Types::Which::Decimal64:
+            case Field::Types::Which::Decimal128:
+            case Field::Types::Which::Decimal256:
                 expr->set_tp(tipb::MysqlDecimal);
-                encodeDAGDecimal(lit->value.get<Decimal>(), ss);
+                encodeDAGDecimal(lit->value, ss);
                 break;
             case Field::Types::Which::String:
                 expr->set_tp(tipb::String);
