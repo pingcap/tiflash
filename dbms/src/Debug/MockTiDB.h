@@ -33,6 +33,8 @@ public:
 
         TableID id() { return table_info.id; }
 
+        ColumnID allocColumnID() { return ++col_id; }
+
         bool isPartitionTable() { return table_info.is_partition_table; }
 
         std::vector<TableID> getPartitionIDs()
@@ -48,6 +50,7 @@ public:
     private:
         const String database_name;
         const String table_name;
+        ColumnID col_id;
     };
     using TablePtr = std::shared_ptr<Table>;
 

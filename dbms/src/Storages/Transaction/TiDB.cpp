@@ -6,6 +6,11 @@
 
 namespace TiDB
 {
+using DB::Decimal128;
+using DB::Decimal256;
+using DB::Decimal32;
+using DB::Decimal64;
+using DB::DecimalField;
 using DB::Field;
 using DB::WriteBufferFromOwnString;
 
@@ -62,14 +67,37 @@ Field ColumnInfo::defaultValueToField() const
     return Field();
 }
 
-DB::Decimal ColumnInfo::getDecimalDefaultValue(const String & str) const
+DB::Field ColumnInfo::getDecimalDefaultValue(const String & str) const
 {
     DB::ReadBufferFromString buffer(str);
-    DB::Decimal result;
-    result.precision = flen;
-    result.scale = decimal;
-    DB::readDecimalText(result, buffer);
-    return result;
+    auto precision = flen;
+    auto scale = decimal;
+
+    auto type = DB::createDecimal(precision, scale);
+    if (DB::checkDecimal<Decimal32>(*type))
+    {
+        DB::Decimal32 result;
+        DB::readDecimalText(result, buffer, precision, scale);
+        return DecimalField<Decimal32>(result, scale);
+    }
+    else if (DB::checkDecimal<Decimal64>(*type))
+    {
+        DB::Decimal64 result;
+        DB::readDecimalText(result, buffer, precision, scale);
+        return DecimalField<Decimal64>(result, scale);
+    }
+    else if (DB::checkDecimal<Decimal128>(*type))
+    {
+        DB::Decimal128 result;
+        DB::readDecimalText(result, buffer, precision, scale);
+        return DecimalField<Decimal128>(result, scale);
+    }
+    else
+    {
+        DB::Decimal256 result;
+        DB::readDecimalText(result, buffer, precision, scale);
+        return DecimalField<Decimal256>(result, scale);
+    }
 }
 
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435

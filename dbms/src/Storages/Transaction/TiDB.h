@@ -36,7 +36,7 @@ using DB::Timestamp;
 #error "Please undefine macro M first."
 #endif
 #define COLUMN_TYPES(M)                              \
-    M(Decimal, 0, Decimal, Decimal, false)           \
+    M(Decimal, 0, Decimal, Decimal32, false)         \
     M(Tiny, 1, VarInt, Int8, true)                   \
     M(Short, 2, VarInt, Int16, true)                 \
     M(Long, 3, VarInt, Int32, true)                  \
@@ -54,7 +54,7 @@ using DB::Timestamp;
     M(Varchar, 15, CompactBytes, String, false)      \
     M(Bit, 16, CompactBytes, UInt64, false)          \
     M(JSON, 0xf5, Json, String, false)               \
-    M(NewDecimal, 0xf6, Decimal, Decimal, false)     \
+    M(NewDecimal, 0xf6, Decimal, Decimal32, false)   \
     M(Enum, 0xf7, VarUInt, Enum16, false)            \
     M(Set, 0xf8, CompactBytes, String, false)        \
     M(TinyBlob, 0xf9, CompactBytes, String, false)   \
@@ -183,7 +183,7 @@ struct ColumnInfo
     CodecFlag getCodecFlag() const;
 
 private:
-    DB::Decimal getDecimalDefaultValue(const String & str) const;
+    DB::Field getDecimalDefaultValue(const String & str) const;
     Int64 getEnumIndex(const String &) const;
 };
 

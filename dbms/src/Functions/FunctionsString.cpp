@@ -1,5 +1,6 @@
 #include <Functions/FunctionsString.h>
 
+#include <thread>
 #include <ext/range.h>
 #include <Columns/ColumnArray.h>
 #include <DataTypes/DataTypeArray.h>
@@ -1786,7 +1787,6 @@ private:
     }
 };
 
-
 template <typename Name, bool is_left>
 class PadUTF8Impl : public IFunction
 {
@@ -1908,7 +1908,7 @@ private:
                        ColumnString::Offsets & res_offsets)
     {
         size_t size = offsets.size();
-        res_data.reserve(length * 3 * size);
+        res_data.reserve(length * 3 * size + size);
         res_offsets.resize(size);
 
         ColumnString::Offset prev_offset = 0;

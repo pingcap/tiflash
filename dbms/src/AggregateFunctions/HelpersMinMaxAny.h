@@ -28,6 +28,11 @@ static IAggregateFunction * createAggregateFunctionSingleValue(const String & na
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
 
+#define DISPATCH(TYPE, DATATYPE) \
+    if (typeid_cast<const DATATYPE *>(argument_type.get())) return new AggregateFunctionTemplate<Data<SingleValueDataFixed<TYPE>>>(argument_type);
+    FOR_DECIMAL_TYPES(DISPATCH)
+#undef DISPATCH
+
     if (typeid_cast<const DataTypeDate *>(argument_type.get()))
         return new AggregateFunctionTemplate<Data<SingleValueDataFixed<DataTypeDate::FieldType>>>(argument_type);
     if (typeid_cast<const DataTypeDateTime *>(argument_type.get()))

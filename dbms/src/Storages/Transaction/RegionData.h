@@ -51,7 +51,8 @@ public:
 
     bool isEqual(const RegionData & r2) const;
 
-    RegionWriteCFData & writeCFMute();
+    RegionWriteCFData & writeCF();
+    RegionDefaultCFData & defaultCF();
 
     const RegionWriteCFData & writeCF() const;
     const RegionDefaultCFData & defaultCF() const;
