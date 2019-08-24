@@ -22,9 +22,9 @@ struct DatumOp
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
-/// Specialized for Date/Datetime, actual does unflatten/flatten.
+/// Specialized for Date/Datetime/Timestamp, actual does unflatten/flatten.
 template <TP tp>
-struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime>::type>
+struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime || tp == TypeTimestamp>::type>
 {
     static void unflatten(const Field & orig, std::optional<Field> & copy)
     {
