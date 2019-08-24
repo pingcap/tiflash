@@ -6,6 +6,9 @@ namespace DB
 {
 
 struct RegionDefaultCFDataTrait;
+struct RegionWriteCFDataTrait;
+
+using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;
 
 template <typename Trait>
 struct ExtraCFData
@@ -16,7 +19,6 @@ struct ExtraCFData
 template <>
 struct ExtraCFData<RegionDefaultCFDataTrait>
 {
-    using Queue = std::deque<std::shared_ptr<const TiKVValue>>;
     mutable std::mutex default_cf_decode_mutex;
 
     ExtraCFData() = default;
@@ -27,13 +29,13 @@ struct ExtraCFData<RegionDefaultCFDataTrait>
         queue.push_back(e);
     }
 
-    std::optional<Queue> popAll()
+    std::optional<ExtraCFDataQueue> popAll()
     {
         std::lock_guard<std::mutex> lock(default_cf_decode_mutex);
         if (queue.empty())
             return {};
 
-        Queue res;
+        ExtraCFDataQueue res;
         queue.swap(res);
         return res;
     }
@@ -61,7 +63,19 @@ private:
     }
 
 private:
-    Queue queue;
+    ExtraCFDataQueue queue;
+};
+
+template <>
+struct ExtraCFData<RegionWriteCFDataTrait> : ExtraCFData<RegionDefaultCFDataTrait>
+{
+    using Base = ExtraCFData<RegionDefaultCFDataTrait>;
+    void add(const std::shared_ptr<const TiKVValue> & e)
+    {
+        if (!e)
+            return;
+        Base::add(e);
+    }
 };
 
 } // namespace DB
