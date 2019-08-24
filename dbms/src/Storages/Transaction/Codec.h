@@ -62,8 +62,7 @@ void EncodeVarUInt(UInt64 num, std::stringstream & ss);
 
 void EncodeVarInt(Int64 num, std::stringstream & ss);
 
-template <typename T>
-void EncodeDecimal(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss);
+void EncodeDecimal(const Field & field, std::stringstream & ss);
 
 void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss);
 

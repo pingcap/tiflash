@@ -2,6 +2,7 @@
 
 #include <DataTypes/DataTypeNullable.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -12,6 +13,9 @@ namespace ErrorCodes
 extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
+
+using TiDB::DatumBumpy;
+using TiDB::TP;
 
 DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_, Int64 records_per_chunk_, tipb::EncodeType encodeType_,
     std::vector<tipb::FieldType> && result_field_types_, Block header_)
@@ -71,8 +75,9 @@ void DAGBlockOutputStream::write(const Block & block)
         }
         for (size_t j = 0; j < block.columns(); j++)
         {
-            auto field = (*block.getByPosition(j).column.get())[i];
-            EncodeDatum(field, getCodecFlagByFieldType(result_field_types[j]), current_ss);
+            const auto & field = (*block.getByPosition(j).column.get())[i];
+            DatumBumpy datum(field, static_cast<TP>(result_field_types[j].tp()));
+            EncodeDatum(datum.field(), getCodecFlagByFieldType(result_field_types[j]), current_ss);
         }
         // Encode current row
         records_per_chunk++;

@@ -71,7 +71,19 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         case tipb::ExprType::Bytes:
             return decodeDAGBytes(expr.val());
         case tipb::ExprType::MysqlDecimal:
-            return decodeDAGDecimal(expr.val()).toString();
+        {
+            auto field = decodeDAGDecimal(expr.val());
+            if (field.getType() == Field::Types::Decimal32)
+                return field.get<DecimalField<Decimal32>>().toString();
+            else if (field.getType() == Field::Types::Decimal64)
+                return field.get<DecimalField<Decimal32>>().toString();
+            else if (field.getType() == Field::Types::Decimal128)
+                return field.get<DecimalField<Decimal32>>().toString();
+            else if (field.getType() == Field::Types::Decimal256)
+                return field.get<DecimalField<Decimal32>>().toString();
+            else
+                throw Exception("Not decimal literal" + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+        }
         case tipb::ExprType::ColumnRef:
             column_id = decodeDAGInt64(expr.val());
             if (column_id < 0 || column_id >= (ColumnID)input_col.size())
