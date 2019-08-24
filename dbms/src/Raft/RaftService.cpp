@@ -59,7 +59,7 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
             region = it->second;
             regions_to_decode.erase(it);
         }
-        region->tryDecodeDefaultCF();
+        region->tryPreDecodeTiKVValue();
         return true;
     });
 
