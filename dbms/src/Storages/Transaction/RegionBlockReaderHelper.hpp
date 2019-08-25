@@ -35,10 +35,10 @@ struct ColumnMap
         getMutableColumnPtr(col_id)->reserve(cap);
     }
 
-    MutableColumnPtr & getMutableColumnPtr(const ColumnID col_id) { return getMutableColumnPtr(*column_map[col_id]); }
+    MutableColumnPtr & getMutableColumnPtr(const ColumnID col_id) { return getMutableColumnPtr((*this)[col_id]); }
     static MutableColumnPtr & getMutableColumnPtr(ColTypeInfo & info) { return std::get<0>(info); }
 
-    NameAndTypePair & getNameAndTypePair(const ColumnID col_id) { return getNameAndTypePair(*column_map[col_id]); }
+    NameAndTypePair & getNameAndTypePair(const ColumnID col_id) { return getNameAndTypePair((*this)[col_id]); }
     static NameAndTypePair & getNameAndTypePair(ColTypeInfo & info) { return std::get<1>(info); }
 
     static size_t getIndex(const ColTypeInfo & info) { return std::get<2>(info); }
@@ -74,7 +74,7 @@ struct DecodedRecordData
         decoded_col_iter.clear();
     }
 
-    const DecodedRow::value_type & operator[](const size_t index) { return *decoded_col_iter[index]; }
+    const DecodedRow::value_type & operator[](const size_t index) const { return *decoded_col_iter[index]; }
 
     template <class... _Args>
     void emplace_back(_Args &&... __args)

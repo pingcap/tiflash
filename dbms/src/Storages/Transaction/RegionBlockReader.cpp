@@ -296,8 +296,6 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     const size_t target_col_size = column_names_to_read.size() - 3;
 
-    Block block;
-
     // optimize for only need handle, tso, delmark.
     if (column_names_to_read.size() > 3)
     {
@@ -329,7 +327,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
             {
                 bool schema_matches = DecodeRow(*value_ptr, column_id_to_info_index, schema_all_column_ids, decoded_data, force_decode);
                 if (!schema_matches && !force_decode)
-                    return std::make_tuple(block, false);
+                    return std::make_tuple(Block(), false);
             }
 
             /// Modify `row` by adding missing column values or removing useless column values.
@@ -386,7 +384,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                             ErrorCodes::LOGICAL_ERROR);
                     }
 
-                    return std::make_tuple(block, false);
+                    return std::make_tuple(Block(), false);
                 }
                 auto & mut_col = ColumnMap::getMutableColumnPtr(col_info);
                 mut_col->insert(unflattened);
@@ -396,7 +394,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         decoded_data.checkValid();
     }
 
-
+    Block block;
     for (const auto & name : column_names_to_read)
     {
         if (name == MutableSupport::delmark_column_name)
@@ -409,7 +407,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         }
         else
         {
-            Int64 col_id = table_info.getColumnID(name);
+            ColumnID col_id = table_info.getColumnID(name);
             block.insert({std::move(column_map.getMutableColumnPtr(col_id)), column_map.getNameAndTypePair(col_id).type, name});
         }
     }
