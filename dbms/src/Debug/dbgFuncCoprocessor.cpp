@@ -14,6 +14,7 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -29,9 +30,12 @@ extern const int BAD_ARGUMENTS;
 extern const int LOGICA_ERROR;
 } // namespace ErrorCodes
 
+using TiDB::DatumFlat;
+using TiDB::TableInfo;
+
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
-using SchemaFetcher = std::function<TiDB::TableInfo(const String &, const String &)>;
+using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts);
 tipb::SelectResponse executeDAGRequest(
@@ -138,7 +142,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
     {
         auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) { return field.first == id->getColumnName(); });
         if (ft == input.end())
-            throw DB::Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+            throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         expr->set_tp(tipb::ColumnRef);
         *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
 
@@ -183,7 +187,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         }
         else
         {
-            throw DB::Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
         }
         expr->set_tp(tipb::ExprType::ScalarFunc);
     }
@@ -221,13 +225,13 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
                 encodeDAGBytes(lit->value.get<String>(), ss);
                 break;
             default:
-                throw DB::Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
+                throw Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
         }
         expr->set_val(ss.str());
     }
     else
     {
-        throw DB::Exception("Unsupported expression " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Unsupported expression " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -262,7 +266,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     ASTSelectQuery & ast_query = typeid_cast<ASTSelectQuery &>(*ast);
 
     /// Get table metadata.
-    TiDB::TableInfo table_info;
+    TableInfo table_info;
     {
         String database_name, table_name;
         auto query_database = ast_query.database();
@@ -333,7 +337,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         {
             ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
             if (!elem)
-                throw DB::Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
             tipb::ByItem * by = topn->add_order_by();
             by->set_desc(elem->direction < 0);
             tipb::Expr * expr = by->mutable_expr();
@@ -389,7 +393,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         {
             auto iter = std::find_if(last_output.begin(), last_output.end(), [&](const auto & field) { return field.first == pair.first; });
             if (iter == last_output.end())
-                throw DB::Exception("Column not found when pruning: " + pair.first, ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Column not found when pruning: " + pair.first, ErrorCodes::LOGICAL_ERROR);
             std::stringstream ss;
             encodeDAGInt64(iter - last_output.begin(), ss);
             pair.second->set_val(ss.str());
@@ -414,7 +418,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         if (has_gby || has_agg_func)
         {
             if (last_executor->has_limit() || last_executor->has_topn())
-                throw DB::Exception("Limit/TopN and Agg cannot co-exist.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Limit/TopN and Agg cannot co-exist.", ErrorCodes::LOGICAL_ERROR);
 
             tipb::Executor * agg_exec = dag_request.add_executors();
             agg_exec->set_tp(tipb::ExecType::TypeAggregation);
@@ -424,7 +428,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             {
                 const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
                 if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
-                    throw DB::Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
 
                 tipb::Expr * agg_func = agg->add_agg_func();
 
@@ -444,7 +448,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                 // TODO: Other agg func.
                 else
                 {
-                    throw DB::Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
                 }
 
                 schema.emplace_back(std::make_pair(func->getColumnName(), fieldTypeToColumnInfo(agg_func->field_type())));
@@ -489,7 +493,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             }
             else
             {
-                throw DB::Exception("Unsupported expression type in select", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Unsupported expression type in select", ErrorCodes::LOGICAL_ERROR);
             }
         }
 
@@ -501,7 +505,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             auto iter
                 = std::find_if(last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
             if (iter == last_output.end())
-                throw DB::Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
             dag_request.add_output_offsets(iter - last_output.begin());
             schema.push_back(*iter);
         }
@@ -526,18 +530,18 @@ tipb::SelectResponse executeDAGRequest(
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
 {
     if (dag_response.has_error())
-        throw DB::Exception(dag_response.error().msg(), dag_response.error().code());
+        throw Exception(dag_response.error().msg(), dag_response.error().code());
 
     BlocksList blocks;
     for (const auto & chunk : dag_response.chunks())
     {
-        std::vector<std::vector<DB::Field>> rows;
-        std::vector<DB::Field> curr_row;
+        std::vector<std::vector<Field>> rows;
+        std::vector<Field> curr_row;
         const std::string & data = chunk.rows_data();
         size_t cursor = 0;
         while (cursor < data.size())
         {
-            curr_row.push_back(DB::DecodeDatum(cursor, data));
+            curr_row.push_back(DecodeDatum(cursor, data));
             if (curr_row.size() == schema.size())
             {
                 rows.emplace_back(std::move(curr_row));
@@ -558,7 +562,8 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
         {
             for (size_t i = 0; i < row.size(); i++)
             {
-                columns[i].column->assumeMutable()->insert(row[i]);
+                const Field & field = row[i];
+                columns[i].column->assumeMutable()->insert(DatumFlat(field, schema[i].second.tp).field());
             }
         }
 

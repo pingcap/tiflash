@@ -204,9 +204,22 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
         case TiDB::TypeDouble:
             return convertNumber<Float64>(field);
         case TiDB::TypeDate:
+        {
+            auto text = field.get<String>();
+            ReadBufferFromMemory buf(text.data(), text.size());
+            DayNum_t date;
+            readDateText(date, buf);
+            return static_cast<Int64>(date);
+        }
         case TiDB::TypeDatetime:
         case TiDB::TypeTimestamp:
-            return DB::parseMyDatetime(field.get<String>());
+        {
+            auto text = field.get<String>();
+            ReadBufferFromMemory buf(text.data(), text.size());
+            time_t dt;
+            readDateTimeText(dt, buf);
+            return static_cast<Int64>(dt);
+        }
         case TiDB::TypeVarchar:
         case TiDB::TypeTinyBlob:
         case TiDB::TypeMediumBlob:

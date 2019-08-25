@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Interpreters/Context.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 
 #include <unordered_map>
@@ -83,6 +84,16 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
                 return field.get<DecimalField<Decimal32>>().toString();
             else
                 throw Exception("Not decimal literal" + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+        }
+        case tipb::ExprType::MysqlTime:
+        {
+            if (!expr.has_field_type()
+                || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime
+                       && expr.field_type().tp() != TiDB::TypeTimestamp))
+                throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+            auto t = decodeDAGUInt64(expr.val());
+            // TODO: Use timezone in DAG request.
+            return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
         }
         case tipb::ExprType::ColumnRef:
             column_id = decodeDAGInt64(expr.val());
@@ -222,12 +233,21 @@ Field decodeLiteral(const tipb::Expr & expr)
             return decodeDAGBytes(expr.val());
         case tipb::ExprType::MysqlDecimal:
             return decodeDAGDecimal(expr.val());
+        case tipb::ExprType::MysqlTime:
+        {
+            if (!expr.has_field_type()
+                || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime
+                       && expr.field_type().tp() != TiDB::TypeTimestamp))
+                throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
+            auto t = decodeDAGUInt64(expr.val());
+            // TODO: Use timezone in DAG request.
+            return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
+        }
         case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDuration:
         case tipb::ExprType::MysqlEnum:
         case tipb::ExprType::MysqlHex:
         case tipb::ExprType::MysqlSet:
-        case tipb::ExprType::MysqlTime:
         case tipb::ExprType::MysqlJson:
         case tipb::ExprType::ValueList:
             throw Exception(tipb::ExprType_Name(expr.tp()) + " is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
