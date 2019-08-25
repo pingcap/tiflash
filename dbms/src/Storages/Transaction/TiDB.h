@@ -43,16 +43,16 @@ using DB::Timestamp;
     M(Float, 4, Float, Float32, false)               \
     M(Double, 5, Float, Float64, false)              \
     M(Null, 6, Nil, Nothing, false)                  \
-    M(Timestamp, 7, Int, DateTime, false)            \
+    M(Timestamp, 7, UInt, DateTime, false)           \
     M(LongLong, 8, Int, Int64, false)                \
     M(Int24, 9, VarInt, Int32, true)                 \
-    M(Date, 10, Int, Date, false)                    \
+    M(Date, 10, UInt, Date, false)                   \
     M(Time, 11, Duration, Int64, false)              \
-    M(Datetime, 12, Int, DateTime, false)            \
+    M(Datetime, 12, UInt, DateTime, false)           \
     M(Year, 13, Int, Int16, false)                   \
     M(NewDate, 14, Int, Date, false)                 \
     M(Varchar, 15, CompactBytes, String, false)      \
-    M(Bit, 16, CompactBytes, UInt64, false)          \
+    M(Bit, 16, VarInt, UInt64, false)                \
     M(JSON, 0xf5, Json, String, false)               \
     M(NewDecimal, 0xf6, Decimal, Decimal32, false)   \
     M(Enum, 0xf7, VarUInt, Enum16, false)            \
