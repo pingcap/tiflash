@@ -179,13 +179,10 @@ struct ColumnInfo
     COLUMN_FLAGS(M)
 #undef M
 
-    DB::Field convertField(const DB::Field &) const;
     DB::Field defaultValueToField() const;
-    Int64 getEnumIndex(const String &) const;
     CodecFlag getCodecFlag() const;
-
-private:
-    DB::Field getDecimalDefaultValue(const String & str) const;
+    DB::Field getDecimalValue(const String &) const;
+    Int64 getEnumIndex(const String &) const;
 };
 
 enum PartitionType

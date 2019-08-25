@@ -56,7 +56,7 @@ Field ColumnInfo::defaultValueToField() const
             return Field();
         case TypeDecimal:
         case TypeNewDecimal:
-            return getDecimalDefaultValue(value.convert<String>());
+            return getDecimalValue(value.convert<String>());
         case TypeTime:
         case TypeYear:
         case TypeSet:
@@ -68,9 +68,9 @@ Field ColumnInfo::defaultValueToField() const
     return Field();
 }
 
-DB::Field ColumnInfo::getDecimalDefaultValue(const String & str) const
+DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 {
-    DB::ReadBufferFromString buffer(str);
+    DB::ReadBufferFromString buffer(decimal_text);
     auto precision = flen;
     auto scale = decimal;
 
@@ -102,16 +102,16 @@ DB::Field ColumnInfo::getDecimalDefaultValue(const String & str) const
 }
 
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
-Int64 ColumnInfo::getEnumIndex(const String & default_str) const
+Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
     for (const auto & elem : elems)
     {
-        if (elem.first == default_str)
+        if (elem.first == enum_id_or_text)
         {
             return elem.second;
         }
     }
-    int num = std::stoi(default_str);
+    int num = std::stoi(enum_id_or_text);
     return num;
 }
 
