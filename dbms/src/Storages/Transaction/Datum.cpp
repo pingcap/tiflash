@@ -44,7 +44,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
         if constexpr (tp == TypeDate)
         {
             auto date = date_lut.makeDayNum(year, month, day);
-            copy = static_cast<Int64>(date);
+            copy = static_cast<UInt64>(date);
         }
         else
         {
@@ -86,7 +86,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
         }
         else
         {
-            time_t date_time(static_cast<UInt64>(orig.get<UInt64>()));
+            time_t date_time(orig.get<Int64>());
             values = date_lut.getValues(date_time);
             hour = date_lut.toHour(date_time);
             minute = date_lut.toMinute(date_time);
@@ -100,7 +100,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
-/// Specialized for integer types less than 64b, checks overflow.
+/// Specialized for integer types less than 64 bit, checks overflow.
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
 {

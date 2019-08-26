@@ -149,21 +149,24 @@ T convertNumber(const Field & field)
     }
 }
 
-Field convertDecimal(UInt32 scale, const Field & field)
+Field convertDecimal(const ColumnInfo & column_info, const Field & field)
 {
     switch (field.getType())
     {
         case Field::Types::Int64:
-            return DecimalField(ToDecimal<Int64, Decimal64>(field.get<Int64>(), scale), scale);
+            return column_info.getDecimalValue(std::to_string(field.get<Int64>()));
         case Field::Types::UInt64:
-            return DecimalField(ToDecimal<Int64, Decimal64>(field.get<UInt64>(), scale), scale);
+            return column_info.getDecimalValue(std::to_string(field.get<UInt64>()));
         case Field::Types::Float64:
-            return DecimalField(ToDecimal<Float64, Decimal64>(field.get<Float64>(), scale), scale);
+            return column_info.getDecimalValue(std::to_string(field.get<Float64>()));
         case Field::Types::Decimal32:
+            return column_info.getDecimalValue(field.get<Decimal32>().toString(column_info.decimal));
         case Field::Types::Decimal64:
+            return column_info.getDecimalValue(field.get<Decimal64>().toString(column_info.decimal));
         case Field::Types::Decimal128:
+            return column_info.getDecimalValue(field.get<Decimal128>().toString(column_info.decimal));
         case Field::Types::Decimal256:
-            return field;
+            return column_info.getDecimalValue(field.get<Decimal256>().toString(column_info.decimal));
         default:
             throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to number", ErrorCodes::LOGICAL_ERROR);
     }
@@ -204,9 +207,22 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
         case TiDB::TypeDouble:
             return convertNumber<Float64>(field);
         case TiDB::TypeDate:
+        {
+            auto text = field.get<String>();
+            ReadBufferFromMemory buf(text.data(), text.size());
+            DayNum_t date;
+            readDateText(date, buf);
+            return static_cast<UInt64>(date);
+        }
         case TiDB::TypeDatetime:
         case TiDB::TypeTimestamp:
-            return DB::parseMyDatetime(field.get<String>());
+        {
+            auto text = field.get<String>();
+            ReadBufferFromMemory buf(text.data(), text.size());
+            time_t dt;
+            readDateTimeText(dt, buf);
+            return static_cast<Int64>(dt);
+        }
         case TiDB::TypeVarchar:
         case TiDB::TypeTinyBlob:
         case TiDB::TypeMediumBlob:
@@ -221,7 +237,7 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
             return Field();
         case TiDB::TypeDecimal:
         case TiDB::TypeNewDecimal:
-            return convertDecimal(column_info.decimal, field);
+            return convertDecimal(column_info, field);
         case TiDB::TypeTime:
             throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Time", ErrorCodes::LOGICAL_ERROR);
         case TiDB::TypeYear:
