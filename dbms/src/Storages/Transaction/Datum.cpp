@@ -100,7 +100,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
-/// Specialized for integer types less than 64b, checks overflow.
+/// Specialized for integer types less than 64 bit, checks overflow.
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
 {
