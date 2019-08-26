@@ -228,10 +228,13 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     ColumnID handle_col_id = InvalidColumnID;
 
+    constexpr size_t MustHaveColCnt = 3; // pk, del, version
     constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
 
-    ColumnMap column_map(table_info.columns.size() + 1, EmptyColumnID);
+    // column_map contains columns in column_names_to_read exclude del and version.
+    ColumnMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
 
+    // column_id_to_info_index contains columns in column_names_to_read exclude pk, del and version
     ColumnIdToInfoIndexMap column_id_to_info_index;
     column_id_to_info_index.set_empty_key(EmptyColumnID);
 
@@ -261,7 +264,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
             column_id_to_info_index.insert(std::make_pair(col_id, i));
     }
 
-    if (column_names_to_read.size() - 3 != column_id_to_info_index.size())
+    if (column_names_to_read.size() - MustHaveColCnt != column_id_to_info_index.size())
         throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
 
     if (!table_info.pk_is_handle)
@@ -294,16 +297,16 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts);
     }
 
-    const size_t target_col_size = column_names_to_read.size() - 3;
+    const size_t target_col_size = column_names_to_read.size() - MustHaveColCnt;
 
     // optimize for only need handle, tso, delmark.
-    if (column_names_to_read.size() > 3)
+    if (column_names_to_read.size() > MustHaveColCnt)
     {
         google::dense_hash_set<ColumnID> decoded_col_ids_set;
         decoded_col_ids_set.set_empty_key(EmptyColumnID);
+        DecodedRecordData decoded_data(column_id_to_info_index.size());
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
-        DecodedRecordData decoded_data(table_info.columns.size());
 
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
