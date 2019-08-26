@@ -40,7 +40,7 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
     {
         return all_path_[0];
     }
-    // find the normal path with least size of parts for this table
+    // find the normal path with least size of parts of this table
     std::unordered_map<String, UInt64> path_size_map;
     for (auto it = all_path_.begin(); it != all_path_.begin() + fast_path_start_index; it++)
     {

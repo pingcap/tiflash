@@ -47,7 +47,7 @@ public:
 
     bool hasFastPath() const
     {
-        return all_path_.size() == fast_path_start_index;
+        return all_path_.size() != fast_path_start_index;
     }
 
     struct Settings
