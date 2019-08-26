@@ -361,7 +361,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
             if (rows_end_in_chunk > rows_start_in_chunk)
             {
                 readChunkData(
-                    columns, cur_chunk, read_column_defines, data_storage, rows_start_in_chunk, rows_end_in_chunk - rows_start_in_chunk);
+                    columns, read_column_defines, cur_chunk, data_storage, rows_start_in_chunk, rows_end_in_chunk - rows_start_in_chunk);
 
                 already_read_rows += rows_end_in_chunk - rows_start_in_chunk;
             }
@@ -421,7 +421,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, PageStorag
         if (chunk_index < chunk_cache_start)
         {
             // Read from storage
-            readChunkData(columns, chunk, read_column_defines, data_storage, 0, chunk.getRows());
+            readChunkData(columns, read_column_defines, chunk, data_storage, 0, chunk.getRows());
         }
         else
         {

@@ -8,6 +8,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Parsers/ASTLiteral.h>
 
 namespace ProfileEvents
 {
@@ -511,6 +512,28 @@ void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands &         comm
     header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
 }
 
+namespace
+{
+inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine &define)
+{
+    if (command.default_expression)
+    {
+        // a cast function
+        // change column_define.default_value
+        auto default_expr = typeid_cast<const ASTLiteral *>(command.default_expression.get());
+        if (default_expr && default_expr->value.getType() == Field::Types::String)
+        {
+            const String default_val = safeGet<String>(default_expr->value);
+            define.default_value = default_val;
+        }
+        else
+        {
+            //throw Exception("default value must be a string", ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
+}
+}
+
 void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          command,
                                              const OptionTableInfoConstRef table_info,
                                              ColumnID &                    max_column_id_used)
@@ -525,8 +548,7 @@ void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          comma
             {
                 exist_column       = true;
                 column_define.type = command.data_type;
-                // TODO change column_define.default_value
-                // column_define.default_value =
+                setColumnDefineDefaultValue(command, column_define);
                 break;
             }
         }
@@ -540,18 +562,19 @@ void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          comma
         // we don't care about `after_column` in `table_columns`
 
         /// If TableInfo from TiDB is not empty, we get column id from TiDB
+        ColumnDefine define(0, command.column_name, command.data_type);
         if (table_info)
         {
             auto         tidb_col_iter = findColumnInfoInTableInfo(table_info->get(), command.column_name);
-            ColumnDefine define(tidb_col_iter->id, command.column_name, command.data_type);
-            table_columns.emplace_back(std::move(define));
+            define.id = tidb_col_iter->id;
         }
         else
         {
-            // in test cases, we allocate column_id here
-            ColumnDefine define(max_column_id_used++, command.column_name, command.data_type);
-            table_columns.emplace_back(std::move(define));
+            define.id = max_column_id_used++;
         }
+        assert(define.id != 0);
+        setColumnDefineDefaultValue(command, define);
+        table_columns.emplace_back(std::move(define));
     }
     else if (command.type == AlterCommand::DROP_COLUMN)
     {
