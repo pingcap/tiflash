@@ -229,7 +229,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         const auto & segment = action.segment;
         const auto   range   = segment->getRange();
         // TODO: Do flush by background threads.
-        if (segment->shouldFlush(dm_context, false))
+        if (segment->shouldFlush(dm_context))
         {
             auto new_segment = action.segment->flush(dm_context);
             {

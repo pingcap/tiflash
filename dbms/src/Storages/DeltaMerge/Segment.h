@@ -60,7 +60,6 @@ struct SegmentSnapshot
     DiskValueSpacePtr delta;
     size_t            delta_rows;
 
-    SegmentSnapshot() = default;
     SegmentSnapshot(const DiskValueSpacePtr & delta_, size_t delta_rows_) : delta{delta_}, delta_rows(delta_rows_) {}
 };
 
@@ -115,7 +114,7 @@ public:
     SegmentPair       split(DMContext & dm_context);
     static SegmentPtr merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
 
-    bool shouldFlush(DMContext & dm_context, bool force = false) const;
+    bool shouldFlush(DMContext & dm_context) const;
     /// Flush delta into stable. i.e. delta merge.
     SegmentPtr flush(DMContext & dm_context);
 
@@ -144,15 +143,15 @@ public:
 
     void check(DMContext & dm_context, const String & when);
 
-    String simpleInfo() { return "{" + DB::toString(segment_id) + ":" + range.toString() + "}"; }
+    String simpleInfo() const { return "{" + DB::toString(segment_id) + ":" + range.toString() + "}"; }
 
-    String info()
+    String info() const
     {
         return "{id:" + DB::toString(segment_id) + ", next: " + DB::toString(next_segment_id) + ", epoch: " + DB::toString(epoch)
             + ", range: " + range.toString() + "}";
     }
 
-    const HandleRange & getRange() { return range; }
+    const HandleRange & getRange() const { return range; }
 
     size_t delta_rows();
     size_t delta_deletes();

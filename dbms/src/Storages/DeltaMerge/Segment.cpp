@@ -328,9 +328,9 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
 }
 
 
-bool Segment::shouldFlush(DMContext & dm_context, bool force) const
+bool Segment::shouldFlush(DMContext & dm_context) const
 {
-    return force || delta->num_rows() >= dm_context.delta_limit_rows || delta->num_bytes() >= dm_context.delta_limit_bytes;
+    return delta->num_rows() >= dm_context.delta_limit_rows || delta->num_bytes() >= dm_context.delta_limit_bytes;
 }
 
 SegmentPtr Segment::flush(DMContext & dm_context)

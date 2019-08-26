@@ -16,8 +16,6 @@ struct SegmentReadTask
     SegmentSnapshot read_snapshot;
     HandleRanges    ranges;
 
-    SegmentReadTask() = default;
-
     explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshot & read_snapshot_)
         : segment(segment_), read_snapshot(read_snapshot_)
     {
