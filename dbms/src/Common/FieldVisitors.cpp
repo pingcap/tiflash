@@ -21,6 +21,14 @@ static inline String formatQuoted(T x)
 }
 
 template <typename T>
+static inline void writeQuoted(const DecimalField<T> & x, WriteBuffer & buf)
+{
+    writeChar('\'', buf);
+    writeText(x.getValue(), x.getScale(), buf);
+    writeChar('\'', buf);
+}
+
+template <typename T>
 static inline String formatQuotedWithPrefix(T x, const char * prefix)
 {
     WriteBufferFromOwnString wb;
@@ -108,10 +116,10 @@ String FieldVisitorToString::operator() (const UInt64 & x) const { return format
 String FieldVisitorToString::operator() (const Int64 & x) const { return formatQuoted(x); }
 String FieldVisitorToString::operator() (const Float64 & x) const { return formatFloat(x); }
 String FieldVisitorToString::operator() (const String & x) const { return formatQuoted(x); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal32> & x) const { return "Decimal32_" + x.toString(); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal64> & x) const { return "Decimal64_" + x.toString(); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal128> & x) const { return "Decimal128_" + x.toString(); }
-String FieldVisitorToString::operator() (const DecimalField<Decimal256> & x) const { return "Decimal256_" + x.toString(); }
+String FieldVisitorToString::operator() (const DecimalField<Decimal32> & x) const { return formatQuoted(x); }
+String FieldVisitorToString::operator() (const DecimalField<Decimal64> & x) const { return formatQuoted(x); }
+String FieldVisitorToString::operator() (const DecimalField<Decimal128> & x) const { return formatQuoted(x); }
+String FieldVisitorToString::operator() (const DecimalField<Decimal256> & x) const { return formatQuoted(x); }
 
 
 String FieldVisitorToString::operator() (const Array & x) const
