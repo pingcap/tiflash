@@ -3,7 +3,9 @@
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ExpressionElementParsers.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -520,15 +522,36 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
     {
         // a cast function
         // change column_define.default_value
-        auto default_expr = typeid_cast<const ASTLiteral *>(command.default_expression.get());
-        if (default_expr && default_expr->value.getType() == Field::Types::String)
+
+        if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
+            default_literal && default_literal->value.getType() == Field::Types::String)
         {
-            const String default_val = safeGet<String>(default_expr->value);
-            define.default_value     = default_val;
+            const auto default_val = safeGet<String>(default_literal->value);
+            define.default_value   = default_val;
+        }
+        else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
+                 default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
+        {
+            // eg. CAST('1.234' AS Float32)
+            if (default_cast_expr->arguments->children.size() != 2)
+            {
+                throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
+            }
+
+            auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
+            if (default_literal_in_cast && default_literal_in_cast->value.getType() == Field::Types::String)
+            {
+                const auto default_value = safeGet<String>(default_literal_in_cast->value);
+                define.default_value     = default_value;
+            }
+            else
+            {
+                throw Exception("First argument in CAST expression must be a string", ErrorCodes::NOT_IMPLEMENTED);
+            }
         }
         else
         {
-            //throw Exception("default value must be a string", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Default value must be a string or CAST('...' AS WhatType)", ErrorCodes::BAD_ARGUMENTS);
         }
     }
 }

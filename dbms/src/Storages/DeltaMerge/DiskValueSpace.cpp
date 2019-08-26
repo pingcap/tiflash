@@ -177,13 +177,8 @@ DiskValueSpace::AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext &
                     if (!is_delete)
                         new_col->insertRangeFrom(*append_block.getByName(col_define.name).column, 0, append_rows);
 
-                    ColumnWithTypeAndName col;
-                    col.column    = std::move(new_col);
-                    col.name      = col_define.name;
-                    col.type      = col_define.type;
-                    col.column_id = col_define.id;
-
-                    compacted_block.insert(col);
+                    ColumnWithTypeAndName col(std::move(new_col), col_define.type, col_define.name, col_define.id);
+                    compacted_block.insert(std::move(col));
                 }
             }
 
@@ -556,11 +551,7 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
         // Use the cache.
         for (const auto & col_define : context.dm_context.table_columns)
         {
-            ColumnWithTypeAndName col;
-            col.column    = cache.at(col_define.id)->cloneResized(cache_rows);
-            col.name      = col_define.name;
-            col.type      = col_define.type;
-            col.column_id = col_define.id;
+            ColumnWithTypeAndName col(cache.at(col_define.id)->cloneResized(cache_rows), col_define.type, col_define.name, col_define.id);
             compacted.insert(col);
 
             if (unlikely(col.column->size() != cache_rows))
