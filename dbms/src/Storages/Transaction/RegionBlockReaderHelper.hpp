@@ -9,12 +9,12 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-struct ColumnMap
+struct ColumnDataInfoMap
 {
     using ColTypeInfo = std::tuple<MutableColumnPtr, NameAndTypePair, size_t>;
     using ColTypeInfoData = std::vector<ColTypeInfo>;
 
-    ColumnMap(const size_t cap, const ColumnID empty_id)
+    ColumnDataInfoMap(const size_t cap, const ColumnID empty_id)
     {
         column_data.reserve(cap);
         column_map.set_empty_key(empty_id);
@@ -25,7 +25,7 @@ struct ColumnMap
     void checkValid() const
     {
         if (ori_cap != column_data.capacity())
-            throw Exception("ColumnMap capacity changes", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("ColumnDataInfoMap capacity changes", ErrorCodes::LOGICAL_ERROR);
     }
 
     void insert(const ColumnID col_id, MutableColumnPtr && ptr, NameAndTypePair && name_pair, size_t index, const size_t cap)
@@ -59,7 +59,7 @@ struct DecodedRecordData
         ori_cap = additional_decoded_row.capacity();
     }
 
-    /// just lick ColumnMap::checkValid
+    /// just like ColumnDataInfoMap::checkValid
     void checkValid() const
     {
         if (ori_cap != additional_decoded_row.capacity())

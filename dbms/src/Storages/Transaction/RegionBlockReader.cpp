@@ -232,7 +232,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
 
     // column_map contains columns in column_names_to_read exclude del and version.
-    ColumnMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
+    ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
 
     // column_id_to_info_index contains columns in column_names_to_read exclude pk, del and version
     ColumnIdToInfoIndexMap column_id_to_info_index;
@@ -370,7 +370,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 const Field & field = decoded_data[data_idx].field;
 
                 auto & col_info = column_map[col_id];
-                const ColumnInfo & column_info = table_info.columns[ColumnMap::getIndex(col_info)];
+                const ColumnInfo & column_info = table_info.columns[ColumnDataInfoMap::getIndex(col_info)];
 
                 DatumFlat datum(field, column_info.tp);
                 const Field & unflattened = datum.field();
@@ -381,7 +381,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                     // Otherwise return false to outer, outer should sync schema and try again.
                     if (force_decode)
                     {
-                        const auto & data_type = ColumnMap::getNameAndTypePair(col_info).type;
+                        const auto & data_type = ColumnDataInfoMap::getNameAndTypePair(col_info).type;
                         throw Exception("Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>()) + " of column "
                                 + column_info.name + " with type " + data_type->getName(),
                             ErrorCodes::LOGICAL_ERROR);
@@ -389,7 +389,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                     return std::make_tuple(Block(), false);
                 }
-                auto & mut_col = ColumnMap::getMutableColumnPtr(col_info);
+                auto & mut_col = ColumnDataInfoMap::getMutableColumnPtr(col_info);
                 mut_col->insert(unflattened);
             }
         }
