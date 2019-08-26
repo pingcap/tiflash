@@ -31,8 +31,8 @@ struct BlockStreamProfileInfo
     size_t bytes = 0;
     // execution time is the total time spent on current stream and all its children streams
     // note that it is different from total_stopwatch.elapsed(), which also includes the time
-    // spent on current stream and all its children streams, but if the iteration time is more
-    // than 1, total_stopwatch.elapsed() includes some of the time spent on its parent streams as well
+    // spent on current stream and all its children streams, but total_stopwatch.elapsed()
+    // includes the time spent on its parent streams as well
     UInt64 execution_time = 0;
 
     using BlockStreamProfileInfos = std::vector<const BlockStreamProfileInfo *>;
