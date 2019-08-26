@@ -221,7 +221,7 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
             ReadBufferFromMemory buf(text.data(), text.size());
             time_t dt;
             readDateTimeText(dt, buf);
-            return static_cast<UInt64>(dt);
+            return static_cast<Int64>(dt);
         }
         case TiDB::TypeVarchar:
         case TiDB::TypeTinyBlob:

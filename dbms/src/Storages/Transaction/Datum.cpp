@@ -67,7 +67,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
 
                 date_time = date_lut.makeDateTime(year, month, day, hour, minute, second);
             }
-            copy = static_cast<UInt64>(date_time);
+            copy = static_cast<Int64>(date_time);
         }
     }
 
@@ -86,7 +86,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
         }
         else
         {
-            time_t date_time(static_cast<UInt64>(orig.get<UInt64>()));
+            time_t date_time(orig.get<Int64>());
             values = date_lut.getValues(date_time);
             hour = date_lut.toHour(date_time);
             minute = date_lut.toMinute(date_time);
