@@ -376,7 +376,7 @@ void StorageMergeTree::alterInternal(
 
     auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, this] (IAST & ast)
+    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info] (IAST & ast)
     {
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
 
@@ -392,8 +392,11 @@ void StorageMergeTree::alterInternal(
             typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(1) = tuple;
         }
 
-        auto literal = std::make_shared<ASTLiteral>(Field(data.table_info->serialize(true)));
-        typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
+        if (table_info)
+        {
+            auto literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize(true)));
+            typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
+        }
     };
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);
