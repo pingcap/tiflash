@@ -30,7 +30,7 @@ struct BlockStreamProfileInfo
     size_t blocks = 0;
     size_t bytes = 0;
     // execution time is the total time spent on current stream and all its children streams
-    // note that it is different from total_stopwatch.elapsed(), which includes ont only the
+    // note that it is different from total_stopwatch.elapsed(), which includes not only the
     // time spent on current stream and all its children streams, but also the time of its
     // parent streams
     UInt64 execution_time = 0;
