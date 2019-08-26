@@ -29,6 +29,11 @@ struct BlockStreamProfileInfo
     size_t rows = 0;
     size_t blocks = 0;
     size_t bytes = 0;
+    // execution time is the total time spent on current stream and all its children streams
+    // note that it is different from total_stopwatch.elapsed(), which includes not only the
+    // time spent on current stream and all its children streams, but also the time of its
+    // parent streams
+    UInt64 execution_time = 0;
 
     using BlockStreamProfileInfos = std::vector<const BlockStreamProfileInfo *>;
 
@@ -44,6 +49,8 @@ struct BlockStreamProfileInfo
     bool hasAppliedLimit() const;
 
     void update(Block & block);
+
+    void updateExecutionTime(UInt64 time) { execution_time += time; }
 
     /// Binary serialization and deserialization of main fields.
     /// Writes only main fields i.e. fields that required by internal transmission protocol.
