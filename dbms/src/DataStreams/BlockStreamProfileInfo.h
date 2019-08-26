@@ -50,7 +50,7 @@ struct BlockStreamProfileInfo
 
     void update(Block & block);
 
-    void update_execution_time(UInt64 time) { execution_time += time; }
+    void updateExecutionTime(UInt64 time) { execution_time += time; }
 
     /// Binary serialization and deserialization of main fields.
     /// Writes only main fields i.e. fields that required by internal transmission protocol.

@@ -85,7 +85,7 @@ Block IProfilingBlockInputStream::read()
     }
 #endif
 
-    info.update_execution_time(info.total_stopwatch.elapsed() - start_time);
+    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     return res;
 }
 
