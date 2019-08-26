@@ -1,11 +1,9 @@
-#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Core/TMTPKType.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
@@ -20,7 +18,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-static Field GenDecodeRow(const TiDB::ColumnInfo & col_info)
+using TiDB::ColumnInfo;
+using TiDB::DatumFlat;
+using TiDB::TableInfo;
+
+static Field GenDecodeRow(const ColumnInfo & col_info)
 {
     switch (col_info.getCodecFlag())
     {
@@ -125,10 +127,13 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
     }
 }
 
+using ColumnIdToInfoIndexMap = google::dense_hash_map<ColumnID, UInt16>;
+using SchemaAllColumnIds = google::dense_hash_set<ColumnID>;
+
 /// DecodeRowSkip function will try to jump over unnecessary field.
-bool DecodeRowSkip(const TiKVValue & value, const google::dense_hash_set<ColumnID> & column_ids_to_read,
-    const google::dense_hash_set<ColumnID> & schema_all_column_ids, DecodedRow & additional_decoded_row,
-    std::vector<DecodedRow::const_iterator> & decoded_col_iter)
+bool DecodeRowSkip(const TiKVValue & value, const ColumnIdToInfoIndexMap & column_id_to_info_index,
+    const SchemaAllColumnIds & schema_all_column_ids, DecodedRow & additional_decoded_row,
+    std::vector<DecodedRow::const_iterator> & decoded_col_iter, const bool force_decode)
 {
     const String & raw_value = value.getStr();
     size_t cursor = 0;
@@ -141,12 +146,17 @@ bool DecodeRowSkip(const TiKVValue & value, const google::dense_hash_set<ColumnI
             break;
 
         ColumnID col_id = f.get<ColumnID>();
+
         column_cnt++;
-        if (!schema_all_column_ids.count(col_id))
+
+        if (schema_matches && !schema_all_column_ids.count(col_id))
         {
             schema_matches = false;
+            if (!force_decode)
+                return schema_matches;
         }
-        if (!column_ids_to_read.count(col_id))
+
+        if (!column_id_to_info_index.count(col_id))
         {
             SkipDatum(cursor, raw_value);
         }
@@ -156,6 +166,7 @@ bool DecodeRowSkip(const TiKVValue & value, const google::dense_hash_set<ColumnI
             decoded_col_iter.emplace_back(additional_decoded_row.cend() - 1);
         }
     }
+
     if (column_cnt != schema_all_column_ids.size())
     {
         schema_matches = false;
@@ -167,9 +178,9 @@ bool DecodeRowSkip(const TiKVValue & value, const google::dense_hash_set<ColumnI
 }
 
 /// DecodeRow function will try to get pre-decoded fields from value, if is none, just decode its str.
-bool DecodeRow(const TiKVValue & value, const google::dense_hash_set<ColumnID> & column_ids_to_read,
-    const google::dense_hash_set<ColumnID> & schema_all_column_ids, DecodedRow & additional_decoded_row,
-    std::vector<DecodedRow::const_iterator> & decoded_col_iter)
+bool DecodeRow(const TiKVValue & value, const ColumnIdToInfoIndexMap & column_id_to_info_index,
+    const SchemaAllColumnIds & schema_all_column_ids, DecodedRow & additional_decoded_row,
+    std::vector<DecodedRow::const_iterator> & decoded_col_iter, const bool force_decode)
 {
     auto & decoded_row_info = value.extraInfo();
     const DecodedRow * id_fields_ptr = decoded_row_info.load();
@@ -183,25 +194,33 @@ bool DecodeRow(const TiKVValue & value, const google::dense_hash_set<ColumnID> &
         {
             const auto & ele = *it;
             const auto & col_id = ele.col_id;
-            if (!schema_all_column_ids.count(col_id))
+
+            if (schema_matches && !schema_all_column_ids.count(col_id))
             {
                 schema_matches = false;
+                if (!force_decode)
+                    return schema_matches;
             }
-            if (column_ids_to_read.count(col_id))
+
+            if (column_id_to_info_index.count(col_id))
             {
                 decoded_col_iter.emplace_back(it);
             }
         }
+
+        if (id_fields.size() != schema_all_column_ids.size())
+            schema_matches = false;
+
         return schema_matches;
     }
     else
     {
-        return DecodeRowSkip(value, column_ids_to_read, schema_all_column_ids, additional_decoded_row, decoded_col_iter);
+        return DecodeRowSkip(value, column_id_to_info_index, schema_all_column_ids, additional_decoded_row, decoded_col_iter, force_decode);
     }
 }
 
 
-std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
+std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
     RegionDataReadInfoList & data_list,
@@ -219,20 +238,20 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     google::dense_hash_map<ColumnID, std::shared_ptr<ColTypePair>> column_map;
     column_map.set_empty_key(EmptyColumnID);
 
-    google::dense_hash_map<ColumnID, size_t> column_id_to_info_index_map;
-    column_id_to_info_index_map.set_empty_key(EmptyColumnID);
+    ColumnIdToInfoIndexMap column_id_to_info_index;
+    column_id_to_info_index.set_empty_key(EmptyColumnID);
 
-    google::dense_hash_set<ColumnID> column_ids_to_read;
-    column_ids_to_read.set_empty_key(EmptyColumnID);
-
-    google::dense_hash_set<ColumnID> schema_all_column_ids;
+    SchemaAllColumnIds schema_all_column_ids;
     schema_all_column_ids.set_empty_key(EmptyColumnID);
+
+    if (table_info.columns.size() > std::numeric_limits<ColumnIdToInfoIndexMap::mapped_type>::max())
+        throw Exception("Too many columns in schema", ErrorCodes::LOGICAL_ERROR);
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
         auto & column_info = table_info.columns[i];
         ColumnID col_id = column_info.id;
-        String col_name = column_info.name;
+        const String & col_name = column_info.name;
         schema_all_column_ids.insert(col_id);
         if (std::find(column_names_to_read.begin(), column_names_to_read.end(), col_name) == column_names_to_read.end())
         {
@@ -244,12 +263,10 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         if (table_info.pk_is_handle && column_info.hasPriKeyFlag())
             handle_col_id = col_id;
         else
-        {
-            column_ids_to_read.insert(col_id);
-            column_id_to_info_index_map.insert(std::make_pair(col_id, i));
-        }
+            column_id_to_info_index.insert(std::make_pair(col_id, i));
     }
-    if (column_names_to_read.size() - 3 != column_ids_to_read.size())
+
+    if (column_names_to_read.size() - 3 != column_id_to_info_index.size())
         throw Exception("schema doesn't contain needed columns.", ErrorCodes::LOGICAL_ERROR);
 
     if (!table_info.pk_is_handle)
@@ -282,8 +299,6 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
         func(*delmark_col, *version_col, column_map[handle_col_id]->first, data_list, start_ts);
     }
 
-    const auto & date_lut = DateLUT::instance();
-
     const size_t target_col_size = column_names_to_read.size() - 3;
 
     Block block;
@@ -315,9 +330,9 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
 
             if (write_type == Region::DelFlag)
             {
-                for (auto col_id : column_ids_to_read)
+                for (const auto & item : column_id_to_info_index)
                 {
-                    const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
+                    const auto & column = table_info.columns[item.second];
 
                     additional_decoded_row.emplace_back(column.id, GenDecodeRow(column));
                     decoded_col_iter.emplace_back(additional_decoded_row.cend() - 1);
@@ -325,32 +340,32 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             }
             else
             {
-                bool schema_matches
-                    = DecodeRow(*value_ptr, column_ids_to_read, schema_all_column_ids, additional_decoded_row, decoded_col_iter);
+                bool schema_matches = DecodeRow(
+                    *value_ptr, column_id_to_info_index, schema_all_column_ids, additional_decoded_row, decoded_col_iter, force_decode);
                 if (!schema_matches && !force_decode)
                     return std::make_tuple(block, false);
             }
 
             /// Modify `row` by adding missing column values or removing useless column values.
-            if (unlikely(decoded_col_iter.size() > column_ids_to_read.size()))
+            if (unlikely(decoded_col_iter.size() > column_id_to_info_index.size()))
             {
                 throw Exception("read unexpected columns.", ErrorCodes::LOGICAL_ERROR);
             }
 
             // redundant column values (column id not in current schema) has been dropped when decoding row
             // this branch handles the case when the row doesn't contain all the needed column
-            if (decoded_col_iter.size() < column_ids_to_read.size())
+            if (decoded_col_iter.size() < column_id_to_info_index.size())
             {
-                decoded_col_ids_set.clear();
+                decoded_col_ids_set.clear_no_resize();
                 for (const auto & e : decoded_col_iter)
                     decoded_col_ids_set.insert(e->col_id);
 
-                for (auto col_id : column_ids_to_read)
+                for (const auto & item : column_id_to_info_index)
                 {
-                    if (decoded_col_ids_set.count(col_id))
+                    if (decoded_col_ids_set.count(item.first))
                         continue;
 
-                    const auto & column = table_info.columns[column_id_to_info_index_map[col_id]];
+                    const auto & column = table_info.columns[item.second];
 
                     additional_decoded_row.emplace_back(column.id,
                         column.hasNoDefaultValueFlag() ? (column.hasNotNullFlag() ? GenDecodeRow(column) : Field())
@@ -367,106 +382,31 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
             {
                 const ColumnID & col_id = iter->col_id;
                 const Field & field = iter->field;
+                const ColumnInfo & column_info = table_info.columns[column_id_to_info_index[col_id]];
 
                 auto it = column_map.find(col_id);
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
-                auto & name_type = it->second->second;
+                DatumFlat datum(field, column_info.tp);
+                const Field & unflattened = datum.field();
+                if (datum.overflow(column_info))
+                {
+                    // Overflow detected, fatal if force_decode is true,
+                    // as schema being newer and narrow shouldn't happen.
+                    // Otherwise return false to outer, outer should sync schema and try again.
+                    if (force_decode)
+                    {
+                        const auto & data_type = it->second->second.type;
+                        throw Exception("Detected overflow when decoding data " + std::to_string(unflattened.get<UInt64>()) + " of column "
+                                + column_info.name + " with type " + data_type->getName(),
+                            ErrorCodes::LOGICAL_ERROR);
+                    }
+
+                    return std::make_tuple(block, false);
+                }
                 auto & mut_col = it->second->first;
-                const auto & tp = name_type.type;
-                if (tp->isDateOrDateTime()
-                    || (tp->isNullable() && dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType()->isDateOrDateTime()))
-                {
-                    if (field.isNull())
-                    {
-                        mut_col->insert(field);
-                        continue;
-                    }
-                    UInt64 packed = field.get<UInt64>();
-                    UInt64 ymdhms = packed >> 24;
-                    UInt64 ymd = ymdhms >> 17;
-                    int day = int(ymd & ((1 << 5) - 1));
-                    int ym = ymd >> 5;
-                    int month = int(ym % 13);
-                    int year = int(ym / 13);
-
-                    UInt64 hms = ymdhms & ((1 << 17) - 1);
-                    int second = int(hms & ((1 << 6) - 1));
-                    int minute = int((hms >> 6) & ((1 << 6) - 1));
-                    int hour = int(hms >> 12);
-
-                    if (typeid_cast<const DataTypeDateTime *>(tp.get())
-                        || (tp->isNullable()
-                               && typeid_cast<const DataTypeDateTime *>(
-                                      dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType().get())))
-                    {
-                        time_t datetime;
-                        if (unlikely(year == 0))
-                            datetime = 0;
-                        else
-                        {
-                            if (unlikely(month == 0 || day == 0))
-                            {
-                                throw Exception("wrong datetime format: " + std::to_string(year) + " " + std::to_string(month) + " "
-                                        + std::to_string(day) + ".",
-                                    ErrorCodes::LOGICAL_ERROR);
-                            }
-                            datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-                        }
-                        mut_col->insert(static_cast<Int64>(datetime));
-                    }
-                    else
-                    {
-                        auto date = date_lut.makeDayNum(year, month, day);
-                        Field date_field(static_cast<Int64>(date));
-                        mut_col->insert(date_field);
-                    }
-                }
-                else
-                {
-                    mut_col->insert(field);
-
-                    // Check overflow for potential un-synced data type widen,
-                    // i.e. schema is old and narrow, meanwhile data is new and wide.
-                    // So far only integers is possible of overflow.
-                    auto & nested_tp = tp->isNullable() ? dynamic_cast<const DataTypeNullable *>(tp.get())->getNestedType() : tp;
-                    auto & orig_column = *mut_col;
-                    auto & nested_column
-                        = mut_col->isColumnNullable() ? dynamic_cast<ColumnNullable &>(*mut_col).getNestedColumn() : *mut_col;
-                    auto inserted_index = orig_column.size() - 1;
-                    if (!orig_column.isNullAt(inserted_index) && nested_tp->isInteger())
-                    {
-                        bool overflow = false;
-                        if (nested_tp->isUnsignedInteger())
-                        {
-                            // Unsigned checking by bitwise compare.
-                            UInt64 inserted = nested_column.get64(inserted_index);
-                            UInt64 orig = field.get<UInt64>();
-                            overflow = inserted != orig;
-                        }
-                        else
-                        {
-                            // Singed checking by arithmetical cast.
-                            Int64 inserted = nested_column.getInt(inserted_index);
-                            Int64 orig = field.get<Int64>();
-                            overflow = inserted != orig;
-                        }
-                        if (overflow)
-                        {
-                            // Overflow detected, fatal if force_decode is true,
-                            // as schema being newer and narrow shouldn't happen.
-                            // Otherwise return false to outer, outer should sync schema and try again.
-                            if (force_decode)
-                                throw Exception(
-                                    "Detected overflow for data " + std::to_string(field.get<UInt64>()) + " of type " + tp->getName(),
-                                    ErrorCodes::LOGICAL_ERROR);
-
-                            return std::make_tuple(block, false);
-                        }
-                    }
-                    // TODO: Consider other kind of type change? I.e. arbitrary type change.
-                }
+                mut_col->insert(unflattened);
             }
         }
     }

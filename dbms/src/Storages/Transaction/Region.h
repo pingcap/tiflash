@@ -164,7 +164,7 @@ public:
 
     static ColumnFamilyType getCf(const std::string & cf);
 
-    void tryDecodeDefaultCF();
+    void tryPreDecodeTiKVValue();
 
 private:
     Region() = delete;

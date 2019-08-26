@@ -9,6 +9,7 @@
 #include <IO/Endian.h>
 
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>
@@ -63,9 +64,10 @@ inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector
     std::stringstream ss;
     for (size_t i = 0; i < fields.size(); i++)
     {
-        const TiDB::ColumnInfo & column = table_info.columns[i];
-        EncodeDatum(Field(column.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column.getCodecFlag(), ss);
+        const TiDB::ColumnInfo & column_info = table_info.columns[i];
+        EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
+        TiDB::DatumBumpy datum = TiDB::DatumBumpy(fields[i], column_info.tp);
+        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
     }
     return TiKVValue(ss.str());
 }

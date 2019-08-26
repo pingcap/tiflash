@@ -655,16 +655,12 @@ void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, co
 
 std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
 
-void Region::tryDecodeDefaultCF()
+void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
 {
-    ExtraCFData<RegionDefaultCFDataTrait>::Queue values;
-    {
-        auto res = data.defaultCF().getExtra().popAll();
-        if (!res)
-            return;
-        values = std::move(*res);
-    }
-    for (const auto & val : values)
+    if (!values)
+        return;
+
+    for (const auto & val : *values)
     {
         auto & decoded_row_info = val->extraInfo();
         if (decoded_row_info.load())
@@ -672,6 +668,12 @@ void Region::tryDecodeDefaultCF()
         DecodedRow * decoded_row = ValueExtraInfo<>::computeDecodedRow(val->getStr());
         decoded_row_info.atomicUpdate(decoded_row);
     }
+}
+
+void Region::tryPreDecodeTiKVValue()
+{
+    DB::tryPreDecodeTiKVValue(data.defaultCF().getExtra().popAll());
+    DB::tryPreDecodeTiKVValue(data.writeCF().getExtra().popAll());
 }
 
 } // namespace DB

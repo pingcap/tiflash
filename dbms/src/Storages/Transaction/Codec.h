@@ -33,23 +33,13 @@ String DecodeBytes(size_t & cursor, const String & raw_value);
 
 String DecodeCompactBytes(size_t & cursor, const String & raw_value);
 
-Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
-
 UInt64 DecodeVarUInt(size_t & cursor, const String & raw_value);
+
+Int64 DecodeVarInt(size_t & cursor, const String & raw_value);
 
 Field DecodeDecimal(size_t & cursor, const String & raw_value);
 
 Field DecodeDatum(size_t & cursor, const String & raw_value);
-
-void SkipBytes(size_t & cursor, const String & raw_value);
-
-void SkipCompactBytes(size_t & cursor, const String & raw_value);
-
-void SkipVarInt(size_t & cursor, const String & raw_value);
-
-void SkipVarUInt(size_t & cursor, const String & raw_value);
-
-void SkipDecimal(size_t & cursor, const String & raw_value);
 
 void SkipDatum(size_t & cursor, const String & raw_value);
 
@@ -68,9 +58,9 @@ void EncodeBytes(const String & ori_str, std::stringstream & ss);
 
 void EncodeCompactBytes(const String & str, std::stringstream & ss);
 
-void EncodeVarInt(Int64 num, std::stringstream & ss);
-
 void EncodeVarUInt(UInt64 num, std::stringstream & ss);
+
+void EncodeVarInt(Int64 num, std::stringstream & ss);
 
 template <typename T>
 void EncodeDecimal(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss);
