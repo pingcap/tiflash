@@ -1,7 +1,7 @@
-#ifndef CLICKHOUSE_DM_BASIC_INCLUDE_H
-#define CLICKHOUSE_DM_BASIC_INCLUDE_H
+#pragma once
 
 #include <gtest/gtest.h>
+#include <test_utils/TiflashTestBasic.h>
 #include <Interpreters/Context.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -21,8 +21,7 @@ class DMTestEnv
 public:
     static Context getContext()
     {
-        static Context context = DB::Context::createGlobal();
-        return context;
+        return ::DB::tests::TiFlashTestEnv::getContext();
     }
 
     static Block prepareSimpleWriteBlock(size_t beg, size_t end, bool reversed)
@@ -82,6 +81,3 @@ public:
 } // namespace tests
 } // namespace DM
 } // namespace DB
-
-
-#endif //CLICKHOUSE_DM_BASIC_INCLUDE_H
