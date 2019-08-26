@@ -67,7 +67,8 @@ public:
 
     void dropDB(Context & context, const String & database_name, bool drop_regions);
 
-    void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+    void addColumnToTable(
+        const String & database_name, const String & table_name, const NameAndTypePair & column, const Field & default_value);
 
     void dropColumnFromTable(const String & database_name, const String & table_name, const String & column_name);
 
