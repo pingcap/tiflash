@@ -3,12 +3,12 @@
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
+#include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
-#include <Parsers/ASTLiteral.h>
 
 namespace ProfileEvents
 {
@@ -514,7 +514,7 @@ void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands &         comm
 
 namespace
 {
-inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine &define)
+inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
     if (command.default_expression)
     {
@@ -524,7 +524,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
         if (default_expr && default_expr->value.getType() == Field::Types::String)
         {
             const String default_val = safeGet<String>(default_expr->value);
-            define.default_value = default_val;
+            define.default_value     = default_val;
         }
         else
         {
@@ -532,7 +532,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
         }
     }
 }
-}
+} // namespace
 
 void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          command,
                                              const OptionTableInfoConstRef table_info,
@@ -565,8 +565,8 @@ void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          comma
         ColumnDefine define(0, command.column_name, command.data_type);
         if (table_info)
         {
-            auto         tidb_col_iter = findColumnInfoInTableInfo(table_info->get(), command.column_name);
-            define.id = tidb_col_iter->id;
+            auto tidb_col_iter = findColumnInfoInTableInfo(table_info->get(), command.column_name);
+            define.id          = tidb_col_iter->id;
         }
         else
         {
@@ -591,6 +591,7 @@ void DeltaMergeStore::flush(const Context & db_context)
     DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
     for (auto && iter : segments)
     {
+        std::unique_lock lock(mutex);
         // flush and update segment
         auto new_segment = iter.second->flush(dm_context);
         iter.second      = new_segment;
