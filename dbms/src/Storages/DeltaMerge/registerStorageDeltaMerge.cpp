@@ -68,8 +68,7 @@ void registerStorageDeltaMerge(StorageFactory & factory)
                 const auto table_info_json = safeGet<String>(ast->value);
                 if (!table_info_json.empty())
                 {
-                    // TODO: examine if this unescaping is necessary. the same as TxnMergeTree.
-                    info.deserialize(table_info_json, true);
+                    info.deserialize(table_info_json);
                     if (unlikely(info.columns.empty()))
                         throw Exception("Engine DeltaMerge table info is invalid. # of columns = 0", ErrorCodes::BAD_ARGUMENTS);
                     table_info = info;

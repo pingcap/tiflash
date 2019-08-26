@@ -100,10 +100,10 @@ bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
             // not support change Decimal to other type, neither other type to Decimal
             return false;
         }
-        // check that modifying the precision of DECIMAL data types is forbidden
-        const auto * dec_from = typeid_cast<const DataTypeDecimal *>(from.get());
-        const auto * dec_to = typeid_cast<const DataTypeDecimal *>(to.get());
-        return dec_from->getPrec() == dec_to->getPrec() && dec_from->getScale() == dec_to->getPrec();
+
+        // TODO should we return true if and only if
+        // from->getPrec() == to->getPrec() && from->getScale() == to->getPrec();
+        return from->equals(*to);
     }
 
     // TODO enums, set?

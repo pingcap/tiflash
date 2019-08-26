@@ -219,13 +219,13 @@ ColumnInfo getColumnInfoByDataType(const DataTypePtr &type)
     }
     if (typeid_cast<const DataTypeInt64 *>(not_null_type.get()))
     {
-        col.tp = TiDB::TypeLonglong;
+        col.tp = TiDB::TypeLongLong;
         return col;
     }
     if (typeid_cast<const DataTypeUInt64 *>(not_null_type.get()))
     {
         col.setUnsignedFlag();
-        col.tp = TiDB::TypeLonglong;
+        col.tp = TiDB::TypeLongLong;
         return col;
     }
     if (not_null_type->isStringOrFixedString())
@@ -254,7 +254,22 @@ ColumnInfo getColumnInfoByDataType(const DataTypePtr &type)
         col.tp = TiDB::TypeDatetime;
         return col;
     }
-    if (typeid_cast<const DataTypeDecimal *>(not_null_type.get()))
+    if (typeid_cast<const DataTypeDecimal32 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeDecimal;
+        return col;
+    }
+    if (typeid_cast<const DataTypeDecimal64 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeDecimal;
+        return col;
+    }
+    if (typeid_cast<const DataTypeDecimal128 *>(not_null_type.get()))
+    {
+        col.tp = TiDB::TypeDecimal;
+        return col;
+    }
+    if (typeid_cast<const DataTypeDecimal256 *>(not_null_type.get()))
     {
         col.tp = TiDB::TypeDecimal;
         return col;

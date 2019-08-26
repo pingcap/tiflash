@@ -468,7 +468,6 @@ void updateDeltaMergeTableCreateStatement(                   //
             column_info.id = column_define.id;
             column_info.name = column_define.name;
             column_info.origin_default_value = column_define.default_value;
-            column_info.has_origin_default_value = true;
             table_info_from_store.columns.emplace_back(std::move(column_info));
         }
     }

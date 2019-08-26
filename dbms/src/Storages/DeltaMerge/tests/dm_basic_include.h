@@ -19,9 +19,9 @@ namespace tests
 class DMTestEnv
 {
 public:
-    static Context getContext(const DB::Settings &settings = DB::Settings())
+    static Context getContext(const ::DB::Settings &settings = DB::Settings())
     {
-        return ::DB::tests::TiFlashTestEnv::getContext();
+        return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }
 
     static ColumnDefines getDefaultColumns()

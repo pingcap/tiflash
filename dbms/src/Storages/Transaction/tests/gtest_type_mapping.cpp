@@ -58,7 +58,7 @@ try
                 }
                 else if (numeric_type == numeric_types[3])
                 {
-                    ASSERT_EQ(column_info.tp, TiDB::TypeLonglong) << actual_test_type;
+                    ASSERT_EQ(column_info.tp, TiDB::TypeLongLong) << actual_test_type;
                 }
             }
         }
