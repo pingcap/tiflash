@@ -25,7 +25,11 @@ TMTStoragePtr TMTStorages::get(TableID table_id) const
     return it->second;
 }
 
-std::unordered_map<TableID, TMTStoragePtr> TMTStorages::getAllStorage() const { return storages; }
+std::unordered_map<TableID, TMTStoragePtr> TMTStorages::getAllStorage() const
+{
+    std::lock_guard lock(mutex);
+    return storages;
+}
 
 TMTStoragePtr TMTStorages::getByName(const std::string & db, const std::string & table) const
 {
