@@ -269,14 +269,8 @@ void InterpreterDAG::executeAggregation(
     }
     else
     {
-        BlockInputStreams inputs;
-        if (!pipeline.streams.empty())
-            inputs.push_back(pipeline.firstStream());
-        else
-            pipeline.streams.resize(1);
-
         pipeline.firstStream()
-            = std::make_shared<AggregatingBlockInputStream>(std::make_shared<ConcatBlockInputStream>(inputs), params, true);
+            = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, true);
     }
     // add cast
 }

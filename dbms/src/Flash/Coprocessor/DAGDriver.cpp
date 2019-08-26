@@ -78,7 +78,7 @@ try
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streamPtr.get()))
             {
-                time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().total_stopwatch.elapsed());
+                time_processed_ns = std::max(time_processed_ns, p_stream->getProfileInfo().execution_time);
                 num_produced_rows += p_stream->getProfileInfo().rows;
                 num_iterations += p_stream->getProfileInfo().blocks;
             }
