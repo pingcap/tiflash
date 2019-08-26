@@ -44,7 +44,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
         if constexpr (tp == TypeDate)
         {
             auto date = date_lut.makeDayNum(year, month, day);
-            copy = static_cast<Int64>(date);
+            copy = static_cast<UInt64>(date);
         }
         else
         {
@@ -67,7 +67,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime 
 
                 date_time = date_lut.makeDateTime(year, month, day, hour, minute, second);
             }
-            copy = static_cast<Int64>(date_time);
+            copy = static_cast<UInt64>(date_time);
         }
     }
 
