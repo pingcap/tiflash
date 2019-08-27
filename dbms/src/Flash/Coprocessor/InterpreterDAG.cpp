@@ -68,8 +68,13 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         ColumnID cid = ci.column_id();
         if (cid < 1 || cid > (Int64)storage->getTableInfo().columns.size())
         {
-            // for sql that do not need read any column(e.g. select count(*) from t), the column id will be -1
-            continue;
+            if (cid == -1)
+            {
+                // for sql that do not need read any column(e.g. select count(*) from t), the column id will be -1
+                continue;
+            }
+            // cid out of bound
+            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
@@ -272,8 +277,7 @@ void InterpreterDAG::executeAggregation(
     }
     else
     {
-        pipeline.firstStream()
-            = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, true);
+        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, true);
     }
     // add cast
 }
