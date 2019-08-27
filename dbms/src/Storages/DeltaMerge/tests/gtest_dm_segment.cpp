@@ -326,7 +326,7 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
                                           /* segment_snap= */ segment->getReadSnapshot(),
                                           /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ tableColumns(),
+                                          /* columns_to_read= */ columns_to_read,
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
@@ -338,7 +338,7 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
         {
             num_rows_read += block.rows();
             const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
-            ASSERT_TRUE(col.type->equals(*column_i32_after_ddl.type));
+            ASSERT_TRUE(col.type->equals(*column_i32_after_ddl.type)) << "col.type: " + col.type->getName() + " expect type: " + column_i32_after_ddl.type->getName();
             ASSERT_EQ(col.name, column_i32_after_ddl.name);
             ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
             for (size_t i = 0; i < block.rows(); ++i)
@@ -393,7 +393,7 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
                                           /* segment_snap= */ segment->getReadSnapshot(),
                                           /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ tableColumns(),
+                                          /* columns_to_read= */ columns_to_read,
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
