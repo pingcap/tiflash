@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <Core/Field.h>
 #include <Storages/Transaction/TiDB.h>
 
