@@ -36,6 +36,7 @@ public:
 
     void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
+    // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     void alterFromTiDB(
         const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context);
 

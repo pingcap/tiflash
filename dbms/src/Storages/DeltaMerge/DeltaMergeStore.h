@@ -67,10 +67,10 @@ public:
     void flush(const Context & context);
 
     /// Apply `commands` on `table_columns`
-    void applyColumnDefineAlters(const AlterCommands &         commands, //
-                                 const OptionTableInfoConstRef table_info,
-                                 ColumnID &                    max_column_id_used,
-                                 const Context &               context);
+    void applyAlters(const AlterCommands &         commands, //
+                     const OptionTableInfoConstRef table_info,
+                     ColumnID &                    max_column_id_used,
+                     const Context &               context);
 
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
@@ -109,9 +109,9 @@ private:
                              size_t             offset,
                              size_t             limit);
 
-    void applyColumnDefineAlter(const AlterCommand &          command, //
-                                const OptionTableInfoConstRef table_info,
-                                ColumnID &                    max_column_id_used);
+    void applyAlter(const AlterCommand &          command, //
+                    const OptionTableInfoConstRef table_info,
+                    ColumnID &                    max_column_id_used);
 
     static Block genHeaderBlock(const ColumnDefines & raw_columns, //
                                 const ColumnDefine &  handle_define,

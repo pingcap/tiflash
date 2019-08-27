@@ -256,6 +256,8 @@ BlockInputStreams StorageDeltaMerge::read( //
             col_define.name = column.name;
             col_define.id = column.column_id;
             col_define.type = column.type;
+            // FIXME set non-empty default value so that we can fill missing value with the right default value
+            // col_define.default_value = "";
         }
         to_read.push_back(col_define);
     }
@@ -403,7 +405,7 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
 
     commands.apply(new_columns); // apply AlterCommands to `new_columns`
     // apply alter to store's table column in DeltaMergeStore
-    store->applyColumnDefineAlters(commands, table_info, max_column_id_used, context);
+    store->applyAlters(commands, table_info, max_column_id_used, context);
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
@@ -487,7 +489,7 @@ void updateDeltaMergeTableCreateStatement(                   //
         else if (args.children.size() == 2)
             args.children.back() = literal;
         else
-            throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table :" + table_name + "engine=DeltaMerge",
+            throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name + " with engine=DeltaMerge",
                 ErrorCodes::BAD_ARGUMENTS);
     };
 

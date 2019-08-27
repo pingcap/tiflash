@@ -496,10 +496,10 @@ Block DeltaMergeStore::genHeaderBlock(const ColumnDefines & raw_columns,
     return toEmptyBlock(real_cols);
 }
 
-void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands &         commands,
-                                              const OptionTableInfoConstRef table_info,
-                                              ColumnID &                    max_column_id_used,
-                                              const Context &               context)
+void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
+                                  const OptionTableInfoConstRef table_info,
+                                  ColumnID &                    max_column_id_used,
+                                  const Context &               context)
 {
     /// Force flush on store, so that no chunks with different data type in memory
     // TODO maybe some ddl do not need to flush cache? eg. just change default value
@@ -507,7 +507,7 @@ void DeltaMergeStore::applyColumnDefineAlters(const AlterCommands &         comm
 
     for (const auto & command : commands)
     {
-        applyColumnDefineAlter(command, table_info, max_column_id_used);
+        applyAlter(command, table_info, max_column_id_used);
     }
 
     // Don't forget to update header
@@ -532,7 +532,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
         else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
                  default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
         {
-            // eg. CAST('1.234' AS Float32)
+            // eg. CAST('1.234' AS Float32); CAST(999 AS Int32)
             if (default_cast_expr->arguments->children.size() != 2)
             {
                 throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
@@ -557,9 +557,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
 }
 } // namespace
 
-void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          command,
-                                             const OptionTableInfoConstRef table_info,
-                                             ColumnID &                    max_column_id_used)
+void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTableInfoConstRef table_info, ColumnID & max_column_id_used)
 {
     if (command.type == AlterCommand::MODIFY_COLUMN)
     {
@@ -601,7 +599,7 @@ void DeltaMergeStore::applyColumnDefineAlter(const AlterCommand &          comma
     }
     else if (command.type == AlterCommand::DROP_COLUMN)
     {
-        // identify column by name in `AlterCommand`
+        // identify column by name in `AlterCommand`. TODO we may change to identify column by column-id later
         table_columns.erase(std::remove_if(table_columns.begin(),
                                            table_columns.end(),
                                            [&](const ColumnDefine & c) { return c.name == command.column_name; }),
