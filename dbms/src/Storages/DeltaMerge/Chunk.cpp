@@ -143,7 +143,7 @@ void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & p
 void readChunkData(MutableColumns &      columns,
                    const Chunk &         chunk,
                    const ColumnDefines & column_defines,
-                   PageStorage &         storage,
+                   const PageReader &    page_reader,
                    size_t                rows_offset,
                    size_t                rows_limit)
 {
@@ -177,11 +177,11 @@ void readChunkData(MutableColumns &      columns,
             col.insertRangeFrom(*tmp_col, rows_offset, rows_limit);
         }
     };
-    storage.read(page_ids, page_handler);
+    page_reader.read(page_ids, page_handler);
 }
 
 
-Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage)
+Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, const PageReader & page_reader)
 {
     if (read_column_defines.empty())
         return {};
@@ -196,7 +196,7 @@ Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, 
     if (chunk.getRows())
     {
         // Read from storage
-        readChunkData(columns, chunk, read_column_defines, data_storage, 0, chunk.getRows());
+        readChunkData(columns, chunk, read_column_defines, page_reader, 0, chunk.getRows());
     }
 
     Block res;

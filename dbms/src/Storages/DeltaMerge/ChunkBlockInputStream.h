@@ -11,8 +11,8 @@ namespace DM
 class ChunkBlockInputStream final : public IBlockInputStream
 {
 public:
-    ChunkBlockInputStream(const Chunks & chunks_, const ColumnDefines & read_columns_, PageStorage & data_storage_)
-        : chunks(chunks_), read_columns(read_columns_), data_storage(data_storage_)
+    ChunkBlockInputStream(const Chunks & chunks_, const ColumnDefines & read_columns_, const PageReader & page_reader_)
+        : chunks(chunks_), read_columns(read_columns_), page_reader(page_reader_)
     {
     }
 
@@ -36,7 +36,7 @@ public:
     {
         if (!hasNextBlock())
             return {};
-        return readChunk(chunks[chunk_index++], read_columns, data_storage);
+        return readChunk(chunks[chunk_index++], read_columns, page_reader);
     }
 
     bool       hasNextBlock() { return chunk_index < chunks.size(); }
@@ -48,7 +48,7 @@ private:
     Chunks        chunks;
     size_t        chunk_index = 0;
     ColumnDefines read_columns;
-    PageStorage & data_storage;
+    PageReader    page_reader;
     Block         header;
 };
 
