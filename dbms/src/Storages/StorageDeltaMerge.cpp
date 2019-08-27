@@ -429,7 +429,7 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & /*n
             ErrorCodes::DIRECTORY_ALREADY_EXISTS};
 
     // flush store and then reset store to new path
-    store->flush(global_context);
+    store->flushCache(global_context);
     ColumnDefines table_column_defines = store->getTableColumns();
     ColumnDefine handle_column_define = store->getHandle();
     DeltaMergeStore::Settings settings = store->getSettings();
@@ -495,7 +495,8 @@ void updateDeltaMergeTableCreateStatement(                   //
         else if (args.children.size() == 2)
             args.children.back() = literal;
         else
-            throw Exception("Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name + " with engine=DeltaMerge",
+            throw Exception(
+                "Wrong arguments num:" + DB::toString(args.children.size()) + " in table: " + table_name + " with engine=DeltaMerge",
                 ErrorCodes::BAD_ARGUMENTS);
     };
 

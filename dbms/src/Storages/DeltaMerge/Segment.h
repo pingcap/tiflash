@@ -118,6 +118,8 @@ public:
     /// Flush delta into stable. i.e. delta merge.
     SegmentPtr flush(DMContext & dm_context);
 
+    /// Flush delta's cached chunks.
+    void flushCache(DMContext & dm_context) { delta->tryFlushCache(OpContext::createForLogStorage(dm_context), /* force= */ true); }
 
     size_t getEstimatedRows();
 

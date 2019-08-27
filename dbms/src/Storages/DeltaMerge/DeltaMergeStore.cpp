@@ -554,7 +554,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
 {
     /// Force flush on store, so that no chunks with different data type in memory
     // TODO maybe some ddl do not need to flush cache? eg. just change default value
-    this->flush(context);
+    this->flushCache(context);
 
     for (const auto & command : commands)
     {
@@ -658,15 +658,14 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
     }
 }
 
-void DeltaMergeStore::flush(const Context & db_context)
+void DeltaMergeStore::flushCache(const Context & db_context)
 {
     DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
-    for (auto && iter : segments)
+    for (auto && [_handle, segment] : segments)
     {
         std::unique_lock lock(mutex);
-        // flush and update segment
-        auto new_segment = iter.second->flush(dm_context);
-        iter.second      = new_segment;
+        (void)_handle;
+        segment->flushCache(dm_context);
     }
 }
 

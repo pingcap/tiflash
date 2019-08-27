@@ -66,7 +66,7 @@ public:
     /// Force flush all data to disk.
     /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
     /// and no other threads is able to read / write at the same time.
-    void flush(const Context & context);
+    void flushCache(const Context & context);
 
     /// Apply `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //

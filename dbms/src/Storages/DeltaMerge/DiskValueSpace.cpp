@@ -505,14 +505,15 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
 
 bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
 {
-    if (!cache_chunks)
+    if (cache_chunks == 0)
         return false;
-    const size_t cache_rows = cacheRows();
 
-    // A chunk can only contains one delete range.
+    // If last chunk is a delete range, we should flush cache.
     HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
     if (!delete_range.none())
         force = true;
+
+    const size_t cache_rows = cacheRows();
     if (!force && cache_rows < context.dm_context.delta_cache_limit_rows && cacheBytes() < context.dm_context.delta_cache_limit_bytes)
         return false;
 
