@@ -21,6 +21,8 @@ static const PageId     DELTA_MERGE_FIRST_SEGMENT_ID     = 1;
 
 class DeltaMergeStore
 {
+    using OpContext = DiskValueSpace::OpContext;
+
 public:
     struct Settings
     {
@@ -102,12 +104,6 @@ private:
     bool shouldMerge(const SegmentPtr & left, const SegmentPtr & right, size_t segment_rows_setting);
     void split(DMContext & dm_context, const SegmentPtr & segment);
     void merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-
-    SegmentPtr write_segment(DMContext &        dm_context, //
-                             const SegmentPtr & segment,
-                             const Block &      block,
-                             size_t             offset,
-                             size_t             limit);
 
     void applyAlter(const AlterCommand &          command, //
                     const OptionTableInfoConstRef table_info,

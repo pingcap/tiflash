@@ -1,6 +1,7 @@
 #include "dm_basic_include.h"
 
 #include <Poco/File.h>
+
 #include <DataStreams/OneBlockInputStream.h>
 
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -89,7 +90,8 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
 
     {
         // read using `getInputStream`
-        BlockInputStreamPtr in            = delta.getInputStream(table_columns, dm_context->storage_pool.log());
+        PageReader          page_reader(dm_context->storage_pool.log());
+        BlockInputStreamPtr in            = delta.getInputStream(table_columns, page_reader);
         size_t              num_rows_read = 0;
         while (Block block = in->read())
         {
@@ -106,7 +108,8 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
         // read using `read` of offset && limit
         const size_t read_offset     = 15;
         const size_t num_rows_expect = 20;
-        Block        block           = delta.read(table_columns, dm_context->storage_pool.log(), read_offset, num_rows_expect);
+        PageReader   page_reader(dm_context->storage_pool.log());
+        Block        block = delta.read(table_columns, page_reader, read_offset, num_rows_expect);
 
         // check the order of cols is the same as read_columns
         const Names colnames = block.getNames();

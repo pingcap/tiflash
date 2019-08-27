@@ -102,6 +102,7 @@ private:
     size_t        rows = 0;
 };
 
+// TODO: use list instead of vector, so that DiskValueSpace won't need to do copy during Segment#getReadSnapshot.
 using Chunks    = std::vector<Chunk>;
 using GenPageId = std::function<PageId()>;
 
@@ -124,19 +125,19 @@ Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_
  * @param columns           The columns to append data.
  * @param column_defines    The DataType, column-id of `columns`.
  * @param chunk             Info about chunk to read. e.g. PageId in `storage`, DataType for reading.
- * @param storage           Where the serialized data storaged in.
+ * @param page_reader       Where the serialized data stored in.
  * @param rows_offset
  * @param rows_limit
  */
 void readChunkData(MutableColumns &      columns,
                    const ColumnDefines & column_defines,
                    const Chunk &         chunk,
-                   PageStorage &         storage,
+                   const PageReader &    page_reader,
                    size_t                rows_offset,
                    size_t                rows_limit);
 
 
-Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage);
+Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, const PageReader & page_reader);
 
 /**
  * Cast `disk_col` from `disk_type` according to `read_define`, and append data

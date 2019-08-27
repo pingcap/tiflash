@@ -12,17 +12,19 @@ class DMSegmentThreadInputStream : public IProfilingBlockInputStream
 public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
     DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr & task_pool_,
+                               const SegmentStreamCreator &   stream_creator_,
                                const ColumnDefines &          columns_to_read_,
                                const String &                 handle_name_,
                                const DataTypePtr &            handle_real_type_,
                                const Context &                context_)
         : task_pool(task_pool_),
+          stream_creator(stream_creator_),
           columns_to_read(columns_to_read_),
           header(toEmptyBlock(columns_to_read)),
           handle_name(handle_name_),
           handle_real_type(handle_real_type_),
           context(context_),
-          log(&Logger::get("SegmentReadTaskPool"))
+          log(&Logger::get("DMSegmentThreadInputStream"))
     {
     }
 
@@ -38,12 +40,15 @@ protected:
         {
             if (!cur_stream)
             {
-                std::tie(cur_segment_id, cur_stream) = task_pool->nextTask();
-                if (!cur_stream) // we are done.
+                auto task = task_pool->nextTask();
+                if (!task)
                 {
                     done = true;
                     return {};
                 }
+
+                cur_segment_id = task->segment->segmentId();
+                cur_stream     = stream_creator(*task);
                 LOG_DEBUG(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
             }
 
@@ -57,7 +62,8 @@ protected:
             }
             else
             {
-                cur_stream = {};
+                cur_segment_id = 0;
+                cur_stream     = {};
                 LOG_DEBUG(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
             }
         }
@@ -80,6 +86,7 @@ protected:
 
 private:
     SegmentReadTaskPoolPtr task_pool;
+    SegmentStreamCreator   stream_creator;
     ColumnDefines          columns_to_read;
     Block                  header;
     String                 handle_name;

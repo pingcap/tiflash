@@ -121,6 +121,12 @@ StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
         global_context, path, name, std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
+void StorageDeltaMerge::drop()
+{
+    // Reclaim memory.
+    MallocExtension::instance()->ReleaseFreeMemory();
+}
+
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, const Block & old_block)
 {
     Block block = old_block;

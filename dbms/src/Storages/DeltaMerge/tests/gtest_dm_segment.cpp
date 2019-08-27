@@ -115,8 +115,10 @@ TEST_F(Segment_test, WriteRead)
     {
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /*columns_to_read= */ tableColumns(),
-                                          {HandleRange::newAll()},
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
         size_t num_rows_read = 0;
@@ -140,8 +142,10 @@ TEST_F(Segment_test, WriteRead)
     {
         // read after delete range
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ tableColumns(),
-                                          {HandleRange::newAll()},
+                                          /* read_ranges= */ {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
         in->readPrefix();
@@ -174,8 +178,10 @@ TEST_F(Segment_test, Split)
     {
         // read written data
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /*columns_to_read= */ tableColumns(),
-                                          {HandleRange::newAll()},
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
 
@@ -208,8 +214,10 @@ TEST_F(Segment_test, Split)
     {
         {
             auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snap= */ {dmContext().storage_pool},
                                               /* columns_to_read= */ tableColumns(),
-                                              {HandleRange::newAll()},
+                                              /* read_ranges= */ {HandleRange::newAll()},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                                               /* expected_block_size= */ 1024);
             in->readPrefix();
@@ -220,11 +228,13 @@ TEST_F(Segment_test, Split)
             in->readSuffix();
         }
         {
-            auto in = new_segment->getInputStream(/* dm_context= */ dmContext(),
-                                                  /*columns_to_read= */ tableColumns(),
-                                                  {HandleRange::newAll()},
-                                                  /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                                  /* expected_block_size= */ 1024);
+            auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snap= */ {dmContext().storage_pool},
+                                              /* columns_to_read= */ tableColumns(),
+                                              /* read_ranges= */ {HandleRange::newAll()},
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -248,8 +258,10 @@ TEST_F(Segment_test, Split)
         {
             size_t num_rows_read = 0;
             auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snap= */ {dmContext().storage_pool},
                                               /* columns_to_read= */ tableColumns(),
-                                              {HandleRange::newAll()},
+                                              /* read_ranges= */ {HandleRange::newAll()},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                                               /* expected_block_size= */ 1024);
             in->readPrefix();
@@ -312,8 +324,10 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
 
         // read written data
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /*columns_to_read= */ columns_to_read,
-                                          {HandleRange::newAll()},
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
 
@@ -345,7 +359,7 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
     const ColumnID new_column_id   = 4;
     ColumnDefine   new_column_define(new_column_id, new_column_name, DataTypeFactory::instance().get("Int8"));
     const Int8     new_column_default_value_int = 16;
-    new_column_define.default_value = DB::toString(new_column_default_value_int);
+    new_column_define.default_value             = DB::toString(new_column_default_value_int);
 
     {
         ColumnDefines columns_before_ddl = DMTestEnv::getDefaultColumns();
@@ -377,8 +391,10 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
 
         // read written data
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /*columns_to_read= */ columns_to_read,
-                                          {HandleRange::newAll()},
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
 

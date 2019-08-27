@@ -24,15 +24,15 @@ TEST(DataTypeDecimal_test, A)
 
     FunctionPtr func = FunctionPlus::create(context);
     DataTypePtr return_type = func->getReturnTypeImpl(args);
-    ASSERT_TRUE(return_type->equals(*expect_add));
+    ASSERT_TRUE(return_type->equals(*expect_add)) << "return type:" + return_type->getName() + " expected type: " + expect_add->getName();
 
     func = FunctionMinus::create(context);
     return_type = func->getReturnTypeImpl(args);
-    ASSERT_TRUE(return_type->equals(*expect_add));
+    ASSERT_TRUE(return_type->equals(*expect_add)) << "return type:" + return_type->getName() + " expected type: " + expect_add->getName();
 
     func = FunctionMultiply::create(context);
     return_type = func->getReturnTypeImpl(args);
-    ASSERT_TRUE(return_type->equals(*expect_mul));
+    ASSERT_TRUE(return_type->equals(*expect_mul)) << "return type:" + return_type->getName() + " expected type: " + expect_add->getName();
 
 }
 
