@@ -41,6 +41,7 @@ private:
     ssize_t stable_skip = 0;
 
     DeltaValueSpacePtr delta_value_space;
+    size_t             delta_rows_limit;
     IndexIterator      entry_it;
     IndexIterator      entry_end;
 
@@ -71,6 +72,7 @@ public:
           stable_input_stream(stable_input_stream_),
           stable_input_stream_raw_ptr(stable_input_stream.get()),
           delta_value_space(delta_value_space_),
+          delta_rows_limit(delta_value_space->getRows()),
           entry_it(index_begin),
           entry_end(index_end),
           max_block_size(max_block_size_)
@@ -159,8 +161,11 @@ private:
             }
             else if (entry_it.getType() == DT_INS)
             {
-                writeInsertFromDelta(output_columns, entry_it.getValue());
-                --output_write_limit;
+                if (entry_it.getValue() < delta_rows_limit)
+                {
+                    writeInsertFromDelta(output_columns, entry_it.getValue());
+                    --output_write_limit;
+                }
             }
             else
             {

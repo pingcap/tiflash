@@ -3,7 +3,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 
-
+/// This class is NOT multi-threads safe!
 class EventRecorder
 {
 public:
@@ -12,8 +12,14 @@ public:
         watch.start();
     }
 
+    ~EventRecorder()
+    {
+      if (!done) submit();
+    }
+
     inline void submit()
     {
+        done = true;
         ProfileEvents::increment(event);
         ProfileEvents::increment(event_elapsed, watch.elapsed());
     }
@@ -23,4 +29,5 @@ private:
     ProfileEvents::Event event_elapsed;
 
     Stopwatch watch;
+    bool done = false;
 };
