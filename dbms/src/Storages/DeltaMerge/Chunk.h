@@ -101,6 +101,7 @@ private:
     size_t        rows = 0;
 };
 
+// TODO: use list instead of vector, so that DiskValueSpace won't need to do copy during Segment#getReadSnapshot.
 using Chunks    = std::vector<Chunk>;
 using GenPageId = std::function<PageId()>;
 
@@ -116,12 +117,12 @@ Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_
 void readChunkData(MutableColumns &      columns,
                    const Chunk &         chunk,
                    const ColumnDefines & column_defines,
-                   PageStorage &         storage,
+                   const PageReader &    page_reader,
                    size_t                rows_offset,
                    size_t                rows_limit);
 
 
-Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, PageStorage & data_storage);
+Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, const PageReader & page_reader);
 
 
 } // namespace DM
