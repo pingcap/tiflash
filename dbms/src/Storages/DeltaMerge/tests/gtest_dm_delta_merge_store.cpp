@@ -238,7 +238,7 @@ try
             commands.emplace_back(std::move(com));
         }
         ColumnID _ignored = 0;
-        store->applyColumnDefineAlters(commands, std::nullopt, _ignored, *context);
+        store->applyAlters(commands, std::nullopt, _ignored, *context);
     }
 
     {

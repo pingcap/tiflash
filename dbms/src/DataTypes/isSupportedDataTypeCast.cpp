@@ -20,8 +20,6 @@ bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
     /// `to` is equal to `from`
     if (to->equals(*from))
     {
-        // TODO: maybe buggy in DataTypeDecimal after merge https://github.com/pingcap/tics/pull/74
-        // https://github.com/pingcap/tics/pull/74/files#diff-bf73e8ba09a6ec5c3814166d71be8666R167
         return true;
     }
 
@@ -101,8 +99,6 @@ bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
             return false;
         }
 
-        // TODO should we return true if and only if
-        // from->getPrec() == to->getPrec() && from->getScale() == to->getPrec();
         return from->equals(*to);
     }
 
