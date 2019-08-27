@@ -411,7 +411,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setCurrentDatabase(default_database);
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
-    global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+    for (int i = 0; i < 180 ; i++) // retry for 3 mins
+    {
+        try
+        {
+            global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+            break;
+        }
+        catch (Poco::Exception & e)
+        {
+            LOG_ERROR(log, "Bootstrap failed because sync schema error: " << e.displayText() << "\n We will sleep 3 seconds and try again.");
+            ::sleep(1);
+        }
+    }
     LOG_DEBUG(log, "Sync schemas done.");
     global_context->initializeSchemaSyncService();
 
