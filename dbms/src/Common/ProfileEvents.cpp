@@ -171,8 +171,14 @@
     \
     M(DMWriteBlock) \
     M(DMWriteBlockNS) \
-    M(DMAppendDelta) \
-    M(DMAppendDeltaNS) \
+    M(DMAppendDeltaPrepare) \
+    M(DMAppendDeltaPrepareNS) \
+    M(DMAppendDeltaCommitMemory) \
+    M(DMAppendDeltaCommitMemoryNS) \
+    M(DMAppendDeltaCommitDisk) \
+    M(DMAppendDeltaCommitDiskNS) \
+    M(DMAppendDeltaCleanUp) \
+    M(DMAppendDeltaCleanUpNS) \
     M(DMPlace) \
     M(DMPlaceNS) \
     M(DMPlaceUpsert) \

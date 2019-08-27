@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 namespace DB
