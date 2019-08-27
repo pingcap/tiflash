@@ -23,6 +23,8 @@ public:
     String getName() const override { return "DeltaMerge"; }
     String getTableName() const override { return name; }
 
+    void drop() override ;
+
     BlockInputStreams read(const Names & column_names,
         const SelectQueryInfo & query_info,
         const Context & context,
