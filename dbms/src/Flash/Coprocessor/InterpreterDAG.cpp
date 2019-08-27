@@ -68,6 +68,11 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         ColumnID cid = ci.column_id();
         if (cid < 1 || cid > (Int64)storage->getTableInfo().columns.size())
         {
+            if (cid == -1)
+            {
+                // for sql that do not need read any column(e.g. select count(*) from t), the column id will be -1
+                continue;
+            }
             // cid out of bound
             throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
@@ -78,8 +83,11 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     if (required_columns.empty())
     {
-        // no column selected, must be something wrong
-        throw Exception("No column is selected in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
+        // if no column is selected, use the smallest column
+        String smallest_column_name = ExpressionActions::getSmallestColumn(storage->getColumns().getAllPhysical());
+        required_columns.push_back(smallest_column_name);
+        auto pair = storage->getColumns().getPhysical(smallest_column_name);
+        source_columns.push_back(pair);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns, context);
@@ -269,8 +277,7 @@ void InterpreterDAG::executeAggregation(
     }
     else
     {
-        pipeline.firstStream()
-            = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, true);
+        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(pipeline.firstStream(), params, true);
     }
     // add cast
 }
