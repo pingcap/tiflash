@@ -44,6 +44,13 @@ public:
         size_t  merge_hint_low_used_file_num        = 10;
     };
 
+#ifdef DELTA_VERSION_SET
+    using VersionedPageEntries = PageEntriesVersionSetWithDelta;
+#else
+    using VersionedPageEntries = PageEntriesVersionSet;
+#endif
+
+    using SnapshotPtr   = VersionedPageEntries::SnapshotPtr;
     using WriterPtr     = std::unique_ptr<PageFile::Writer>;
     using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
@@ -55,18 +62,13 @@ public:
 
     void write(const WriteBatch & write_batch);
 
-#ifdef DELTA_VERSION_SET
-    using SnapshotPtr = PageEntriesVersionSetWithDelta::SnapshotPtr;
-#else
-    using SnapshotPtr = PageEntryMapVersionSet::SnapshotPtr;
-#endif
     SnapshotPtr getSnapshot();
 
-    PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = nullptr);
-    Page      read(PageId page_id, SnapshotPtr snapshot = nullptr);
-    PageMap   read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = nullptr);
-    void      read(const std::vector<PageId> & page_ids, PageHandler & handler, SnapshotPtr snapshot = nullptr);
-    void      traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = nullptr);
+    PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
+    Page      read(PageId page_id, SnapshotPtr snapshot = {});
+    PageMap   read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot = {});
+    void      read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot = {});
+    void      traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
     void      traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
     bool      gc();
 
@@ -91,11 +93,7 @@ private:
     String storage_path;
     Config config;
 
-#ifdef DELTA_VERSION_SET
-    PageEntriesVersionSetWithDelta version_set;
-#else
-    PageEntryMapVersionSet version_set;
-#endif
+    VersionedPageEntries versioned_page_entries;
 
     PageFile  write_file;
     WriterPtr write_file_writer;
@@ -108,6 +106,23 @@ private:
 
     std::mutex write_mutex;
     std::mutex gc_mutex; // A mutex used to protect gc
+};
+
+class PageReader
+{
+public:
+    /// Not snapshot read.
+    explicit PageReader(PageStorage & storage_) : storage(storage_), snap() {}
+    /// Snapshot read.
+    PageReader(PageStorage & storage_, const PageStorage::SnapshotPtr & snap_) : storage(storage_), snap(snap_) {}
+
+    Page    read(PageId page_id) const { return storage.read(page_id, snap); }
+    PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
+    void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler); };
+
+private:
+    PageStorage &            storage;
+    PageStorage::SnapshotPtr snap;
 };
 
 } // namespace DB
