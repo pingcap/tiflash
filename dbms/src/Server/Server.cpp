@@ -416,6 +416,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         try
         {
             global_context->getTMTContext().getSchemaSyncer()->syncSchemas(*global_context);
+            break;
         }
         catch (Poco::Exception & e)
         {
