@@ -89,5 +89,5 @@ Code: 60. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: Table defa
 
 
 ## Clean up
-#>> drop table if exists dm_test
-#>> drop table if exists dm_test_renamed
+>> drop table if exists dm_test
+>> drop table if exists dm_test_renamed

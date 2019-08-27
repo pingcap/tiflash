@@ -203,7 +203,7 @@ ColumnInfo getColumnInfoByDataType(const DataTypePtr & type)
         not_null_type = type;
     }
 
-    // Use TypeIndex in this PR:
+    // Use enum TypeIndex
     switch (not_null_type->getTypeId())
     {
         case TypeIndex::Nothing:
