@@ -91,15 +91,19 @@ bool isSupportedDataTypeCast(const DataTypePtr &from, const DataTypePtr &to)
         return false;
     }
 
-    if (from->isDecimal() || to->isDecimal())
     {
-        if (from->isDecimal() && to->isDecimal())
+        bool from_is_decimal = IsDecimalDataType(from);
+        bool to_is_decimal = IsDecimalDataType(to);
+        if (from_is_decimal || to_is_decimal)
         {
-            // not support change Decimal to other type, neither other type to Decimal
-            return false;
-        }
+            if (from_is_decimal && to_is_decimal)
+            {
+                // not support change Decimal to other type, neither other type to Decimal
+                return false;
+            }
 
-        return from->equals(*to);
+            return from->equals(*to);
+        }
     }
 
     // TODO enums, set?

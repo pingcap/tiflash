@@ -341,7 +341,6 @@ public:
     virtual bool isInteger() const { return false; };
     virtual bool isUnsignedInteger() const { return false; };
 
-    virtual bool isDecimal() const { return false; }
     virtual bool isDateOrDateTime() const { return false; };
 
     /** Numbers, Enums, Date, DateTime. Not nullable.

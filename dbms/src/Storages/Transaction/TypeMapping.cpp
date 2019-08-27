@@ -1,5 +1,6 @@
 #include <type_traits>
 
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -9,7 +10,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <Common/typeid_cast.h>
+#include <Functions/FunctionHelpers.h>
 
 namespace DB
 {
@@ -168,11 +169,31 @@ DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
     return base;
 }
 
-ColumnInfo getColumnInfoByDataType(const DataTypePtr &type)
+
+namespace
+{
+
+template <typename T>
+bool getDecimalInfo(const IDataType * type, ColumnInfo & column_info)
+{
+    using TypeDec = DataTypeDecimal<T>;
+    if (auto decimal_type = checkAndGetDataType<TypeDec>(type); decimal_type != nullptr)
+    {
+        column_info.flen = decimal_type->getPrec();
+        column_info.decimal = decimal_type->getScale();
+        column_info.tp = TiDB::TypeNewDecimal;
+        return true;
+    }
+    return false;
+}
+
+} // namespace
+
+ColumnInfo getColumnInfoByDataType(const DataTypePtr & type)
 {
     ColumnInfo col;
     DataTypePtr not_null_type;
-    if (const DataTypeNullable * type_nullable = typeid_cast<const DataTypeNullable *>(type.get()))
+    if (const auto * type_nullable = typeid_cast<const DataTypeNullable *>(type.get()))
     {
         not_null_type = type_nullable->getNestedType();
     }
@@ -182,105 +203,104 @@ ColumnInfo getColumnInfoByDataType(const DataTypePtr &type)
         not_null_type = type;
     }
 
-    // TODO Use TypeIndex in this PR:
-    // https://github.com/pingcap/tics/pull/74/files#diff-bda9a99f5a35beca1528f66a89ad9804R101
-    if (typeid_cast<const DataTypeInt8 *>(not_null_type.get()))
+    // Use TypeIndex in this PR:
+    switch (not_null_type->getTypeId())
     {
-        col.tp = TiDB::TypeTiny;
-        return col;
+        case TypeIndex::Nothing:
+            col.tp = TiDB::TypeNull;
+            break;
+
+        // UnSigned
+        case TypeIndex::UInt8:
+            col.setUnsignedFlag();
+            col.tp = TiDB::TypeTiny;
+            break;
+        case TypeIndex::UInt16:
+            col.setUnsignedFlag();
+            col.tp = TiDB::TypeShort;
+            break;
+        case TypeIndex::UInt32:
+            col.setUnsignedFlag();
+            col.tp = TiDB::TypeLong;
+            break;
+        case TypeIndex::UInt64:
+            col.setUnsignedFlag();
+            col.tp = TiDB::TypeLongLong;
+            break;
+
+        // Signed
+        case TypeIndex::Int8:
+            col.tp = TiDB::TypeTiny;
+            break;
+        case TypeIndex::Int16:
+            col.tp = TiDB::TypeShort;
+            break;
+        case TypeIndex::Int32:
+            col.tp = TiDB::TypeLong;
+            break;
+        case TypeIndex::Int64:
+            col.tp = TiDB::TypeLongLong;
+            break;
+
+        // Floating point types
+        case TypeIndex::Float32:
+            col.tp = TiDB::TypeFloat;
+            break;
+        case TypeIndex::Float64:
+            col.tp = TiDB::TypeDouble;
+            break;
+
+        case TypeIndex::Date:
+            col.tp = TiDB::TypeDate;
+            break;
+        case TypeIndex::DateTime:
+            col.tp = TiDB::TypeDatetime;
+            break;
+
+        case TypeIndex::String:
+            col.tp = TiDB::TypeString;
+            break;
+        case TypeIndex::FixedString:
+            col.tp = TiDB::TypeString;
+            break;
+
+        // Decimal
+        case TypeIndex::Decimal32:
+            getDecimalInfo<Decimal32>(type.get(), col);
+            break;
+        case TypeIndex::Decimal64:
+            getDecimalInfo<Decimal64>(type.get(), col);
+            break;
+        case TypeIndex::Decimal128:
+            getDecimalInfo<Decimal128>(type.get(), col);
+            break;
+        case TypeIndex::Decimal256:
+            getDecimalInfo<Decimal256>(type.get(), col);
+            break;
+
+        // Unknown numeric in TiDB
+        case TypeIndex::UInt128:
+            break;
+        case TypeIndex::Int128:
+            break;
+        case TypeIndex::Int256:
+            break;
+
+        // Unkonwn
+        case TypeIndex::Enum8:
+        case TypeIndex::Enum16:
+        case TypeIndex::UUID:
+        case TypeIndex::Array:
+        case TypeIndex::Tuple:
+        case TypeIndex::Set:
+        case TypeIndex::Interval:
+        case TypeIndex::Nullable:
+        case TypeIndex::Function:
+        case TypeIndex::AggregateFunction:
+        case TypeIndex::LowCardinality:
+            throw Exception("Unknown TiDB type from " + type->getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
-    if (typeid_cast<const DataTypeUInt8 *>(not_null_type.get()))
-    {
-        col.setUnsignedFlag();
-        col.tp = TiDB::TypeTiny;
-        return col;
-    }
-    if (typeid_cast<const DataTypeInt16 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeShort;
-        return col;
-    }
-    if (typeid_cast<const DataTypeUInt16 *>(not_null_type.get()))
-    {
-        col.setUnsignedFlag();
-        col.tp = TiDB::TypeShort;
-        return col;
-    }
-    if (typeid_cast<const DataTypeInt32 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeLong;
-        return col;
-    }
-    if (typeid_cast<const DataTypeUInt32 *>(not_null_type.get()))
-    {
-        col.setUnsignedFlag();
-        col.tp = TiDB::TypeLong;
-        return col;
-    }
-    if (typeid_cast<const DataTypeInt64 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeLongLong;
-        return col;
-    }
-    if (typeid_cast<const DataTypeUInt64 *>(not_null_type.get()))
-    {
-        col.setUnsignedFlag();
-        col.tp = TiDB::TypeLongLong;
-        return col;
-    }
-    if (not_null_type->isStringOrFixedString())
-    {
-        col.tp = TiDB::TypeString;
-        return col;
-    }
-    if (typeid_cast<const DataTypeFloat32 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeFloat;
-        return col;
-    }
-    if (typeid_cast<const DataTypeFloat64 *>(not_null_type.get()))
-    {
-        col.setUnsignedFlag();
-        col.tp = TiDB::TypeDouble;
-        return col;
-    }
-    if (typeid_cast<const DataTypeDate *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeDate;
-        return col;
-    }
-    if (typeid_cast<const DataTypeDateTime *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeDatetime;
-        return col;
-    }
-    if (typeid_cast<const DataTypeDecimal32 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeDecimal;
-        return col;
-    }
-    if (typeid_cast<const DataTypeDecimal64 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeDecimal;
-        return col;
-    }
-    if (typeid_cast<const DataTypeDecimal128 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeDecimal;
-        return col;
-    }
-    if (typeid_cast<const DataTypeDecimal256 *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeDecimal;
-        return col;
-    }
-    if (typeid_cast<const DataTypeNothing *>(not_null_type.get()))
-    {
-        col.tp = TiDB::TypeNull;
-        return col;
-    }
-    throw Exception("Unknown TiDB type from " + type->getName(), ErrorCodes::NOT_IMPLEMENTED);
+    return col;
 }
 
 } // namespace DB
-
