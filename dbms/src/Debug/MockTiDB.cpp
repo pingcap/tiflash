@@ -1,5 +1,6 @@
 #include <Debug/MockTiDB.h>
 
+#include <Common/FieldVisitors.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -128,7 +129,7 @@ bool tryGetDecimalType(const IDataType * nested_type, ColumnInfo & column_info)
     return false;
 }
 
-ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
+ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id, const Field & default_value)
 {
     ColumnInfo column_info;
     column_info.id = id;
@@ -189,9 +190,17 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id)
     if (checkDataType<DataTypeUInt64>(nested_type))
         column_info.tp = TiDB::TypeLongLong;
 
-    // Default value.
-    // TODO: Parse default value and set flag properly.
-    column_info.setNoDefaultValueFlag();
+    // Default value, currently we only support int.
+    if (!default_value.isNull())
+    {
+        // convert any type to string , this is TiDB's style.
+
+        column_info.origin_default_value = applyVisitor(FieldVisitorToString(), default_value);
+    }
+    else
+    {
+        column_info.setNoDefaultValueFlag();
+    }
 
     return column_info;
 }
@@ -240,7 +249,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     int i = 1;
     for (auto & column : columns.getAllPhysical())
     {
-        table_info.columns.emplace_back(getColumnInfoFromColumn(column, i++));
+        table_info.columns.emplace_back(getColumnInfoFromColumn(column, i++, Field()));
     }
 
     table_info.pk_is_handle = false;
@@ -323,7 +332,8 @@ void MockTiDB::dropPartition(const String & database_name, const String & table_
     version_diff[version] = diff;
 }
 
-void MockTiDB::addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column)
+void MockTiDB::addColumnToTable(
+    const String & database_name, const String & table_name, const NameAndTypePair & column, const Field & default_value)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -334,7 +344,7 @@ void MockTiDB::addColumnToTable(const String & database_name, const String & tab
         != columns.end())
         throw Exception("Column " + column.name + " already exists in TiDB table " + qualified_name, ErrorCodes::LOGICAL_ERROR);
 
-    ColumnInfo column_info = getColumnInfoFromColumn(column, table->allocColumnID());
+    ColumnInfo column_info = getColumnInfoFromColumn(column, table->allocColumnID(), default_value);
     columns.emplace_back(column_info);
 
     version++;
@@ -381,7 +391,7 @@ void MockTiDB::modifyColumnInTable(const String & database_name, const String & 
     if (it == columns.end())
         throw Exception("Column " + column.name + " does not exist in TiDB table  " + qualified_name, ErrorCodes::LOGICAL_ERROR);
 
-    ColumnInfo column_info = getColumnInfoFromColumn(column, 0);
+    ColumnInfo column_info = getColumnInfoFromColumn(column, 0, Field());
     if (it->hasUnsignedFlag() != column_info.hasUnsignedFlag())
         throw Exception("Modify column " + column.name + " UNSIGNED flag is not allowed", ErrorCodes::LOGICAL_ERROR);
     if (it->hasNotNullFlag() != column_info.hasNotNullFlag())
