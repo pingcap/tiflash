@@ -22,6 +22,7 @@ namespace DM
 
 struct BlockOrDelete
 {
+    BlockOrDelete() = default;
     BlockOrDelete(Block && block_) : block(block_) {}
     BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
 
@@ -29,6 +30,24 @@ struct BlockOrDelete
     HandleRange delete_range;
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
+
+struct AppendWriteBatches
+{
+    WriteBatch data;
+    WriteBatch meta;
+    WriteBatch removed_data;
+};
+
+struct AppendTask
+{
+    bool   append_cache; // If not append cache, then clear cache.
+    size_t remove_chunk_back;
+    Chunks append_chunks;
+};
+using AppendTaskPtr = std::unique_ptr<AppendTask>;
+
+class DiskValueSpace;
+using DiskValueSpacePtr = std::shared_ptr<DiskValueSpace>;
 
 class DiskValueSpace
 {
@@ -62,21 +81,6 @@ public:
         GenPageId     gen_data_page_id;
     };
 
-    struct AppendTask
-    {
-        /// The write order of the following wirte batch is critical!
-
-        WriteBatch data_write_batch;
-        WriteBatch meta_write_batch;
-
-        WriteBatch data_remove_write_batch;
-
-        bool   append_cache; // If not append cache, then clear cache.
-        size_t remove_chunk_back;
-        Chunks append_chunks;
-    };
-    using AppendTaskPtr = std::unique_ptr<AppendTask>;
-
     DiskValueSpace(bool should_cache_, PageId page_id_);
     DiskValueSpace(bool should_cache_, PageId page_id_, const Chunks & chunks_);
     DiskValueSpace(const DiskValueSpace & other);
@@ -84,9 +88,8 @@ public:
     /// Called after the instance is created from existing metadata.
     void restore(const OpContext & context);
 
-    AppendTaskPtr createAppendTask(const OpContext & context, const BlockOrDelete & block_or_delete) const;
-
-    void applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & block_or_delete);
+    AppendTaskPtr     createAppendTask(const OpContext & context, AppendWriteBatches & wbs, const BlockOrDelete & update) const;
+    DiskValueSpacePtr applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
     /// Write the blocks from input_stream into underlying storage, the returned chunks can be added to
     /// specified value space instance by #setChunks or #appendChunkWithCache later.
@@ -103,24 +106,24 @@ public:
     /// Read the requested chunks' data and compact into a block.
     /// The columns of the returned block are guaranteed to be in order of read_columns.
     Block read(const ColumnDefines & read_columns,
-               PageStorage &         data_storage,
+               const PageReader &    page_reader,
                size_t                rows_offset,
                size_t                rows_limit,
                std::optional<size_t> reserve_rows = {}) const;
 
     /// Read the chunk data.
     /// The columns of the returned block are guaranteed to be in order of read_columns.
-    Block read(const ColumnDefines & read_columns, PageStorage & data_storage, size_t chunk_index) const;
+    Block read(const ColumnDefines & read_columns, const PageReader & page_reader, size_t chunk_index) const;
 
     /// The data of returned block is in insert order.
     BlockOrDeletes getMergeBlocks(const ColumnDefine & handle,
-                                  PageStorage &        data_storage,
+                                  const PageReader &   page_reader,
                                   size_t               rows_begin,
                                   size_t               deletes_begin,
                                   size_t               rows_end,
                                   size_t               deletes_end) const;
 
-    ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, PageStorage & data_storage) const;
+    ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
     bool tryFlushCache(const OpContext & context, bool force = false);
 
@@ -157,8 +160,6 @@ private:
 
     Logger * log;
 };
-
-using DiskValueSpacePtr = std::shared_ptr<DiskValueSpace>;
 
 } // namespace DM
 } // namespace DB

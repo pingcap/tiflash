@@ -12,7 +12,7 @@ namespace DM
 
 static const std::chrono::seconds DELTA_MERGE_GC_PERIOD(60);
 
-class StoragePool
+class StoragePool : private boost::noncopyable
 {
 public:
     using Clock     = std::chrono::system_clock;
@@ -21,7 +21,6 @@ public:
     using Seconds   = std::chrono::seconds;
 
     explicit StoragePool(const String & path);
-    StoragePool(const StoragePool &) = delete;
 
     PageId maxLogPageId() { return max_log_page_id; }
     PageId maxDataPageId() { return max_data_page_id; }
@@ -50,6 +49,24 @@ private:
 
     std::mutex mutex;
 };
+
+const static PageStorage::SnapshotPtr EMPTY_PS_SNAP_PTR = {};
+
+class StorageSnapshot
+{
+public:
+    StorageSnapshot(StoragePool & storage, bool snapshot_read = true)
+        : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : EMPTY_PS_SNAP_PTR),
+          data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : EMPTY_PS_SNAP_PTR),
+          meta_reader(storage.meta(), snapshot_read ? storage.meta().getSnapshot() : EMPTY_PS_SNAP_PTR)
+    {
+    }
+
+    PageReader log_reader;
+    PageReader data_reader;
+    PageReader meta_reader;
+};
+using StorageSnapshotPtr = std::shared_ptr<StorageSnapshot>;
 
 } // namespace DM
 } // namespace DB
