@@ -21,7 +21,6 @@ namespace DM
 static constexpr size_t CHUNK_SERIALIZE_BUFFER_SIZE = 65536;
 
 
-// TODO: version des/ser
 struct ColumnMeta
 {
     ColId       col_id;
@@ -69,6 +68,8 @@ public:
         return bytes;
     }
 
+    bool hasColumn(ColId col_id) const { return columns.count(col_id) > 0; }
+
     const ColumnMeta & getColumn(ColId col_id) const
     {
         auto it = columns.find(col_id);
@@ -114,15 +115,47 @@ Chunks deserializeChunks(ReadBuffer & buf);
 
 Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block);
 
+/**
+ * Read `chunk`'s columns from `storage` and append the `chunk`'s data range
+ * [`rows_offset`, `rows_offset`+`rows_limit`) to `columns`.
+ *
+ * Note that after ddl, the data type between `chunk.columns` and `column_defines` maybe different,
+ * we do a cast according to `column_defines` before append to `columns`.
+ *
+ * @param columns           The columns to append data.
+ * @param column_defines    The DataType, column-id of `columns`.
+ * @param chunk             Info about chunk to read. e.g. PageId in `storage`, DataType for reading.
+ * @param page_reader       Where the serialized data stored in.
+ * @param rows_offset
+ * @param rows_limit
+ */
 void readChunkData(MutableColumns &      columns,
-                   const Chunk &         chunk,
                    const ColumnDefines & column_defines,
+                   const Chunk &         chunk,
                    const PageReader &    page_reader,
                    size_t                rows_offset,
                    size_t                rows_limit);
 
 
 Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, const PageReader & page_reader);
+
+/**
+ * Cast `disk_col` from `disk_type` according to `read_define`, and append data
+ * [`rows_offset`, `rows_offset`+`rows_limit`) to `memory_col`
+ *
+ * @param disk_type
+ * @param disk_col
+ * @param read_define
+ * @param memory_col
+ * @param rows_offset
+ * @param rows_limit
+ */
+void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
+                                       const ColumnPtr &    disk_col,
+                                       const ColumnDefine & read_define,
+                                       MutableColumnPtr     memory_col,
+                                       size_t               rows_offset,
+                                       size_t               rows_limit);
 
 
 } // namespace DM
