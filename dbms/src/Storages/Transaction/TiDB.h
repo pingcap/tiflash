@@ -264,7 +264,7 @@ struct TableInfo
     bool is_partition_table = false;
     TableID belonging_table_id = -1;
     PartitionInfo partition;
-    Int64 schema_version = -1;
+    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
     ColumnID getColumnID(const String & name) const;
 

@@ -3,6 +3,9 @@
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ExpressionElementParsers.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -60,6 +63,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
         if (col.name != table_handle_define.name && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             table_columns.emplace_back(col);
     }
+    // update block header
+    header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
 
     DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
     if (!storage_pool.maxMetaPageId())
@@ -523,6 +528,143 @@ void DeltaMergeStore::check(const Context & db_context, const DB::Settings & db_
     {
         (void)end;
         segment->check(dm_context, "Manually");
+    }
+}
+
+Block DeltaMergeStore::genHeaderBlock(const ColumnDefines & raw_columns,
+                                      const ColumnDefine &  handle_define,
+                                      const DataTypePtr &   handle_real_type)
+{
+    ColumnDefines real_cols = raw_columns;
+    for (auto && col : real_cols)
+    {
+        if (col.id == handle_define.id)
+        {
+            if (handle_real_type)
+                col.type = handle_real_type;
+        }
+    }
+    return toEmptyBlock(real_cols);
+}
+
+void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
+                                  const OptionTableInfoConstRef table_info,
+                                  ColumnID &                    max_column_id_used,
+                                  const Context &               context)
+{
+    /// Force flush on store, so that no chunks with different data type in memory
+    // TODO maybe some ddl do not need to flush cache? eg. just change default value
+    this->flushCache(context);
+
+    for (const auto & command : commands)
+    {
+        applyAlter(command, table_info, max_column_id_used);
+    }
+
+    // Don't forget to update header
+    header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
+}
+
+namespace
+{
+inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
+{
+    if (command.default_expression)
+    {
+        // a cast function
+        // change column_define.default_value
+
+        if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
+            default_literal && default_literal->value.getType() == Field::Types::String)
+        {
+            const auto default_val = safeGet<String>(default_literal->value);
+            define.default_value   = default_val;
+        }
+        else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
+                 default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
+        {
+            // eg. CAST('1.234' AS Float32); CAST(999 AS Int32)
+            if (default_cast_expr->arguments->children.size() != 2)
+            {
+                throw Exception("Unknown CAST expression in default expr", ErrorCodes::NOT_IMPLEMENTED);
+            }
+
+            auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
+            if (default_literal_in_cast && default_literal_in_cast->value.getType() == Field::Types::String)
+            {
+                const auto default_value = safeGet<String>(default_literal_in_cast->value);
+                define.default_value     = default_value;
+            }
+            else
+            {
+                throw Exception("First argument in CAST expression must be a string", ErrorCodes::NOT_IMPLEMENTED);
+            }
+        }
+        else
+        {
+            throw Exception("Default value must be a string or CAST('...' AS WhatType)", ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
+}
+} // namespace
+
+void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTableInfoConstRef table_info, ColumnID & max_column_id_used)
+{
+    if (command.type == AlterCommand::MODIFY_COLUMN)
+    {
+        // find column define and then apply modify
+        bool exist_column = false;
+        for (auto && column_define : table_columns)
+        {
+            if (column_define.name == command.column_name)
+            {
+                exist_column       = true;
+                column_define.type = command.data_type;
+                setColumnDefineDefaultValue(command, column_define);
+                break;
+            }
+        }
+        if (!exist_column)
+        {
+            throw Exception(String("Alter column: ") + command.column_name + " is not exists.", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    else if (command.type == AlterCommand::ADD_COLUMN)
+    {
+        // we don't care about `after_column` in `table_columns`
+
+        /// If TableInfo from TiDB is not empty, we get column id from TiDB
+        ColumnDefine define(0, command.column_name, command.data_type);
+        if (table_info)
+        {
+            auto tidb_col_iter = findColumnInfoInTableInfo(table_info->get(), command.column_name);
+            define.id          = tidb_col_iter->id;
+        }
+        else
+        {
+            define.id = max_column_id_used++;
+        }
+        assert(define.id != 0);
+        setColumnDefineDefaultValue(command, define);
+        table_columns.emplace_back(std::move(define));
+    }
+    else if (command.type == AlterCommand::DROP_COLUMN)
+    {
+        // identify column by name in `AlterCommand`. TODO we may change to identify column by column-id later
+        table_columns.erase(std::remove_if(table_columns.begin(),
+                                           table_columns.end(),
+                                           [&](const ColumnDefine & c) { return c.name == command.column_name; }),
+                            table_columns.end());
+    }
+}
+
+void DeltaMergeStore::flushCache(const Context & db_context)
+{
+    DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
+    for (auto && [_handle, segment] : segments)
+    {
+        (void)_handle;
+        segment->flushCache(dm_context);
     }
 }
 

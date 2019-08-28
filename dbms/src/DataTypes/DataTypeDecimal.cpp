@@ -168,7 +168,7 @@ bool DataTypeDecimal<T>::equals(const IDataType & rhs) const
 {
     if (auto ptr = checkDecimal<T>(rhs))
     {
-        return ptr->getScale() == scale;
+        return ptr->getScale() == scale && ptr->getPrec() == precision;
     }
     return false;
 }

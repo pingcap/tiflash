@@ -21,9 +21,10 @@ struct DMContext
     const Context & db_context;
     StoragePool &   storage_pool;
 
-    const String &        table_name;
-    const ColumnDefines & table_columns;
-    const ColumnDefine &  table_handle_define;
+    // The schema snapshot
+    // We need a consistent snapshot of columns, copy ColumnsDefines
+    const ColumnDefines table_columns;
+    const ColumnDefine  table_handle_define;
 
     const UInt64 min_version;
 

@@ -181,13 +181,8 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, Append
                     if (!is_delete)
                         new_col->insertRangeFrom(*append_block.getByName(col_define.name).column, 0, append_rows);
 
-                    ColumnWithTypeAndName col;
-                    col.column    = std::move(new_col);
-                    col.name      = col_define.name;
-                    col.type      = col_define.type;
-                    col.column_id = col_define.id;
-
-                    compacted_block.insert(col);
+                    ColumnWithTypeAndName col(std::move(new_col), col_define.type, col_define.name, col_define.id);
+                    compacted_block.insert(std::move(col));
                 }
             }
 
@@ -380,7 +375,7 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
             if (rows_end_in_chunk > rows_start_in_chunk)
             {
                 readChunkData(
-                    columns, cur_chunk, read_column_defines, page_reader, rows_start_in_chunk, rows_end_in_chunk - rows_start_in_chunk);
+                    columns, read_column_defines, cur_chunk, page_reader, rows_start_in_chunk, rows_end_in_chunk - rows_start_in_chunk);
 
                 already_read_rows += rows_end_in_chunk - rows_start_in_chunk;
             }
@@ -391,6 +386,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
 
     if (already_read_rows < rows_limit)
     {
+        // TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
+
         // chunk_index could be larger than chunk_cache_start.
         size_t cache_rows_offset = 0;
         for (size_t i = chunk_cache_start; i < chunk_index; ++i)
@@ -398,11 +395,12 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
 
         for (size_t index = 0; index < read_column_defines.size(); ++index)
         {
-            ColumnDefine define    = read_column_defines[index];
-            auto &       cache_col = cache.at(define.id);
+            const ColumnDefine & define    = read_column_defines[index];
+            auto &               cache_col = cache.at(define.id); // TODO new inserted col'id don't exist in cache.
 
             size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
 
+            // TODO columns[index].type maybe not consisted with cache_col after ddl.
             columns[index]->insertRangeFrom(*cache_col, cache_rows_offset + rows_offset_in_chunk, rows_limit - already_read_rows);
         }
     }
@@ -411,13 +409,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
         const ColumnDefine &  define = read_column_defines[index];
-        ColumnWithTypeAndName col;
-        col.type      = define.type;
-        col.name      = define.name;
-        col.column_id = define.id;
-        col.column    = std::move(columns[index]);
-
-        res.insert(col);
+        ColumnWithTypeAndName col(std::move(columns[index]), define.type, define.name, define.id);
+        res.insert(std::move(col));
     }
     return res;
 }
@@ -442,11 +435,13 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, const Page
         if (chunk_index < chunk_cache_start)
         {
             // Read from storage
-            readChunkData(columns, chunk, read_column_defines, page_reader, 0, chunk.getRows());
+            readChunkData(columns, read_column_defines, chunk, page_reader, 0, chunk.getRows());
         }
         else
         {
             // Read from cache
+
+            // TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
             size_t cache_rows_offset = 0;
             for (size_t i = chunk_cache_start; i < chunk_index; ++i)
                 cache_rows_offset += chunks[i].getRows();
@@ -464,13 +459,8 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, const Page
     for (size_t index = 0; index < read_column_defines.size(); ++index)
     {
         const ColumnDefine &  define = read_column_defines[index];
-        ColumnWithTypeAndName col;
-        col.type      = define.type;
-        col.name      = define.name;
-        col.column_id = define.id;
-        col.column    = std::move(columns[index]);
-
-        res.insert(col);
+        ColumnWithTypeAndName col(std::move(columns[index]), define.type, define.name, define.id);
+        res.insert(std::move(col));
     }
     return res;
 }
@@ -515,14 +505,15 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
 
 bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
 {
-    if (!cache_chunks)
+    if (cache_chunks == 0)
         return false;
-    const size_t cache_rows = cacheRows();
 
-    // A chunk can only contains one delete range.
+    // If last chunk is a delete range, we should flush cache.
     HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
     if (!delete_range.none())
         force = true;
+
+    const size_t cache_rows = cacheRows();
     if (!force && cache_rows < context.dm_context.delta_cache_limit_rows && cacheBytes() < context.dm_context.delta_cache_limit_bytes)
         return false;
 
@@ -581,11 +572,7 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
         // Use the cache.
         for (const auto & col_define : context.dm_context.table_columns)
         {
-            ColumnWithTypeAndName col;
-            col.column    = cache.at(col_define.id)->cloneResized(cache_rows);
-            col.name      = col_define.name;
-            col.type      = col_define.type;
-            col.column_id = col_define.id;
+            ColumnWithTypeAndName col(cache.at(col_define.id)->cloneResized(cache_rows), col_define.type, col_define.name, col_define.id);
             compacted.insert(col);
 
             if (unlikely(col.column->size() != cache_rows))
