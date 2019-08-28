@@ -119,7 +119,7 @@ public:
     SegmentPtr flush(DMContext & dm_context);
 
     /// Flush delta's cached chunks.
-    void flushCache(DMContext & dm_context) { delta->tryFlushCache(OpContext::createForLogStorage(dm_context), /* force= */ true); }
+    void flushCache(DMContext & dm_context);
 
     size_t getEstimatedRows();
 

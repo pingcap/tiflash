@@ -663,7 +663,6 @@ void DeltaMergeStore::flushCache(const Context & db_context)
     DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
     for (auto && [_handle, segment] : segments)
     {
-        std::unique_lock lock(mutex);
         (void)_handle;
         segment->flushCache(dm_context);
     }
