@@ -14,7 +14,7 @@ class DMColumnFilterBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     DMColumnFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
-        : columns_to_read(columns_to_read_), header(createHeader(columns_to_read))
+        : columns_to_read(columns_to_read_), header(toEmptyBlock(columns_to_read))
     {
         children.emplace_back(input);
     }

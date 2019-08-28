@@ -1,0 +1,54 @@
+>> drop table if exists dm_test
+
+## tests for joint primary key
+>> create table dm_test (
+        a Int32,
+        b Int32,
+        c String,
+        d FixedString(20)
+   ) engine = DeltaMerge((a, b))
+
+>> insert into table dm_test values(1, 2, 'hello TiFlash', 'hello world')
+
+# drop a part of pk is forbidden
+>> alter table dm_test drop column a
+Received exception from server (version 1.1.54381):
+Code: 36. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: a.
+
+>> alter table dm_test drop column b
+Received exception from server (version 1.1.54381):
+Code: 36. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: b.
+
+>> select * from dm_test
+┌─a─┬─b─┬─c─────────────┬─d─────────────────────────────┐
+│ 1 │ 2 │ hello TiFlash │ hello world\0\0\0\0\0\0\0\0\0 │
+└───┴───┴───────────────┴───────────────────────────────┘
+>> show create table dm_test
+┌─statement─────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ CREATE TABLE default.dm_test ( a Int32,  b Int32,  c String,  d FixedString(20)) ENGINE = DeltaMerge((a, b)) │
+└───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+>> alter table dm_test drop column c
+#>> show create table dm_test
+#┌─statement──────────────────────────────────────────────────────────────────────────────────────────┐
+#│ CREATE TABLE default.dm_test ( a Int32,  b Int32,  d FixedString(200)) ENGINE = DeltaMerge((a, b)) │
+#└────────────────────────────────────────────────────────────────────────────────────────────────────┘
+>> select * from dm_test
+┌─a─┬─b─┬─d─────────────────────────────┐
+│ 1 │ 2 │ hello world\0\0\0\0\0\0\0\0\0 │
+└───┴───┴───────────────────────────────┘
+
+
+>> alter table dm_test drop column d
+>> select * from dm_test
+┌─a─┬─b─┐
+│ 1 │ 2 │
+└───┴───┘
+#>> show create table dm_test
+#┌─statement─────────────────────────────────────────────────────────────────────┐
+#│ CREATE TABLE default.dm_test ( a Int32,  b Int32) ENGINE = DeltaMerge((a, b)) │
+#└───────────────────────────────────────────────────────────────────────────────┘
+
+## Clean up
+>> drop table if exists dm_test

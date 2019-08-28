@@ -7,9 +7,9 @@ macro(grep_gtest_sources BASE_DIR DST_VAR)
 endmacro()
 # attach all dm gtest sources
 grep_gtest_sources(${ClickHouse_SOURCE_DIR}/dbms/src/Storages/DeltaMerge/tests dm_gtest_sources)
-add_executable(unit_tests_dm EXCLUDE_FROM_ALL ${dm_gtest_sources} dm_basic_include.h)
-target_link_libraries(unit_tests_dm gtest_main dbms clickhouse_functions)
-add_check(unit_tests_dm)
+add_executable(gtests_dm EXCLUDE_FROM_ALL ${dm_gtest_sources} dm_basic_include.h)
+target_link_libraries(gtests_dm gtest_main dbms clickhouse_functions)
+add_check(gtests_dm)
 
 # add unit test by hand
 add_executable(dm_test_storage_delta_merge EXCLUDE_FROM_ALL gtest_dm_storage_delta_merge.cpp)
