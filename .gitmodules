@@ -37,9 +37,6 @@
 [submodule "contrib/kvproto"]
 	path = contrib/kvproto
 	url = https://github.com/pingcap/kvproto.git
-[submodule "contrib/leveldb"]
-	path = contrib/leveldb
-	url = https://github.com/google/leveldb.git
 [submodule "contrib/junction"]
 	path = contrib/junction
 	url = https://github.com/preshing/junction.git
