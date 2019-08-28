@@ -23,5 +23,7 @@ TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type);
 // Note that not every TiFlash type has a corresponding TiDB type,
 // caller should make sure the source type is valid, otherwise exception will be thrown.
 ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value);
+ColumnInfo getColumnInfoByDataType(const DataTypePtr &type);
 
 } // namespace DB
+

@@ -40,10 +40,12 @@ protected:
         table_columns.emplace_back(VERSION_COLUMN_DEFINE);
         table_columns.emplace_back(TAG_COLUMN_DEFINE);
 
+        // TODO fill columns
+        // table_info.columns.emplace_back();
+
         dm_context = std::make_unique<DMContext>(
             DMContext{.db_context          = context,
                       .storage_pool        = *storage_pool,
-                      .table_name          = name,
                       .table_columns       = table_columns,
                       .table_handle_define = table_handle_define,
                       .min_version         = 0,
@@ -62,6 +64,7 @@ protected:
     String path;
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePool>  storage_pool;
+    TiDB::TableInfo table_info;
     ColumnDefine                  table_handle_define;
     ColumnDefines                 table_columns;
     DM::DeltaMergeStore::Settings settings;
