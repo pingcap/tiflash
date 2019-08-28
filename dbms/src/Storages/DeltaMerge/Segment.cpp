@@ -369,6 +369,12 @@ SegmentPtr Segment::flush(DMContext & dm_context)
     return new_me;
 }
 
+void Segment::flushCache(DMContext &dm_context)
+{
+    std::unique_lock lock(read_write_mutex);
+    delta->tryFlushCache(OpContext::createForLogStorage(dm_context), /* force= */ true);
+}
+
 Segment::Segment(UInt64 epoch_, const HandleRange & range_, PageId segment_id_, PageId next_segment_id_, PageId delta_id, PageId stable_id)
     : epoch(epoch_),
       range(range_),

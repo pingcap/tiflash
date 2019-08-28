@@ -20,7 +20,7 @@ public:
         : task_pool(task_pool_),
           stream_creator(stream_creator_),
           columns_to_read(columns_to_read_),
-          header(createHeader(columns_to_read)),
+          header(toEmptyBlock(columns_to_read)),
           handle_name(handle_name_),
           handle_real_type(handle_real_type_),
           context(context_),

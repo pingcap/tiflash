@@ -290,8 +290,8 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
             )
     SETUP_TARGET_FOR_COVERAGE_LCOV(
             NAME tiflash_lcov_coverage
-            DEPENDENCIES unit_tests_dbms
-            EXECUTABLE unit_tests_dbms
+            DEPENDENCIES gtests_dbms
+            EXECUTABLE gtests_dbms
     )
     set(COVERAGE_GCOVR_EXCLUDES
             'contrib'
