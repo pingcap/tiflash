@@ -234,6 +234,23 @@ void DataTypeNumberBase<T>::deserializeBinary(IColumn & column, ReadBuffer & ist
 template <typename T>
 void DataTypeNumberBase<T>::serializeBinaryBulk(const IColumn & column, WriteBuffer & ostr, size_t offset, size_t limit) const
 {
+    if constexpr (std::is_same_v<T, UInt8>)
+    {
+        // This is for tmt to write null vector.
+        const ColumnConst * x = typeid_cast<const ColumnConst *>(&column);
+        if (x != nullptr)
+        {
+            size_t size = x->size();
+
+            if (limit == 0 || offset + limit > size)
+                limit = size - offset;
+
+            for(size_t i = 0; i < limit; i++)
+                writeIntBinary<UInt8>(UInt8(0), ostr);
+
+            return;
+        }
+    }
     const typename ColumnVector<T>::Container & x = typeid_cast<const ColumnVector<T> &>(column).getData();
 
     size_t size = x.size();

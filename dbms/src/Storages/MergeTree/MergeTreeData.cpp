@@ -948,12 +948,12 @@ void MergeTreeData::checkAlter(const AlterCommands & commands)
     ExpressionActionsPtr unused_expression;
     NameToNameMap unused_map;
     bool unused_bool;
-
-    createConvertExpression(nullptr, getColumns().getAllPhysical(), new_columns.getAllPhysical(), unused_expression, unused_map, unused_bool);
+    DataPart::Checksums checksums;
+    createConvertExpression(nullptr, checksums, getColumns().getAllPhysical(), new_columns.getAllPhysical(), unused_expression, unused_map, unused_bool);
 }
 
-void MergeTreeData::createConvertExpression(const DataPartPtr & part, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
-    ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata) const
+void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::Checksums & checksums, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
+    ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata)
 {
     out_expression = nullptr;
     out_rename_map = {};
@@ -1006,8 +1006,31 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, const Name
 
             if (!new_type->equals(*old_type) && (!part || part->hasColumnFiles(column.name)))
             {
+                if (merging_params.mode == MergingParams::Txn)
+                {
+                    if (part && !old_type->isNullable() && new_type->isNullable())
+                    {
+                        auto null_map_name = column.name + "_null";
+                        auto null_map_type = std::make_shared<DataTypeUInt8>();
+                        Block b;
+                        b.insert({ null_map_type->createColumnConstWithDefaultValue(part->rows_count), null_map_type, null_map_name});
+                        auto compression_settings = this->context.chooseCompressionSettings(
+                            part->bytes_on_disk,
+                            static_cast<double>(part->bytes_on_disk) / this->getTotalActiveSizeInBytes());
+                        MergedColumnOnlyOutputStream out(*this, b, part->getFullPath(), true /* sync */, compression_settings, true /* skip_offsets */);
+                        out.write(b);
+                        auto add_checksums = out.writeSuffixAndGetChecksums();
+                        checksums.files[column.name + ".null.bin"] = add_checksums.files[null_map_name + ".bin"];
+                        checksums.files[column.name + ".null.mrk"] = add_checksums.files[null_map_name + ".mrk"];
+                        out_rename_map[null_map_name + ".bin"] = column.name + ".null.bin";
+                        out_rename_map[null_map_name + ".mrk"] = column.name + ".null.mrk";
+                    }
+                    out_force_update_metadata = true;
+                    continue;
+                }
+
                 // TODO: Asserting TXN table never needs data conversion might be arbitary.
-                if (isMetadataOnlyConversion(old_type, new_type) || merging_params.mode == MergingParams::Txn)
+                if (isMetadataOnlyConversion(old_type, new_type))
                 {
                     out_force_update_metadata = true;
                     continue;
@@ -1110,7 +1133,8 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     ExpressionActionsPtr expression;
     AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part)); /// Blocks changes to the part.
     bool force_update_metadata;
-    createConvertExpression(part, part->columns, new_columns, expression, transaction->rename_map, force_update_metadata);
+    DataPart::Checksums new_checksums = part->checksums;
+    createConvertExpression(part, new_checksums, part->columns, new_columns, expression, transaction->rename_map, force_update_metadata);
 
     size_t num_files_to_modify = transaction->rename_map.size();
     size_t num_files_to_remove = 0;
@@ -1260,12 +1284,11 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     }
 
     /// Update the checksums.
-    DataPart::Checksums new_checksums = part->checksums;
     for (auto it : transaction->rename_map)
     {
         if (it.second.empty())
             new_checksums.files.erase(it.first);
-        else
+        else if (add_checksums.files.find(it.first) != add_checksums.files.end())
             new_checksums.files[it.second] = add_checksums.files[it.first];
     }
 

@@ -385,12 +385,11 @@ void MockTiDB::modifyColumnInTable(const String & database_name, const String & 
     ColumnInfo column_info = getColumnInfoFromColumn(column, 0, Field());
     if (it->hasUnsignedFlag() != column_info.hasUnsignedFlag())
         throw Exception("Modify column " + column.name + " UNSIGNED flag is not allowed", ErrorCodes::LOGICAL_ERROR);
-    if (it->hasNotNullFlag() != column_info.hasNotNullFlag())
-        throw Exception("Modify column " + column.name + " NOT NULL flag is not allowed", ErrorCodes::LOGICAL_ERROR);
-    if (it->tp == column_info.tp)
+    if (it->tp == column_info.tp && it->hasNotNullFlag() == column_info.hasNotNullFlag())
         throw Exception("Column " + column.name + " type not changed", ErrorCodes::LOGICAL_ERROR);
 
     it->tp = column_info.tp;
+    it->flag = column_info.flag;
 
     version++;
     SchemaDiff diff;
