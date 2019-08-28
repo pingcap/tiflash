@@ -15,6 +15,8 @@ UNFINISHED_1_PREFIX = '\t'
 UNFINISHED_2_PREFIX = '   '
 WORD_PH = '{#WORD}'
 
+verbose = False
+
 class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
@@ -114,6 +116,7 @@ class Matcher:
         elif line.startswith(CMD_PREFIX_TIDB):
             self.executor_tidb.exe(line[len(CMD_PREFIX_TIDB):])
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
+            if verbose: print 'running', line
             if self.outputs != None and not matched(self.outputs, self.matches, self.fuzz):
                 return False
             self.query = line[len(CMD_PREFIX):]
@@ -165,6 +168,7 @@ def run():
     path = sys.argv[2]
     fuzz = (sys.argv[3] == 'true')
     mysql_client = sys.argv[4]
+    if verbose: print 'parsing `{}`'.format(path)
 
     matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), fuzz)
 

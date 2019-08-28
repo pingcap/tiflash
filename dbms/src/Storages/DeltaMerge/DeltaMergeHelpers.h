@@ -1,3 +1,5 @@
+#include <utility>
+
 #pragma once
 
 #include <Columns/ColumnVector.h>
@@ -11,6 +13,7 @@
 #include <Interpreters/sortBlock.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -62,16 +65,6 @@ inline const ColumnWithTypeAndName & getByColumnId(const Block & block, ColId co
     throw Exception("Column with column id " + DB::toString(col_id) + " not found");
 }
 
-inline ColumnWithTypeAndName createColumnWithTypeAndName(const ColumnPtr & column, const DataTypePtr & type, const String & name, ColId id)
-{
-    ColumnWithTypeAndName c;
-    c.column    = column;
-    c.type      = type;
-    c.name      = name;
-    c.column_id = id;
-    return c;
-}
-
 inline SortDescription getPkSort(const ColumnDefine & handle)
 {
     SortDescription sort;
@@ -106,6 +99,13 @@ inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
 }
 
 template <typename T>
+inline PaddedPODArray<T> * toMutableColumnVectorDataPtr(const MutableColumnPtr & column)
+{
+    ColumnVector<T> & c = typeid_cast<ColumnVector<T> &>(*(column));
+    return &c.getData();
+}
+
+template <typename T>
 inline const PaddedPODArray<T> & toColumnVectorData(const ColumnPtr & column)
 {
     const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
@@ -124,27 +124,23 @@ inline PaddedPODArray<T> const * getColumnVectorDataPtr(const Block & block, siz
     return toColumnVectorDataPtr<T>(block.getByPosition(pos).column);
 }
 
-inline void addColumn(Block & block, ColId col_id, String col_name, const DataTypePtr & col_type, const ColumnPtr & col)
+inline void addColumnToBlock(Block & block, ColId col_id, const String &col_name, const DataTypePtr & col_type, const ColumnPtr & col)
 {
-    ColumnWithTypeAndName column;
-    column.column_id = col_id;
-    column.name      = col_name;
-    column.type      = col_type;
-    column.column    = col;
-    block.insert(column);
+    ColumnWithTypeAndName column(col, col_type, col_name, col_id);
+    block.insert(std::move(column));
 }
 
 inline Block toEmptyBlock(const ColumnDefines & columns)
 {
     Block block;
     for (auto & c : columns)
-        addColumn(block, c.id, c.name, c.type, c.type->createColumn());
+        addColumnToBlock(block, c.id, c.name, c.type, c.type->createColumn());
     return block;
 }
 
 inline void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const Context & context)
 {
-    auto * to_type_ptr = &(*to_type);
+    const IDataType * to_type_ptr = to_type.get();
 
     if (checkDataType<DataTypeUInt8>(to_type_ptr))
         FunctionToUInt8::create(context)->execute(block, {pos}, pos);
@@ -250,21 +246,6 @@ inline size_t blockBytes(const Block & block)
     return bytes;
 }
 
-inline Block createHeader(const ColumnDefines & col_defines)
-{
-    Block header;
-    for (auto & d : col_defines)
-    {
-        ColumnWithTypeAndName col;
-        col.name      = d.name;
-        col.type      = d.type;
-        col.column_id = d.id;
-        col.column    = d.type->createColumn();
-        header.insert(std::move(col));
-    }
-    return header;
-}
-
 template <class T, bool right_open = true>
 inline String rangeToString(T start, T end)
 {
@@ -283,6 +264,18 @@ template <typename T>
 inline String rangeToString(const Range<T> & range)
 {
     return rangeToString<T, true>(range.start, range.end);
+}
+
+/// find column from `table_info.columns` or throw exception
+inline std::vector<TiDB::ColumnInfo>::const_iterator findColumnInfoInTableInfo(const TiDB::TableInfo & table_info, const String & column_name)
+{
+    auto iter = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const TiDB::ColumnInfo & column_info) {
+        return column_info.name == column_name;
+    });
+    if (iter == table_info.columns.end())
+        throw Exception("Invalid column name. Cannot find column " + column_name + " in `table_info`",
+                        ErrorCodes::ILLEGAL_COLUMN);
+    return iter;
 }
 
 } // namespace DM

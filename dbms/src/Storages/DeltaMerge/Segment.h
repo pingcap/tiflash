@@ -118,6 +118,9 @@ public:
     /// Flush delta into stable. i.e. delta merge.
     SegmentPtr flush(DMContext & dm_context);
 
+    /// Flush delta's cached chunks.
+    void flushCache(DMContext & dm_context);
+
     size_t getEstimatedRows();
 
     size_t getEstimatedBytes();

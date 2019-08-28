@@ -2,11 +2,13 @@
 
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
+#include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -61,10 +63,23 @@ public:
                            UInt64                max_version,
                            size_t                expected_block_size);
 
+    /// Force flush all data to disk.
+    /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
+    /// and no other threads is able to read / write at the same time.
+    void flushCache(const Context & context);
+
+    /// Apply `commands` on `table_columns`
+    void applyAlters(const AlterCommands &         commands, //
+                     const OptionTableInfoConstRef table_info,
+                     ColumnID &                    max_column_id_used,
+                     const Context &               context);
+
     void setMinDataVersion(UInt64 version) { min_version = version; }
 
-    const ColumnDefines & getTableColumns() { return table_columns; }
-    const ColumnDefine &  getHandle() { return table_handle_define; }
+    const ColumnDefines & getTableColumns() const { return table_columns; }
+    const ColumnDefine &  getHandle() const { return table_handle_define; }
+    const Block &         getHeader() const { return header; }
+    const Settings &      getSettings() const { return settings; }
 
     void check(const Context & db_context, const DB::Settings & db_settings);
 
@@ -73,7 +88,6 @@ private:
     {
         return DMContext{.db_context          = db_context,
                          .storage_pool        = storage_pool,
-                         .table_name          = table_name,
                          .table_columns       = table_columns,
                          .table_handle_define = table_handle_define,
                          .min_version         = min_version,
@@ -91,15 +105,25 @@ private:
     void split(DMContext & dm_context, const SegmentPtr & segment);
     void merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
 
+    void applyAlter(const AlterCommand &          command, //
+                    const OptionTableInfoConstRef table_info,
+                    ColumnID &                    max_column_id_used);
+
+    static Block genHeaderBlock(const ColumnDefines & raw_columns, //
+                                const ColumnDefine &  handle_define,
+                                const DataTypePtr &   handle_real_type);
+
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
 
-    String        path;
-    StoragePool   storage_pool;
+    String      path;
+    StoragePool storage_pool;
+
     String        table_name;
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;
     DataTypePtr   table_handle_real_type;
+    Block         header; // an empty block header
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;

@@ -14,3 +14,6 @@ target_link_libraries (table_info dbms)
 
 add_executable (leveldb_test leveldb_test.cpp)
 target_link_libraries (leveldb_test dbms)
+
+add_executable(type_mapping gtest_type_mapping.cpp)
+target_link_libraries(type_mapping dbms gtest_main)

@@ -43,6 +43,10 @@ struct AlterCommand
         return (name_with_dot == name_type.name.substr(0, name_without_dot.length() + 1) || name_without_dot == name_type.name);
     }
 
+    /// For MODIFY_COLUMN
+    /// find column from `columns` or throw exception
+    NamesAndTypesList::Iterator findColumn(NamesAndTypesList &columns) const;
+
     void apply(ColumnsDescription & columns_description) const;
 
     AlterCommand() = default;
