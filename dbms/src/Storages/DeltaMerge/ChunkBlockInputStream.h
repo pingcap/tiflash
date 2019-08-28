@@ -8,6 +8,7 @@ namespace DB
 {
 namespace DM
 {
+/// Read `chunks` as blocks according to `read_columns`
 class ChunkBlockInputStream final : public IBlockInputStream
 {
 public:
@@ -17,20 +18,7 @@ public:
     }
 
     String getName() const override { return "Chunk"; }
-    Block  getHeader() const override
-    {
-        Block res;
-        for (const auto & c : read_columns)
-        {
-            ColumnWithTypeAndName col;
-            col.column    = c.type->createColumn();
-            col.type      = c.type;
-            col.name      = c.name;
-            col.column_id = c.id;
-            res.insert(col);
-        }
-        return res;
-    }
+    Block  getHeader() const override { return toEmptyBlock(read_columns); }
 
     Block read() override
     {

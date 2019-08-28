@@ -1,3 +1,5 @@
+#include <utility>
+
 #pragma once
 
 #include <Columns/IColumn.h>
@@ -24,9 +26,9 @@ struct ColumnWithTypeAndName
     /// TODO Handle column_id properly after we support DDL.
     Int64 column_id;
 
-    ColumnWithTypeAndName() {}
-    ColumnWithTypeAndName(const ColumnPtr & column_, const DataTypePtr & type_, const String & name_)
-        : column(column_), type(type_), name(name_) {}
+    ColumnWithTypeAndName(): ColumnWithTypeAndName(nullptr, nullptr, "") {}
+    ColumnWithTypeAndName(ColumnPtr column_, const DataTypePtr & type_, const String & name_, Int64 column_id_ = 0)
+        : column(std::move(column_)), type(type_), name(name_), column_id(column_id_) {}
 
     /// Uses type->createColumn() to create column
     ColumnWithTypeAndName(const DataTypePtr & type_, const String & name_)
