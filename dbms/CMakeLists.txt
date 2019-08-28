@@ -155,7 +155,6 @@ target_link_libraries (dbms
     clickhouse_common_io
     flash_service
     kvproto
-    leveldb
     kv_client
     tipb
     ${Protobuf_LIBRARIES}
