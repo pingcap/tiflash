@@ -392,7 +392,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 if (datum.invalidNull(column_info))
                 {
                     // Null value with non-null type detected, fatal if force_decode is true,
-                    // as schema being newer and narrow shouldn't happen.
+                    // as schema being newer and with invalid null shouldn't happen.
                     // Otherwise return false to outer, outer should sync schema and try again.
                     if (force_decode)
                     {
