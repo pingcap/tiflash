@@ -1,0 +1,17 @@
+>> DBGInvoke __enable_schema_sync_service('false')
+
+# Unqualified identifiers resolve to alias in select list.
+>> select 0 as c, c + 1 as c1 from (select 1 as c) as t where c = 1;
+
+# Qualified identifiers resolve to column in table.
+>> select 0 as c, t.c + 1 as c1 from (select 1 as c) as t where t.c = 1;
+┌─c─┬─c1─┐
+│ 0 │  2 │
+└───┴────┘
+
+# Combine the above two.
+>> select 0 as c, c + 1 as c1 from (select 1 as c) as t where t.c = 1;
+┌─c─┬─c1─┐
+│ 0 │  1 │
+└───┴────┘
+
