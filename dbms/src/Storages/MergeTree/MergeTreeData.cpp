@@ -1008,6 +1008,8 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
             {
                 if (merging_params.mode == MergingParams::Txn)
                 {
+                    // Any type conversion for TMT is ignored, except adding nullable property.
+                    // And for adding null map ONLY, i.e. not touching the data file, we do null map writing here in place.
                     if (part && !old_type->isNullable() && new_type->isNullable())
                     {
                         auto null_map_name = column.name + "_null";
@@ -1029,7 +1031,6 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
                     continue;
                 }
 
-                // TODO: Asserting TXN table never needs data conversion might be arbitary.
                 if (isMetadataOnlyConversion(old_type, new_type))
                 {
                     out_force_update_metadata = true;

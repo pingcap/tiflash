@@ -389,9 +389,9 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                     return std::make_tuple(Block(), false);
                 }
-                if (datum.hasInvalidNull(column_info))
+                if (datum.invalidNull(column_info))
                 {
-                    // Overflow detected, fatal if force_decode is true,
+                    // Null value with non-null type detected, fatal if force_decode is true,
                     // as schema being newer and narrow shouldn't happen.
                     // Otherwise return false to outer, outer should sync schema and try again.
                     if (force_decode)
