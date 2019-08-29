@@ -342,6 +342,7 @@ void ExpressionAnalyzer::translateQualifiedNamesImpl(ASTPtr & ast, const String 
                     {
                         String node_alias = ast->tryGetAlias();
                         ast = ast->children.back();
+                        static_cast<ASTIdentifier &>(*ast.get()).can_be_alias = false;
                         if (!node_alias.empty())
                             ast->setAlias(node_alias);
                     }
@@ -356,6 +357,7 @@ void ExpressionAnalyzer::translateQualifiedNamesImpl(ASTPtr & ast, const String 
                                 new_name += '.';
                             new_name += static_cast<const ASTIdentifier &>(*child.get()).name;
                         }
+                        ident->can_be_alias = false;
                         ident->name = new_name;
                     }
                 }
@@ -1011,7 +1013,7 @@ void ExpressionAnalyzer::normalizeTreeImpl(
         {
             /// If it is an alias, but not a parent alias (for constructs like "SELECT column + 1 AS column").
             auto it_alias = aliases.find(identifier_node->name);
-            if (it_alias != aliases.end() && current_alias != identifier_node->name)
+            if (it_alias != aliases.end() && current_alias != identifier_node->name && identifier_node->can_be_alias)
             {
                 /// Let's replace it with the corresponding tree node.
                 if (current_asts.count(it_alias->second.get()))
