@@ -25,8 +25,11 @@ public:
     /// what this identifier identifies
     Kind kind;
 
+    /// if it's a cropped name it could not be an alias
+    bool can_be_alias;
+
     ASTIdentifier(const String & name_, const Kind kind_ = Column)
-        : name(name_), kind(kind_) {}
+        : name(name_), kind(kind_), can_be_alias(true) {}
 
     /** Get the text that identifies this element. */
     String getID() const override { return "Identifier_" + name; }
