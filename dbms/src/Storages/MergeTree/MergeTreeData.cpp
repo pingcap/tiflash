@@ -1015,7 +1015,7 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
                         auto null_map_name = column.name + "_null";
                         auto null_map_type = std::make_shared<DataTypeUInt8>();
                         Block b;
-                        b.insert({ null_map_type->createColumnConstWithDefaultValue(part->rows_count), null_map_type, null_map_name});
+                        b.insert({ null_map_type->createColumnConstWithDefaultValue(part->rows_count)->convertToFullColumnIfConst(), null_map_type, null_map_name});
                         auto compression_settings = this->context.chooseCompressionSettings(
                             part->bytes_on_disk,
                             static_cast<double>(part->bytes_on_disk) / this->getTotalActiveSizeInBytes());
