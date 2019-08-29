@@ -1009,11 +1009,11 @@ void ExpressionAnalyzer::normalizeTreeImpl(
     }
     else if ((identifier_node = typeid_cast<ASTIdentifier *>(ast.get())))
     {
-        if (identifier_node->kind == ASTIdentifier::Column)
+        if (identifier_node->kind == ASTIdentifier::Column && identifier_node->can_be_alias)
         {
             /// If it is an alias, but not a parent alias (for constructs like "SELECT column + 1 AS column").
             auto it_alias = aliases.find(identifier_node->name);
-            if (it_alias != aliases.end() && current_alias != identifier_node->name && identifier_node->can_be_alias)
+            if (it_alias != aliases.end() && current_alias != identifier_node->name)
             {
                 /// Let's replace it with the corresponding tree node.
                 if (current_asts.count(it_alias->second.get()))
