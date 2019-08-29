@@ -49,7 +49,6 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
 {
     AlterCommands alter_commands;
 
-    /// Detect new columns.
     // TODO: Detect rename columns.
 
     /// Detect dropped columns.
@@ -75,6 +74,7 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
         alter_commands.emplace_back(std::move(command));
     }
 
+    /// Detect new columns.
     for (const auto & column_info : table_info.columns)
     {
         const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
@@ -105,7 +105,8 @@ inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_i
             if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
                 LOG_ERROR(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
-            return column_info_.id == orig_column_info.id && column_info_.tp != orig_column_info.tp;
+            return column_info_.id == orig_column_info.id
+                && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
         });
 
         AlterCommand command;

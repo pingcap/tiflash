@@ -651,8 +651,8 @@ private:
     /// for transformation-free changing of Enum values list).
     /// Files to be deleted are mapped to an empty string in out_rename_map.
     /// If part == nullptr, just checks that all type conversions are possible.
-    void createConvertExpression(const DataPartPtr & part, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
-        ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata) const;
+    void createConvertExpression(const DataPartPtr & part, DataPart::Checksums &, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
+        ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata);
 
     /// Calculates column sizes in compressed form for the current state of data_parts. Call with data_parts mutex locked.
     void calculateColumnSizesImpl();

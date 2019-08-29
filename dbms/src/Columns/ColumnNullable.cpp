@@ -426,7 +426,7 @@ void ColumnNullable::applyNullMap(const ColumnNullable & other)
 void ColumnNullable::checkConsistency() const
 {
     if (null_map->size() != getNestedColumn().size())
-        throw Exception("Logical error: Sizes of nested column and null map of Nullable column are not equal",
+        throw Exception("Logical error: Sizes of nested column and null map of Nullable column are not equal: null size is : " + std::to_string(null_map->size()) + " column size is : "+ std::to_string(getNestedColumn().size()),
             ErrorCodes::SIZES_OF_NESTED_COLUMNS_ARE_INCONSISTENT);
 }
 
