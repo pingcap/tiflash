@@ -32,6 +32,9 @@ class DatumFlat : public DatumBase
 public:
     DatumFlat(const DB::Field & field, TP tp);
 
+    /// Checks if it's null value with a not null type for schema mismatch detection.
+    bool invalidNull(const ColumnInfo & column_info);
+
     /// Checks overflow for schema mismatch detection.
     bool overflow(const ColumnInfo & column_info);
 };
