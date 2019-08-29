@@ -388,7 +388,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 if (it == column_map.end())
                     throw Exception("col_id not found in column_map", ErrorCodes::LOGICAL_ERROR);
 
-                DatumFlat datum(field, column_info.tp);
+                DatumFlat datum(field, column_info.tp, column_info.flen, column_info.decimal);
                 const Field & unflattened = datum.field();
                 if (datum.overflow(column_info))
                 {

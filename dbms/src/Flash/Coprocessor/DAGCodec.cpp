@@ -26,7 +26,10 @@ void encodeDAGString(const String & s, std::stringstream & ss) { ss << s; }
 
 void encodeDAGBytes(const String & bytes, std::stringstream & ss) { ss << bytes; }
 
-void encodeDAGDecimal(const Field & field, std::stringstream & ss) { EncodeDecimal(field, ss); }
+void encodeDAGDecimal(const Field & field, PrecType prec, ScaleType scale, std::stringstream & ss)
+{
+    EncodeDecimal(field, prec, scale, ss);
+}
 
 Int64 decodeDAGInt64(const String & s)
 {

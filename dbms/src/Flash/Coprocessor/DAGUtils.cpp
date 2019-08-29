@@ -89,11 +89,14 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         {
             if (!expr.has_field_type()
                 || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime
-                       && expr.field_type().tp() != TiDB::TypeTimestamp))
+                    && expr.field_type().tp() != TiDB::TypeTimestamp))
                 throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
-            return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
+            return std::to_string(
+                TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp()), expr.field_type().flen(), expr.field_type().decimal())
+                    .field()
+                    .get<Int64>());
         }
         case tipb::ExprType::ColumnRef:
             column_id = decodeDAGInt64(expr.val());
@@ -237,11 +240,12 @@ Field decodeLiteral(const tipb::Expr & expr)
         {
             if (!expr.has_field_type()
                 || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime
-                       && expr.field_type().tp() != TiDB::TypeTimestamp))
+                    && expr.field_type().tp() != TiDB::TypeTimestamp))
                 throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
-            return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field();
+            return TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp()), expr.field_type().flen(), expr.field_type().decimal())
+                .field();
         }
         case tipb::ExprType::MysqlBit:
         case tipb::ExprType::MysqlDuration:

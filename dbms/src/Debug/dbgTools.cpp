@@ -256,10 +256,11 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
     for (size_t i = 0; i < fields.size(); i++)
     {
         const TiDB::ColumnInfo & column_info = table_info.columns[i];
-        EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
+        TiDB::DatumBumpy datum_column_index = TiDB::DatumBumpy(Field(column_info.id), TiDB::TypeLong, 11, 0);
+        EncodeDatum(datum_column_index, TiDB::CodecFlagInt, ss);
         Field field = convertField(column_info, fields[i]);
-        TiDB::DatumBumpy datum = TiDB::DatumBumpy(field, column_info.tp);
-        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
+        TiDB::DatumBumpy datum = TiDB::DatumBumpy(field, column_info.tp, column_info.flen, column_info.decimal);
+        EncodeDatum(datum, column_info.getCodecFlag(), ss);
     }
 }
 

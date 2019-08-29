@@ -76,8 +76,9 @@ void DAGBlockOutputStream::write(const Block & block)
         for (size_t j = 0; j < block.columns(); j++)
         {
             const auto & field = (*block.getByPosition(j).column.get())[i];
-            DatumBumpy datum(field, static_cast<TP>(result_field_types[j].tp()));
-            EncodeDatum(datum.field(), getCodecFlagByFieldType(result_field_types[j]), current_ss);
+            DatumBumpy datum(
+                field, static_cast<TP>(result_field_types[j].tp()), result_field_types[j].flen(), result_field_types[j].decimal());
+            EncodeDatum(datum, getCodecFlagByFieldType(result_field_types[j]), current_ss);
         }
         // Encode current row
         records_per_chunk++;

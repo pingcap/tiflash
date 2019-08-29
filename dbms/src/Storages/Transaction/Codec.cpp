@@ -410,9 +410,20 @@ inline void writeWord(String & buf, Int32 word, int size)
 }
 
 template <typename T>
-void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::stringstream & ss)
+void EncodeDecimalImpl(const DecimalField<T> & dec_field, PrecType prec, ScaleType frac, std::stringstream & ss)
 {
     static_assert(IsDecimal<T>);
+
+    const T & dec = dec_field.getValue();
+    auto actual_prec = dec_field.getPrec();
+    auto actual_scale = dec_field.getScale();
+    if (actual_scale != frac || actual_prec > prec)
+    {
+        std::stringstream error_msg;
+        error_msg << "Unexpected decimal value during encoding, want decimal(" << prec << "," << frac << "), got decimal(" << actual_prec
+                  << "," << actual_scale << ")";
+        throw Exception(error_msg.str(), ErrorCodes::LOGICAL_ERROR);
+    }
 
     constexpr Int32 decimal_mod = powers10[digitsPerWord];
     ss << UInt8(prec) << UInt8(frac);
@@ -476,27 +487,27 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::string
     ss.write(buf.c_str(), buf.size());
 }
 
-void EncodeDecimal(const Field & field, std::stringstream & ss)
+void EncodeDecimal(const Field & field, PrecType prec, ScaleType scale, std::stringstream & ss)
 {
     if (field.getType() == Field::Types::Decimal32)
     {
-        auto decimal_field = field.get<DecimalField<Decimal32>>();
-        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+        auto & decimal_field = field.get<DecimalField<Decimal32>>();
+        return EncodeDecimalImpl(decimal_field, prec, scale, ss);
     }
     else if (field.getType() == Field::Types::Decimal64)
     {
-        auto decimal_field = field.get<DecimalField<Decimal64>>();
-        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+        auto & decimal_field = field.get<DecimalField<Decimal64>>();
+        return EncodeDecimalImpl(decimal_field, prec, scale, ss);
     }
     else if (field.getType() == Field::Types::Decimal128)
     {
-        auto decimal_field = field.get<DecimalField<Decimal128>>();
-        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+        auto & decimal_field = field.get<DecimalField<Decimal128>>();
+        return EncodeDecimalImpl(decimal_field, prec, scale, ss);
     }
     else if (field.getType() == Field::Types::Decimal256)
     {
-        auto decimal_field = field.get<DecimalField<Decimal256>>();
-        return EncodeDecimalImpl(decimal_field.getValue(), decimal_field.getPrec(), decimal_field.getScale(), ss);
+        auto & decimal_field = field.get<DecimalField<Decimal256>>();
+        return EncodeDecimalImpl(decimal_field, prec, scale, ss);
     }
     else
     {
@@ -504,8 +515,9 @@ void EncodeDecimal(const Field & field, std::stringstream & ss)
     }
 }
 
-void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
+void EncodeDatum(const TiDB::DatumBase & datum, TiDB::CodecFlag flag, std::stringstream & ss)
 {
+    auto & field = datum.field();
     if (field.isNull())
     {
         ss << UInt8(TiDB::CodecFlagNil);
@@ -515,7 +527,7 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
     switch (flag)
     {
         case TiDB::CodecFlagDecimal:
-            return EncodeDecimal(field, ss);
+            return EncodeDecimal(field, datum.getFlen(), datum.getDecimal(), ss);
         case TiDB::CodecFlagCompactBytes:
             return EncodeCompactBytes(field.safeGet<String>(), ss);
         case TiDB::CodecFlagFloat:
@@ -533,9 +545,9 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
     }
 }
 
-template void EncodeDecimalImpl<Decimal32>(const Decimal32 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimalImpl<Decimal64>(const Decimal64 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimalImpl<Decimal128>(const Decimal128 &, PrecType, ScaleType, std::stringstream & ss);
-template void EncodeDecimalImpl<Decimal256>(const Decimal256 &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal32>(const DecimalField<Decimal32> &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal64>(const DecimalField<Decimal64> &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal128>(const DecimalField<Decimal128> &, PrecType, ScaleType, std::stringstream & ss);
+template void EncodeDecimalImpl<Decimal256>(const DecimalField<Decimal256> &, PrecType, ScaleType, std::stringstream & ss);
 
 } // namespace DB

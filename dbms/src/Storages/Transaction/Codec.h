@@ -3,6 +3,7 @@
 #include <Common/Decimal.h>
 #include <Core/Field.h>
 #include <IO/Endian.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -62,8 +63,8 @@ void EncodeVarUInt(UInt64 num, std::stringstream & ss);
 
 void EncodeVarInt(Int64 num, std::stringstream & ss);
 
-void EncodeDecimal(const Field & field, std::stringstream & ss);
+void EncodeDecimal(const Field & field, PrecType prec, ScaleType scale, std::stringstream & ss);
 
-void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss);
+void EncodeDatum(const TiDB::DatumBase & datum, TiDB::CodecFlag flag, std::stringstream & ss);
 
 } // namespace DB

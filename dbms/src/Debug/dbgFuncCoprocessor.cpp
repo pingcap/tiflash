@@ -53,7 +53,8 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
             auto mmt = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -95,7 +96,8 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
@@ -133,6 +135,30 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
     ret.flen = field_type.flen();
     ret.decimal = field_type.decimal();
     return ret;
+}
+
+void encodeDecimalLiteral(const Field & field, std::stringstream & ss)
+{
+    if (field.getType() == Field::Types::Decimal32)
+    {
+        auto & decimal_field = field.get<DecimalField<Decimal32>>();
+        encodeDAGDecimal(field, decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
+    else if (field.getType() == Field::Types::Decimal64)
+    {
+        auto & decimal_field = field.get<DecimalField<Decimal32>>();
+        encodeDAGDecimal(field, decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
+    else if (field.getType() == Field::Types::Decimal128)
+    {
+        auto & decimal_field = field.get<DecimalField<Decimal32>>();
+        encodeDAGDecimal(field, decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
+    else if (field.getType() == Field::Types::Decimal256)
+    {
+        auto & decimal_field = field.get<DecimalField<Decimal32>>();
+        encodeDAGDecimal(field, decimal_field.getPrec(), decimal_field.getScale(), ss);
+    }
 }
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
@@ -217,7 +243,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
             case Field::Types::Which::Decimal128:
             case Field::Types::Which::Decimal256:
                 expr->set_tp(tipb::MysqlDecimal);
-                encodeDAGDecimal(lit->value, ss);
+                encodeDecimalLiteral(lit->value, ss);
                 break;
             case Field::Types::Which::String:
                 expr->set_tp(tipb::String);
@@ -563,7 +589,8 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
             for (size_t i = 0; i < row.size(); i++)
             {
                 const Field & field = row[i];
-                columns[i].column->assumeMutable()->insert(DatumFlat(field, schema[i].second.tp).field());
+                columns[i].column->assumeMutable()->insert(
+                    DatumFlat(field, schema[i].second.tp, schema[i].second.flen, schema[i].second.decimal).field());
             }
         }
 

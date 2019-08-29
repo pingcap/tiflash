@@ -146,7 +146,7 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeEnum>::type>
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
-DatumFlat::DatumFlat(const DB::Field & field, TP tp) : DatumBase(field, tp)
+DatumFlat::DatumFlat(const DB::Field & field, TP tp, Int32 flen, Int32 decimal) : DatumBase(field, tp, flen, decimal)
 {
     switch (tp)
     {
@@ -179,7 +179,7 @@ bool DatumFlat::overflow(const ColumnInfo & column_info)
     throw DB::Exception("Shouldn't reach here", DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-DatumBumpy::DatumBumpy(const DB::Field & field, TP tp) : DatumBase(field, tp)
+DatumBumpy::DatumBumpy(const DB::Field & field, TP tp, Int32 flen, Int32 decimal) : DatumBase(field, tp, flen, decimal)
 {
     switch (tp)
     {

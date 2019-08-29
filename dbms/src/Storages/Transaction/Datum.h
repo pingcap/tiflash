@@ -14,14 +14,18 @@ namespace TiDB
 class DatumBase
 {
 protected:
-    DatumBase(const DB::Field & field, TP tp_) : orig(field), tp(tp_) {}
+    DatumBase(const DB::Field & field, TP tp_, Int32 flen_, Int32 decimal_) : orig(field), tp(tp_), flen(flen_), decimal(decimal_) {}
 
 public:
     const DB::Field & field() const { return copy ? *copy : orig; }
+    Int32 getFlen() const { return flen; }
+    Int32 getDecimal() const { return decimal; }
 
 protected:
     const DB::Field & orig;
     const TP tp;
+    const Int32 flen;
+    const Int32 decimal;
     std::optional<DB::Field> copy;
 };
 
@@ -30,7 +34,7 @@ protected:
 class DatumFlat : public DatumBase
 {
 public:
-    DatumFlat(const DB::Field & field, TP tp);
+    DatumFlat(const DB::Field & field, TP tp, Int32 flen, Int32 decimal);
 
     /// Checks overflow for schema mismatch detection.
     bool overflow(const ColumnInfo & column_info);
@@ -40,7 +44,7 @@ public:
 class DatumBumpy : public DatumBase
 {
 public:
-    DatumBumpy(const DB::Field & field, TP tp);
+    DatumBumpy(const DB::Field & field, TP tp, Int32 flen, Int32 decimal);
 };
 
 } // namespace TiDB
