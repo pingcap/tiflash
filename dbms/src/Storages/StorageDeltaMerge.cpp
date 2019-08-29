@@ -31,15 +31,17 @@ extern const int DIRECTORY_ALREADY_EXISTS;
 
 using namespace DM;
 
-StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
-    const std::string & name_,
+StorageDeltaMerge::StorageDeltaMerge(const String & path_,
+    const String & db_name_,
+    const String & table_name_,
     const OptionTableInfoConstRef table_info_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
     Context & global_context_)
     : IManageableStorage{columns_},
-      path(path_ + "/" + name_),
-      name(name_),
+      path(path_ + "/" + table_name_),
+      db_name(db_name_),
+      name(table_name_),
       max_column_id_used(0),
       global_context(global_context_),
       log(&Logger::get("StorageDeltaMerge"))

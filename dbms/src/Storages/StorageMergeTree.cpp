@@ -61,7 +61,7 @@ StorageMergeTree::StorageMergeTree(
     const MergeTreeData::MergingParams & merging_params_,
     const MergeTreeSettings & settings_,
     bool has_force_restore_data_flag)
-    : path(path_), database_name(database_name_), table_name(table_name_), full_path(path + escapeForFileName(table_name) + '/'),
+    : IManageableStorage{}, path(path_), database_name(database_name_), table_name(table_name_), full_path(path + escapeForFileName(table_name) + '/'),
     context(context_), background_pool(context_.getBackgroundPool()),
     data(database_name, table_name,
          full_path, columns_,
@@ -322,7 +322,7 @@ void StorageMergeTree::alter(
     alterInternal(params, database_name, table_name, std::nullopt, context);
 }
 
-void StorageMergeTree::alterForTMT(
+void StorageMergeTree::alterFromTiDB(
     const AlterCommands & params,
     const TiDB::TableInfo & table_info,
     const String & database_name,
@@ -717,7 +717,7 @@ void StorageMergeTree::dropPartition(const ASTPtr & /*query*/, const ASTPtr & pa
 void StorageMergeTree::truncate(const ASTPtr & /*query*/, const Context & /*context*/)
 {
     auto lock = lockForAlter(__PRETTY_FUNCTION__);
-    
+
     MergeTreeData::DataParts parts = data.getDataParts();
 
     for (const auto & part : parts)

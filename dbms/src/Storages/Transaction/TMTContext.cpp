@@ -36,9 +36,9 @@ KVStorePtr & TMTContext::getKVStore() { return kvstore; }
 
 const KVStorePtr & TMTContext::getKVStore() const { return kvstore; }
 
-TMTStorages & TMTContext::getStorages() { return storages; }
+ManagedStorages & TMTContext::getStorages() { return storages; }
 
-const TMTStorages & TMTContext::getStorages() const { return storages; }
+const ManagedStorages & TMTContext::getStorages() const { return storages; }
 
 RegionTable & TMTContext::getRegionTable() { return region_table; }
 

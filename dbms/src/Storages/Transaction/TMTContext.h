@@ -27,8 +27,8 @@ public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
 
-    const TMTStorages & getStorages() const;
-    TMTStorages & getStorages();
+    const ManagedStorages & getStorages() const;
+    ManagedStorages & getStorages();
 
     const RegionTable & getRegionTable() const;
     RegionTable & getRegionTable();
@@ -58,7 +58,7 @@ public:
 
 private:
     KVStorePtr kvstore;
-    TMTStorages storages;
+    ManagedStorages storages;
     RegionTable region_table;
 
 private:

@@ -5,7 +5,7 @@
 namespace DB
 {
 
-void TMTStorages::put(TMTStoragePtr storage)
+void ManagedStorages::put(ManageableStoragePtr storage)
 {
     std::lock_guard lock(mutex);
 
@@ -15,7 +15,7 @@ void TMTStorages::put(TMTStoragePtr storage)
     storages.emplace(table_id, storage);
 }
 
-TMTStoragePtr TMTStorages::get(TableID table_id) const
+ManageableStoragePtr ManagedStorages::get(TableID table_id) const
 {
     std::lock_guard lock(mutex);
 
@@ -25,13 +25,13 @@ TMTStoragePtr TMTStorages::get(TableID table_id) const
     return it->second;
 }
 
-std::unordered_map<TableID, TMTStoragePtr> TMTStorages::getAllStorage() const
+std::unordered_map<TableID, ManageableStoragePtr> ManagedStorages::getAllStorage() const
 {
     std::lock_guard lock(mutex);
     return storages;
 }
 
-TMTStoragePtr TMTStorages::getByName(const std::string & db, const std::string & table) const
+ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const std::string & table) const
 {
     std::lock_guard lock(mutex);
 
@@ -44,7 +44,7 @@ TMTStoragePtr TMTStorages::getByName(const std::string & db, const std::string &
     return it->second;
 }
 
-void TMTStorages::remove(TableID table_id)
+void ManagedStorages::remove(TableID table_id)
 {
     std::lock_guard lock(mutex);
 

@@ -226,12 +226,12 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
     }
 
-    TableInfo table_info;
-
     if (databases.find(database_name) == databases.end())
     {
         throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
     }
+
+    TableInfo table_info;
     table_info.db_id = databases[database_name];
     table_info.db_name = database_name;
     table_info.id = table_id_allocator++;
@@ -249,7 +249,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
 
     auto table = std::make_shared<Table>(database_name, table_name, std::move(table_info));
     tables_by_id.emplace(table->table_info.id, table);
-    tables_by_name.emplace(database_name + "." + table_name, table);
+    tables_by_name.emplace(qualified_name, table);
 
     version++;
     SchemaDiff diff;

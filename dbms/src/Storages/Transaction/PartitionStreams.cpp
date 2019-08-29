@@ -85,8 +85,21 @@ void RegionTable::writeBlockByRegion(
 
         /// Write block into storage.
         start_time = Clock::now();
-        TxnMergeTreeBlockOutputStream output(*storage);
-        output.write(std::move(block));
+        switch (storage->engineType())
+        {
+            case IManageableStorage::TMT:
+            {
+                auto * tmt_storage = typeid_cast<StorageMergeTree*>(storage.get());
+                TxnMergeTreeBlockOutputStream output(*tmt_storage);
+                output.write(std::move(block));
+                break;
+            }
+            case IManageableStorage::DM:
+            {
+                // TODO
+                break;
+            }
+        }
         write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
         /// Move read data to outer to remove.

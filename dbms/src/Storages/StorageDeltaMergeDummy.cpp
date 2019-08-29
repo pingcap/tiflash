@@ -26,6 +26,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
@@ -231,6 +232,12 @@ void StorageDeltaMergeDummy::check(const Context &)
             throw Exception("Algorithm broken: tuples should be ordered");
         last_entry = entry_it;
     }
+}
+
+const TiDB::TableInfo &StorageDeltaMergeDummy::getTableInfo() const
+{
+    static TiDB::TableInfo dummy;
+    return dummy;
 }
 
 static ASTPtr extractKeyExpressionList(IAST & node)

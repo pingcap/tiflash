@@ -260,7 +260,7 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
 
     // Call storage alter to apply schema changes.
     for (const auto & alter_commands : commands_vec)
-        storage->alterForTMT(alter_commands, *table_info, db_name, context);
+        storage->alterFromTiDB(alter_commands, *table_info, db_name, context);
 
     auto & tmt_context = context.getTMTContext();
 
@@ -273,7 +273,7 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
             auto part_storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(part_def.id).get());
             if (part_storage != nullptr)
                 for (const auto & alter_commands : commands_vec)
-                    part_storage->alterForTMT(alter_commands, new_table_info, db_name, context);
+                    part_storage->alterFromTiDB(alter_commands, new_table_info, db_name, context);
         }
     }
 
