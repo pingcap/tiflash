@@ -389,6 +389,21 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                     return std::make_tuple(Block(), false);
                 }
+                if (datum.invalidNull(column_info))
+                {
+                    // Null value with non-null type detected, fatal if force_decode is true,
+                    // as schema being newer and with invalid null shouldn't happen.
+                    // Otherwise return false to outer, outer should sync schema and try again.
+                    if (force_decode)
+                    {
+                        const auto & data_type = ColumnDataInfoMap::getNameAndTypePair(col_info).type;
+                        throw Exception("Detected invalid null when decoding data " + std::to_string(unflattened.get<UInt64>())
+                                + " of column " + column_info.name + " with type " + data_type->getName(),
+                            ErrorCodes::LOGICAL_ERROR);
+                    }
+
+                    return std::make_tuple(Block(), false);
+                }
                 auto & mut_col = ColumnDataInfoMap::getMutableColumnPtr(col_info);
                 mut_col->insert(unflattened);
             }
