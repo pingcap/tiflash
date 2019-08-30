@@ -333,7 +333,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::vector<std::string> pd_addrs;
     std::string learner_key;
     std::string learner_value;
-    std::unordered_set<std::string> ignore_databases;
+    std::unordered_set<std::string> ignore_databases{"system"};
     std::string kvstore_path = path + "kvstore/";
     std::string region_mapping_path = path + "regmap/";
 
