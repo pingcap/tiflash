@@ -15,11 +15,16 @@ struct AlterCommand
         DROP_COLUMN,
         MODIFY_COLUMN,
         MODIFY_PRIMARY_KEY,
+        // Rename column is only for tmt schema sync.
+        RENAME_COLUMN,
     };
 
     Type type;
 
     String column_name;
+
+    // Only for Rename column.
+    String new_column_name;
 
     /// For DROP COLUMN ... FROM PARTITION
     String partition_name;
