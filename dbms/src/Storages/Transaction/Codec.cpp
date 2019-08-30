@@ -414,6 +414,13 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::string
 {
     static_assert(IsDecimal<T>);
 
+    // todo this is a work around, this fix only makes the encoded value as a valid value, the encoded prec
+    //  and scale is not the same as TiDB request, but luckily TiDB can handle this when reading from dag
+    //  response. In order to encoding the decimal with the type requested by TiDB, TiFlash should get the
+    //  prec and scale from column
+    if (prec < frac) {
+        prec = frac;
+    }
     constexpr Int32 decimal_mod = powers10[digitsPerWord];
     ss << UInt8(prec) << UInt8(frac);
 
