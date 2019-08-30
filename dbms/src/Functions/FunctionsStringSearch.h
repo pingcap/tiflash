@@ -38,8 +38,9 @@ namespace DB
   * Warning! At this point, the arguments needle, pattern, n, replacement must be constants.
   */
 
+static const UInt8 CH_ESCAPE_CHAR = '\\';
 
-template <typename Impl, typename Name>
+template <typename Impl, typename Name, Int32 arg_num = 2>
 class FunctionsStringSearch : public IFunction
 {
 public:
@@ -56,7 +57,7 @@ public:
 
     size_t getNumberOfArguments() const override
     {
-        return 2;
+        return arg_num;
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -68,8 +69,51 @@ public:
         if (!arguments[1]->isString())
             throw Exception(
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (arg_num == 3 && !arguments[2]->isInteger())
+            throw Exception(
+                    "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         return std::make_shared<DataTypeNumber<typename Impl::ResultType>>();
+    }
+
+    // replace the escape_char in orig_string with '\\'
+    // this function does not check the validation of the orig_string
+    // for example, for string "abcd" and escape char 'd', it will
+    // return "abc\\"
+    String replaceEscapeChar(String & orig_string, UInt8 escape_char)
+    {
+        std::stringstream ss;
+        for (size_t i = 0; i < orig_string.size(); i++)
+        {
+            auto c = orig_string[i];
+            if (c == escape_char)
+            {
+                if (i+1 != orig_string.size() && orig_string[i+1] == escape_char)
+                {
+                    // two successive escape char, which means it is trying to escape itself, just remove one
+                    i++;
+                    ss << escape_char;
+                }
+                else
+                {
+                    if (i + 1 != orig_string.size() && orig_string[i+1] == CH_ESCAPE_CHAR)
+                    {
+                        continue;
+                    }
+                    ss << CH_ESCAPE_CHAR;
+                }
+            }
+            else if (c == CH_ESCAPE_CHAR)
+            {
+                // need to escape this '\\'
+                ss << CH_ESCAPE_CHAR << CH_ESCAPE_CHAR;
+            }
+            else
+            {
+                ss << c;
+            }
+        }
+        return ss.str();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
@@ -82,10 +126,44 @@ public:
         const ColumnConst * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
         const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
+        UInt8 escape_char = CH_ESCAPE_CHAR;
+        if (arg_num == 3)
+        {
+            auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
+            bool valid_args = true;
+            if (col_needle_const == nullptr || col_escape_const == nullptr)
+            {
+                valid_args = false;
+            }
+            else
+            {
+                auto c = col_escape_const->getValue<Int32>();
+                if (c < 0 || c > 255)
+                {
+                    // todo maybe use more strict constraint
+                    valid_args = false;
+                }
+                else
+                {
+                    escape_char = (UInt8) c;
+                }
+            }
+            if (!valid_args)
+            {
+                throw Exception("2nd and 3rd arguments of function " + getName() + " must "
+                      "be constants, and the 3rd argument must between 0 and 255.");
+            }
+        }
+
         if (col_haystack_const && col_needle_const)
         {
             ResultType res{};
-            Impl::constant_constant(col_haystack_const->getValue<String>(), col_needle_const->getValue<String>(), res);
+            String needle_string = col_needle_const->getValue<String>();
+            if (arg_num == 3 && escape_char != CH_ESCAPE_CHAR)
+            {
+                needle_string = replaceEscapeChar(needle_string, escape_char);
+            }
+            Impl::constant_constant(col_haystack_const->getValue<String>(), needle_string, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
         }
@@ -105,7 +183,15 @@ public:
                 col_needle_vector->getOffsets(),
                 vec_res);
         else if (col_haystack_vector && col_needle_const)
-            Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), col_needle_const->getValue<String>(), vec_res);
+        {
+            String needle_string = col_needle_const->getValue<String>();
+            if (arg_num == 3 && escape_char != CH_ESCAPE_CHAR)
+            {
+                needle_string = replaceEscapeChar(needle_string, escape_char);
+            }
+            Impl::vector_constant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(),
+                                  needle_string, vec_res);
+        }
         else if (col_haystack_const && col_needle_vector)
             Impl::constant_vector(col_haystack_const->getValue<String>(), col_needle_vector->getChars(), col_needle_vector->getOffsets(), vec_res);
         else
