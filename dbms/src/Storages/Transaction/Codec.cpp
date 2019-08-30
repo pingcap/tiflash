@@ -414,6 +414,15 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::string
 {
     static_assert(IsDecimal<T>);
 
+    // Scale must (if not, then we have bugs) be the same as TiDB expected, but precision will be
+    // trimmed to as minimal as possible by TiFlash decimal implementation. TiDB doesn't allow
+    // decimal with precision less than scale, therefore in theory we should align value's precision
+    // according to data type. But TiDB somehow happens to allow precision not equal to data type,
+    // of which we take advantage to make such a handy fix.
+    if (prec < frac)
+    {
+        prec = frac;
+    }
     constexpr Int32 decimal_mod = powers10[digitsPerWord];
     ss << UInt8(prec) << UInt8(frac);
 
