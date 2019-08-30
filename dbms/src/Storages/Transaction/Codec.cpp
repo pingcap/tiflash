@@ -418,7 +418,8 @@ void EncodeDecimalImpl(const T & dec, PrecType prec, ScaleType frac, std::string
     //  and scale is not the same as TiDB request, but luckily TiDB can handle this when reading from dag
     //  response. In order to encoding the decimal with the type requested by TiDB, TiFlash should get the
     //  prec and scale from column
-    if (prec < frac) {
+    if (prec < frac)
+    {
         prec = frac;
     }
     constexpr Int32 decimal_mod = powers10[digitsPerWord];
