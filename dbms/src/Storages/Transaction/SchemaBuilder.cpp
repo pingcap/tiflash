@@ -40,6 +40,8 @@ struct TmpColNameGenerator
     String operator()(const String & name) { return String(tmpNamePrefix) + name; }
 };
 
+// CyclicRenameResolver resolves cyclic table rename and column rename.
+// TmpNameGenerator rename current name to a temp name that will not conflict with other names.
 template <typename Name_, typename TmpNameGenerator>
 struct CyclicRenameResolver
 {
@@ -48,49 +50,54 @@ struct CyclicRenameResolver
     using NameMap = std::map<Name, Name>;
     using NameSet = std::set<Name>;
 
+    // visited records which name has been processed.
     NameSet visited;
     TmpNameGenerator name_gen;
 
-    void resolve(NameMap & map, std::vector<NamePair> & result)
+    // We will not ensure correctness if we call it multiple times, so we make it a rvalue call.
+    std::vector<NamePair> resolve(const NameMap & rename_map) &&
     {
-        while (!map.empty())
+        std::vector<NamePair> result;
+        for (auto it = rename_map.begin(); it != rename_map.end(); it++)
         {
-            resolveImpl(map, map.begin(), result);
+            if (!visited.count(it->first))
+            {
+                resolveImpl(rename_map, it, result);
+            }
         }
+        return result;
     }
 
 private:
-    NamePair resolveImpl(NameMap & map, auto it, std::vector<NamePair> & result)
+    NamePair resolveImpl(const NameMap & rename_map, auto it, std::vector<NamePair> & result)
     {
         Name target_name = it->second;
         Name origin_name = it->first;
         visited.insert(it->first);
-        auto next_it = map.find(target_name);
-        if (next_it == map.end())
+        auto next_it = rename_map.find(target_name);
+        if (next_it == rename_map.end())
         {
             // The target name does not exist, so we can rename it directly.
             result.push_back(NamePair(origin_name, target_name));
-            map.erase(it);
             return NamePair();
         }
         else if (visited.find(target_name) != visited.end())
         {
-            // the target name is visited, so this is a cyclic rename.
+            // The target name is visited, so this is a cyclic rename.
             auto tmp_name = name_gen(target_name);
             result.push_back(NamePair(target_name, tmp_name));
             result.push_back(NamePair(origin_name, target_name));
-            map.erase(it);
             return NamePair(target_name, tmp_name);
         }
         else
         {
-            auto pair = resolveImpl(map, next_it, result);
+            // The target name is in rename map, so we continue to resolve it.
+            auto pair = resolveImpl(rename_map, next_it, result);
             if (pair.first == origin_name)
             {
                 origin_name = pair.second;
             }
             result.push_back(NamePair(origin_name, target_name));
-            map.erase(it);
             return pair;
         }
     }
@@ -146,7 +153,6 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
 
     {
         std::map<String, String> rename_map;
-        std::vector<std::pair<String, String>> rename_result;
         /// rename columns.
         for (const auto & orig_column_info : orig_table_info.columns)
         {
@@ -161,7 +167,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
             }
         }
 
-        CyclicRenameResolver<String, TmpColNameGenerator>().resolve(rename_map, rename_result);
+        auto rename_result = CyclicRenameResolver<String, TmpColNameGenerator>().resolve(rename_map);
         for (const auto & rename_pair : rename_result)
         {
             AlterCommands rename_commands;
@@ -790,8 +796,7 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
         }
     }
 
-    std::vector<typename Resolver::NamePair> result;
-    Resolver().resolve(rename_map, result);
+    auto result = Resolver().resolve(rename_map);
     for (const auto & rename_pair : result)
     {
         applyRenameTableImpl(rename_pair.first.first, rename_pair.second.first, rename_pair.first.second, rename_pair.second.second);
