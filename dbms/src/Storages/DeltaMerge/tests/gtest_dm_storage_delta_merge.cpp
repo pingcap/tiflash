@@ -129,6 +129,7 @@ TEST(StorageDeltaMergeDummy_test, ReadWriteCase1)
 }
 
 TEST(StorageDeltaMerge_test, ReadWriteCase1)
+try
 {
     // prepare block data
     Block sample;
@@ -229,6 +230,14 @@ TEST(StorageDeltaMerge_test, ReadWriteCase1)
     }
     dms->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
+}
+catch (const Exception & e)
+{
+    const auto text = e.displayText();
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
+
+    throw;
 }
 
 } // namespace tests
