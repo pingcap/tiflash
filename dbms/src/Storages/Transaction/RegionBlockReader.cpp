@@ -226,10 +226,10 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
 
-    ColumnID handle_col_id = InvalidColumnID;
+    ColumnID handle_col_id = TiDBPkColumnID;
 
     constexpr size_t MustHaveColCnt = 3; // pk, del, version
-    constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
+    constexpr ColumnID EmptyColumnID = TiDBPkColumnID - 1;
 
     // column_map contains columns in column_names_to_read exclude del and version.
     ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);

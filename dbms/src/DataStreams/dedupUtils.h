@@ -3,6 +3,7 @@
 #include <Storages/MutableSupport.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnFixedString.h>
+#include <DataStreams/IBlockInputStream.h>
 
 #include <Core/SortDescription.h>
 #include <Core/SortCursor.h>
