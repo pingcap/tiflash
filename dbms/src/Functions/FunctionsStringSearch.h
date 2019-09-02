@@ -40,11 +40,12 @@ namespace DB
 
 static const UInt8 CH_ESCAPE_CHAR = '\\';
 
-template <typename Impl, typename Name, Int32 arg_num = 2>
+template <typename Impl, typename Name, size_t num_args = 2>
 class FunctionsStringSearch : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
+    static constexpr auto has_3_args = (num_args == 3);
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<FunctionsStringSearch>();
@@ -57,7 +58,7 @@ public:
 
     size_t getNumberOfArguments() const override
     {
-        return arg_num;
+        return num_args;
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -69,7 +70,7 @@ public:
         if (!arguments[1]->isString())
             throw Exception(
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        if (arg_num == 3 && !arguments[2]->isInteger())
+        if (has_3_args && !arguments[2]->isInteger())
             throw Exception(
                     "Illegal type " + arguments[2]->getName() + " of argument of function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -127,7 +128,7 @@ public:
         const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
-        if (arg_num == 3)
+        if (has_3_args)
         {
             auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
             bool valid_args = true;
@@ -159,7 +160,7 @@ public:
         {
             ResultType res{};
             String needle_string = col_needle_const->getValue<String>();
-            if (arg_num == 3 && escape_char != CH_ESCAPE_CHAR)
+            if (has_3_args && escape_char != CH_ESCAPE_CHAR)
             {
                 needle_string = replaceEscapeChar(needle_string, escape_char);
             }
@@ -185,7 +186,7 @@ public:
         else if (col_haystack_vector && col_needle_const)
         {
             String needle_string = col_needle_const->getValue<String>();
-            if (arg_num == 3 && escape_char != CH_ESCAPE_CHAR)
+            if (has_3_args && escape_char != CH_ESCAPE_CHAR)
             {
                 needle_string = replaceEscapeChar(needle_string, escape_char);
             }
