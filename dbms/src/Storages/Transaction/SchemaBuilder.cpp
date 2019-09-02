@@ -69,7 +69,7 @@ struct CyclicRenameResolver
     }
 
 private:
-    NamePair resolveImpl(const NameMap & rename_map, auto it, std::vector<NamePair> & result)
+    NamePair resolveImpl(const NameMap & rename_map, typename NameMap::const_iterator & it, std::vector<NamePair> & result)
     {
         Name target_name = it->second;
         Name origin_name = it->first;
