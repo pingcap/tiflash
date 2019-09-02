@@ -97,7 +97,14 @@ public:
                 }
                 else
                 {
-                    if (i + 1 != orig_string.size() && orig_string[i+1] == CH_ESCAPE_CHAR)
+                    // https://github.com/pingcap/tidb/blob/master/util/stringutil/string_util.go#L154
+                    // if any char following escape char that is not [escape_char,'_','%'], it is invalid escape.
+                    // mysql will treat escape character as the origin value even
+                    // the escape sequence is invalid in Go or C.
+                    // e.g., \m is invalid in Go, but in MySQL we will get "m" for select '\m'.
+                    // Following case is correct just for escape \, not for others like +.
+                    // TODO: Add more checks for other escapes.
+                    if (i+1 != orig_string.size() && orig_string[i+1] == CH_ESCAPE_CHAR)
                     {
                         continue;
                     }
