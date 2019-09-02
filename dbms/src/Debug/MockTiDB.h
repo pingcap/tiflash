@@ -74,6 +74,9 @@ public:
 
     void modifyColumnInTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
 
+    void renameColumnInTable(
+        const String & database_name, const String & table_name, const String & old_column_name, const String & new_column_name);
+
     void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
 
     void truncateTable(const String & database_name, const String & table_name);

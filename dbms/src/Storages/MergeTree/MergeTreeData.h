@@ -444,6 +444,12 @@ public:
         const ASTPtr & new_primary_key,
         bool skip_sanity_checks);
 
+    /// Performs column rename operation for tmt storage.
+    AlterDataPartTransactionPtr renameColumnPart(
+        const DataPartPtr & part,
+        const NamesAndTypesList & new_columns,
+        const AlterCommand & command) const;
+
     /// Should be called if part data is suspected to be corrupted.
     void reportBrokenPart(const String & name)
     {

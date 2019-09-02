@@ -65,4 +65,6 @@
 │     2 │
 └───────┘
 
+=> DBGInvoke __drop_tidb_table(default, test)
+=> drop table if exists default.test
 => DBGInvoke __refresh_schemas()
