@@ -185,7 +185,8 @@ TEST(StorageDeltaMerge_test, ReadWriteCase1)
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
         Context context = DMTestEnv::getContext();
-        storage         = StorageDeltaMerge::create(".", "t", std::nullopt, ColumnsDescription{names_and_types_list}, astptr, context);
+        storage         = StorageDeltaMerge::create(
+            ".", /* db_name= */ "default", /* name= */ "t", std::nullopt, ColumnsDescription{names_and_types_list}, astptr, context);
         storage->startup();
     }
 

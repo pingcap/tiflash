@@ -87,7 +87,7 @@ void RegionTable::writeBlockByRegion(
 
         /// Write block into storage.
         start_time = Clock::now();
-        // do not use typeid_cast, since Storage is multi-inherite
+        // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
         switch (storage->engineType())
         {
             case IManageableStorage::TMT:
@@ -104,7 +104,7 @@ void RegionTable::writeBlockByRegion(
                 ASTPtr query(new ASTInsertQuery(dm_storage->getDatabaseName(), dm_storage->getTableName(), /* is_import_= */ true));
                 BlockOutputStreamPtr output = dm_storage->write(query, context.getSettingsRef());
                 output->writePrefix();
-                output->write(std::move(block));
+                output->write(block);
                 output->writeSuffix();
                 break;
             }

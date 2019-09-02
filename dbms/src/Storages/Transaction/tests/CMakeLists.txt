@@ -9,8 +9,8 @@ target_link_libraries (region_persister dbms)
 add_executable (kvstore kvstore.cpp)
 target_link_libraries (kvstore dbms)
 
-add_executable (table_info table_info.cpp)
-target_link_libraries (table_info dbms)
+add_executable (table_info gtest_table_info.cpp)
+target_link_libraries (table_info dbms clickhouse_functions gtest_main)
 
 add_executable(type_mapping gtest_type_mapping.cpp)
 target_link_libraries(type_mapping dbms gtest_main)
