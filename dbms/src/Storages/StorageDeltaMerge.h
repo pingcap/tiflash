@@ -19,6 +19,8 @@ namespace DB
 class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IManageableStorage
 {
 public:
+    ~StorageDeltaMerge() override;
+
     bool supportsModification() const override { return true; }
 
     String getName() const override { return "DeltaMerge"; }
@@ -52,6 +54,8 @@ public:
     const TiDB::TableInfo & getTableInfo() const override { return tidb_table_info; }
 
     void startup() override;
+
+    void shutdown() override;
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
@@ -95,6 +99,8 @@ private:
 
     // Used to allocate new column-id when this table is NOT synced from TiDB
     ColumnID max_column_id_used;
+
+    std::atomic<bool> shutdown_called{false};
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 

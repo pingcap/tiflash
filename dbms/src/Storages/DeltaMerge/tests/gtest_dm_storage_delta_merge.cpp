@@ -230,6 +230,9 @@ try
     }
     dms->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
+
+
+    //storage->drop();
 }
 catch (const Exception & e)
 {

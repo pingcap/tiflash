@@ -11,6 +11,11 @@ struct TableInfo;
 
 namespace DB
 {
+/**
+ * An interface for Storages synced from TiDB.
+ *
+ * Note that you must override `startup` and `shutdown` to register/remove this table into TMTContext.
+ */
 class IManageableStorage : public IStorage
 {
 public:

@@ -123,6 +123,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
 void StorageDeltaMerge::drop()
 {
+    shutdown();
     // Reclaim memory.
     MallocExtension::instance()->ReleaseFreeMemory();
 }
@@ -460,6 +461,24 @@ void StorageDeltaMerge::startup()
 {
     TMTContext & tmt = global_context.getTMTContext();
     tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
+}
+
+void StorageDeltaMerge::shutdown()
+{
+    if (shutdown_called)
+        return;
+
+    shutdown_called = true;
+
+    // remove this table from TMTContext
+    TMTContext & tmt_context = global_context.getTMTContext();
+    tmt_context.getStorages().remove(tidb_table_info.id);
+    tmt_context.getRegionTable().removeTable(tidb_table_info.id);
+}
+
+StorageDeltaMerge::~StorageDeltaMerge()
+{
+    shutdown();
 }
 
 } // namespace DB
