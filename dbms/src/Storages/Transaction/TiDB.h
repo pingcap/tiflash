@@ -266,6 +266,14 @@ struct TableInfo
     PartitionInfo partition;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
+    // Indicate that use 'TMT' or 'DM' as storage engine in AP. (TMT by default now)
+    enum class EngineType
+    {
+        TMT = 0,
+        DM,
+    };
+    EngineType engine_type = EngineType::TMT;
+
     ColumnID getColumnID(const String & name) const;
 
     TableInfo producePartitionTableInfo(TableID table_or_partition_id) const;

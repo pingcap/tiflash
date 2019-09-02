@@ -70,7 +70,7 @@ inline SortDescription getPkSort(const ColumnDefine & handle)
 {
     SortDescription sort;
     sort.emplace_back(handle.name, 1, 1);
-    sort.emplace_back(VERSION_COLUMN_NAME, 1, 1);
+    sort.emplace_back(::DB::MutableSupport::version_column_name, 1, 1);
     return sort;
 }
 
@@ -263,18 +263,6 @@ template <typename T>
 inline String rangeToString(const Range<T> & range)
 {
     return rangeToString<T, true>(range.start, range.end);
-}
-
-/// find column from `table_info.columns` or throw exception
-inline std::vector<TiDB::ColumnInfo>::const_iterator findColumnInfoInTableInfo(const TiDB::TableInfo & table_info, const String & column_name)
-{
-    auto iter = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const TiDB::ColumnInfo & column_info) {
-        return column_info.name == column_name;
-    });
-    if (iter == table_info.columns.end())
-        throw Exception("Invalid column name. Cannot find column " + column_name + " in `table_info`",
-                        ErrorCodes::ILLEGAL_COLUMN);
-    return iter;
 }
 
 } // namespace DM

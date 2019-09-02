@@ -62,8 +62,6 @@ public:
 
     /// mark that ColumnId of those columns are defined in dbms/src/Storages/Transaction/Types.h
 
-
-
     enum DeduperType
     {
         DeduperOriginStreams            = 0,

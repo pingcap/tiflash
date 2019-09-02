@@ -1,6 +1,10 @@
+#include <common/logger_useful.h>
+
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTInsertQuery.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
@@ -9,8 +13,6 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -85,18 +87,25 @@ void RegionTable::writeBlockByRegion(
 
         /// Write block into storage.
         start_time = Clock::now();
+        // do not use typeid_cast, since Storage is multi-inherite
         switch (storage->engineType())
         {
             case IManageableStorage::TMT:
             {
-                auto * tmt_storage = typeid_cast<StorageMergeTree*>(storage.get());
+                auto * tmt_storage = dynamic_cast<StorageMergeTree *>(storage.get());
                 TxnMergeTreeBlockOutputStream output(*tmt_storage);
                 output.write(std::move(block));
                 break;
             }
             case IManageableStorage::DM:
             {
-                // TODO
+                auto * dm_storage = dynamic_cast<StorageDeltaMerge *>(storage.get());
+                // imported data from TiDB, ASTInsertQuery.is_import need to be true
+                ASTPtr query(new ASTInsertQuery(dm_storage->getDatabaseName(), dm_storage->getTableName(), /* is_import_= */ true));
+                BlockOutputStreamPtr output = dm_storage->write(query, context.getSettingsRef());
+                output->writePrefix();
+                output->write(std::move(block));
+                output->writeSuffix();
                 break;
             }
         }

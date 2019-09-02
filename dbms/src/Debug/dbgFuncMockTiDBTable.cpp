@@ -25,8 +25,8 @@ extern const int LOGICAL_ERROR;
 
 void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
-    if (args.size() != 3)
-        throw Exception("Args not matched, should be: database-name, table-name, schema-string", ErrorCodes::BAD_ARGUMENTS);
+    if (!(args.size() == 3 || args.size() == 4))
+        throw Exception("Args not matched, should be: database-name, table-name, schema-string ['tmt'/'dm']", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -41,9 +41,14 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
         throw Exception("Invalid TiDB table schema", ErrorCodes::LOGICAL_ERROR);
     ColumnsDescription columns
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
+
+    String engine_type("tmt");
+    if (args.size() == 4)
+        engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+
     auto tso = context.getTMTContext().getPDClient()->getTS();
 
-    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso);
+    TableID table_id = MockTiDB::instance().newTable(database_name, table_name, columns, tso, std::move(engine_type));
 
     std::stringstream ss;
     ss << "mock table #" << table_id;

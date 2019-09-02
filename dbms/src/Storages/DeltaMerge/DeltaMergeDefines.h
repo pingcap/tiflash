@@ -4,15 +4,16 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <type_traits>
 
 #include <Common/Allocator.h>
 #include <Common/ArenaWithFreeLists.h>
 #include <Common/EventRecorder.h>
-#include <DataTypes/DataTypeFactory.h>
-
 #include <Core/NamesAndTypes.h>
 #include <Core/Types.h>
-#include <type_traits>
+#include <DataTypes/DataTypeFactory.h>
+#include <Storages/MutableSupport.h>
+#include <Storages/Transaction/Types.h>
 
 namespace TiDB
 {
@@ -59,7 +60,7 @@ using DeltaIndexPtr    = std::shared_ptr<DeltaIndex>;
 
 using Handle = Int64;
 using RowId  = UInt64;
-using ColId  = Int64;
+using ColId  = DB::ColumnID;
 
 using ColIds     = std::vector<ColId>;
 using HandlePair = std::pair<Handle, Handle>;
@@ -87,17 +88,17 @@ using LockGuard        = std::lock_guard<std::mutex>;
 
 static const UInt64 INITIAL_EPOCH = 5; // Following TiDB, and I have no idea why 5 is chosen.
 
-static const String EXTRA_HANDLE_COLUMN_NAME = "_extra_handle_";
-static const String VERSION_COLUMN_NAME      = "_version_";
-static const String TAG_COLUMN_NAME          = "_tag_"; // 0: upsert; 1: delete
+static const String & EXTRA_HANDLE_COLUMN_NAME = ::DB::MutableSupport::tidb_pk_column_name;
+static const String & VERSION_COLUMN_NAME      = ::DB::MutableSupport::version_column_name;
+static const String & TAG_COLUMN_NAME          = ::DB::MutableSupport::delmark_column_name;
 
-static const ColId EXTRA_HANDLE_COLUMN_ID = -1;
-static const ColId VERSION_COLUMN_ID      = -1024; // Prevent conflict with TiDB.
-static const ColId TAG_COLUMN_ID          = -1025;
+static const ColId EXTRA_HANDLE_COLUMN_ID = ::DB::TiDBPkColumnID;
+static const ColId VERSION_COLUMN_ID      = ::DB::VersionColumnID;
+static const ColId TAG_COLUMN_ID          = ::DB::DelMarkColumnID;
 
-static const DataTypePtr EXTRA_HANDLE_COLUMN_TYPE = DataTypeFactory::instance().get("Int64");
-static const DataTypePtr VERSION_COLUMN_TYPE      = DataTypeFactory::instance().get("UInt64");
-static const DataTypePtr TAG_COLUMN_TYPE          = DataTypeFactory::instance().get("UInt8");
+static const DataTypePtr & EXTRA_HANDLE_COLUMN_TYPE = ::DB::MutableSupport::tidb_pk_column_type;
+static const DataTypePtr & VERSION_COLUMN_TYPE      = ::DB::MutableSupport::version_column_type;
+static const DataTypePtr & TAG_COLUMN_TYPE          = ::DB::MutableSupport::delmark_column_type;
 
 static const ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE};
 static const ColumnDefine VERSION_COLUMN_DEFINE{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};

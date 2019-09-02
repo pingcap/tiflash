@@ -594,17 +594,16 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
         // we don't care about `after_column` in `store_columns`
 
         /// If TableInfo from TiDB is not empty, we get column id from TiDB
+        /// else we allocate a new id by `max_column_id_used`
         ColumnDefine define(0, command.column_name, command.data_type);
         if (table_info)
         {
-            auto tidb_col_iter = findColumnInfoInTableInfo(table_info->get(), command.column_name);
-            define.id          = tidb_col_iter->id;
+            define.id = table_info->get().getColumnID(command.column_name);
         }
         else
         {
             define.id = max_column_id_used++;
         }
-        assert(define.id != 0);
         setColumnDefineDefaultValue(command, define);
         table_columns.emplace_back(std::move(define));
     }

@@ -20,6 +20,7 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -73,8 +74,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
         if (table_info_)
         {
             /// If TableInfo from TiDB is not empty, we get column id from TiDB
-            auto col_iter = findColumnInfoInTableInfo(table_info_->get(), column_define.name);
-            column_define.id = col_iter->id;
+            column_define.id = table_info_->get().getColumnID(column_define.name);
         }
         else
         {
@@ -453,6 +453,12 @@ void updateDeltaMergeTableCreateStatement(                   //
     };
 
     context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);
+}
+
+void StorageDeltaMerge::startup()
+{
+    TMTContext & tmt = global_context.getTMTContext();
+    tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
 }
 
 } // namespace DB

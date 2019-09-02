@@ -442,7 +442,7 @@ CodecFlag ColumnInfo::getCodecFlag() const
 
 ColumnID TableInfo::getColumnID(const String & name) const
 {
-    for (auto col : columns)
+    for (const auto& col : columns)
     {
         if (name == col.name)
         {

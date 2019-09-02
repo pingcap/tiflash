@@ -51,6 +51,8 @@ public:
 
     const TiDB::TableInfo & getTableInfo() const override { return tidb_table_info; }
 
+    void startup() override;
+
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
     BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
