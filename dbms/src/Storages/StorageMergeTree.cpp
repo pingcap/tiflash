@@ -153,7 +153,7 @@ BlockInputStreams StorageMergeTree::read(
     }
     else if (select_query && select_query->raw_for_mutable)
     {
-        throw Exception("Only " + MutableSupport::storage_name + " support SELRAW.", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Only " + MutableSupport::mmt_storage_name + " support SELRAW.", ErrorCodes::BAD_ARGUMENTS);
     }
     return res;
 }
@@ -261,7 +261,7 @@ BlockOutputStreamPtr StorageMergeTree::write(const ASTPtr & query, const Setting
     }
     else if ((insert_query && insert_query->is_import) || delete_query)
     {
-        throw Exception("Only " + MutableSupport::storage_name + " support IMPORT or DELETE.", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Only " + MutableSupport::mmt_storage_name + " support IMPORT or DELETE.", ErrorCodes::BAD_ARGUMENTS);
     }
 
     return res;
