@@ -90,13 +90,13 @@ private:
         if (pkIsHandle())
         {
             // Add an extra handle column.
-            store_columns.push_back(EXTRA_HANDLE_COLUMN_DEFINE);
+            store_columns.push_back(getExtraHandleColumnDefine());
         }
 
         return DMContext{.db_context    = db_context,
                          .storage_pool  = storage_pool,
                          .store_columns = std::move(store_columns),
-                         .handle_column = EXTRA_HANDLE_COLUMN_DEFINE,
+                         .handle_column = getExtraHandleColumnDefine(),
                          .min_version   = min_version,
 
                          .not_compress            = settings.not_compress_columns,

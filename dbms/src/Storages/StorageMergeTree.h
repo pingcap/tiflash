@@ -85,7 +85,7 @@ public:
 
     void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
-    EngineType engineType() const override { return TMT; }
+    StorageEngine engineType() const override { return TMT; }
 
     void alterFromTiDB(
         const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;

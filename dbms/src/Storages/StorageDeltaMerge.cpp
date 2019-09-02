@@ -42,7 +42,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     : IManageableStorage{columns_},
       path(path_ + "/" + table_name_),
       db_name(db_name_),
-      name(table_name_),
+      table_name(table_name_),
       max_column_id_used(0),
       global_context(global_context_),
       log(&Logger::get("StorageDeltaMerge"))
@@ -118,7 +118,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
     assert(!handle_column_define.name.empty());
     assert(!table_column_defines.empty());
     store = std::make_shared<DeltaMergeStore>(
-        global_context, path, name, std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
+        global_context, path, table_name, std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
@@ -253,9 +253,9 @@ BlockInputStreams StorageDeltaMerge::read( //
         if (n == EXTRA_HANDLE_COLUMN_NAME)
             col_define = store->getHandle();
         else if (n == VERSION_COLUMN_NAME)
-            col_define = VERSION_COLUMN_DEFINE;
+            col_define = getVersionColumnDefine();
         else if (n == TAG_COLUMN_NAME)
-            col_define = TAG_COLUMN_DEFINE;
+            col_define = getTagColumnDefine();
         else
         {
             auto & column = header.getByName(n);
@@ -371,7 +371,7 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     setColumns(std::move(new_columns));
 }
 
-void StorageDeltaMerge::rename(const String & new_path_to_db, const String & /*new_database_name*/, const String & new_table_name)
+void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
 {
     const String new_path = new_path_to_db + "/" + new_table_name;
 
@@ -394,7 +394,8 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & /*n
         global_context, new_path, new_table_name, std::move(table_column_defines), std::move(handle_column_define), settings);
 
     path = new_path;
-    name = new_table_name;
+    db_name = new_database_name;
+    table_name = new_table_name;
 }
 
 void updateDeltaMergeTableCreateStatement(                   //

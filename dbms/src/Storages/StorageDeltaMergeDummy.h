@@ -54,7 +54,7 @@ public:
     /// entries, inserts, deletes, modifies
     std::tuple<UInt64, UInt64, UInt64, UInt64> delta_status();
 
-    EngineType engineType() const override { return DM; }
+    StorageEngine engineType() const override { return DM; }
 
     String getDatabaseName() const override
     {

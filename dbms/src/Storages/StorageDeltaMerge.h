@@ -22,7 +22,7 @@ public:
     bool supportsModification() const override { return true; }
 
     String getName() const override { return "DeltaMerge"; }
-    String getTableName() const override { return name; }
+    String getTableName() const override { return table_name; }
 
     void drop() override;
 
@@ -41,7 +41,7 @@ public:
 
     void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
-    EngineType engineType() const override { return DM; }
+    StorageEngine engineType() const override { return DM; }
 
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     void alterFromTiDB(
@@ -83,7 +83,7 @@ private:
 
     String path;
     String db_name;
-    String name;
+    String table_name;
 
     DM::DeltaMergeStorePtr store;
 

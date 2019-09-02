@@ -28,8 +28,8 @@ public:
     {
         ColumnDefines columns;
         columns.emplace_back(ColumnDefine(1, "pk", std::make_shared<DataTypeInt64>()));
-        columns.emplace_back(VERSION_COLUMN_DEFINE);
-        columns.emplace_back(TAG_COLUMN_DEFINE);
+        columns.emplace_back(getVersionColumnDefine());
+        columns.emplace_back(getTagColumnDefine());
         return columns;
     }
 

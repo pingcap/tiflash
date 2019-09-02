@@ -14,7 +14,7 @@ namespace DB
 class IManageableStorage : public IStorage
 {
 public:
-    enum EngineType
+    enum StorageEngine
     {
         TMT = 0,
         DM,
@@ -31,7 +31,7 @@ public:
 
     virtual void check(const Context &) {}
 
-    virtual EngineType engineType() const = 0;
+    virtual StorageEngine engineType() const = 0;
 
     virtual String getDatabaseName() const = 0;
 

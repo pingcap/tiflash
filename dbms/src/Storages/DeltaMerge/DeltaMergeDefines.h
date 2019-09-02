@@ -88,21 +88,32 @@ using LockGuard        = std::lock_guard<std::mutex>;
 
 static const UInt64 INITIAL_EPOCH = 5; // Following TiDB, and I have no idea why 5 is chosen.
 
-static const String & EXTRA_HANDLE_COLUMN_NAME = ::DB::MutableSupport::tidb_pk_column_name;
-static const String & VERSION_COLUMN_NAME      = ::DB::MutableSupport::version_column_name;
-static const String & TAG_COLUMN_NAME          = ::DB::MutableSupport::delmark_column_name;
+// TODO maybe we should use those variables instead of macros?
+#define EXTRA_HANDLE_COLUMN_NAME ::DB::MutableSupport::tidb_pk_column_name
+#define VERSION_COLUMN_NAME ::DB::MutableSupport::version_column_name
+#define TAG_COLUMN_NAME ::DB::MutableSupport::delmark_column_name
 
-static const ColId EXTRA_HANDLE_COLUMN_ID = ::DB::TiDBPkColumnID;
-static const ColId VERSION_COLUMN_ID      = ::DB::VersionColumnID;
-static const ColId TAG_COLUMN_ID          = ::DB::DelMarkColumnID;
+#define EXTRA_HANDLE_COLUMN_ID ::DB::TiDBPkColumnID
+#define VERSION_COLUMN_ID ::DB::VersionColumnID
+#define TAG_COLUMN_ID ::DB::DelMarkColumnID
 
-static const DataTypePtr & EXTRA_HANDLE_COLUMN_TYPE = ::DB::MutableSupport::tidb_pk_column_type;
-static const DataTypePtr & VERSION_COLUMN_TYPE      = ::DB::MutableSupport::version_column_type;
-static const DataTypePtr & TAG_COLUMN_TYPE          = ::DB::MutableSupport::delmark_column_type;
+#define EXTRA_HANDLE_COLUMN_TYPE ::DB::MutableSupport::tidb_pk_column_type
+#define VERSION_COLUMN_TYPE ::DB::MutableSupport::version_column_type
+#define TAG_COLUMN_TYPE ::DB::MutableSupport::delmark_column_type
 
-static const ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE};
-static const ColumnDefine VERSION_COLUMN_DEFINE{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
-static const ColumnDefine TAG_COLUMN_DEFINE{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
+inline const ColumnDefine & getExtraHandleColumnDefine()
+{
+    static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE};
+    return EXTRA_HANDLE_COLUMN_DEFINE_;
+}
+inline ColumnDefine getVersionColumnDefine()
+{
+    return ColumnDefine{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
+}
+inline ColumnDefine getTagColumnDefine()
+{
+    return ColumnDefine{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
+}
 
 static constexpr UInt64 MIN_UINT64 = std::numeric_limits<UInt64>::min();
 static constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
