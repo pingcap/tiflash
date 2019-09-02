@@ -246,14 +246,16 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
     for (const auto & alter_commands : commands_vec)
         for (const auto & command : alter_commands)
         {
-            // TODO: Other command types.
             if (command.type == AlterCommand::ADD_COLUMN)
                 ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
             else if (command.type == AlterCommand::DROP_COLUMN)
                 ss << "DROP COLUMN " << command.column_name << ", ";
             else if (command.type == AlterCommand::MODIFY_COLUMN)
                 ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::RENAME_COLUMN)
+                ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
         }
+
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
     // Call storage alter to apply schema changes.
