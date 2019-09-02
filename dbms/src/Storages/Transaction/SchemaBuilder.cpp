@@ -26,6 +26,84 @@ namespace ErrorCodes
 extern const int DDL_ERROR;
 }
 
+
+constexpr char tmpNamePrefix[] = "_tiflash_tmp_";
+
+struct TmpTableNameGenerator
+{
+    using TableName = std::pair<String, String>;
+    TableName operator()(const TableName & name) { return std::make_pair(name.first, String(tmpNamePrefix) + name.second); }
+};
+
+struct TmpColNameGenerator
+{
+    String operator()(const String & name) { return String(tmpNamePrefix) + name; }
+};
+
+// CyclicRenameResolver resolves cyclic table rename and column rename.
+// TmpNameGenerator rename current name to a temp name that will not conflict with other names.
+template <typename Name_, typename TmpNameGenerator>
+struct CyclicRenameResolver
+{
+    using Name = Name_;
+    using NamePair = std::pair<Name, Name>;
+    using NameMap = std::map<Name, Name>;
+    using NameSet = std::set<Name>;
+
+    // visited records which name has been processed.
+    NameSet visited;
+    TmpNameGenerator name_gen;
+
+    // We will not ensure correctness if we call it multiple times, so we make it a rvalue call.
+    std::vector<NamePair> resolve(const NameMap & rename_map) &&
+    {
+        std::vector<NamePair> result;
+        for (auto it = rename_map.begin(); it != rename_map.end(); it++)
+        {
+            if (!visited.count(it->first))
+            {
+                resolveImpl(rename_map, it, result);
+            }
+        }
+        return result;
+    }
+
+private:
+    NamePair resolveImpl(const NameMap & rename_map, auto it, std::vector<NamePair> & result)
+    {
+        Name target_name = it->second;
+        Name origin_name = it->first;
+        visited.insert(it->first);
+        auto next_it = rename_map.find(target_name);
+        if (next_it == rename_map.end())
+        {
+            // The target name does not exist, so we can rename it directly.
+            result.push_back(NamePair(origin_name, target_name));
+            return NamePair();
+        }
+        else if (visited.find(target_name) != visited.end())
+        {
+            // The target name is visited, so this is a cyclic rename.
+            auto tmp_name = name_gen(target_name);
+            result.push_back(NamePair(target_name, tmp_name));
+            result.push_back(NamePair(origin_name, target_name));
+            return NamePair(target_name, tmp_name);
+        }
+        else
+        {
+            // The target name is in rename map, so we continue to resolve it.
+            auto pair = resolveImpl(rename_map, next_it, result);
+            if (pair.first == origin_name)
+            {
+                origin_name = pair.second;
+            }
+            result.push_back(NamePair(origin_name, target_name));
+            return pair;
+        }
+    }
+};
+
+
 inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
 {
     command.column_name = column_info.name;
@@ -45,87 +123,115 @@ inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const Co
     }
 }
 
-inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
+inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
-    AlterCommands alter_commands;
+    std::vector<AlterCommands> result;
 
-    // TODO: Detect rename columns.
-
-    /// Detect dropped columns.
-    for (const auto & orig_column_info : orig_table_info.columns)
+    // add drop commands
     {
-        const auto & column_info = std::find_if(table_info.columns.begin(),
-            table_info.columns.end(),
-            [&](const TiDB::ColumnInfo & column_info_) { return column_info_.id == orig_column_info.id; });
+        AlterCommands drop_commands;
 
-        AlterCommand command;
-        if (column_info == table_info.columns.end())
+        /// Detect dropped columns.
+        for (const auto & orig_column_info : orig_table_info.columns)
         {
-            // Dropped column.
-            command.type = AlterCommand::DROP_COLUMN;
-            command.column_name = orig_column_info.name;
-        }
-        else
-        {
-            // Column unchanged.
-            continue;
-        }
+            const auto & column_info = std::find_if(table_info.columns.begin(),
+                table_info.columns.end(),
+                [&](const TiDB::ColumnInfo & column_info_) { return column_info_.id == orig_column_info.id; });
 
-        alter_commands.emplace_back(std::move(command));
+            if (column_info == table_info.columns.end())
+            {
+                AlterCommand command;
+                // Dropped column.
+                command.type = AlterCommand::DROP_COLUMN;
+                // Drop column with old name.
+                command.column_name = orig_column_info.name;
+                drop_commands.emplace_back(std::move(command));
+            }
+        }
+        result.push_back(drop_commands);
     }
 
-    /// Detect new columns.
-    for (const auto & column_info : table_info.columns)
     {
-        const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
-            orig_table_info.columns.end(),
-            [&](const TiDB::ColumnInfo & orig_column_info_) { return orig_column_info_.id == column_info.id; });
+        std::map<String, String> rename_map;
+        /// rename columns.
+        for (const auto & orig_column_info : orig_table_info.columns)
+        {
+            const auto & column_info
+                = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+                      return (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name);
+                  });
 
-        AlterCommand command;
-        if (orig_column_info == orig_table_info.columns.end())
-        {
-            // New column.
-            command.type = AlterCommand::ADD_COLUMN;
-            setAlterCommandColumn(log, command, column_info);
-        }
-        else
-        {
-            // Column unchanged.
-            continue;
+            if (column_info != table_info.columns.end())
+            {
+                rename_map[orig_column_info.name] = column_info->name;
+            }
         }
 
-        alter_commands.emplace_back(std::move(command));
+        auto rename_result = CyclicRenameResolver<String, TmpColNameGenerator>().resolve(rename_map);
+        for (const auto & rename_pair : rename_result)
+        {
+            AlterCommands rename_commands;
+            AlterCommand command;
+            command.type = AlterCommand::RENAME_COLUMN;
+            command.column_name = rename_pair.first;
+            command.new_column_name = rename_pair.second;
+            rename_commands.push_back(command);
+            result.push_back(rename_commands);
+        }
     }
 
-    /// Detect type changed columns.
-    for (const auto & orig_column_info : orig_table_info.columns)
+    // alter commands
     {
-        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
-            // TODO: Check primary key.
-            if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
-                LOG_ERROR(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
-
-            return column_info_.id == orig_column_info.id
-                && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
-        });
-
-        AlterCommand command;
-        if (column_info == table_info.columns.end())
+        AlterCommands alter_commands;
+        /// Detect type changed columns.
+        for (const auto & orig_column_info : orig_table_info.columns)
         {
-            // Column unchanged.
-            continue;
-        }
-        else
-        {
-            // Type changed column.
-            command.type = AlterCommand::MODIFY_COLUMN;
-            setAlterCommandColumn(log, command, *column_info);
-        }
+            const auto & column_info
+                = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+                      if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
+                          LOG_ERROR(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
-        alter_commands.emplace_back(std::move(command));
+                      return column_info_.id == orig_column_info.id
+                          && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
+                  });
+
+            if (column_info != table_info.columns.end())
+            {
+                AlterCommand command;
+                // Type changed column.
+                command.type = AlterCommand::MODIFY_COLUMN;
+                // Alter column with old name.
+                setAlterCommandColumn(log, command, *column_info);
+                alter_commands.emplace_back(std::move(command));
+            }
+        }
+        result.push_back(alter_commands);
     }
 
-    return alter_commands;
+    {
+        AlterCommands add_commands;
+        /// Detect new columns.
+        for (const auto & column_info : table_info.columns)
+        {
+            const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
+                orig_table_info.columns.end(),
+                [&](const TiDB::ColumnInfo & orig_column_info_) { return orig_column_info_.id == column_info.id; });
+
+            if (orig_column_info == orig_table_info.columns.end())
+            {
+                AlterCommand command;
+                // New column.
+                command.type = AlterCommand::ADD_COLUMN;
+                setAlterCommandColumn(log, command, column_info);
+
+                add_commands.emplace_back(std::move(command));
+            }
+        }
+
+        result.push_back(add_commands);
+    }
+
+    return result;
 }
 
 template <typename Getter>
@@ -133,24 +239,28 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
 {
     table_info->schema_version = target_version;
     auto orig_table_info = storage->getTableInfo();
-    auto alter_commands = detectSchemaChanges(log, *table_info, orig_table_info);
+    auto commands_vec = detectSchemaChanges(log, *table_info, orig_table_info);
 
     std::stringstream ss;
     ss << "Detected schema changes: " << db_name << "." << table_info->name << "\n";
-    for (const auto & command : alter_commands)
-    {
-        // TODO: Other command types.
-        if (command.type == AlterCommand::ADD_COLUMN)
-            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-        else if (command.type == AlterCommand::DROP_COLUMN)
-            ss << "DROP COLUMN " << command.column_name << ", ";
-        else if (command.type == AlterCommand::MODIFY_COLUMN)
-            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-    }
+    for (const auto & alter_commands : commands_vec)
+        for (const auto & command : alter_commands)
+        {
+            if (command.type == AlterCommand::ADD_COLUMN)
+                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::DROP_COLUMN)
+                ss << "DROP COLUMN " << command.column_name << ", ";
+            else if (command.type == AlterCommand::MODIFY_COLUMN)
+                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::RENAME_COLUMN)
+                ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
+        }
+
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
     // Call storage alter to apply schema changes.
-    storage->alterForTMT(alter_commands, *table_info, db_name, context);
+    for (const auto & alter_commands : commands_vec)
+        storage->alterForTMT(alter_commands, *table_info, db_name, context);
 
     auto & tmt_context = context.getTMTContext();
 
@@ -162,7 +272,8 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
             auto part_storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(part_def.id).get());
             if (part_storage != nullptr)
-                part_storage->alterForTMT(alter_commands, new_table_info, db_name, context);
+                for (const auto & alter_commands : commands_vec)
+                    part_storage->alterForTMT(alter_commands, new_table_info, db_name, context);
         }
     }
 
@@ -660,56 +771,17 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
     }
 }
 
-using TableName = std::pair<String, String>;
-using TableNamePair = std::pair<TableName, TableName>;
-using TableNameMap = std::map<TableName, TableName>;
-using TableNameSet = std::set<TableName>;
-constexpr char TmpTableNamePrefix[] = "_tiflash_tmp_";
-
-inline TableName generateTmpTable(const TableName & name) { return TableName(name.first, String(TmpTableNamePrefix) + name.second); }
-
-template <typename Builder>
-TableNamePair resolveRename(Builder * builder, TableNameMap & map, TableNameMap::iterator it, TableNameSet & visited)
-{
-    TableName target_name = it->second;
-    TableName origin_name = it->first;
-    visited.insert(it->first);
-    auto next_it = map.find(target_name);
-    if (next_it == map.end())
-    {
-        builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
-        map.erase(it);
-        return TableNamePair();
-    }
-    else if (visited.find(target_name) != visited.end())
-    {
-        // There is a cycle.
-        auto tmp_name = generateTmpTable(target_name);
-        builder->applyRenameTableImpl(target_name.first, tmp_name.first, target_name.second, tmp_name.second);
-        builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
-        map.erase(it);
-        return TableNamePair(target_name, tmp_name);
-    }
-    else
-    {
-        auto pair = resolveRename(builder, map, next_it, visited);
-        if (pair.first == origin_name)
-        {
-            origin_name = pair.second;
-        }
-        builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
-        map.erase(it);
-        return pair;
-    }
-}
-
 template <typename Getter>
 void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs)
 {
+    using Resolver = CyclicRenameResolver<std::pair<String, String>, TmpTableNameGenerator>;
+    using TableName = typename Resolver::Name;
+
     // Rename Table First.
     auto & tmt_context = context.getTMTContext();
     auto storage_map = tmt_context.getStorages().getAllStorage();
-    TableNameMap rename_map;
+
+    typename Resolver::NameMap rename_map;
     for (auto table_db : table_dbs)
     {
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
@@ -726,11 +798,10 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
         }
     }
 
-    while (!rename_map.empty())
+    auto result = Resolver().resolve(rename_map);
+    for (const auto & rename_pair : result)
     {
-        auto it = rename_map.begin();
-        TableNameSet visited;
-        resolveRename(this, rename_map, it, visited);
+        applyRenameTableImpl(rename_pair.first.first, rename_pair.second.first, rename_pair.first.second, rename_pair.second.second);
     }
 
     // Then Alter Table.

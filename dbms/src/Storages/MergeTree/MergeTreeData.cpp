@@ -1119,6 +1119,85 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::
     }
 }
 
+MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
+    const DataPartPtr & part,
+    const NamesAndTypesList & new_columns,
+    const AlterCommand & command) const
+{
+    // check if is compact
+    if (part->isCompactFormat())
+    {
+        throw Exception("L0 compact does not support alter clause.");
+    }
+    AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part)); /// Blocks changes to the part.
+    DataPart::Checksums new_checksums = part->checksums;
+
+    DataTypePtr data_type;
+
+    for (const auto & pair : new_columns)
+    {
+        if (pair.name == command.new_column_name)
+        {
+            data_type = pair.type;
+            break;
+        }
+    }
+    if (data_type == nullptr)
+    {
+        throw Exception("Can't find new column " + command.new_column_name + " in column list", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    data_type->enumerateStreams(
+        [&](const IDataType::SubstreamPath & substream_path)
+        {
+            /// Skip array sizes, because they cannot be modified in ALTER.
+            if (!substream_path.empty() && substream_path.back().type == IDataType::Substream::ArraySizes)
+                return;
+
+            String old_file_name = IDataType::getFileNameForStream(command.column_name, substream_path);
+            String new_file_name = IDataType::getFileNameForStream(command.new_column_name, substream_path);
+
+            transaction->rename_map[old_file_name + ".bin"] = new_file_name + ".bin";
+            transaction->rename_map[old_file_name + ".mrk"] = new_file_name + ".mrk";
+
+            auto it = new_checksums.files.find(old_file_name + ".bin");
+            if (it == new_checksums.files.end())
+            {
+                // Can not find old checksums.
+                throw Exception("Cannot find file checksums for " + old_file_name + ".bin", ErrorCodes::LOGICAL_ERROR);
+            }
+            new_checksums.files.erase(it);
+            new_checksums.files.emplace(new_file_name + ".bin", it->second);
+            it = new_checksums.files.find(old_file_name + ".mrk");
+            if (it == new_checksums.files.end())
+            {
+                // Can not find old checksums.
+                throw Exception("Cannot find file checksums for " + old_file_name + ".mrk", ErrorCodes::LOGICAL_ERROR);
+            }
+            new_checksums.files.erase(it);
+            new_checksums.files.emplace(new_file_name + ".mrk", it->second);
+        }, {});
+
+    /// Write the checksums to the temporary file.
+    if (!part->checksums.empty())
+    {
+        transaction->new_checksums = new_checksums;
+        WriteBufferFromFile checksums_file(part->getFullPath() + "checksums.txt.tmp", 4096);
+        new_checksums.write(checksums_file);
+        transaction->rename_map["checksums.txt.tmp"] = "checksums.txt";
+    }
+
+    /// Write the new column list to the temporary file.
+    {
+        transaction->new_columns = new_columns;
+        WriteBufferFromFile columns_file(part->getFullPath() + "columns.txt.tmp", 4096);
+        transaction->new_columns.writeText(columns_file);
+        transaction->rename_map["columns.txt.tmp"] = "columns.txt";
+    }
+
+    return transaction;
+}
+
 MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     const DataPartPtr & part,
     const NamesAndTypesList & new_columns,
