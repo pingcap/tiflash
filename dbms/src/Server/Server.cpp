@@ -28,6 +28,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
@@ -337,6 +338,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string kvstore_path = path + "kvstore/";
     std::string region_mapping_path = path + "regmap/";
 
+    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::TMT;
+    ::TiDB::StorageEngine engine = engine_if_empty;
+
     if (config().has("raft"))
     {
         need_raft_service = true;
@@ -397,11 +401,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             region_mapping_path = config().getString("raft.regmap");
         }
+
+        if (config().has("raft.storage_engine"))
+        {
+            String s_engine = config().getString("raft.storage_engine");
+            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(),
+                    [](char ch){return std::tolower(ch);});
+            if (s_engine == "tmt")
+                engine = ::TiDB::StorageEngine::TMT;
+            else if (s_engine == "dm")
+                engine = ::TiDB::StorageEngine::DM;
+            else
+                engine = engine_if_empty;
+        }
     }
 
     {
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path, engine);
     }
 
     /// Then, load remaining databases

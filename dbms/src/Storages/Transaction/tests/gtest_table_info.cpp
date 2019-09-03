@@ -43,10 +43,10 @@ struct Case
         ASSERT_EQ(json1, json2) << "Table info unescaped serde mismatch:\n" + json1 + "\n" + json2;
 
         // generate create statement with db_info and table_info
-        auto verify_stmt = [&](TiDB::TableInfo::EngineType engine_type) {
+        auto verify_stmt = [&](TiDB::StorageEngine engine_type) {
             table_info.engine_type = engine_type;
             String stmt = createTableStmt(db_info, table_info);
-            if (engine_type == TiDB::TableInfo::EngineType::TMT)
+            if (engine_type == TiDB::StorageEngine::TMT)
                 ASSERT_EQ(stmt, create_stmt_tmt) << "Table info create statement (TMT) mismatch:\n" + stmt + "\n" + create_stmt_tmt;
             else
                 ASSERT_EQ(stmt, create_stmt_dm) << "Table info create statement (DM) mismatch:\n" + stmt + "\n" + create_stmt_dm;
@@ -58,8 +58,8 @@ struct Case
             ASSERT_EQ(json1, json2) << "Table info escaped serde mismatch:\n" + json1 + "\n" + json2;
         };
 
-        verify_stmt(TiDB::TableInfo::EngineType::TMT);
-        verify_stmt(TiDB::TableInfo::EngineType::DM);
+        verify_stmt(TiDB::StorageEngine::TMT);
+        verify_stmt(TiDB::StorageEngine::DM);
     }
 
 private:

@@ -5,6 +5,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -266,13 +267,7 @@ struct TableInfo
     PartitionInfo partition;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
-    // Indicate that use 'TMT' or 'DM' as storage engine in AP. (TMT by default now)
-    enum class EngineType
-    {
-        TMT = 0,
-        DM,
-    };
-    EngineType engine_type = EngineType::TMT;
+    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::TMT;
 
     ColumnID getColumnID(const String & name) const;
 

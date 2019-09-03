@@ -15,6 +15,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <IO/CompressionSettings.h>
 #include <Storages/PartPathSelector.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 
 namespace Poco
@@ -367,7 +368,8 @@ public:
                           const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
-                          const std::string & region_mapping_path);
+                          const std::string & region_mapping_path,
+                          ::TiDB::StorageEngine engine);
     RaftService & getRaftService();
 
     void initializeSchemaSyncService();

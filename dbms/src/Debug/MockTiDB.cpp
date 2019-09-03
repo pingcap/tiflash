@@ -259,9 +259,9 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         throw Exception("Unknown engine type : " + engine_type +", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
     }
     if (engine_type == "tmt")
-        table_info.engine_type = TiDB::TableInfo::EngineType::TMT;
+        table_info.engine_type = TiDB::StorageEngine::TMT;
     else if (engine_type == "dm")
-        table_info.engine_type = TiDB::TableInfo::EngineType::DM;
+        table_info.engine_type = TiDB::StorageEngine::DM;
     else
         throw Exception("Unknown engine type : " + engine_type +", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
 

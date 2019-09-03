@@ -615,7 +615,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
     }
 
     // storage engine type
-    if (table_info.engine_type == TiDB::TableInfo::EngineType::TMT)
+    if (table_info.engine_type == TiDB::StorageEngine::TMT)
     {
         writeString(") Engine = TxnMergeTree((", stmt_buf);
         for (size_t i = 0; i < pks.size(); i++)
@@ -628,7 +628,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
         writeString(table_info.serialize(true), stmt_buf);
         writeString("')", stmt_buf);
     }
-    else if (table_info.engine_type == TiDB::TableInfo::EngineType::DM)
+    else if (table_info.engine_type == TiDB::StorageEngine::DM)
     {
         writeString(") Engine = DeltaMerge((", stmt_buf);
         for (size_t i = 0; i < pks.size(); i++)
