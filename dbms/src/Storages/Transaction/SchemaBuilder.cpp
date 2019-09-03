@@ -419,7 +419,8 @@ void SchemaBuilder<Getter>::applyAlterPartition(TiDB::DBInfoPtr db_info, TableID
             orig_defs.begin(), orig_defs.end(), [&](const PartitionDefinition & orig_def) { return new_def.id == orig_def.id; });
         if (it == orig_defs.end())
         {
-            applyCreatePhysicalTableImpl(*db_info, table_info->producePartitionTableInfo(new_def.id));
+            auto part_table_info = table_info->producePartitionTableInfo(new_def.id);
+            applyCreatePhysicalTableImpl(*db_info, part_table_info);
         }
     }
 }
@@ -650,8 +651,14 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
 }
 
 template <typename Getter>
-void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info)
+void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info)
 {
+    if (table_info.engine_type == StorageEngine::UNSPECIFIED)
+    {
+        auto & tmt_context = context.getTMTContext();
+        table_info.engine_type = tmt_context.getEngineType();
+    }
+
     String stmt = createTableStmt(db_info, table_info);
 
     LOG_INFO(log, "try to create table with stmt: " << stmt);

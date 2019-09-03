@@ -49,7 +49,7 @@ private:
 
     void applyAlterPartition(TiDB::DBInfoPtr db_info, Int64 table_id);
 
-    void applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, const TiDB::TableInfo & table_info);
+    void applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info);
 
     void applyCreateTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info);
 

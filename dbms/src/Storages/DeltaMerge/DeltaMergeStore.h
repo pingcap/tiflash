@@ -80,8 +80,14 @@ public:
     const ColumnDefine &  getHandle() const { return table_handle_define; }
     Block                 getHeader() const { return toEmptyBlock(table_columns); }
     const Settings &      getSettings() const { return settings; }
-    DataTypePtr           getPKDataType() const { return table_handle_real_type; }
-    SortDescription       getPrimarySortDescription() const;
+    DataTypePtr           getPKDataType() const
+    {
+        if (table_handle_real_type)
+            return table_handle_real_type;
+        else
+            return EXTRA_HANDLE_COLUMN_TYPE;
+    }
+    SortDescription getPrimarySortDescription() const;
 
     void check(const Context & db_context, const DB::Settings & db_settings);
 

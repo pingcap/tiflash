@@ -417,6 +417,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
+        LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
         global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path, engine);
     }

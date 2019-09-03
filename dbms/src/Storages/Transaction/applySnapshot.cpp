@@ -64,10 +64,12 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
                             handle_map[handle] = std::move(data);
                     }
                 }
-                else if (pk_type == IManageableStorage::PKType::INT64)
-                    handle_map = getHandleMapByRange<Int64>(*context, storage, handle_range);
                 else
-                    throw Exception("Unspecified pk data type of table: " + storage->getDatabaseName() + "." + storage->getTableName(), ErrorCodes::NOT_IMPLEMENTED);
+                {
+                    // For pk is Int64 and other types.
+                    // TODO what about pk is UInt32?
+                    handle_map = getHandleMapByRange<Int64>(*context, storage, handle_range);
+                }
             }
 
             new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);

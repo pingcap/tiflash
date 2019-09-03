@@ -267,7 +267,7 @@ struct TableInfo
     PartitionInfo partition;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
-    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::TMT;
+    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
 
