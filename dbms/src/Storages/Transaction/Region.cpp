@@ -121,16 +121,6 @@ void Region::execChangePeer(
     meta.execChangePeer(request, response, index, term);
 }
 
-const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
-{
-    for (const auto & peer : region.peers())
-    {
-        if (peer.store_id() == store_id)
-            return peer;
-    }
-    throw Exception("[findPeer] peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-}
-
 Regions Region::execBatchSplit(
     const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
@@ -654,21 +644,6 @@ void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, co
 }
 
 std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
-
-void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
-{
-    if (!values)
-        return;
-
-    for (const auto & val : *values)
-    {
-        auto & decoded_row_info = val->extraInfo();
-        if (decoded_row_info.load())
-            continue;
-        DecodedRow * decoded_row = ValueExtraInfo<>::computeDecodedRow(val->getStr());
-        decoded_row_info.atomicUpdate(decoded_row);
-    }
-}
 
 void Region::tryPreDecodeTiKVValue()
 {
