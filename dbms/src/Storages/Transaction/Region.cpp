@@ -42,7 +42,7 @@ TableID Region::insert(const std::string & cf, TiKVKey key, TiKVValue value)
 
 TableID Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
-    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
     if (table_id == InvalidTableID)
         return InvalidTableID;
@@ -59,7 +59,7 @@ TableID Region::remove(const std::string & cf, const TiKVKey & key)
 
 TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
-    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
     if (table_id == InvalidTableID)
         return InvalidTableID;
@@ -585,7 +585,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         if (ori_ts >= safe_point)
             throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
-        std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
+        auto raw_key = RecordKVFormat::genRawKey(table_id, handle);
         TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
         TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
         TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);

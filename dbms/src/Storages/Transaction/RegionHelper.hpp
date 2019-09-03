@@ -4,7 +4,7 @@ namespace DB
 {
 
 /// Ignoring all keys other than records.
-inline TableID checkRecordAndValidTable(const std::string & raw_key)
+inline TableID checkRecordAndValidTable(const DecodedTiKVKey & raw_key)
 {
     // Ignoring all keys other than records.
     if (!RecordKVFormat::isRecord(raw_key))

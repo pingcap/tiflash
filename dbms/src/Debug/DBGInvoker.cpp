@@ -64,6 +64,7 @@ DBGInvoker::DBGInvoker()
     regFunc("try_flush_region", dbgFuncTryFlushRegion);
 
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
+    regFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
 
     regFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regFunc("refresh_schemas", dbgFuncRefreshSchemas);
