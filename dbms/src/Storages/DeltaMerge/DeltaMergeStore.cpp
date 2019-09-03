@@ -627,5 +627,12 @@ void DeltaMergeStore::flushCache(const Context & db_context)
     }
 }
 
+SortDescription DeltaMergeStore::getPrimarySortDescription() const
+{
+    SortDescription desc;
+    desc.emplace_back(table_handle_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
+    return desc;
+}
+
 } // namespace DM
 } // namespace DB

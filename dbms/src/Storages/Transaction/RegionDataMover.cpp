@@ -1,6 +1,7 @@
+#include <Columns/ColumnsNumber.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/RegionDataMover.h>
 
 namespace DB
@@ -15,11 +16,12 @@ static const std::string RegionDataMoverName = "RegionDataMover";
 
 template <typename HandleType>
 BlockInputStreamPtr createBlockInputStreamFromRange(
-    Context & context, const StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
+    Context & context, const ManageableStoragePtr & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
 {
+    // TODO ensure both TMT / DeltaMerge can handle this statement
     std::stringstream ss;
     ss << "SELRAW NOKVSTORE " << MutableSupport::version_column_name << ", " << MutableSupport::delmark_column_name << ", " << pk_name
-       << " FROM " << storage.getDatabaseName() << "." << storage.getTableName() << " WHERE (" << handle_range.first.handle_id
+       << " FROM " << storage->getDatabaseName() << "." << storage->getTableName() << " WHERE (" << handle_range.first.handle_id
        << " <= " << pk_name << ") AND (" << pk_name;
 
     if (handle_range.second.type == TiKVHandle::HandleIDType::NORMAL)
@@ -35,9 +37,9 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
 }
 
 template <typename HandleType>
-HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, const HandleRange<HandleType> & handle_range)
+HandleMap getHandleMapByRange(Context & context, const ManageableStoragePtr & storage, const HandleRange<HandleType> & handle_range)
 {
-    SortDescription pk_columns = storage.getData().getPrimarySortDescription();
+    SortDescription pk_columns = storage->getPrimarySortDescription();
     if (pk_columns.size() != 1)
         throw Exception("RegionDataMover: primary key should be one column", ErrorCodes::LOGICAL_ERROR);
 
@@ -91,7 +93,9 @@ HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, con
     return output_data;
 }
 
-template HandleMap getHandleMapByRange<Int64>(Context & context, StorageMergeTree & storage, const HandleRange<Int64> & handle_range);
-template HandleMap getHandleMapByRange<UInt64>(Context & context, StorageMergeTree & storage, const HandleRange<UInt64> & handle_range);
+template HandleMap getHandleMapByRange<Int64>(
+    Context & context, const ManageableStoragePtr & storage, const HandleRange<Int64> & handle_range);
+template HandleMap getHandleMapByRange<UInt64>(
+    Context & context, const ManageableStoragePtr & storage, const HandleRange<UInt64> & handle_range);
 
 } // namespace DB

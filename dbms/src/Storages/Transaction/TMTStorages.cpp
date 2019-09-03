@@ -35,9 +35,9 @@ ManageableStoragePtr ManagedStorages::getByName(const std::string & db, const st
 {
     std::lock_guard lock(mutex);
 
-    auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<TableID, StoragePtr> & pair) {
-        auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(pair.second);
-        return merge_tree->getDatabaseName() == db && merge_tree->getTableName() == table;
+    auto it = std::find_if(storages.begin(), storages.end(), [&](const std::pair<TableID, ManageableStoragePtr> & pair) {
+        auto &storage = pair.second;
+        return storage->getDatabaseName() == db && storage->getTableName() == table;
     });
     if (it == storages.end())
         return nullptr;

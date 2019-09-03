@@ -55,6 +55,8 @@ public:
     std::tuple<UInt64, UInt64, UInt64, UInt64> delta_status();
 
     StorageEngine engineType() const override { return DM; }
+    DataTypePtr getPKTypeImpl() const override { return std::make_shared<DataTypeInt64>(); }
+    SortDescription getPrimarySortDescription() const override { return primary_sort_descr; }
 
     String getDatabaseName() const override
     {

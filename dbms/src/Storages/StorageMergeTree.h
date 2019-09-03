@@ -90,9 +90,6 @@ public:
     void alterFromTiDB(
         const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
 
-    void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name,
-        const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
-
     bool checkTableCanBeDropped() const override;
 
     const TableInfo & getTableInfo() const override;
@@ -102,6 +99,8 @@ public:
     const MergeTreeData & getData() const { return data; }
 
     String getDataPath() const override { return full_path; }
+
+    SortDescription getPrimarySortDescription() const override { return data.getPrimarySortDescription(); }
 
 private:
     String path;
@@ -145,6 +144,10 @@ private:
 
     bool mergeTask();
 
+    void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name,
+                       const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
+
+    DataTypePtr getPKTypeImpl() const override;
 
 protected:
     /** Attach the table with the appropriate name, along the appropriate path (with  / at the end),

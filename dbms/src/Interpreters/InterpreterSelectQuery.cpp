@@ -208,6 +208,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         if (!storage_)
             return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
 
+        // TODO handle if storage_ is a DeltaMerge?
         const auto merge_tree = dynamic_cast<const StorageMergeTree *>(storage_.get());
         if (!merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
             throw Exception("Specifying schema_version for non-TMT storage: " + storage_->getName() + ", table: " + qualified_name + " is not allowed", ErrorCodes::LOGICAL_ERROR);

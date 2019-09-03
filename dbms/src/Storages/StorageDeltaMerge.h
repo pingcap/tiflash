@@ -57,6 +57,8 @@ public:
 
     void shutdown() override;
 
+    SortDescription getPrimarySortDescription() const override;
+
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
     BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
@@ -81,6 +83,8 @@ private:
         const String & table_name,
         const DB::DM::OptionTableInfoConstRef table_info_,
         const Context & context);
+
+    DataTypePtr getPKTypeImpl() const override;
 
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;

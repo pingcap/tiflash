@@ -15,6 +15,7 @@
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Storages/IManageableStorage.h>
 
 namespace DB
 {
@@ -235,7 +236,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
 }
 
 template <typename Getter>
-void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const String & db_name, StorageMergeTree * storage)
+void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const String & db_name, ManageableStoragePtr storage)
 {
     table_info->schema_version = target_version;
     auto orig_table_info = storage->getTableInfo();
@@ -270,7 +271,7 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
         for (const auto& part_def : table_info->partition.definitions)
         {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
-            auto part_storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(part_def.id).get());
+            auto part_storage = tmt_context.getStorages().get(part_def.id);
             if (part_storage != nullptr)
                 for (const auto & alter_commands : commands_vec)
                     part_storage->alterFromTiDB(alter_commands, new_table_info, db_name, context);
@@ -285,7 +286,7 @@ void SchemaBuilder<Getter>::applyAlterTable(TiDB::DBInfoPtr dbInfo, Int64 table_
 {
     auto table_info = getter.getTableInfo(dbInfo->id, table_id);
     auto & tmt_context = context.getTMTContext();
-    auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_id).get());
+    auto storage = tmt_context.getStorages().get(table_id);
     if (storage == nullptr || table_info == nullptr)
     {
         throw Exception("miss table: " + std::to_string(table_id), ErrorCodes::DDL_ERROR);
@@ -725,7 +726,7 @@ void SchemaBuilder<Getter>::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_i
         LOG_DEBUG(log, "table id " << table_id << " in db " << database_name << " is not existed.");
         return;
     }
-    const auto & table_info = static_cast<StorageMergeTree *>(storage_to_drop)->getTableInfo();
+    const auto & table_info = storage_to_drop->getTableInfo();
     if (table_info.isLogicalPartitionTable())
     {
         // drop all partition tables.
@@ -806,7 +807,7 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
     typename Resolver::NameMap rename_map;
     for (const auto& table_db : table_dbs)
     {
-        auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
+        auto storage = tmt_context.getStorages().get(table_db.first->id);
         if (storage != nullptr)
         {
             const String old_db = storage->getDatabaseName();
@@ -829,7 +830,7 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
     // Then Alter Table.
     for (const auto& table_db : table_dbs)
     {
-        auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
+        auto storage = tmt_context.getStorages().get(table_db.first->id);
         if (storage != nullptr)
         {
             const String db_name = storage->getDatabaseName();
@@ -844,7 +845,7 @@ void SchemaBuilder<Getter>::createTables(std::vector<std::pair<TableInfoPtr, DBI
     auto & tmt_context = context.getTMTContext();
     for (const auto& table_db : table_dbs)
     {
-        auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
+        auto storage = tmt_context.getStorages().get(table_db.first->id);
         if (storage == nullptr)
         {
             applyCreatePhysicalTableImpl(*table_db.second, *table_db.first);

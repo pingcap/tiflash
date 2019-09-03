@@ -787,4 +787,9 @@ void StorageMergeTree::freezePartition(const ASTPtr & partition, const String & 
     data.freezePartition(partition, with_name, context);
 }
 
+DataTypePtr StorageMergeTree::getPKTypeImpl() const
+{
+    return data.primary_key_data_types[0];
+}
+
 }

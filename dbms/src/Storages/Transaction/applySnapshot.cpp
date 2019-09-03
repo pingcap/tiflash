@@ -49,24 +49,25 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
             HandleMap handle_map;
 
             {
-                auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-                auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
+                // acquire lock so that no other threads can change storage's structure
+                auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+                const auto pk_type = storage->getPKType();
 
-                const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
-
-                if (pk_is_uint64)
+                if (pk_type == IManageableStorage::PKType::UINT64)
                 {
                     const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    handle_map = getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[0]);
+                    handle_map = getHandleMapByRange<UInt64>(*context, storage, new_range[0]);
                     if (n > 1)
                     {
-                        auto new_handle_map = getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[1]);
+                        auto new_handle_map = getHandleMapByRange<UInt64>(*context, storage, new_range[1]);
                         for (auto & [handle, data] : new_handle_map)
                             handle_map[handle] = std::move(data);
                     }
                 }
+                else if (pk_type == IManageableStorage::PKType::INT64)
+                    handle_map = getHandleMapByRange<Int64>(*context, storage, handle_range);
                 else
-                    handle_map = getHandleMapByRange<Int64>(*context, *merge_tree, handle_range);
+                    throw Exception("Unspecified pk data type of table: " + storage->getDatabaseName() + "." + storage->getTableName(), ErrorCodes::NOT_IMPLEMENTED);
             }
 
             new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);

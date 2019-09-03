@@ -481,4 +481,14 @@ StorageDeltaMerge::~StorageDeltaMerge()
     shutdown();
 }
 
+DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
+{
+    return store->getPKDataType();
+}
+
+SortDescription StorageDeltaMerge::getPrimarySortDescription() const
+{
+    return store->getPrimarySortDescription();
+}
+
 } // namespace DB

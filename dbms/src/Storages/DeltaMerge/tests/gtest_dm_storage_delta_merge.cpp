@@ -232,7 +232,7 @@ try
     ASSERT_EQ(num_rows_read, sample.rows());
 
 
-    //storage->drop();
+    storage->drop();
 }
 catch (const Exception & e)
 {
