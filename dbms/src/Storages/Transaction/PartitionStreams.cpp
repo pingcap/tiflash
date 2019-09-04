@@ -90,14 +90,14 @@ void RegionTable::writeBlockByRegion(
         // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
         switch (storage->engineType())
         {
-            case IManageableStorage::TMT:
+            case ::TiDB::StorageEngine::TMT:
             {
                 auto * tmt_storage = dynamic_cast<StorageMergeTree *>(storage.get());
                 TxnMergeTreeBlockOutputStream output(*tmt_storage);
                 output.write(std::move(block));
                 break;
             }
-            case IManageableStorage::DM:
+            case ::TiDB::StorageEngine::DM:
             {
                 auto * dm_storage = dynamic_cast<StorageDeltaMerge *>(storage.get());
                 // imported data from TiDB, ASTInsertQuery.is_import need to be true
@@ -108,6 +108,8 @@ void RegionTable::writeBlockByRegion(
                 output->writeSuffix();
                 break;
             }
+            default:
+                throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
         }
         write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 

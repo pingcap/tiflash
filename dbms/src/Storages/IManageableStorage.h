@@ -4,6 +4,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 namespace TiDB
 {
@@ -20,12 +21,6 @@ namespace DB
 class IManageableStorage : public IStorage
 {
 public:
-    enum StorageEngine
-    {
-        TMT = 0,
-        DM,
-    };
-
     enum class PKType
     {
         INT64 = 0,
@@ -44,7 +39,7 @@ public:
 
     virtual void check(const Context &) {}
 
-    virtual StorageEngine engineType() const = 0;
+    virtual ::TiDB::StorageEngine engineType() const = 0;
 
     virtual String getDatabaseName() const = 0;
 

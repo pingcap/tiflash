@@ -220,7 +220,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto storage_schema_version = merge_tree->getTableInfo().schema_version;
         // Not allow storage schema version greater than query schema version in any case.
         if (storage_schema_version > query_schema_version)
-            throw Exception("Table " + qualified_name + " schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(query_schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
+            throw Exception("Table " + qualified_name + " schema version " + toString(storage_schema_version) + " newer than query schema version " + toString(query_schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
 
         // If schema synced, we must be very recent so we are good as long as storage schema version is no greater than query schema version.
         // If schema not synced, we are good if storage schema version is right on query schema version.

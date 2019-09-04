@@ -9,6 +9,8 @@ enum class StorageEngine
     UNSPECIFIED = 0,
     TMT,
     DM,
+
+    TEST_MEMORY = 128,
 };
 
 } // namespace TiDB
