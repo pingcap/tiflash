@@ -42,7 +42,7 @@ TableID Region::insert(const std::string & cf, TiKVKey key, TiKVValue value)
 
 TableID Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
-    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
     if (table_id == InvalidTableID)
         return InvalidTableID;
@@ -59,7 +59,7 @@ TableID Region::remove(const std::string & cf, const TiKVKey & key)
 
 TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
-    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
     if (table_id == InvalidTableID)
         return InvalidTableID;
@@ -119,16 +119,6 @@ void Region::execChangePeer(
     LOG_INFO(log, toString(false) << " execute change peer type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
     meta.execChangePeer(request, response, index, term);
-}
-
-const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
-{
-    for (const auto & peer : region.peers())
-    {
-        if (peer.store_id() == store_id)
-            return peer;
-    }
-    throw Exception("[findPeer] peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
 Regions Region::execBatchSplit(
@@ -585,7 +575,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         if (ori_ts >= safe_point)
             throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
-        std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
+        auto raw_key = RecordKVFormat::genRawKey(table_id, handle);
         TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
         TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
         TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
@@ -654,21 +644,6 @@ void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, co
 }
 
 std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
-
-void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
-{
-    if (!values)
-        return;
-
-    for (const auto & val : *values)
-    {
-        auto & decoded_row_info = val->extraInfo();
-        if (decoded_row_info.load())
-            continue;
-        DecodedRow * decoded_row = ValueExtraInfo<>::computeDecodedRow(val->getStr());
-        decoded_row_info.atomicUpdate(decoded_row);
-    }
-}
 
 void Region::tryPreDecodeTiKVValue()
 {
