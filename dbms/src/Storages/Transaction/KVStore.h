@@ -55,12 +55,11 @@ public:
 
     void updateRegionTableBySnapshot(RegionTable & region_table);
 
-    KVStoreTaskLock genTaskLock() const;
-
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
     void removeRegion(const RegionID region_id, RegionTable * region_table);
+    KVStoreTaskLock genTaskLock() const;
 
     RegionMap & regions();
     const RegionMap & regions() const;
@@ -85,7 +84,7 @@ private:
 /// Encapsulation of lock guard of task mutex in KVStore
 class KVStoreTaskLock : private boost::noncopyable
 {
-    friend KVStoreTaskLock KVStore::genTaskLock() const;
+    friend class KVStore;
     KVStoreTaskLock(std::mutex & mutex_) : lock(mutex_) {}
     std::lock_guard<std::mutex> lock;
 };
