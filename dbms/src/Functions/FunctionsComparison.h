@@ -133,6 +133,15 @@ inline time_t dateToDateTime(UInt32 date_data)
     return DateLUT::instance().makeDateTime(local_date.year(), local_date.month(), local_date.day(), 0, 0, 0);
 }
 
+inline DayNum_t dateTimeToDate(time_t time_data, bool & truncated)
+{
+    // todo use timezone info
+    auto & date_lut = DateLUT::instance();
+    truncated = date_lut.toHour(time_data) != 0 || date_lut.toMinute(time_data) != 0 || date_lut.toSecond(time_data) != 0;
+    auto values = date_lut.getValues(time_data);
+    return date_lut.makeDayNum(values.year, values.month, values.day_of_month);
+}
+
 
 template <typename A, typename B, template <typename, typename> class Op, bool is_left_date>
 struct DateDateTimeComparisonImpl
@@ -175,18 +184,30 @@ struct DateDateTimeComparisonImpl
         }
         else
         {
-            using OpType = B;
-            size_t size = a.size();
-            const A * a_pos = &a[0];
-            UInt8 * c_pos = &c[0];
-            const A * a_end = a_pos + size;
-
-            while (a_pos < a_end)
+            // date vector with datetime constant
+            // first check if datetime constant can be convert to date constant
+            bool truncated = true;
+            DayNum_t date_num = dateTimeToDate((time_t) b, truncated);
+            if (!truncated)
             {
-                time_t date_time = dateToDateTime(*a_pos);
-                *c_pos = Op<OpType, OpType>::apply((OpType)date_time, b);
-                ++a_pos;
-                ++c_pos;
+                using OpType = A;
+                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant(a, (OpType) date_num, c);
+            }
+            else
+            {
+                using OpType = B;
+                size_t size = a.size();
+                const A *a_pos = &a[0];
+                UInt8 *c_pos = &c[0];
+                const A *a_end = a_pos + size;
+
+                while (a_pos < a_end)
+                {
+                    time_t date_time = dateToDateTime(*a_pos);
+                    *c_pos = Op<OpType, OpType>::apply((OpType) date_time, b);
+                    ++a_pos;
+                    ++c_pos;
+                }
             }
         }
     }
@@ -202,18 +223,29 @@ struct DateDateTimeComparisonImpl
         }
         else
         {
-            using OpType = A;
-            size_t size = b.size();
-            const B * b_pos = &b[0];
-            UInt8 * c_pos = &c[0];
-            const B * b_end = b_pos + size;
-
-            while (b_pos < b_end)
+            // datetime constant with date vector
+            bool truncated = true;
+            DayNum_t date_num = dateTimeToDate((time_t) a, truncated);
+            if (!truncated)
             {
-                time_t date_time = dateToDateTime(*b_pos);
-                *c_pos = Op<OpType, OpType>::apply(a, (OpType)date_time);
-                ++b_pos;
-                ++c_pos;
+                using OpType = B;
+                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant((OpType)a, date_num, c);
+            }
+            else
+            {
+                using OpType = A;
+                size_t size = b.size();
+                const B *b_pos = &b[0];
+                UInt8 *c_pos = &c[0];
+                const B *b_end = b_pos + size;
+
+                while (b_pos < b_end)
+                {
+                    time_t date_time = dateToDateTime(*b_pos);
+                    *c_pos = Op<OpType, OpType>::apply(a, (OpType) date_time);
+                    ++b_pos;
+                    ++c_pos;
+                }
             }
         }
     }
