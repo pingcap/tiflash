@@ -83,7 +83,7 @@ void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
     applied_term = term;
 }
 
-void RegionMeta::notifyAll() { cv.notify_all(); }
+void RegionMeta::notifyAll() const { cv.notify_all(); }
 
 UInt64 RegionMeta::appliedIndex() const
 {
@@ -154,13 +154,13 @@ void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
     region_state.set_state(peer_state_);
 }
 
-void RegionMeta::waitIndex(UInt64 index)
+void RegionMeta::waitIndex(UInt64 index) const
 {
     std::unique_lock<std::mutex> lock(mutex);
     cv.wait(lock, [this, index] { return doCheckIndex(index); });
 }
 
-bool RegionMeta::checkIndex(UInt64 index)
+bool RegionMeta::checkIndex(UInt64 index) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return doCheckIndex(index);
@@ -196,7 +196,7 @@ void RegionMeta::assignRegionMeta(RegionMeta && rhs)
     region_state = std::move(rhs.region_state);
 }
 
-void RegionMeta::execChangePeer(
+void MetaRaftCommandDelegate::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
@@ -233,7 +233,7 @@ void RegionMeta::execChangePeer(
     }
 }
 
-void RegionMeta::execCompactLog(
+void MetaRaftCommandDelegate::execCompactLog(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &, const UInt64 index, const UInt64 term)
 {
     const auto & compact_log_request = request.compact_log();
@@ -263,6 +263,9 @@ bool RegionMeta::isPeerRemoved() const
 
 bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 {
+    std::lock_guard<std::mutex> lock1(meta1.mutex);
+    std::lock_guard<std::mutex> lock2(meta2.mutex);
+
     return meta1.peer == meta2.peer && meta1.apply_state == meta2.apply_state && meta1.applied_term == meta2.applied_term
         && meta1.region_state == meta2.region_state;
 }
@@ -272,6 +275,12 @@ std::tuple<RegionVersion, RegionVersion, RegionRange> RegionMeta::dumpVersionRan
     std::lock_guard<std::mutex> lock(mutex);
     return {region_state.region().region_epoch().version(), region_state.region().region_epoch().conf_ver(),
         std::make_pair(TiKVKey::copyFrom(region_state.region().start_key()), TiKVKey::copyFrom(region_state.region().end_key()))};
+}
+
+MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
+{
+    static_assert(sizeof(MetaRaftCommandDelegate) == sizeof(RegionMeta));
+    return static_cast<MetaRaftCommandDelegate &>(*this);
 }
 
 } // namespace DB

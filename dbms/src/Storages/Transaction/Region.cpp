@@ -34,7 +34,7 @@ RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const Reg
 
 LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
 
-TableID Region::insert(const std::string & cf, TiKVKey key, TiKVValue value)
+TableID Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     return doInsert(cf, std::move(key), std::move(value));
@@ -86,13 +86,7 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
     return table_id;
 }
 
-UInt64 Region::getIndex() const
-{
-    std::shared_lock<std::shared_mutex> lock(mutex);
-    return meta.appliedIndex();
-}
-
-UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
+UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 
 RegionPtr Region::splitInto(RegionMeta meta)
 {
@@ -111,17 +105,17 @@ RegionPtr Region::splitInto(RegionMeta meta)
     return new_region;
 }
 
-void Region::execChangePeer(
+void RegionRaftCommandDelegate::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
 
     LOG_INFO(log, toString(false) << " execute change peer type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
-    meta.execChangePeer(request, response, index, term);
+    meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
 }
 
-Regions Region::execBatchSplit(
+Regions RegionRaftCommandDelegate::execBatchSplit(
     const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & new_region_infos = response.splits().regions();
@@ -174,30 +168,30 @@ Regions Region::execBatchSplit(
     return split_regions;
 }
 
-void Region::execCompactLog(
+void RegionRaftCommandDelegate::execCompactLog(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & compact_log_request = request.compact_log();
-    LOG_INFO(log,
-        toString(false) << " execute compact log, compact_term: " << compact_log_request.compact_term()
-                        << ", compact_index: " << compact_log_request.compact_index());
+    const auto compact_index = compact_log_request.compact_index();
+    const auto compact_term = compact_log_request.compact_term();
 
-    meta.execCompactLog(request, response, index, term);
+    LOG_INFO(log, toString(false) << " execute compact log, compact_term: " << compact_term << ", compact_index: " << compact_index);
+
+    meta.makeRaftCommandDelegate().execCompactLog(request, response, index, term);
 }
 
-RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
+void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const KVStore &, RegionTable *, RaftCommandResult & result)
 {
     const auto & header = cmd.header();
     UInt64 term = header.term();
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
 
-    RaftCommandResult result;
+    result.type = RaftCommandResult::Type::Default;
     result.sync_log = sync_log;
 
     {
-        auto applied_index = meta.appliedIndex();
-        if (index <= applied_index)
+        if (index <= appliedIndex())
         {
             result.type = RaftCommandResult::Type::IndexError;
             if (term == 0 && index == 0)
@@ -206,7 +200,7 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
             }
             else
                 LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
-            return result;
+            return;
         }
     }
 
@@ -361,8 +355,6 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
 
     if (is_dirty)
         incDirtyFlag();
-
-    return result;
 }
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
@@ -417,13 +409,15 @@ ColumnFamilyType Region::getCf(const std::string & cf)
 
 RegionID Region::id() const { return meta.regionId(); }
 
-bool Region::isPendingRemove() const { return meta.peerState() == raft_serverpb::PeerState::Tombstone; }
+bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
 void Region::setPendingRemove()
 {
     meta.setPeerState(raft_serverpb::PeerState::Tombstone);
     meta.notifyAll();
 }
+
+raft_serverpb::PeerState Region::peerState() const { return meta.peerState(); }
 
 size_t Region::dataSize() const { return data.dataSize(); }
 
@@ -589,6 +583,14 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
                                               << ori_write_map_size << ", remain size " << write_map.size());
     if (deleted_gc_cnt)
         LOG_INFO(log, "[compareAndCompleteSnapshot] add deleted gc: " << deleted_gc_cnt);
+}
+
+RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
+{
+    static_assert(sizeof(RegionRaftCommandDelegate) == sizeof(Region));
+    // lock is useless, just to make sure the task mutex of KVStore is locked
+    std::ignore = lock;
+    return static_cast<RegionRaftCommandDelegate &>(*this);
 }
 
 void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region)
