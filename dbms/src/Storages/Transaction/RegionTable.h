@@ -177,6 +177,7 @@ public:
     bool tryFlushRegions();
 
     void tryFlushRegion(RegionID region_id);
+    void tryFlushRegion(RegionID region_id, TableID table_id);
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
