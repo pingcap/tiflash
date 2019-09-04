@@ -26,7 +26,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
 
     if (old_region)
     {
-        if (old_region->getIndex() >= new_region->getIndex())
+        if (old_region->appliedIndex() >= new_region->appliedIndex())
         {
             LOG_WARNING(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
             return false;

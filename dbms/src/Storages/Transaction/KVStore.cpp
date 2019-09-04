@@ -15,7 +15,9 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir, region_manager), log(&Logger::get("KVStore")) {}
+KVStore::KVStore(const std::string & data_dir)
+    : region_persister(data_dir, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
+{}
 
 void KVStore::restore(const RegionClientCreateFunc & region_client_create)
 {
@@ -46,15 +48,20 @@ RegionPtr KVStore::getRegion(const RegionID region_id) const
     return nullptr;
 }
 
-RegionManager::RegionTaskElementPtr RegionManager::getRegionTaskCtrl(const RegionID region_id) const
+const RegionManager::RegionTaskElement & RegionManager::getRegionTaskCtrl(const RegionID region_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto & p = regions_ctrl[region_id];
-    return p ? p : (p = std::make_shared<RegionTaskElement>());
+    if (auto it = regions_ctrl.find(region_id); it != regions_ctrl.end())
+        return it->second;
+
+    return regions_ctrl.try_emplace(region_id).first->second;
 }
 
-RegionTaskLock RegionManager::genRegionTaskLock(const RegionID region_id) const { return RegionTaskLock(*getRegionTaskCtrl(region_id)); }
+RegionTaskLock RegionManager::genRegionTaskLock(const RegionID region_id) const
+{
+    return RegionTaskLock(getRegionTaskCtrl(region_id).mutex);
+}
 
 size_t KVStore::regionSize() const
 {
@@ -77,16 +84,16 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context)
         region_persister.persist(*new_region, region_lock);
     }
     {
-        std::lock_guard<std::mutex> lock(task_mutex);
+        auto task_lock = genTaskLock();
         auto region_lock = region_manager.genRegionTaskLock(region_id);
 
         RegionPtr old_region = getRegion(region_id);
         if (old_region != nullptr)
         {
-            UInt64 old_index = old_region->getProbableIndex();
+            UInt64 old_index = old_region->appliedIndex();
 
             LOG_DEBUG(log, "KVStore::onSnapshot previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
-            if (old_index >= new_region->getProbableIndex())
+            if (old_index >= new_region->appliedIndex())
             {
                 LOG_INFO(log, "KVStore::onSnapshot discard new region because of index is outdated");
                 return false;
@@ -126,7 +133,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         LOG_INFO(log, "Report [region " << region_id << "] destroyed");
     };
 
-    std::lock_guard<std::mutex> lock(task_mutex);
+    auto task_lock = genTaskLock();
 
     for (auto && cmd : *cmds.mutable_requests())
     {
@@ -155,7 +162,8 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             continue;
         }
 
-        RaftCommandResult result = curr_region.onCommand(std::move(cmd));
+        curr_region.makeRaftCommandDelegate(task_lock).onCommand(std::move(cmd), *this, region_table, *raft_cmd_res);
+        RaftCommandResult & result = *raft_cmd_res;
 
         const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region.toCommandResponse(); };
 
@@ -269,7 +277,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
 void KVStore::report(RaftContext & raft_ctx)
 {
-    std::lock_guard<std::mutex> lock(task_mutex);
+    auto lock = genTaskLock();
 
     enginepb::CommandResponseBatch responseBatch;
     {
@@ -364,6 +372,7 @@ void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)
     LOG_INFO(log, "update RegionTable done");
 }
 
+KVStoreTaskLock KVStore::genTaskLock() const { return KVStoreTaskLock(task_mutex); }
 RegionMap & KVStore::regions() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }
 std::mutex & KVStore::mutex() const { return region_manager.mutex; }

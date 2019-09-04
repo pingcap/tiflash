@@ -19,6 +19,7 @@ namespace DB
 {
 
 using RegionRange = std::pair<TiKVKey, TiKVKey>;
+class MetaRaftCommandDelegate;
 
 class RegionMeta
 {
@@ -62,7 +63,7 @@ public:
     raft_serverpb::RaftApplyState getApplyState() const;
 
     void setApplied(UInt64 index, UInt64 term);
-    void notifyAll();
+    void notifyAll() const;
 
     std::string toString(bool dump_status = true) const;
 
@@ -79,20 +80,20 @@ public:
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
-    void waitIndex(UInt64 index);
-    bool checkIndex(UInt64 index);
+    void waitIndex(UInt64 index) const;
+    bool checkIndex(UInt64 index) const;
 
     bool isPeerRemoved() const;
 
-    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execCompactLog(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
     std::tuple<RegionVersion, RegionVersion, RegionRange> dumpVersionRange() const;
+    MetaRaftCommandDelegate & makeRaftCommandDelegate();
 
 private:
+    RegionMeta() = delete;
+    friend class MetaRaftCommandDelegate;
+
     void doSetRegion(const metapb::Region & region);
-
     void doSetApplied(UInt64 index, UInt64 term);
-
     bool doCheckIndex(UInt64 index) const;
 
 private:
@@ -105,7 +106,7 @@ private:
     raft_serverpb::RegionLocalState region_state;
 
     mutable std::mutex mutex;
-    std::condition_variable cv;
+    mutable std::condition_variable cv;
     const RegionID region_id;
 };
 
@@ -124,5 +125,15 @@ inline raft_serverpb::RaftApplyState initialApplyState()
     state.mutable_truncated_state()->set_term(RAFT_INIT_LOG_TERM);
     return state;
 }
+
+class MetaRaftCommandDelegate : public RegionMeta, private boost::noncopyable
+{
+    friend class RegionRaftCommandDelegate;
+
+    MetaRaftCommandDelegate() = delete;
+
+    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    void execCompactLog(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+};
 
 } // namespace DB

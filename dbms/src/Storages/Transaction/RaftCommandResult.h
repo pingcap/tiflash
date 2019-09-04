@@ -8,7 +8,7 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
-struct RaftCommandResult
+struct RaftCommandResult : private boost::noncopyable
 {
     enum Type
     {

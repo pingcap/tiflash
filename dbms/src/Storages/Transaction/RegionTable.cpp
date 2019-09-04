@@ -359,7 +359,7 @@ void RegionTable::removeRegion(const RegionID region_id)
 
 void RegionTable::tryFlushRegion(RegionID region_id)
 {
-    TableID table_id;
+    TableIDSet table_ids;
     {
         std::lock_guard<std::mutex> lock(mutex);
         if (auto it = regions.find(region_id); it != regions.end())
@@ -370,7 +370,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
                 return;
             }
             // maybe this region contains more than one table, just flush the first one.
-            table_id = *it->second.begin();
+            table_ids = it->second;
         }
         else
         {
@@ -379,6 +379,12 @@ void RegionTable::tryFlushRegion(RegionID region_id)
         }
     }
 
+    for (const auto table_id : table_ids)
+        tryFlushRegion(region_id, table_id);
+}
+
+void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
+{
     const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
         std::lock_guard<std::mutex> lock(mutex);
         if (auto table_it = tables.find(table_id); table_it != tables.end())
