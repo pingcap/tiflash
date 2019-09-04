@@ -423,7 +423,16 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
     if (!status)
         return;
 
-    flushRegion(table_id, region_id, cache_bytes, false);
+    std::exception_ptr first_exception;
+
+    try
+    {
+        flushRegion(table_id, region_id, cache_bytes, false);
+    }
+    catch (...)
+    {
+        first_exception = std::current_exception();
+    }
 
     func_update_region([&](InternalRegion & region) -> bool {
         region.pause_flush = false;
@@ -433,6 +442,9 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
         region.last_flush_time = Clock::now();
         return true;
     });
+
+    if (first_exception)
+        std::rethrow_exception(first_exception);
 }
 
 bool RegionTable::tryFlushRegions()
@@ -449,8 +461,17 @@ bool RegionTable::tryFlushRegions()
         });
     }
 
-    for (auto & [id, cache_bytes] : to_flush)
-        flushRegion(id.first, id.second, cache_bytes);
+    std::exception_ptr first_exception;
+
+    try
+    {
+        for (auto & [id, cache_bytes] : to_flush)
+            flushRegion(id.first, id.second, cache_bytes);
+    }
+    catch (...)
+    {
+        first_exception = std::current_exception();
+    }
 
     { // Now reset status information.
         Timepoint now = Clock::now();
@@ -465,6 +486,9 @@ bool RegionTable::tryFlushRegions()
             }
         });
     }
+
+    if (first_exception)
+        std::rethrow_exception(first_exception);
 
     return !to_flush.empty();
 }
