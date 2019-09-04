@@ -81,7 +81,7 @@ public:
 
     void initDelta();
 
-    void check(const Context & context) override;
+    void checkStatus(const Context & context) override;
 
     StorageDeltaMergeDummy(const std::string & path_,
         const std::string & name_,

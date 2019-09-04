@@ -287,7 +287,7 @@ BlockInputStreams StorageDeltaMerge::read( //
     }
 }
 
-void StorageDeltaMerge::check(const Context & context) { store->check(context, context.getSettingsRef()); }
+void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context, context.getSettingsRef()); }
 
 //==========================================================================================
 // DDL methods.

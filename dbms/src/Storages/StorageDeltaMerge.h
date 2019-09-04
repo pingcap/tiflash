@@ -69,7 +69,7 @@ public:
     BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
 
 
-    void check(const Context & context) override;
+    void checkStatus(const Context & context) override;
 
 protected:
     StorageDeltaMerge(const String & path_,

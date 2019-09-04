@@ -12,6 +12,8 @@ enum class StorageEngine
 
     // indicate other engine type in ClickHouse
     UNSUPPORTED_ENGINES = 128,
+    // Just for test, Buggy StorageMemory
+    DEBUGGING_MEMORY = 129,
 };
 
 } // namespace TiDB

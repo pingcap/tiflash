@@ -571,6 +571,12 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
         writeString(table_info.serialize(true), stmt_buf);
         writeString("')", stmt_buf);
     }
+    else if (table_info.engine_type == TiDB::StorageEngine::DEBUGGING_MEMORY)
+    {
+        writeString(") Engine = Debugging('", stmt_buf);
+        writeString(table_info.serialize(true), stmt_buf);
+        writeString("')", stmt_buf);
+    }
     else
     {
         throw Exception("Unknown engine type : " + toString(static_cast<int32_t>(table_info.engine_type)), ErrorCodes::DDL_ERROR);
