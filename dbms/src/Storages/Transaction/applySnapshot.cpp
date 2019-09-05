@@ -1,5 +1,8 @@
 #include <Core/TMTPKType.h>
+#include <DataStreams/IBlockOutputStream.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
@@ -17,6 +20,40 @@ extern const int LOGICAL_ERROR;
 }
 
 static const std::string RegionSnapshotName = "RegionSnapshot";
+
+namespace
+{
+
+void completeSnapshotForTMT(ManageableStoragePtr & storage,                 //
+    const HandleRange<HandleID> & handle_range, const Timestamp safe_point, //
+    const TableID table_id, RegionPtr new_region, Context * context)
+{
+    HandleMap handle_map;
+    {
+        const auto pk_type = storage->getPKType();
+
+        if (pk_type == IManageableStorage::PKType::UINT64)
+        {
+            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
+            handle_map = getHandleMapByRange<UInt64>(*context, storage, new_range[0]);
+            if (n > 1)
+            {
+                auto new_handle_map = getHandleMapByRange<UInt64>(*context, storage, new_range[1]);
+                for (auto & [handle, data] : new_handle_map)
+                    handle_map[handle] = std::move(data);
+            }
+        }
+        else
+        {
+            // For pk is Int64 and other types.
+            handle_map = getHandleMapByRange<Int64>(*context, storage, handle_range);
+        }
+    }
+
+    new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);
+}
+
+} // namespace
 
 bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * context)
 {
@@ -46,33 +83,27 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
             if (handle_range.first >= handle_range.second)
                 continue;
-            HandleMap handle_map;
 
+            // acquire lock so that no other threads can change storage's structure
+            auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+
+            switch (storage->engineType())
             {
-                // acquire lock so that no other threads can change storage's structure
-                auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
-                const auto pk_type = storage->getPKType();
-
-                if (pk_type == IManageableStorage::PKType::UINT64)
+                case TiDB::StorageEngine::TMT:
+                    completeSnapshotForTMT(storage, handle_range, safe_point, table_id, new_region, context);
+                    break;
+                case TiDB::StorageEngine::DM:
                 {
-                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    handle_map = getHandleMapByRange<UInt64>(*context, storage, new_range[0]);
-                    if (n > 1)
-                    {
-                        auto new_handle_map = getHandleMapByRange<UInt64>(*context, storage, new_range[1]);
-                        for (auto & [handle, data] : new_handle_map)
-                            handle_map[handle] = std::move(data);
-                    }
+                    // In StorageDeltaMerge, we call deleteRange to remove old data
+                    auto * dm_storage = dynamic_cast<StorageDeltaMerge *>(storage.get());
+                    DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
+                    dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+                    break;
                 }
-                else
-                {
-                    // For pk is Int64 and other types.
-                    // TODO what about pk is UInt32?
-                    handle_map = getHandleMapByRange<Int64>(*context, storage, handle_range);
-                }
+                default:
+                    throw Exception(
+                        "Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
             }
-
-            new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);
         }
     }
 

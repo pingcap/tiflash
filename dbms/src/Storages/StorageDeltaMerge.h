@@ -37,6 +37,11 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    void deleteRange(const DM::HandleRange &range_to_delete, const Settings & settings)
+    {
+        return store->deleteRange(global_context, settings, range_to_delete);
+    }
+
     void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override;
 
     String getDatabaseName() const override { return db_name; }
