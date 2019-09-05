@@ -80,11 +80,6 @@ inline HandleRange<HandleID> getHandleRangeByTable(const KeyType & start_key, co
     return {start_handle, end_handle};
 }
 
-inline HandleRange<HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
-{
-    return getHandleRangeByTable(range.first, range.second, table_id);
-}
-
 } // namespace TiKVRange
 
 } // namespace DB

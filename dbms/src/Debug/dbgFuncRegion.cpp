@@ -220,7 +220,7 @@ std::string getRegionKeyString(const TiKVRange::Handle s, const TiKVKey & k)
     {
         if (s.type != TiKVHandle::HandleIDType::NORMAL)
         {
-            auto raw_key = k.empty() ? "" : RecordKVFormat::decodeTiKVKey(k);
+            auto raw_key = k.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(k);
             bool is_record = RecordKVFormat::isRecord(raw_key);
             std::stringstream ss;
             if (is_record)
@@ -285,6 +285,7 @@ void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none,
             ss << " [none], ";
         else
             ss << " ranges: [" << range.first.toString() << ", " << range.second.toString() << "), ";
+        ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
         if (auto s = region->dataInfo(); s.size() > 2)
             ss << ", " << s;
         output(ss.str());

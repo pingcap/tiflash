@@ -43,15 +43,14 @@ RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
 {
     const auto range = region.getRange();
-    return insertRegion(table, range.first, range.second, region.id());
+    return insertRegion(table, *range, region.id());
 }
 
-RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id)
+RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id)
 {
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok]
-        = table_regions.emplace(region_id, InternalRegion(region_id, TiKVRange::getHandleRangeByTable(start, end, table.table_id)));
+    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.getHandleRangeByTable(table.table_id)));
     if (!ok)
         throw Exception(
             "[RegionTable::insertRegion] insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
@@ -95,8 +94,7 @@ void RegionTable::doShrinkRegionRange(const Region & region)
     {
         auto table_id = *region_table_it;
 
-        const auto handle_range = TiKVRange::getHandleRangeByTable(range, table_id);
-
+        const auto handle_range = range->getHandleRangeByTable(table_id);
         auto table_it = tables.find(table_id);
         if (table_it == tables.end())
             throw Exception("Table " + DB::toString(table_id) + " not found in table map", ErrorCodes::LOGICAL_ERROR);

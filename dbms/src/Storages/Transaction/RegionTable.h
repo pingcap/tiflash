@@ -30,6 +30,7 @@ class Block;
 // for debug
 struct MockTiDBTable;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+class RegionRangeKeys;
 
 class RegionTable : private boost::noncopyable
 {
@@ -135,7 +136,7 @@ private:
 
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
-    InternalRegion & insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
 
     bool shouldFlush(const InternalRegion & region) const;
 
