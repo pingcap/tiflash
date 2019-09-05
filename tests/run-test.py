@@ -147,10 +147,6 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
                 continue
             if line.startswith(COMMENT_PREFIX) or len(line) == 0:
                 continue
-            # filter out inline comment
-            line_comment_pos = line.find('--')
-            if line_comment_pos != -1:
-                line = line[:line_comment_pos].strip()
             if origin.startswith(UNFINISHED_1_PREFIX) or origin.startswith(UNFINISHED_2_PREFIX):
                 if cached[-1] == ',':
                     cached += ' '
