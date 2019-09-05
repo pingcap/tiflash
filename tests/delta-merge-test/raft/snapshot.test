@@ -34,7 +34,7 @@
     4, 0, 1000,
     2, 3, 0, 11,
     1, 3, 0, 13,
-    4, 4, 1, 0 -- this row is mark deleted
+    4, 4, 1, 0
     )
 => DBGInvoke __try_flush_region(4)
 ## now we should not find rowid==3
