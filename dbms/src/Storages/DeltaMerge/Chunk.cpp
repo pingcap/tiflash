@@ -440,12 +440,6 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
                 disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
             return true;
         }
-        else if (checkDataType<DataTypeUInt32>(read_type_not_null))
-        {
-            insertRangeFromWithNumericTypeCast<FromType, UInt32>(
-                disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
-            return true;
-        }
     }
     else if (checkDataType<DataTypeInt32>(disk_type_not_null))
     {
@@ -453,12 +447,6 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
         if (checkDataType<DataTypeInt64>(read_type_not_null))
         {
             insertRangeFromWithNumericTypeCast<FromType, Int64>(
-                disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
-            return true;
-        }
-        else if (checkDataType<DataTypeInt32>(read_type_not_null))
-        {
-            insertRangeFromWithNumericTypeCast<FromType, Int32>(
                 disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
             return true;
         }
@@ -478,12 +466,6 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
                 disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
             return true;
         }
-        else if (checkDataType<DataTypeUInt16>(read_type_not_null))
-        {
-            insertRangeFromWithNumericTypeCast<FromType, UInt16>(
-                disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
-            return true;
-        }
     }
     else if (checkDataType<DataTypeInt16>(disk_type_not_null))
     {
@@ -497,12 +479,6 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
         else if (checkDataType<DataTypeInt64>(read_type_not_null))
         {
             insertRangeFromWithNumericTypeCast<FromType, Int64>(
-                disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
-            return true;
-        }
-        else if (checkDataType<DataTypeInt16>(read_type_not_null))
-        {
-            insertRangeFromWithNumericTypeCast<FromType, Int16>(
                 disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
             return true;
         }
@@ -528,12 +504,6 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
                 disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
             return true;
         }
-        else if (checkDataType<DataTypeUInt8>(read_type_not_null))
-        {
-            insertRangeFromWithNumericTypeCast<FromType, UInt8>(
-                disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
-            return true;
-        }
     }
     else if (checkDataType<DataTypeInt8>(disk_type_not_null))
     {
@@ -553,12 +523,6 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
         else if (checkDataType<DataTypeInt16>(read_type_not_null))
         {
             insertRangeFromWithNumericTypeCast<FromType, Int16>(
-                disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
-            return true;
-        }
-        else if (checkDataType<DataTypeInt8>(read_type_not_null))
-        {
-            insertRangeFromWithNumericTypeCast<FromType, Int8>(
                 disk_col_not_null, null_map, read_define, memory_col_not_null, rows_offset, rows_limit);
             return true;
         }

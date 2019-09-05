@@ -5,7 +5,6 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/randomSeed.h>
 #include <common/logger_useful.h>
 
 #include <IO/WriteHelpers.h>
@@ -16,55 +15,15 @@
 
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
-#include <common/logger_useful.h>
 #include <ext/scope_guard.h>
 
 #include <Storages/Page/PageFile.h>
-
-namespace ProfileEvents
-{
-extern const Event FileOpen;
-extern const Event FileOpenFailed;
-extern const Event Seek;
-extern const Event PSMWritePages;
-extern const Event PSMWriteCalls;
-extern const Event PSMWriteIOCalls;
-extern const Event PSMWriteBytes;
-extern const Event PSMReadPages;
-extern const Event PSMReadCalls;
-extern const Event PSMReadIOCalls;
-extern const Event PSMReadBytes;
-extern const Event PSMWriteFailed;
-extern const Event PSMReadFailed;
-} // namespace ProfileEvents
-
-namespace CurrentMetrics
-{
-extern const Metric Write;
-extern const Metric Read;
-} // namespace CurrentMetrics
+#include <Storages/Page/PageUtil.h>
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-extern const int UNKNOWN_FORMAT_VERSION;
-extern const int CHECKSUM_DOESNT_MATCH;
-extern const int FILE_DOESNT_EXIST;
-extern const int CANNOT_OPEN_FILE;
-extern const int CANNOT_FSYNC;
-extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
-extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
-extern const int CANNOT_SEEK_THROUGH_FILE;
-extern const int PAGE_SIZE_NOT_MATCH;
-extern const int LOGICAL_ERROR;
-extern const int ILLFORMED_PAGE_NAME;
-extern const int FILE_SIZE_NOT_MATCH;
-} // namespace ErrorCodes
-
 // =========================================================
-// Helper functions
+// Page Meta format
 // =========================================================
 
 static constexpr bool PAGE_CHECKSUM_ON_READ = true;
@@ -72,164 +31,6 @@ static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 #ifndef O_DIRECT
 #define O_DIRECT 00040000
 #endif
-
-template <bool read, bool must_exist = true>
-int openFile(const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::FileOpen);
-
-    int flags;
-    if constexpr (read)
-    {
-        flags = O_RDONLY;
-    }
-    else
-    {
-        flags = O_WRONLY | O_CREAT;
-    }
-
-    int fd = ::open(path.c_str(), flags, 0666);
-    if (-1 == fd)
-    {
-        ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        if constexpr (!must_exist)
-        {
-            if (errno == ENOENT)
-            {
-                return 0;
-            }
-        }
-        throwFromErrno("Cannot open file " + path, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
-    }
-
-    return fd;
-}
-
-void syncFile(int fd, const std::string & path)
-{
-    if (-1 == ::fsync(fd))
-        throwFromErrno("Cannot fsync " + path, ErrorCodes::CANNOT_FSYNC);
-}
-
-void seekFile(int fd, off_t pos, const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::Seek);
-
-    off_t res = lseek(fd, pos, SEEK_SET);
-    if (-1 == res)
-        throwFromErrno("Cannot seek through file " + path, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
-}
-
-void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
-    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
-
-    size_t bytes_written = 0;
-    while (bytes_written != to_write)
-    {
-        ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls);
-        ssize_t res = 0;
-        {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
-            res = ::pwrite(fd, data + bytes_written, to_write - bytes_written, offset + bytes_written);
-        }
-
-        if ((-1 == res || 0 == res) && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
-            throwFromErrno("Cannot write to file " + path, ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
-        }
-
-        if (res > 0)
-            bytes_written += res;
-    }
-}
-
-
-void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::PSMReadCalls);
-
-    size_t bytes_read = 0;
-    while (bytes_read < expected_bytes)
-    {
-        ProfileEvents::increment(ProfileEvents::PSMReadIOCalls);
-
-        ssize_t res = 0;
-        {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-            res = ::pread(fd, const_cast<char *>(buf + bytes_read), expected_bytes - bytes_read, offset + bytes_read);
-        }
-        if (!res)
-            break;
-
-        if (-1 == res && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::PSMReadFailed);
-            throwFromErrno("Cannot read from file " + path, ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
-        }
-
-        if (res > 0)
-            bytes_read += res;
-    }
-    ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
-
-    if (unlikely(bytes_read != expected_bytes))
-        throw Exception("Not enough data in file " + path, ErrorCodes::FILE_SIZE_NOT_MATCH);
-}
-
-/// Write and advance sizeof(T) bytes.
-template <typename T>
-inline void put(char *& pos, const T & v)
-{
-    std::memcpy(pos, reinterpret_cast<const char *>(&v), sizeof(T));
-    pos += sizeof(T);
-}
-
-/// Read and advance sizeof(T) bytes.
-template <typename T, bool advance = true>
-inline T get(std::conditional_t<advance, char *&, const char *> pos)
-{
-    T v;
-    std::memcpy(reinterpret_cast<char *>(&v), pos, sizeof(T));
-    if constexpr (advance)
-        pos += sizeof(T);
-    return v;
-}
-
-template <typename C, typename T = typename C::value_type>
-std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false> & allocator)
-{
-    Poco::File file(path);
-    if (!file.exists())
-        return {};
-
-    size_t file_size = file.getSize();
-    int    file_fd   = openFile<true>(path);
-    char * data      = (char *)allocator.alloc(file_size);
-    SCOPE_EXIT({ allocator.free(data, file_size); });
-    char * pos = data;
-
-    readFile(file_fd, 0, data, file_size, path);
-
-    auto               size   = get<UInt64>(pos);
-    std::unique_ptr<C> values = std::make_unique<C>();
-    for (size_t i = 0; i < size; ++i)
-    {
-        T v = get<T>(pos);
-        values->push_back(v);
-    }
-
-    if (unlikely(pos != data + file_size))
-        throw Exception("pos not match", ErrorCodes::FILE_SIZE_NOT_MATCH);
-
-    return values;
-}
-
-// =========================================================
-// Page Meta format
-// =========================================================
 
 namespace PageMetaFormat
 {

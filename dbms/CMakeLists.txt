@@ -295,7 +295,7 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     )
     SETUP_TARGET_FOR_COVERAGE_GCOVR_HTML(
             NAME tiflash_gcovr_coverage
-            DEPENDENCIES unit_tests_dbms
-            EXECUTABLE unit_tests_dbms
+            DEPENDENCIES gtests_dbms
+            EXECUTABLE gtests_dbms
     )
 endif()
