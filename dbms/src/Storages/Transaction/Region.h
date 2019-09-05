@@ -16,6 +16,10 @@ using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
+class KVStore;
+class RegionTable;
+class RegionRaftCommandDelegate;
+class KVStoreTaskLock;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -98,10 +102,8 @@ public:
         : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
-    TableID insert(const std::string & cf, TiKVKey key, TiKVValue value);
+    TableID insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     TableID remove(const std::string & cf, const TiKVKey & key);
-
-    RaftCommandResult onCommand(enginepb::CommandRequest && cmd);
 
     CommittedScanner createCommittedScanner(TableID expected_table_id);
     CommittedRemover createCommittedRemover(TableID expected_table_id);
@@ -110,7 +112,7 @@ public:
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
-    RegionRange getRange() const;
+    ImutRegionRangePtr getRange() const;
 
     enginepb::CommandResponse toCommandResponse() const;
     std::string toString(bool dump_status = true) const;
@@ -118,6 +120,7 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
     bool isPeerRemoved() const;
+    raft_serverpb::PeerState peerState() const;
 
     size_t dataSize() const;
     size_t writeCFCount() const;
@@ -141,14 +144,13 @@ public:
 
     void waitIndex(UInt64 index);
 
-    UInt64 getIndex() const;
-    UInt64 getProbableIndex() const;
+    UInt64 appliedIndex() const;
 
     RegionVersion version() const;
     RegionVersion confVer() const;
 
     /// version, conf_version, range
-    std::tuple<RegionVersion, RegionVersion, RegionRange> dumpVersionRange() const;
+    std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
 
     HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
 
@@ -163,11 +165,13 @@ public:
     void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
 
     static ColumnFamilyType getCf(const std::string & cf);
+    RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
 
     void tryPreDecodeTiKVValue();
 
 private:
     Region() = delete;
+    friend class RegionRaftCommandDelegate;
 
     // Private methods no need to lock mutex, normally
 
@@ -182,12 +186,6 @@ private:
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
 
     RegionPtr splitInto(RegionMeta meta);
-    Regions execBatchSplit(
-        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
-    void execChangePeer(
-        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
-    void execCompactLog(
-        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 
 private:
     RegionData data;
@@ -203,6 +201,23 @@ private:
     mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
+};
+
+class RegionRaftCommandDelegate : public Region, private boost::noncopyable
+{
+public:
+    /// Only after the task mutex of KVStore is locked, region can apply raft command.
+    void onCommand(enginepb::CommandRequest &&, const KVStore &, RegionTable *, RaftCommandResult &);
+
+private:
+    RegionRaftCommandDelegate() = delete;
+
+    Regions execBatchSplit(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execChangePeer(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execCompactLog(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 };
 
 } // namespace DB

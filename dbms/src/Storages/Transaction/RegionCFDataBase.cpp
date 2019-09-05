@@ -4,6 +4,10 @@
 namespace DB
 {
 
+const std::string RegionWriteCFDataTrait::name = "write";
+const std::string RegionDefaultCFDataTrait::name = "default";
+const std::string RegionLockCFDataTrait::name = "lock";
+
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
 {
@@ -25,12 +29,12 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 template <typename Trait>
 TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
 {
-    const String & raw_key = RecordKVFormat::decodeTiKVKey(key);
+    const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     return insert(std::move(key), std::move(value), raw_key);
 }
 
 template <typename Trait>
-TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const String & raw_key)
+TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key)
 {
     Pair kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (shouldIgnoreInsert(kv_pair.second))

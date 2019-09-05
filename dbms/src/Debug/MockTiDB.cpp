@@ -394,12 +394,38 @@ void MockTiDB::modifyColumnInTable(const String & database_name, const String & 
     ColumnInfo column_info = getColumnInfoFromColumn(column, 0, Field());
     if (it->hasUnsignedFlag() != column_info.hasUnsignedFlag())
         throw Exception("Modify column " + column.name + " UNSIGNED flag is not allowed", ErrorCodes::LOGICAL_ERROR);
-    if (it->hasNotNullFlag() != column_info.hasNotNullFlag())
-        throw Exception("Modify column " + column.name + " NOT NULL flag is not allowed", ErrorCodes::LOGICAL_ERROR);
-    if (it->tp == column_info.tp)
+    if (it->tp == column_info.tp && it->hasNotNullFlag() == column_info.hasNotNullFlag())
         throw Exception("Column " + column.name + " type not changed", ErrorCodes::LOGICAL_ERROR);
 
     it->tp = column_info.tp;
+    it->flag = column_info.flag;
+
+    version++;
+    SchemaDiff diff;
+    diff.type = SchemaActionModifyColumn;
+    diff.schema_id = table->table_info.db_id;
+    diff.table_id = table->id();
+    diff.version = version;
+    version_diff[version] = diff;
+}
+
+void MockTiDB::renameColumnInTable(
+    const String & database_name, const String & table_name, const String & old_column_name, const String & new_column_name)
+{
+    std::lock_guard lock(tables_mutex);
+
+    TablePtr table = getTableByNameInternal(database_name, table_name);
+    String qualified_name = database_name + "." + table_name;
+    auto & columns = table->table_info.columns;
+    auto it = std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & column_) { return column_.name == old_column_name; });
+    if (it == columns.end())
+        throw Exception("Column " + old_column_name + " does not exist in TiDB table  " + qualified_name, ErrorCodes::LOGICAL_ERROR);
+
+    if (columns.end()
+        != std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & column_) { return column_.name == new_column_name; }))
+        throw Exception("Column " + new_column_name + " exists in TiDB table  " + qualified_name, ErrorCodes::LOGICAL_ERROR);
+
+    it->name = new_column_name;
 
     version++;
     SchemaDiff diff;

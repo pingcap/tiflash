@@ -19,12 +19,13 @@ struct CFKeyHasher
 
 struct RegionWriteCFDataTrait
 {
+    static const std::string name;
     using DecodedWriteCFValue = RecordKVFormat::DecodedWriteCFValue;
     using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedWriteCFValue>;
     using Map = std::map<Key, Value>;
 
-    static Map::value_type genKVPair(TiKVKey && key, const String & raw_key, TiKVValue && value)
+    static Map::value_type genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
     {
         HandleID handle_id = RecordKVFormat::getHandle(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
@@ -42,11 +43,12 @@ struct RegionWriteCFDataTrait
 
 struct RegionDefaultCFDataTrait
 {
+    static const std::string name;
     using Key = std::pair<HandleID, Timestamp>;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>>;
     using Map = std::map<Key, Value>;
 
-    static Map::value_type genKVPair(TiKVKey && key, const String & raw_key, TiKVValue && value)
+    static Map::value_type genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
     {
         HandleID handle_id = RecordKVFormat::getHandle(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
@@ -57,12 +59,13 @@ struct RegionDefaultCFDataTrait
 
 struct RegionLockCFDataTrait
 {
+    static const std::string name;
     using DecodedLockCFValue = RecordKVFormat::DecodedLockCFValue;
     using Key = HandleID;
     using Value = std::tuple<std::shared_ptr<const TiKVKey>, std::shared_ptr<const TiKVValue>, DecodedLockCFValue>;
     using Map = std::unordered_map<Key, Value>;
 
-    static Map::value_type genKVPair(TiKVKey && key, const String & raw_key, TiKVValue && value)
+    static Map::value_type genKVPair(TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
     {
         HandleID handle_id = RecordKVFormat::getHandle(raw_key);
         auto decoded_val = RecordKVFormat::decodeLockCfValue(value);
