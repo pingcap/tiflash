@@ -133,13 +133,14 @@ inline time_t dateToDateTime(UInt32 date_data)
     return DateLUT::instance().makeDateTime(local_date.year(), local_date.month(), local_date.day(), 0, 0, 0);
 }
 
-inline DayNum_t dateTimeToDate(time_t time_data, bool & truncated)
+inline std::tuple<DayNum_t, bool> dateTimeToDate(time_t time_data)
 {
     // todo use timezone info
     auto & date_lut = DateLUT::instance();
-    truncated = date_lut.toHour(time_data) != 0 || date_lut.toMinute(time_data) != 0 || date_lut.toSecond(time_data) != 0;
+    auto truncated = date_lut.toHour(time_data) != 0 || date_lut.toMinute(time_data) != 0 || date_lut.toSecond(time_data) != 0;
     auto values = date_lut.getValues(time_data);
-    return date_lut.makeDayNum(values.year, values.month, values.day_of_month);
+    auto day_num = date_lut.makeDayNum(values.year, values.month, values.day_of_month);
+    return std::make_tuple(day_num, truncated);
 }
 
 
@@ -186,8 +187,9 @@ struct DateDateTimeComparisonImpl
         {
             // date vector with datetime constant
             // first check if datetime constant can be convert to date constant
-            bool truncated = true;
-            DayNum_t date_num = dateTimeToDate((time_t) b, truncated);
+            bool truncated;
+            DayNum_t date_num;
+            std::tie(date_num, truncated) = dateTimeToDate((time_t) b);
             if (!truncated)
             {
                 using OpType = A;
@@ -224,8 +226,9 @@ struct DateDateTimeComparisonImpl
         else
         {
             // datetime constant with date vector
-            bool truncated = true;
-            DayNum_t date_num = dateTimeToDate((time_t) a, truncated);
+            bool truncated;
+            DayNum_t date_num;
+            std::tie(date_num, truncated) = dateTimeToDate((time_t) a);
             if (!truncated)
             {
                 using OpType = B;
