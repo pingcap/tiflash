@@ -112,7 +112,7 @@ public:
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
-    RegionRange getRange() const;
+    ImutRegionRangePtr getRange() const;
 
     enginepb::CommandResponse toCommandResponse() const;
     std::string toString(bool dump_status = true) const;
@@ -150,7 +150,7 @@ public:
     RegionVersion confVer() const;
 
     /// version, conf_version, range
-    std::tuple<RegionVersion, RegionVersion, RegionRange> dumpVersionRange() const;
+    std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
 
     HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
 

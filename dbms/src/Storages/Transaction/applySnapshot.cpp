@@ -115,10 +115,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
             auto & key = *it->mutable_key();
             auto & value = *it->mutable_value();
 
-            auto & tikv_key = static_cast<TiKVKey &>(key);
-            auto & tikv_value = static_cast<TiKVValue &>(value);
-
-            new_region->insert(data.cf(), std::move(tikv_key), std::move(tikv_value));
+            new_region->insert(data.cf(), TiKVKey(std::move(key)), TiKVValue(std::move(value)));
         }
     }
 

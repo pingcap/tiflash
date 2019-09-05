@@ -79,8 +79,7 @@ struct DecodedTiKVKey : std::string
 {
     using Base = std::string;
     DecodedTiKVKey(Base && str_) : Base(std::move(str_)) {}
-    DecodedTiKVKey() = delete;
-    DecodedTiKVKey(const char * str) : Base(str) {}
+    DecodedTiKVKey() = default;
 };
 
 static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));
