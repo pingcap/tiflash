@@ -147,6 +147,10 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
                 continue
             if line.startswith(COMMENT_PREFIX) or len(line) == 0:
                 continue
+            # filter out inline comment
+            line_comment_pos = line.find('--')
+            if line_comment_pos != -1:
+                line = line[:line_comment_pos].strip()
             if origin.startswith(UNFINISHED_1_PREFIX) or origin.startswith(UNFINISHED_2_PREFIX):
                 if cached[-1] == ',':
                     cached += ' '
@@ -160,15 +164,18 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
         return True, matcher, todos
 
 def run():
-    if len(sys.argv) != 5:
-        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd'
+    if len(sys.argv) not in (5, 6):
+        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd [verbose]'
         sys.exit(1)
 
     dbc = sys.argv[1]
     path = sys.argv[2]
     fuzz = (sys.argv[3] == 'true')
     mysql_client = sys.argv[4]
-    if verbose: print 'parsing `{}`'.format(path)
+    global verbose
+    if len(sys.argv) == 6:
+        verbose = (sys.argv[5] == 'true')
+    if verbose: print 'parsing file: `{}`'.format(path)
 
     matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), fuzz)
 
