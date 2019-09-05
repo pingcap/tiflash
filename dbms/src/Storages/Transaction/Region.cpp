@@ -100,7 +100,8 @@ RegionPtr Region::splitInto(RegionMeta meta)
     else
         new_region = std::make_shared<Region>(std::move(meta));
 
-    data.splitInto(new_region->getRange(), new_region->data);
+    const auto range = new_region->getRange();
+    data.splitInto(range->keys(), new_region->data);
 
     return new_region;
 }
@@ -468,7 +469,7 @@ std::string Region::toString(bool dump_status) const { return meta.toString(dump
 
 enginepb::CommandResponse Region::toCommandResponse() const { return meta.toCommandResponse(); }
 
-RegionRange Region::getRange() const { return meta.getRange(); }
+ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
 UInt64 Region::learnerRead()
 {
@@ -494,10 +495,7 @@ UInt64 Region::version() const { return meta.version(); }
 
 UInt64 Region::confVer() const { return meta.confVer(); }
 
-HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const
-{
-    return TiKVRange::getHandleRangeByTable(getRange(), table_id);
-}
+HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const { return getRange()->getHandleRangeByTable(table_id); }
 
 void Region::assignRegion(Region && new_region)
 {
@@ -595,7 +593,8 @@ RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLoc
 
 void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region)
 {
-    const auto & [start_key, end_key] = getRange();
+    const auto range = getRange();
+    const auto & [start_key, end_key] = range->keys();
     std::unordered_map<TableID, HandleMap> handle_maps;
     {
         std::shared_lock<std::shared_mutex> source_lock(source_region.mutex);
@@ -645,7 +644,7 @@ void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, co
     return data.deleteRange(type, start_key, end_key);
 }
 
-std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
+std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
 
 void Region::tryPreDecodeTiKVValue()
 {
