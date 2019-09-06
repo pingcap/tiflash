@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gtest/gtest.h>
+
 #include <Columns/ColumnVector.h>
 #include <Common/typeid_cast.h>
 #include <Core/Block.h>
@@ -7,7 +9,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <gtest/gtest.h>
 #include <test_utils/TiflashTestBasic.h>
 
 namespace DB
@@ -35,7 +36,7 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
 class DMTestEnv
 {
 public:
-    static Context getContext(const ::DB::Settings & settings = DB::Settings())
+    static Context & getContext(const ::DB::Settings & settings = DB::Settings())
     {
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }

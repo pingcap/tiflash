@@ -11,7 +11,7 @@ namespace tests
 class TiFlashTestEnv
 {
 public:
-    static Context getContext(const DB::Settings & settings = DB::Settings())
+    static Context & getContext(const DB::Settings & settings = DB::Settings())
     {
         static Context context = DB::Context::createGlobal();
         try
