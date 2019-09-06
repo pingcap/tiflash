@@ -27,6 +27,8 @@ protected:
 
         context = std::make_unique<Context>(DMTestEnv::getContext());
         store   = reload();
+
+        Logger::get("DeltaMergeStore").setLevel("trace");
     }
 
     DeltaMergeStorePtr reload(const ColumnDefines & pre_define_columns = {})
@@ -179,6 +181,114 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
+
+    {
+        // test readRaw
+        const auto &        columns = store->getTableColumns();
+        BlockInputStreamPtr in      = store->readRaw(*context,
+                                                  context->getSettingsRef(),
+                                                  columns, 1)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == "pk")
+                    {
+                        EXPECT_EQ(c->getInt(i), i);
+                    }
+                    else if (iter.name == col_str_define.name)
+                    {
+                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
+                    }
+                    else if (iter.name == col_i8_define.name)
+                    {
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+
+TEST_F(DeltaMergeStore_test, Split)
+{
+    const String      col_name_c1 = "col2";
+    const ColId       col_id_c1   = 2;
+    const DataTypePtr col_type_c1 = DataTypeFactory::instance().get("Int64");
+    {
+        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine  cd(col_id_c1, col_name_c1, col_type_c1);
+        table_column_defines.emplace_back(cd);
+        store = reload(table_column_defines);
+    }
+
+    const size_t num_rows_write = 2097153;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col1:String for test
+            ColumnWithTypeAndName col1(std::make_shared<DataTypeInt64>(), col_name_c1);
+            {
+                IColumn::MutablePtr m_col2 = col1.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    Int64 num = i;
+                    m_col2->insert(Field(num));
+                }
+                col1.column = std::move(m_col2);
+            }
+            block.insert(col1);
+        }
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    {
+        // read all columns from store
+        const auto &        columns = store->getTableColumns();
+        BlockInputStreamPtr in      = store->read(*context,
+                                             context->getSettingsRef(),
+                                             columns,
+                                             {HandleRange::newAll()},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             /* expected_block_size= */ 1024)[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == "pk")
+                    {
+                        EXPECT_EQ(c->getInt(i) % 1024, i);
+                    }
+                    else if (iter.name == col_name_c1)
+                    {
+                        EXPECT_EQ(c->getInt(i) % 1024, i);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
 }
 
 TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
@@ -282,6 +392,240 @@ try
                         //printf("col2:%s\n", c->getDataAt(i).data);
                         Int64 num = i * (i % 2 == 0 ? -1 : 1);
                         EXPECT_EQ(c->getInt(i), num);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
+
+TEST_F(DeltaMergeStore_test, DDLDropColumn)
+try
+{
+    const String      col_name_to_drop = "i8";
+    const ColId       col_id_to_drop   = 2;
+    const DataTypePtr col_type_to_drop = DataTypeFactory::instance().get("Int8");
+    {
+        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine  cd(col_id_to_drop, col_name_to_drop, col_type_to_drop);
+        table_column_defines.emplace_back(cd);
+        store = reload(table_column_defines);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 4UL);
+        const auto & str_col = cols[3];
+        ASSERT_EQ(str_col.name, col_name_to_drop);
+        ASSERT_EQ(str_col.id, col_id_to_drop);
+        ASSERT_TRUE(str_col.type->equals(*col_type_to_drop));
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col2:String for test
+            ColumnWithTypeAndName col2(std::make_shared<DataTypeInt8>(), col_name_to_drop);
+            {
+                IColumn::MutablePtr m_col2 = col2.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                    m_col2->insert(Field(num));
+                }
+                col2.column = std::move(m_col2);
+            }
+            block.insert(col2);
+        }
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    {
+        // DDL change delete col i8
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type        = AlterCommand::DROP_COLUMN;
+            com.data_type   = col_type_to_drop;
+            com.column_name = col_name_to_drop;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_drop = col_id_to_drop;
+        store->applyAlters(commands, std::nullopt, _col_to_drop, *context);
+    }
+
+    {
+        // read all columns from store
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {HandleRange::newAll()},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr & in = ins[0];
+        {
+            const Block head = in->getHeader();
+            ASSERT_FALSE(head.has(col_name_to_drop));
+        }
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == "pk")
+                    {
+                        EXPECT_EQ(c->getInt(i), i);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
+TEST_F(DeltaMergeStore_test, DDLAddColumn)
+try
+{
+    const String      col_name_c1 = "i8";
+    const ColId       col_id_c1   = 2;
+    const DataTypePtr col_type_c1 = DataTypeFactory::instance().get("Int8");
+
+    const String      col_name_to_add = "i32";
+    const ColId       col_id_to_add   = 3;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Int32");
+    {
+        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
+        ColumnDefine  cd(col_id_c1, col_name_c1, col_type_c1);
+        table_column_defines.emplace_back(cd);
+        store = reload(table_column_defines);
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col1:String for test
+            ColumnWithTypeAndName col1(std::make_shared<DataTypeInt8>(), col_name_c1);
+            {
+                IColumn::MutablePtr m_col2 = col1.type->createColumn();
+                for (size_t i = 0; i < num_rows_write; i++)
+                {
+                    Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                    m_col2->insert(Field(num));
+                }
+                col1.column = std::move(m_col2);
+            }
+            block.insert(col1);
+        }
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    {
+        // DDL change add col i32
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type        = AlterCommand::ADD_COLUMN;
+            com.data_type   = col_type_to_add;
+            com.column_name = col_name_to_add;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *context);
+    }
+
+    {
+        // read all columns from store
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {HandleRange::newAll()},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr & in = ins[0];
+        {
+            const Block head = in->getHeader();
+            {
+                const auto & col = head.getByName(col_name_c1);
+                ASSERT_EQ(col.name, col_name_c1);
+                ASSERT_EQ(col.column_id, col_id_c1);
+                ASSERT_TRUE(col.type->equals(*col_type_c1));
+            }
+
+            {
+                const auto & col = head.getByName(col_name_to_add);
+                ASSERT_EQ(col.name, col_name_to_add);
+                ASSERT_EQ(col.column_id, col_id_to_add);
+                ASSERT_TRUE(col.type->equals(*col_type_to_add));
+            }
+        }
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto && iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                {
+                    if (iter.name == "pk")
+                    {
+                        EXPECT_EQ(c->getInt(i), i);
+                    }
+                    else if (iter.name == col_name_c1)
+                    {
+                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
+                        EXPECT_EQ(c->getInt(i), num);
+                    }
+                    else if (iter.name == col_name_to_add)
+                    {
+                        EXPECT_EQ(c->getInt(i), 0);
                     }
                 }
             }
