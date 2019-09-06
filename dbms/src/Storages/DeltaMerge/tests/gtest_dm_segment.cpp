@@ -113,6 +113,27 @@ TEST_F(Segment_test, WriteRead)
     }
 
     {
+        // estimate segment
+        auto estimatedRows = segment->getEstimatedRows();
+        ASSERT_GT(estimatedRows, num_rows_write / 2);
+        ASSERT_LT(estimatedRows, num_rows_write * 2);
+
+        auto estimatedBytes = segment->getEstimatedBytes();
+        ASSERT_GT(estimatedBytes, num_rows_write * 5 / 2);
+        ASSERT_LT(estimatedBytes, num_rows_write * 5 * 2);
+    }
+
+    {
+        // check segment
+        segment->check(dmContext(), "test");
+    }
+
+    {
+        // flush segment
+        segment->flush(dmContext());
+    }
+
+    {
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
                                           /* segment_snap= */ segment->getReadSnapshot(),
@@ -338,7 +359,8 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
         {
             num_rows_read += block.rows();
             const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
-            ASSERT_TRUE(col.type->equals(*column_i32_after_ddl.type)) << "col.type: " + col.type->getName() + " expect type: " + column_i32_after_ddl.type->getName();
+            ASSERT_TRUE(col.type->equals(*column_i32_after_ddl.type))
+                << "col.type: " + col.type->getName() + " expect type: " + column_i32_after_ddl.type->getName();
             ASSERT_EQ(col.name, column_i32_after_ddl.name);
             ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
             for (size_t i = 0; i < block.rows(); ++i)

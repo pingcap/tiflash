@@ -109,7 +109,7 @@ DataTypePtr typeFromString(const String & str)
 TEST(ChunkColumnCast_test, CastNumeric)
 {
     {
-        const Strings to_types = {"UInt16", "UInt32", "UInt64"};
+        const Strings to_types = {"UInt8", "UInt16", "UInt32", "UInt64"};
 
         DataTypePtr      disk_data_type = typeFromString("UInt8");
         MutableColumnPtr disk_col       = disk_data_type->createColumn();
@@ -133,9 +133,105 @@ TEST(ChunkColumnCast_test, CastNumeric)
     }
 
     {
-        const Strings to_types = {"Int16", "Int32", "Int64"};
+        const Strings to_types = {"UInt16", "UInt32", "UInt64"};
+
+        DataTypePtr      disk_data_type = typeFromString("UInt16");
+        MutableColumnPtr disk_col       = disk_data_type->createColumn();
+        disk_col->insert(Field(UInt64(15)));
+        disk_col->insert(Field(UInt64(255)));
+
+        for (const String & to_type : to_types)
+        {
+            DataTypePtr      read_data_type = typeFromString(to_type);
+            ColumnDefine     read_define(0, "c", read_data_type);
+            MutableColumnPtr memory_column = read_data_type->createColumn();
+            memory_column->reserve(2);
+
+            castColumnAccordingToColumnDefine(disk_data_type, disk_col->getPtr(), read_define, memory_column->getPtr(), 0, 2);
+
+            UInt64 val1 = memory_column->getUInt(0);
+            ASSERT_EQ(val1, 15UL);
+            UInt64 val2 = memory_column->getUInt(1);
+            ASSERT_EQ(val2, 255UL);
+        }
+    }
+
+    {
+        const Strings to_types = {"UInt32", "UInt64"};
+
+        DataTypePtr      disk_data_type = typeFromString("UInt32");
+        MutableColumnPtr disk_col       = disk_data_type->createColumn();
+        disk_col->insert(Field(UInt64(15)));
+        disk_col->insert(Field(UInt64(255)));
+
+        for (const String & to_type : to_types)
+        {
+            DataTypePtr      read_data_type = typeFromString(to_type);
+            ColumnDefine     read_define(0, "c", read_data_type);
+            MutableColumnPtr memory_column = read_data_type->createColumn();
+            memory_column->reserve(2);
+
+            castColumnAccordingToColumnDefine(disk_data_type, disk_col->getPtr(), read_define, memory_column->getPtr(), 0, 2);
+
+            UInt64 val1 = memory_column->getUInt(0);
+            ASSERT_EQ(val1, 15UL);
+            UInt64 val2 = memory_column->getUInt(1);
+            ASSERT_EQ(val2, 255UL);
+        }
+    }
+
+    {
+        const Strings to_types = {"Int8", "Int16", "Int32", "Int64"};
 
         DataTypePtr      disk_data_type = typeFromString("Int8");
+        MutableColumnPtr disk_col       = disk_data_type->createColumn();
+        disk_col->insert(Field(Int64(127)));
+        disk_col->insert(Field(Int64(-1)));
+
+        for (const String & to_type : to_types)
+        {
+            DataTypePtr      read_data_type = typeFromString(to_type);
+            ColumnDefine     read_define(0, "c", read_data_type);
+            MutableColumnPtr memory_column = read_data_type->createColumn();
+            memory_column->reserve(2);
+
+            castColumnAccordingToColumnDefine(disk_data_type, disk_col->getPtr(), read_define, memory_column->getPtr(), 0, 2);
+
+            Int64 val1 = memory_column->getInt(0);
+            ASSERT_EQ(val1, 127L);
+            Int64 val2 = memory_column->getInt(1);
+            ASSERT_EQ(val2, -1L);
+        }
+    }
+
+    {
+        const Strings to_types = {"Int16", "Int32", "Int64"};
+
+        DataTypePtr      disk_data_type = typeFromString("Int16");
+        MutableColumnPtr disk_col       = disk_data_type->createColumn();
+        disk_col->insert(Field(Int64(127)));
+        disk_col->insert(Field(Int64(-1)));
+
+        for (const String & to_type : to_types)
+        {
+            DataTypePtr      read_data_type = typeFromString(to_type);
+            ColumnDefine     read_define(0, "c", read_data_type);
+            MutableColumnPtr memory_column = read_data_type->createColumn();
+            memory_column->reserve(2);
+
+            castColumnAccordingToColumnDefine(disk_data_type, disk_col->getPtr(), read_define, memory_column->getPtr(), 0, 2);
+
+            Int64 val1 = memory_column->getInt(0);
+            ASSERT_EQ(val1, 127L);
+            Int64 val2 = memory_column->getInt(1);
+            ASSERT_EQ(val2, -1L);
+        }
+    }
+
+    {
+        const Strings to_types = {"Int32", "Int64"};
+
+        DataTypePtr      disk_data_type = typeFromString("Int32");
         MutableColumnPtr disk_col       = disk_data_type->createColumn();
         disk_col->insert(Field(Int64(127)));
         disk_col->insert(Field(Int64(-1)));
@@ -216,7 +312,7 @@ TEST(ChunkColumnCast_test, DISABLED_CastNullableToNotNullWithNonZeroDefaultValue
 
 TEST(ChunkColumnCast_test, CastNullableToNullable)
 {
-    const Strings to_types = {"Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
+    const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
     DataTypePtr      disk_data_type = typeFromString("Nullable(Int8)");
     MutableColumnPtr disk_col       = disk_data_type->createColumn();
@@ -251,7 +347,7 @@ TEST(ChunkColumnCast_test, CastNullableToNullable)
 
 TEST(ChunkColumnCast_test, CastNotNullToNullable)
 {
-    const Strings to_types = {"Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
+    const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
     DataTypePtr      disk_data_type = typeFromString("Int8");
     MutableColumnPtr disk_col       = disk_data_type->createColumn();

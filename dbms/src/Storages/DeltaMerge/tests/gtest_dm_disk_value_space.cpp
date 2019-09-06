@@ -2,8 +2,10 @@
 
 #include <Poco/File.h>
 
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 
@@ -64,7 +66,7 @@ protected:
     String path;
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePool>  storage_pool;
-    TiDB::TableInfo table_info;
+    TiDB::TableInfo               table_info;
     ColumnDefine                  table_handle_define;
     ColumnDefines                 table_columns;
     DM::DeltaMergeStore::Settings settings;
@@ -79,13 +81,24 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
     DiskValueSpace delta(true, 0);
     {
         // write to DiskValueSpace
-        Block                     block  = DMTestEnv::prepareSimpleWriteBlock(value_beg, value_beg + num_rows_write, false);
-        DiskValueSpace::OpContext opc    = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
-        Chunks                    chunks = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block));
-        for (auto & chunk : chunks)
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(value_beg, value_beg + num_rows_write / 2, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(value_beg + num_rows_write / 2, value_beg + num_rows_write, false);
+        DiskValueSpace::OpContext opc     = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
+        Chunks                    chunks1 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block1));
+        Chunks                    chunks2 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block2));
+        for (auto & chunk : chunks1)
         {
-            delta.appendChunkWithCache(opc, std::move(chunk), block);
+            delta.appendChunkWithCache(opc, std::move(chunk), block1);
         }
+
+        for (auto & chunk : chunks2)
+        {
+            delta.appendChunkWithCache(opc, std::move(chunk), block2);
+        }
+
+        EXPECT_EQ(num_rows_write, delta.num_rows(0, 2));
+        delta.tryFlushCache(opc, true);
+        EXPECT_EQ(num_rows_write, delta.num_rows(0, 1));
     }
 
     {
@@ -130,6 +143,35 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
                 {
                     EXPECT_EQ(c->getInt(i), static_cast<int64_t>(value_beg + read_offset + i));
                     //printf("%lld\n", c->getInt(i));
+                }
+            }
+        }
+    }
+
+    {
+        // read using `read` of chunk_index
+        const size_t chunk_index = 0;
+        PageReader   page_reader(dm_context->storage_pool.log());
+        Block        block = delta.read(table_columns, page_reader, chunk_index);
+
+        // check the order of cols is the same as read_columns
+        const Names col_names = block.getNames();
+        ASSERT_EQ(col_names.size(), table_columns.size());
+        for (size_t i = 0; i < col_names.size(); ++i)
+        {
+            EXPECT_EQ(col_names[i], table_columns[i].name);
+        }
+
+        // check the value
+        ASSERT_EQ(block.rows(), num_rows_write);
+        for (const auto & iter : block)
+        {
+            auto c = iter.column;
+            for (size_t i = 0; i < c->size(); ++i)
+            {
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(i), static_cast<int64_t>(value_beg + i));
                 }
             }
         }
