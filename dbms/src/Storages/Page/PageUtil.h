@@ -60,7 +60,8 @@ extern const int CANNOT_SEEK_THROUGH_FILE;
 extern const int FILE_SIZE_NOT_MATCH;
 } // namespace ErrorCodes
 
-
+namespace PageUtil
+{
 // =========================================================
 // Helper functions
 // =========================================================
@@ -150,5 +151,7 @@ std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false>
 
     return values;
 }
+
+} // namespace PageUtil
 
 } // namespace DB

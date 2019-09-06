@@ -8,29 +8,29 @@ namespace DB
 {
 namespace tests
 {
-static String filename = "page_util_test";
+static const std::string FileName = "page_util_test";
 
 TEST(PageUtils_test, ReadWriteFile)
 {
-    ::remove(filename.c_str());
+    ::remove(FileName.c_str());
 
-    int fd = openFile<false, false>(filename);
-    writeFile(fd, 0, "123", 3, filename);
-    syncFile(fd, filename);
+    int fd = PageUtil::openFile<false, false>(FileName);
+    PageUtil::writeFile(fd, 0, "123", 3, FileName);
+    PageUtil::syncFile(fd, FileName);
     ::close(fd);
 
-    int fd2 = openFile<true, true>(filename);
+    int fd2 = PageUtil::openFile<true, true>(FileName);
     ASSERT_GT(fd2, 0);
     ::close(fd2);
 
-    ::remove(filename.c_str());
+    ::remove(FileName.c_str());
 }
 
 TEST(PageUtils_test, FileNotExists)
 {
-    ::remove(filename.c_str());
+    ::remove(FileName.c_str());
 
-    int fd = openFile<true, false>(filename);
+    int fd = PageUtil::openFile<true, false>(FileName);
     ASSERT_EQ(fd, 0);
 }
 

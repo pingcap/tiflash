@@ -15,7 +15,7 @@
 
 #include <Storages/Page/PageUtil.h>
 
-namespace DB
+namespace DB::PageUtil
 {
 
 void syncFile(int fd, const std::string & path)
@@ -82,4 +82,5 @@ void readFile(int fd, const off_t offset, const char * buf, size_t expected_byte
     if (unlikely(bytes_read != expected_bytes))
         throw DB::Exception("Not enough data in file " + path, ErrorCodes::FILE_SIZE_NOT_MATCH);
 }
-} // namespace DB
+
+} // namespace DB::PageUtil

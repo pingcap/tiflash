@@ -431,6 +431,9 @@ bool castNonNullNumericColumn(const DataTypePtr &  disk_type_not_null_,
     assert(!disk_type_not_null->isNullable());
     assert(!read_type_not_null->isNullable());
 
+    /// Caller should ensure that dist_type != read_type
+    assert(!disk_type_not_null->equals(*read_type_not_null));
+
     if (checkDataType<DataTypeUInt32>(disk_type_not_null))
     {
         using FromType = UInt32;

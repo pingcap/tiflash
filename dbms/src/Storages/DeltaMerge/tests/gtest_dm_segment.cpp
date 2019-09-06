@@ -58,8 +58,6 @@ protected:
         ColumnDefines cols = pre_define_columns.empty() ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        storage_pool->gc(Seconds(0));
-
         auto segment_id = storage_pool->newMetaPageId();
         return Segment::newSegment(*dm_context_, HandleRange::newAll(), segment_id, 0);
     }
