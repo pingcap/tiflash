@@ -5,7 +5,6 @@
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/randomSeed.h>
 #include <common/logger_useful.h>
 
 #include <IO/WriteHelpers.h>
@@ -16,55 +15,15 @@
 
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
-#include <common/logger_useful.h>
 #include <ext/scope_guard.h>
 
 #include <Storages/Page/PageFile.h>
-
-namespace ProfileEvents
-{
-extern const Event FileOpen;
-extern const Event FileOpenFailed;
-extern const Event Seek;
-extern const Event PSMWritePages;
-extern const Event PSMWriteCalls;
-extern const Event PSMWriteIOCalls;
-extern const Event PSMWriteBytes;
-extern const Event PSMReadPages;
-extern const Event PSMReadCalls;
-extern const Event PSMReadIOCalls;
-extern const Event PSMReadBytes;
-extern const Event PSMWriteFailed;
-extern const Event PSMReadFailed;
-} // namespace ProfileEvents
-
-namespace CurrentMetrics
-{
-extern const Metric Write;
-extern const Metric Read;
-} // namespace CurrentMetrics
+#include <Storages/Page/PageUtil.h>
 
 namespace DB
 {
-
-namespace ErrorCodes
-{
-extern const int UNKNOWN_FORMAT_VERSION;
-extern const int CHECKSUM_DOESNT_MATCH;
-extern const int FILE_DOESNT_EXIST;
-extern const int CANNOT_OPEN_FILE;
-extern const int CANNOT_FSYNC;
-extern const int CANNOT_WRITE_TO_FILE_DESCRIPTOR;
-extern const int CANNOT_READ_FROM_FILE_DESCRIPTOR;
-extern const int CANNOT_SEEK_THROUGH_FILE;
-extern const int PAGE_SIZE_NOT_MATCH;
-extern const int LOGICAL_ERROR;
-extern const int ILLFORMED_PAGE_NAME;
-extern const int FILE_SIZE_NOT_MATCH;
-} // namespace ErrorCodes
-
 // =========================================================
-// Helper functions
+// Page Meta format
 // =========================================================
 
 static constexpr bool PAGE_CHECKSUM_ON_READ = true;
@@ -72,164 +31,6 @@ static constexpr bool PAGE_CHECKSUM_ON_READ = true;
 #ifndef O_DIRECT
 #define O_DIRECT 00040000
 #endif
-
-template <bool read, bool must_exist = true>
-int openFile(const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::FileOpen);
-
-    int flags;
-    if constexpr (read)
-    {
-        flags = O_RDONLY;
-    }
-    else
-    {
-        flags = O_WRONLY | O_CREAT;
-    }
-
-    int fd = ::open(path.c_str(), flags, 0666);
-    if (-1 == fd)
-    {
-        ProfileEvents::increment(ProfileEvents::FileOpenFailed);
-        if constexpr (!must_exist)
-        {
-            if (errno == ENOENT)
-            {
-                return 0;
-            }
-        }
-        throwFromErrno("Cannot open file " + path, errno == ENOENT ? ErrorCodes::FILE_DOESNT_EXIST : ErrorCodes::CANNOT_OPEN_FILE);
-    }
-
-    return fd;
-}
-
-void syncFile(int fd, const std::string & path)
-{
-    if (-1 == ::fsync(fd))
-        throwFromErrno("Cannot fsync " + path, ErrorCodes::CANNOT_FSYNC);
-}
-
-void seekFile(int fd, off_t pos, const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::Seek);
-
-    off_t res = lseek(fd, pos, SEEK_SET);
-    if (-1 == res)
-        throwFromErrno("Cannot seek through file " + path, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
-}
-
-void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::PSMWriteCalls);
-    ProfileEvents::increment(ProfileEvents::PSMWriteBytes, to_write);
-
-    size_t bytes_written = 0;
-    while (bytes_written != to_write)
-    {
-        ProfileEvents::increment(ProfileEvents::PSMWriteIOCalls);
-        ssize_t res = 0;
-        {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Write};
-            res = ::pwrite(fd, data + bytes_written, to_write - bytes_written, offset + bytes_written);
-        }
-
-        if ((-1 == res || 0 == res) && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::PSMWriteFailed);
-            throwFromErrno("Cannot write to file " + path, ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR);
-        }
-
-        if (res > 0)
-            bytes_written += res;
-    }
-}
-
-
-void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
-{
-    ProfileEvents::increment(ProfileEvents::PSMReadCalls);
-
-    size_t bytes_read = 0;
-    while (bytes_read < expected_bytes)
-    {
-        ProfileEvents::increment(ProfileEvents::PSMReadIOCalls);
-
-        ssize_t res = 0;
-        {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-            res = ::pread(fd, const_cast<char *>(buf + bytes_read), expected_bytes - bytes_read, offset + bytes_read);
-        }
-        if (!res)
-            break;
-
-        if (-1 == res && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::PSMReadFailed);
-            throwFromErrno("Cannot read from file " + path, ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
-        }
-
-        if (res > 0)
-            bytes_read += res;
-    }
-    ProfileEvents::increment(ProfileEvents::PSMReadBytes, bytes_read);
-
-    if (unlikely(bytes_read != expected_bytes))
-        throw Exception("Not enough data in file " + path, ErrorCodes::FILE_SIZE_NOT_MATCH);
-}
-
-/// Write and advance sizeof(T) bytes.
-template <typename T>
-inline void put(char *& pos, const T & v)
-{
-    std::memcpy(pos, reinterpret_cast<const char *>(&v), sizeof(T));
-    pos += sizeof(T);
-}
-
-/// Read and advance sizeof(T) bytes.
-template <typename T, bool advance = true>
-inline T get(std::conditional_t<advance, char *&, const char *> pos)
-{
-    T v;
-    std::memcpy(reinterpret_cast<char *>(&v), pos, sizeof(T));
-    if constexpr (advance)
-        pos += sizeof(T);
-    return v;
-}
-
-template <typename C, typename T = typename C::value_type>
-std::unique_ptr<C> readValuesFromFile(const std::string & path, Allocator<false> & allocator)
-{
-    Poco::File file(path);
-    if (!file.exists())
-        return {};
-
-    size_t file_size = file.getSize();
-    int    file_fd   = openFile<true>(path);
-    char * data      = (char *)allocator.alloc(file_size);
-    SCOPE_EXIT({ allocator.free(data, file_size); });
-    char * pos = data;
-
-    readFile(file_fd, 0, data, file_size, path);
-
-    auto               size   = get<UInt64>(pos);
-    std::unique_ptr<C> values = std::make_unique<C>();
-    for (size_t i = 0; i < size; ++i)
-    {
-        T v = get<T>(pos);
-        values->push_back(v);
-    }
-
-    if (unlikely(pos != data + file_size))
-        throw Exception("pos not match", ErrorCodes::FILE_SIZE_NOT_MATCH);
-
-    return values;
-}
-
-// =========================================================
-// Page Meta format
-// =========================================================
 
 namespace PageMetaFormat
 {
@@ -282,13 +83,13 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     char * meta_pos = meta_buffer;
     char * data_pos = data_buffer;
 
-    put(meta_pos, meta_write_bytes);
-    put(meta_pos, PageFile::CURRENT_VERSION);
+    PageUtil::put(meta_pos, meta_write_bytes);
+    PageUtil::put(meta_pos, PageFile::CURRENT_VERSION);
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
     for (const auto & write : wb.getWrites())
     {
-        put(meta_pos, static_cast<IsPut>(write.type));
+        PageUtil::put(meta_pos, static_cast<IsPut>(write.type));
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
@@ -306,23 +107,23 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
             edit.put(write.page_id, pc);
 
-            put(meta_pos, (PageId)write.page_id);
-            put(meta_pos, (PageTag)write.tag);
-            put(meta_pos, (PageOffset)page_data_file_off);
-            put(meta_pos, (PageSize)write.size);
-            put(meta_pos, (Checksum)page_checksum);
+            PageUtil::put(meta_pos, (PageId)write.page_id);
+            PageUtil::put(meta_pos, (PageTag)write.tag);
+            PageUtil::put(meta_pos, (PageOffset)page_data_file_off);
+            PageUtil::put(meta_pos, (PageSize)write.size);
+            PageUtil::put(meta_pos, (Checksum)page_checksum);
 
             page_data_file_off += write.size;
             break;
         }
         case WriteBatch::WriteType::DEL:
-            put(meta_pos, (PageId)write.page_id);
+            PageUtil::put(meta_pos, (PageId)write.page_id);
 
             edit.del(write.page_id);
             break;
         case WriteBatch::WriteType::REF:
-            put(meta_pos, static_cast<PageId>(write.page_id));
-            put(meta_pos, static_cast<PageId>(write.ori_page_id));
+            PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
+            PageUtil::put(meta_pos, static_cast<PageId>(write.ori_page_id));
 
             edit.ref(write.page_id, write.ori_page_id);
             break;
@@ -330,7 +131,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     }
 
     const Checksum wb_checksum = CityHash_v1_0_2::CityHash64(meta_buffer, meta_write_bytes - sizeof(Checksum));
-    put(meta_pos, wb_checksum);
+    PageUtil::put(meta_pos, wb_checksum);
 
     if (unlikely(meta_pos != meta_buffer + meta_write_bytes || data_pos != data_buffer + data_write_bytes))
         throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
@@ -360,7 +161,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             break;
         }
         const char * wb_start_pos = pos;
-        const auto   wb_bytes     = get<WBSize>(pos);
+        const auto   wb_bytes     = PageUtil::get<WBSize>(pos);
         if (wb_start_pos + wb_bytes > meta_data_end)
         {
             LOG_WARNING(log, "Incomplete write batch, ignored.");
@@ -368,13 +169,13 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         }
 
         // this field is always true now
-        const auto version = get<PageFileVersion>(pos);
+        const auto version = PageUtil::get<PageFileVersion>(pos);
         if (version != PageFile::CURRENT_VERSION)
             throw Exception("Version not match", ErrorCodes::LOGICAL_ERROR);
 
         // check the checksum of WriteBatch
         const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
-        const auto wb_checksum               = get<Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
+        const auto wb_checksum               = PageUtil::get<Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
         if (wb_checksum != CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum))
         {
             throw Exception("Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data),
@@ -384,20 +185,20 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         // recover WriteBatch
         while (pos < wb_start_pos + wb_bytes_without_checksum)
         {
-            const auto is_put     = get<IsPut>(pos);
+            const auto is_put     = PageUtil::get<IsPut>(pos);
             const auto write_type = static_cast<WriteBatch::WriteType>(is_put);
             switch (write_type)
             {
             case WriteBatch::WriteType::PUT:
             {
-                auto      page_id = get<PageId>(pos);
+                auto      page_id = PageUtil::get<PageId>(pos);
                 PageEntry pc;
                 pc.file_id  = file_id;
                 pc.level    = level;
-                pc.tag      = get<PageTag>(pos);
-                pc.offset   = get<PageOffset>(pos);
-                pc.size     = get<PageSize>(pos);
-                pc.checksum = get<Checksum>(pos);
+                pc.tag      = PageUtil::get<PageTag>(pos);
+                pc.offset   = PageUtil::get<PageOffset>(pos);
+                pc.size     = PageUtil::get<PageSize>(pos);
+                pc.checksum = PageUtil::get<Checksum>(pos);
 
                 edit.put(page_id, pc);
                 page_data_file_size += pc.size;
@@ -405,14 +206,14 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             }
             case WriteBatch::WriteType::DEL:
             {
-                auto page_id = get<PageId>(pos);
+                auto page_id = PageUtil::get<PageId>(pos);
                 edit.del(page_id); // Reserve the order of removal.
                 break;
             }
             case WriteBatch::WriteType::REF:
             {
-                const auto ref_id  = get<PageId>(pos);
-                const auto page_id = get<PageId>(pos);
+                const auto ref_id  = PageUtil::get<PageId>(pos);
+                const auto page_id = PageUtil::get<PageId>(pos);
                 edit.ref(ref_id, page_id);
             }
             }
@@ -436,8 +237,8 @@ PageFile::Writer::Writer(PageFile & page_file_, bool sync_on_write_)
       sync_on_write(sync_on_write_),
       data_file_path(page_file.dataPath()),
       meta_file_path(page_file.metaPath()),
-      data_file_fd(openFile<false>(data_file_path)),
-      meta_file_fd(openFile<false>(meta_file_path))
+      data_file_fd(PageUtil::openFile<false>(data_file_path)),
+      meta_file_fd(PageUtil::openFile<false>(meta_file_path))
 {
 }
 
@@ -447,8 +248,8 @@ PageFile::Writer::~Writer()
         ::close(data_file_fd);
         ::close(meta_file_fd);
     });
-    syncFile(data_file_fd, data_file_path);
-    syncFile(meta_file_fd, meta_file_path);
+    PageUtil::syncFile(data_file_fd, data_file_path);
+    PageUtil::syncFile(meta_file_fd, meta_file_path);
 }
 
 void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
@@ -463,9 +264,9 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
     SCOPE_EXIT({ page_file.free(data_buf.begin(), data_buf.size()); });
 
     auto write_buf = [&](int fd, UInt64 offset, const std::string & path, ByteBuffer buf) {
-        writeFile(fd, offset, buf.begin(), buf.size(), path);
+        PageUtil::writeFile(fd, offset, buf.begin(), buf.size(), path);
         if (sync_on_write)
-            syncFile(fd, path);
+            PageUtil::syncFile(fd, path);
     };
 
     write_buf(data_file_fd, page_file.data_file_pos, data_file_path, data_buf);
@@ -479,7 +280,7 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
 // PageFile::Reader
 // =========================================================
 
-PageFile::Reader::Reader(PageFile & page_file) : data_file_path(page_file.dataPath()), data_file_fd(openFile<true>(data_file_path)) {}
+PageFile::Reader::Reader(PageFile & page_file) : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path)) {}
 
 PageFile::Reader::~Reader()
 {
@@ -513,7 +314,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     PageMap page_map;
     for (const auto & [page_id, page_cache] : to_read)
     {
-        readFile(data_file_fd, page_cache.offset, pos, page_cache.size, data_file_path);
+        PageUtil::readFile(data_file_fd, page_cache.offset, pos, page_cache.size, data_file_path);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -562,7 +363,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     {
         auto && [page_id, page_cache] = *it;
 
-        readFile(data_file_fd, page_cache.offset, data_buf, page_cache.size, data_file_path);
+        PageUtil::readFile(data_file_fd, page_cache.offset, data_buf, page_cache.size, data_file_path);
 
         if constexpr (PAGE_CHECKSUM_ON_READ)
         {
@@ -665,14 +466,14 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
     Poco::File   file(path);
     const size_t file_size = file.getSize();
 
-    int file_fd = openFile<true, false>(path);
+    int file_fd = PageUtil::openFile<true, false>(path);
     // File not exists.
     if (!file_fd)
         return;
     char * data = (char *)alloc(file_size);
     SCOPE_EXIT({ free(data, file_size); });
 
-    readFile(file_fd, 0, data, file_size, path);
+    PageUtil::readFile(file_fd, 0, data, file_size, path);
 
     // analyze meta file and update page_entries
     std::tie(this->meta_file_pos, this->data_file_pos)
