@@ -62,7 +62,7 @@ inline Block filterUnsorted(const HandleRange & handle_range, Block && block, si
 
     IColumn::Filter filter(rows);
     size_t          passed_count = 0;
-    for (size_t i = 0; i < rows - 1; ++i)
+    for (size_t i = 0; i < rows; ++i)
     {
         bool ok   = handle_range.check(handle_col_data[i]);
         filter[i] = ok;
