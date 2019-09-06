@@ -73,7 +73,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     }
     else
     {
-        region = context.getTMTContext().getRegionTable().getRegionByTableAndID(table_id, region_id);
+        region = context.getTMTContext().getKVStore()->getRegion(region_id);
         if (!region)
             throw Exception("No such region", ErrorCodes::BAD_ARGUMENTS);
     }
