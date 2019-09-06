@@ -369,7 +369,7 @@ SegmentPtr Segment::flush(DMContext & dm_context)
     return new_me;
 }
 
-void Segment::flushCache(DMContext &dm_context)
+void Segment::flushCache(DMContext & dm_context)
 {
     std::unique_lock lock(read_write_mutex);
     delta->tryFlushCache(OpContext::createForLogStorage(dm_context), /* force= */ true);
@@ -913,7 +913,14 @@ size_t Segment::estimatedRows()
 size_t Segment::estimatedBytes()
 {
     size_t stable_bytes = stable->num_bytes();
-    return stable_bytes + delta->num_bytes() - (stable_bytes / stable->num_rows()) * delta_tree->numDeletes();
+    if (stable->num_rows() == 0)
+    {
+        return stable_bytes + delta->num_bytes();
+    }
+    else
+    {
+        return stable_bytes + delta->num_bytes() - (stable_bytes / stable->num_rows()) * delta_tree->numDeletes();
+    }
 }
 
 } // namespace DM
