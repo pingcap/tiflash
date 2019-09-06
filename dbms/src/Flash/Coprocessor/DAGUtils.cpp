@@ -87,9 +87,7 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
         }
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type()
-                || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime
-                       && expr.field_type().tp() != TiDB::TypeTimestamp))
+            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
                 throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.
@@ -235,9 +233,7 @@ Field decodeLiteral(const tipb::Expr & expr)
             return decodeDAGDecimal(expr.val());
         case tipb::ExprType::MysqlTime:
         {
-            if (!expr.has_field_type()
-                || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime
-                       && expr.field_type().tp() != TiDB::TypeTimestamp))
+            if (!expr.has_field_type() || (expr.field_type().tp() != TiDB::TypeDate && expr.field_type().tp() != TiDB::TypeDatetime))
                 throw Exception("Invalid MySQL Time literal " + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
             auto t = decodeDAGUInt64(expr.val());
             // TODO: Use timezone in DAG request.

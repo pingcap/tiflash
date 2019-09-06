@@ -181,7 +181,6 @@ public:
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
-    RegionPtr getRegionByTableAndID(const TableID table_id, const RegionID region_id);
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,

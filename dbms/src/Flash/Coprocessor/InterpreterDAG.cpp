@@ -7,6 +7,7 @@
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/LimitBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
@@ -16,6 +17,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -136,7 +138,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.region_id = dag.getRegionID();
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
-    auto current_region = context.getTMTContext().getRegionTable().getRegionByTableAndID(table_id, info.region_id);
+    auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
     if (!current_region)
     {
         std::vector<RegionID> region_ids;
@@ -147,6 +149,11 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
     pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
+
+    if (pipeline.streams.empty())
+    {
+        pipeline.streams.emplace_back(std::make_shared<NullBlockInputStream>(storage->getSampleBlockForColumns(required_columns)));
+    }
 
     pipeline.transform([&](auto & stream) { stream->addTableLock(table_lock); });
 
@@ -178,7 +185,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             }
         });
     }
-    ColumnsWithTypeAndName columnsWithTypeAndName = pipeline.firstStream()->getHeader().getColumnsWithTypeAndName();
 }
 
 InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()

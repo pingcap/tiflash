@@ -28,7 +28,8 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
       region_version(region_version_),
       region_conf_version(region_conf_version_),
       dag_response(dag_response_),
-      internal(internal_)
+      internal(internal_),
+      log(&Logger::get("DAGDriver"))
 {}
 
 void DAGDriver::execute()
@@ -98,10 +99,12 @@ catch (const LockException & e)
 }
 catch (const Exception & e)
 {
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)
 {
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
 }
 
