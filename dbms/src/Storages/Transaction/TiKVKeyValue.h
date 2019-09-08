@@ -75,11 +75,22 @@ using TiKVKey = StringObject<true>;
 using TiKVValue = StringObject<false>;
 using TiKVKeyValue = std::pair<TiKVKey, TiKVValue>;
 
-struct DecodedTiKVKey : std::string
+struct DecodedTiKVKey : std::string, private boost::noncopyable
 {
     using Base = std::string;
     DecodedTiKVKey(Base && str_) : Base(std::move(str_)) {}
     DecodedTiKVKey() = default;
+
+    // even if don't add this method, the move construction is still the default one.
+    DecodedTiKVKey(DecodedTiKVKey && obj) : Base((Base &&) obj) {}
+    DecodedTiKVKey & operator=(DecodedTiKVKey && obj)
+    {
+        if (this == &obj)
+            return *this;
+
+        (Base &)* this = (Base &&) obj;
+        return *this;
+    }
 };
 
 static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));

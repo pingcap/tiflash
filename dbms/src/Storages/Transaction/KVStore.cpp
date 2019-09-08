@@ -48,6 +48,22 @@ RegionPtr KVStore::getRegion(const RegionID region_id) const
     return nullptr;
 }
 
+KVStore::RegionsAppliedindexMap KVStore::getRegionsByRange(const RegionRange & range) const
+{
+    auto task_lock = genTaskLock();
+
+    RegionsAppliedindexMap res;
+    for (const auto & region : regions())
+    {
+        auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
+        const auto & [start_key, end_key] = region_delegate.getRange().comparableKeys();
+        if (range.first.compare(end_key) >= 0 || range.second.compare(start_key) <= 0)
+            continue;
+        res.emplace(region.first, std::make_pair(region.second, region_delegate.appliedIndex()));
+    }
+    return res;
+}
+
 const RegionManager::RegionTaskElement & RegionManager::getRegionTaskCtrl(const RegionID region_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
@@ -76,28 +92,48 @@ void KVStore::traverseRegions(std::function<void(RegionID region_id, const Regio
         callback(it->first, it->second);
 }
 
-bool KVStore::onSnapshot(RegionPtr new_region, Context * context)
+bool KVStore::onSnapshot(RegionPtr new_region, Context * context) { return onSnapshot(new_region, context, {}); }
+
+bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check)
 {
     RegionID region_id = new_region->id();
     {
         auto region_lock = region_manager.genRegionTaskLock(region_id);
         region_persister.persist(*new_region, region_lock);
     }
+
     {
         auto task_lock = genTaskLock();
         auto region_lock = region_manager.genRegionTaskLock(region_id);
 
+        for (const auto & region_info : regions_to_check)
+        {
+            const auto & region = region_info.second.first;
+
+            if (auto it = regions().find(region_info.first); it != regions().end())
+            {
+                if (it->second != region)
+                {
+                    LOG_WARNING(log, "[onSnapshot] " << it->second->toString() << " instance changed");
+                    return false;
+                }
+                if (region->appliedIndex() != region_info.second.second)
+                {
+                    LOG_WARNING(log, "[onSnapshot] " << it->second->toString() << " instance changed");
+                    return false;
+                }
+            }
+            else
+            {
+                LOG_DEBUG(log, "[onSnapshot] " << region->toString(false) << " not found");
+                return false;
+            }
+        }
+
         RegionPtr old_region = getRegion(region_id);
         if (old_region != nullptr)
         {
-            UInt64 old_index = old_region->appliedIndex();
-
-            LOG_DEBUG(log, "KVStore::onSnapshot previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
-            if (old_index >= new_region->appliedIndex())
-            {
-                LOG_INFO(log, "KVStore::onSnapshot discard new region because of index is outdated");
-                return false;
-            }
+            LOG_DEBUG(log, "[onSnapshot] previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
         }
@@ -106,14 +142,14 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context)
             std::lock_guard<std::mutex> lock(mutex());
             regions().emplace(region_id, new_region);
         }
-
-        if (context)
-            context->getRaftService().addRegionToDecode(new_region);
     }
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
     if (context)
+    {
+        context->getRaftService().addRegionToDecode(new_region);
         context->getTMTContext().getRegionTable().applySnapshotRegion(*new_region);
+    }
 
     return true;
 }
@@ -143,7 +179,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         const RegionPtr curr_region_ptr = getRegion(curr_region_id);
         if (curr_region_ptr == nullptr)
         {
-            LOG_WARNING(log, "[KVStore::onServiceCommand] [region " << curr_region_id << "] is not found, might be removed already");
+            LOG_WARNING(log, "[onServiceCommand] [region " << curr_region_id << "] is not found, might be removed already");
             report_region_destroy(curr_region_id);
             continue;
         }

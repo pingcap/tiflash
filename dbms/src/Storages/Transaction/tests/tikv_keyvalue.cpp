@@ -269,5 +269,29 @@ int main(int, char **)
             assert(!RecordKVFormat::checkKeyPaddingValid(s.data() + 4, i));
     }
 
+    {
+        RegionRangeKeys range(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::genKey(2, 4, 100));
+        assert(RecordKVFormat::getTs(range.comparableKeys().first.key) == 3);
+        assert(RecordKVFormat::getTs(range.comparableKeys().second.key) == 100);
+        assert(RecordKVFormat::getTableId(range.rawKeys().first) == 1);
+        assert(RecordKVFormat::getTableId(range.rawKeys().second) == 2);
+        assert(RecordKVFormat::getHandle(range.rawKeys().first) == 2);
+        assert(RecordKVFormat::getHandle(range.rawKeys().second) == 4);
+
+        assert(range.comparableKeys().first.state == TiKVRangeKey::NORMAL);
+        assert(range.comparableKeys().second.state == TiKVRangeKey::NORMAL);
+
+        RegionRangeKeys range2(TiKVKey{}, TiKVKey{});
+        assert(range2.comparableKeys().first.state == TiKVRangeKey::MIN);
+        assert(range2.comparableKeys().second.state == TiKVRangeKey::MAX);
+
+        assert(range2.comparableKeys().first.compare(range2.comparableKeys().second) < 0);
+        assert(range2.comparableKeys().first.compare(range.comparableKeys().second) < 0);
+        assert(range.comparableKeys().first.compare(range.comparableKeys().second) < 0);
+        assert(range.comparableKeys().second.compare(range2.comparableKeys().second) < 0);
+
+        assert(range.comparableKeys().first.compare(RecordKVFormat::genKey(1, 2, 3)) == 0);
+    }
+
     return res ? 0 : 1;
 }
