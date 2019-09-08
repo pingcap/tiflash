@@ -80,8 +80,6 @@ struct DecodedTiKVKey : std::string, private boost::noncopyable
     using Base = std::string;
     DecodedTiKVKey(Base && str_) : Base(std::move(str_)) {}
     DecodedTiKVKey() = default;
-
-    // even if don't add this method, the move construction is still the default one.
     DecodedTiKVKey(DecodedTiKVKey && obj) : Base((Base &&) obj) {}
     DecodedTiKVKey & operator=(DecodedTiKVKey && obj)
     {
