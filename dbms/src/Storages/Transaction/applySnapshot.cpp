@@ -26,7 +26,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
 
     if (old_region)
     {
-        if (old_region->getIndex() >= new_region->getIndex())
+        if (old_region->appliedIndex() >= new_region->appliedIndex())
         {
             LOG_WARNING(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
             return false;
@@ -115,10 +115,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
             auto & key = *it->mutable_key();
             auto & value = *it->mutable_value();
 
-            auto & tikv_key = static_cast<TiKVKey &>(key);
-            auto & tikv_value = static_cast<TiKVValue &>(value);
-
-            new_region->insert(data.cf(), std::move(tikv_key), std::move(tikv_value));
+            new_region->insert(data.cf(), TiKVKey(std::move(key)), TiKVValue(std::move(value)));
         }
     }
 

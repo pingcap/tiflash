@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Storages/Transaction/TableRowIDMinMax.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
@@ -13,18 +14,10 @@ namespace TiKVRange
 
 using Handle = TiKVHandle::Handle<HandleID>;
 
-template <bool start, bool decoded = false, typename KeyType = TiKVKey>
-inline Handle getRangeHandle(const KeyType & tikv_key, const TableID table_id)
+template <bool start>
+inline Handle getRangeHandle(const DecodedTiKVKey & key, const TableID table_id)
 {
-    if constexpr (decoded)
-        static_assert(std::is_same_v<KeyType, std::string>);
-    else
-        static_assert(std::is_same_v<KeyType, TiKVKey>);
-
-    constexpr HandleID min = std::numeric_limits<HandleID>::min();
-    constexpr HandleID max = std::numeric_limits<HandleID>::max();
-
-    if (tikv_key.empty())
+    if (key.empty())
     {
         if constexpr (start)
             return Handle::normal_min;
@@ -32,21 +25,10 @@ inline Handle getRangeHandle(const KeyType & tikv_key, const TableID table_id)
             return Handle::max;
     }
 
-    const std::string * raw_key_ptr = nullptr;
-    std::string decoded_raw_key;
-    if constexpr (decoded)
-        raw_key_ptr = &tikv_key;
-    else
-    {
-        decoded_raw_key = RecordKVFormat::decodeTiKVKey(tikv_key);
-        raw_key_ptr = &decoded_raw_key;
-    }
-
-    const std::string & key = *raw_key_ptr;
-
-    if (key <= RecordKVFormat::genRawKey(table_id, min))
+    const auto & table_min_max = TableRowIDMinMax::getMinMax(table_id);
+    if (key <= table_min_max.handle_min)
         return Handle::normal_min;
-    if (key > RecordKVFormat::genRawKey(table_id, max))
+    if (key > table_min_max.handle_max)
         return Handle::max;
 
     if (likely(key.size() == RecordKVFormat::RAW_KEY_SIZE))
@@ -73,17 +55,29 @@ inline Handle getRangeHandle(const KeyType & tikv_key, const TableID table_id)
     }
 }
 
-inline HandleRange<HandleID> getHandleRangeByTable(const TiKVKey & start_key, const TiKVKey & end_key, TableID table_id)
+template <bool start>
+inline Handle getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
 {
+    if (tikv_key.empty())
+    {
+        if constexpr (start)
+            return Handle::normal_min;
+        else
+            return Handle::max;
+    }
+
+    return getRangeHandle<start>(RecordKVFormat::decodeTiKVKey(tikv_key), table_id);
+}
+
+template <typename KeyType>
+inline HandleRange<HandleID> getHandleRangeByTable(const KeyType & start_key, const KeyType & end_key, const TableID table_id)
+{
+    static_assert(std::is_same_v<KeyType, DecodedTiKVKey> || std::is_same_v<KeyType, TiKVKey>);
+
     auto start_handle = getRangeHandle<true>(start_key, table_id);
     auto end_handle = getRangeHandle<false>(end_key, table_id);
 
     return {start_handle, end_handle};
-}
-
-inline HandleRange<HandleID> getHandleRangeByTable(const std::pair<TiKVKey, TiKVKey> & range, TableID table_id)
-{
-    return getHandleRangeByTable(range.first, range.second, table_id);
 }
 
 } // namespace TiKVRange

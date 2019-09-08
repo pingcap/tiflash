@@ -43,15 +43,14 @@ RegionTable::Table & RegionTable::getOrCreateTable(const TableID table_id)
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
 {
     const auto range = region.getRange();
-    return insertRegion(table, range.first, range.second, region.id());
+    return insertRegion(table, *range, region.id());
 }
 
-RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id)
+RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id)
 {
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok]
-        = table_regions.emplace(region_id, InternalRegion(region_id, TiKVRange::getHandleRangeByTable(start, end, table.table_id)));
+    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.getHandleRangeByTable(table.table_id)));
     if (!ok)
         throw Exception(
             "[RegionTable::insertRegion] insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
@@ -95,8 +94,7 @@ void RegionTable::doShrinkRegionRange(const Region & region)
     {
         auto table_id = *region_table_it;
 
-        const auto handle_range = TiKVRange::getHandleRangeByTable(range, table_id);
-
+        const auto handle_range = range->getHandleRangeByTable(table_id);
         auto table_it = tables.find(table_id);
         if (table_it == tables.end())
             throw Exception("Table " + DB::toString(table_id) + " not found in table map", ErrorCodes::LOGICAL_ERROR);
@@ -359,7 +357,7 @@ void RegionTable::removeRegion(const RegionID region_id)
 
 void RegionTable::tryFlushRegion(RegionID region_id)
 {
-    TableID table_id;
+    TableIDSet table_ids;
     {
         std::lock_guard<std::mutex> lock(mutex);
         if (auto it = regions.find(region_id); it != regions.end())
@@ -370,7 +368,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
                 return;
             }
             // maybe this region contains more than one table, just flush the first one.
-            table_id = *it->second.begin();
+            table_ids = it->second;
         }
         else
         {
@@ -379,6 +377,12 @@ void RegionTable::tryFlushRegion(RegionID region_id)
         }
     }
 
+    for (const auto table_id : table_ids)
+        tryFlushRegion(region_id, table_id);
+}
+
+void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
+{
     const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
         std::lock_guard<std::mutex> lock(mutex);
         if (auto table_it = tables.find(table_id); table_it != tables.end())
@@ -417,7 +421,16 @@ void RegionTable::tryFlushRegion(RegionID region_id)
     if (!status)
         return;
 
-    flushRegion(table_id, region_id, cache_bytes, false);
+    std::exception_ptr first_exception;
+
+    try
+    {
+        flushRegion(table_id, region_id, cache_bytes, false);
+    }
+    catch (...)
+    {
+        first_exception = std::current_exception();
+    }
 
     func_update_region([&](InternalRegion & region) -> bool {
         region.pause_flush = false;
@@ -427,6 +440,9 @@ void RegionTable::tryFlushRegion(RegionID region_id)
         region.last_flush_time = Clock::now();
         return true;
     });
+
+    if (first_exception)
+        std::rethrow_exception(first_exception);
 }
 
 bool RegionTable::tryFlushRegions()
@@ -443,8 +459,17 @@ bool RegionTable::tryFlushRegions()
         });
     }
 
-    for (auto & [id, cache_bytes] : to_flush)
-        flushRegion(id.first, id.second, cache_bytes);
+    std::exception_ptr first_exception;
+
+    try
+    {
+        for (auto & [id, cache_bytes] : to_flush)
+            flushRegion(id.first, id.second, cache_bytes);
+    }
+    catch (...)
+    {
+        first_exception = std::current_exception();
+    }
 
     { // Now reset status information.
         Timepoint now = Clock::now();
@@ -459,6 +484,9 @@ bool RegionTable::tryFlushRegions()
             }
         });
     }
+
+    if (first_exception)
+        std::rethrow_exception(first_exception);
 
     return !to_flush.empty();
 }
