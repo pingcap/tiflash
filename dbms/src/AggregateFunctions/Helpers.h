@@ -24,7 +24,6 @@
     M(Int64) \
     M(Float32) \
     M(Float64) \
-    M(Decimal)
 
 #define FOR_NUMERIC_TYPES_AND_ENUMS(M) \
     M(UInt8, DataTypeUInt8) \
@@ -39,10 +38,25 @@
     M(Float64, DataTypeFloat64) \
     M(UInt8, DataTypeEnum8) \
     M(UInt16, DataTypeEnum16) \
-    M(Decimal, DataTypeDecimal)
+
+#define FOR_DECIMAL_TYPES(M) \
+    M(Decimal32, DataTypeDecimal32)\
+    M(Decimal64, DataTypeDecimal64)\
+    M(Decimal128, DataTypeDecimal128)\
+    M(Decimal256, DataTypeDecimal256)
 
 namespace DB
 {
+
+template <template <typename, typename> class AggregateFunctionTemplate, typename ResultType, typename ... TArgs>
+static IAggregateFunction * createWithDecimalType(const IDataType & argument_type, TArgs && ... args)
+{
+#define DISPATCH(FIELDTYPE, DATATYPE) \
+    if (typeid_cast<const DATATYPE *>(&argument_type)) return new AggregateFunctionTemplate<FIELDTYPE, ResultType>(std::forward<TArgs>(args)...);
+    FOR_DECIMAL_TYPES(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
 
 /** Create an aggregate function with a numeric type in the template parameter, depending on the type of the argument.
   */

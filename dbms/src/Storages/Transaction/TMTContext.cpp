@@ -1,6 +1,6 @@
-#include <Debug/MockSchemaSyncer.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
@@ -20,8 +20,8 @@ TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs
       rpc_client(std::make_shared<pingcap::kv::RpcClient>()),
       ignore_databases(ignore_databases_),
       schema_syncer(addrs.size() == 0
-              ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<MockSchemaSyncer>())
-              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer>(pd_client, region_cache, rpc_client)))
+              ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(pd_client, region_cache, rpc_client))
+              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client)))
 {}
 
 void TMTContext::restore()
@@ -79,5 +79,7 @@ pingcap::kv::RegionClientPtr TMTContext::createRegionClient(pingcap::kv::RegionV
 pingcap::kv::RegionCachePtr TMTContext::getRegionCache() const { return region_cache; }
 
 pingcap::kv::RpcClientPtr TMTContext::getRpcClient() { return rpc_client; }
+
+const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
 
 } // namespace DB

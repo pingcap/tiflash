@@ -5,7 +5,6 @@
 => drop table if exists default.test
 
 => DBGInvoke __set_flush_threshold(1000000, 1000000)
-=> DBGInvoke __mock_schema_syncer('true')
 
 # Sync add column by reading.
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String')
@@ -25,7 +24,7 @@
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_2.
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_2 from default.test " --schema_version "100
+=> select col_2 from default.test " --schema_version "10000000
 ┌─col_2─┐
 │     1 │
 └───────┘
@@ -41,7 +40,7 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 │       │
 └───────┘
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_1 from default.test " --schema_version "100
+=> select col_1 from default.test " --schema_version "10000000
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_1.
 
@@ -64,9 +63,9 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 # 128 will overflow when decoding using out-of-date schema (Int8).
 => select col_2 from default.test
 Received exception from server (version {#WORD}):
-Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 128 of type Nullable(Int8).
+Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow when decoding data 128 of column col_2 with type Nullable(Int8).
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_2 from default.test " --schema_version "100
+=> select col_2 from default.test " --schema_version "10000000
 ┌─col_2─┐
 │     1 │
 │     2 │
@@ -81,9 +80,9 @@ Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow 
 # 65536 will overflow when decoding using out-of-date schema (Int16).
 => select col_2 from default.test
 Received exception from server (version {#WORD}):
-Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 65536 of type Nullable(Int16).
+Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow when decoding data 65536 of column col_2 with type Nullable(Int16).
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_2 from default.test " --schema_version "100
+=> select col_2 from default.test " --schema_version "10000000
 ┌─col_2─┐
 │     1 │
 │     2 │
@@ -102,9 +101,9 @@ Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow 
 # 256 will overflow when decoding using out-of-date schema (UInt8).
 => select col_3 from default.test
 Received exception from server (version {#WORD}):
-Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 256 of type UInt8.
+Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow when decoding data 256 of column col_3 with type UInt8.
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_3, col_4 from default.test " --schema_version "100
+=> select col_3, col_4 from default.test " --schema_version "10000000
 ┌─col_3─┬─col_4─┐
 │     0 │    \N │
 │     0 │    \N │
@@ -136,7 +135,7 @@ Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow 
 ┌───────────────col_2─┬────────────────col_3─┬─col_4─┐
 │ 9223372036854775807 │ 18446744073709551615 │     1 │
 └─────────────────────┴──────────────────────┴───────┘
-=> select col_3, col_4 from default.test " --schema_version "100
+=> select col_3, col_4 from default.test " --schema_version "100000000
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_3.
 
@@ -148,9 +147,9 @@ Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier
 # -256 will overflow when decoding using out-of-date schema (UInt8).
 => select col_4 from default.test
 Received exception from server (version {#WORD}):
-Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow for data 256 of type Nullable(UInt8).
+Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow when decoding data 256 of column col_4 with type Nullable(UInt8).
 # Read with specified bigger schema version will trigger schema sync.
-=> select col_4 from default.test " --schema_version "100
+=> select col_4 from default.test " --schema_version "100000000
 ┌─col_4─┐
 │    \N │
 │    \N │
@@ -165,7 +164,39 @@ Code: 49. DB::Exception: Received from {#WORD} DB::Exception: Detected overflow 
 => select col_2 from default.test
 Received exception from server (version {#WORD}):
 Code: 47. DB::Exception: Received from {#WORD} DB::Exception: Unknown identifier: col_2.
+=> DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 Nullable(Int8)')
+=> DBGInvoke __refresh_schemas()
+=> select col_2 from default.test
+┌─col_2─┐
+│    \N │
+│    \N │
+│    \N │
+│    \N │
+│    \N │
+│    \N │
+│    \N │
+│    \N │
+│    \N │
+└───────┘
+=> DBGInvoke __reset_schemas()
+=> DBGInvoke __drop_column_from_tidb_table(default, test, col_2)
 
+=> DBGInvoke __add_column_to_tidb_table(default, test, 'col_2 Int8')
+
+=> DBGInvoke __refresh_schemas()
+
+=> select col_2 from default.test
+┌─col_2─┐
+│     0 │
+│     0 │
+│     0 │
+│     0 │
+│     0 │
+│     0 │
+│     0 │
+│     0 │
+│     0 │
+└───────┘
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test

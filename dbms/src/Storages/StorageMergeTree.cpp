@@ -354,12 +354,21 @@ void StorageMergeTree::alterInternal(
 
     ASTPtr new_primary_key_ast = data.primary_expr_ast;
 
+    bool rename_column = false;
     for (const AlterCommand & param : params)
     {
         if (param.type == AlterCommand::MODIFY_PRIMARY_KEY)
         {
             primary_key_is_modified = true;
             new_primary_key_ast = param.primary_key;
+        }
+        else if (param.type == AlterCommand::RENAME_COLUMN)
+        {
+            rename_column = true;
+            if (params.size() != 1) 
+            {
+                throw Exception("There is an internal error for rename columns", ErrorCodes::LOGICAL_ERROR);
+            }
         }
     }
 
@@ -370,13 +379,18 @@ void StorageMergeTree::alterInternal(
     auto columns_for_parts = new_columns.getAllPhysical();
     for (const MergeTreeData::DataPartPtr & part : parts)
     {
-        if (auto transaction = data.alterDataPart(part, columns_for_parts, new_primary_key_ast, false))
+        if (rename_column)
+        {
+            auto transaction = data.renameColumnPart(part, columns_for_parts, params[0]);
+            transactions.push_back(std::move(transaction));
+        }
+        else if (auto transaction = data.alterDataPart(part, columns_for_parts, new_primary_key_ast, false))
             transactions.push_back(std::move(transaction));
     }
 
     auto table_hard_lock = lockStructureForAlter(__PRETTY_FUNCTION__);
 
-    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, this] (IAST & ast)
+    IDatabase::ASTModifier storage_modifier = [primary_key_is_modified, new_primary_key_ast, table_info] (IAST & ast)
     {
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
 
@@ -392,8 +406,11 @@ void StorageMergeTree::alterInternal(
             typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.at(1) = tuple;
         }
 
-        auto literal = std::make_shared<ASTLiteral>(Field(data.table_info->serialize(true)));
-        typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
+        if (table_info)
+        {
+            auto literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize(true)));
+            typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
+        }
     };
 
     context.getDatabase(database_name)->alterTable(context, table_name, new_columns, storage_modifier);

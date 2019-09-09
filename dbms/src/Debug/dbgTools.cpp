@@ -139,7 +139,8 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
 
     // Using the region meta's table ID rather than table_info's, as this could be a partition table so that the table ID should be partition ID.
-    TableID table_id = RecordKVFormat::getTableId(region->getRange().first);
+    const auto range = region->getRange();
+    TableID table_id = RecordKVFormat::getTableId(range->rawKeys().first);
 
     TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
     TiKVValue value = RecordKVFormat::EncodeRow(table_info, fields);
@@ -217,6 +218,7 @@ struct BatchCtrl
     void EncodeDatum(std::stringstream & ss, TiDB::CodecFlag flag, Int64 magic_num)
     {
         Int8 target = (magic_num % 70) + '0';
+        ss << UInt8(flag);
         switch (flag)
         {
             case TiDB::CodecFlagJson:
@@ -230,17 +232,17 @@ struct BatchCtrl
             case TiDB::CodecFlagBytes:
                 memset(default_str.data(), target, default_str.size());
                 return EncodeBytes(default_str, ss);
-            case TiDB::CodecFlagDecimal:
-                return EncodeDecimal(Decimal(magic_num), ss);
+            //case TiDB::CodecFlagDecimal:
+            //    return EncodeDecimal(Decimal(magic_num), ss);
             case TiDB::CodecFlagCompactBytes:
                 memset(default_str.data(), target, default_str.size());
                 return EncodeCompactBytes(default_str, ss);
             case TiDB::CodecFlagFloat:
                 return EncodeFloat64(Float64(magic_num) / 1111.1, ss);
             case TiDB::CodecFlagUInt:
-                return EncodeNumber<UInt64, TiDB::CodecFlagUInt>(UInt64(magic_num), ss);
+                return EncodeUInt<UInt64>(UInt64(magic_num), ss);
             case TiDB::CodecFlagInt:
-                return EncodeNumber<Int64, TiDB::CodecFlagInt>(Int64(magic_num), ss);
+                return EncodeInt64(Int64(magic_num), ss);
             case TiDB::CodecFlagVarInt:
                 return EncodeVarInt(Int64(magic_num), ss);
             case TiDB::CodecFlagVarUInt:
@@ -257,6 +259,7 @@ struct BatchCtrl
         {
             const TiDB::ColumnInfo & column = table_info.columns[i];
             EncodeDatum(ss, TiDB::CodecFlagInt, column.id);
+            // TODO: May need to use BumpyDatum to flatten before encoding.
             EncodeDatum(ss, column.getCodecFlag(), magic_num);
         }
         return TiKVValue(ss.str());
@@ -301,8 +304,8 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
     HandleID curr_max_handle_id = 0;
     tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         curr_max_region_id = (curr_max_region_id == InvalidRegionID) ? region_id : std::max<RegionID>(curr_max_region_id, region_id);
-        auto range = region->getRange();
-        curr_max_handle_id = std::max(RecordKVFormat::getHandle(range.second), curr_max_handle_id);
+        const auto range = region->getRange();
+        curr_max_handle_id = std::max(RecordKVFormat::getHandle(range->rawKeys().second), curr_max_handle_id);
     });
 
     Int64 key_num_each_region = flush_num * batch_num;
@@ -310,7 +313,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStore()->onSnapshot(region, &tmt.getRegionTable());
+        tmt.getKVStore()->onSnapshot(region, &context);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
@@ -347,9 +350,8 @@ Int64 concurrentRangeOperate(
     Int64 tol = 0;
     for (auto region : regions)
     {
-        auto [start_key, end_key] = region->getRange();
-        auto ss = TiKVRange::getRangeHandle<true>(start_key, table_info.id);
-        auto ee = TiKVRange::getRangeHandle<false>(end_key, table_info.id);
+        const auto range = region->getRange();
+        const auto & [ss, ee] = range->getHandleRangeByTable(table_info.id);
         TiKVRange::Handle handle_begin = std::max<TiKVRange::Handle>(ss, start_handle);
         TiKVRange::Handle handle_end = std::min<TiKVRange::Handle>(ee, end_handle);
         if (handle_end <= handle_begin)

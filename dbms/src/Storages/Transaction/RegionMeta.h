@@ -2,13 +2,7 @@
 
 #include <condition_variable>
 
-#include <Storages/Transaction/TiKVKeyValue.h>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <kvproto/metapb.pb.h>
-#include <kvproto/raft_serverpb.pb.h>
-#pragma GCC diagnostic pop
+#include <Storages/Transaction/RegionState.h>
 
 namespace pingcap::kv
 {
@@ -18,28 +12,15 @@ struct RegionVerID;
 namespace DB
 {
 
-using RegionRange = std::pair<TiKVKey, TiKVKey>;
+class MetaRaftCommandDelegate;
 
 class RegionMeta
 {
 public:
     RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_,
-        raft_serverpb::RegionLocalState region_state_)
-        : peer(std::move(peer_)),
-          apply_state(std::move(apply_state_)),
-          applied_term(applied_term_),
-          region_state(std::move(region_state_)),
-          region_id(region_state.region().id())
-    {}
+        raft_serverpb::RegionLocalState region_state_);
 
-    RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_)
-        : peer(std::move(peer_)),
-          apply_state(std::move(apply_state_)),
-          applied_term(apply_state.truncated_state().term()),
-          region_id(region.id())
-    {
-        *region_state.mutable_region() = std::move(region);
-    }
+    RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_);
 
     RegionMeta(RegionMeta && meta);
 
@@ -50,7 +31,7 @@ public:
     UInt64 appliedIndex() const;
     UInt64 appliedTerm() const;
 
-    RegionRange getRange() const;
+    ImutRegionRangePtr getRange() const;
 
     metapb::Peer getPeer() const;
     pingcap::kv::RegionVerID getRegionVerID() const;
@@ -62,7 +43,7 @@ public:
     raft_serverpb::RaftApplyState getApplyState() const;
 
     void setApplied(UInt64 index, UInt64 term);
-    void notifyAll();
+    void notifyAll() const;
 
     std::string toString(bool dump_status = true) const;
 
@@ -79,19 +60,20 @@ public:
 
     friend bool operator==(const RegionMeta & meta1, const RegionMeta & meta2);
 
-    void waitIndex(UInt64 index);
-    bool checkIndex(UInt64 index);
+    void waitIndex(UInt64 index) const;
+    bool checkIndex(UInt64 index) const;
 
     bool isPeerRemoved() const;
 
-    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execCompactLog(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
+    MetaRaftCommandDelegate & makeRaftCommandDelegate();
 
 private:
+    RegionMeta() = delete;
+    friend class MetaRaftCommandDelegate;
+
     void doSetRegion(const metapb::Region & region);
-
     void doSetApplied(UInt64 index, UInt64 term);
-
     bool doCheckIndex(UInt64 index) const;
 
 private:
@@ -101,10 +83,10 @@ private:
     raft_serverpb::RaftApplyState apply_state;
     UInt64 applied_term;
 
-    raft_serverpb::RegionLocalState region_state;
+    RegionState region_state;
 
     mutable std::mutex mutex;
-    std::condition_variable cv;
+    mutable std::condition_variable cv;
     const RegionID region_id;
 };
 
@@ -123,5 +105,20 @@ inline raft_serverpb::RaftApplyState initialApplyState()
     state.mutable_truncated_state()->set_term(RAFT_INIT_LOG_TERM);
     return state;
 }
+
+class MetaRaftCommandDelegate : public RegionMeta, private boost::noncopyable
+{
+    friend class RegionRaftCommandDelegate;
+
+    MetaRaftCommandDelegate() = delete;
+
+    const metapb::Peer & getPeer() const;
+    const raft_serverpb::RaftApplyState & applyState() const;
+    const UInt64 & appliedTerm() const;
+    const RegionState & regionState() const;
+
+    void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+    void execCompactLog(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
+};
 
 } // namespace DB

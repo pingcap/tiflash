@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/Transaction/SerializationHelper.h>
+#include <Storages/Transaction/TiKVDecodedValue.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -18,22 +19,18 @@ public:
     };
 
     StringObject() = default;
-    explicit StringObject(Base && str_) : Base(std::move(str_)) {}
+    StringObject(Base && str_) : Base(std::move(str_)) {}
     StringObject(StringObject && obj) : Base((Base &&) obj) {}
     StringObject(const char * str, const size_t len) : Base(str, len) {}
-
+    StringObject(const char * str) : Base(str) {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
 
-    StringObject & operator=(const StringObject & a)
+    StringObject & operator=(const StringObject & a) = delete;
+    StringObject & operator=(StringObject && a)
     {
         if (this == &a)
             return *this;
 
-        (Base &)* this = (const Base &)a;
-        return *this;
-    }
-    StringObject & operator=(StringObject && a)
-    {
         (Base &)* this = (Base &&) a;
         return *this;
     }
@@ -63,17 +60,28 @@ public:
 
     static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
 
+    ValueExtraInfo<is_key> & extraInfo() const { return extra; }
+
 private:
     StringObject(const Base & str_) : Base(str_) {}
     StringObject(const StringObject & obj) = delete;
     size_t size() const = delete;
+
+private:
+    mutable ValueExtraInfo<is_key> extra;
 };
 
 using TiKVKey = StringObject<true>;
 using TiKVValue = StringObject<false>;
 using TiKVKeyValue = std::pair<TiKVKey, TiKVValue>;
 
-static_assert(sizeof(TiKVKey) == sizeof(std::string));
-static_assert(sizeof(TiKVValue) == sizeof(std::string));
+struct DecodedTiKVKey : std::string
+{
+    using Base = std::string;
+    DecodedTiKVKey(Base && str_) : Base(std::move(str_)) {}
+    DecodedTiKVKey() = default;
+};
+
+static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));
 
 } // namespace DB

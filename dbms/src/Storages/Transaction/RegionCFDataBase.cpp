@@ -4,27 +4,37 @@
 namespace DB
 {
 
+const std::string RegionWriteCFDataTrait::name = "write";
+const std::string RegionDefaultCFDataTrait::name = "default";
+const std::string RegionLockCFDataTrait::name = "lock";
+
 template <typename Trait>
 const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
 {
     return *std::get<0>(val);
 }
 
+template <typename Value>
+const std::shared_ptr<const TiKVValue> & getTiKVValuePtr(const Value & val)
+{
+    return std::get<1>(val);
+}
+
 template <typename Trait>
 const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 {
-    return *std::get<1>(val);
+    return *getTiKVValuePtr<Value>(val);
 }
 
 template <typename Trait>
 TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
 {
-    const String & raw_key = RecordKVFormat::decodeTiKVKey(key);
+    const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     return insert(std::move(key), std::move(value), raw_key);
 }
 
 template <typename Trait>
-TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const String & raw_key)
+TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key)
 {
     Pair kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (shouldIgnoreInsert(kv_pair.second))
@@ -38,9 +48,13 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
 {
     auto & map = data[table_id];
     auto [it, ok] = map.emplace(std::move(kv_pair));
-    std::ignore = it;
     if (!ok)
-        throw Exception("Found existing key in hex: " + getTiKVKey(kv_pair.second).toHex(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
+
+    if constexpr (std::is_same_v<Trait, RegionWriteCFDataTrait>)
+        extra.add(Trait::getRowRawValuePtr(it->second));
+    else
+        extra.add(getTiKVValuePtr(it->second));
     return table_id;
 }
 
@@ -159,13 +173,14 @@ size_t RegionCFDataBase<Trait>::getSize() const
 }
 
 template <typename Trait>
-RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data))
+RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data)), extra(std::move(region.extra))
 {}
 
 template <typename Trait>
 RegionCFDataBase<Trait> & RegionCFDataBase<Trait>::operator=(RegionCFDataBase && region)
 {
     data = std::move(region.data);
+    extra = std::move(region.extra);
     return *this;
 }
 
@@ -297,6 +312,12 @@ void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVK
         else
             ++data_it;
     }
+}
+
+template <typename Trait>
+ExtraCFData<Trait> & RegionCFDataBase<Trait>::getExtra()
+{
+    return extra;
 }
 
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;

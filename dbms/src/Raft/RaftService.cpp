@@ -30,17 +30,15 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
 
     persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); }, false);
 
-    table_flush_handle = background_pool.addTask(
-        [this] {
-            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-            return region_table.tryFlushRegions();
-        },
-        false);
+    table_flush_handle = background_pool.addTask([this] {
+        RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+        return region_table.tryFlushRegions();
+    });
 
     region_flush_handle = background_pool.addTask([this] {
         RegionID region_id;
         {
-            std::lock_guard<std::mutex> lock(mutex);
+            std::lock_guard<std::mutex> lock(region_mutex);
             if (regions_to_flush.empty())
                 return false;
             region_id = regions_to_flush.front();
@@ -51,17 +49,50 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
         return true;
     });
 
+    region_decode_handle = background_pool.addTask([this] {
+        RegionPtr region;
+        {
+            std::lock_guard<std::mutex> lock(region_mutex);
+            if (regions_to_decode.empty())
+                return false;
+            auto it = regions_to_decode.begin();
+            region = it->second;
+            regions_to_decode.erase(it);
+        }
+        region->tryPreDecodeTiKVValue();
+        return true;
+    });
 
     LOG_INFO(log, "Raft service listening on [" << address << "]");
+
+    {
+        std::vector<RegionPtr> regions;
+        kvstore->traverseRegions([&regions](RegionID, const RegionPtr & region) {
+            if (region->dataSize())
+                regions.emplace_back(region);
+        });
+
+        for (const auto & region : regions)
+            addRegionToDecode(region);
+    }
 }
 
 void RaftService::addRegionToFlush(const Region & region)
 {
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex> lock(region_mutex);
         regions_to_flush.push(region.id());
     }
     region_flush_handle->wake();
+}
+
+void RaftService::addRegionToDecode(const RegionPtr & region)
+{
+    {
+        std::lock_guard<std::mutex> lock(region_mutex);
+        regions_to_decode.emplace(region->id(), region);
+    }
+    region_decode_handle->wake();
 }
 
 RaftService::~RaftService()
@@ -81,6 +112,12 @@ RaftService::~RaftService()
     {
         background_pool.removeTask(region_flush_handle);
         region_flush_handle = nullptr;
+    }
+
+    if (region_decode_handle)
+    {
+        background_pool.removeTask(region_decode_handle);
+        region_decode_handle = nullptr;
     }
 
     // wait 5 seconds for pending rpcs to gracefully stop

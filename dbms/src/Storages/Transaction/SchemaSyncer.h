@@ -16,10 +16,17 @@ public:
     virtual ~SchemaSyncer() = default;
 
     /**
+     * Get current version of CH schema.
+     */
+    virtual Int64 getCurrentVersion() = 0;
+
+    /**
      * Synchronize all schemas between TiDB and CH.
      * @param context
      */
     virtual bool syncSchemas(Context & context) = 0;
+
+    virtual void reset() = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;

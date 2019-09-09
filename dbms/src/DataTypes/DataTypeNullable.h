@@ -17,6 +17,8 @@ public:
     std::string getName() const override { return "Nullable(" + nested_data_type->getName() + ")"; }
     const char * getFamilyName() const override { return "Nullable"; }
 
+    TypeIndex getTypeId() const override { return TypeIndex::Nullable; }
+
     void enumerateStreams(StreamCallback callback, SubstreamPath path) const override;
 
     void serializeBinaryBulkWithMultipleStreams(

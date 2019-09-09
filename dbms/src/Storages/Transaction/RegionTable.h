@@ -30,6 +30,7 @@ class Block;
 // for debug
 struct MockTiDBTable;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+class RegionRangeKeys;
 
 class RegionTable : private boost::noncopyable
 {
@@ -135,13 +136,14 @@ private:
 
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
-    InternalRegion & insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
 
     bool shouldFlush(const InternalRegion & region) const;
 
     void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size, const bool try_persist = true);
 
     // For debug
+    friend class MockTiDB;
     friend struct MockTiDBTable;
 
     void mockDropRegionsInTable(TableID table_id);
@@ -176,6 +178,7 @@ public:
     bool tryFlushRegions();
 
     void tryFlushRegion(RegionID region_id);
+    void tryFlushRegion(RegionID region_id, TableID table_id);
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
@@ -188,21 +191,21 @@ public:
     static void writeBlockByRegion(
         Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log);
 
-    using BlockOption = std::optional<Block>;
-
     /// Read the data of the given region into block, take good care of learner read and locks.
     /// Assuming that the schema has been properly synced by outer, i.e. being new enough to decode data before start_ts,
     /// we directly ask readRegionBlock to perform a read with the given start_ts and force_decode being true.
-    static std::tuple<BlockOption, RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
+    static std::tuple<Block, RegionReadStatus> readBlockByRegion(const TiDB::TableInfo & table_info,
         const ColumnsDescription & columns,
         const Names & column_names_to_read,
         const RegionPtr & region,
         RegionVersion region_version,
         RegionVersion conf_version,
         bool resolve_locks,
-        Timestamp start_ts);
+        Timestamp start_ts,
+        DB::HandleRange<HandleID> & handle_range);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
+    void dumpRegionsByTable(const TableID table_id, size_t & count, InternalRegions * regions) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

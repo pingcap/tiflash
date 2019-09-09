@@ -36,7 +36,7 @@ using DB::Timestamp;
 #error "Please undefine macro M first."
 #endif
 #define COLUMN_TYPES(M)                              \
-    M(Decimal, 0, Decimal, Decimal, false)           \
+    M(Decimal, 0, Decimal, Decimal32, false)         \
     M(Tiny, 1, VarInt, Int8, true)                   \
     M(Short, 2, VarInt, Int16, true)                 \
     M(Long, 3, VarInt, Int32, true)                  \
@@ -54,8 +54,8 @@ using DB::Timestamp;
     M(Varchar, 15, CompactBytes, String, false)      \
     M(Bit, 16, CompactBytes, UInt64, false)          \
     M(JSON, 0xf5, Json, String, false)               \
-    M(NewDecimal, 0xf6, Decimal, Decimal, false)     \
-    M(Enum, 0xf7, CompactBytes, Enum16, false)       \
+    M(NewDecimal, 0xf6, Decimal, Decimal32, false)   \
+    M(Enum, 0xf7, VarUInt, Enum16, false)            \
     M(Set, 0xf8, CompactBytes, String, false)        \
     M(TinyBlob, 0xf9, CompactBytes, String, false)   \
     M(MediumBlob, 0xfa, CompactBytes, String, false) \
@@ -169,8 +169,12 @@ struct ColumnInfo
     COLUMN_FLAGS(M)
 #undef M
 
-    CodecFlag getCodecFlag() const;
     DB::Field defaultValueToField() const;
+    CodecFlag getCodecFlag() const;
+
+private:
+    DB::Field getDecimalDefaultValue(const String & str) const;
+    Int64 getEnumIndex(const String &) const;
 };
 
 enum PartitionType
@@ -222,6 +226,7 @@ struct DBInfo
     String collate;
     SchemaState state;
 
+    DBInfo() = default;
     DBInfo(const String & json) { deserialize(json); }
 
     void deserialize(const String & json_str);
@@ -263,32 +268,11 @@ struct TableInfo
 
     ColumnID getColumnID(const String & name) const;
 
-    TableInfo producePartitionTableInfo(TableID table_or_partition_id) const
-    {
-        //
-        // Some sanity checks for partition table.
-        if (unlikely(!(is_partition_table && partition.enable)))
-            throw Exception("Table ID " + std::to_string(id) + " seeing partition ID " + std::to_string(table_or_partition_id)
-                    + " but it's not a partition table",
-                DB::ErrorCodes::LOGICAL_ERROR);
+    TableInfo producePartitionTableInfo(TableID table_or_partition_id) const;
 
-        if (unlikely(std::find_if(partition.definitions.begin(), partition.definitions.end(), [table_or_partition_id](const auto & d) {
-                return d.id == table_or_partition_id;
-            }) == partition.definitions.end()))
-            throw Exception(
-                "Couldn't find partition with ID " + std::to_string(table_or_partition_id) + " in table ID " + std::to_string(id),
-                DB::ErrorCodes::LOGICAL_ERROR);
+    bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == -1 && partition.enable; }
 
-        // This is a TiDB partition table, adjust the table ID by making it to physical table ID (partition ID).
-        TableInfo new_table = *this;
-        new_table.belonging_table_id = id;
-        new_table.id = table_or_partition_id;
-
-        // Mangle the table name by appending partition name.
-        new_table.name += "_" + std::to_string(table_or_partition_id);
-
-        return new_table;
-    }
+    String getPartitionTableName(TableID part_id) const;
 };
 
 using DBInfoPtr = std::shared_ptr<DBInfo>;

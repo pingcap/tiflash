@@ -11,6 +11,8 @@ class DataTypeDate final : public DataTypeNumberBase<UInt32>
 public:
     const char * getFamilyName() const override { return "Date"; }
 
+    TypeIndex getTypeId() const override {return TypeIndex::Date;}
+
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextEscaped(IColumn & column, ReadBuffer & istr) const override;

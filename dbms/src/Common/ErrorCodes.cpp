@@ -372,6 +372,8 @@ namespace ErrorCodes
     extern const int FUNCTION_THROW_IF_VALUE_IS_NON_ZERO = 395;
     extern const int TOO_MANY_ROWS_OR_BYTES = 396;
     extern const int QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW = 397;
+    extern const int CANNOT_MPROTECT = 445;
+    extern const int DECIMAL_OVERFLOW = 446;
 
 
     extern const int KEEPER_EXCEPTION = 999;
@@ -392,6 +394,7 @@ namespace ErrorCodes
     extern const int REGION_MISS = 10002;
     extern const int SCHEMA_SYNC_ERROR = 10003;
     extern const int SCHEMA_VERSION_ERROR = 10004;
+    extern const int DDL_ERROR = 10005;
 }
 
 }

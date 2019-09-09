@@ -2,7 +2,7 @@
 
 #include <map>
 
-#include <Storages/Transaction/TiKVKeyValue.h>
+#include <Storages/Transaction/ExtraCFData.h>
 
 namespace DB
 {
@@ -37,7 +37,7 @@ struct RegionCFDataBase
 
     TableID insert(TiKVKey && key, TiKVValue && value);
     TableID insert(const TableID table_id, std::pair<Key, Value> && kv_pair);
-    TableID insert(TiKVKey && key, TiKVValue && value, const String & raw_key);
+    TableID insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key);
 
     static size_t calcTiKVKeyValueSize(const Value & value);
 
@@ -69,12 +69,15 @@ struct RegionCFDataBase
 
     void deleteRange(const TiKVKey & start_key, const TiKVKey & end_key);
 
+    ExtraCFData<Trait> & getExtra();
+
 private:
     static bool shouldIgnoreInsert(const Value & value);
     static bool shouldIgnoreRemove(const Value & value);
 
 private:
     Data data;
+    ExtraCFData<Trait> extra;
 };
 
 } // namespace DB

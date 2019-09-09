@@ -11,6 +11,8 @@ namespace DB
 static const Seconds REGION_PERSIST_PERIOD(300);      // 5 minutes
 static const Seconds KVSTORE_TRY_PERSIST_PERIOD(180); // 3 minutes
 
+class Context;
+
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
@@ -19,6 +21,8 @@ struct RaftContext;
 
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
+struct RaftCommandResult;
+class KVStoreTaskLock;
 
 struct MockTiDBTable;
 
@@ -33,7 +37,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, RegionTable * region_table);
+    bool onSnapshot(RegionPtr new_region, Context * context);
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
 
@@ -52,8 +56,10 @@ public:
     void updateRegionTableBySnapshot(RegionTable & region_table);
 
 private:
+    friend class MockTiDB;
     friend struct MockTiDBTable;
     void removeRegion(const RegionID region_id, RegionTable * region_table);
+    KVStoreTaskLock genTaskLock() const;
 
     RegionMap & regions();
     const RegionMap & regions() const;
@@ -69,7 +75,18 @@ private:
     // onServiceCommand and onSnapshot should not be called concurrently
     mutable std::mutex task_mutex;
 
+    // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
+    std::unique_ptr<RaftCommandResult> raft_cmd_res;
+
     Logger * log;
+};
+
+/// Encapsulation of lock guard of task mutex in KVStore
+class KVStoreTaskLock : private boost::noncopyable
+{
+    friend class KVStore;
+    KVStoreTaskLock(std::mutex & mutex_) : lock(mutex_) {}
+    std::lock_guard<std::mutex> lock;
 };
 
 } // namespace DB

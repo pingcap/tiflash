@@ -17,6 +17,8 @@ public:
 
     const char * getFamilyName() const override { return TypeName<T>::get(); }
 
+    TypeIndex getTypeId() const override {return TypeId<T>::value;};
+
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextEscaped(IColumn & column, ReadBuffer & istr) const override;

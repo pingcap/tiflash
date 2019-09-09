@@ -193,9 +193,12 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 }
 
 
-void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 schema_version)
+void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 query_schema_version)
 {
     String qualified_name = database_name + "." + table_name;
+
+    /// Get current schema version in schema syncer for a chance to shortcut.
+    auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableStructureReadLockPtr, Int64, bool> {
@@ -214,10 +217,15 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
 
         /// Check schema version.
         auto storage_schema_version = merge_tree->getTableInfo().schema_version;
-        if (storage_schema_version > schema_version)
-            throw Exception("Table " + qualified_name + " schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
+        // Not allow storage schema version greater than query schema version in any case.
+        if (storage_schema_version > query_schema_version)
+            throw Exception("Table " + qualified_name + " schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(query_schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
 
-        if ((schema_synced && storage_schema_version <= schema_version) || (!schema_synced && storage_schema_version == schema_version))
+        // If schema synced, we must be very recent so we are good as long as storage schema version is no greater than query schema version.
+        // If schema not synced, we are good if storage schema version is right on query schema version.
+        // Otherwise we are at the risk of out-of-date schema, but we still have a chance to be sure that we are good, if global schema version is greater than query schema version.
+        if ((schema_synced && storage_schema_version <= query_schema_version)
+            || (!schema_synced && (storage_schema_version == query_schema_version || global_schema_version > query_schema_version)))
             return std::make_tuple(storage_, lock, storage_schema_version, true);
 
         return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
@@ -227,12 +235,18 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     StoragePtr storage_;
     TableStructureReadLockPtr lock;
     Int64 storage_schema_version;
+    auto log_schema_version = [&](const String & result) {
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema " << result
+            << " Schema version [storage, global, query]: "
+            << "[" << storage_schema_version << ", " << global_schema_version << ", " << query_schema_version
+            << "].");
+    };
     bool ok;
     {
         std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(false);
         if (ok)
         {
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", OK, no syncing required.");
+            log_schema_version("OK, no syncing required.");
             storage = storage_;
             table_lock = lock;
             return;
@@ -241,7 +255,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
 
     /// If first try failed, sync schema and try again.
     {
-        LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", not OK, syncing schemas.");
+        log_schema_version("not OK, syncing schemas.");
         auto start_time = Clock::now();
         context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
@@ -250,7 +264,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         std::tie(storage_, lock, storage_schema_version, ok) = get_and_lock_storage(true);
         if (ok)
         {
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Table " << qualified_name << " schema version: " << storage_schema_version << ", query schema version: " << schema_version << ", OK after syncing.");
+            log_schema_version("OK after syncing.");
             storage = storage_;
             table_lock = lock;
             return;
@@ -753,7 +767,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         query_info.mvcc_query_info->resolve_locks = settings.resolve_locks;
         query_info.mvcc_query_info->read_tso = settings.read_tso;
 
-        String request_str = settings.regions;
+        const String & request_str = settings.regions;
 
         if (request_str.size() > 0)
         {
@@ -771,18 +785,14 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
                 RegionQueryInfo info;
                 info.region_id = region.id();
-                auto epoch = region.region_epoch();
+                const auto & epoch = region.region_epoch();
                 info.version = epoch.version();
                 info.conf_version = epoch.conf_ver();
-
-                auto table_id = static_cast<StorageMergeTree*>(storage.get()) -> getTableInfo().id;
-
-                auto start_key = TiKVRange::getRangeHandle<true, true, std::string>(region.start_key(), table_id);
-                auto end_key = TiKVRange::getRangeHandle<false, true, std::string>(region.end_key(), table_id);
-                info.range_in_table = HandleRange<HandleID>(start_key, end_key);
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
 
+            if (query_info.mvcc_query_info->regions_query_info.empty())
+                throw Exception("[InterpreterSelectQuery::executeFetchColumns] no region query", ErrorCodes::LOGICAL_ERROR);
             query_info.mvcc_query_info->concurrent = 0.0;
         }
 
