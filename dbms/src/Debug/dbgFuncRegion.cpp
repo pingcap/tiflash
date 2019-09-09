@@ -144,13 +144,8 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
             TiKVValue value(ss.str());
             UInt64 commit_ts = tso;
             UInt64 prewrite_ts = tso;
-            TiKVValue commit_value;
-
-            if (del)
-                commit_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts);
-            else
-                commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value);
-
+            TiKVValue commit_value = del ? RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts)
+                                         : RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value);
             TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
 
             region->insert(Region::write_cf_name, std::move(commit_key), std::move(commit_value));
@@ -226,7 +221,7 @@ std::string getRegionKeyString(const TiKVRange::Handle s, const TiKVKey & k)
     {
         if (s.type != TiKVHandle::HandleIDType::NORMAL)
         {
-            String raw_key = k.empty() ? "" : RecordKVFormat::decodeTiKVKey(k);
+            auto raw_key = k.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(k);
             bool is_record = RecordKVFormat::isRecord(raw_key);
             std::stringstream ss;
             if (is_record)
@@ -274,20 +269,10 @@ std::string getEndKeyString(TableID table_id, const TiKVKey & end_key)
     }
 }
 
-void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+void dbgFuncDumpAllRegion(Context & context, TableID table_id, bool ignore_none, bool dump_status, DBGInvoker::Printer & output)
 {
-    if (args.size() < 1)
-        throw Exception("Args not matched, should be: table_id", ErrorCodes::BAD_ARGUMENTS);
-
-    auto & tmt = context.getTMTContext();
-    TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-
-    bool ignore_none = false;
-    if (args.size() > 1)
-        ignore_none = (std::string(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
-
     size_t size = 0;
-    tmt.getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
+    context.getTMTContext().getKVStore()->traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
         std::ignore = region_id;
         auto range = region->getHandleRangeByTable(table_id);
         size += 1;
@@ -296,15 +281,47 @@ void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Prin
         if (range.first >= range.second && ignore_none)
             return;
 
-        ss << "table #" << table_id << " " << region->toString();
+        ss << region->toString(dump_status);
         if (range.first >= range.second)
             ss << " [none], ";
         else
             ss << " ranges: [" << range.first.toString() << ", " << range.second.toString() << "), ";
-        ss << region->dataInfo();
+        ss << "state: " << raft_serverpb::PeerState_Name(region->peerState());
+        if (auto s = region->dataInfo(); s.size() > 2)
+            ss << ", " << s;
         output(ss.str());
     });
     output("total size: " + toString(size));
+}
+
+void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 1)
+        throw Exception("Args not matched, should be: table_id", ErrorCodes::BAD_ARGUMENTS);
+
+    TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+
+    bool ignore_none = false;
+    if (args.size() > 1)
+        ignore_none = (std::string(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
+
+    bool dump_status = true;
+    if (args.size() > 2)
+        dump_status = (std::string(typeid_cast<const ASTIdentifier &>(*args[2]).name) == "true");
+
+    output("table #" + toString(table_id));
+    dbgFuncDumpAllRegion(context, table_id, ignore_none, dump_status, output);
+}
+
+void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+
+    auto table = MockTiDB::instance().getTableByName(database_name, table_name);
+    auto table_id = table->id();
+
+    dbgFuncDumpAllRegion(context, table_id, false, false, output);
 }
 
 } // namespace DB

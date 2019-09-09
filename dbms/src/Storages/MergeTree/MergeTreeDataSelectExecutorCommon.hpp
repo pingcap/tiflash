@@ -91,7 +91,7 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
         if (range.end != marks_count)
             index_right_handle = static_cast<TargetType>(index[0]->getUInt(range.end));
 
-        if (handle_begin >= index_right_handle || index_left_handle >= handle_end)
+        if (handle_begin > index_right_handle || index_left_handle >= handle_end)
             continue;
 
         if (range.end == range.begin + 1)

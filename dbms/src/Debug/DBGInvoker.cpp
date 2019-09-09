@@ -44,6 +44,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
     regSchemalessFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
     regSchemalessFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
+    regSchemalessFunc("rename_column_in_tidb_table", MockTiDBTable::dbgFuncRenameColumnInTiDBTable);
     regSchemalessFunc("rename_tidb_table", MockTiDBTable::dbgFuncRenameTiDBTable);
     regSchemalessFunc("truncate_tidb_table", MockTiDBTable::dbgFuncTruncateTiDBTable);
 
@@ -64,11 +65,12 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("try_flush_region", dbgFuncTryFlushRegion);
 
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
+    regSchemalessFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
+    regSchemalessFunc("dump_region_table", ClusterManage::dumpRegionTable);
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
-    regSchemalessFunc("dump_region_table", ClusterManage::dumpRegionTable);
 
     regSchemafulFunc("dag", dbgFuncDAG);
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);

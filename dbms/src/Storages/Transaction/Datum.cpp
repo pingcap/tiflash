@@ -162,6 +162,8 @@ DatumFlat::DatumFlat(const DB::Field & field, TP tp) : DatumBase(field, tp)
     }
 }
 
+bool DatumFlat::invalidNull(const ColumnInfo & column_info) { return column_info.hasNotNullFlag() && orig.isNull(); }
+
 bool DatumFlat::overflow(const ColumnInfo & column_info)
 {
     switch (tp)
