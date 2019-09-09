@@ -25,6 +25,7 @@ struct RaftCommandResult;
 class KVStoreTaskLock;
 
 struct MockTiDBTable;
+struct TiKVRangeKey;
 
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
@@ -35,9 +36,16 @@ public:
 
     RegionPtr getRegion(const RegionID region_id) const;
 
+    using RegionsAppliedindexMap = std::unordered_map<RegionID, std::pair<RegionPtr, UInt64>>;
+    using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
+    /// Get all regions whose range overlapped with start/end key.
+    RegionsAppliedindexMap getRegionsByRange(const RegionRange & range) const;
+
     void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, Context * context);
+    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check);
+    bool onSnapshot(RegionPtr, Context *);
+
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
 

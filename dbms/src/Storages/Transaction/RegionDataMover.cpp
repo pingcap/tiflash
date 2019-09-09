@@ -35,7 +35,8 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
 }
 
 template <typename HandleType>
-HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, const HandleRange<HandleType> & handle_range)
+void getHandleMapByRange(
+    Context & context, StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, HandleMap & output_data)
 {
     SortDescription pk_columns = storage.getData().getPrimarySortDescription();
     if (pk_columns.size() != 1)
@@ -54,7 +55,6 @@ HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, con
         pk_col_pos = sample.getPositionByName(pk_name);
     }
 
-    HandleMap output_data;
     size_t tol_rows = 0;
 
     while (true)
@@ -87,11 +87,9 @@ HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, con
     LOG_DEBUG(&Logger::get(RegionDataMoverName),
         "[getHandleMapByRange] execute sql and handle data, cost "
             << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows << " rows");
-
-    return output_data;
 }
 
-template HandleMap getHandleMapByRange<Int64>(Context & context, StorageMergeTree & storage, const HandleRange<Int64> & handle_range);
-template HandleMap getHandleMapByRange<UInt64>(Context & context, StorageMergeTree & storage, const HandleRange<UInt64> & handle_range);
+template void getHandleMapByRange<Int64>(Context &, StorageMergeTree &, const HandleRange<Int64> &, HandleMap &);
+template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const HandleRange<UInt64> &, HandleMap &);
 
 } // namespace DB
