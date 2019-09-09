@@ -17,6 +17,8 @@ namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
 extern const Event DMWriteBlockNS;
+extern const Event DMDeleteRange;
+extern const Event DMDeleteRangeNS;
 extern const Event DMAppendDeltaCommitDisk;
 extern const Event DMAppendDeltaCommitDiskNS;
 extern const Event DMAppendDeltaCleanUp;
@@ -222,7 +224,7 @@ void DeltaMergeStore::commitWrites(WriteActions &&       actions,
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
 {
-    EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
+    EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
     if (delete_range.start >= delete_range.end)
         return;

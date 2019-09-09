@@ -10,7 +10,6 @@ enum class StorageEngine
     TMT,
     DM,
 
-    TEST_MEMORY = 128,
 };
 
 } // namespace TiDB

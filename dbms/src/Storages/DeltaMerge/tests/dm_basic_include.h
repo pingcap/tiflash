@@ -1,6 +1,6 @@
 #pragma once
 
-#include <gtest/gtest.h>
+#include <test_utils/TiflashTestBasic.h>
 
 #include <Columns/ColumnVector.h>
 #include <Common/typeid_cast.h>
@@ -9,7 +9,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
-#include <test_utils/TiflashTestBasic.h>
 
 namespace DB
 {
