@@ -1,3 +1,5 @@
+#pragma once
+
 #include <map>
 #include <set>
 #include <utility>
@@ -5,7 +7,8 @@
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 
-#pragma once
+/// === Some Private struct / method for SchemaBuilder
+/// Notice that this file should only included by SchemaBuilder.cpp and unittest for this file.
 
 namespace DB
 {
