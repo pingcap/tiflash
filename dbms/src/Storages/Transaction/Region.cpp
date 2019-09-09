@@ -101,7 +101,7 @@ RegionPtr Region::splitInto(RegionMeta meta)
         new_region = std::make_shared<Region>(std::move(meta));
 
     const auto range = new_region->getRange();
-    data.splitInto(range->keys(), new_region->data);
+    data.splitInto(range->comparableKeys(), new_region->data);
 
     return new_region;
 }
@@ -330,13 +330,13 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
                 {
                     auto & delete_range = *req.mutable_delete_range();
                     const auto & cf = delete_range.cf();
-                    const auto & start = TiKVKey(std::move(*delete_range.mutable_start_key()));
-                    const auto & end = TiKVKey(std::move(*delete_range.mutable_end_key()));
+                    auto start = TiKVKey(std::move(*delete_range.mutable_start_key()));
+                    auto end = TiKVKey(std::move(*delete_range.mutable_end_key()));
 
                     LOG_INFO(log,
                         toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
                                         << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
-                    doDeleteRange(cf, start, end);
+                    doDeleteRange(cf, RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)));
                     break;
                 }
                 default:
@@ -591,11 +591,10 @@ RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLoc
     return static_cast<RegionRaftCommandDelegate &>(*this);
 }
 
-void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region)
+void Region::compareAndUpdateHandleMaps(const Region & source_region, std::unordered_map<TableID, HandleMap> & handle_maps)
 {
     const auto range = getRange();
-    const auto & [start_key, end_key] = range->keys();
-    std::unordered_map<TableID, HandleMap> handle_maps;
+    const auto & [start_key, end_key] = range->comparableKeys();
     {
         std::shared_lock<std::shared_mutex> source_lock(source_region.mutex);
 
@@ -610,13 +609,10 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
             {
                 const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
 
-                {
-                    bool ok = start_key ? key >= start_key : true;
-                    ok = ok && (end_key ? key < end_key : true);
-
-                    if (!ok)
-                        continue;
-                }
+                if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
+                    ;
+                else
+                    continue;
 
                 const auto & [handle, ts] = write_map_it->first;
                 const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
@@ -629,19 +625,16 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
             }
 
             LOG_DEBUG(log,
-                "[compareAndCompleteSnapshot] memory cache: source " << source_region.toString(false) << ", table " << table_id
+                "[compareAndUpdateHandleMaps] memory cache: source " << source_region.toString(false) << ", table " << table_id
                                                                      << ", record size " << write_map.size());
         }
     }
-
-    for (auto & [table_id, handle_map] : handle_maps)
-        compareAndCompleteSnapshot(handle_map, table_id, safe_point);
 }
 
-void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, const TiKVKey & end_key)
+void Region::doDeleteRange(const std::string & cf, const RegionRange & range)
 {
     auto type = getCf(cf);
-    return data.deleteRange(type, start_key, end_key);
+    return data.deleteRange(type, range);
 }
 
 std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
@@ -651,5 +644,10 @@ void Region::tryPreDecodeTiKVValue()
     DB::tryPreDecodeTiKVValue(data.defaultCF().getExtra().popAll());
     DB::tryPreDecodeTiKVValue(data.writeCF().getExtra().popAll());
 }
+
+const RegionRangeKeys & RegionRaftCommandDelegate::getRange() { return *meta.makeRaftCommandDelegate().regionState().getRange(); }
+UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().getApplyState().applied_index(); }
+metapb::Region Region::getMetaRegion() const { return meta.getMetaRegion(); }
+raft_serverpb::MergeState Region::getMergeState() const { return meta.getMergeState(); }
 
 } // namespace DB

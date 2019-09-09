@@ -68,6 +68,9 @@ public:
     std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
     MetaRaftCommandDelegate & makeRaftCommandDelegate();
 
+    metapb::Region getMetaRegion() const;
+    raft_serverpb::MergeState getMergeState() const;
+
 private:
     RegionMeta() = delete;
     friend class MetaRaftCommandDelegate;
@@ -114,7 +117,6 @@ class MetaRaftCommandDelegate : public RegionMeta, private boost::noncopyable
 
     const metapb::Peer & getPeer() const;
     const raft_serverpb::RaftApplyState & applyState() const;
-    const UInt64 & appliedTerm() const;
     const RegionState & regionState() const;
 
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
