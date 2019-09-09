@@ -106,13 +106,15 @@ inline const ColumnDefine & getExtraHandleColumnDefine()
     static ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE_{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE};
     return EXTRA_HANDLE_COLUMN_DEFINE_;
 }
-inline ColumnDefine getVersionColumnDefine()
+inline const ColumnDefine & getVersionColumnDefine()
 {
-    return ColumnDefine{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
+    static ColumnDefine VERSION_COLUMN_DEFINE_{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
+    return VERSION_COLUMN_DEFINE_;
 }
-inline ColumnDefine getTagColumnDefine()
+inline const ColumnDefine & getTagColumnDefine()
 {
-    return ColumnDefine{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
+    static ColumnDefine TAG_COLUMN_DEFINE_{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
+    return TAG_COLUMN_DEFINE_;
 }
 
 static constexpr UInt64 MIN_UINT64 = std::numeric_limits<UInt64>::min();
