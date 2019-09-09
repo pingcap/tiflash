@@ -125,7 +125,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
             }
             else
             {
-                LOG_DEBUG(log, "[onSnapshot] " << region->toString(false) << " not found");
+                LOG_WARNING(log, "[onSnapshot] " << region->toString(false) << " not found");
                 return false;
             }
         }
