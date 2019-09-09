@@ -113,7 +113,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
             const auto & column_info
                 = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
                       if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
-                          LOG_ERROR(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
+                          LOG_INFO(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
                       return column_info_.id == orig_column_info.id
                           && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
