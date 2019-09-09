@@ -52,7 +52,6 @@ Field ColumnInfo::defaultValueToField() const
         default:
             throw Exception("Have not proccessed type: " + std::to_string(tp));
     }
-    return Field();
 }
 
 Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
