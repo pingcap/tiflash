@@ -258,7 +258,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                                   read_info.index_begin,
                                   read_info.index_end,
                                   expected_block_size);
-    stream           = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_MVCC>>(stream, handle, max_version);
+    stream           = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, handle, max_version);
     return stream;
 }
 
@@ -365,7 +365,7 @@ SegmentPtr Segment::flush(DMContext & dm_context)
                                        read_info.index_begin,
                                        read_info.index_end,
                                        STABLE_CHUNK_ROWS);
-    data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(data_stream, handle, min_version);
+    data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(data_stream, handle, min_version);
 
     SegmentPtr new_me = reset(dm_context, data_stream);
 
@@ -584,7 +584,7 @@ Segment::doSplit(DMContext & dm_context, const PageReader & data_page_reader, co
                                                       read_info.index_begin,
                                                       read_info.index_end,
                                                       STABLE_CHUNK_ROWS);
-        my_data  = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
+        my_data  = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
         auto tmp = DiskValueSpace::writeChunks(opc, my_data);
         my_new_stable_chunks.swap(tmp);
     }
@@ -599,7 +599,7 @@ Segment::doSplit(DMContext & dm_context, const PageReader & data_page_reader, co
                                                          read_info.index_begin,
                                                          read_info.index_end,
                                                          STABLE_CHUNK_ROWS);
-        other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
+        other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
         auto tmp   = DiskValueSpace::writeChunks(opc, other_data);
         other_new_stable_chunks.swap(tmp);
     }
@@ -675,7 +675,7 @@ SegmentPtr Segment::doMerge(DMContext &        dm_context,
                                                               left_read_info.index_begin,
                                                               left_read_info.index_end,
                                                               STABLE_CHUNK_ROWS);
-        left_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(left_data, handle, min_version);
+        left_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(left_data, handle, min_version);
 
         BlockInputStreamPtr right_data = right->getPlacedStream(data_page_reader,
                                                                 {right->range},
@@ -685,7 +685,7 @@ SegmentPtr Segment::doMerge(DMContext &        dm_context,
                                                                 right_read_info.index_begin,
                                                                 right_read_info.index_end,
                                                                 STABLE_CHUNK_ROWS);
-        right_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>>(right_data, handle, min_version);
+        right_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(right_data, handle, min_version);
 
         BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams({left_data, right_data}));
 

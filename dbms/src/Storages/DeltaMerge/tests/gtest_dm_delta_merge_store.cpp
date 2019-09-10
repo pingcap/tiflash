@@ -49,6 +49,7 @@ private:
     String path;
 
 protected:
+    // a ptr to context, we can reload context with different settings if need.
     std::unique_ptr<Context> context;
     DeltaMergeStorePtr       store;
 };
@@ -216,6 +217,109 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+
+TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
+{
+    const UInt64 tso1          = 4;
+    const size_t num_rows_tso1 = 128;
+    {
+        // write to store
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_tso1, false, tso1);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    const UInt64 tso2          = 890;
+    const size_t num_rows_tso2 = 256;
+    {
+        // write to store
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_tso1, num_rows_tso1 + num_rows_tso2, false, tso2);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    {
+        // read all data of max_version
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {HandleRange::newAll()},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, num_rows_tso1 + num_rows_tso2);
+    }
+
+    {
+        // read all data <= tso2
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {HandleRange::newAll()},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso2,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, num_rows_tso1 + num_rows_tso2);
+    }
+
+    {
+        // read all data <= tso1
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {HandleRange::newAll()},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso1,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, num_rows_tso1);
+    }
+
+    {
+        // read all data < tso1
+        const auto &      columns = store->getTableColumns();
+        BlockInputStreams ins     = store->read(*context,
+                                            context->getSettingsRef(),
+                                            columns,
+                                            {HandleRange::newAll()},
+                                            /* num_streams= */ 1,
+                                            /* max_version= */ tso1 - 1,
+                                            /* expected_block_size= */ 1024);
+        ASSERT_EQ(ins.size(), 1UL);
+        BlockInputStreamPtr in = ins[0];
+
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+            num_rows_read += block.rows();
+        in->readSuffix();
+        EXPECT_EQ(num_rows_read, 0UL);
     }
 }
 

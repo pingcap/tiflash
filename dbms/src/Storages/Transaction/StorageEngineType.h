@@ -10,6 +10,8 @@ enum class StorageEngine
     TMT,
     DM,
 
+    // indicate other engine type in ClickHouse
+    UNSUPPORTED_ENGINES = 128,
 };
 
 } // namespace TiDB

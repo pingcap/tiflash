@@ -30,7 +30,7 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
         // so that optimizer could use vectorized optimization.
         // The original logic can be seen in #checkWithNextIndex().
 
-        if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
+        if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
             for (size_t n = 0; n < i; n += UNROLL_BATCH)
             {
@@ -56,7 +56,7 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
                     filter[n + k] &= !(*delete_col_data)[n + k];
             }
         }
-        else if constexpr (MODE == DM_VESION_FILTER_MODE_COMPACT)
+        else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
 
             for (size_t n = 0; n < i; n += UNROLL_BATCH)
@@ -99,11 +99,11 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
             {
                 // No more block.
                 bool ok;
-                if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
+                if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
                 {
                     ok = !deleted && cur_version <= version_limit;
                 }
-                else if (MODE == DM_VESION_FILTER_MODE_COMPACT)
+                else if (MODE == DM_VERSION_FILTER_MODE_COMPACT)
                 {
                     ok = cur_version >= version_limit || !deleted;
                 }
@@ -119,11 +119,11 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
                 auto next_handle  = (*handle_col_data)[0];
                 auto next_version = (*version_col_data)[0];
                 bool ok;
-                if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
+                if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
                 {
                     ok = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
                 }
-                else if (MODE == DM_VESION_FILTER_MODE_COMPACT)
+                else if (MODE == DM_VERSION_FILTER_MODE_COMPACT)
                 {
                     ok = cur_version >= version_limit || (cur_handle != next_handle && !deleted);
                 }
@@ -135,10 +135,12 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
             }
         }
 
-        size_t passed_count = countBytesInFilter(filter);
+        const size_t passed_count = countBytesInFilter(filter);
 
-        if (!passed_count)
+        // This block is empty after filter, continue to process next block
+        if (passed_count == 0)
             continue;
+
         if (passed_count == rows)
             return cur_raw_block;
 
@@ -151,8 +153,8 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
     }
 }
 
-template class DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_MVCC>;
-template class DMVersionFilterBlockInputStream<DM_VESION_FILTER_MODE_COMPACT>;
+template class DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>;
+template class DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>;
 
 } // namespace DM
 } // namespace DB

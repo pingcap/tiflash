@@ -85,7 +85,13 @@ public:
 
     void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
-    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::TMT; }
+    ::TiDB::StorageEngine engineType() const override
+    {
+        if (data.merging_params.mode == MergeTreeData::MergingParams::Txn)
+            return ::TiDB::StorageEngine::TMT;
+        else
+            return ::TiDB::StorageEngine::UNSUPPORTED_ENGINES;
+    }
 
     void alterFromTiDB(
         const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
