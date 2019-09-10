@@ -84,7 +84,7 @@ std::pair<std::vector<String>, String> splitDatetime(String format)
         frac = format.substr(idx + 1);
         format = format.substr(0, idx);
     }
-    return std::make_pair(parseDateFormat(format), frac);
+    return std::make_pair(parseDateFormat(format), std::move(frac));
 }
 
 MyTimeBase::MyTimeBase(UInt64 packed, UInt8 fsp_)

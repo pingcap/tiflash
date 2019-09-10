@@ -568,6 +568,8 @@ inline void readMyDateText(UInt64 & date, ReadBuffer & buf)
 
         date = MyDate(year, month, day).toPackedUInt();
     }
+
+    throw Exception("wrong date format.", ErrorCodes::CANNOT_PARSE_DATE);
 }
 
 
