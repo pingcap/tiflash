@@ -30,6 +30,11 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
 //   ./storage-client.sh "DBGInvoke dump_all_region(table_id)"
 void dbgFuncDumpAllRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+// Dump all region ranges for specific table
+// Usage:
+//   ./storage-client.sh "DBGInvoke dump_all_mock_region(table_id)"
+void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 // Try flush regions
 // Usage:
 //   ./storage-client.sh "DBGInvoke try_flush()"

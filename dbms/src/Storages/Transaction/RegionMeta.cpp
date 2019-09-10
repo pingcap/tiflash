@@ -16,7 +16,7 @@ std::tuple<size_t, UInt64> RegionMeta::serialize(WriteBuffer & buf) const
     size += writeBinary2(peer, buf);
     size += writeBinary2(apply_state, buf);
     size += writeBinary2(applied_term, buf);
-    size += writeBinary2(region_state, buf);
+    size += writeBinary2(region_state.getBase(), buf);
     return {size, apply_state.applied_index()};
 }
 
@@ -54,7 +54,7 @@ pingcap::kv::RegionVerID RegionMeta::getRegionVerID() const
     std::lock_guard<std::mutex> lock(mutex);
 
     return pingcap::kv::RegionVerID{
-        regionId(), region_state.region().region_epoch().conf_ver(), region_state.region().region_epoch().version()};
+        regionId(), region_state.getRegion().region_epoch().conf_ver(), region_state.getRegion().region_epoch().version()};
 }
 
 raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
@@ -68,7 +68,7 @@ void RegionMeta::doSetRegion(const metapb::Region & region)
     if (regionId() != region.id())
         throw Exception("[RegionMeta::doSetRegion] region id is not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-    *region_state.mutable_region() = region;
+    region_state.setRegion(region);
 }
 
 void RegionMeta::setApplied(UInt64 index, UInt64 term)
@@ -83,7 +83,7 @@ void RegionMeta::doSetApplied(UInt64 index, UInt64 term)
     applied_term = term;
 }
 
-void RegionMeta::notifyAll() { cv.notify_all(); }
+void RegionMeta::notifyAll() const { cv.notify_all(); }
 
 UInt64 RegionMeta::appliedIndex() const
 {
@@ -117,10 +117,10 @@ RegionMeta::RegionMeta(RegionMeta && rhs) : region_id(rhs.regionId())
     region_state = std::move(rhs.region_state);
 }
 
-RegionRange RegionMeta::getRange() const
+ImutRegionRangePtr RegionMeta::getRange() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {TiKVKey::copyFrom(region_state.region().start_key()), TiKVKey::copyFrom(region_state.region().end_key())};
+    return region_state.getRange();
 }
 
 std::string RegionMeta::toString(bool dump_status) const
@@ -145,22 +145,22 @@ std::string RegionMeta::toString(bool dump_status) const
 raft_serverpb::PeerState RegionMeta::peerState() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return region_state.state();
+    return region_state.getState();
 }
 
 void RegionMeta::setPeerState(const raft_serverpb::PeerState peer_state_)
 {
     std::lock_guard<std::mutex> lock(mutex);
-    region_state.set_state(peer_state_);
+    region_state.setState(peer_state_);
 }
 
-void RegionMeta::waitIndex(UInt64 index)
+void RegionMeta::waitIndex(UInt64 index) const
 {
     std::unique_lock<std::mutex> lock(mutex);
     cv.wait(lock, [this, index] { return doCheckIndex(index); });
 }
 
-bool RegionMeta::checkIndex(UInt64 index)
+bool RegionMeta::checkIndex(UInt64 index) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return doCheckIndex(index);
@@ -168,19 +168,19 @@ bool RegionMeta::checkIndex(UInt64 index)
 
 bool RegionMeta::doCheckIndex(UInt64 index) const
 {
-    return region_state.state() == raft_serverpb::PeerState::Tombstone || apply_state.applied_index() >= index;
+    return region_state.getState() == raft_serverpb::PeerState::Tombstone || apply_state.applied_index() >= index;
 }
 
 UInt64 RegionMeta::version() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return region_state.region().region_epoch().version();
+    return region_state.getRegion().region_epoch().version();
 }
 
 UInt64 RegionMeta::confVer() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return region_state.region().region_epoch().conf_ver();
+    return region_state.getRegion().region_epoch().conf_ver();
 }
 
 void RegionMeta::assignRegionMeta(RegionMeta && rhs)
@@ -196,44 +196,45 @@ void RegionMeta::assignRegionMeta(RegionMeta && rhs)
     region_state = std::move(rhs.region_state);
 }
 
-void RegionMeta::execChangePeer(
+void MetaRaftCommandDelegate::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term)
 {
+    std::lock_guard<std::mutex> lock(mutex);
+
     const auto & change_peer_request = request.change_peer();
     const auto & new_region = response.change_peer().region();
 
+    bool pending_remove = false;
     switch (change_peer_request.change_type())
     {
         case eraftpb::ConfChangeType::AddNode:
         case eraftpb::ConfChangeType::AddLearnerNode:
         {
-            std::lock_guard<std::mutex> lock(mutex);
-
             // change the peers of region, add conf_ver.
             doSetRegion(new_region);
-            doSetApplied(index, term);
-            return;
+            break;
         }
         case eraftpb::ConfChangeType::RemoveNode:
         {
-            const auto & peer = change_peer_request.peer();
-
-            std::lock_guard<std::mutex> lock(mutex);
+            if (peer.id() == change_peer_request.peer().id())
+                pending_remove = true;
 
             doSetRegion(new_region);
-
-            if (this->peer.id() == peer.id())
-                region_state.set_state(raft_serverpb::PeerState::Tombstone);
-
-            doSetApplied(index, term);
-            return;
+            break;
         }
         default:
             throw Exception("[RegionMeta::execChangePeer] unsupported cmd", ErrorCodes::LOGICAL_ERROR);
     }
+
+    if (pending_remove)
+        region_state.setState(raft_serverpb::PeerState::Tombstone);
+    else
+        region_state.setState(raft_serverpb::PeerState::Normal);
+    region_state.clearMergeState();
+    doSetApplied(index, term);
 }
 
-void RegionMeta::execCompactLog(
+void MetaRaftCommandDelegate::execCompactLog(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &, const UInt64 index, const UInt64 term)
 {
     const auto & compact_log_request = request.compact_log();
@@ -250,10 +251,10 @@ bool RegionMeta::isPeerRemoved() const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    if (region_state.state() == raft_serverpb::PeerState::Tombstone)
+    if (region_state.getState() == raft_serverpb::PeerState::Tombstone)
         return true;
 
-    for (const auto & region_peer : region_state.region().peers())
+    for (const auto & region_peer : region_state.getRegion().peers())
     {
         if (region_peer.id() == peer.id())
             return false;
@@ -263,15 +264,46 @@ bool RegionMeta::isPeerRemoved() const
 
 bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 {
+    std::lock_guard<std::mutex> lock1(meta1.mutex);
+    std::lock_guard<std::mutex> lock2(meta2.mutex);
+
     return meta1.peer == meta2.peer && meta1.apply_state == meta2.apply_state && meta1.applied_term == meta2.applied_term
         && meta1.region_state == meta2.region_state;
 }
 
-std::tuple<RegionVersion, RegionVersion, RegionRange> RegionMeta::dumpVersionRange() const
+std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> RegionMeta::dumpVersionRange() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {region_state.region().region_epoch().version(), region_state.region().region_epoch().conf_ver(),
-        std::make_pair(TiKVKey::copyFrom(region_state.region().start_key()), TiKVKey::copyFrom(region_state.region().end_key()))};
+    return {region_state.getRegion().region_epoch().version(), region_state.getRegion().region_epoch().conf_ver(), region_state.getRange()};
+}
+
+MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
+{
+    static_assert(sizeof(MetaRaftCommandDelegate) == sizeof(RegionMeta));
+    return static_cast<MetaRaftCommandDelegate &>(*this);
+}
+
+const metapb::Peer & MetaRaftCommandDelegate::getPeer() const { return peer; }
+const raft_serverpb::RaftApplyState & MetaRaftCommandDelegate::applyState() const { return apply_state; }
+const UInt64 & MetaRaftCommandDelegate::appliedTerm() const { return applied_term; }
+const RegionState & MetaRaftCommandDelegate::regionState() const { return region_state; }
+
+RegionMeta::RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_,
+    raft_serverpb::RegionLocalState region_state_)
+    : peer(std::move(peer_)),
+      apply_state(std::move(apply_state_)),
+      applied_term(applied_term_),
+      region_state(std::move(region_state_)),
+      region_id(region_state.getRegion().id())
+{}
+
+RegionMeta::RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb::RaftApplyState apply_state_)
+    : peer(std::move(peer_)),
+      apply_state(std::move(apply_state_)),
+      applied_term(apply_state.truncated_state().term()),
+      region_id(region.id())
+{
+    region_state.setRegion(std::move(region));
 }
 
 } // namespace DB

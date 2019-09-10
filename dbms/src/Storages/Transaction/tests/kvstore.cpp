@@ -1,6 +1,7 @@
 #include <ext/scope_guard.h>
 
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/applySnapshot.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>

@@ -19,22 +19,18 @@ public:
     };
 
     StringObject() = default;
-    explicit StringObject(Base && str_) : Base(std::move(str_)) {}
+    StringObject(Base && str_) : Base(std::move(str_)) {}
     StringObject(StringObject && obj) : Base((Base &&) obj) {}
     StringObject(const char * str, const size_t len) : Base(str, len) {}
-
+    StringObject(const char * str) : Base(str) {}
     static StringObject copyFrom(const Base & str) { return StringObject(str); }
 
-    StringObject & operator=(const StringObject & a)
+    StringObject & operator=(const StringObject & a) = delete;
+    StringObject & operator=(StringObject && a)
     {
         if (this == &a)
             return *this;
 
-        (Base &)* this = (const Base &)a;
-        return *this;
-    }
-    StringObject & operator=(StringObject && a)
-    {
         (Base &)* this = (Base &&) a;
         return *this;
     }
@@ -78,5 +74,14 @@ private:
 using TiKVKey = StringObject<true>;
 using TiKVValue = StringObject<false>;
 using TiKVKeyValue = std::pair<TiKVKey, TiKVValue>;
+
+struct DecodedTiKVKey : std::string
+{
+    using Base = std::string;
+    DecodedTiKVKey(Base && str_) : Base(std::move(str_)) {}
+    DecodedTiKVKey() = default;
+};
+
+static_assert(sizeof(DecodedTiKVKey) == sizeof(std::string));
 
 } // namespace DB

@@ -143,7 +143,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
             if (version != region_version || conf_ver != conf_version)
                 return {Block(), VERSION_ERROR};
 
-            handle_range = TiKVRange::getHandleRangeByTable(key_range, table_info.id);
+            handle_range = key_range->getHandleRangeByTable(table_info.id);
         }
 
         /// Deal with locks.
