@@ -31,7 +31,6 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
     }
     current_chunk = nullptr;
     current_records_num = 0;
-    total_rows = 0;
 }
 
 
@@ -43,10 +42,10 @@ void DAGBlockOutputStream::writePrefix()
 void DAGBlockOutputStream::writeSuffix()
 {
     // error handle,
-    if (current_chunk != nullptr && records_per_chunk > 0)
+    if (current_chunk != nullptr && current_records_num > 0)
     {
         current_chunk->set_rows_data(current_ss.str());
-        dag_response.add_output_counts(records_per_chunk);
+        dag_response.add_output_counts(current_records_num);
     }
 }
 
@@ -71,7 +70,7 @@ void DAGBlockOutputStream::write(const Block & block)
             }
             current_chunk = dag_response.add_chunks();
             current_ss.str("");
-            records_per_chunk = 0;
+            current_records_num = 0;
         }
         for (size_t j = 0; j < block.columns(); j++)
         {
@@ -80,8 +79,7 @@ void DAGBlockOutputStream::write(const Block & block)
             EncodeDatum(datum.field(), getCodecFlagByFieldType(result_field_types[j]), current_ss);
         }
         // Encode current row
-        records_per_chunk++;
-        total_rows++;
+        current_records_num++;
     }
 }
 
