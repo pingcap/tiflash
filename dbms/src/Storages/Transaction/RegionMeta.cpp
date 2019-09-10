@@ -1,3 +1,4 @@
+#include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/RegionMeta.h>
 
 #pragma GCC diagnostic push
@@ -53,8 +54,7 @@ pingcap::kv::RegionVerID RegionMeta::getRegionVerID() const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    return pingcap::kv::RegionVerID{
-        regionId(), region_state.getRegion().region_epoch().conf_ver(), region_state.getRegion().region_epoch().version()};
+    return pingcap::kv::RegionVerID{regionId(), region_state.getConfVersion(), region_state.getVersion()};
 }
 
 raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
@@ -174,13 +174,13 @@ bool RegionMeta::doCheckIndex(UInt64 index) const
 UInt64 RegionMeta::version() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return region_state.getRegion().region_epoch().version();
+    return region_state.getVersion();
 }
 
 UInt64 RegionMeta::confVer() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return region_state.getRegion().region_epoch().conf_ver();
+    return region_state.getConfVersion();
 }
 
 void RegionMeta::assignRegionMeta(RegionMeta && rhs)
@@ -274,7 +274,7 @@ bool operator==(const RegionMeta & meta1, const RegionMeta & meta2)
 std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> RegionMeta::dumpVersionRange() const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return {region_state.getRegion().region_epoch().version(), region_state.getRegion().region_epoch().conf_ver(), region_state.getRange()};
+    return {region_state.getVersion(), region_state.getConfVersion(), region_state.getRange()};
 }
 
 MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
@@ -285,7 +285,6 @@ MetaRaftCommandDelegate & RegionMeta::makeRaftCommandDelegate()
 
 const metapb::Peer & MetaRaftCommandDelegate::getPeer() const { return peer; }
 const raft_serverpb::RaftApplyState & MetaRaftCommandDelegate::applyState() const { return apply_state; }
-const UInt64 & MetaRaftCommandDelegate::appliedTerm() const { return applied_term; }
 const RegionState & MetaRaftCommandDelegate::regionState() const { return region_state; }
 
 RegionMeta::RegionMeta(metapb::Peer peer_, raft_serverpb::RaftApplyState apply_state_, const UInt64 applied_term_,
@@ -304,6 +303,18 @@ RegionMeta::RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb:
       region_id(region.id())
 {
     region_state.setRegion(std::move(region));
+}
+
+metapb::Region RegionMeta::getMetaRegion() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return region_state.getRegion();
+}
+
+raft_serverpb::MergeState RegionMeta::getMergeState() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    return region_state.getMergeState();
 }
 
 } // namespace DB
