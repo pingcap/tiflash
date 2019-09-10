@@ -3,6 +3,7 @@
 #include <Storages/Transaction/RegionClientCreate.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
+#include <Storages/Transaction/RegionsRangeIndex.h>
 
 namespace DB
 {
@@ -66,8 +67,9 @@ public:
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
-    void removeRegion(const RegionID region_id, RegionTable * region_table);
+    void removeRegion(const RegionID region_id, RegionTable * region_table, const KVStoreTaskLock & task_lock);
     KVStoreTaskLock genTaskLock() const;
+    std::lock_guard<std::mutex> genRegionManageLock() const;
 
     RegionMap & regions();
     const RegionMap & regions() const;
@@ -82,6 +84,9 @@ private:
 
     // onServiceCommand and onSnapshot should not be called concurrently
     mutable std::mutex task_mutex;
+    // region_range_index must be protected by task_mutex. It's used to search for region by range.
+    // region merge/split/apply-snapshot/remove will change the range.
+    RegionsRangeIndexKVStore region_range_index;
 
     // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
     std::unique_ptr<RaftCommandResult> raft_cmd_res;

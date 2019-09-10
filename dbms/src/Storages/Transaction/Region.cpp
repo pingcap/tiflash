@@ -228,6 +228,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
             }
             case raft_cmdpb::AdminCmdType::BatchSplit:
             {
+                result.region_range = meta.makeRaftCommandDelegate().regionState().getRange();
                 Regions split_regions = execBatchSplit(request, response, index, term);
                 for (auto & region : split_regions)
                     region->last_persist_time.store(last_persist_time);

@@ -26,7 +26,7 @@ public:
     void drop(RegionID region_id);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    void restore(RegionMap & regions, RegionClientCreateFunc * func = nullptr);
+    RegionMap restore(RegionClientCreateFunc * func = nullptr);
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
