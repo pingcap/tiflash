@@ -31,6 +31,7 @@ extern const int DDL_ERROR;
 inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const ColumnInfo & column_info)
 {
     command.column_name = column_info.name;
+    command.column_id = column_info.id;
     command.data_type = getDataTypeByColumnInfo(column_info);
     if (!column_info.origin_default_value.isEmpty())
     {
@@ -69,6 +70,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
                 command.type = AlterCommand::DROP_COLUMN;
                 // Drop column with old name.
                 command.column_name = orig_column_info.name;
+                command.column_id = orig_column_info.id;
                 drop_commands.emplace_back(std::move(command));
             }
         }
@@ -76,9 +78,11 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
     }
 
     {
-        using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
-        typename Resolver::NameMap rename_map;
         /// rename columns.
+        /// Note that if new column data type has changed at the same time, this do not apply data type change.
+        /// We will apply another alter command later to apply data type change.
+        using Resolver = CyclicRenameResolver<ColumnNameWithID, TmpColNameWithIDGenerator>;
+        typename Resolver::NameMap rename_map;
         for (const auto & orig_column_info : orig_table_info.columns)
         {
             const auto & column_info
@@ -88,7 +92,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
 
             if (column_info != table_info.columns.end())
             {
-                rename_map[orig_column_info.name] = column_info->name;
+                rename_map[ColumnNameWithID{orig_column_info.name, orig_column_info.id}] = ColumnNameWithID{column_info->name, column_info->id};
             }
         }
 
@@ -98,8 +102,9 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
             AlterCommands rename_commands;
             AlterCommand command;
             command.type = AlterCommand::RENAME_COLUMN;
-            command.column_name = rename_pair.first;
-            command.new_column_name = rename_pair.second;
+            command.column_name = rename_pair.first.name;
+            command.new_column_name = rename_pair.second.name;
+            command.column_id = rename_pair.second.id;
             rename_commands.push_back(command);
             result.push_back(rename_commands);
         }
@@ -386,7 +391,7 @@ void SchemaBuilder<Getter>::applyRenameTable(DBInfoPtr db_info, DatabaseID old_d
     }
 
     auto & tmt_context = context.getTMTContext();
-    auto storage_to_rename = tmt_context.getStorages().get(table_id).get();
+    auto storage_to_rename = tmt_context.getStorages().get(table_id);
     if (storage_to_rename == nullptr)
     {
         throw Exception("miss old table id in Flash " + std::to_string(table_id));
@@ -403,7 +408,7 @@ void SchemaBuilder<Getter>::applyRenameTable(DBInfoPtr db_info, DatabaseID old_d
         for (const auto& table_db : table_dbs)
         {
             auto table = table_db.first;
-            auto part_storage = tmt_context.getStorages().get(table->id).get();
+            auto part_storage = tmt_context.getStorages().get(table->id);
             if (part_storage != nullptr)
             {
                 part_storage->setTableInfo(*table);
