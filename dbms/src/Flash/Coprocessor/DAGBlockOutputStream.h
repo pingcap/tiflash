@@ -29,7 +29,7 @@ public:
 private:
     tipb::SelectResponse & dag_response;
 
-    Int64 records_per_chunk;
+    const Int64 records_per_chunk;
     tipb::EncodeType encodeType;
     std::vector<tipb::FieldType> result_field_types;
 
@@ -38,7 +38,6 @@ private:
     tipb::Chunk * current_chunk;
     Int64 current_records_num;
     std::stringstream current_ss;
-    Int64 total_rows;
 };
 
 } // namespace DB
