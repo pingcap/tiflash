@@ -24,6 +24,9 @@ struct TiKVRangeKey : boost::noncopyable
     TiKVRangeKey(State state_, TiKVKey && key_);
     TiKVRangeKey(TiKVRangeKey &&);
 
+    TiKVRangeKey copy() const;
+    TiKVRangeKey & operator=(TiKVRangeKey &&);
+
     State state;
     TiKVKey key;
 };
