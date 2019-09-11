@@ -39,10 +39,10 @@ public:
 
     using RegionsAppliedindexMap = std::unordered_map<RegionID, std::pair<RegionPtr, UInt64>>;
     using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
-    /// Get all regions whose range overlapped with start/end key.
-    RegionsAppliedindexMap getRegionsByRangeOverlap(const RegionRange & range) const;
+    /// Get and callback all regions whose range overlapped with start/end key.
+    void handleRegionsByRangeOverlap(const RegionRange & range, std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const;
 
-    void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
+    void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
     bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check = {});
 

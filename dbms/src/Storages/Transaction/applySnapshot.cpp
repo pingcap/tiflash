@@ -44,9 +44,26 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         std::unordered_map<TableID, HandleMap> handle_maps;
 
         {
+            std::stringstream ss;
             // Get all regions whose range overlapped with the one of new_region.
             const auto & new_range = new_region->getRange();
-            regions_to_check = kvstore->getRegionsByRangeOverlap(new_range->comparableKeys());
+
+            ss << "New range " << new_range->comparableKeys().first.key.toHex() << "," << new_range->comparableKeys().second.key.toHex()
+               << " is overlapped with ";
+
+            kvstore->handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock & task_lock) {
+                for (const auto & region : region_map)
+                {
+                    auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
+                    regions_to_check.emplace(region.first, std::make_pair(region.second, region_delegate.appliedIndex()));
+                    ss << region_delegate.toString(true) << " ";
+                }
+            });
+            if (!regions_to_check.empty())
+                LOG_DEBUG(log, ss.str());
+            else
+                LOG_DEBUG(log, ss.str() << "no region");
+
             // Get all handle with largest version in those regions.
             for (const auto & region_info : regions_to_check)
                 new_region->compareAndUpdateHandleMaps(*region_info.second.first, handle_maps);

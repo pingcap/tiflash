@@ -55,19 +55,11 @@ RegionPtr KVStore::getRegion(const RegionID region_id) const
     return nullptr;
 }
 
-KVStore::RegionsAppliedindexMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
+void KVStore::handleRegionsByRangeOverlap(
+    const RegionRange & range, std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const
 {
     auto task_lock = genTaskLock();
-
-    RegionsAppliedindexMap res;
-    auto region_map = region_range_index.findByRangeOverlap(range);
-    for (const auto & region : region_map)
-    {
-        auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
-        res.emplace(region.first, std::make_pair(region.second, region_delegate.appliedIndex()));
-        LOG_DEBUG(log, "[getRegionsByRangeOverlap] found " << region_delegate.toString(true));
-    }
-    return res;
+    callback(region_range_index.findByRangeOverlap(range), task_lock);
 }
 
 const RegionManager::RegionTaskElement & RegionManager::getRegionTaskCtrl(const RegionID region_id) const
@@ -91,7 +83,7 @@ size_t KVStore::regionSize() const
     return regions().size();
 }
 
-void KVStore::traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const
+void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const
 {
     auto manage_lock = genRegionManageLock();
     for (auto it = regions().begin(); it != regions().end(); ++it)
