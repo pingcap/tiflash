@@ -23,21 +23,20 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create)
 {
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionManageLock();
-    auto & region_map = regions();
 
     LOG_INFO(log, "start to restore regions");
-    region_map = region_persister.restore(const_cast<RegionClientCreateFunc *>(&region_client_create));
+    regions() = region_persister.restore(const_cast<RegionClientCreateFunc *>(&region_client_create));
 
     // init range index
-    for (const auto & region : region_map)
-        region_range_index.add(region.second, task_lock);
+    for (const auto & region : regions())
+        region_range_index.add(region.second);
 
     LOG_INFO(log, "restore regions done");
 
     // Remove regions whose state = Tombstone, those regions still exist because progress crash after persisted and before removal.
     {
         std::vector<RegionID> regions_to_remove;
-        for (auto & p : region_map)
+        for (auto & p : regions())
         {
             RegionPtr & region = p.second;
             if (region->isPendingRemove())
@@ -61,7 +60,7 @@ KVStore::RegionsAppliedindexMap KVStore::getRegionsByRange(const RegionRange & r
     auto task_lock = genTaskLock();
 
     RegionsAppliedindexMap res;
-    auto region_map = region_range_index.findByRangeOverlap(range, task_lock);
+    auto region_map = region_range_index.findByRangeOverlap(range);
     for (const auto & region : region_map)
     {
         auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
@@ -98,8 +97,6 @@ void KVStore::traverseRegions(std::function<void(RegionID region_id, const Regio
     for (auto it = regions().begin(); it != regions().end(); ++it)
         callback(it->first, it->second);
 }
-
-bool KVStore::onSnapshot(RegionPtr new_region, Context * context) { return onSnapshot(new_region, context, {}); }
 
 bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check)
 {
@@ -141,7 +138,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
         if (old_region != nullptr)
         {
             LOG_DEBUG(log, "[onSnapshot] previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
-            region_range_index.remove(old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id, task_lock);
+            region_range_index.remove(old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id);
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
         }
@@ -151,7 +148,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
             regions().emplace(region_id, new_region);
         }
 
-        region_range_index.add(new_region, task_lock);
+        region_range_index.add(new_region);
     }
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
@@ -237,7 +234,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             {
                 auto manage_lock = genRegionManageLock();
 
-                region_range_index.remove(result.region_range->comparableKeys(), curr_region_id, task_lock);
+                region_range_index.remove(result.region_range->comparableKeys(), curr_region_id);
 
                 for (auto & new_region : split_regions)
                 {
@@ -251,10 +248,10 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                         new_region = it->second;
                     }
 
-                    region_range_index.add(new_region, task_lock);
+                    region_range_index.add(new_region);
                 }
 
-                region_range_index.add(curr_region_ptr, task_lock);
+                region_range_index.add(curr_region_ptr);
             }
 
             {
@@ -409,7 +406,7 @@ void KVStore::removeRegion(const RegionID region_id, RegionTable * region_table,
     }
     {
         // remove index
-        region_range_index.remove(region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id, task_lock);
+        region_range_index.remove(region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(), region_id);
     }
 
     region_persister.drop(region_id);
@@ -431,7 +428,6 @@ void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)
 KVStoreTaskLock KVStore::genTaskLock() const { return KVStoreTaskLock(task_mutex); }
 RegionMap & KVStore::regions() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }
-std::mutex & KVStore::mutex() const { return region_manager.mutex; }
-std::lock_guard<std::mutex> KVStore::genRegionManageLock() const { return std::lock_guard<std::mutex>(mutex()); }
+KVStore::RegionManageLock KVStore::genRegionManageLock() const { return RegionManageLock(region_manager.mutex); }
 
 } // namespace DB

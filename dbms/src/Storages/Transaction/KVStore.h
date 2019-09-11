@@ -44,8 +44,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check);
-    bool onSnapshot(RegionPtr, Context *);
+    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check = {});
 
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
@@ -69,11 +68,12 @@ private:
     friend struct MockTiDBTable;
     void removeRegion(const RegionID region_id, RegionTable * region_table, const KVStoreTaskLock & task_lock);
     KVStoreTaskLock genTaskLock() const;
-    std::lock_guard<std::mutex> genRegionManageLock() const;
+
+    using RegionManageLock = std::lock_guard<std::mutex>;
+    RegionManageLock genRegionManageLock() const;
 
     RegionMap & regions();
     const RegionMap & regions() const;
-    std::mutex & mutex() const;
 
 private:
     RegionManager region_manager;
@@ -86,7 +86,7 @@ private:
     mutable std::mutex task_mutex;
     // region_range_index must be protected by task_mutex. It's used to search for region by range.
     // region merge/split/apply-snapshot/remove will change the range.
-    RegionsRangeIndexKVStore region_range_index;
+    RegionsRangeIndex region_range_index;
 
     // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
     std::unique_ptr<RaftCommandResult> raft_cmd_res;

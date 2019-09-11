@@ -112,14 +112,4 @@ RegionsRangeIndex::RootMap::iterator RegionsRangeIndex::split(const TiKVRangeKey
         return doSplit(begin_it, new_start);
 }
 
-void RegionsRangeIndexKVStore::add(const RegionPtr & new_region, const KVStoreTaskLock &) { RegionsRangeIndex::add(new_region); }
-void RegionsRangeIndexKVStore::remove(const RegionRange & range, const RegionID region_id, const KVStoreTaskLock &)
-{
-    RegionsRangeIndex::remove(range, region_id);
-}
-RegionMap RegionsRangeIndexKVStore::findByRangeOverlap(const RegionRange & range, const KVStoreTaskLock &) const
-{
-    return RegionsRangeIndex::findByRangeOverlap(range);
-}
-
 } // namespace DB
