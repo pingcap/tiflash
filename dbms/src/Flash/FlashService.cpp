@@ -62,6 +62,12 @@ grpc::Status FlashService::Coprocessor(
 grpc::Status FlashService::BatchCommands(
     grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
 {
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
     tikvpb::BatchCommandsRequest request;
     while (stream->Read(&request))
     {
@@ -69,7 +75,7 @@ grpc::Status FlashService::BatchCommands(
 
         tikvpb::BatchCommandsResponse response;
         BatchCommandsContext batch_commands_context(
-            [this](grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); }, *grpc_context);
+            context, [this](grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); }, *grpc_context);
         BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
         auto ret = batch_commands_handler.execute();
         if (!ret.ok())

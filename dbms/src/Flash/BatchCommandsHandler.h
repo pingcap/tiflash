@@ -13,12 +13,19 @@ namespace DB
 
 struct BatchCommandsContext
 {
+    /// Context for this batch commands.
+    Context & db_context;
+
+    /// Context creation function for each individual command - they should be handled isolated,
+    /// given that context is being used to pass arguments regarding queries.
     using DBContextCreationFunc = std::function<std::tuple<Context, grpc::Status>(grpc::ServerContext *)>;
     DBContextCreationFunc db_context_creation_func;
+
     grpc::ServerContext & grpc_server_context;
 
-    BatchCommandsContext(DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_)
-        : db_context_creation_func(std::move(db_context_creation_func_)), grpc_server_context(grpc_server_context_)
+    BatchCommandsContext(
+        Context & db_context_, DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_)
+        : db_context(db_context_), db_context_creation_func(std::move(db_context_creation_func_)), grpc_server_context(grpc_server_context_)
     {}
 };
 
