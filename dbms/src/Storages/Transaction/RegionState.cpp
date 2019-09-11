@@ -80,6 +80,9 @@ TiKVRangeKey TiKVRangeKey::makeTiKVRangeKey(TiKVKey && key)
     return TiKVRangeKey(state, std::move(key));
 }
 
+template TiKVRangeKey TiKVRangeKey::makeTiKVRangeKey<true>(TiKVKey &&);
+template TiKVRangeKey TiKVRangeKey::makeTiKVRangeKey<false>(TiKVKey &&);
+
 RegionRangeKeys::RegionRange RegionRangeKeys::makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key)
 {
     return std::make_pair(
@@ -103,5 +106,17 @@ int TiKVRangeKey::compare(const TiKVRangeKey & tar) const
 TiKVRangeKey::TiKVRangeKey(State state_, TiKVKey && key_) : state(state_), key(std::move(key_)) {}
 
 TiKVRangeKey::TiKVRangeKey(TiKVRangeKey && src) : state(src.state), key(std::move(src.key)) {}
+
+TiKVRangeKey & TiKVRangeKey::operator=(TiKVRangeKey && src)
+{
+    if (this == &src)
+        return *this;
+
+    state = src.state;
+    key = std::move(src.key);
+    return *this;
+}
+
+TiKVRangeKey TiKVRangeKey::copy() const { return TiKVRangeKey(state, TiKVKey::copyFrom(key)); }
 
 } // namespace DB
