@@ -15,6 +15,8 @@ grpc::Status BatchCommandsHandler::execute()
     if (request.requests_size() == 0)
         return grpc::Status::OK;
 
+    // TODO: Fill transport_layer_load into BatchCommandsResponse.
+
     auto command_handler_func
         = [](BatchCommandsContext::DBContextCreationFunc db_context_creation_func, grpc::ServerContext * grpc_server_context,
               const tikvpb::BatchCommandsRequest::Request & req, tikvpb::BatchCommandsResponse::Response & resp, grpc::Status & ret) {
@@ -55,9 +57,8 @@ grpc::Status BatchCommandsHandler::execute()
 
     /// Use thread pool to handle requests concurrently.
     const Settings & settings = batch_commands_context.db_context.getSettingsRef();
-    size_t max_threads = settings.aggregation_memory_efficient_merge_threads
-        ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
-        : static_cast<size_t>(settings.max_threads);
+    size_t max_threads = settings.batch_commands_threads ? static_cast<size_t>(settings.batch_commands_threads)
+                                                         : static_cast<size_t>(settings.max_threads);
 
     LOG_DEBUG(
         log, __PRETTY_FUNCTION__ << ": Handling " << request.requests_size() << " batch commands using " << max_threads << " threads.");
