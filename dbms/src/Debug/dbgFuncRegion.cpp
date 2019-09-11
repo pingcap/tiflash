@@ -75,10 +75,15 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     output(ss.str());
 }
 
-void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
+void dbgFuncTryFlush(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().tryFlushRegions();
+
+    bool force_flush = false;
+    if (!args.empty())
+        force_flush = (String(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
+
+    tmt.getRegionTable().tryFlushRegions(force_flush);
 
     std::stringstream ss;
     ss << "region_table try flush regions";

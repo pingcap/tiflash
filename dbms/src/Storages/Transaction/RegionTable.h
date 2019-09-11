@@ -174,7 +174,7 @@ public:
     /// Note that flush is organized by partition. i.e. if a regions is selected to be flushed, all regions belong to its partition will also flushed.
     /// This function will be called constantly by background threads.
     /// Returns whether this function has done any meaningful job.
-    bool tryFlushRegions();
+    bool tryFlushRegions(bool force = false);
 
     void tryFlushRegion(RegionID region_id);
     void tryFlushRegion(RegionID region_id, TableID table_id);

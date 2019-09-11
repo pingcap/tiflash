@@ -447,12 +447,12 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
         std::rethrow_exception(first_exception);
 }
 
-bool RegionTable::tryFlushRegions()
+bool RegionTable::tryFlushRegions(bool force)
 {
     std::map<std::pair<TableID, RegionID>, size_t> to_flush;
     { // judge choose region to flush
         traverseInternalRegions([&](TableID table_id, InternalRegion & region) {
-            if (shouldFlush(region))
+            if (shouldFlush(region) || force)
             {
                 to_flush.insert_or_assign({table_id, region.region_id}, region.cache_bytes);
                 // Stop other flush threads.
