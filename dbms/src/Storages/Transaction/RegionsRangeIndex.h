@@ -42,8 +42,6 @@ public:
     void clear();
 
 private:
-    friend class RegionsRangeIndex;
-
     void tryMergeEmpty(RootMap::iterator remove_it);
     RootMap::iterator split(const TiKVRangeKey & new_start);
 
