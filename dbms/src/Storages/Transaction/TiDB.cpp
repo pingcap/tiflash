@@ -1,8 +1,12 @@
 #include <Common/Decimal.h>
 #include <IO/ReadBufferFromString.h>
+#include <Poco/Format.h>
+#include <Poco/String.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/MyTimeParser.h>
 #include <Storages/Transaction/TiDB.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
 
 namespace TiDB
 {
@@ -57,12 +61,14 @@ Field ColumnInfo::defaultValueToField() const
         case TypeNewDecimal:
             return getDecimalDefaultValue(value.convert<String>());
         case TypeTime:
+            return Field();
         case TypeYear:
+            return Field();
         case TypeSet:
-            // TODO support it !
+            // blocked by TiDB https://github.com/pingcap/tidb/issues/12160
             return Field();
         default:
-            throw Exception("Have not proccessed type: " + std::to_string(tp));
+            throw Exception("Have not processed type: " + std::to_string(tp));
     }
     return Field();
 }
@@ -114,7 +120,8 @@ Int64 ColumnInfo::getEnumIndex(const String & default_str) const
     return num;
 }
 
-Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
+Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
+try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -131,7 +138,7 @@ Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
     tp_json->set("Flag", flag);
     tp_json->set("Flen", flen);
     tp_json->set("Decimal", decimal);
-    if (elems.size() > 0)
+    if (!elems.empty())
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
         for (auto & elem : elems)
@@ -157,7 +164,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json) try
+void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json)
+try
 {
     id = json->getValue<Int64>("id");
     name = json->getObject("name")->getValue<String>("L");
@@ -191,7 +199,8 @@ catch (const Poco::Exception & e)
 
 PartitionDefinition::PartitionDefinition(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const try
+Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const
+try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
@@ -212,7 +221,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionDef): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json) try
+void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json)
+try
 {
     id = json->getValue<Int64>("id");
     name = json->getObject("name")->getValue<String>("L");
@@ -227,7 +237,8 @@ catch (const Poco::Exception & e)
 
 PartitionInfo::PartitionInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const try
+Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const
+try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -256,7 +267,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionInfo::deserialize(Poco::JSON::Object::Ptr json) try
+void PartitionInfo::deserialize(Poco::JSON::Object::Ptr json)
+try
 {
     type = static_cast<PartitionType>(json->getValue<Int32>("type"));
     expr = json->getValue<String>("expr");
@@ -280,7 +292,8 @@ catch (const Poco::Exception & e)
 
 TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
-String TableInfo::serialize(bool escaped) const try
+String TableInfo::serialize(bool escaped) const
+try
 {
     std::stringstream buf;
 
@@ -338,7 +351,8 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void DBInfo::deserialize(const String & json_str) try
+void DBInfo::deserialize(const String & json_str)
+try
 {
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var result = parser.parse(json_str);
@@ -356,7 +370,8 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
-void TableInfo::deserialize(const String & json_str) try
+void TableInfo::deserialize(const String & json_str)
+try
 {
     if (json_str.empty())
     {
