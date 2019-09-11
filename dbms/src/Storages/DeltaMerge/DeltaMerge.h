@@ -258,7 +258,6 @@ private:
             if (!stable_input_stream_raw_ptr->hasNext())
                 throw Exception("Unexpected end of block, need more rows to skip");
 
-            //            auto [first_handle, last_handle] = stable_input_stream_raw_ptr->nextBlockHandle();
             size_t rows = stable_input_stream_raw_ptr->nextRows();
             if (!stable_input_stream_raw_ptr->shouldSkipNext())
             {
@@ -269,24 +268,6 @@ private:
                 stable_input_stream_raw_ptr->skipNext();
                 stable_skip -= rows;
             }
-
-            //            if (handle_range.intersect(first_handle, last_handle))
-            //            {
-            //                // We need to load next block.
-            //                fillStableBlockIfNeeded();
-            //                continue;
-            //            }
-            //
-            //            // Entirely skip block.
-            //            stable_input_stream_raw_ptr->skipNextBlock();
-            //            stable_skip -= rows;
-
-            // If the next block of stable is larger then handle_range, then we should stop reading from stable.
-            //            if (!handle_range.checkEnd(first_handle))
-            //            {
-            //                stable_done     = true;
-            //                use_stable_rows = 0;
-            //            }
         }
 
         if (stable_skip < 0)
@@ -327,15 +308,7 @@ private:
                     throw Exception("Unexpected end of block, need more rows to write");
             }
 
-            //            auto [first_handle, last_handle] = stable_input_stream_raw_ptr->nextBlockHandle();
             size_t next_block_rows = stable_input_stream_raw_ptr->nextRows();
-
-            //            if (handle_range.intersect(first_handle, last_handle))
-            //            {
-            //                // Load next block, and then write to output in next round.
-            //                fillStableBlockIfNeeded();
-            //                continue;
-            //            }
 
             if (!stable_input_stream_raw_ptr->shouldSkipNext())
             {
@@ -356,14 +329,6 @@ private:
                     use_stable_rows = 0;
                 }
             }
-
-            // If the next block of stable is larger then handle_range, then we should stop reading from stable.
-            //            if (!handle_range.checkEnd(first_handle))
-            //            {
-            //                stable_done     = true;
-            //                use_stable_rows = 0;
-            //                break;
-            //            }
         }
     }
 

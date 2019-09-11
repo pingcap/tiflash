@@ -59,8 +59,12 @@ struct SegmentSnapshot
 {
     DiskValueSpacePtr delta;
     size_t            delta_rows;
+    size_t            delta_deletes;
 
-    SegmentSnapshot(const DiskValueSpacePtr & delta_, size_t delta_rows_) : delta{delta_}, delta_rows(delta_rows_) {}
+    SegmentSnapshot(const DiskValueSpacePtr & delta_, size_t delta_rows_, size_t delta_deletes_)
+        : delta{delta_}, delta_rows(delta_rows_), delta_deletes(delta_deletes_)
+    {
+    }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by succeeding ranges.
@@ -199,6 +203,8 @@ private:
     DeltaIndexPtr ensurePlace(const DMContext &          dm_context,
                               const StorageSnapshot &    storage_snapshot,
                               const DiskValueSpacePtr &  to_place_delta,
+                              size_t                     delta_rows_limit,
+                              size_t                     delta_deletes_limit,
                               const DeltaValueSpacePtr & delta_value_space);
     /// Reference the inserts/updates by delta tree.
     void placeUpsert(const DMContext &          dm_context,

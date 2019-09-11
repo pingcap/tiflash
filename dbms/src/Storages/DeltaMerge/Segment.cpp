@@ -197,7 +197,7 @@ void Segment::check(DMContext & dm_context, const String & when)
     LOG_DEBUG(log, when + ": stable_rows:" + DB::toString(stable_rows) + ", delta_rows:" + DB::toString(delta_rows));
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
-    auto            read_info = getReadInfo<false>(dm_context, {delta, delta_rows}, storage_snapshot, {handle});
+    auto            read_info = getReadInfo<false>(dm_context, {delta, delta_rows, delta->num_deletes()}, storage_snapshot, {handle});
 
     LOG_DEBUG(log,
               when + ": entries:" + DB::toString(delta_tree->numEntries()) + ", inserts:" + DB::toString(delta_tree->numInserts())
@@ -236,7 +236,7 @@ void Segment::check(DMContext & dm_context, const String & when)
 SegmentSnapshot Segment::getReadSnapshot()
 {
     std::unique_lock lock(read_write_mutex);
-    return {delta, delta->num_rows()};
+    return {delta, delta->num_rows(), delta->num_deletes()};
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
@@ -310,7 +310,8 @@ SegmentPair Segment::split(DMContext & dm_context)
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
 
-    auto   read_info   = getReadInfo<false>(dm_context, {delta, delta->num_rows()}, storage_snapshot, dm_context.store_columns);
+    auto read_info
+        = getReadInfo<false>(dm_context, {delta, delta->num_rows(), delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
     Handle split_point = getSplitPoint(dm_context, storage_snapshot.data_reader, read_info);
     auto   res         = doSplit(dm_context, storage_snapshot.data_reader, read_info, split_point);
 
@@ -325,10 +326,10 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
 
-    auto left_read_info
-        = left->getReadInfo<false>(dm_context, {left->delta, left->delta->num_rows()}, storage_snapshot, dm_context.store_columns);
-    auto right_read_info
-        = right->getReadInfo<false>(dm_context, {right->delta, right->delta->num_rows()}, storage_snapshot, dm_context.store_columns);
+    auto left_read_info = left->getReadInfo<false>(
+        dm_context, {left->delta, left->delta->num_rows(), left->delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
+    auto right_read_info = right->getReadInfo<false>(
+        dm_context, {right->delta, right->delta->num_rows(), left->delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
 
     auto res = doMerge(dm_context, storage_snapshot.data_reader, left, left_read_info, right, right_read_info);
 
@@ -355,7 +356,7 @@ SegmentPtr Segment::flush(DMContext & dm_context)
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
 
-    auto read_info   = getReadInfo<false>(dm_context, {delta, delta->num_rows()}, storage_snapshot, columns);
+    auto read_info   = getReadInfo<false>(dm_context, {delta, delta->num_rows(), delta->num_deletes()}, storage_snapshot, columns);
     auto data_stream = getPlacedStream(storage_snapshot.data_reader,
                                        {range},
                                        read_info.read_columns,
@@ -467,7 +468,12 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
     const auto delta_block       = delta_snap->read(new_columns_to_read, storage_snaps.log_reader, 0, segment_snap.delta_rows);
     auto       delta_value_space = std::make_shared<DeltaValueSpace>(handle, new_columns_to_read, delta_block);
 
-    DeltaIndexPtr delta_index = ensurePlace(dm_context, storage_snaps, delta_snap, delta_value_space);
+    DeltaIndexPtr delta_index = ensurePlace(dm_context, //
+                                            storage_snaps,
+                                            delta_snap,
+                                            segment_snap.delta_rows,
+                                            segment_snap.delta_deletes,
+                                            delta_value_space);
 
     auto index_begin = DeltaIndex::begin(delta_index);
     auto index_end   = DeltaIndex::end(delta_index);
@@ -777,6 +783,8 @@ SegmentPtr Segment::reset(DMContext & dm_context, BlockInputStreamPtr & input_st
 DeltaIndexPtr Segment::ensurePlace(const DMContext &          dm_context,
                                    const StorageSnapshot &    storage_snapshot,
                                    const DiskValueSpacePtr &  to_place_delta,
+                                   size_t                     delta_rows_limit,
+                                   size_t                     delta_deletes_limit,
                                    const DeltaValueSpacePtr & delta_value_space)
 {
     // Synchronize between read/read threads.
@@ -784,14 +792,16 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &          dm_context,
 
     EventRecorder recorder(ProfileEvents::DMPlace, ProfileEvents::DMPlaceNS);
 
-    size_t delta_rows    = to_place_delta->num_rows();
-    size_t delta_deletes = to_place_delta->num_deletes();
     // Other read threads could already done place.
-    if (placed_delta_rows >= delta_rows && placed_delta_deletes >= delta_deletes)
-        return delta_tree->getEntriesCopy<Allocator<false>>(delta_rows, delta_deletes);
+    if (placed_delta_rows >= delta_rows_limit && placed_delta_deletes >= delta_deletes_limit)
+        return delta_tree->getEntriesCopy<Allocator<false>>(delta_rows_limit, delta_deletes_limit);
 
-    auto blocks = to_place_delta->getMergeBlocks(
-        dm_context.sort_column, storage_snapshot.log_reader, placed_delta_rows, placed_delta_deletes, delta_rows, delta_deletes);
+    auto blocks = to_place_delta->getMergeBlocks(dm_context.sort_column,
+                                                 storage_snapshot.log_reader,
+                                                 placed_delta_rows,
+                                                 placed_delta_deletes,
+                                                 delta_rows_limit,
+                                                 delta_deletes_limit);
 
     for (auto & v : blocks)
     {
@@ -801,7 +811,7 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &          dm_context,
             placeUpsert(dm_context, storage_snapshot.data_reader, delta_value_space, std::move(v.block));
     }
 
-    return delta_tree->getEntriesCopy<Allocator<false>>(delta_rows, delta_deletes);
+    return delta_tree->getEntriesCopy<Allocator<false>>(delta_rows_limit, delta_deletes_limit);
 }
 
 void Segment::placeUpsert(const DMContext &          dm_context,
