@@ -25,7 +25,7 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create)
     auto manage_lock = genRegionManageLock();
 
     LOG_INFO(log, "start to restore regions");
-    regions() = region_persister.restore(const_cast<RegionClientCreateFunc *>(&region_client_create));
+    regionsMut() = region_persister.restore(const_cast<RegionClientCreateFunc *>(&region_client_create));
 
     // init range index
     for (const auto & region : regions())
@@ -38,7 +38,7 @@ void KVStore::restore(const RegionClientCreateFunc & region_client_create)
         std::vector<RegionID> regions_to_remove;
         for (auto & p : regions())
         {
-            RegionPtr & region = p.second;
+            const RegionPtr & region = p.second;
             if (region->isPendingRemove())
                 regions_to_remove.push_back(region->id());
         }
@@ -145,7 +145,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
         else
         {
             auto manage_lock = genRegionManageLock();
-            regions().emplace(region_id, new_region);
+            regionsMut().emplace(region_id, new_region);
         }
 
         region_range_index.add(new_region);
@@ -236,7 +236,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
                 for (auto & new_region : split_regions)
                 {
-                    auto [it, ok] = regions().emplace(new_region->id(), new_region);
+                    auto [it, ok] = regionsMut().emplace(new_region->id(), new_region);
                     if (!ok)
                     {
                         // definitely, any region's index is greater or equal than the initial one.
@@ -404,7 +404,7 @@ void KVStore::removeRegion(const RegionID region_id, RegionTable * region_table,
         auto manage_lock = genRegionManageLock();
         auto it = regions().find(region_id);
         region = it->second;
-        regions().erase(it);
+        regionsMut().erase(it);
     }
     {
         // remove index
@@ -428,7 +428,7 @@ void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)
 }
 
 KVStoreTaskLock KVStore::genTaskLock() const { return KVStoreTaskLock(task_mutex); }
-RegionMap & KVStore::regions() { return region_manager.regions; }
+RegionMap & KVStore::regionsMut() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }
 KVStore::RegionManageLock KVStore::genRegionManageLock() const { return RegionManageLock(region_manager.mutex); }
 

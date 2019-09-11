@@ -72,7 +72,7 @@ private:
     using RegionManageLock = std::lock_guard<std::mutex>;
     RegionManageLock genRegionManageLock() const;
 
-    RegionMap & regions();
+    RegionMap & regionsMut();
     const RegionMap & regions() const;
 
 private:
