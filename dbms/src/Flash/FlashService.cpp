@@ -1,7 +1,8 @@
 #include <Flash/FlashService.h>
 
 #include <Core/Types.h>
-#include <Flash/Coprocessor/CoprocessorHandler.h>
+#include <Flash/BatchCommandsHandler.h>
+#include <Flash/CoprocessorHandler.h>
 #include <grpcpp/security/server_credentials.h>
 #include <grpcpp/server_builder.h>
 
@@ -54,8 +55,40 @@ grpc::Status FlashService::Coprocessor(
 
     auto ret = cop_handler.execute();
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done");
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
+}
+
+grpc::Status FlashService::BatchCommands(
+    grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
+{
+    tikvpb::BatchCommandsRequest request;
+    while (stream->Read(&request))
+    {
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());
+
+        tikvpb::BatchCommandsResponse response;
+        BatchCommandsContext batch_commands_context(
+            [this](grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); }, *grpc_context);
+        BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
+        auto ret = batch_commands_handler.execute();
+        if (!ret.ok())
+        {
+            LOG_DEBUG(
+                log, __PRETTY_FUNCTION__ << ": Handle batch commands request done: " << ret.error_code() << ", " << ret.error_message());
+            return ret;
+        }
+
+        if (!stream->Write(response))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write response failed for unknown reason.");
+            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
+        }
+
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle batch commands request done: " << ret.error_code() << ", " << ret.error_message());
+    }
+
+    return grpc::Status::OK;
 }
 
 String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const String & name, const String & default_val)
@@ -66,7 +99,7 @@ String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const Str
         return String(grpc_context->client_metadata().find(name)->second.data());
 }
 
-std::tuple<Context, ::grpc::Status> FlashService::createDBContext(grpc::ServerContext * grpc_context)
+std::tuple<Context, grpc::Status> FlashService::createDBContext(grpc::ServerContext * grpc_context)
 {
     /// Create DB context.
     Context context = server.context();
@@ -101,7 +134,7 @@ std::tuple<Context, ::grpc::Status> FlashService::createDBContext(grpc::ServerCo
     std::string expr_field_type_check = getClientMetaVarWithDefault(grpc_context, "dag_expr_field_type_strict_check", "1");
     context.setSetting("dag_expr_field_type_strict_check", expr_field_type_check);
 
-    return std::make_tuple(context, ::grpc::Status::OK);
+    return std::make_tuple(context, grpc::Status::OK);
 }
 
 } // namespace DB
