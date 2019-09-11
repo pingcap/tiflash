@@ -55,7 +55,7 @@ RegionPtr KVStore::getRegion(const RegionID region_id) const
     return nullptr;
 }
 
-KVStore::RegionsAppliedindexMap KVStore::getRegionsByRange(const RegionRange & range) const
+KVStore::RegionsAppliedindexMap KVStore::getRegionsByRangeOverlap(const RegionRange & range) const
 {
     auto task_lock = genTaskLock();
 
@@ -65,7 +65,7 @@ KVStore::RegionsAppliedindexMap KVStore::getRegionsByRange(const RegionRange & r
     {
         auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
         res.emplace(region.first, std::make_pair(region.second, region_delegate.appliedIndex()));
-        LOG_DEBUG(log, "[getRegionsByRange] found " << region_delegate.toString(true));
+        LOG_DEBUG(log, "[getRegionsByRangeOverlap] found " << region_delegate.toString(true));
     }
     return res;
 }
@@ -234,8 +234,6 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             {
                 auto manage_lock = genRegionManageLock();
 
-                region_range_index.remove(result.region_range->comparableKeys(), curr_region_id);
-
                 for (auto & new_region : split_regions)
                 {
                     auto [it, ok] = regions().emplace(new_region->id(), new_region);
@@ -247,11 +245,15 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                         // just use the previous one.
                         new_region = it->second;
                     }
-
-                    region_range_index.add(new_region);
                 }
+            }
 
+            {
+                region_range_index.remove(result.range_before_split->comparableKeys(), curr_region_id);
                 region_range_index.add(curr_region_ptr);
+
+                for (auto & new_region : split_regions)
+                    region_range_index.add(new_region);
             }
 
             {

@@ -29,7 +29,7 @@ struct RaftCommandResult : private boost::noncopyable
     Type type = Type::Default;
     std::vector<RegionPtr> split_regions{};
     TableIDSet table_ids{};
-    ImutRegionRangePtr region_range;
+    ImutRegionRangePtr range_before_split;
 };
 
 } // namespace DB

@@ -46,7 +46,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         {
             // Get all regions whose range overlapped with the one of new_region.
             const auto & new_range = new_region->getRange();
-            regions_to_check = kvstore->getRegionsByRange(new_range->comparableKeys());
+            regions_to_check = kvstore->getRegionsByRangeOverlap(new_range->comparableKeys());
             // Get all handle with largest version in those regions.
             for (const auto & region_info : regions_to_check)
                 new_region->compareAndUpdateHandleMaps(*region_info.second.first, handle_maps);
