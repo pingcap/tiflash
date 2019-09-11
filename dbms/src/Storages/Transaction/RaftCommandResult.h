@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -8,7 +10,7 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
-struct RaftCommandResult
+struct RaftCommandResult : private boost::noncopyable
 {
     enum Type
     {

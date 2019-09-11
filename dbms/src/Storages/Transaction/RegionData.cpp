@@ -5,7 +5,7 @@
 namespace DB
 {
 
-TableID RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const String & raw_key, TiKVValue && value)
+TableID RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
 {
     switch (cf)
     {
@@ -33,20 +33,20 @@ TableID RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const String & r
     }
 }
 
-void RegionData::removeLockCF(const TableID & table_id, const String & raw_key)
+void RegionData::removeLockCF(const TableID & table_id, const DecodedTiKVKey & raw_key)
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
     lock_cf.remove(table_id, handle_id);
 }
 
-void RegionData::removeDefaultCF(const TableID & table_id, const TiKVKey & key, const String & raw_key)
+void RegionData::removeDefaultCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key)
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
     Timestamp ts = RecordKVFormat::getTs(key);
     cf_data_size -= default_cf.remove(table_id, RegionDefaultCFData::Key{handle_id, ts}, true);
 }
 
-void RegionData::removeWriteCF(const TableID & table_id, const TiKVKey & key, const String & raw_key)
+void RegionData::removeWriteCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key)
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
     Timestamp ts = RecordKVFormat::getTs(key);
@@ -178,7 +178,8 @@ void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
     region_data.cf_data_size += total_size;
 }
 
-RegionWriteCFData & RegionData::writeCFMute() { return write_cf; }
+RegionWriteCFData & RegionData::writeCF() { return write_cf; }
+RegionDefaultCFData & RegionData::defaultCF() { return default_cf; }
 
 const RegionWriteCFData & RegionData::writeCF() const { return write_cf; }
 const RegionDefaultCFData & RegionData::defaultCF() const { return default_cf; }
@@ -197,18 +198,18 @@ RegionData::RegionData(RegionData && data)
 
 UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
 
-void RegionData::deleteRange(const ColumnFamilyType cf, const TiKVKey & start_key, const TiKVKey & end_key)
+void RegionData::deleteRange(const ColumnFamilyType cf, const RegionRange & range)
 {
     switch (cf)
     {
         case Write:
-            write_cf.deleteRange(start_key, end_key);
+            write_cf.deleteRange(range);
             break;
         case Default:
-            default_cf.deleteRange(start_key, end_key);
+            default_cf.deleteRange(range);
             break;
         case Lock:
-            lock_cf.deleteRange(start_key, end_key);
+            lock_cf.deleteRange(range);
             break;
         default:
             throw Exception("[RegionData::deleteRange] with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);

@@ -9,11 +9,11 @@
 #include <IO/Endian.h>
 
 #include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
-
 
 namespace DB
 {
@@ -32,26 +32,8 @@ static const char SHORT_VALUE_PREFIX = 'v';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 
-static const UInt64 SIGN_MARK = UInt64(1) << 63;
-
 static const size_t RAW_KEY_NO_HANDLE_SIZE = 1 + 8 + 2;
 static const size_t RAW_KEY_SIZE = RAW_KEY_NO_HANDLE_SIZE + 8;
-
-inline std::vector<Field> DecodeRow(const TiKVValue & value)
-{
-    std::vector<Field> vec;
-    const String & raw_value = value.getStr();
-    size_t cursor = 0;
-    while (cursor < raw_value.size())
-    {
-        vec.push_back(DecodeDatum(cursor, raw_value));
-    }
-
-    if (cursor != raw_value.size())
-        throw Exception("DecodeRow cursor is not end", ErrorCodes::LOGICAL_ERROR);
-
-    return vec;
-}
 
 // Key format is here:
 // https://docs.google.com/document/d/1J9Dsp8l5Sbvzjth77hK8yx3SzpEJ4SXaR_wIvswRhro/edit
@@ -65,7 +47,7 @@ inline TiKVKey encodeAsTiKVKey(const String & ori_str)
 
 inline UInt64 encodeUInt64(const UInt64 x) { return toBigEndian(x); }
 
-inline UInt64 encodeInt64(const Int64 x) { return encodeUInt64(static_cast<UInt64>(x) ^ SIGN_MARK); }
+inline UInt64 encodeInt64(const Int64 x) { return encodeUInt64(static_cast<UInt64>(x) ^ SIGN_MASK); }
 
 inline UInt64 encodeUInt64Desc(const UInt64 x) { return encodeUInt64(~x); }
 
@@ -73,7 +55,7 @@ inline UInt64 decodeUInt64(const UInt64 x) { return toBigEndian(x); }
 
 inline UInt64 decodeUInt64Desc(const UInt64 x) { return ~decodeUInt64(x); }
 
-inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MARK); }
+inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MASK); }
 
 inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields)
 {
@@ -82,9 +64,10 @@ inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector
     std::stringstream ss;
     for (size_t i = 0; i < fields.size(); i++)
     {
-        const TiDB::ColumnInfo & column = table_info.columns[i];
-        EncodeDatum(Field(column.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column.getCodecFlag(), ss);
+        const TiDB::ColumnInfo & column_info = table_info.columns[i];
+        EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
+        TiDB::DatumBumpy datum = TiDB::DatumBumpy(fields[i], column_info.tp);
+        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
     }
     return TiKVValue(ss.str());
 }
@@ -95,16 +78,16 @@ inline T read(const char * s)
     return *(reinterpret_cast<const T *>(s));
 }
 
-inline String genRawKey(const TableID tableId, const HandleID handleId)
+inline DecodedTiKVKey genRawKey(const TableID tableId, const HandleID handleId)
 {
-    String key(RecordKVFormat::RAW_KEY_SIZE, 0);
+    std::string key(RecordKVFormat::RAW_KEY_SIZE, 0);
     memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
     auto big_endian_table_id = encodeInt64(tableId);
     memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
     memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
     auto big_endian_handle_id = encodeInt64(handleId);
     memcpy(key.data() + RAW_KEY_NO_HANDLE_SIZE, reinterpret_cast<const char *>(&big_endian_handle_id), 8);
-    return key;
+    return std::move(key);
 }
 
 inline TiKVKey genKey(const TableID tableId, const HandleID handleId) { return encodeAsTiKVKey(genRawKey(tableId, handleId)); }
@@ -115,7 +98,7 @@ inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
     return p == 0;
 }
 
-inline std::tuple<std::string, size_t> decodeTiKVKeyFull(const TiKVKey & key)
+inline std::tuple<DecodedTiKVKey, size_t> decodeTiKVKeyFull(const TiKVKey & key)
 {
     const size_t chunk_len = ENC_GROUP_SIZE + 1;
     std::string res;
@@ -143,19 +126,19 @@ inline std::tuple<std::string, size_t> decodeTiKVKeyFull(const TiKVKey & key)
     }
 }
 
-inline String decodeTiKVKey(const TiKVKey & key) { return std::get<0>(decodeTiKVKeyFull(key)); }
+inline DecodedTiKVKey decodeTiKVKey(const TiKVKey & key) { return std::get<0>(decodeTiKVKeyFull(key)); }
 
 inline Timestamp getTs(const TiKVKey & key) { return decodeUInt64Desc(read<UInt64>(key.data() + key.dataSize() - 8)); }
 
-inline TableID getTableId(const String & key) { return decodeInt64(read<UInt64>(key.data() + 1)); }
+inline TableID getTableId(const DecodedTiKVKey & key) { return decodeInt64(read<UInt64>(key.data() + 1)); }
 
-inline HandleID getHandle(const String & key) { return decodeInt64(read<UInt64>(key.data() + RAW_KEY_NO_HANDLE_SIZE)); }
+inline HandleID getHandle(const DecodedTiKVKey & key) { return decodeInt64(read<UInt64>(key.data() + RAW_KEY_NO_HANDLE_SIZE)); }
 
 inline TableID getTableId(const TiKVKey & key) { return getTableId(decodeTiKVKey(key)); }
 
 inline HandleID getHandle(const TiKVKey & key) { return getHandle(decodeTiKVKey(key)); }
 
-inline bool isRecord(const String & raw_key)
+inline bool isRecord(const DecodedTiKVKey & raw_key)
 {
     return raw_key.size() >= RAW_KEY_SIZE && raw_key[0] == TABLE_PREFIX && memcmp(raw_key.data() + 9, RECORD_PREFIX_SEP, 2) == 0;
 }

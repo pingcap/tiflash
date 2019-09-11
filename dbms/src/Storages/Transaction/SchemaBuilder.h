@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/Context.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/SchemaGetter.h>
 

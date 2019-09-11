@@ -16,6 +16,10 @@ using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
+class KVStore;
+class RegionTable;
+class RegionRaftCommandDelegate;
+class KVStoreTaskLock;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -70,7 +74,7 @@ public:
     public:
         CommittedRemover(const RegionPtr & store_, TableID expected_table_id_) : store(store_), lock(store_->mutex)
         {
-            auto & data = store->data.writeCFMute().getDataMut();
+            auto & data = store->data.writeCF().getDataMut();
             write_cf_data_it = data.find(expected_table_id_);
             found = write_cf_data_it != data.end();
         }
@@ -98,19 +102,17 @@ public:
         : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
-    TableID insert(const std::string & cf, TiKVKey key, TiKVValue value);
+    TableID insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     TableID remove(const std::string & cf, const TiKVKey & key);
 
-    RaftCommandResult onCommand(enginepb::CommandRequest && cmd);
-
-    std::unique_ptr<CommittedScanner> createCommittedScanner(TableID expected_table_id);
-    std::unique_ptr<CommittedRemover> createCommittedRemover(TableID expected_table_id);
+    CommittedScanner createCommittedScanner(TableID expected_table_id);
+    CommittedRemover createCommittedRemover(TableID expected_table_id);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
 
     RegionID id() const;
-    RegionRange getRange() const;
+    ImutRegionRangePtr getRange() const;
 
     enginepb::CommandResponse toCommandResponse() const;
     std::string toString(bool dump_status = true) const;
@@ -118,6 +120,7 @@ public:
     bool isPendingRemove() const;
     void setPendingRemove();
     bool isPeerRemoved() const;
+    raft_serverpb::PeerState peerState() const;
 
     size_t dataSize() const;
     size_t writeCFCount() const;
@@ -141,14 +144,13 @@ public:
 
     void waitIndex(UInt64 index);
 
-    UInt64 getIndex() const;
-    UInt64 getProbableIndex() const;
+    UInt64 appliedIndex() const;
 
     RegionVersion version() const;
     RegionVersion confVer() const;
 
     /// version, conf_version, range
-    std::tuple<RegionVersion, RegionVersion, RegionRange> dumpVersionRange() const;
+    std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> dumpVersionRange() const;
 
     HandleRange<HandleID> getHandleRangeByTable(TableID table_id) const;
 
@@ -158,20 +160,28 @@ public:
 
     using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
 
-    /// only can be used for applying snapshot. only can be called by single thread.
+    /// Only can be used for applying snapshot. only can be called by single thread.
+    /// Try to fill record with delmark if it exists in ch but has been remove by GC in leader.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
-    void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
+    /// Traverse all data in source_region and get handle with largest version.
+    void compareAndUpdateHandleMaps(const Region & source_region, std::unordered_map<TableID, HandleMap> & handle_maps);
 
     static ColumnFamilyType getCf(const std::string & cf);
+    RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
+    metapb::Region getMetaRegion() const;
+    raft_serverpb::MergeState getMergeState() const;
+
+    void tryPreDecodeTiKVValue();
 
 private:
     Region() = delete;
+    friend class RegionRaftCommandDelegate;
 
     // Private methods no need to lock mutex, normally
 
     TableID doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
-    void doDeleteRange(const std::string & cf, const TiKVKey & start_key, const TiKVKey & end_key);
+    void doDeleteRange(const std::string & cf, const RegionRange & range);
 
     RegionDataReadInfo readDataByWriteIt(
         const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
@@ -180,12 +190,6 @@ private:
     LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
 
     RegionPtr splitInto(RegionMeta meta);
-    Regions execBatchSplit(
-        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
-    void execChangePeer(
-        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
-    void execCompactLog(
-        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 
 private:
     RegionData data;
@@ -201,6 +205,25 @@ private:
     mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
+};
+
+class RegionRaftCommandDelegate : public Region, private boost::noncopyable
+{
+public:
+    /// Only after the task mutex of KVStore is locked, region can apply raft command.
+    void onCommand(enginepb::CommandRequest &&, const KVStore &, RegionTable *, RaftCommandResult &);
+    const RegionRangeKeys & getRange();
+    UInt64 appliedIndex();
+
+private:
+    RegionRaftCommandDelegate() = delete;
+
+    Regions execBatchSplit(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execChangePeer(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execCompactLog(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 };
 
 } // namespace DB

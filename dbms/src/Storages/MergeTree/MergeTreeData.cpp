@@ -948,12 +948,12 @@ void MergeTreeData::checkAlter(const AlterCommands & commands)
     ExpressionActionsPtr unused_expression;
     NameToNameMap unused_map;
     bool unused_bool;
-
-    createConvertExpression(nullptr, getColumns().getAllPhysical(), new_columns.getAllPhysical(), unused_expression, unused_map, unused_bool);
+    DataPart::Checksums checksums;
+    createConvertExpression(nullptr, checksums, getColumns().getAllPhysical(), new_columns.getAllPhysical(), unused_expression, unused_map, unused_bool);
 }
 
-void MergeTreeData::createConvertExpression(const DataPartPtr & part, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
-    ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata) const
+void MergeTreeData::createConvertExpression(const DataPartPtr & part, DataPart::Checksums & checksums, const NamesAndTypesList & old_columns, const NamesAndTypesList & new_columns,
+    ExpressionActionsPtr & out_expression, NameToNameMap & out_rename_map, bool & out_force_update_metadata)
 {
     out_expression = nullptr;
     out_rename_map = {};
@@ -1006,8 +1006,32 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, const Name
 
             if (!new_type->equals(*old_type) && (!part || part->hasColumnFiles(column.name)))
             {
-                // TODO: Asserting TXN table never needs data conversion might be arbitary.
-                if (isMetadataOnlyConversion(old_type, new_type) || merging_params.mode == MergingParams::Txn)
+                if (merging_params.mode == MergingParams::Txn)
+                {
+                    // Any type conversion for TMT is ignored, except adding nullable property.
+                    // And for adding null map ONLY, i.e. not touching the data file, we do null map writing here in place.
+                    if (part && !old_type->isNullable() && new_type->isNullable())
+                    {
+                        auto null_map_name = column.name + "_null";
+                        auto null_map_type = std::make_shared<DataTypeUInt8>();
+                        Block b;
+                        b.insert({ null_map_type->createColumnConstWithDefaultValue(part->rows_count)->convertToFullColumnIfConst(), null_map_type, null_map_name});
+                        auto compression_settings = this->context.chooseCompressionSettings(
+                            part->bytes_on_disk,
+                            static_cast<double>(part->bytes_on_disk) / this->getTotalActiveSizeInBytes());
+                        MergedColumnOnlyOutputStream out(*this, b, part->getFullPath(), true /* sync */, compression_settings, true /* skip_offsets */);
+                        out.write(b);
+                        auto add_checksums = out.writeSuffixAndGetChecksums();
+                        checksums.files[column.name + ".null.bin"] = add_checksums.files[null_map_name + ".bin"];
+                        checksums.files[column.name + ".null.mrk"] = add_checksums.files[null_map_name + ".mrk"];
+                        out_rename_map[null_map_name + ".bin"] = column.name + ".null.bin";
+                        out_rename_map[null_map_name + ".mrk"] = column.name + ".null.mrk";
+                    }
+                    out_force_update_metadata = true;
+                    continue;
+                }
+
+                if (isMetadataOnlyConversion(old_type, new_type))
                 {
                     out_force_update_metadata = true;
                     continue;
@@ -1095,6 +1119,85 @@ void MergeTreeData::createConvertExpression(const DataPartPtr & part, const Name
     }
 }
 
+MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
+    const DataPartPtr & part,
+    const NamesAndTypesList & new_columns,
+    const AlterCommand & command) const
+{
+    // check if is compact
+    if (part->isCompactFormat())
+    {
+        throw Exception("L0 compact does not support alter clause.");
+    }
+    AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part)); /// Blocks changes to the part.
+    DataPart::Checksums new_checksums = part->checksums;
+
+    DataTypePtr data_type;
+
+    for (const auto & pair : new_columns)
+    {
+        if (pair.name == command.new_column_name)
+        {
+            data_type = pair.type;
+            break;
+        }
+    }
+    if (data_type == nullptr)
+    {
+        throw Exception("Can't find new column " + command.new_column_name + " in column list", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    data_type->enumerateStreams(
+        [&](const IDataType::SubstreamPath & substream_path)
+        {
+            /// Skip array sizes, because they cannot be modified in ALTER.
+            if (!substream_path.empty() && substream_path.back().type == IDataType::Substream::ArraySizes)
+                return;
+
+            String old_file_name = IDataType::getFileNameForStream(command.column_name, substream_path);
+            String new_file_name = IDataType::getFileNameForStream(command.new_column_name, substream_path);
+
+            transaction->rename_map[old_file_name + ".bin"] = new_file_name + ".bin";
+            transaction->rename_map[old_file_name + ".mrk"] = new_file_name + ".mrk";
+
+            auto it = new_checksums.files.find(old_file_name + ".bin");
+            if (it == new_checksums.files.end())
+            {
+                // Can not find old checksums.
+                throw Exception("Cannot find file checksums for " + old_file_name + ".bin", ErrorCodes::LOGICAL_ERROR);
+            }
+            new_checksums.files.erase(it);
+            new_checksums.files.emplace(new_file_name + ".bin", it->second);
+            it = new_checksums.files.find(old_file_name + ".mrk");
+            if (it == new_checksums.files.end())
+            {
+                // Can not find old checksums.
+                throw Exception("Cannot find file checksums for " + old_file_name + ".mrk", ErrorCodes::LOGICAL_ERROR);
+            }
+            new_checksums.files.erase(it);
+            new_checksums.files.emplace(new_file_name + ".mrk", it->second);
+        }, {});
+
+    /// Write the checksums to the temporary file.
+    if (!part->checksums.empty())
+    {
+        transaction->new_checksums = new_checksums;
+        WriteBufferFromFile checksums_file(part->getFullPath() + "checksums.txt.tmp", 4096);
+        new_checksums.write(checksums_file);
+        transaction->rename_map["checksums.txt.tmp"] = "checksums.txt";
+    }
+
+    /// Write the new column list to the temporary file.
+    {
+        transaction->new_columns = new_columns;
+        WriteBufferFromFile columns_file(part->getFullPath() + "columns.txt.tmp", 4096);
+        transaction->new_columns.writeText(columns_file);
+        transaction->rename_map["columns.txt.tmp"] = "columns.txt";
+    }
+
+    return transaction;
+}
+
 MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     const DataPartPtr & part,
     const NamesAndTypesList & new_columns,
@@ -1110,7 +1213,8 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     ExpressionActionsPtr expression;
     AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part)); /// Blocks changes to the part.
     bool force_update_metadata;
-    createConvertExpression(part, part->columns, new_columns, expression, transaction->rename_map, force_update_metadata);
+    DataPart::Checksums new_checksums = part->checksums;
+    createConvertExpression(part, new_checksums, part->columns, new_columns, expression, transaction->rename_map, force_update_metadata);
 
     size_t num_files_to_modify = transaction->rename_map.size();
     size_t num_files_to_remove = 0;
@@ -1260,12 +1364,11 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::alterDataPart(
     }
 
     /// Update the checksums.
-    DataPart::Checksums new_checksums = part->checksums;
     for (auto it : transaction->rename_map)
     {
         if (it.second.empty())
             new_checksums.files.erase(it.first);
-        else
+        else if (add_checksums.files.find(it.first) != add_checksums.files.end())
             new_checksums.files[it.second] = add_checksums.files[it.first];
     }
 

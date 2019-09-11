@@ -3,6 +3,7 @@
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -171,10 +172,17 @@ void MockTiDBTable::dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & 
     if (cols.getAllPhysical().size() > 1)
         throw Exception("Not support multiple columns", ErrorCodes::LOGICAL_ERROR);
 
-    // TODO: Support partition table.
-
     NameAndTypePair column = cols.getAllPhysical().front();
-    MockTiDB::instance().addColumnToTable(database_name, table_name, column);
+    auto it = cols.defaults.find(column.name);
+    Field default_value;
+    if (it != cols.defaults.end())
+    {
+        const auto * func = typeid_cast<const ASTFunction *>(it->second.expression.get());
+        const auto * value_ptr
+            = typeid_cast<const ASTLiteral *>(typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
+        default_value = value_ptr->value;
+    }
+    MockTiDB::instance().addColumnToTable(database_name, table_name, column, default_value);
 
     std::stringstream ss;
     ss << "added column " << column.name << " " << column.type->getName();
@@ -191,8 +199,6 @@ void MockTiDBTable::dbgFuncDropColumnFromTiDBTable(Context & /*context*/, const 
     const String & column_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
 
     MockTiDB::TablePtr table = MockTiDB::instance().getTableByName(database_name, table_name);
-
-    // TODO: Support partition table.
 
     MockTiDB::instance().dropColumnFromTable(database_name, table_name, column_name);
 
@@ -221,13 +227,28 @@ void MockTiDBTable::dbgFuncModifyColumnInTiDBTable(DB::Context & context, const 
     if (cols.getAllPhysical().size() > 1)
         throw Exception("Not support multiple columns", ErrorCodes::LOGICAL_ERROR);
 
-    // TODO: Support partition table.
-
     NameAndTypePair column = cols.getAllPhysical().front();
     MockTiDB::instance().modifyColumnInTable(database_name, table_name, column);
 
     std::stringstream ss;
     ss << "modified column " << column.name << " " << column.type->getName();
+    output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncRenameColumnInTiDBTable(DB::Context &, const DB::ASTs & args, DB::DBGInvoker::Printer output)
+{
+    if (args.size() != 4)
+        throw Exception("Args not matched, should be: database-name, table-name, old_col_name, new_col_name", ErrorCodes::BAD_ARGUMENTS);
+
+    const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
+    const String & old_column_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
+    const String & new_column_name = typeid_cast<const ASTIdentifier &>(*args[3]).name;
+
+    MockTiDB::instance().renameColumnInTable(database_name, table_name, old_column_name, new_column_name);
+
+    std::stringstream ss;
+    ss << "rename column " << old_column_name << " " << new_column_name;
     output(ss.str());
 }
 

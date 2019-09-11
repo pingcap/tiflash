@@ -67,7 +67,7 @@ services:
       - "pd0"
     restart: on-failure
   tidb0:
-    image: pingcap/tidb:latest
+    image: pingcap/tidb:v3.0.3
     ports:
       - "4000:4000"
       - "10080:10080"

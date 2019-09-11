@@ -23,12 +23,15 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     Logger * log = &Logger::get(RegionSnapshotName);
 
     auto old_region = kvstore->getRegion(new_region->id());
+    UInt64 old_applied_index = 0;
+    KVStore::RegionsAppliedindexMap regions_to_check;
 
     if (old_region)
     {
-        if (old_region->getIndex() >= new_region->getIndex())
+        old_applied_index = old_region->appliedIndex();
+        if (old_applied_index >= new_region->appliedIndex())
         {
-            LOG_WARNING(log, "Region " << new_region->id() << " already has newer index, " << old_region->toString(true));
+            LOG_WARNING(log, new_region->toString(false) << " already has newer index " << old_applied_index);
             return false;
         }
     }
@@ -38,16 +41,23 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         auto & tmt = context->getTMTContext();
         Timestamp safe_point = tmt.getPDClient()->getGCSafePoint();
 
-        if (old_region)
-            new_region->compareAndCompleteSnapshot(safe_point, *old_region);
+        std::unordered_map<TableID, HandleMap> handle_maps;
 
+        {
+            // Get all regions whose range overlapped with the one of new_region.
+            const auto & new_range = new_region->getRange();
+            regions_to_check = kvstore->getRegionsByRange(new_range->comparableKeys());
+            // Get all handle with largest version in those regions.
+            for (const auto & region_info : regions_to_check)
+                new_region->compareAndUpdateHandleMaps(*region_info.second.first, handle_maps);
+        }
+
+        // Traverse all table in ch and update handle_maps.
         for (auto [table_id, storage] : tmt.getStorages().getAllStorage())
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
             if (handle_range.first >= handle_range.second)
                 continue;
-            HandleMap handle_map;
-
             {
                 auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                 auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
@@ -57,24 +67,34 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
                 if (pk_is_uint64)
                 {
                     const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    handle_map = getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[0]);
+                    getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[0], handle_maps[table_id]);
                     if (n > 1)
-                    {
-                        auto new_handle_map = getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[1]);
-                        for (auto & [handle, data] : new_handle_map)
-                            handle_map[handle] = std::move(data);
-                    }
+                        getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[1], handle_maps[table_id]);
                 }
                 else
-                    handle_map = getHandleMapByRange<Int64>(*context, *merge_tree, handle_range);
+                    getHandleMapByRange<Int64>(*context, *merge_tree, handle_range, handle_maps[table_id]);
             }
+        }
 
+        for (auto & [table_id, handle_map] : handle_maps)
             new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);
+    }
+
+    if (old_region)
+    {
+        auto info = std::make_pair(old_region, old_applied_index);
+        auto res = regions_to_check.emplace(old_region->id(), info);
+        if (!res.second)
+        {
+            if (res.first->second != info)
+            {
+                LOG_WARNING(log, old_region->toString() << " doesn't match index");
+                return false;
+            }
         }
     }
 
-    // context may be null in test cases.
-    return kvstore->onSnapshot(new_region, context ? &context->getTMTContext().getRegionTable() : nullptr);
+    return kvstore->onSnapshot(new_region, context, regions_to_check);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)
@@ -116,10 +136,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
             auto & key = *it->mutable_key();
             auto & value = *it->mutable_value();
 
-            auto & tikv_key = static_cast<TiKVKey &>(key);
-            auto & tikv_value = static_cast<TiKVValue &>(value);
-
-            new_region->insert(data.cf(), std::move(tikv_key), std::move(tikv_value));
+            new_region->insert(data.cf(), TiKVKey(std::move(key)), TiKVValue(std::move(value)));
         }
     }
 
@@ -128,7 +145,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
 
     bool status = applySnapshot(kvstore, new_region, context);
 
-    LOG_INFO(log, "Region " << new_region->id() << " apply snapshot " << (status ? "success" : "fail"));
+    LOG_INFO(log, new_region->toString(false) << " apply snapshot " << (status ? "success" : "fail"));
 }
 
 } // namespace DB

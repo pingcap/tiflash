@@ -30,6 +30,7 @@ class Block;
 // for debug
 struct MockTiDBTable;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+class RegionRangeKeys;
 
 class RegionTable : private boost::noncopyable
 {
@@ -135,7 +136,7 @@ private:
 
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
-    InternalRegion & insertRegion(Table & table, const TiKVKey & start, const TiKVKey & end, const RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
 
     bool shouldFlush(const InternalRegion & region) const;
 
@@ -177,6 +178,7 @@ public:
     bool tryFlushRegions();
 
     void tryFlushRegion(RegionID region_id);
+    void tryFlushRegion(RegionID region_id, TableID table_id);
 
     void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
@@ -203,6 +205,7 @@ public:
         DB::HandleRange<HandleID> & handle_range);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
+    void dumpRegionsByTable(const TableID table_id, size_t & count, InternalRegions * regions) const;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

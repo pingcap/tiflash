@@ -1,6 +1,6 @@
 #include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <Storages/Transaction/RegionManager.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <ext/scope_guard.h>
 
 #include "region_helper.h"
@@ -64,9 +64,9 @@ int main(int, char **)
     {
         auto region = std::make_shared<Region>(createRegionMeta(100));
         TiKVKey key = RecordKVFormat::genKey(100, 323, 9983);
-        region->insert("default", key, TiKVValue("value1"));
-        region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
-        region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+        region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+        region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
         auto path = dir_path + "region.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -125,9 +125,9 @@ int main(int, char **)
         }
 
         TiKVKey key = RecordKVFormat::genKey(100, 323, 9983);
-        region->insert("default", key, TiKVValue("value1"));
-        region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
-        region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+        region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+        region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
         auto path = dir_path + "region_state.test";
         WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -166,9 +166,9 @@ int main(int, char **)
             {
                 auto region = std::make_shared<Region>(createRegionMeta(i));
                 TiKVKey key = RecordKVFormat::genKey(100, i, diff++);
-                region->insert("default", key, TiKVValue("value1"));
-                region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
-                region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+                region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+                region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+                region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
                 persister.persist(*region);
 
@@ -216,9 +216,9 @@ int main(int, char **)
         {
             auto region = std::make_shared<Region>(createRegionMeta(i));
             TiKVKey key = RecordKVFormat::genKey(100, i, diff++);
-            region->insert("default", key, TiKVValue("value1"));
-            region->insert("write", key, RecordKVFormat::encodeWriteCfValue('P', 0));
-            region->insert("lock", key, RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+            region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+            region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+            region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
             persister.persist(*region);
 

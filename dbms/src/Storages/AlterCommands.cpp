@@ -160,6 +160,25 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
         /// This have no relation to changing the list of columns.
         /// TODO Check that all columns exist, that only columns with constant defaults are added.
     }
+    else if (type == RENAME_COLUMN)
+    {
+        auto & columns = columns_description.ordinary;
+        // We only consider ordinary columns.
+        NamesAndTypesList::iterator old_column_it = std::find_if(columns.begin(), columns.end(),
+            [&](const NameAndTypePair & orig_column){ return orig_column.name == column_name; });
+        if(old_column_it == columns.end())
+        {
+            throw Exception("Rename column fails, old column name: " + column_name + " doesn't exist ", ErrorCodes::LOGICAL_ERROR);
+        }
+        // Make sure new column doesn't exist.
+        NamesAndTypesList::iterator new_column_it = std::find_if(columns.begin(), columns.end(),
+            [&](const NameAndTypePair & orig_column){ return orig_column.name == new_column_name; });
+        if(new_column_it != columns.end())
+        {
+            throw Exception("Rename column fails, new column name: " + column_name + " has existed ", ErrorCodes::LOGICAL_ERROR);
+        }
+        old_column_it->name = new_column_name;
+    }
     else
         throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
 }

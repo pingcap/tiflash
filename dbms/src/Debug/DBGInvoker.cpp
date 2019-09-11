@@ -2,6 +2,7 @@
 #include <thread>
 
 #include <DataStreams/StringStreamBlockInputStream.h>
+#include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
@@ -42,6 +43,7 @@ DBGInvoker::DBGInvoker()
     regFunc("add_column_to_tidb_table", MockTiDBTable::dbgFuncAddColumnToTiDBTable);
     regFunc("drop_column_from_tidb_table", MockTiDBTable::dbgFuncDropColumnFromTiDBTable);
     regFunc("modify_column_in_tidb_table", MockTiDBTable::dbgFuncModifyColumnInTiDBTable);
+    regFunc("rename_column_in_tidb_table", MockTiDBTable::dbgFuncRenameColumnInTiDBTable);
     regFunc("rename_tidb_table", MockTiDBTable::dbgFuncRenameTiDBTable);
     regFunc("truncate_tidb_table", MockTiDBTable::dbgFuncTruncateTiDBTable);
 
@@ -62,10 +64,13 @@ DBGInvoker::DBGInvoker()
     regFunc("try_flush_region", dbgFuncTryFlushRegion);
 
     regFunc("dump_all_region", dbgFuncDumpAllRegion);
+    regFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
 
     regFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regFunc("refresh_schemas", dbgFuncRefreshSchemas);
     regFunc("reset_schemas", dbgFuncResetSchemas);
+
+    regFunc("dump_region_table", ClusterManage::dumpRegionTable);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)

@@ -13,6 +13,7 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/SchemaBuilder.h>
+#include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -32,88 +33,129 @@ inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const Co
     command.data_type = getDataTypeByColumnInfo(column_info);
     if (!column_info.origin_default_value.isEmpty())
     {
-        LOG_DEBUG(log, "add default value for column: " + column_info.name);
-        command.default_expression = ASTPtr(new ASTLiteral(column_info.defaultValueToField()));
+        LOG_DEBUG(log, "add default value for column: " << column_info.name);
+        auto arg0 = std::make_shared<ASTLiteral>(column_info.defaultValueToField());
+        auto arg1 = std::make_shared<ASTLiteral>(command.data_type->getName());
+        auto args = std::make_shared<ASTExpressionList>();
+        args->children.emplace_back(arg0);
+        args->children.emplace_back(arg1);
+        auto func = std::make_shared<ASTFunction>();
+        func->name = "CAST";
+        func->arguments = args;
+        command.default_expression = func;
     }
 }
 
-inline AlterCommands detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
+inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
-    AlterCommands alter_commands;
+    std::vector<AlterCommands> result;
 
-    /// Detect new columns.
-    // TODO: Detect rename columns.
-    for (const auto & column_info : table_info.columns)
+    // add drop commands
     {
-        const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
-            orig_table_info.columns.end(),
-            [&](const TiDB::ColumnInfo & orig_column_info_) { return orig_column_info_.id == column_info.id; });
+        AlterCommands drop_commands;
 
-        AlterCommand command;
-        if (orig_column_info == orig_table_info.columns.end())
+        /// Detect dropped columns.
+        for (const auto & orig_column_info : orig_table_info.columns)
         {
-            // New column.
-            command.type = AlterCommand::ADD_COLUMN;
-            setAlterCommandColumn(log, command, column_info);
-        }
-        else
-        {
-            // Column unchanged.
-            continue;
-        }
+            const auto & column_info = std::find_if(table_info.columns.begin(),
+                table_info.columns.end(),
+                [&](const TiDB::ColumnInfo & column_info_) { return column_info_.id == orig_column_info.id; });
 
-        alter_commands.emplace_back(std::move(command));
+            if (column_info == table_info.columns.end())
+            {
+                AlterCommand command;
+                // Dropped column.
+                command.type = AlterCommand::DROP_COLUMN;
+                // Drop column with old name.
+                command.column_name = orig_column_info.name;
+                drop_commands.emplace_back(std::move(command));
+            }
+        }
+        result.push_back(drop_commands);
     }
 
-    /// Detect dropped columns.
-    for (const auto & orig_column_info : orig_table_info.columns)
     {
-        const auto & column_info = std::find_if(table_info.columns.begin(),
-            table_info.columns.end(),
-            [&](const TiDB::ColumnInfo & column_info_) { return column_info_.id == orig_column_info.id; });
-
-        AlterCommand command;
-        if (column_info == table_info.columns.end())
+        using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
+        typename Resolver::NameMap rename_map;
+        /// rename columns.
+        for (const auto & orig_column_info : orig_table_info.columns)
         {
-            // Dropped column.
-            command.type = AlterCommand::DROP_COLUMN;
-            command.column_name = orig_column_info.name;
-        }
-        else
-        {
-            // Column unchanged.
-            continue;
+            const auto & column_info
+                = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+                      return (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name);
+                  });
+
+            if (column_info != table_info.columns.end())
+            {
+                rename_map[orig_column_info.name] = column_info->name;
+            }
         }
 
-        alter_commands.emplace_back(std::move(command));
+        typename Resolver::NamePairs rename_result = Resolver().resolve(std::move(rename_map));
+        for (const auto & rename_pair : rename_result)
+        {
+            AlterCommands rename_commands;
+            AlterCommand command;
+            command.type = AlterCommand::RENAME_COLUMN;
+            command.column_name = rename_pair.first;
+            command.new_column_name = rename_pair.second;
+            rename_commands.push_back(command);
+            result.push_back(rename_commands);
+        }
     }
 
-    /// Detect type changed columns.
-    for (const auto & orig_column_info : orig_table_info.columns)
+    // alter commands
     {
-        const auto & column_info = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
-            // TODO: Check primary key.
-            // TODO: Support Rename Column;
-            return column_info_.id == orig_column_info.id && column_info_.tp != orig_column_info.tp;
-        });
-
-        AlterCommand command;
-        if (column_info == table_info.columns.end())
+        AlterCommands alter_commands;
+        /// Detect type changed columns.
+        for (const auto & orig_column_info : orig_table_info.columns)
         {
-            // Column unchanged.
-            continue;
-        }
-        else
-        {
-            // Type changed column.
-            command.type = AlterCommand::MODIFY_COLUMN;
-            setAlterCommandColumn(log, command, *column_info);
-        }
+            const auto & column_info
+                = std::find_if(table_info.columns.begin(), table_info.columns.end(), [&](const ColumnInfo & column_info_) {
+                      if (column_info_.id == orig_column_info.id && column_info_.name != orig_column_info.name)
+                          LOG_INFO(log, "detect column " << orig_column_info.name << " rename to " << column_info_.name);
 
-        alter_commands.emplace_back(std::move(command));
+                      return column_info_.id == orig_column_info.id
+                          && (column_info_.tp != orig_column_info.tp || column_info_.hasNotNullFlag() != orig_column_info.hasNotNullFlag());
+                  });
+
+            if (column_info != table_info.columns.end())
+            {
+                AlterCommand command;
+                // Type changed column.
+                command.type = AlterCommand::MODIFY_COLUMN;
+                // Alter column with new column info
+                setAlterCommandColumn(log, command, *column_info);
+                alter_commands.emplace_back(std::move(command));
+            }
+        }
+        result.push_back(alter_commands);
     }
 
-    return alter_commands;
+    {
+        AlterCommands add_commands;
+        /// Detect new columns.
+        for (const auto & column_info : table_info.columns)
+        {
+            const auto & orig_column_info = std::find_if(orig_table_info.columns.begin(),
+                orig_table_info.columns.end(),
+                [&](const TiDB::ColumnInfo & orig_column_info_) { return orig_column_info_.id == column_info.id; });
+
+            if (orig_column_info == orig_table_info.columns.end())
+            {
+                AlterCommand command;
+                // New column.
+                command.type = AlterCommand::ADD_COLUMN;
+                setAlterCommandColumn(log, command, column_info);
+
+                add_commands.emplace_back(std::move(command));
+            }
+        }
+
+        result.push_back(add_commands);
+    }
+
+    return result;
 }
 
 template <typename Getter>
@@ -121,24 +163,28 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
 {
     table_info->schema_version = target_version;
     auto orig_table_info = storage->getTableInfo();
-    auto alter_commands = detectSchemaChanges(log, *table_info, orig_table_info);
+    auto commands_vec = detectSchemaChanges(log, *table_info, orig_table_info);
 
     std::stringstream ss;
     ss << "Detected schema changes: " << db_name << "." << table_info->name << "\n";
-    for (const auto & command : alter_commands)
-    {
-        // TODO: Other command types.
-        if (command.type == AlterCommand::ADD_COLUMN)
-            ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-        else if (command.type == AlterCommand::DROP_COLUMN)
-            ss << "DROP COLUMN " << command.column_name << ", ";
-        else if (command.type == AlterCommand::MODIFY_COLUMN)
-            ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
-    }
+    for (const auto & alter_commands : commands_vec)
+        for (const auto & command : alter_commands)
+        {
+            if (command.type == AlterCommand::ADD_COLUMN)
+                ss << "ADD COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::DROP_COLUMN)
+                ss << "DROP COLUMN " << command.column_name << ", ";
+            else if (command.type == AlterCommand::MODIFY_COLUMN)
+                ss << "MODIFY COLUMN " << command.column_name << " " << command.data_type->getName() << ", ";
+            else if (command.type == AlterCommand::RENAME_COLUMN)
+                ss << "RENAME COLUMN from " << command.column_name << " to " << command.new_column_name << ", ";
+        }
+
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": " << ss.str());
 
     // Call storage alter to apply schema changes.
-    storage->alterForTMT(alter_commands, *table_info, db_name, context);
+    for (const auto & alter_commands : commands_vec)
+        storage->alterForTMT(alter_commands, *table_info, db_name, context);
 
     auto & tmt_context = context.getTMTContext();
 
@@ -150,7 +196,8 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
             auto part_storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(part_def.id).get());
             if (part_storage != nullptr)
-                part_storage->alterForTMT(alter_commands, new_table_info, db_name, context);
+                for (const auto & alter_commands : commands_vec)
+                    part_storage->alterForTMT(alter_commands, new_table_info, db_name, context);
         }
     }
 
@@ -192,7 +239,7 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
 
     if (isIgnoreDB(di->name))
     {
-        LOG_INFO(log, "ignore schema changes for db: " + di->name);
+        LOG_INFO(log, "ignore schema changes for db: " << di->name);
         return;
     }
 
@@ -239,6 +286,7 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
         }
         default:
         {
+            LOG_INFO(log, "ignore change type: " << int(diff.type));
             break;
         }
     }
@@ -366,7 +414,7 @@ template <typename Getter>
 void SchemaBuilder<Getter>::applyRenameTableImpl(
     const String & old_db, const String & new_db, const String & old_table, const String & new_table)
 {
-    LOG_INFO(log, "The " + old_db + "." + old_table + " will be renamed to " + new_db + "." + new_table);
+    LOG_INFO(log, "The " << old_db << "." << old_table << " will be renamed to " << new_db << "." << new_table);
     if (old_db == new_db && old_table == new_table)
     {
         return;
@@ -408,7 +456,7 @@ void SchemaBuilder<Getter>::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info)
 {
     if (isIgnoreDB(db_info->name))
     {
-        LOG_INFO(log, "ignore schema changes for db: " + db_info->name);
+        LOG_INFO(log, "ignore schema changes for db: " << db_info->name);
         return;
     }
 
@@ -431,7 +479,7 @@ void SchemaBuilder<Getter>::applyDropSchema(DatabaseID schema_id)
     if (unlikely(it == databases.end()))
     {
         LOG_INFO(
-            log, "Syncer wants to drop database: " + std::to_string(schema_id) + " . But database is not found, may has been dropped.");
+            log, "Syncer wants to drop database: " << std::to_string(schema_id) << " . But database is not found, may has been dropped.");
         return;
     }
     applyDropSchemaImpl(it->second);
@@ -441,7 +489,7 @@ void SchemaBuilder<Getter>::applyDropSchema(DatabaseID schema_id)
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropSchemaImpl(const String & database_name)
 {
-    LOG_INFO(log, "Try to drop database: " + database_name);
+    LOG_INFO(log, "Try to drop database: " << database_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
     drop_query->if_exists = true;
@@ -507,7 +555,7 @@ void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db
 {
     String stmt = createTableStmt(db_info, table_info);
 
-    LOG_INFO(log, "try to create table with stmt: " + stmt);
+    LOG_INFO(log, "try to create table with stmt: " << stmt);
 
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, stmt.data(), stmt.data() + stmt.size(), "from syncSchema " + table_info.name, 0);
@@ -557,7 +605,7 @@ void SchemaBuilder<Getter>::applyCreateTableImpl(const TiDB::DBInfo & db_info, T
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropTableImpl(const String & database_name, const String & table_name)
 {
-    LOG_INFO(log, "try to drop table : " + database_name + "." + table_name);
+    LOG_INFO(log, "try to drop table : " << database_name << "." << table_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
     drop_query->table = table_name;
@@ -570,13 +618,13 @@ void SchemaBuilder<Getter>::applyDropTableImpl(const String & database_name, con
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_id)
 {
-    LOG_DEBUG(log, "drop table id :" + std::to_string(table_id));
+    LOG_DEBUG(log, "drop table id :" << std::to_string(table_id));
     String database_name = dbInfo->name;
     auto & tmt_context = context.getTMTContext();
     auto storage_to_drop = tmt_context.getStorages().get(table_id).get();
     if (storage_to_drop == nullptr)
     {
-        LOG_DEBUG(log, "table id " + std::to_string(table_id) + " in db " + database_name + " is not existed.");
+        LOG_DEBUG(log, "table id " << table_id << " in db " << database_name << " is not existed.");
         return;
     }
     const auto & table_info = static_cast<StorageMergeTree *>(storage_to_drop)->getTableInfo();
@@ -627,7 +675,7 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
     for (auto table : tables_to_drop)
     {
         applyDropTableImpl(table.first, table.second);
-        LOG_DEBUG(log, "Table " + table.first + "." + table.second + " is dropped during sync all schemas");
+        LOG_DEBUG(log, "Table " << table.first << "." << table.second << " is dropped during sync all schemas");
     }
     const auto & dbs = context.getDatabases();
     for (auto it = dbs.begin(); it != dbs.end(); it++)
@@ -643,60 +691,21 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
     for (auto db : dbs_to_drop)
     {
         applyDropSchemaImpl(db);
-        LOG_DEBUG(log, "DB " + db + " is dropped during sync all schemas");
-    }
-}
-
-using TableName = std::pair<String, String>;
-using TableNamePair = std::pair<TableName, TableName>;
-using TableNameMap = std::map<TableName, TableName>;
-using TableNameSet = std::set<TableName>;
-constexpr char TmpTableNamePrefix[] = "_tiflash_tmp_";
-
-inline TableName generateTmpTable(const TableName & name) { return TableName(name.first, String(TmpTableNamePrefix) + name.second); }
-
-template <typename Builder>
-TableNamePair resolveRename(Builder * builder, TableNameMap & map, TableNameMap::iterator it, TableNameSet & visited)
-{
-    TableName target_name = it->second;
-    TableName origin_name = it->first;
-    visited.insert(it->first);
-    auto next_it = map.find(target_name);
-    if (next_it == map.end())
-    {
-        builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
-        map.erase(it);
-        return TableNamePair();
-    }
-    else if (visited.find(target_name) != visited.end())
-    {
-        // There is a cycle.
-        auto tmp_name = generateTmpTable(target_name);
-        builder->applyRenameTableImpl(target_name.first, tmp_name.first, target_name.second, tmp_name.second);
-        builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
-        map.erase(it);
-        return TableNamePair(target_name, tmp_name);
-    }
-    else
-    {
-        auto pair = resolveRename(builder, map, next_it, visited);
-        if (pair.first == origin_name)
-        {
-            origin_name = pair.second;
-        }
-        builder->applyRenameTableImpl(origin_name.first, target_name.first, origin_name.second, target_name.second);
-        map.erase(it);
-        return pair;
+        LOG_DEBUG(log, "DB " << db << " is dropped during sync all schemas");
     }
 }
 
 template <typename Getter>
 void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs)
 {
+    using Resolver = CyclicRenameResolver<std::pair<String, String>, TmpTableNameGenerator>;
+    using TableName = typename Resolver::Name;
+
     // Rename Table First.
     auto & tmt_context = context.getTMTContext();
     auto storage_map = tmt_context.getStorages().getAllStorage();
-    TableNameMap rename_map;
+
+    typename Resolver::NameMap rename_map;
     for (auto table_db : table_dbs)
     {
         auto storage = static_cast<StorageMergeTree *>(tmt_context.getStorages().get(table_db.first->id).get());
@@ -713,11 +722,10 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
         }
     }
 
-    while (!rename_map.empty())
+    typename Resolver::NamePairs result = Resolver().resolve(std::move(rename_map));
+    for (const auto & rename_pair : result)
     {
-        auto it = rename_map.begin();
-        TableNameSet visited;
-        resolveRename(this, rename_map, it, visited);
+        applyRenameTableImpl(rename_pair.first.first, rename_pair.second.first, rename_pair.first.second, rename_pair.second.second);
     }
 
     // Then Alter Table.
@@ -757,7 +765,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
     {
         if (isIgnoreDB((*it)->name))
         {
-            LOG_INFO(log, "ignore schema changes for db: " + (*it)->name);
+            LOG_INFO(log, "ignore schema changes for db: " << (*it)->name);
             it = all_schema.erase(it);
         }
         else
@@ -768,7 +776,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
 
     for (auto db_info : all_schema)
     {
-        LOG_DEBUG(log, "Load schema : " + db_info->name);
+        LOG_DEBUG(log, "Load schema : " << db_info->name);
     }
 
     // Collect All Table Info and Create DBs.

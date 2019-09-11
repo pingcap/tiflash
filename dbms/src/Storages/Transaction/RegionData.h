@@ -25,11 +25,11 @@ public:
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 
-    TableID insert(ColumnFamilyType cf, TiKVKey && key, const String & raw_key, TiKVValue && value);
+    TableID insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value);
 
-    void removeLockCF(const TableID & table_id, const String & raw_key);
-    void removeDefaultCF(const TableID & table_id, const TiKVKey & key, const String & raw_key);
-    void removeWriteCF(const TableID & table_id, const TiKVKey & key, const String & raw_key);
+    void removeLockCF(const TableID & table_id, const DecodedTiKVKey & raw_key);
+    void removeDefaultCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key);
+    void removeWriteCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key);
 
     WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it);
 
@@ -51,7 +51,8 @@ public:
 
     bool isEqual(const RegionData & r2) const;
 
-    RegionWriteCFData & writeCFMute();
+    RegionWriteCFData & writeCF();
+    RegionDefaultCFData & defaultCF();
 
     const RegionWriteCFData & writeCF() const;
     const RegionDefaultCFData & defaultCF() const;
@@ -63,7 +64,7 @@ public:
 
     RegionData(RegionData && data);
 
-    void deleteRange(const ColumnFamilyType cf, const TiKVKey & start_key, const TiKVKey & end_key);
+    void deleteRange(const ColumnFamilyType cf, const RegionRange & range);
 
 public:
     static UInt8 getWriteType(const ConstWriteCFIter & write_it);

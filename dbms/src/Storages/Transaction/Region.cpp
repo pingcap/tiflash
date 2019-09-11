@@ -34,7 +34,7 @@ RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const Reg
 
 LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
 
-TableID Region::insert(const std::string & cf, TiKVKey key, TiKVValue value)
+TableID Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     return doInsert(cf, std::move(key), std::move(value));
@@ -42,7 +42,7 @@ TableID Region::insert(const std::string & cf, TiKVKey key, TiKVValue value)
 
 TableID Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
-    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
     if (table_id == InvalidTableID)
         return InvalidTableID;
@@ -59,7 +59,7 @@ TableID Region::remove(const std::string & cf, const TiKVKey & key)
 
 TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
-    std::string raw_key = RecordKVFormat::decodeTiKVKey(key);
+    auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto table_id = checkRecordAndValidTable(raw_key);
     if (table_id == InvalidTableID)
         return InvalidTableID;
@@ -86,13 +86,7 @@ TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
     return table_id;
 }
 
-UInt64 Region::getIndex() const
-{
-    std::shared_lock<std::shared_mutex> lock(mutex);
-    return meta.appliedIndex();
-}
-
-UInt64 Region::getProbableIndex() const { return meta.appliedIndex(); }
+UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 
 RegionPtr Region::splitInto(RegionMeta meta)
 {
@@ -106,32 +100,23 @@ RegionPtr Region::splitInto(RegionMeta meta)
     else
         new_region = std::make_shared<Region>(std::move(meta));
 
-    data.splitInto(new_region->getRange(), new_region->data);
+    const auto range = new_region->getRange();
+    data.splitInto(range->comparableKeys(), new_region->data);
 
     return new_region;
 }
 
-void Region::execChangePeer(
+void RegionRaftCommandDelegate::execChangePeer(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & change_peer_request = request.change_peer();
 
     LOG_INFO(log, toString(false) << " execute change peer type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
-    meta.execChangePeer(request, response, index, term);
+    meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
 }
 
-const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
-{
-    for (const auto & peer : region.peers())
-    {
-        if (peer.store_id() == store_id)
-            return peer;
-    }
-    throw Exception("[findPeer] peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-}
-
-Regions Region::execBatchSplit(
+Regions RegionRaftCommandDelegate::execBatchSplit(
     const raft_cmdpb::AdminRequest &, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & new_region_infos = response.splits().regions();
@@ -184,30 +169,30 @@ Regions Region::execBatchSplit(
     return split_regions;
 }
 
-void Region::execCompactLog(
+void RegionRaftCommandDelegate::execCompactLog(
     const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term)
 {
     const auto & compact_log_request = request.compact_log();
-    LOG_INFO(log,
-        toString(false) << " execute compact log, compact_term: " << compact_log_request.compact_term()
-                        << ", compact_index: " << compact_log_request.compact_index());
+    const auto compact_index = compact_log_request.compact_index();
+    const auto compact_term = compact_log_request.compact_term();
 
-    meta.execCompactLog(request, response, index, term);
+    LOG_INFO(log, toString(false) << " execute compact log, compact_term: " << compact_term << ", compact_index: " << compact_index);
+
+    meta.makeRaftCommandDelegate().execCompactLog(request, response, index, term);
 }
 
-RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
+void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const KVStore &, RegionTable *, RaftCommandResult & result)
 {
     const auto & header = cmd.header();
     UInt64 term = header.term();
     UInt64 index = header.index();
     bool sync_log = header.sync_log();
 
-    RaftCommandResult result;
+    result.type = RaftCommandResult::Type::Default;
     result.sync_log = sync_log;
 
     {
-        auto applied_index = meta.appliedIndex();
-        if (index <= applied_index)
+        if (index <= appliedIndex())
         {
             result.type = RaftCommandResult::Type::IndexError;
             if (term == 0 && index == 0)
@@ -216,7 +201,7 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
             }
             else
                 LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
-            return result;
+            return;
         }
     }
 
@@ -288,8 +273,8 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                     auto & key = *put.mutable_key();
                     auto & value = *put.mutable_value();
 
-                    auto & tikv_key = static_cast<TiKVKey &>(key);
-                    auto & tikv_value = static_cast<TiKVValue &>(value);
+                    auto tikv_key = TiKVKey(std::move(key));
+                    auto tikv_value = TiKVValue(std::move(value));
 
                     try
                     {
@@ -312,10 +297,10 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                 }
                 case raft_cmdpb::CmdType::Delete:
                 {
-                    const auto & del = req.delete_();
+                    auto & del = *req.mutable_delete_();
 
-                    auto & key = del.key();
-                    const auto & tikv_key = static_cast<const TiKVKey &>(key);
+                    auto & key = *del.mutable_key();
+                    auto tikv_key = TiKVKey(std::move(key));
 
                     try
                     {
@@ -343,15 +328,15 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
                     break;
                 case raft_cmdpb::CmdType::DeleteRange:
                 {
-                    const auto & delete_range = req.delete_range();
+                    auto & delete_range = *req.mutable_delete_range();
                     const auto & cf = delete_range.cf();
-                    const auto & start = static_cast<const TiKVKey &>(delete_range.start_key());
-                    const auto & end = static_cast<const TiKVKey &>(delete_range.end_key());
+                    auto start = TiKVKey(std::move(*delete_range.mutable_start_key()));
+                    auto end = TiKVKey(std::move(*delete_range.mutable_end_key()));
 
                     LOG_INFO(log,
                         toString(false) << " start to execute " << raft_cmdpb::CmdType_Name(type) << ", CF: " << cf
                                         << ", start key in hex: " << start.toHex() << ", end key in hex: " << end.toHex());
-                    doDeleteRange(cf, start, end);
+                    doDeleteRange(cf, RegionRangeKeys::makeComparableKeys(std::move(start), std::move(end)));
                     break;
                 }
                 default:
@@ -371,8 +356,6 @@ RaftCommandResult Region::onCommand(enginepb::CommandRequest && cmd)
 
     if (is_dirty)
         incDirtyFlag();
-
-    return result;
 }
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
@@ -427,13 +410,15 @@ ColumnFamilyType Region::getCf(const std::string & cf)
 
 RegionID Region::id() const { return meta.regionId(); }
 
-bool Region::isPendingRemove() const { return meta.peerState() == raft_serverpb::PeerState::Tombstone; }
+bool Region::isPendingRemove() const { return peerState() == raft_serverpb::PeerState::Tombstone; }
 
 void Region::setPendingRemove()
 {
     meta.setPeerState(raft_serverpb::PeerState::Tombstone);
     meta.notifyAll();
 }
+
+raft_serverpb::PeerState Region::peerState() const { return meta.peerState(); }
 
 size_t Region::dataSize() const { return data.dataSize(); }
 
@@ -470,21 +455,21 @@ void Region::decDirtyFlag(size_t x) const { dirty_flag -= x; }
 
 void Region::incDirtyFlag() { dirty_flag++; }
 
-std::unique_ptr<Region::CommittedScanner> Region::createCommittedScanner(TableID expected_table_id)
+Region::CommittedScanner Region::createCommittedScanner(TableID expected_table_id)
 {
-    return std::make_unique<Region::CommittedScanner>(this->shared_from_this(), expected_table_id);
+    return Region::CommittedScanner(this->shared_from_this(), expected_table_id);
 }
 
-std::unique_ptr<Region::CommittedRemover> Region::createCommittedRemover(TableID expected_table_id)
+Region::CommittedRemover Region::createCommittedRemover(TableID expected_table_id)
 {
-    return std::make_unique<Region::CommittedRemover>(this->shared_from_this(), expected_table_id);
+    return Region::CommittedRemover(this->shared_from_this(), expected_table_id);
 }
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
 
 enginepb::CommandResponse Region::toCommandResponse() const { return meta.toCommandResponse(); }
 
-RegionRange Region::getRange() const { return meta.getRange(); }
+ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
 UInt64 Region::learnerRead()
 {
@@ -510,10 +495,7 @@ UInt64 Region::version() const { return meta.version(); }
 
 UInt64 Region::confVer() const { return meta.confVer(); }
 
-HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const
-{
-    return TiKVRange::getHandleRangeByTable(getRange(), table_id);
-}
+HandleRange<HandleID> Region::getHandleRangeByTable(TableID table_id) const { return getRange()->getHandleRangeByTable(table_id); }
 
 void Region::assignRegion(Region && new_region)
 {
@@ -542,7 +524,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
     if (handle_map.empty())
         return;
 
-    auto & region_data = data.writeCFMute().getDataMut();
+    auto & region_data = data.writeCF().getDataMut();
     auto & write_map = region_data[table_id];
 
     size_t deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
@@ -585,7 +567,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         if (ori_ts >= safe_point)
             throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
-        std::string raw_key = RecordKVFormat::genRawKey(table_id, handle);
+        auto raw_key = RecordKVFormat::genRawKey(table_id, handle);
         TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
         TiKVKey commit_key = RecordKVFormat::appendTs(key, ori_ts);
         TiKVValue value = RecordKVFormat::encodeWriteCfValue(DelFlag, 0);
@@ -601,10 +583,18 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         LOG_INFO(log, "[compareAndCompleteSnapshot] add deleted gc: " << deleted_gc_cnt);
 }
 
-void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region)
+RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
 {
-    const auto & [start_key, end_key] = getRange();
-    std::unordered_map<TableID, HandleMap> handle_maps;
+    static_assert(sizeof(RegionRaftCommandDelegate) == sizeof(Region));
+    // lock is useless, just to make sure the task mutex of KVStore is locked
+    std::ignore = lock;
+    return static_cast<RegionRaftCommandDelegate &>(*this);
+}
+
+void Region::compareAndUpdateHandleMaps(const Region & source_region, std::unordered_map<TableID, HandleMap> & handle_maps)
+{
+    const auto range = getRange();
+    const auto & [start_key, end_key] = range->comparableKeys();
     {
         std::shared_lock<std::shared_mutex> source_lock(source_region.mutex);
 
@@ -619,13 +609,10 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
             {
                 const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
 
-                {
-                    bool ok = start_key ? key >= start_key : true;
-                    ok = ok && (end_key ? key < end_key : true);
-
-                    if (!ok)
-                        continue;
-                }
+                if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
+                    ;
+                else
+                    continue;
 
                 const auto & [handle, ts] = write_map_it->first;
                 const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
@@ -638,21 +625,29 @@ void Region::compareAndCompleteSnapshot(const Timestamp safe_point, const Region
             }
 
             LOG_DEBUG(log,
-                "[compareAndCompleteSnapshot] memory cache: source " << source_region.toString(false) << ", table " << table_id
+                "[compareAndUpdateHandleMaps] memory cache: source " << source_region.toString(false) << ", table " << table_id
                                                                      << ", record size " << write_map.size());
         }
     }
-
-    for (auto & [table_id, handle_map] : handle_maps)
-        compareAndCompleteSnapshot(handle_map, table_id, safe_point);
 }
 
-void Region::doDeleteRange(const std::string & cf, const TiKVKey & start_key, const TiKVKey & end_key)
+void Region::doDeleteRange(const std::string & cf, const RegionRange & range)
 {
     auto type = getCf(cf);
-    return data.deleteRange(type, start_key, end_key);
+    return data.deleteRange(type, range);
 }
 
-std::tuple<RegionVersion, RegionVersion, RegionRange> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
+std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
+
+void Region::tryPreDecodeTiKVValue()
+{
+    DB::tryPreDecodeTiKVValue(data.defaultCF().getExtra().popAll());
+    DB::tryPreDecodeTiKVValue(data.writeCF().getExtra().popAll());
+}
+
+const RegionRangeKeys & RegionRaftCommandDelegate::getRange() { return *meta.makeRaftCommandDelegate().regionState().getRange(); }
+UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().getApplyState().applied_index(); }
+metapb::Region Region::getMetaRegion() const { return meta.getMetaRegion(); }
+raft_serverpb::MergeState Region::getMergeState() const { return meta.getMergeState(); }
 
 } // namespace DB

@@ -33,6 +33,8 @@ public:
 
         TableID id() { return table_info.id; }
 
+        ColumnID allocColumnID() { return ++col_id; }
+
         bool isPartitionTable() { return table_info.is_partition_table; }
 
         std::vector<TableID> getPartitionIDs()
@@ -48,6 +50,7 @@ public:
     private:
         const String database_name;
         const String table_name;
+        ColumnID col_id;
     };
     using TablePtr = std::shared_ptr<Table>;
 
@@ -64,11 +67,15 @@ public:
 
     void dropDB(Context & context, const String & database_name, bool drop_regions);
 
-    void addColumnToTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+    void addColumnToTable(
+        const String & database_name, const String & table_name, const NameAndTypePair & column, const Field & default_value);
 
     void dropColumnFromTable(const String & database_name, const String & table_name, const String & column_name);
 
     void modifyColumnInTable(const String & database_name, const String & table_name, const NameAndTypePair & column);
+
+    void renameColumnInTable(
+        const String & database_name, const String & table_name, const String & old_column_name, const String & new_column_name);
 
     void renameTable(const String & database_name, const String & table_name, const String & new_table_name);
 

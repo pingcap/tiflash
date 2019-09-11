@@ -15,7 +15,9 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir) : region_persister(data_dir, region_manager), log(&Logger::get("KVStore")) {}
+KVStore::KVStore(const std::string & data_dir)
+    : region_persister(data_dir, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
+{}
 
 void KVStore::restore(const RegionClientCreateFunc & region_client_create)
 {
@@ -46,15 +48,36 @@ RegionPtr KVStore::getRegion(const RegionID region_id) const
     return nullptr;
 }
 
-RegionManager::RegionTaskElementPtr RegionManager::getRegionTaskCtrl(const RegionID region_id) const
+KVStore::RegionsAppliedindexMap KVStore::getRegionsByRange(const RegionRange & range) const
+{
+    auto task_lock = genTaskLock();
+
+    RegionsAppliedindexMap res;
+    for (const auto & region : regions())
+    {
+        auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
+        const auto & [start_key, end_key] = region_delegate.getRange().comparableKeys();
+        if (range.first.compare(end_key) >= 0 || range.second.compare(start_key) <= 0)
+            continue;
+        res.emplace(region.first, std::make_pair(region.second, region_delegate.appliedIndex()));
+    }
+    return res;
+}
+
+const RegionManager::RegionTaskElement & RegionManager::getRegionTaskCtrl(const RegionID region_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto & p = regions_ctrl[region_id];
-    return p ? p : (p = std::make_shared<RegionTaskElement>());
+    if (auto it = regions_ctrl.find(region_id); it != regions_ctrl.end())
+        return it->second;
+
+    return regions_ctrl.try_emplace(region_id).first->second;
 }
 
-RegionTaskLock RegionManager::genRegionTaskLock(const RegionID region_id) const { return RegionTaskLock(*getRegionTaskCtrl(region_id)); }
+RegionTaskLock RegionManager::genRegionTaskLock(const RegionID region_id) const
+{
+    return RegionTaskLock(getRegionTaskCtrl(region_id).mutex);
+}
 
 size_t KVStore::regionSize() const
 {
@@ -69,28 +92,48 @@ void KVStore::traverseRegions(std::function<void(RegionID region_id, const Regio
         callback(it->first, it->second);
 }
 
-bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
+bool KVStore::onSnapshot(RegionPtr new_region, Context * context) { return onSnapshot(new_region, context, {}); }
+
+bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check)
 {
     RegionID region_id = new_region->id();
     {
         auto region_lock = region_manager.genRegionTaskLock(region_id);
         region_persister.persist(*new_region, region_lock);
     }
+
     {
-        std::lock_guard<std::mutex> lock(task_mutex);
+        auto task_lock = genTaskLock();
         auto region_lock = region_manager.genRegionTaskLock(region_id);
+
+        for (const auto & region_info : regions_to_check)
+        {
+            const auto & region = region_info.second.first;
+
+            if (auto it = regions().find(region_info.first); it != regions().end())
+            {
+                if (it->second != region)
+                {
+                    LOG_WARNING(log, "[onSnapshot] " << it->second->toString() << " instance changed");
+                    return false;
+                }
+                if (region->appliedIndex() != region_info.second.second)
+                {
+                    LOG_WARNING(log, "[onSnapshot] " << it->second->toString() << " instance changed");
+                    return false;
+                }
+            }
+            else
+            {
+                LOG_WARNING(log, "[onSnapshot] " << region->toString(false) << " not found");
+                return false;
+            }
+        }
 
         RegionPtr old_region = getRegion(region_id);
         if (old_region != nullptr)
         {
-            UInt64 old_index = old_region->getProbableIndex();
-
-            LOG_DEBUG(log, "KVStore::onSnapshot previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
-            if (old_index >= new_region->getProbableIndex())
-            {
-                LOG_INFO(log, "KVStore::onSnapshot discard new region because of index is outdated");
-                return false;
-            }
+            LOG_DEBUG(log, "[onSnapshot] previous " << old_region->toString(true) << " ; new " << new_region->toString(true));
             old_region->assignRegion(std::move(*new_region));
             new_region = old_region;
         }
@@ -102,8 +145,11 @@ bool KVStore::onSnapshot(RegionPtr new_region, RegionTable * region_table)
     }
 
     // if the operation about RegionTable is out of the protection of task_mutex, we should make sure that it can't delete any mapping relation.
-    if (region_table)
-        region_table->applySnapshotRegion(*new_region);
+    if (context)
+    {
+        context->getRaftService().addRegionToDecode(new_region);
+        context->getTMTContext().getRegionTable().applySnapshotRegion(*new_region);
+    }
 
     return true;
 }
@@ -112,6 +158,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 {
     TMTContext * tmt_context = raft_ctx.context ? &(raft_ctx.context->getTMTContext()) : nullptr;
     RegionTable * region_table = tmt_context ? &(tmt_context->getRegionTable()) : nullptr;
+    RaftService * raft_service = raft_ctx.context ? &(raft_ctx.context->getRaftService()) : nullptr;
 
     enginepb::CommandResponseBatch responseBatch;
 
@@ -122,7 +169,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         LOG_INFO(log, "Report [region " << region_id << "] destroyed");
     };
 
-    std::lock_guard<std::mutex> lock(task_mutex);
+    auto task_lock = genTaskLock();
 
     for (auto && cmd : *cmds.mutable_requests())
     {
@@ -132,7 +179,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         const RegionPtr curr_region_ptr = getRegion(curr_region_id);
         if (curr_region_ptr == nullptr)
         {
-            LOG_WARNING(log, "[KVStore::onServiceCommand] [region " << curr_region_id << "] is not found, might be removed already");
+            LOG_WARNING(log, "[onServiceCommand] [region " << curr_region_id << "] is not found, might be removed already");
             report_region_destroy(curr_region_id);
             continue;
         }
@@ -151,7 +198,8 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             continue;
         }
 
-        RaftCommandResult result = curr_region.onCommand(std::move(cmd));
+        curr_region.makeRaftCommandDelegate(task_lock).onCommand(std::move(cmd), *this, region_table, *raft_cmd_res);
+        RaftCommandResult & result = *raft_cmd_res;
 
         const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region.toCommandResponse(); };
 
@@ -176,7 +224,6 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
-            auto & raft_service = raft_ctx.context->getRaftService();
             {
                 std::lock_guard<std::mutex> lock(mutex());
 
@@ -200,10 +247,10 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 for (const auto & new_region : split_regions)
                 {
                     region_table->updateRegionForSplit(*new_region, curr_region_id);
-                    raft_service.addRegionToFlush(*new_region);
+                    raft_service->addRegionToFlush(*new_region);
                 }
                 region_table->shrinkRegionRange(curr_region);
-                raft_service.addRegionToFlush(curr_region);
+                raft_service->addRegionToFlush(curr_region);
             }
 
             {
@@ -247,6 +294,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 break;
             case RaftCommandResult::Type::UpdateTableID:
                 handle_update_table_ids(result.table_ids);
+                raft_service->addRegionToDecode(curr_region_ptr);
                 break;
             case RaftCommandResult::Type::Default:
                 persist_and_sync();
@@ -265,7 +313,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
 void KVStore::report(RaftContext & raft_ctx)
 {
-    std::lock_guard<std::mutex> lock(task_mutex);
+    auto lock = genTaskLock();
 
     enginepb::CommandResponseBatch responseBatch;
     {
@@ -360,6 +408,7 @@ void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)
     LOG_INFO(log, "update RegionTable done");
 }
 
+KVStoreTaskLock KVStore::genTaskLock() const { return KVStoreTaskLock(task_mutex); }
 RegionMap & KVStore::regions() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }
 std::mutex & KVStore::mutex() const { return region_manager.mutex; }

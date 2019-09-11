@@ -40,16 +40,16 @@ void RegionTable::writeBlockByRegion(
         /// Read raw KVs from region cache.
         {
             // Shortcut for empty region.
-            if (!scanner->hasNext())
+            if (!scanner.hasNext())
                 return;
 
-            data_list_to_remove.reserve(scanner->writeMapSize());
+            data_list_to_remove.reserve(scanner.writeMapSize());
 
             auto start_time = Clock::now();
             do
             {
-                data_list_read.emplace_back(scanner->next());
-            } while (scanner->hasNext());
+                data_list_read.emplace_back(scanner.next());
+            } while (scanner.hasNext());
             region_read_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
         }
     }
@@ -143,14 +143,14 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
             if (version != region_version || conf_ver != conf_version)
                 return {Block(), VERSION_ERROR};
 
-            handle_range = TiKVRange::getHandleRangeByTable(key_range, table_info.id);
+            handle_range = key_range->getHandleRangeByTable(table_info.id);
         }
 
         /// Deal with locks.
         {
             if (resolve_locks)
             {
-                LockInfoPtr lock_info = scanner->getLockInfo(start_ts);
+                LockInfoPtr lock_info = scanner.getLockInfo(start_ts);
                 if (lock_info)
                 {
                     LockInfos lock_infos;
@@ -163,17 +163,17 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
         /// Read raw KVs from region cache.
         {
             // Shortcut for empty region.
-            if (!scanner->hasNext())
+            if (!scanner.hasNext())
                 return {Block(), OK};
 
-            data_list_read.reserve(scanner->writeMapSize());
+            data_list_read.reserve(scanner.writeMapSize());
 
             // Tiny optimization for queries that need only handle, tso, delmark.
             bool need_value = column_names_to_read.size() != 3;
             do
             {
-                data_list_read.emplace_back(scanner->next(need_value));
-            } while (scanner->hasNext());
+                data_list_read.emplace_back(scanner.next(need_value));
+            } while (scanner.hasNext());
         }
     }
 
