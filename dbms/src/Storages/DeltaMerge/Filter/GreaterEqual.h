@@ -17,13 +17,7 @@ public:
 
     RSResult roughCheck(const RSCheckParam & param) override
     {
-//        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
-        auto it = param.indexes.find(attr.col_id);
-    if (it == param.indexes.end())
-        return Some;
-    auto rsindex = it->second;
-    if (!rsindex.type->equals(*attr.type))
-        return Some;
+        GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
         return rsindex.minmax->checkGreaterEqual(value, rsindex.type, null_direction);
     }
 

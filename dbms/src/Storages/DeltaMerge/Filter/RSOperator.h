@@ -86,7 +86,7 @@ public:
     if (it == param.indexes.end())                                         \
         return Some;                                                       \
     auto rsindex = it->second;                                             \
-    if (!rsindex.type->equals(*attr.type))                                  \
+    if (!rsindex.type->equals(*attr.type))                                 \
         return Some;
 
 

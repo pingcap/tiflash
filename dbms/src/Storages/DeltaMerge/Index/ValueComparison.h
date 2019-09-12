@@ -165,9 +165,6 @@ private:
                 right_field = Field((typename NearestFieldType<Right>::Type)right);
             if (left_field.getType() == right_field.getType())
             {
-                // TODO: optimizaton is required.
-                //            res = Op<Field, Field>::apply(left_field, right_field);
-
                 if constexpr (std::is_same_v<OpInt, EqualsInt>)
                     res = left_field == right_field;
                 else if constexpr (std::is_same_v<OpInt, LessInt>)
