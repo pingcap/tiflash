@@ -23,7 +23,7 @@ public:
         {
             if (!filter)
             {
-                skip_chunks[i] = false;
+                skip_chunks[i] = 0;
                 continue;
             }
             auto &       chunk = chunks[i];
@@ -51,8 +51,8 @@ public:
     void   skipNext() { ++chunk_index; }
 
 private:
-    Chunks            chunks;
-    std::vector<bool> skip_chunks;
+    Chunks             chunks;
+    std::vector<UInt8> skip_chunks;
 
     size_t        chunk_index = 0;
     ColumnDefines read_columns;

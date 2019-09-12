@@ -79,7 +79,7 @@ public:
         return it->second;
     }
 
-    ColumnMeta const * tryGetColumn(ColId col_id) const
+    const ColumnMeta * tryGetColumn(ColId col_id) const
     {
         auto it = columns.find(col_id);
         if (unlikely(it == columns.end()))

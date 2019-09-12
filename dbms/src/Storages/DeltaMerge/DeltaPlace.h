@@ -42,7 +42,7 @@ struct RidGenerator
     size_t  delta_block_rows;
     size_t  delta_block_pos = 0;
     // Whether this row's pk duplicates with the next one, if so, they share the same rid.
-    std::vector<bool> delta_block_dup_next;
+    std::vector<UInt8> delta_block_dup_next;
     // Whether current row's pk duplicates with the previous one. Used by Upsert.
     bool dup_prev = false;
 
@@ -58,7 +58,7 @@ struct RidGenerator
           sort_desc(sort_desc_),
           num_sort_columns(sort_desc.size()),
           delta_block_rows(delta_block.rows()),
-          delta_block_dup_next(delta_block_rows, false)
+          delta_block_dup_next(delta_block_rows, 0)
     {
         stable_stream->readPrefix();
 
