@@ -11,7 +11,8 @@ namespace DB
 {
 
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path)
+    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
+    ::TiDB::StorageEngine engine_)
     : kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
@@ -21,7 +22,8 @@ TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs
       ignore_databases(ignore_databases_),
       schema_syncer(addrs.size() == 0
               ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(pd_client, region_cache, rpc_client))
-              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client)))
+              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client))),
+      engine(engine_)
 {}
 
 void TMTContext::restore()
@@ -35,9 +37,9 @@ KVStorePtr & TMTContext::getKVStore() { return kvstore; }
 
 const KVStorePtr & TMTContext::getKVStore() const { return kvstore; }
 
-TMTStorages & TMTContext::getStorages() { return storages; }
+ManagedStorages & TMTContext::getStorages() { return storages; }
 
-const TMTStorages & TMTContext::getStorages() const { return storages; }
+const ManagedStorages & TMTContext::getStorages() const { return storages; }
 
 RegionTable & TMTContext::getRegionTable() { return region_table; }
 

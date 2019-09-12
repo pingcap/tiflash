@@ -171,6 +171,8 @@
     \
     M(DMWriteBlock) \
     M(DMWriteBlockNS) \
+    M(DMDeleteRange) \
+    M(DMDeleteRangeNS) \
     M(DMAppendDeltaPrepare) \
     M(DMAppendDeltaPrepareNS) \
     M(DMAppendDeltaCommitMemory) \

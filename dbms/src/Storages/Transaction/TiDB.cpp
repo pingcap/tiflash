@@ -453,7 +453,7 @@ CodecFlag ColumnInfo::getCodecFlag() const
 
 ColumnID TableInfo::getColumnID(const String & name) const
 {
-    for (auto col : columns)
+    for (const auto& col : columns)
     {
         if (name == col.name)
         {
@@ -462,7 +462,11 @@ ColumnID TableInfo::getColumnID(const String & name) const
     }
 
     if (name == DB::MutableSupport::tidb_pk_column_name)
-        return DB::InvalidColumnID;
+        return DB::TiDBPkColumnID;
+    else if (name == DB::MutableSupport::version_column_name)
+        return DB::VersionColumnID;
+    else if (name == DB::MutableSupport::delmark_column_name)
+        return DB::DelMarkColumnID;
 
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
 }

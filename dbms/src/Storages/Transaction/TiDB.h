@@ -5,6 +5,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -265,6 +266,8 @@ struct TableInfo
     TableID belonging_table_id = -1;
     PartitionInfo partition;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+
+    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
 

@@ -1,6 +1,10 @@
+#include <common/logger_useful.h>
+
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTInsertQuery.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/Region.h>
@@ -9,8 +13,6 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -85,8 +87,30 @@ void RegionTable::writeBlockByRegion(
 
         /// Write block into storage.
         start_time = Clock::now();
-        TxnMergeTreeBlockOutputStream output(*storage);
-        output.write(std::move(block));
+        // Note: do NOT use typeid_cast, since Storage is multi-inherite and typeid_cast will return nullptr
+        switch (storage->engineType())
+        {
+            case ::TiDB::StorageEngine::TMT:
+            {
+                auto * tmt_storage = dynamic_cast<StorageMergeTree *>(storage.get());
+                TxnMergeTreeBlockOutputStream output(*tmt_storage);
+                output.write(std::move(block));
+                break;
+            }
+            case ::TiDB::StorageEngine::DM:
+            {
+                auto * dm_storage = dynamic_cast<StorageDeltaMerge *>(storage.get());
+                // imported data from TiDB, ASTInsertQuery.is_import need to be true
+                ASTPtr query(new ASTInsertQuery(dm_storage->getDatabaseName(), dm_storage->getTableName(), /* is_import_= */ true));
+                BlockOutputStreamPtr output = dm_storage->write(query, context.getSettingsRef());
+                output->writePrefix();
+                output->write(block);
+                output->writeSuffix();
+                break;
+            }
+            default:
+                throw Exception("Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
+        }
         write_part_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
         /// Move read data to outer to remove.

@@ -43,8 +43,8 @@ TableID getTableID(Context & context, const std::string & database_name, const s
     }
 
     auto storage = context.getTable(database_name, table_name);
-    auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-    auto table_info = merge_tree->getTableInfo();
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    auto table_info = managed_storage->getTableInfo();
     return table_info.id;
 }
 

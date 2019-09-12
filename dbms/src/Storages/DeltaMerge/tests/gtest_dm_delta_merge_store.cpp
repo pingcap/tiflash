@@ -3,6 +3,7 @@
 
 #include <Poco/File.h>
 
+#include <Storages/DeltaMerge/DeltaMergeStore-internal.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 
 namespace DB
@@ -644,6 +645,107 @@ catch (const Exception & e)
         std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
 
     throw;
+}
+
+
+
+/// tests for prepare write actions
+
+namespace
+{
+
+DeltaMergeStore::SegmentSortedMap prepareSegments(const HandleRanges & ranges)
+{
+    DeltaMergeStore::SegmentSortedMap segments;
+
+    const UInt64 epoch      = 0;
+    PageId       segment_id = 0;
+    PageId       delta_id   = 1024;
+    PageId       stable_id  = 2048;
+
+    auto segment_generator = [&](HandleRange range) -> SegmentPtr {
+        SegmentPtr s = std::make_shared<Segment>(
+            epoch, /* range= */ range, /* segment_id= */ segment_id, /*next_segment_id=*/segment_id + 1, delta_id, stable_id);
+        segment_id++;
+        delta_id++;
+        stable_id++;
+        return s;
+    };
+
+    for (const auto & range: ranges)
+    {
+        auto seg = segment_generator(range);
+        segments.insert({range.end, seg});
+    }
+
+    return segments;
+}
+
+} // namespace
+
+TEST(DeltaMergeStoreInternal_test, PrepareWriteForBlock)
+{
+    std::shared_mutex m;
+
+    const HandleRanges ranges = {
+            {-100, -23},
+            {-23, 25},
+            {25, 49},
+            {49, 103},
+    };
+
+    const size_t block_pk_beg = -4;
+    const size_t block_pk_end = 49;
+
+    DeltaMergeStore::SegmentSortedMap segments = prepareSegments(ranges);
+    Block                             block    = DMTestEnv::prepareSimpleWriteBlock(block_pk_beg, block_pk_end, false);
+    const String                      pk_name  = "pk";
+
+    auto actions = prepareWriteActions(block, segments, pk_name, std::shared_lock(m));
+    ASSERT_EQ(actions.size(), 2UL);
+
+    auto &act0 = actions[0];
+    ASSERT_NE(act0.segment, nullptr);
+    ASSERT_RANGE_EQ(act0.segment->getRange(), ranges[1]);
+    EXPECT_EQ(act0.offset, 0UL);
+    const size_t end_off_for_act0 = ranges[1].end - block_pk_beg;
+    EXPECT_EQ(act0.limit, end_off_for_act0);
+
+    auto &act1 = actions[1];
+    ASSERT_NE(act1.segment, nullptr);
+    ASSERT_RANGE_EQ(act1.segment->getRange(), ranges[2]);
+    EXPECT_EQ(act1.offset, end_off_for_act0);
+    EXPECT_EQ(act1.limit, block.rows() - end_off_for_act0);
+}
+
+TEST(DeltaMergeStoreInternal_test, PrepareWriteForDeleteRange)
+{
+    std::shared_mutex m;
+
+    const HandleRanges ranges = {
+            {-100, -23},
+            {-23, 25},
+            {25, 49},
+            {49, 103},
+    };
+
+    DeltaMergeStore::SegmentSortedMap segments = prepareSegments(ranges);
+    HandleRange                       delete_range(-4, 49);
+
+    auto actions = prepareWriteActions(delete_range, segments, std::shared_lock(m));
+    ASSERT_EQ(actions.size(), 2UL);
+
+    auto &act0 = actions[0];
+    ASSERT_NE(act0.segment, nullptr);
+    EXPECT_RANGE_EQ(act0.segment->getRange(), ranges[1]);
+    ASSERT_FALSE(act0.update.block); // no rows in block
+    EXPECT_RANGE_EQ(act0.update.delete_range, delete_range); // TODO maybe more precise
+
+    auto &act1 = actions[1];
+    ASSERT_NE(act1.segment, nullptr);
+    EXPECT_RANGE_EQ(act1.segment->getRange(), ranges[2]);
+    ASSERT_FALSE(act1.update.block); // no rows in block
+    EXPECT_RANGE_EQ(act1.update.delete_range, delete_range);
 }
 
 } // namespace tests
