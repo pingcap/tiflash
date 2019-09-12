@@ -12,12 +12,12 @@
 
 # drop a part of pk is forbidden
 >> alter table dm_test drop column a
-Received exception from server (version 1.1.54381):
-Code: 36. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: a.
+Received exception from server (version {#WORD}):
+Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: a.
 
 >> alter table dm_test drop column b
-Received exception from server (version 1.1.54381):
-Code: 36. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: b.
+Received exception from server (version {#WORD}):
+Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine DeltaMerge doesn't support drop primary key / hidden column: b.
 
 >> select * from dm_test
 ┌─a─┬─b─┬─c─────────────┬─d─────────────────────────────┐
@@ -25,7 +25,7 @@ Code: 36. DB::Exception: Received from 127.0.0.1:9000. DB::Exception: Storage en
 └───┴───┴───────────────┴───────────────────────────────┘
 >> show create table dm_test
 ┌─statement─────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ CREATE TABLE default.dm_test ( a Int32,  b Int32,  c String,  d FixedString(20)) ENGINE = DeltaMerge((a, b)) │
+│ CREATE TABLE default.dm_test ( a Int32,  b Int32,  c String,  d FixedString(20)) ENGINE = DeltaMerge((a, b))  │
 └───────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 

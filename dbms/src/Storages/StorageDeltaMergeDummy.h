@@ -54,6 +54,27 @@ public:
     /// entries, inserts, deletes, modifies
     std::tuple<UInt64, UInt64, UInt64, UInt64> delta_status();
 
+    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DM; }
+    DataTypePtr getPKTypeImpl() const override { return std::make_shared<DataTypeInt64>(); }
+    SortDescription getPrimarySortDescription() const override { return primary_sort_descr; }
+
+    String getDatabaseName() const override
+    {
+        throw Exception("getDatabaseName is not implement for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    void setTableInfo(const TiDB::TableInfo & /*table_info_*/) override {}
+    const TiDB::TableInfo & getTableInfo() const override;
+
+    // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
+    void alterFromTiDB(const AlterCommands & /*commands*/,
+        const TiDB::TableInfo & /*table_info*/,
+        const String & /*database_name*/,
+        const Context & /*context*/) override
+    {
+        throw Exception("alterFromTiDB is not implement for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     void flushDelta() override;
 
     BlockInputStreamPtr status() override;

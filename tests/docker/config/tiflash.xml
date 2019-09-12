@@ -23,6 +23,8 @@
         <!--pd_addr>192.168.65.2:2379</pd_addr-->
         <!-- ignored dbs, extra spaces are trimed -->
         <ignore_databases>system </ignore_databases>
+        <!--specify what engine we use. tmt or dm -->
+        <storage_engine>tmt</storage_engine>
     </raft>
 
     <flash>

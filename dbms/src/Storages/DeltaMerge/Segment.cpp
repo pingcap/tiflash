@@ -493,9 +493,9 @@ ColumnDefines Segment::arrangeReadColumns(const ColumnDefine & handle, const Col
     ColumnDefines new_columns_to_read;
 
     new_columns_to_read.push_back(handle);
-    new_columns_to_read.push_back(VERSION_COLUMN_DEFINE);
+    new_columns_to_read.push_back(getVersionColumnDefine());
     if constexpr (add_tag_column)
-        new_columns_to_read.push_back(TAG_COLUMN_DEFINE);
+        new_columns_to_read.push_back(getTagColumnDefine());
 
     for (size_t i = 0; i < columns_to_read.size(); ++i)
     {
@@ -828,7 +828,7 @@ void Segment::placeUpsert(const DMContext &          dm_context,
     BlockInputStreamPtr merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
         data_page_reader,
         {range},
-        {handle, VERSION_COLUMN_DEFINE},
+        {handle, getVersionColumnDefine()},
         EMPTY_FILTER,
         delta_value_space,
         delta_index_begin,
@@ -859,7 +859,7 @@ void Segment::placeDelete(const DMContext &          dm_context,
         BlockInputStreamPtr delete_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
             data_page_reader,
             {delete_range},
-            {handle, VERSION_COLUMN_DEFINE},
+            {handle, getVersionColumnDefine()},
             EMPTY_FILTER,
             delta_value_space,
             delta_index_begin,
@@ -883,7 +883,7 @@ void Segment::placeDelete(const DMContext &          dm_context,
         BlockInputStreamPtr merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
             data_page_reader,
             {range},
-            {handle, VERSION_COLUMN_DEFINE},
+            {handle, getVersionColumnDefine()},
             EMPTY_FILTER,
             delta_value_space,
             delta_index_begin,

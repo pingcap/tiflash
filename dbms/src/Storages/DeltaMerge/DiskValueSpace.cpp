@@ -493,7 +493,7 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
             if (chunk.isDeleteRange())
                 res.emplace_back(chunk.getDeleteRange());
             if (block_rows_end != block_rows_start)
-                res.emplace_back(read({handle, VERSION_COLUMN_DEFINE}, page_reader, block_rows_start, block_rows_end - block_rows_start));
+                res.emplace_back(read({handle, getVersionColumnDefine()}, page_reader, block_rows_start, block_rows_end - block_rows_start));
 
             block_rows_start = block_rows_end;
         }
