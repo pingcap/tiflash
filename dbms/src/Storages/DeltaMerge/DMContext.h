@@ -24,7 +24,7 @@ struct DMContext
     // The schema snapshot
     // We need a consistent snapshot of columns, copy ColumnsDefines
     const ColumnDefines store_columns;
-    const ColumnDefine  sort_column;
+    const ColumnDefine  handle_column;
 
     const UInt64 min_version;
 

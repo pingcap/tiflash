@@ -120,7 +120,7 @@ BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, 
 
 Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block)
 {
-    auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.sort_column.name));
+    auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.handle_column.name));
     Chunk  chunk(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
     for (const auto & col_define : dm_context.store_columns)
     {

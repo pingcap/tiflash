@@ -46,11 +46,11 @@ protected:
         // table_info.columns.emplace_back();
 
         dm_context = std::make_unique<DMContext>(
-            DMContext{.db_context          = context,
-                      .storage_pool        = *storage_pool,
-                      .store_columns       = table_columns,
-                      .sort_column = table_handle_define,
-                      .min_version         = 0,
+            DMContext{.db_context    = context,
+                      .storage_pool  = *storage_pool,
+                      .store_columns = table_columns,
+                      .handle_column = table_handle_define,
+                      .min_version   = 0,
 
                       .not_compress            = settings.not_compress_columns,
                       .delta_limit_rows        = context.getSettingsRef().dm_segment_delta_limit_rows,

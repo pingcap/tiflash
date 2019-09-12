@@ -71,7 +71,7 @@ protected:
             DMContext{.db_context    = *db_context,
                       .storage_pool  = *storage_pool,
                       .store_columns = table_columns_,
-                      .sort_column   = table_columns_.at(0),
+                      .handle_column = table_columns_.at(0),
                       .min_version   = 0,
 
                       .not_compress            = settings.not_compress_columns,

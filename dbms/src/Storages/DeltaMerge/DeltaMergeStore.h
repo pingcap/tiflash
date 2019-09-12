@@ -96,7 +96,7 @@ private:
         return DMContext{.db_context    = db_context,
                          .storage_pool  = storage_pool,
                          .store_columns = std::move(store_columns),
-                         .sort_column   = EXTRA_HANDLE_COLUMN_DEFINE,
+                         .handle_column = EXTRA_HANDLE_COLUMN_DEFINE,
                          .min_version   = min_version,
 
                          .not_compress            = settings.not_compress_columns,

@@ -189,7 +189,7 @@ void Segment::applyAppendTask(const OpContext & opc, const AppendTaskPtr & task,
 
 void Segment::check(DMContext & dm_context, const String & when)
 {
-    auto & handle = dm_context.sort_column;
+    auto & handle = dm_context.handle_column;
 
     size_t stable_rows = stable->num_rows();
     size_t delta_rows  = delta->num_rows();
@@ -248,7 +248,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                                             UInt64                  max_version,
                                             size_t                  expected_block_size)
 {
-    auto & handle    = dm_context.sort_column;
+    auto & handle    = dm_context.handle_column;
     auto   read_info = getReadInfo<true>(dm_context, segment_snap, storage_snaps, columns_to_read);
     auto   stream    = getPlacedStream(storage_snaps.data_reader,
                                   read_ranges,
@@ -267,7 +267,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
                                                const StorageSnapshot & storage_snaps,
                                                const ColumnDefines &   columns_to_read)
 {
-    auto & handle = dm_context.sort_column;
+    auto & handle = dm_context.handle_column;
 
     ColumnDefines new_columns_to_read;
     new_columns_to_read.push_back(handle);
@@ -350,7 +350,7 @@ SegmentPtr Segment::flush(DMContext & dm_context)
 
     LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] start to merge delta.");
 
-    auto & handle      = dm_context.sort_column;
+    auto & handle      = dm_context.handle_column;
     auto & columns     = dm_context.store_columns;
     auto   min_version = dm_context.min_version;
 
@@ -452,7 +452,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
                                        const StorageSnapshot & storage_snaps,
                                        const ColumnDefines &   columns_to_read)
 {
-    auto new_columns_to_read = arrangeReadColumns<add_tag_column>(dm_context.sort_column, columns_to_read);
+    auto new_columns_to_read = arrangeReadColumns<add_tag_column>(dm_context.handle_column, columns_to_read);
 
     // Create a new delta vs and delta index snapshot, so that later read/write operations won't block write thread.
     // TODO: We don't need to do copy if chunks in DiskValueSpace is a list.
@@ -463,7 +463,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
         delta_snap = std::make_shared<DiskValueSpace>(*segment_snap.delta);
     }
 
-    auto & handle = dm_context.sort_column;
+    auto & handle = dm_context.handle_column;
 
     const auto delta_block       = delta_snap->read(new_columns_to_read, storage_snaps.log_reader, 0, segment_snap.delta_rows);
     auto       delta_value_space = std::make_shared<DeltaValueSpace>(handle, new_columns_to_read, delta_block);
@@ -563,7 +563,7 @@ Segment::doSplit(DMContext & dm_context, const PageReader & data_page_reader, co
 {
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
-    auto & handle       = dm_context.sort_column;
+    auto & handle       = dm_context.handle_column;
     auto & storage_pool = dm_context.storage_pool;
     auto   min_version  = dm_context.min_version;
 
@@ -661,7 +661,7 @@ SegmentPtr Segment::doMerge(DMContext &        dm_context,
 
     EventRecorder recorder(ProfileEvents::DMSegmentMerge, ProfileEvents::DMSegmentMergeNS);
 
-    auto & handle       = dm_context.sort_column;
+    auto & handle       = dm_context.handle_column;
     auto & storage_pool = dm_context.storage_pool;
     auto   min_version  = dm_context.min_version;
 
@@ -796,7 +796,7 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &          dm_context,
     if (placed_delta_rows >= delta_rows_limit && placed_delta_deletes >= delta_deletes_limit)
         return delta_tree->getEntriesCopy<Allocator<false>>(delta_rows_limit, delta_deletes_limit);
 
-    auto blocks = to_place_delta->getMergeBlocks(dm_context.sort_column,
+    auto blocks = to_place_delta->getMergeBlocks(dm_context.handle_column,
                                                  storage_snapshot.log_reader,
                                                  placed_delta_rows,
                                                  placed_delta_deletes,
@@ -821,7 +821,7 @@ void Segment::placeUpsert(const DMContext &          dm_context,
 {
     EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
 
-    auto & handle            = dm_context.sort_column;
+    auto & handle            = dm_context.handle_column;
     auto   delta_index_begin = delta_tree->begin();
     auto   delta_index_end   = delta_tree->end();
 
@@ -850,7 +850,7 @@ void Segment::placeDelete(const DMContext &          dm_context,
 {
     EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
 
-    auto & handle            = dm_context.sort_column;
+    auto & handle            = dm_context.handle_column;
     auto   delta_index_begin = delta_tree->begin();
     auto   delta_index_end   = delta_tree->end();
 
@@ -898,10 +898,10 @@ Handle Segment::getSplitPoint(DMContext & dm_context, const PageReader & data_pa
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
-    auto & handle = dm_context.sort_column;
+    auto & handle = dm_context.handle_column;
     auto   stream = getPlacedStream(data_page_reader,
                                   {range},
-                                  {dm_context.sort_column},
+                                  {dm_context.handle_column},
                                   {},
                                   read_info.delta_value_space,
                                   read_info.index_begin,
