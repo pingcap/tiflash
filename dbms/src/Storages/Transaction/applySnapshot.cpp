@@ -1,5 +1,6 @@
 #include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
@@ -76,19 +77,38 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
             {
+                // acquire lock so that no other threads can change storage's structure
                 auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-
-                const bool pk_is_uint64 = getTMTPKType(*storage->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
-
-                if (pk_is_uint64)
+                switch (storage->engineType())
                 {
-                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    getHandleMapByRange<UInt64>(*context, *storage, new_range[0], handle_map);
-                    if (n > 1)
-                        getHandleMapByRange<UInt64>(*context, *storage, new_range[1], handle_map);
+                    case TiDB::StorageEngine::TMT:
+                    {
+                        const bool pk_is_uint64 = getTMTPKType(*storage->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
+
+                        if (pk_is_uint64)
+                        {
+                            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
+                            getHandleMapByRange<UInt64>(*context, *storage, new_range[0], handle_map);
+                            if (n > 1)
+                                getHandleMapByRange<UInt64>(*context, *storage, new_range[1], handle_map);
+                        }
+                        else
+                            getHandleMapByRange<Int64>(*context, *storage, handle_range, handle_map);
+
+                        break;
+                    }
+                    case TiDB::StorageEngine::DM:
+                    {
+                        // In StorageDeltaMerge, we use deleteRange to remove old data
+                        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                        ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
+                        dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+                        break;
+                    }
+                    default:
+                        throw Exception(
+                            "Unknown StorageEngine: " + toString(static_cast<Int32>(storage->engineType())), ErrorCodes::LOGICAL_ERROR);
                 }
-                else
-                    getHandleMapByRange<Int64>(*context, *storage, handle_range, handle_map);
             }
         }
 

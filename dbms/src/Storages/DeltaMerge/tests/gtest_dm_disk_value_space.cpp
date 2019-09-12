@@ -35,12 +35,12 @@ protected:
         dropDataInDisk();
 
         storage_pool        = std::make_unique<StoragePool>(path);
-        Context context     = DMTestEnv::getContext();
+        Context & context   = DMTestEnv::getContext();
         table_handle_define = ColumnDefine(1, "pk", std::make_shared<DataTypeInt64>());
         table_columns.clear();
         table_columns.emplace_back(table_handle_define);
-        table_columns.emplace_back(VERSION_COLUMN_DEFINE);
-        table_columns.emplace_back(TAG_COLUMN_DEFINE);
+        table_columns.emplace_back(getVersionColumnDefine());
+        table_columns.emplace_back(getTagColumnDefine());
 
         // TODO fill columns
         // table_info.columns.emplace_back();

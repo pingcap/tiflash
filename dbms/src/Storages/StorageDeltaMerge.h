@@ -15,15 +15,18 @@
 
 namespace DB
 {
+
 class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IManageableStorage
 {
 public:
+    ~StorageDeltaMerge() override;
+
     bool supportsModification() const override { return true; }
 
     String getName() const override { return "DeltaMerge"; }
-    String getTableName() const override { return name; }
+    String getTableName() const override { return table_name; }
 
-    void drop() override ;
+    void drop() override;
 
     BlockInputStreams read(const Names & column_names,
         const SelectQueryInfo & query_info,
@@ -34,15 +37,32 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
+    void deleteRange(const DM::HandleRange &range_to_delete, const Settings & settings)
+    {
+        return store->deleteRange(global_context, settings, range_to_delete);
+    }
+
     void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override;
+
+    String getDatabaseName() const override { return db_name; }
 
     void alter(const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context) override;
 
+    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::DM; }
+
     // Apply AlterCommands synced from TiDB should use `alterFromTiDB` instead of `alter(...)`
     void alterFromTiDB(
-        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context);
+        const AlterCommands & commands, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
 
-    inline const TiDB::TableInfo & getTableInfo() const { return tidb_table_info; }
+    void setTableInfo(const TiDB::TableInfo & table_info_) override { tidb_table_info = table_info_; }
+
+    const TiDB::TableInfo & getTableInfo() const override { return tidb_table_info; }
+
+    void startup() override;
+
+    void shutdown() override;
+
+    SortDescription getPrimarySortDescription() const override;
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
@@ -52,8 +72,9 @@ public:
     void check(const Context & context) override;
 
 protected:
-    StorageDeltaMerge(const std::string & path_,
-        const std::string & name_,
+    StorageDeltaMerge(const String & path_,
+        const String & db_name_,
+        const String & name_,
         const DM::OptionTableInfoConstRef table_info_,
         const ColumnsDescription & columns_,
         const ASTPtr & primary_expr_ast_,
@@ -68,11 +89,14 @@ private:
         const DB::DM::OptionTableInfoConstRef table_info_,
         const Context & context);
 
+    DataTypePtr getPKTypeImpl() const override;
+
 private:
     using ColumnIdMap = std::unordered_map<String, size_t>;
 
     String path;
-    String name;
+    String db_name;
+    String table_name;
 
     DM::DeltaMergeStorePtr store;
 
@@ -84,6 +108,8 @@ private:
 
     // Used to allocate new column-id when this table is NOT synced from TiDB
     ColumnID max_column_id_used;
+
+    std::atomic<bool> shutdown_called{false};
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
 

@@ -127,10 +127,10 @@ public:
     TableFullWriteLock lockForAlter(const std::string & who = "Alter")
     {
         /// The calculation order is important.
-        auto data_lock = lockDataForAlter(who);
-        auto structure_lock = lockStructureForAlter(who);
+        auto data_lock_ = lockDataForAlter(who);
+        auto structure_lock_ = lockStructureForAlter(who);
 
-        return {std::move(data_lock), std::move(structure_lock)};
+        return {std::move(data_lock_), std::move(structure_lock_)};
     }
 
     /** Does not allow changing the data in the table. (Moreover, does not give a look at the structure of the table with the intention to change the data).

@@ -23,8 +23,8 @@ public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
 
-    const TMTStorages & getStorages() const;
-    TMTStorages & getStorages();
+    const ManagedStorages & getStorages() const;
+    ManagedStorages & getStorages();
 
     const RegionTable & getRegionTable() const;
     RegionTable & getRegionTable();
@@ -34,7 +34,8 @@ public:
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
         const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path,
-        const std::string & flash_service_address_);
+        const std::string & flash_service_address_,
+        TiDB::StorageEngine engine_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -47,9 +48,11 @@ public:
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
+    ::TiDB::StorageEngine getEngineType() const { return engine; }
+
 private:
     KVStorePtr kvstore;
-    TMTStorages storages;
+    ManagedStorages storages;
     RegionTable region_table;
 
 private:
@@ -64,6 +67,7 @@ private:
     SchemaSyncerPtr schema_syncer;
 
     String flash_service_address;
+    ::TiDB::StorageEngine engine;
 };
 
 } // namespace DB

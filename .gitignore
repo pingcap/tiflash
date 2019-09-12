@@ -228,6 +228,9 @@ config-preprocessed.xml
 *.pb.cpp
 *.pb.h
 
+# Mac OS
+.DS_Store
+
 # Ignore symlink to private repository
 /private
 

@@ -1,9 +1,13 @@
 #pragma once
 
-#include <Core/Names.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <ext/singleton.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+
+#include <Core/Block.h>
+#include <Core/Names.h>
+#include <Common/typeid_cast.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -20,14 +24,14 @@ public:
         all_hidden.insert(all_hidden.end(), mutable_hidden.begin(), mutable_hidden.end());
     }
 
-    const OrderedNameSet & hiddenColumns(std::string table_type_name)
+    const OrderedNameSet & hiddenColumns(const String& table_type_name)
     {
-        if (storage_name == table_type_name || txn_storage_name == table_type_name)
+        if (mmt_storage_name == table_type_name || txn_storage_name == table_type_name)
             return mutable_hidden;
         return empty;
     }
 
-    void eraseHiddenColumns(Block & block, std::string table_type_name)
+    void eraseHiddenColumns(Block & block, const String& table_type_name)
     {
         const OrderedNameSet & names = hiddenColumns(table_type_name);
         for (auto & it : names)
@@ -45,11 +49,18 @@ public:
             !(typeid_cast<const DataTypeInt64 *>(t.get()) || typeid_cast<const DataTypeUInt64 *>(t.get()));
     }
 
-    static const std::string storage_name;
-    static const std::string version_column_name;
-    static const std::string delmark_column_name;
-    static const std::string tidb_pk_column_name;
-    static const std::string txn_storage_name;
+    static const String mmt_storage_name;
+    static const String txn_storage_name;
+
+    static const String tidb_pk_column_name;
+    static const String version_column_name;
+    static const String delmark_column_name;
+
+    static const DataTypePtr tidb_pk_column_type;
+    static const DataTypePtr version_column_type;
+    static const DataTypePtr delmark_column_type;
+
+    /// mark that ColumnId of those columns are defined in dbms/src/Storages/Transaction/Types.h
 
     enum DeduperType
     {

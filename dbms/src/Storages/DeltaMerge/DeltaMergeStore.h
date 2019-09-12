@@ -51,6 +51,8 @@ public:
 
     void write(const Context & db_context, const DB::Settings & db_settings, const Block & block);
 
+    void deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range);
+
     BlockInputStreams
     readRaw(const Context & db_context, const DB::Settings & db_settings, const ColumnDefines & column_defines, size_t num_streams);
 
@@ -80,8 +82,23 @@ public:
     const ColumnDefine &  getHandle() const { return table_handle_define; }
     Block                 getHeader() const { return toEmptyBlock(table_columns); }
     const Settings &      getSettings() const { return settings; }
+    DataTypePtr           getPKDataType() const { return table_handle_define.type; }
+    SortDescription       getPrimarySortDescription() const;
 
     void check(const Context & db_context, const DB::Settings & db_settings);
+
+    struct WriteAction
+    {
+        SegmentPtr segment;
+        size_t     offset;
+        size_t     limit;
+
+        BlockOrDelete update = {};
+        AppendTaskPtr task   = {};
+    };
+
+    using WriteActions     = std::vector<WriteAction>;
+    using SegmentSortedMap = std::map<Handle, SegmentPtr>;
 
 private:
     DMContext newDMContext(const Context & db_context, const DB::Settings & db_settings)
@@ -90,13 +107,13 @@ private:
         if (pkIsHandle())
         {
             // Add an extra handle column.
-            store_columns.push_back(EXTRA_HANDLE_COLUMN_DEFINE);
+            store_columns.push_back(getExtraHandleColumnDefine());
         }
 
         return DMContext{.db_context    = db_context,
                          .storage_pool  = storage_pool,
                          .store_columns = std::move(store_columns),
-                         .handle_column = EXTRA_HANDLE_COLUMN_DEFINE,
+                         .handle_column = getExtraHandleColumnDefine(),
                          .min_version   = min_version,
 
                          .not_compress            = settings.not_compress_columns,
@@ -106,7 +123,7 @@ private:
                          .delta_cache_limit_bytes = db_settings.dm_segment_delta_cache_limit_bytes};
     }
 
-    bool pkIsHandle() { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     bool afterInsertOrDelete(const Context & db_context, const DB::Settings & db_settings);
     bool shouldSplit(const SegmentPtr & segment, size_t segment_rows_setting);
@@ -118,9 +135,14 @@ private:
                     const OptionTableInfoConstRef table_info,
                     ColumnID &                    max_column_id_used);
 
-private:
-    using SegmentSortedMap = std::map<Handle, SegmentPtr>;
+    void commitWrites(WriteActions &&       actions,
+                      AppendWriteBatches && wbs,
+                      DMContext &           dm_context,
+                      OpContext &           op_context,
+                      const Context &       db_context,
+                      const DB::Settings &  db_settings);
 
+private:
     String      path;
     StoragePool storage_pool;
 
