@@ -1,12 +1,8 @@
 #include <Common/Decimal.h>
 #include <IO/ReadBufferFromString.h>
-#include <Poco/Format.h>
-#include <Poco/String.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/MyTimeParser.h>
 #include <Storages/Transaction/TiDB.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/join.hpp>
 
 namespace TiDB
 {
