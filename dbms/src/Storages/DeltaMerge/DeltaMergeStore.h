@@ -78,7 +78,7 @@ public:
 
     const ColumnDefines & getTableColumns() const { return table_columns; }
     const ColumnDefine &  getHandle() const { return table_handle_define; }
-    const Block &         getHeader() const { return header; }
+    Block                 getHeader() const { return toEmptyBlock(table_columns); }
     const Settings &      getSettings() const { return settings; }
 
     void check(const Context & db_context, const DB::Settings & db_settings);
@@ -86,11 +86,18 @@ public:
 private:
     DMContext newDMContext(const Context & db_context, const DB::Settings & db_settings)
     {
-        return DMContext{.db_context          = db_context,
-                         .storage_pool        = storage_pool,
-                         .table_columns       = table_columns,
-                         .table_handle_define = table_handle_define,
-                         .min_version         = min_version,
+        ColumnDefines store_columns = table_columns;
+        if (pkIsHandle())
+        {
+            // Add an extra handle column.
+            store_columns.push_back(EXTRA_HANDLE_COLUMN_DEFINE);
+        }
+
+        return DMContext{.db_context    = db_context,
+                         .storage_pool  = storage_pool,
+                         .store_columns = std::move(store_columns),
+                         .handle_column = EXTRA_HANDLE_COLUMN_DEFINE,
+                         .min_version   = min_version,
 
                          .not_compress            = settings.not_compress_columns,
                          .delta_limit_rows        = db_settings.dm_segment_delta_limit_rows,
@@ -98,6 +105,8 @@ private:
                          .delta_cache_limit_rows  = db_settings.dm_segment_delta_cache_limit_rows,
                          .delta_cache_limit_bytes = db_settings.dm_segment_delta_cache_limit_bytes};
     }
+
+    bool pkIsHandle() { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     bool afterInsertOrDelete(const Context & db_context, const DB::Settings & db_settings);
     bool shouldSplit(const SegmentPtr & segment, size_t segment_rows_setting);
@@ -109,10 +118,6 @@ private:
                     const OptionTableInfoConstRef table_info,
                     ColumnID &                    max_column_id_used);
 
-    static Block genHeaderBlock(const ColumnDefines & raw_columns, //
-                                const ColumnDefine &  handle_define,
-                                const DataTypePtr &   handle_real_type);
-
 private:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
 
@@ -122,8 +127,6 @@ private:
     String        table_name;
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;
-    DataTypePtr   table_handle_real_type;
-    Block         header; // an empty block header
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;

@@ -16,7 +16,7 @@ TEST(Chunk_test, Insert)
     const UInt32 num_rows = 1024;
     Chunk        chunk;
 
-    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>()};
+    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>(), {}};
     chunk.insert(u64_meta);
 
     {
@@ -28,7 +28,7 @@ TEST(Chunk_test, Insert)
         EXPECT_TRUE(got.type->equals(*u64_meta.type));
     }
 
-    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>()};
+    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>(), {}};
     chunk.insert(string_meta);
 
     {
@@ -46,9 +46,9 @@ TEST(Chunk_test, Seri)
     const UInt32 num_rows = 1024;
     Chunk        chunk;
 
-    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>()};
+    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>(), {}};
     chunk.insert(u64_meta);
-    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>()};
+    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>(), {}};
     chunk.insert(string_meta);
     EXPECT_FALSE(chunk.isDeleteRange());
 

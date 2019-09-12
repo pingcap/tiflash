@@ -22,6 +22,15 @@ void Chunk::serialize(WriteBuffer & buf) const
         writeIntBinary(d.rows, buf);
         writeIntBinary(d.bytes, buf);
         writeStringBinary(d.type->getName(), buf);
+        if (d.minmax)
+        {
+            writePODBinary(true, buf);
+            d.minmax->write(*d.type, buf);
+        }
+        else
+        {
+            writePODBinary(false, buf);
+        }
     }
 }
 
@@ -46,8 +55,11 @@ Chunk Chunk::deserialize(ReadBuffer & buf)
         readIntBinary(d.rows, buf);
         readIntBinary(d.bytes, buf);
         readStringBinary(type, buf);
-
         d.type = DataTypeFactory::instance().get(type);
+        bool has_minmax;
+        readPODBinary(has_minmax, buf);
+        if (has_minmax)
+            d.minmax = MinMaxIndex::read(*d.type, buf);
 
         chunk.columns.emplace(d.col_id, d);
 
@@ -108,9 +120,9 @@ BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, 
 
 Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block)
 {
-    auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.table_handle_define.name));
+    auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.handle_column.name));
     Chunk  chunk(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
-    for (const auto & col_define : dm_context.table_columns)
+    for (const auto & col_define : dm_context.store_columns)
     {
         auto            col_id = col_define.id;
         const IColumn & column = *(block.getByName(col_define.name).column);
@@ -122,6 +134,8 @@ Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_
         d.rows    = column.size();
         d.bytes   = size;
         d.type    = col_define.type;
+        d.minmax  = std::make_shared<MinMaxIndex>(
+            *col_define.type, column, static_cast<const ColumnVector<UInt8> &>(*block.getByName(TAG_COLUMN_NAME).column), 0, column.size());
 
         wb.putPage(d.page_id, 0, buf, size);
         chunk.insert(d);

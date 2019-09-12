@@ -68,11 +68,11 @@ protected:
         table_columns_ = columns;
 
         dm_context_ = std::make_unique<DMContext>(
-            DMContext{.db_context          = *db_context,
-                      .storage_pool        = *storage_pool,
-                      .table_columns       = table_columns_,
-                      .table_handle_define = table_columns_.at(0),
-                      .min_version         = 0,
+            DMContext{.db_context    = *db_context,
+                      .storage_pool  = *storage_pool,
+                      .store_columns = table_columns_,
+                      .handle_column = table_columns_.at(0),
+                      .min_version   = 0,
 
                       .not_compress            = settings.not_compress_columns,
                       .delta_limit_rows        = db_context->getSettingsRef().dm_segment_delta_limit_rows,
@@ -140,6 +140,7 @@ TEST_F(Segment_test, WriteRead)
                                           /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ tableColumns(),
                                           /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
         size_t num_rows_read = 0;
@@ -167,6 +168,7 @@ TEST_F(Segment_test, WriteRead)
                                           /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ tableColumns(),
                                           /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
         in->readPrefix();
@@ -203,6 +205,7 @@ TEST_F(Segment_test, Split)
                                           /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ tableColumns(),
                                           /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
 
@@ -239,6 +242,7 @@ TEST_F(Segment_test, Split)
                                               /* storage_snap= */ {dmContext().storage_pool},
                                               /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                                               /* expected_block_size= */ 1024);
             in->readPrefix();
@@ -254,6 +258,7 @@ TEST_F(Segment_test, Split)
                                               /* storage_snap= */ {dmContext().storage_pool},
                                               /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                                               /* expected_block_size= */ 1024);
             in->readPrefix();
@@ -283,6 +288,7 @@ TEST_F(Segment_test, Split)
                                               /* storage_snap= */ {dmContext().storage_pool},
                                               /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                                               /* expected_block_size= */ 1024);
             in->readPrefix();
@@ -349,6 +355,7 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
                                           /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ columns_to_read,
                                           /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
 
@@ -417,6 +424,7 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
                                           /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ columns_to_read,
                                           /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
 

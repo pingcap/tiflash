@@ -14,6 +14,7 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 
 namespace DB
 {
@@ -73,22 +74,20 @@ inline SortDescription getPkSort(const ColumnDefine & handle)
     return sort;
 }
 
-using PermutationPtr = std::unique_ptr<IColumn::Permutation>;
-inline PermutationPtr sortBlockByPk(const ColumnDefine & handle, Block & block)
+inline bool sortBlockByPk(const ColumnDefine & handle, Block & block, IColumn::Permutation & perm)
 {
     SortDescription sort = getPkSort(handle);
     if (isAlreadySorted(block, sort))
-        return {};
+        return false;
 
-    auto perm = std::make_unique<IColumn::Permutation>();
-    stableGetPermutation(block, sort, *perm);
+    stableGetPermutation(block, sort, perm);
 
     for (size_t i = 0; i < block.columns(); ++i)
     {
         auto & c = block.getByPosition(i);
-        c.column = c.column->permute(*perm, 0);
+        c.column = c.column->permute(perm, 0);
     }
-    return perm;
+    return true;
 }
 
 template <typename T>

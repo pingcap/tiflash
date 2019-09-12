@@ -23,8 +23,8 @@ struct DMContext
 
     // The schema snapshot
     // We need a consistent snapshot of columns, copy ColumnsDefines
-    const ColumnDefines table_columns;
-    const ColumnDefine  table_handle_define;
+    const ColumnDefines store_columns;
+    const ColumnDefine  handle_column;
 
     const UInt64 min_version;
 
