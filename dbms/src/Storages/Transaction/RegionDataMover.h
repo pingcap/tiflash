@@ -12,6 +12,6 @@ class Context;
 using HandleMap = std::unordered_map<HandleID, std::tuple<UInt64, UInt8>>;
 
 template <typename HandleType>
-HandleMap getHandleMapByRange(Context & context, StorageMergeTree & storage, const HandleRange<HandleType> & handle_range);
+void getHandleMapByRange(Context &, StorageMergeTree &, const HandleRange<HandleType> &, HandleMap &);
 
 } // namespace DB
