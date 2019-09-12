@@ -56,7 +56,7 @@ using DB::Timestamp;
     M(JSON, 0xf5, Json, String, false)               \
     M(NewDecimal, 0xf6, Decimal, Decimal32, false)   \
     M(Enum, 0xf7, VarUInt, Enum16, false)            \
-    M(Set, 0xf8, CompactBytes, String, false)        \
+    M(Set, 0xf8, VarUInt, UInt64, false)             \
     M(TinyBlob, 0xf9, CompactBytes, String, false)   \
     M(MediumBlob, 0xfa, CompactBytes, String, false) \
     M(LongBlob, 0xfb, CompactBytes, String, false)   \
