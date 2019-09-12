@@ -13,17 +13,11 @@ public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
     DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr & task_pool_,
                                const SegmentStreamCreator &   stream_creator_,
-                               const ColumnDefines &          columns_to_read_,
-                               const String &                 handle_name_,
-                               const DataTypePtr &            handle_real_type_,
-                               const Context &                context_)
+                               const ColumnDefines &          columns_to_read_)
         : task_pool(task_pool_),
           stream_creator(stream_creator_),
           columns_to_read(columns_to_read_),
           header(toEmptyBlock(columns_to_read)),
-          handle_name(handle_name_),
-          handle_real_type(handle_real_type_),
-          context(context_),
           log(&Logger::get("DMSegmentThreadInputStream"))
     {
     }
@@ -74,13 +68,6 @@ protected:
         Block res;
         for (auto & cd : columns_to_read)
             res.insert(original_block.getByName(cd.name));
-
-        if (handle_real_type && res.has(handle_name))
-        {
-            auto pos = res.getPositionByName(handle_name);
-            convertColumn(res, pos, handle_real_type, context);
-            res.getByPosition(pos).type = handle_real_type;
-        }
         return res;
     }
 
@@ -89,9 +76,6 @@ private:
     SegmentStreamCreator   stream_creator;
     ColumnDefines          columns_to_read;
     Block                  header;
-    String                 handle_name;
-    DataTypePtr            handle_real_type;
-    const Context &        context;
 
     bool                done = false;
     BlockInputStreamPtr cur_stream;

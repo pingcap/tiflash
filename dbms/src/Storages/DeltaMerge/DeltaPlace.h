@@ -42,7 +42,7 @@ struct RidGenerator
     size_t  delta_block_rows;
     size_t  delta_block_pos = 0;
     // Whether this row's pk duplicates with the next one, if so, they share the same rid.
-    std::vector<bool> delta_block_dup_next;
+    std::vector<UInt8> delta_block_dup_next;
     // Whether current row's pk duplicates with the previous one. Used by Upsert.
     bool dup_prev = false;
 
@@ -58,7 +58,7 @@ struct RidGenerator
           sort_desc(sort_desc_),
           num_sort_columns(sort_desc.size()),
           delta_block_rows(delta_block.rows()),
-          delta_block_dup_next(delta_block_rows, false)
+          delta_block_dup_next(delta_block_rows, 0)
     {
         stable_stream->readPrefix();
 
@@ -186,13 +186,13 @@ struct RidGenerator
 /**
  * Index the block which is already sorted by primary keys. The indexing is recorded into delta_tree.
  */
-template <class DeltaTree>
-void placeInsert(const BlockInputStreamPtr & stable, //
-                 const Block &               delta_block,
-                 DeltaTree &                 delta_tree,
-                 RowId                       delta_value_space_offset,
-                 const PermutationPtr &      row_id_ref,
-                 const SortDescription &     sort)
+template <bool use_row_id_ref, class DeltaTree>
+void placeInsert(const BlockInputStreamPtr &  stable, //
+                 const Block &                delta_block,
+                 DeltaTree &                  delta_tree,
+                 RowId                        delta_value_space_offset,
+                 const IColumn::Permutation & row_id_ref,
+                 const SortDescription &      sort)
 {
     auto block_rows = delta_block.rows();
     if (!block_rows)
@@ -208,20 +208,25 @@ void placeInsert(const BlockInputStreamPtr & stable, //
     for (size_t i = 0; i < block_rows; ++i)
     {
         auto [rid, dup] = rids[i];
-        if (dup)
-            delta_tree.addDelete(rid);
-        if (row_id_ref)
-            delta_tree.addInsert(rid, delta_value_space_offset + (*row_id_ref)[i]);
+        UInt64 tuple_id;
+        if constexpr (use_row_id_ref)
+            tuple_id = delta_value_space_offset + row_id_ref[i];
         else
-            delta_tree.addInsert(rid, delta_value_space_offset + i);
+            tuple_id = delta_value_space_offset + i;
+
+        if (dup)
+            delta_tree.addDelete(rid, tuple_id);
+        delta_tree.addInsert(rid, tuple_id);
     }
 }
 
+/// del_range_id: the pos of delete range action in value space. It is used to filter out irrelevant deletes.
 template <class DeltaTree>
 void placeDelete(const BlockInputStreamPtr & stable, //
                  const Block &               delta_block,
                  DeltaTree &                 delta_tree,
-                 const SortDescription &     sort)
+                 const SortDescription &     sort,
+                 UInt64                      del_range_id)
 {
     auto block_rows = delta_block.rows();
     if (!block_rows)
@@ -236,7 +241,7 @@ void placeDelete(const BlockInputStreamPtr & stable, //
     for (size_t i = 0; i < block_rows; ++i)
     {
         if (rids[i] >= 0)
-            delta_tree.addDelete(rids[i]);
+            delta_tree.addDelete(rids[i], del_range_id | DEL_RANGE_POS_MARK);
     }
 }
 

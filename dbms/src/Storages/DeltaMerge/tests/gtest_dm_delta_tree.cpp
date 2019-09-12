@@ -254,9 +254,9 @@ TEST_F(DeltaTree_test, Delete1)
     {
         tree.addDelete(0);
         tree.checkAll();
-        expectedResult = "(0|0|DEL|" + std::to_string(i + 1) + "),";
-        ASSERT_EQ(expectedResult, treeToString(tree));
+        expectedResult += "(0|" + std::to_string(i) + "|DEL|1),";
     }
+    ASSERT_EQ(expectedResult, treeToString(tree));
 }
 
 TEST_F(DeltaTree_test, Delete2)

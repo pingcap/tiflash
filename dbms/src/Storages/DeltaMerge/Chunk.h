@@ -10,6 +10,7 @@
 #include <DataTypes/IDataType.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/Page/PageStorage.h>
 
@@ -23,11 +24,12 @@ static constexpr size_t CHUNK_SERIALIZE_BUFFER_SIZE = 65536;
 
 struct ColumnMeta
 {
-    ColId       col_id;
-    PageId      page_id;
-    UInt32      rows;
-    UInt64      bytes;
-    DataTypePtr type;
+    ColId          col_id;
+    PageId         page_id;
+    UInt32         rows;
+    UInt64         bytes;
+    DataTypePtr    type;
+    MinMaxIndexPtr minmax;
 };
 using ColumnMetas = std::vector<ColumnMeta>;
 
@@ -35,7 +37,6 @@ class Chunk
 {
 public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
-
 
     Chunk() : Chunk(0, 0) {}
     Chunk(Handle handle_first_, Handle handle_last_) : handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false) {}
@@ -76,6 +77,14 @@ public:
         if (unlikely(it == columns.end()))
             throw Exception("Column with id" + DB::toString(col_id) + " not found");
         return it->second;
+    }
+
+    const ColumnMeta * tryGetColumn(ColId col_id) const
+    {
+        auto it = columns.find(col_id);
+        if (unlikely(it == columns.end()))
+            return nullptr;
+        return &it->second;
     }
 
     const ColumnMetaMap & getMetas() const { return columns; }

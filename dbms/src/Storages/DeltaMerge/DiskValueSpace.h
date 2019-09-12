@@ -123,9 +123,9 @@ public:
                                   size_t               rows_end,
                                   size_t               deletes_end) const;
 
-    ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
-
     bool tryFlushCache(const OpContext & context, bool force = false);
+
+    ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
     size_t num_rows() const;
     size_t num_rows(size_t chunks_offset, size_t chunk_length) const;
