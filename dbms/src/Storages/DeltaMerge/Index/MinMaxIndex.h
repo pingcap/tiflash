@@ -38,7 +38,6 @@ public:
 
     // TODO: Use has_null and value.isNull to check.
 
-    RSResult checkBetween(const Field & value0, const Field & value1, const DataTypePtr & type, int nan_direction);
     RSResult checkEqual(const Field & value, const DataTypePtr & type);
     RSResult checkGreater(const Field & value, const DataTypePtr & type, int nan_direction);
     RSResult checkGreaterEqual(const Field & value, const DataTypePtr & type, int nan_direction);
