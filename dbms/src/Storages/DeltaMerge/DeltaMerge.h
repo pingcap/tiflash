@@ -18,7 +18,7 @@ namespace DB
 namespace DM
 {
 
-// Note that the columns in stable input stream and value space must exactly the same, include the name, type, and id.
+// Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
 template <class DeltaValueSpace, class IndexIterator>
 class DeltaMergeBlockInputStream final : public IProfilingBlockInputStream
 {
@@ -37,11 +37,10 @@ private:
     // How many rows we need to skip before writing stable rows into output.
     // == 0: None
     // > 0 : do skip
-    // < 0 : some rows are filtered out by handle_range, should not write into output.
+    // < 0 : some rows are filtered out by index, should not write into output.
     ssize_t stable_skip = 0;
 
     DeltaValueSpacePtr delta_value_space;
-    size_t             delta_rows_limit;
     IndexIterator      entry_it;
     IndexIterator      entry_end;
 
@@ -72,7 +71,6 @@ public:
           stable_input_stream(stable_input_stream_),
           stable_input_stream_raw_ptr(stable_input_stream.get()),
           delta_value_space(delta_value_space_),
-          delta_rows_limit(delta_value_space->getRows()),
           entry_it(index_begin),
           entry_end(index_end),
           max_block_size(max_block_size_)
@@ -155,20 +153,20 @@ private:
 
         if constexpr (!c_delta_done)
         {
-            if (entry_it.getType() == DT_DEL)
+            auto tuple_id = entry_it.getValue();
+            switch (entry_it.getType())
             {
-                writeDeleteFromDelta(entry_it.getValue());
-            }
-            else if (entry_it.getType() == DT_INS)
-            {
-                if (entry_it.getValue() < delta_rows_limit)
+            case DT_DEL:
+                writeDeleteFromDelta(1);
+                break;
+            case DT_INS:
+                if (handle_range.check(delta_value_space->getHandle(tuple_id)))
                 {
-                    writeInsertFromDelta(output_columns, entry_it.getValue());
+                    writeInsertFromDelta(output_columns, tuple_id);
                     --output_write_limit;
                 }
-            }
-            else
-            {
+                break;
+            default:
                 throw Exception("Entry type " + DTTypeString(entry_it.getType()) + " is not supported, is end: "
                                 + DB::toString(entry_it == entry_end) + ", use_stable_rows: " + DB::toString(use_stable_rows)
                                 + ", stable_skip: " + DB::toString(stable_skip) + ", stable_done: " + DB::toString(stable_done)
@@ -257,28 +255,18 @@ private:
                 continue;
             }
             // Check whether we can skip next block entirely or not.
-            if (!stable_input_stream_raw_ptr->hasNextBlock())
+            if (!stable_input_stream_raw_ptr->hasNext())
                 throw Exception("Unexpected end of block, need more rows to skip");
 
-            auto [first_handle, last_handle] = stable_input_stream_raw_ptr->nextBlockHandle();
-            size_t rows                      = stable_input_stream_raw_ptr->nextBlockRows();
-
-            if (handle_range.intersect(first_handle, last_handle))
+            size_t rows = stable_input_stream_raw_ptr->nextRows();
+            if (!stable_input_stream_raw_ptr->shouldSkipNext())
             {
-                // We need to load next block.
                 fillStableBlockIfNeeded();
-                continue;
             }
-
-            // Entirely skip block.
-            stable_input_stream_raw_ptr->skipNextBlock();
-            stable_skip -= rows;
-
-            // If the next block of stable is larger then handle_range, then we should stop reading from stable.
-            if (!handle_range.checkEnd(first_handle))
+            else
             {
-                stable_done     = true;
-                use_stable_rows = 0;
+                stable_input_stream_raw_ptr->skipNext();
+                stable_skip -= rows;
             }
         }
 
@@ -297,6 +285,9 @@ private:
             }
         }
 
+        if (unlikely(!(stable_skip == 0 || use_stable_rows == 0)))
+            throw Exception("Algorithm broken!");
+
         while (use_stable_rows && output_write_limit)
         {
             if (curStableBlockRemaining())
@@ -305,7 +296,7 @@ private:
                 continue;
             }
 
-            if (!stable_input_stream_raw_ptr->hasNextBlock())
+            if (!stable_input_stream_raw_ptr->hasNext())
             {
                 if constexpr (c_delta_done)
                 {
@@ -317,43 +308,34 @@ private:
                     throw Exception("Unexpected end of block, need more rows to write");
             }
 
-            auto [first_handle, last_handle] = stable_input_stream_raw_ptr->nextBlockHandle();
-            size_t next_block_rows           = stable_input_stream_raw_ptr->nextBlockRows();
+            size_t next_block_rows = stable_input_stream_raw_ptr->nextRows();
 
-            if (handle_range.intersect(first_handle, last_handle))
+            if (!stable_input_stream_raw_ptr->shouldSkipNext())
             {
-                // Load next block, and then write to output in next round.
                 fillStableBlockIfNeeded();
-                continue;
-            }
-
-            // Entirely skip block.
-            stable_input_stream_raw_ptr->skipNextBlock();
-            // We skipped some rows, some of them are consumed by writing to output, the rest are recorded by stable_skip.
-            if (next_block_rows <= use_stable_rows)
-            {
-                use_stable_rows -= next_block_rows;
             }
             else
             {
-                stable_skip -= next_block_rows - use_stable_rows;
-                use_stable_rows = 0;
-            }
-
-            // If the next block of stable is larger then handle_range, then we should stop reading from stable.
-            if (!handle_range.checkEnd(first_handle))
-            {
-                stable_done     = true;
-                use_stable_rows = 0;
-                break;
+                // Entirely skip block.
+                stable_input_stream_raw_ptr->skipNext();
+                // We skipped some rows, some of them are consumed by writing to output, the rest are recorded by stable_skip.
+                if (next_block_rows <= use_stable_rows)
+                {
+                    use_stable_rows -= next_block_rows;
+                }
+                else
+                {
+                    stable_skip -= next_block_rows - use_stable_rows;
+                    use_stable_rows = 0;
+                }
             }
         }
     }
 
-    inline void writeInsertFromDelta(MutableColumns & output_columns, UInt64 value_index)
+    inline void writeInsertFromDelta(MutableColumns & output_columns, UInt64 tuple_id)
     {
         for (size_t index = 0; index < num_columns; ++index)
-            delta_value_space->insertValue(*output_columns[index], index, value_index);
+            delta_value_space->insertValue(*output_columns[index], index, tuple_id);
     }
 
     inline void writeDeleteFromDelta(size_t n) { stable_skip += n; }
@@ -362,7 +344,7 @@ private:
     {
         auto prev_sid = entry_it.getSid();
         if (entry_it.getType() == DT_DEL)
-            prev_sid += entry_it.getValue();
+            prev_sid += 1;
 
         ++entry_it;
 
