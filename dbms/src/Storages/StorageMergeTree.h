@@ -5,6 +5,7 @@
 #include <Common/SimpleIncrement.h>
 #include <Core/TMTPKType.h>
 #include <Storages/IStorage.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -22,7 +23,7 @@ namespace DB
 
 /** See the description of the data structure in MergeTreeData.
   */
-class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>, public IStorage
+class StorageMergeTree : public ext::shared_ptr_helper<StorageMergeTree>, public IManageableStorage
 {
     friend class MergeTreeBlockOutputStream;
     friend class TxnMergeTreeBlockOutputStream;
@@ -37,13 +38,17 @@ public:
     std::string getName() const override { return data.merging_params.getModeName() + "MergeTree"; }
 
     std::string getTableName() const override { return table_name; }
-    std::string getDatabaseName() const { return database_name; }
+    std::string getDatabaseName() const override { return database_name; }
 
     bool supportsSampling() const override { return data.supportsSampling(); }
     bool supportsPrewhere() const override { return data.supportsPrewhere(); }
     bool supportsFinal() const override { return data.supportsFinal(); }
     bool supportsIndexForIn() const override { return true; }
-    bool supportsModification() const override { return data.merging_params.mode == MergeTreeData::MergingParams::Mode::Mutable || data.merging_params.mode == MergeTreeData::MergingParams::Mode::Txn; }
+    bool supportsModification() const override
+    {
+        return data.merging_params.mode == MergeTreeData::MergingParams::Mode::Mutable
+            || data.merging_params.mode == MergeTreeData::MergingParams::Mode::Txn;
+    }
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand) const override { return data.mayBenefitFromIndexForIn(left_in_operand); }
 
     const ColumnsDescription & getColumns() const override { return data.getColumns(); }
@@ -81,14 +86,15 @@ public:
 
     void alter(const AlterCommands & params, const String & database_name, const String & table_name, const Context & context) override;
 
-    void alterForTMT(const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context);
+    ::TiDB::StorageEngine engineType() const override { return ::TiDB::StorageEngine::TMT; }
 
-    void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name, const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
+    void alterFromTiDB(
+        const AlterCommands & params, const TiDB::TableInfo & table_info, const String & database_name, const Context & context) override;
 
     bool checkTableCanBeDropped() const override;
 
-    const TableInfo & getTableInfo() const;
-    void setTableInfo(const TableInfo & table_info_);
+    const TableInfo & getTableInfo() const override;
+    void setTableInfo(const TableInfo & table_info_) override;
 
     MergeTreeData & getData() { return data; }
     const MergeTreeData & getData() const { return data; }
@@ -96,6 +102,7 @@ public:
     String getDataPath() const override { return full_path; }
 
     bool pkIsUInt64() const { return getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64; }
+    SortDescription getPrimarySortDescription() const override { return data.getPrimarySortDescription(); }
 
 private:
     String path;
@@ -139,6 +146,10 @@ private:
 
     bool mergeTask();
 
+    void alterInternal(const AlterCommands & params, const String & database_name, const String & table_name,
+                       const std::optional<std::reference_wrapper<const TiDB::TableInfo>> table_info, const Context & context);
+
+    DataTypePtr getPKTypeImpl() const override;
 
 protected:
     /** Attach the table with the appropriate name, along the appropriate path (with  / at the end),

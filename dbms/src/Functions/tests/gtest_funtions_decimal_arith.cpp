@@ -1,15 +1,15 @@
 #include <test_utils/TiflashTestBasic.h>
 
-#include <Interpreters/Context.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <Functions/FunctionsArithmetic.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
 namespace tests
 {
 
-void ASSERT_DecimalDataTypeScaleEq(const DataTypePtr &actual_, ScaleType expected_scale)
+void ASSERT_DecimalDataTypeScaleEq(const DataTypePtr & actual_, ScaleType expected_scale)
 {
     if (auto actual = checkDecimal<Decimal32>(*actual_))
         ASSERT_EQ(actual->getScale(), expected_scale);
@@ -36,10 +36,12 @@ TEST(DataTypeDecimal_test, A)
     DataTypePtr lhs = createDecimal(10, 4);
     DataTypePtr rhs = createDecimal(10, 6);
 
-    const ScaleType scale_max = std::max(typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale(), (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale());
-    const ScaleType scale_sum = typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale() + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
+    const ScaleType scale_max = std::max(
+        typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale(), (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale());
+    const ScaleType scale_sum
+        = typeid_cast<const DataTypeDecimal64 *>(lhs.get())->getScale() + (typeid_cast<const DataTypeDecimal64 *>(rhs.get()))->getScale();
 
-    Context context = TiFlashTestEnv::getContext();
+    Context & context = TiFlashTestEnv::getContext();
     DataTypes args{lhs, rhs};
 
     // Decimal(10, 4) + Decimal(10, 6)
@@ -56,7 +58,6 @@ TEST(DataTypeDecimal_test, A)
     func = FunctionMultiply::create(context);
     return_type = func->getReturnTypeImpl(args);
     ASSERT_DecimalDataTypeScaleEq(return_type, scale_sum);
-
 }
 
 } // namespace tests

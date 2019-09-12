@@ -9,6 +9,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/DeltaMergeStore-internal.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -16,6 +17,8 @@ namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
 extern const Event DMWriteBlockNS;
+extern const Event DMDeleteRange;
+extern const Event DMDeleteRangeNS;
 extern const Event DMAppendDeltaCommitDisk;
 extern const Event DMAppendDeltaCommitDiskNS;
 extern const Event DMAppendDeltaCleanUp;
@@ -48,8 +51,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       log(&Logger::get("DeltaMergeStore"))
 {
     table_columns.emplace_back(table_handle_define);
-    table_columns.emplace_back(VERSION_COLUMN_DEFINE);
-    table_columns.emplace_back(TAG_COLUMN_DEFINE);
+    table_columns.emplace_back(getVersionColumnDefine());
+    table_columns.emplace_back(getTagColumnDefine());
 
     for (auto & col : columns)
     {
@@ -157,45 +160,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         LOG_DEBUG(log, msg);
     }
 
-    const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(EXTRA_HANDLE_COLUMN_NAME));
-
-    struct WriteAction
-    {
-        SegmentPtr segment;
-        size_t     offset;
-        size_t     limit;
-
-        BlockOrDelete update = {};
-        AppendTaskPtr task   = {};
-    };
-    std::vector<WriteAction> actions;
-
-    {
-        std::shared_lock lock(mutex);
-
-        size_t offset = 0;
-        while (offset != rows)
-        {
-            auto start      = handle_data[offset];
-            auto segment_it = segments.upper_bound(start);
-            if (segment_it == segments.end())
-            {
-                if (start == P_INF_HANDLE)
-                    --segment_it;
-                else
-                    throw Exception("Failed to locate segment begin with start: " + DB::toString(start), ErrorCodes::LOGICAL_ERROR);
-            }
-            auto segment = segment_it->second;
-            auto range   = segment->getRange();
-            auto end_pos = range.end == P_INF_HANDLE ? handle_data.cend()
-                                                     : std::lower_bound(handle_data.cbegin() + offset, handle_data.cend(), range.end);
-            size_t limit = end_pos - (handle_data.cbegin() + offset);
-
-            actions.emplace_back(WriteAction{.segment = segment, .offset = offset, .limit = limit});
-
-            offset += limit;
-        }
-    }
+    // Locate which segments to write
+    WriteActions actions = prepareWriteActions(block, segments, EXTRA_HANDLE_COLUMN_NAME, std::shared_lock(mutex));
 
     auto               op_context = OpContext::createForLogStorage(dm_context);
     AppendWriteBatches wbs;
@@ -207,6 +173,16 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
+    commitWrites(std::move(actions), std::move(wbs), dm_context, op_context, db_context, db_settings);
+}
+
+void DeltaMergeStore::commitWrites(WriteActions &&       actions,
+                                   AppendWriteBatches && wbs,
+                                   DMContext &           dm_context,
+                                   OpContext &           op_context,
+                                   const Context &       db_context,
+                                   const DB::Settings &  db_settings)
+{
     // Commit updates to disk.
     {
         EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitDisk, ProfileEvents::DMAppendDeltaCommitDiskNS);
@@ -244,6 +220,45 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
     // TODO: Should only check the updated segments.
     afterInsertOrDelete(db_context, db_settings);
+}
+
+void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
+{
+    EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
+
+    if (delete_range.start >= delete_range.end)
+        return;
+
+    DMContext dm_context = newDMContext(db_context, db_settings);
+
+    if (log->debug())
+    {
+        std::shared_lock lock(mutex);
+
+        String msg = "Before delete range" + rangeToString(delete_range) + ". All segments:{";
+        for (auto & [end, segment] : segments)
+        {
+            (void)end;
+            msg += DB::toString(segment->segmentId()) + ":" + segment->getRange().toString() + ",";
+        }
+        msg.pop_back();
+        msg += "}";
+        LOG_DEBUG(log, msg);
+    }
+
+    WriteActions actions = prepareWriteActions(delete_range, segments, std::shared_lock(mutex));
+
+    auto               op_context = OpContext::createForLogStorage(dm_context);
+    AppendWriteBatches wbs;
+
+    // Prepare updates' information.
+    for (auto & action : actions)
+    {
+        // action.update is set in `prepareWriteActions` for delete_range
+        action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
+    }
+
+    commitWrites(std::move(actions), std::move(wbs), dm_context, op_context, db_context, db_settings);
 }
 
 BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
@@ -527,6 +542,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
 
 namespace
 {
+// TODO maybe move to -internal.h ?
 inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
     if (command.default_expression)
@@ -594,17 +610,16 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
         // we don't care about `after_column` in `store_columns`
 
         /// If TableInfo from TiDB is not empty, we get column id from TiDB
+        /// else we allocate a new id by `max_column_id_used`
         ColumnDefine define(0, command.column_name, command.data_type);
         if (table_info)
         {
-            auto tidb_col_iter = findColumnInfoInTableInfo(table_info->get(), command.column_name);
-            define.id          = tidb_col_iter->id;
+            define.id = table_info->get().getColumnID(command.column_name);
         }
         else
         {
             define.id = max_column_id_used++;
         }
-        assert(define.id != 0);
         setColumnDefineDefaultValue(command, define);
         table_columns.emplace_back(std::move(define));
     }
@@ -626,6 +641,13 @@ void DeltaMergeStore::flushCache(const Context & db_context)
         (void)_handle;
         segment->flushCache(dm_context);
     }
+}
+
+SortDescription DeltaMergeStore::getPrimarySortDescription() const
+{
+    SortDescription desc;
+    desc.emplace_back(table_handle_define.name, /* direction_= */ 1, /* nulls_direction_= */ 1);
+    return desc;
 }
 
 } // namespace DM
