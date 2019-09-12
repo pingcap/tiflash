@@ -8,19 +8,20 @@ function run_file()
 	local fuzz="$4"
 	local skip_raw_test="$5"
 	local mysql_client="$6"
+    local verbose="$7"
 
 	local ext=${path##*.}
 
 	if [ "$ext" == "test" ]; then
-		python run-test.py "$dbc" "$path" "$fuzz" "$mysql_client"
+		python run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
 	else
 		if [ "$ext" == "visual" ]; then
-			python run-test-gen-from-visual.py "$path" "$skip_raw_test"
+			python run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose"
 			if [ $? != 0 ]; then
 				echo "Generate test files failed: $file" >&2
 				exit 1
 			fi
-			run_dir "$dbc" "$path.test" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
+			run_dir "$dbc" "$path.test" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 		fi
 	fi
 
@@ -42,6 +43,7 @@ function run_dir()
 	local fuzz="$4"
 	local skip_raw_test="$5"
 	local mysql_client="$6"
+    local verbose="$7"
 
 	find "$path" -maxdepth 1 -name "*.visual" -type f | sort | while read file; do
 		if [ -f "$file" ]; then
@@ -60,7 +62,7 @@ function run_dir()
 
 	find "$path" -maxdepth 1 -name "*.test" -type f | sort | while read file; do
 		if [ -f "$file" ]; then
-			run_file "$dbc" "$file" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
+			run_file "$dbc" "$file" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 		fi
 	done
 
@@ -70,7 +72,7 @@ function run_dir()
 
 	find "$path" -maxdepth 1 -type d | sort -r | while read dir; do
 		if [ -d "$dir" ] && [ "$dir" != "$path" ]; then
-			run_dir "$dbc" "$dir" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
+			run_dir "$dbc" "$dir" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 		fi
 	done
 
@@ -87,12 +89,13 @@ function run_path()
 	local fuzz="$4"
 	local skip_raw_test="$5"
 	local mysql_client="$6"
+    local verbose="$7"
 
 	if [ -f "$path" ]; then
-		run_file "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
+		run_file "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 	else
 		if [ -d "$path" ]; then
-			run_dir "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
+			run_dir "$dbc" "$path" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
 		else
 			echo "error: $path not file nor dir." >&2
 			exit 1
@@ -109,6 +112,7 @@ skip_raw_test="$4"
 debug="$5"
 continue_on_error="$6"
 dbc="$7"
+verbose="$8"
 
 source ./_env.sh
 
@@ -133,6 +137,10 @@ if [ -z "$dbc" ]; then
 		debug="--stacktrace"
 	fi
 	dbc="DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH $storage_bin client --host $storage_server --port $storage_port -d $storage_db $debug -f PrettyCompactNoEscapes --query"
+fi
+
+if [ -z "$verbose" ]; then
+    verbose="false"
 fi
 
 if [ -z "$continue_on_error" ]; then
@@ -161,4 +169,4 @@ if [ "$fullstack" = true ]; then
     python generate-fullstack-test.py "$tidb_db" "$tidb_table"
 fi
 
-run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client"
+run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"

@@ -21,6 +21,8 @@
         <ignore_databases>system</ignore_databases>
         <learner_key>engine</learner_key>
         <learner_value>tiflash</learner_value>
+        <!--specify what engine we use. tmt or dm -->
+        <storage_engine>tmt</storage_engine>
     </raft>
 
     <flash>

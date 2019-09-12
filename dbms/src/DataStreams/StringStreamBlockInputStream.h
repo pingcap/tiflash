@@ -2,6 +2,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/dedupUtils.h>
+#include <DataTypes/DataTypeString.h>
 
 namespace DB
 {
