@@ -2,13 +2,12 @@
 
 #include <common/logger_useful.h>
 
+#include <DataStreams/BlockIO.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
-
-#include <DataStreams/BlockIO.h>
 #include <grpcpp/server_context.h>
 
 namespace DB
