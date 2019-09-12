@@ -47,13 +47,6 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       settings(settings_),
       log(&Logger::get("DeltaMergeStore"))
 {
-    // We use Int64 to store handle.
-    if (!table_handle_define.type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
-    {
-        table_handle_real_type   = table_handle_define.type;
-        table_handle_define.type = EXTRA_HANDLE_COLUMN_TYPE;
-    }
-
     table_columns.emplace_back(table_handle_define);
     table_columns.emplace_back(VERSION_COLUMN_DEFINE);
     table_columns.emplace_back(TAG_COLUMN_DEFINE);
@@ -63,8 +56,6 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
         if (col.name != table_handle_define.name && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             table_columns.emplace_back(col);
     }
-    // update block header
-    header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
 
     DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
     if (!storage_pool.maxMetaPageId())
@@ -129,21 +120,22 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     DMContext dm_context = newDMContext(db_context, db_settings);
     Block     block      = to_write;
 
-    const auto & handle_define = table_handle_define;
+    // Add an extra handle column, if handle reused the original column data.
+    if (pkIsHandle())
     {
-        // Transform handle column into Int64.
-        auto handle_pos = block.getPositionByName(handle_define.name);
-        if (!block.getByPosition(handle_pos).type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
-        {
-            FunctionToInt64::create(db_context)->execute(block, {handle_pos}, handle_pos);
-            block.getByPosition(handle_pos).type = EXTRA_HANDLE_COLUMN_TYPE;
-        }
+        auto handle_pos = block.getPositionByName(table_handle_define.name);
+        addColumnToBlock(block, //
+                         EXTRA_HANDLE_COLUMN_ID,
+                         EXTRA_HANDLE_COLUMN_NAME,
+                         EXTRA_HANDLE_COLUMN_TYPE,
+                         EXTRA_HANDLE_COLUMN_TYPE->createColumn());
+        FunctionToInt64::create(db_context)->execute(block, {handle_pos}, block.columns() - 1);
     }
 
     {
         // Sort by handle & version in ascending order.
         SortDescription sort;
-        sort.emplace_back(handle_define.name, 1, 0);
+        sort.emplace_back(EXTRA_HANDLE_COLUMN_NAME, 1, 0);
         sort.emplace_back(VERSION_COLUMN_NAME, 1, 0);
 
         if (!isAlreadySorted(block, sort))
@@ -165,7 +157,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         LOG_DEBUG(log, msg);
     }
 
-    const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(handle_define.name));
+    const auto & handle_data = getColumnVectorData<Handle>(block, block.getPositionByName(EXTRA_HANDLE_COLUMN_NAME));
 
     struct WriteAction
     {
@@ -286,14 +278,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
-            read_task_pool,
-            stream_creator,
-            columns_to_read,
-            table_handle_define.name,
-            DataTypePtr{},
-            db_context);
-
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(read_task_pool, stream_creator, columns_to_read);
         res.push_back(stream);
     }
     return res;
@@ -367,12 +352,13 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
 
     auto dm_context = newDMContext(db_context, db_settings);
 
-    SegmentStreamCreator stream_creator = [=](const SegmentReadTask & task) {
+    auto stream_creator = [=](const SegmentReadTask & task) {
         return task.segment->getInputStream(dm_context,
                                             task.read_snapshot,
                                             *storage_snapshot,
                                             columns_to_read,
                                             task.ranges,
+                                            {},
                                             max_version,
                                             std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
     };
@@ -383,14 +369,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>( //
-            read_task_pool,
-            stream_creator,
-            columns_to_read,
-            table_handle_define.name,
-            table_handle_real_type,
-            db_context);
-
+        BlockInputStreamPtr stream = std::make_shared<DMSegmentThreadInputStream>(read_task_pool, stream_creator, columns_to_read);
         res.push_back(stream);
     }
     return res;
@@ -531,22 +510,6 @@ void DeltaMergeStore::check(const Context & db_context, const DB::Settings & db_
     }
 }
 
-Block DeltaMergeStore::genHeaderBlock(const ColumnDefines & raw_columns,
-                                      const ColumnDefine &  handle_define,
-                                      const DataTypePtr &   handle_real_type)
-{
-    ColumnDefines real_cols = raw_columns;
-    for (auto && col : real_cols)
-    {
-        if (col.id == handle_define.id)
-        {
-            if (handle_real_type)
-                col.type = handle_real_type;
-        }
-    }
-    return toEmptyBlock(real_cols);
-}
-
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const OptionTableInfoConstRef table_info,
                                   ColumnID &                    max_column_id_used,
@@ -560,9 +523,6 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
     {
         applyAlter(command, table_info, max_column_id_used);
     }
-
-    // Don't forget to update header
-    header = genHeaderBlock(table_columns, table_handle_define, table_handle_real_type);
 }
 
 namespace
@@ -631,7 +591,7 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
     }
     else if (command.type == AlterCommand::ADD_COLUMN)
     {
-        // we don't care about `after_column` in `table_columns`
+        // we don't care about `after_column` in `store_columns`
 
         /// If TableInfo from TiDB is not empty, we get column id from TiDB
         ColumnDefine define(0, command.column_name, command.data_type);

@@ -3,7 +3,6 @@
 #include <IO/MemoryReadWriteBuffer.h>
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/DeltaMerge/ChunkBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 #include <Storages/Page/PageStorage.h>
@@ -66,11 +65,11 @@ void DiskValueSpace::restore(const OpContext & context)
         size_t     total_rows = num_rows();
         size_t     cache_rows = rowsFromBack(chunks_to_cache);
         PageReader page_reader(context.data_storage);
-        Block      cache_data = read(context.dm_context.table_columns, page_reader, total_rows - cache_rows, cache_rows);
+        Block      cache_data = read(context.dm_context.store_columns, page_reader, total_rows - cache_rows, cache_rows);
         if (unlikely(cache_data.rows() != cache_rows))
             throw Exception("The fragment rows from storage mismatch");
 
-        for (const auto & col_define : context.dm_context.table_columns)
+        for (const auto & col_define : context.dm_context.store_columns)
         {
             ColumnWithTypeAndName & col = cache_data.getByName(col_define.name);
             cache[col_define.id]        = (*std::move(col.column)).mutate();
@@ -158,7 +157,7 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, Append
 
                 PageReader page_reader(context.data_storage);
                 // Load fragment chunks' data from disk.
-                compacted_block = read(context.dm_context.table_columns, //
+                compacted_block = read(context.dm_context.store_columns, //
                                        page_reader,
                                        in_storage_rows,
                                        cache_rows,
@@ -173,7 +172,7 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, Append
             else
             {
                 // Use the cache.
-                for (const auto & col_define : context.dm_context.table_columns)
+                for (const auto & col_define : context.dm_context.store_columns)
                 {
                     auto new_col = col_define.type->createColumn();
                     new_col->reserve(compacted_rows);
@@ -227,7 +226,7 @@ DiskValueSpacePtr DiskValueSpace::applyAppendTask(const OpContext & context, con
             throw Exception("cache should only be applied to this");
 
         auto block_rows = update.block.rows();
-        for (const auto & col_define : context.dm_context.table_columns)
+        for (const auto & col_define : context.dm_context.store_columns)
         {
             const ColumnWithTypeAndName & col = update.block.getByName(col_define.name);
 
@@ -321,7 +320,7 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
         && (write_rows >= context.dm_context.delta_cache_limit_rows || write_bytes >= context.dm_context.delta_cache_limit_bytes))
         return;
 
-    for (const auto & col_define : context.dm_context.table_columns)
+    for (const auto & col_define : context.dm_context.store_columns)
     {
         const ColumnWithTypeAndName & col = block.getByName(col_define.name);
 
@@ -562,7 +561,7 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     {
         // Load fragment data from disk.
         PageReader page_reader(context.data_storage);
-        compacted = read(context.dm_context.table_columns, page_reader, in_storage_rows, cache_rows);
+        compacted = read(context.dm_context.store_columns, page_reader, in_storage_rows, cache_rows);
 
         if (unlikely(compacted.rows() != cache_rows))
             throw Exception("The fragment rows from storage mismatch");
@@ -570,7 +569,7 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     else
     {
         // Use the cache.
-        for (const auto & col_define : context.dm_context.table_columns)
+        for (const auto & col_define : context.dm_context.store_columns)
         {
             ColumnWithTypeAndName col(cache.at(col_define.id)->cloneResized(cache_rows), col_define.type, col_define.name, col_define.id);
             compacted.insert(col);
@@ -622,7 +621,7 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
 
 ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const
 {
-    return std::make_shared<ChunkBlockInputStream>(chunks, read_columns, page_reader);
+    return std::make_shared<ChunkBlockInputStream>(chunks, RSOperatorPtr(), read_columns, page_reader);
 }
 
 size_t DiskValueSpace::num_rows() const

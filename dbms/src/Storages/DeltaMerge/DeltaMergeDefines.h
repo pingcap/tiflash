@@ -3,6 +3,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 
 #include <Common/Allocator.h>
 #include <Common/ArenaWithFreeLists.h>
@@ -72,7 +73,10 @@ struct ColumnDefine
     DataTypePtr type;
     String      default_value;
 
-    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr): id(id_), name(std::move(name_)), type(std::move(type_)) {}
+    explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr)
+        : id(id_), name(std::move(name_)), type(std::move(type_))
+    {
+    }
 };
 using ColumnDefines   = std::vector<ColumnDefine>;
 using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
@@ -95,6 +99,7 @@ static const DataTypePtr EXTRA_HANDLE_COLUMN_TYPE = DataTypeFactory::instance().
 static const DataTypePtr VERSION_COLUMN_TYPE      = DataTypeFactory::instance().get("UInt64");
 static const DataTypePtr TAG_COLUMN_TYPE          = DataTypeFactory::instance().get("UInt8");
 
+static const ColumnDefine EXTRA_HANDLE_COLUMN_DEFINE{EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE};
 static const ColumnDefine VERSION_COLUMN_DEFINE{VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE};
 static const ColumnDefine TAG_COLUMN_DEFINE{TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE};
 
@@ -109,6 +114,8 @@ static constexpr Handle P_INF_HANDLE = MAX_INT64; // Used in range, indicating p
 
 static_assert(static_cast<Int64>(static_cast<UInt64>(MIN_INT64)) == MIN_INT64, "Unsupported compiler!");
 static_assert(static_cast<Int64>(static_cast<UInt64>(MAX_INT64)) == MAX_INT64, "Unsupported compiler!");
+
+static constexpr UInt64 DEL_RANGE_POS_MARK = (1ULL << 63);
 
 } // namespace DM
 } // namespace DB

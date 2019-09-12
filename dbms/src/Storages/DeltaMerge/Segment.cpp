@@ -12,6 +12,7 @@
 #include <Storages/DeltaMerge/DeltaMerge.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaPlace.h>
+#include <Storages/DeltaMerge/FilterHelper.h>
 #include <Storages/DeltaMerge/Segment.h>
 
 namespace ProfileEvents
@@ -188,7 +189,7 @@ void Segment::applyAppendTask(const OpContext & opc, const AppendTaskPtr & task,
 
 void Segment::check(DMContext & dm_context, const String & when)
 {
-    auto & handle = dm_context.table_handle_define;
+    auto & handle = dm_context.handle_column;
 
     size_t stable_rows = stable->num_rows();
     size_t delta_rows  = delta->num_rows();
@@ -196,7 +197,7 @@ void Segment::check(DMContext & dm_context, const String & when)
     LOG_DEBUG(log, when + ": stable_rows:" + DB::toString(stable_rows) + ", delta_rows:" + DB::toString(delta_rows));
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
-    auto            read_info = getReadInfo<false>(dm_context, {delta, delta_rows}, storage_snapshot, {handle});
+    auto            read_info = getReadInfo<false>(dm_context, {delta, delta_rows, delta->num_deletes()}, storage_snapshot, {handle});
 
     LOG_DEBUG(log,
               when + ": entries:" + DB::toString(delta_tree->numEntries()) + ", inserts:" + DB::toString(delta_tree->numInserts())
@@ -205,6 +206,7 @@ void Segment::check(DMContext & dm_context, const String & when)
     auto stream = getPlacedStream(storage_snapshot.data_reader,
                                   {range},
                                   read_info.read_columns,
+                                  EMPTY_FILTER,
                                   read_info.delta_value_space,
                                   read_info.index_begin,
                                   read_info.index_end,
@@ -234,7 +236,7 @@ void Segment::check(DMContext & dm_context, const String & when)
 SegmentSnapshot Segment::getReadSnapshot()
 {
     std::unique_lock lock(read_write_mutex);
-    return {delta, delta->num_rows()};
+    return {delta, delta->num_rows(), delta->num_deletes()};
 }
 
 BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
@@ -242,14 +244,16 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                                             const StorageSnapshot & storage_snaps,
                                             const ColumnDefines &   columns_to_read,
                                             const HandleRanges &    read_ranges,
+                                            const RSOperatorPtr &   filter,
                                             UInt64                  max_version,
                                             size_t                  expected_block_size)
 {
-    auto & handle    = dm_context.table_handle_define;
+    auto & handle    = dm_context.handle_column;
     auto   read_info = getReadInfo<true>(dm_context, segment_snap, storage_snaps, columns_to_read);
     auto   stream    = getPlacedStream(storage_snaps.data_reader,
                                   read_ranges,
                                   read_info.read_columns,
+                                  filter,
                                   read_info.delta_value_space,
                                   read_info.index_begin,
                                   read_info.index_end,
@@ -263,7 +267,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
                                                const StorageSnapshot & storage_snaps,
                                                const ColumnDefines &   columns_to_read)
 {
-    auto & handle = dm_context.table_handle_define;
+    auto & handle = dm_context.handle_column;
 
     ColumnDefines new_columns_to_read;
     new_columns_to_read.push_back(handle);
@@ -281,10 +285,16 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
         delta_snap = std::make_shared<DiskValueSpace>(*segment_snap.delta);
     }
 
-    BlockInputStreamPtr delta_stream = delta_snap->getInputStream(new_columns_to_read, storage_snaps.log_reader);
+    BlockInputStreamPtr delta_stream = std::make_shared<ChunkBlockInputStream>(delta_snap->getChunks(), //
+                                                                               EMPTY_FILTER,
+                                                                               new_columns_to_read,
+                                                                               storage_snaps.log_reader);
     delta_stream                     = std::make_shared<DMHandleFilterBlockInputStream>(delta_stream, range, 0, false);
 
-    BlockInputStreamPtr stable_stream = stable->getInputStream(new_columns_to_read, storage_snaps.data_reader);
+    BlockInputStreamPtr stable_stream = std::make_shared<ChunkBlockInputStream>(stable->getChunks(), //
+                                                                                EMPTY_FILTER,
+                                                                                new_columns_to_read,
+                                                                                storage_snaps.data_reader);
     stable_stream                     = std::make_shared<DMHandleFilterBlockInputStream>(stable_stream, range, 0, true);
 
     BlockInputStreams streams;
@@ -300,7 +310,8 @@ SegmentPair Segment::split(DMContext & dm_context)
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
 
-    auto   read_info   = getReadInfo<false>(dm_context, {delta, delta->num_rows()}, storage_snapshot, dm_context.table_columns);
+    auto read_info
+        = getReadInfo<false>(dm_context, {delta, delta->num_rows(), delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
     Handle split_point = getSplitPoint(dm_context, storage_snapshot.data_reader, read_info);
     auto   res         = doSplit(dm_context, storage_snapshot.data_reader, read_info, split_point);
 
@@ -315,10 +326,10 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
 
-    auto left_read_info
-        = left->getReadInfo<false>(dm_context, {left->delta, left->delta->num_rows()}, storage_snapshot, dm_context.table_columns);
-    auto right_read_info
-        = right->getReadInfo<false>(dm_context, {right->delta, right->delta->num_rows()}, storage_snapshot, dm_context.table_columns);
+    auto left_read_info = left->getReadInfo<false>(
+        dm_context, {left->delta, left->delta->num_rows(), left->delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
+    auto right_read_info = right->getReadInfo<false>(
+        dm_context, {right->delta, right->delta->num_rows(), left->delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
 
     auto res = doMerge(dm_context, storage_snapshot.data_reader, left, left_read_info, right, right_read_info);
 
@@ -339,16 +350,17 @@ SegmentPtr Segment::flush(DMContext & dm_context)
 
     LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] start to merge delta.");
 
-    auto & handle      = dm_context.table_handle_define;
-    auto & columns     = dm_context.table_columns;
+    auto & handle      = dm_context.handle_column;
+    auto & columns     = dm_context.store_columns;
     auto   min_version = dm_context.min_version;
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
 
-    auto read_info   = getReadInfo<false>(dm_context, {delta, delta->num_rows()}, storage_snapshot, columns);
+    auto read_info   = getReadInfo<false>(dm_context, {delta, delta->num_rows(), delta->num_deletes()}, storage_snapshot, columns);
     auto data_stream = getPlacedStream(storage_snapshot.data_reader,
                                        {range},
                                        read_info.read_columns,
+                                       EMPTY_FILTER,
                                        read_info.delta_value_space,
                                        read_info.index_begin,
                                        read_info.index_end,
@@ -440,7 +452,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
                                        const StorageSnapshot & storage_snaps,
                                        const ColumnDefines &   columns_to_read)
 {
-    auto new_columns_to_read = arrangeReadColumns<add_tag_column>(dm_context.table_handle_define, columns_to_read);
+    auto new_columns_to_read = arrangeReadColumns<add_tag_column>(dm_context.handle_column, columns_to_read);
 
     // Create a new delta vs and delta index snapshot, so that later read/write operations won't block write thread.
     // TODO: We don't need to do copy if chunks in DiskValueSpace is a list.
@@ -451,17 +463,17 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
         delta_snap = std::make_shared<DiskValueSpace>(*segment_snap.delta);
     }
 
-    auto & handle = dm_context.table_handle_define;
+    auto & handle = dm_context.handle_column;
 
     const auto delta_block       = delta_snap->read(new_columns_to_read, storage_snaps.log_reader, 0, segment_snap.delta_rows);
     auto       delta_value_space = std::make_shared<DeltaValueSpace>(handle, new_columns_to_read, delta_block);
 
-    DeltaIndexPtr delta_index;
-    {
-        // Synchronize between read/read threads.
-        std::unique_lock lock(read_read_mutex);
-        delta_index = ensurePlace(dm_context, storage_snaps, delta_snap, delta_value_space);
-    }
+    DeltaIndexPtr delta_index = ensurePlace(dm_context, //
+                                            storage_snaps,
+                                            delta_snap,
+                                            segment_snap.delta_rows,
+                                            segment_snap.delta_deletes,
+                                            delta_value_space);
 
     auto index_begin = DeltaIndex::begin(delta_index);
     auto index_end   = DeltaIndex::end(delta_index);
@@ -503,13 +515,16 @@ template <class IndexIterator>
 BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_page_reader,
                                              const HandleRanges &       read_ranges,
                                              const ColumnDefines &      read_columns,
+                                             const RSOperatorPtr &      filter,
                                              const DeltaValueSpacePtr & delta_value_space,
                                              const IndexIterator &      delta_index_begin,
                                              const IndexIterator &      delta_index_end,
                                              size_t                     expected_block_size) const
 {
     auto placed_stream_creator = [&](const HandleRange & read_range) {
-        auto stable_input_stream = stable->getInputStream(read_columns, data_page_reader);
+        auto with_handle_range_filter = withHanleRange(filter, read_range);
+        auto stable_input_stream
+            = std::make_shared<ChunkBlockInputStream>(stable->getChunks(), with_handle_range_filter, read_columns, data_page_reader);
         return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator>>( //
             0,
             read_range,
@@ -548,7 +563,7 @@ Segment::doSplit(DMContext & dm_context, const PageReader & data_page_reader, co
 {
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
-    auto & handle       = dm_context.table_handle_define;
+    auto & handle       = dm_context.handle_column;
     auto & storage_pool = dm_context.storage_pool;
     auto   min_version  = dm_context.min_version;
 
@@ -564,6 +579,7 @@ Segment::doSplit(DMContext & dm_context, const PageReader & data_page_reader, co
         BlockInputStreamPtr my_data = getPlacedStream(data_page_reader,
                                                       {my_range},
                                                       read_info.read_columns,
+                                                      EMPTY_FILTER,
                                                       read_info.delta_value_space,
                                                       read_info.index_begin,
                                                       read_info.index_end,
@@ -578,6 +594,7 @@ Segment::doSplit(DMContext & dm_context, const PageReader & data_page_reader, co
         BlockInputStreamPtr other_data = getPlacedStream(data_page_reader,
                                                          {other_range},
                                                          read_info.read_columns,
+                                                         EMPTY_FILTER,
                                                          read_info.delta_value_space,
                                                          read_info.index_begin,
                                                          read_info.index_end,
@@ -644,7 +661,7 @@ SegmentPtr Segment::doMerge(DMContext &        dm_context,
 
     EventRecorder recorder(ProfileEvents::DMSegmentMerge, ProfileEvents::DMSegmentMergeNS);
 
-    auto & handle       = dm_context.table_handle_define;
+    auto & handle       = dm_context.handle_column;
     auto & storage_pool = dm_context.storage_pool;
     auto   min_version  = dm_context.min_version;
 
@@ -653,6 +670,7 @@ SegmentPtr Segment::doMerge(DMContext &        dm_context,
         BlockInputStreamPtr left_data = left->getPlacedStream(data_page_reader,
                                                               {left->range},
                                                               left_read_info.read_columns,
+                                                              EMPTY_FILTER,
                                                               left_read_info.delta_value_space,
                                                               left_read_info.index_begin,
                                                               left_read_info.index_end,
@@ -662,6 +680,7 @@ SegmentPtr Segment::doMerge(DMContext &        dm_context,
         BlockInputStreamPtr right_data = right->getPlacedStream(data_page_reader,
                                                                 {right->range},
                                                                 right_read_info.read_columns,
+                                                                EMPTY_FILTER,
                                                                 right_read_info.delta_value_space,
                                                                 right_read_info.index_begin,
                                                                 right_read_info.index_end,
@@ -764,17 +783,25 @@ SegmentPtr Segment::reset(DMContext & dm_context, BlockInputStreamPtr & input_st
 DeltaIndexPtr Segment::ensurePlace(const DMContext &          dm_context,
                                    const StorageSnapshot &    storage_snapshot,
                                    const DiskValueSpacePtr &  to_place_delta,
+                                   size_t                     delta_rows_limit,
+                                   size_t                     delta_deletes_limit,
                                    const DeltaValueSpacePtr & delta_value_space)
 {
+    // Synchronize between read/read threads.
+    std::unique_lock lock(read_read_mutex);
+
+    // Other read threads could already done place.
+    if (placed_delta_rows >= delta_rows_limit && placed_delta_deletes >= delta_deletes_limit)
+        return delta_tree->getEntriesCopy<Allocator<false>>(delta_rows_limit, delta_deletes_limit);
+
     EventRecorder recorder(ProfileEvents::DMPlace, ProfileEvents::DMPlaceNS);
 
-    size_t delta_rows    = to_place_delta->num_rows();
-    size_t delta_deletes = to_place_delta->num_deletes();
-    if (placed_delta_rows == delta_rows && placed_delta_deletes == delta_deletes)
-        return delta_tree->getEntriesCopy<Allocator<false>>();
-
-    auto blocks = to_place_delta->getMergeBlocks(
-        dm_context.table_handle_define, storage_snapshot.log_reader, placed_delta_rows, placed_delta_deletes, delta_rows, delta_deletes);
+    auto blocks = to_place_delta->getMergeBlocks(dm_context.handle_column,
+                                                 storage_snapshot.log_reader,
+                                                 placed_delta_rows,
+                                                 placed_delta_deletes,
+                                                 delta_rows_limit,
+                                                 delta_deletes_limit);
 
     for (auto & v : blocks)
     {
@@ -784,9 +811,7 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &          dm_context,
             placeUpsert(dm_context, storage_snapshot.data_reader, delta_value_space, std::move(v.block));
     }
 
-    recorder.submit();
-
-    return delta_tree->getEntriesCopy<Allocator<false>>();
+    return delta_tree->getEntriesCopy<Allocator<false>>(delta_rows_limit, delta_deletes_limit);
 }
 
 void Segment::placeUpsert(const DMContext &          dm_context,
@@ -796,7 +821,7 @@ void Segment::placeUpsert(const DMContext &          dm_context,
 {
     EventRecorder recorder(ProfileEvents::DMPlaceUpsert, ProfileEvents::DMPlaceUpsertNS);
 
-    auto & handle            = dm_context.table_handle_define;
+    auto & handle            = dm_context.handle_column;
     auto   delta_index_begin = delta_tree->begin();
     auto   delta_index_end   = delta_tree->end();
 
@@ -804,16 +829,18 @@ void Segment::placeUpsert(const DMContext &          dm_context,
         data_page_reader,
         {range},
         {handle, VERSION_COLUMN_DEFINE},
+        EMPTY_FILTER,
         delta_value_space,
         delta_index_begin,
         delta_index_end,
         DEFAULT_BLOCK_SIZE);
 
-    auto perm = sortBlockByPk(handle, block);
-    DM::placeInsert(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
+    IColumn::Permutation perm;
+    if (sortBlockByPk(handle, block, perm))
+        DM::placeInsert<true>(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
+    else
+        DM::placeInsert<false>(merged_stream, block, *delta_tree, placed_delta_rows, perm, getPkSort(handle));
     placed_delta_rows += block.rows();
-
-    recorder.submit();
 }
 
 void Segment::placeDelete(const DMContext &          dm_context,
@@ -823,7 +850,7 @@ void Segment::placeDelete(const DMContext &          dm_context,
 {
     EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
 
-    auto & handle            = dm_context.table_handle_define;
+    auto & handle            = dm_context.handle_column;
     auto   delta_index_begin = delta_tree->begin();
     auto   delta_index_end   = delta_tree->end();
 
@@ -833,6 +860,7 @@ void Segment::placeDelete(const DMContext &          dm_context,
             data_page_reader,
             {delete_range},
             {handle, VERSION_COLUMN_DEFINE},
+            EMPTY_FILTER,
             delta_value_space,
             delta_index_begin,
             delta_index_end,
@@ -856,25 +884,25 @@ void Segment::placeDelete(const DMContext &          dm_context,
             data_page_reader,
             {range},
             {handle, VERSION_COLUMN_DEFINE},
+            EMPTY_FILTER,
             delta_value_space,
             delta_index_begin,
             delta_index_end,
             DEFAULT_BLOCK_SIZE);
-        DM::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle));
+        DM::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle), placed_delta_deletes);
     }
     ++placed_delta_deletes;
-
-    recorder.submit();
 }
 
 Handle Segment::getSplitPoint(DMContext & dm_context, const PageReader & data_page_reader, const ReadInfo & read_info)
 {
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
 
-    auto & handle = dm_context.table_handle_define;
+    auto & handle = dm_context.handle_column;
     auto   stream = getPlacedStream(data_page_reader,
                                   {range},
-                                  {dm_context.table_handle_define},
+                                  {dm_context.handle_column},
+                                  EMPTY_FILTER,
                                   read_info.delta_value_space,
                                   read_info.index_begin,
                                   read_info.index_end,
@@ -902,6 +930,29 @@ Handle Segment::getSplitPoint(DMContext & dm_context, const PageReader & data_pa
     recorder.submit();
 
     return split_handle;
+}
+
+MinMaxIndexPtr Segment::getMinMax(const ColumnDefine & column_define)
+{
+    auto minmax = std::make_shared<MinMaxIndex>();
+
+    auto merge_minmax = [&](const DiskValueSpacePtr & value_space) -> bool {
+        for (auto & chunk : value_space->getChunks())
+        {
+            auto * col = chunk.tryGetColumn(column_define.id);
+            // TODO: Handle the case of after DDL
+            if (!col || !col->type->equals(*column_define.type))
+                return false;
+            minmax->merge(*(col->minmax));
+        }
+        return true;
+    };
+
+    bool ok = merge_minmax(delta) && merge_minmax(stable);
+    if (ok)
+        return minmax;
+    else
+        return {};
 }
 
 size_t Segment::estimatedRows()
