@@ -37,7 +37,7 @@ void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::
 
 // Try flush regions
 // Usage:
-//   ./storage-client.sh "DBGInvoke try_flush()"
+//   ./storage-client.sh "DBGInvoke try_flush([force_flush])"
 void dbgFuncTryFlush(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Try flush regions

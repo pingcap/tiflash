@@ -43,8 +43,8 @@ TableID getTableID(Context & context, const std::string & database_name, const s
     }
 
     auto storage = context.getTable(database_name, table_name);
-    auto * merge_tree = dynamic_cast<StorageMergeTree *>(storage.get());
-    auto table_info = merge_tree->getTableInfo();
+    auto managed_storage = std::static_pointer_cast<IManageableStorage>(storage);
+    auto table_info = managed_storage->getTableInfo();
     return table_info.id;
 }
 
@@ -75,10 +75,15 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
     output(ss.str());
 }
 
-void dbgFuncTryFlush(Context & context, const ASTs &, DBGInvoker::Printer output)
+void dbgFuncTryFlush(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     TMTContext & tmt = context.getTMTContext();
-    tmt.getRegionTable().tryFlushRegions();
+
+    bool force_flush = false;
+    if (!args.empty())
+        force_flush = (String(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
+
+    tmt.getRegionTable().tryFlushRegions(force_flush);
 
     std::stringstream ss;
     ss << "region_table try flush regions";

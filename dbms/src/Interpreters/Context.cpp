@@ -1423,12 +1423,13 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & learner_value,
                                const std::unordered_set<std::string> & ignore_databases,
                                const std::string & kvstore_path,
-                               const std::string & region_mapping_path)
+                               const std::string & region_mapping_path,
+                               ::TiDB::StorageEngine engine)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path, engine);
 }
 
 void Context::initializePartPathSelector(const std::vector<std::string> & all_path)

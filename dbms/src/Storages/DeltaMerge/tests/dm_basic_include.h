@@ -1,13 +1,14 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <test_utils/TiflashTestBasic.h>
-#include <Interpreters/Context.h>
-#include <Core/Block.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+
 #include <Columns/ColumnVector.h>
 #include <Common/typeid_cast.h>
+#include <Core/Block.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Range.h>
 
 namespace DB
 {
@@ -16,10 +17,25 @@ namespace DM
 namespace tests
 {
 
+/// helper functions for comparing HandleRange
+
+inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_expr,
+                                                     const char *        rhs_expr, //
+                                                     const HandleRange & lhs,
+                                                     const HandleRange & rhs)
+{
+    if (lhs == rhs)
+        return ::testing::AssertionSuccess();
+    else
+        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
+}
+#define ASSERT_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
+#define EXPECT_RANGE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
+
 class DMTestEnv
 {
 public:
-    static Context getContext(const ::DB::Settings &settings = DB::Settings())
+    static Context & getContext(const ::DB::Settings & settings = DB::Settings())
     {
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }
@@ -28,8 +44,8 @@ public:
     {
         ColumnDefines columns;
         columns.emplace_back(ColumnDefine(1, "pk", std::make_shared<DataTypeInt64>()));
-        columns.emplace_back(VERSION_COLUMN_DEFINE);
-        columns.emplace_back(TAG_COLUMN_DEFINE);
+        columns.emplace_back(getVersionColumnDefine());
+        columns.emplace_back(getTagColumnDefine());
         return columns;
     }
 
@@ -53,9 +69,12 @@ public:
                 for (size_t i = 0; i < num_rows; i++)
                 {
                     Field field;
-                    if (!reversed) {
+                    if (!reversed)
+                    {
                         field = Int64(beg + i);
-                    } else {
+                    }
+                    else
+                    {
                         field = Int64(end - 1 - i);
                     }
                     m_col->insert(field);
@@ -92,7 +111,6 @@ public:
         return block;
     }
 };
-
 
 
 } // namespace tests

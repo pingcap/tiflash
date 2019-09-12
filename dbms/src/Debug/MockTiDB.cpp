@@ -18,6 +18,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+} // namespace ErrorCodes
+
 using ColumnInfo = TiDB::ColumnInfo;
 using TableInfo = TiDB::TableInfo;
 using PartitionInfo = TiDB::PartitionInfo;
@@ -218,7 +223,7 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
     return schema_id;
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso, String engine_type)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -228,12 +233,12 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         throw Exception("Mock TiDB table " + qualified_name + " already exists", ErrorCodes::TABLE_ALREADY_EXISTS);
     }
 
-    TableInfo table_info;
-
     if (databases.find(database_name) == databases.end())
     {
         throw Exception("MockTiDB not found db: " + database_name, ErrorCodes::LOGICAL_ERROR);
     }
+
+    TableInfo table_info;
     table_info.db_id = databases[database_name];
     table_info.db_name = database_name;
     table_info.id = table_id_allocator++;
@@ -249,9 +254,22 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     table_info.comment = "Mocked.";
     table_info.update_timestamp = tso;
 
+    // set storage engine type
+    std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (!(engine_type == "tmt" || engine_type == "dm"))
+    {
+        throw Exception("Unknown engine type : " + engine_type +", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
+    }
+    if (engine_type == "tmt")
+        table_info.engine_type = TiDB::StorageEngine::TMT;
+    else if (engine_type == "dm")
+        table_info.engine_type = TiDB::StorageEngine::DM;
+    else
+        throw Exception("Unknown engine type : " + engine_type +", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
+
     auto table = std::make_shared<Table>(database_name, table_name, std::move(table_info));
     tables_by_id.emplace(table->table_info.id, table);
-    tables_by_name.emplace(database_name + "." + table_name, table);
+    tables_by_name.emplace(qualified_name, table);
 
     version++;
     SchemaDiff diff;
