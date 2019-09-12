@@ -45,7 +45,7 @@ public:
     {
         static constexpr size_t SPLIT_SIZE = 65536;
 
-        using DeleteMark  = std::vector<bool>;
+        using DeleteMark  = std::vector<UInt8>;
         using DeleteMarks = std::vector<DeleteMark>;
 
         String         name;
