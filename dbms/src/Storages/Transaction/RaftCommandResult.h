@@ -10,6 +10,9 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 
+class RegionRangeKeys;
+using ImutRegionRangePtr = std::shared_ptr<const RegionRangeKeys>;
+
 struct RaftCommandResult : private boost::noncopyable
 {
     enum Type
@@ -26,6 +29,7 @@ struct RaftCommandResult : private boost::noncopyable
     Type type = Type::Default;
     std::vector<RegionPtr> split_regions{};
     TableIDSet table_ids{};
+    ImutRegionRangePtr range_before_split;
 };
 
 } // namespace DB
