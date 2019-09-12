@@ -1,0 +1,270 @@
+#include <Flash/Coprocessor/TiDBChunk.h>
+
+#include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnString.h>
+#include <Columns/ColumnVector.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeDecimal.h>
+#include <Flash/Coprocessor/TiDBDecimal.h>
+#include <Functions/FunctionHelpers.h>
+
+namespace DB
+{
+
+TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
+{
+    for (auto & type : field_types)
+    {
+        switch (type.tp())
+        {
+            case TiDB::TypeTiny:
+            case TiDB::TypeShort:
+            case TiDB::TypeInt24:
+            case TiDB::TypeLong:
+            case TiDB::TypeLongLong:
+            case TiDB::TypeYear:
+            case TiDB::TypeDouble:
+                columns.emplace_back(8, "00000000");
+                break;
+            case TiDB::TypeFloat:
+                columns.emplace_back(4, "0000");
+                break;
+            case TiDB::TypeDecimal:
+                columns.emplace_back(40, "0000000000000000000000000000000000000000");
+                break;
+            case TiDB::TypeDate:
+            case TiDB::TypeDatetime:
+            case TiDB::TypeNewDate:
+            case TiDB::TypeTimestamp:
+                columns.emplace_back(16, "0000000000000000");
+                break;
+            case TiDB::TypeVarchar:
+            case TiDB::TypeVarString:
+                columns.emplace_back(VAR_SIZE, "");
+                break;
+            default:
+                throw Exception("not supported field type in array encode.");
+        }
+    }
+}
+
+template <typename T>
+void decimalToVector(T dec, std::vector<Int32> & vec, UInt32 scale)
+{
+    Int256 value = dec.value;
+    if (value < 0)
+    {
+        value = -value;
+    }
+    while (value != 0)
+    {
+        vec.push_back(static_cast<Int32>(value % 10));
+        value = value / 10;
+    }
+    while (vec.size() < scale)
+    {
+        vec.push_back(0);
+    }
+}
+
+template <typename T>
+bool flashDecimalColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
+    const DataTypePtr & data_type, size_t start_index, size_t end_index)
+{
+    if (checkColumn<ColumnDecimal<T>>(flash_col_untyped) && checkDataType<DataTypeDecimal<T>>(data_type.get())
+        && field_type.tp() == TiDB::TypeNewDecimal)
+    {
+        const ColumnDecimal<T> * flash_col = checkAndGetColumn<ColumnDecimal<T>>(flash_col_untyped);
+        const DataTypeDecimal<T> * type = checkAndGetDataType<DataTypeDecimal<T>>(data_type.get());
+        for (size_t i = start_index; i < end_index; i++)
+        {
+            if (flash_col->isNullAt(i))
+            {
+                dag_column.appendNull();
+                continue;
+            }
+            const T & dec = flash_col->getElement(i);
+            UInt32 scale = type->getScale();
+            std::vector<Int32> digits;
+            decimalToVector<T>(dec, digits, scale);
+            TiDBDecimal tiDecimal(scale, digits, dec.value < 0);
+            dag_column.appendDecimal(tiDecimal);
+        }
+    }
+    return false;
+}
+
+template <typename T>
+bool flashNumColToDAGCol(
+    TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type, size_t start_index, size_t end_index)
+{
+    if (const ColumnVector<T> * flash_col = checkAndGetColumn<ColumnVector<T>>(flash_col_untyped))
+    {
+        for (size_t i = start_index; i < end_index; i++)
+        {
+            if (flash_col->isNullAt(i))
+            {
+                dag_column.appendNull();
+                continue;
+            }
+            switch (field_type.tp())
+            {
+                case TiDB::TypeTiny:
+                case TiDB::TypeShort:
+                case TiDB::TypeInt24:
+                case TiDB::TypeLong:
+                case TiDB::TypeLongLong:
+                case TiDB::TypeYear:
+                    if (field_type.flag() & TiDB::ColumnFlagUnsigned)
+                    {
+                        dag_column.appendUInt64(UInt64(flash_col->getElement(i)));
+                    }
+                    else
+                    {
+                        dag_column.appendInt64(Int64(flash_col->getElement(i)));
+                    }
+                    break;
+                case TiDB::TypeFloat:
+                    dag_column.appendFloat32(Float32(flash_col->getElement(i)));
+                    break;
+                case TiDB::TypeDouble:
+                    dag_column.appendFloat64(Float64(flash_col->getElement(i)));
+                    break;
+                default:
+                    throw Exception("Not supported yet: trying to convert flash col " + flash_col->getName()
+                        + " to DAG column of type: " + field_type.DebugString());
+            }
+        }
+        return true;
+    }
+    // todo maybe the column is a const col??
+    return false;
+}
+
+bool flashDateColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
+    const DataTypePtr & data_type, size_t start_index, size_t end_index)
+{
+    if ((field_type.tp() == TiDB::TypeDate || field_type.tp() == TiDB::TypeDatetime || field_type.tp() == TiDB::TypeTimestamp)
+        && checkDataType<DataTypeDate>(data_type.get()))
+    {
+        const ColumnVector<UInt32> * flash_col = checkAndGetColumn<ColumnVector<UInt32>>(flash_col_untyped);
+        const auto & date_lut = DateLUT::instance();
+        for (size_t i = start_index; i < end_index; i++)
+        {
+            if (flash_col->isNullAt(i))
+            {
+                dag_column.appendNull();
+                continue;
+            }
+            DayNum_t day_num(flash_col->getElement(i));
+            TiDBTime time = TiDBTime(day_num, date_lut, field_type);
+            dag_column.appendTime(time);
+        }
+        return true;
+    }
+    return false;
+}
+
+bool flashDateTimeColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
+    const DataTypePtr & data_type, size_t start_index, size_t end_index)
+{
+    if ((field_type.tp() == TiDB::TypeDate || field_type.tp() == TiDB::TypeDatetime || field_type.tp() == TiDB::TypeTimestamp)
+        && checkDataType<DataTypeDateTime>(data_type.get()))
+    {
+        const ColumnVector<Int64> * flash_col = checkAndGetColumn<ColumnVector<Int64>>(flash_col_untyped);
+        const auto & date_lut = DateLUT::instance();
+        for (size_t i = start_index; i < end_index; i++)
+        {
+            if (flash_col->isNullAt(i))
+            {
+                dag_column.appendNull();
+                continue;
+            }
+            time_t time_num(flash_col->getElement(i));
+            TiDBTime time = TiDBTime(time_num, date_lut, field_type);
+            dag_column.appendTime(time);
+        }
+        return true;
+    }
+    return false;
+}
+
+bool flashStringColToDAGCol(
+    TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type, size_t start_index, size_t end_index)
+{
+    // columnFixedString is not used so do not check it
+    const ColumnString * flash_col = checkAndGetColumn<ColumnString>(flash_col_untyped);
+    if (flash_col)
+    {
+        for (size_t i = start_index; i < end_index; i++)
+        {
+            // todo check if we can convert flash_col to DAG col directly since the internal representation is almost the same
+            if (flash_col->isNullAt(i))
+            {
+                dag_column.appendNull();
+                continue;
+            }
+            switch (field_type.tp())
+            {
+                case TiDB::TypeVarchar:
+                case TiDB::TypeVarString:
+                    dag_column.appendBytes(flash_col->getDataAt(i));
+                    break;
+                default:
+                    throw Exception("Not supported yet: convert flash col " + flash_col->getName()
+                        + " to DAG column of type: " + field_type.DebugString());
+            }
+        }
+        return true;
+    }
+
+    return false;
+}
+
+void flashColToDAGCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & flash_col, const tipb::FieldType & field_type,
+    size_t start_index, size_t end_index)
+{
+    const IColumn * col = flash_col.column.get();
+    const bool is_num = col->isNumeric();
+    if (is_num)
+    {
+        if (!(flashDateColToDAGCol(dag_column, col, field_type, flash_col.type, start_index, end_index)
+                || flashDateTimeColToDAGCol(dag_column, col, field_type, flash_col.type, start_index, end_index)
+                || flashNumColToDAGCol<UInt8>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt16>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt32>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt16>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt32>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt64>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt128>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Int8>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Int32>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Int64>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Float32>(dag_column, col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Float64>(dag_column, col, field_type, start_index, end_index)))
+        {
+            throw Exception("Illegal column " + col->getName() + " when try to convert flash col to DAG col");
+        }
+    }
+    else if (!(flashDecimalColToDAGCol<Decimal32>(dag_column, col, field_type, flash_col.type, start_index, end_index)
+                 || flashDecimalColToDAGCol<Decimal64>(dag_column, col, field_type, flash_col.type, start_index, end_index)
+                 || flashDecimalColToDAGCol<Decimal128>(dag_column, col, field_type, flash_col.type, start_index, end_index)
+                 || flashDecimalColToDAGCol<Decimal256>(dag_column, col, field_type, flash_col.type, start_index, end_index)
+                 || flashStringColToDAGCol(dag_column, col, field_type, start_index, end_index)))
+    {
+        throw Exception("Illegal column " + col->getName() + " when try to convert flash col to DAG col");
+    }
+}
+
+
+void TiDBChunk::buildDAGChunkFromBlock(
+    const Block & block, const std::vector<tipb::FieldType> & field_types, size_t start_index, size_t end_index)
+{
+    for (size_t i = 0; i < block.columns(); i++)
+    {
+        flashColToDAGCol(columns[i], block.getByPosition(i), field_types[i], start_index, end_index);
+    }
+}
+
+} // namespace DB

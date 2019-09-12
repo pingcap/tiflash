@@ -2,6 +2,7 @@
 
 #include <Common/Decimal.h>
 #include <Core/Field.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 
 namespace DB
 {
@@ -13,6 +14,13 @@ void encodeDAGFloat64(Float64, std::stringstream &);
 void encodeDAGString(const String &, std::stringstream &);
 void encodeDAGBytes(const String &, std::stringstream &);
 void encodeDAGDecimal(const Field &, std::stringstream &);
+
+template <typename T>
+void encodeLittleEndian(const T & value, std::stringstream & ss)
+{
+    auto v = toLittleEndian(value);
+    ss.write(reinterpret_cast<const char *>(&v), sizeof(v));
+}
 
 Int64 decodeDAGInt64(const String &);
 UInt64 decodeDAGUInt64(const String &);
