@@ -20,6 +20,7 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
@@ -31,15 +32,17 @@ extern const int DIRECTORY_ALREADY_EXISTS;
 
 using namespace DM;
 
-StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
-    const std::string & name_,
+StorageDeltaMerge::StorageDeltaMerge(const String & path_,
+    const String & db_name_,
+    const String & table_name_,
     const OptionTableInfoConstRef table_info_,
     const ColumnsDescription & columns_,
     const ASTPtr & primary_expr_ast_,
     Context & global_context_)
     : IManageableStorage{columns_},
-      path(path_ + "/" + name_),
-      name(name_),
+      path(path_ + "/" + table_name_),
+      db_name(db_name_),
+      table_name(table_name_),
       max_column_id_used(0),
       global_context(global_context_),
       log(&Logger::get("StorageDeltaMerge"))
@@ -71,8 +74,7 @@ StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
         if (table_info_)
         {
             /// If TableInfo from TiDB is not empty, we get column id from TiDB
-            auto col_iter = findColumnInfoInTableInfo(table_info_->get(), column_define.name);
-            column_define.id = col_iter->id;
+            column_define.id = table_info_->get().getColumnID(column_define.name);
         }
         else
         {
@@ -116,11 +118,12 @@ StorageDeltaMerge::StorageDeltaMerge(const std::string & path_,
     assert(!handle_column_define.name.empty());
     assert(!table_column_defines.empty());
     store = std::make_shared<DeltaMergeStore>(
-        global_context, path, name, std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
+        global_context, path, table_name, std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
 {
+    shutdown();
     // Reclaim memory.
     MallocExtension::instance()->ReleaseFreeMemory();
 }
@@ -251,9 +254,9 @@ BlockInputStreams StorageDeltaMerge::read( //
         if (n == EXTRA_HANDLE_COLUMN_NAME)
             col_define = store->getHandle();
         else if (n == VERSION_COLUMN_NAME)
-            col_define = VERSION_COLUMN_DEFINE;
+            col_define = getVersionColumnDefine();
         else if (n == TAG_COLUMN_NAME)
-            col_define = TAG_COLUMN_DEFINE;
+            col_define = getTagColumnDefine();
         else
         {
             auto & column = header.getByName(n);
@@ -369,7 +372,7 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     setColumns(std::move(new_columns));
 }
 
-void StorageDeltaMerge::rename(const String & new_path_to_db, const String & /*new_database_name*/, const String & new_table_name)
+void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new_database_name, const String & new_table_name)
 {
     const String new_path = new_path_to_db + "/" + new_table_name;
 
@@ -392,7 +395,8 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & /*n
         global_context, new_path, new_table_name, std::move(table_column_defines), std::move(handle_column_define), settings);
 
     path = new_path;
-    name = new_table_name;
+    db_name = new_database_name;
+    table_name = new_table_name;
 }
 
 void updateDeltaMergeTableCreateStatement(                   //
@@ -451,6 +455,40 @@ void updateDeltaMergeTableCreateStatement(                   //
     };
 
     context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);
+}
+
+void StorageDeltaMerge::startup()
+{
+    TMTContext & tmt = global_context.getTMTContext();
+    tmt.getStorages().put(std::static_pointer_cast<StorageDeltaMerge>(shared_from_this()));
+}
+
+void StorageDeltaMerge::shutdown()
+{
+    if (shutdown_called)
+        return;
+
+    shutdown_called = true;
+
+    // remove this table from TMTContext
+    TMTContext & tmt_context = global_context.getTMTContext();
+    tmt_context.getStorages().remove(tidb_table_info.id);
+    tmt_context.getRegionTable().removeTable(tidb_table_info.id);
+}
+
+StorageDeltaMerge::~StorageDeltaMerge()
+{
+    shutdown();
+}
+
+DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
+{
+    return store->getPKDataType();
+}
+
+SortDescription StorageDeltaMerge::getPrimarySortDescription() const
+{
+    return store->getPrimarySortDescription();
 }
 
 } // namespace DB
