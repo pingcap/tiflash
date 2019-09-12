@@ -1,11 +1,9 @@
-#include <Flash/Coprocessor/CoprocessorHandler.h>
+#include <Flash/CoprocessorHandler.h>
 
-#include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
@@ -24,8 +22,7 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-grpc::Status CoprocessorHandler::execute()
-try
+grpc::Status CoprocessorHandler::execute() try
 {
     switch (cop_request->tp())
     {
@@ -48,7 +45,7 @@ try
             throw Exception(
                 "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
     }
-    return ::grpc::Status(::grpc::StatusCode::OK, "");
+    return grpc::Status::OK;
 }
 catch (const LockException & e)
 {
@@ -60,7 +57,7 @@ catch (const LockException & e)
     lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
     lock_info->set_lock_version(e.lock_infos[0]->lock_version);
     // return ok so TiDB has the chance to see the LockException
-    return ::grpc::Status(::grpc::StatusCode::OK, "");
+    return grpc::Status::OK;
 }
 catch (const RegionException & e)
 {
@@ -83,7 +80,7 @@ catch (const RegionException & e)
             break;
     }
     // return ok so TiDB has the chance to see the LockException
-    return ::grpc::Status(::grpc::StatusCode::OK, "");
+    return grpc::Status::OK;
 }
 catch (const Exception & e)
 {
@@ -96,14 +93,14 @@ catch (const Exception & e)
 
     // TODO: Map other DB error codes to grpc codes.
 
-    return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.message());
+    return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
 }
 catch (const std::exception & e)
 {
     LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
     cop_response->Clear();
     cop_response->set_other_error(e.what());
-    return ::grpc::Status(::grpc::StatusCode::INTERNAL, e.what());
+    return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
 }
 
 } // namespace DB
