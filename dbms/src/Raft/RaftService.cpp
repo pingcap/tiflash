@@ -8,25 +8,14 @@
 namespace DB
 {
 
-RaftService::RaftService(const std::string & address_, DB::Context & db_context_)
-    : address(address_),
-      db_context(db_context_),
+RaftService::RaftService(DB::Context & db_context_)
+    : db_context(db_context_),
       kvstore(db_context.getTMTContext().getKVStore()),
       background_pool(db_context.getBackgroundPool()),
       log(&Logger::get("RaftService"))
 {
     if (!db_context.getTMTContext().isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
-
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(address, grpc::InsecureServerCredentials());
-    builder.RegisterService(this);
-
-    // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
-    builder.SetMaxReceiveMessageSize(-1);
-    builder.SetMaxSendMessageSize(-1);
-
-    grpc_server = builder.BuildAndStart();
 
     persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); }, false);
 
@@ -62,8 +51,6 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
         region->tryPreDecodeTiKVValue();
         return true;
     });
-
-    LOG_INFO(log, "Raft service listening on [" << address << "]");
 
     {
         std::vector<RegionPtr> regions;
@@ -119,12 +106,6 @@ RaftService::~RaftService()
         background_pool.removeTask(region_decode_handle);
         region_decode_handle = nullptr;
     }
-
-    // wait 5 seconds for pending rpcs to gracefully stop
-    gpr_timespec deadline{5, 0, GPR_TIMESPAN};
-    LOG_DEBUG(log, "Begin to shutting down grpc server");
-    grpc_server->Shutdown(deadline);
-    grpc_server->Wait();
 }
 
 grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream)
@@ -143,7 +124,7 @@ grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, 
     }
     catch (...)
     {
-        tryLogCurrentException(log, "gRPC ApplyCommandBatch on " + address + " error");
+        tryLogCurrentException(log, "gRPC ApplyCommandBatch error");
     }
 
     return grpc::Status::CANCELLED;
@@ -158,7 +139,7 @@ grpc::Status RaftService::ApplySnapshot(grpc::ServerContext *, CommandServerRead
     }
     catch (...)
     {
-        tryLogCurrentException(log, "gRPC ApplyCommandBatch on " + address + " error");
+        tryLogCurrentException(log, "gRPC ApplyCommandBatch error");
         return grpc::Status(grpc::StatusCode::UNKNOWN, "Runtime error, check theflash log for detail.");
     }
 }

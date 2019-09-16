@@ -15,11 +15,16 @@ extern const int NOT_IMPLEMENTED;
 }
 
 FlashService::FlashService(const std::string & address_, IServer & server_)
-    : server(server_), address(address_), log(&Logger::get("FlashService"))
+    : address(address_), server(server_), log(&Logger::get("FlashService"))
 {
     grpc::ServerBuilder builder;
     builder.AddListeningPort(address, grpc::InsecureServerCredentials());
     builder.RegisterService(this);
+    builder.RegisterService(&server.context().getRaftService());
+
+    // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
+    builder.SetMaxReceiveMessageSize(-1);
+    builder.SetMaxSendMessageSize(-1);
 
     // todo should set a reasonable value??
     builder.SetMaxReceiveMessageSize(-1);
