@@ -48,7 +48,7 @@ struct ValueComparision
     template <typename Right>
     static int compare(const Field & left_field, const DataTypePtr & right_type, const Right & right)
     {
-        bool res;
+        bool res = 0;
         bool ok;
 
         auto LeftGroupType = getGroupType(left_field);
