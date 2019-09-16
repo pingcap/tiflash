@@ -267,6 +267,7 @@ struct BatchCtrl
         {
             const TiDB::ColumnInfo & column = table_info.columns[i];
             EncodeDatum(ss, TiDB::CodecFlagInt, column.id);
+            // TODO: May need to use BumpyDatum to flatten before encoding.
             EncodeDatum(ss, column.getCodecFlag(), magic_num);
         }
         return TiKVValue(ss.str());
