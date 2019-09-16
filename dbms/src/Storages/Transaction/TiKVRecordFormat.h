@@ -66,7 +66,8 @@ inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector
     {
         const TiDB::ColumnInfo & column_info = table_info.columns[i];
         EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
-        EncodeDatum(fields[i], column_info.getCodecFlag(), ss);
+        TiDB::DatumBumpy datum = TiDB::DatumBumpy(fields[i], column_info.tp);
+        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
     }
     return TiKVValue(ss.str());
 }

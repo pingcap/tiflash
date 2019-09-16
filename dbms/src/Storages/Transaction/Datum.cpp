@@ -1,4 +1,3 @@
-#include <Common/MyTime.h>
 #include <Storages/Transaction/Datum.h>
 
 #include <ext/bit_cast.h>
@@ -18,12 +17,8 @@ using DB::Field;
 template <TP tp, typename = void>
 struct DatumOp
 {
-    static bool overflow(const Field &, const ColumnInfo &) { return false; }
-};
-
-template <TP tp>
-struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeTime || tp == TypeDatetime || tp == TypeTimestamp>::type>
-{
+    static void unflatten(const Field &, std::optional<Field> &) {}
+    static void flatten(const Field &, std::optional<Field> &) {}
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
@@ -31,6 +26,9 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeTime || t
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
 {
+    static void unflatten(const Field &, std::optional<Field> &) {}
+    static void flatten(const Field &, std::optional<Field> &) {}
+
     static bool overflow(const Field & field, const ColumnInfo & column_info)
     {
         if (field.isNull())
@@ -59,7 +57,21 @@ private:
     }
 };
 
-DatumFlat::DatumFlat(const DB::Field & field, TP tp) : DatumBase(field, tp) {}
+DatumFlat::DatumFlat(const DB::Field & field, TP tp) : DatumBase(field, tp)
+{
+    switch (tp)
+    {
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(tt, v, cf, ct, w)                       \
+    case Type##tt:                                \
+        DatumOp<Type##tt>::unflatten(orig, copy); \
+        break;
+        COLUMN_TYPES(M)
+#undef M
+    }
+}
 
 bool DatumFlat::invalidNull(const ColumnInfo & column_info) { return column_info.hasNotNullFlag() && orig.isNull(); }
 
@@ -78,6 +90,22 @@ bool DatumFlat::overflow(const ColumnInfo & column_info)
     }
 
     throw DB::Exception("Shouldn't reach here", DB::ErrorCodes::LOGICAL_ERROR);
+}
+
+DatumBumpy::DatumBumpy(const DB::Field & field, TP tp) : DatumBase(field, tp)
+{
+    switch (tp)
+    {
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(tt, v, cf, ct, w)                     \
+    case Type##tt:                              \
+        DatumOp<Type##tt>::flatten(orig, copy); \
+        break;
+        COLUMN_TYPES(M)
+#undef M
+    }
 }
 
 }; // namespace TiDB
