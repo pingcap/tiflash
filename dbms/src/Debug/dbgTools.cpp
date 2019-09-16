@@ -8,7 +8,6 @@
 #include <Raft/RaftContext.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/MyTimeParser.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
