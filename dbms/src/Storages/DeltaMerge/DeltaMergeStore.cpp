@@ -255,7 +255,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
     for (auto & action : actions)
     {
         // action.update is set in `prepareWriteActions` for delete_range
-        action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
+        action.task = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
     commitWrites(std::move(actions), std::move(wbs), dm_context, op_context, db_context, db_settings);
@@ -605,7 +605,22 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
         }
         if (unlikely(!exist_column))
         {
-            throw Exception(String("Alter column: ") + command.column_name + " is not exists.", ErrorCodes::LOGICAL_ERROR);
+            // Fall back to find column by name, this path should only call by tests.
+            LOG_WARNING(log, "Try to apply alter to column: " + command.column_name + ", id:" + toString(command.column_id) + ", but not found by id, fall back locating col by name.");
+            for (auto && column_define : table_columns)
+            {
+                if (column_define.name == command.column_name)
+                {
+                    exist_column       = true;
+                    column_define.type = command.data_type;
+                    setColumnDefineDefaultValue(command, column_define);
+                    break;
+                }
+            }
+            if (unlikely(!exist_column))
+            {
+                throw Exception(String("Alter column: ") + command.column_name + " is not exists.", ErrorCodes::LOGICAL_ERROR);
+            }
         }
     }
     else if (command.type == AlterCommand::ADD_COLUMN)
@@ -628,14 +643,13 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
     }
     else if (command.type == AlterCommand::DROP_COLUMN)
     {
-        table_columns.erase(std::remove_if(table_columns.begin(),
-                                           table_columns.end(),
-                                           [&](const ColumnDefine & c) { return c.id == command.column_id; }),
-                            table_columns.end());
+        table_columns.erase(
+            std::remove_if(table_columns.begin(), table_columns.end(), [&](const ColumnDefine & c) { return c.id == command.column_id; }),
+            table_columns.end());
     }
     else if (command.type == AlterCommand::RENAME_COLUMN)
     {
-        for (auto &&c : table_columns)
+        for (auto && c : table_columns)
             if (c.id == command.column_id)
             {
                 c.name = command.new_column_name;
