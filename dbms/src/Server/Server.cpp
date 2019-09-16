@@ -452,10 +452,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     if (need_raft_service)
-    {
-        String raft_service_addr = config().getString("raft.service_addr");
-        global_context->initializeRaftService(raft_service_addr);
-    }
+        global_context->initializeRaftService();
 
     SCOPE_EXIT({
         LOG_INFO(log, "Shutting down raft service.");
