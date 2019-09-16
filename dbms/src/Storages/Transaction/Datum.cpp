@@ -18,22 +18,12 @@ using DB::Field;
 template <TP tp, typename = void>
 struct DatumOp
 {
-    static void flatten(const Field &, std::optional<Field> &) {}
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
-/// Specialized for Date/Datetime/Timestamp, actual does unflatten/flatten.
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeTime || tp == TypeDatetime || tp == TypeTimestamp>::type>
 {
-    static void flatten(const Field & orig, std::optional<Field> & copy)
-    {
-        if (orig.isNull())
-            return;
-        auto plain_text = orig.safeGet<String>();
-        copy = DB::parseMyDateTime(plain_text);
-    }
-
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
@@ -41,8 +31,6 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeTime || t
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
 {
-    static void flatten(const Field &, std::optional<Field> &) {}
-
     static bool overflow(const Field & field, const ColumnInfo & column_info)
     {
         if (field.isNull())
@@ -90,22 +78,6 @@ bool DatumFlat::overflow(const ColumnInfo & column_info)
     }
 
     throw DB::Exception("Shouldn't reach here", DB::ErrorCodes::LOGICAL_ERROR);
-}
-
-DatumBumpy::DatumBumpy(const DB::Field & field, TP tp) : DatumBase(field, tp)
-{
-    switch (tp)
-    {
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(tt, v, cf, ct, w)                     \
-    case Type##tt:                              \
-        DatumOp<Type##tt>::flatten(orig, copy); \
-        break;
-        COLUMN_TYPES(M)
-#undef M
-    }
 }
 
 }; // namespace TiDB

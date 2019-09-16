@@ -25,7 +25,6 @@ protected:
     std::optional<DB::Field> copy;
 };
 
-/// Flat datum that needs unflatten, emits the bumpy representation (in field).
 /// Also exposes the trait for outer to do other operations such as overflow check.
 class DatumFlat : public DatumBase
 {
@@ -37,13 +36,6 @@ public:
 
     /// Checks overflow for schema mismatch detection.
     bool overflow(const ColumnInfo & column_info);
-};
-
-/// Bumpy datum that needs flatten, emits the flat representation (in field).
-class DatumBumpy : public DatumBase
-{
-public:
-    DatumBumpy(const DB::Field & field, TP tp);
 };
 
 } // namespace TiDB

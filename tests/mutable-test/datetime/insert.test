@@ -2,15 +2,13 @@
 
 >> drop table if exists test
 
->> create table test (
-	a MyDateTime(5)
-	) engine = Log
+>> create table test(a MyDateTime(5)) engine = Log
 
->> insert into test values ('1991-09-05 11:11:11')
+>> insert into test values('1991-09-05 11:11:11')
 
->> insert into test values ('1991-09-05 11:11:11.123')
+>> insert into test values('1991-09-05 11:11:11.123')
 
->> insert into test values ('1991-00-00 11:11:11')
+>> insert into test values('1991-00-00 11:11:11')
 
 >> select a from test
 ┌─a─────────────────────────┐
@@ -21,13 +19,11 @@
 
 >> drop table if exists test
 
->> create table test (
-	a MyDate
-	) engine = Log
+>> create table test(a MyDate) engine = Log
 
->> insert into test values ('1991-09-05')
->> insert into test values ('1991-00-05')
->> insert into test values ('1001-01-00')
+>> insert into test values('1991-09-05')
+>> insert into test values('1991-00-05')
+>> insert into test values('1001-01-00')
 
 >> select a from test
 ┌─a───────────┐
@@ -36,3 +32,4 @@
 │ 1001-01-00  │
 └─────────────┘
 
+>> drop table if exists test

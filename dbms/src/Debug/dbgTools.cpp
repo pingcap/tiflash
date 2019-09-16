@@ -121,15 +121,23 @@ void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, co
     }
 }
 
+bool isDateTimeType(TiDB::TP tp) { return tp == TiDB::TypeTimestamp || tp == TiDB::TypeDate || tp == TiDB::TypeDatetime; }
+
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
     ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
 {
     std::vector<Field> fields;
     ASTs::const_iterator it;
+    int idx = 0;
     while ((it = begin++) != end)
     {
         auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
+        if (isDateTimeType(table_info.columns[idx].tp))
+        {
+            field = parseMyDateTime(field.safeGet<String>());
+        }
         fields.emplace_back(field);
+        idx++;
     }
     if (fields.size() != table_info.columns.size())
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
@@ -259,7 +267,6 @@ struct BatchCtrl
         {
             const TiDB::ColumnInfo & column = table_info.columns[i];
             EncodeDatum(ss, TiDB::CodecFlagInt, column.id);
-            // TODO: May need to use BumpyDatum to flatten before encoding.
             EncodeDatum(ss, column.getCodecFlag(), magic_num);
         }
         return TiKVValue(ss.str());
