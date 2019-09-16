@@ -1,17 +1,17 @@
 #pragma once
 
-#include <DataTypes/DataTypeNumberBase.h>
+#include <DataTypes/DataTypeMyTimeBase.h>
 
 
 namespace DB
 {
 
-class DataTypeDate final : public DataTypeNumberBase<UInt16>
+class DataTypeMyDate final : public DataTypeMyTimeBase
 {
 public:
-    const char * getFamilyName() const override { return "Date"; }
+    const char * getFamilyName() const override { return "MyDate"; }
 
-    TypeIndex getTypeId() const override {return TypeIndex::Date;}
+    TypeIndex getTypeId() const override { return TypeIndex::MyDate; }
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
@@ -30,4 +30,4 @@ public:
     bool equals(const IDataType & rhs) const override;
 };
 
-}
+} // namespace DB
