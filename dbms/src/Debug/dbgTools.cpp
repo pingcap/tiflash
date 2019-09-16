@@ -206,22 +206,9 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
         case TiDB::TypeDouble:
             return convertNumber<Float64>(field);
         case TiDB::TypeDate:
-        {
-            auto text = field.get<String>();
-            ReadBufferFromMemory buf(text.data(), text.size());
-            DayNum_t date;
-            readDateText(date, buf);
-            return static_cast<UInt64>(date);
-        }
         case TiDB::TypeDatetime:
         case TiDB::TypeTimestamp:
-        {
-            auto text = field.get<String>();
-            ReadBufferFromMemory buf(text.data(), text.size());
-            time_t dt;
-            readDateTimeText(dt, buf);
-            return static_cast<Int64>(dt);
-        }
+            return parseMyDateTime(field.safeGet<String>());
         case TiDB::TypeVarchar:
         case TiDB::TypeTinyBlob:
         case TiDB::TypeMediumBlob:
@@ -262,8 +249,6 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
     }
 }
 
-bool isDateTimeType(TiDB::TP tp) { return tp == TiDB::TypeTimestamp || tp == TiDB::TypeDate || tp == TiDB::TypeDatetime; }
-
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
     ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
 {
@@ -273,10 +258,6 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     while ((it = begin++) != end)
     {
         auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
-        if (isDateTimeType(table_info.columns[idx].tp))
-        {
-            field = parseMyDateTime(field.safeGet<String>());
-        }
         fields.emplace_back(field);
         idx++;
     }

@@ -57,6 +57,17 @@ private:
     }
 };
 
+/// Specialized for Date/DateTime/Timestamp, using unflatten/flatten to transform Int to UInt back and forth.
+template <TP tp>
+struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime || tp == TypeTimestamp>::type>
+{
+    static void unflatten(const Field & orig, std::optional<Field> & copy) { copy = static_cast<UInt64>(orig.get<Int64>()); }
+
+    static void flatten(const Field & orig, std::optional<Field> & copy) { copy = static_cast<Int64>(orig.get<UInt64>()); }
+
+    static bool overflow(const Field &, const ColumnInfo &) { return false; }
+};
+
 /// Specialized for Enum, using unflatten/flatten to transform UInt to Int back and forth.
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeEnum>::type>
