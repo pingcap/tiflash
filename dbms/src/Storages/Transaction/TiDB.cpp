@@ -1,7 +1,7 @@
 #include <Common/Decimal.h>
+#include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/MyTimeParser.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace TiDB
@@ -41,7 +41,7 @@ Field ColumnInfo::defaultValueToField() const
         case TypeDate:
         case TypeDatetime:
         case TypeTimestamp:
-            return DB::parseMyDatetime(value.convert<String>());
+            return DB::parseMyDateTime(value.convert<String>());
         case TypeVarchar:
         case TypeTinyBlob:
         case TypeMediumBlob:

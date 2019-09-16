@@ -241,7 +241,7 @@ struct ToDateTimeImpl
 };
 
 template <typename Name> struct ConvertImpl<DataTypeDate, DataTypeDateTime, Name>
-    : DateTimeTransformImpl<UInt32, Int64, ToDateTimeImpl> {};
+    : DateTimeTransformImpl<UInt16, UInt32, ToDateTimeImpl> {};
 
 
 /// Implementation of toDate function.
@@ -260,7 +260,7 @@ struct ToDateTransform32Or64
 /** Conversion of DateTime to Date: throw off time component.
   */
 template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeDate, Name>
-    : DateTimeTransformImpl<Int64, UInt32, ToDateImpl> {};
+    : DateTimeTransformImpl<UInt32, UInt16, ToDateImpl> {};
 
 /** Special case of converting (U)Int32 or (U)Int64 (and also, for convenience, Float32, Float64) to Date.
   * If number is less than 65536, then it is treated as DayNum, and if greater or equals, then as unix timestamp.

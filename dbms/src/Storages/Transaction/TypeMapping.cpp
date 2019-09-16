@@ -1,9 +1,9 @@
 #include <type_traits>
 
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -81,8 +81,8 @@ template <typename T>
 inline constexpr bool IsEnumType = EnumType<T>::value;
 
 template <typename T, bool should_widen>
-std::enable_if_t<!IsSignedType<T> && !IsDecimalType<T> && !IsEnumType<T>, DataTypePtr> getDataTypeByColumnInfoBase(
-    const ColumnInfo &, const T *)
+std::enable_if_t<!IsSignedType<T> && !IsDecimalType<T> && !IsEnumType<T> && !std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr>
+getDataTypeByColumnInfoBase(const ColumnInfo &, const T *)
 {
     DataTypePtr t = std::make_shared<T>();
 
@@ -118,6 +118,21 @@ template <typename T, bool should_widen>
 std::enable_if_t<IsDecimalType<T>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
 {
     DataTypePtr t = createDecimal(column_info.flen, column_info.decimal);
+
+    if (should_widen)
+    {
+        auto widen = t->widen();
+        t.swap(widen);
+    }
+
+    return t;
+}
+
+
+template <typename T, bool should_widen>
+std::enable_if_t<std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
+{
+    DataTypePtr t = std::make_shared<T>(column_info.decimal);
 
     if (should_widen)
     {

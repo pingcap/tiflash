@@ -19,6 +19,7 @@
 #include <Common/UInt128.h>
 #include <common/StringRef.h>
 #include <Common/Decimal.h>
+#include <Common/MyTime.h>
 
 #include <IO/WriteBuffer.h>
 #include <IO/WriteIntText.h>
@@ -495,6 +496,12 @@ inline void writeUUIDText(const UUID & uuid, WriteBuffer & buf)
     buf.write(s, sizeof(s));
 }
 
+inline void writeMyDateText(UInt64 date, WriteBuffer & buf)
+{
+    const String & tmp = MyDate(date).toString();
+    buf.write(tmp.c_str(), tmp.size());
+}
+
 /// in YYYY-MM-DD format
 template <char delimiter = '-'>
 inline void writeDateText(const LocalDate & date, WriteBuffer & buf)
@@ -615,6 +622,12 @@ inline void writeDateTimeText(const LocalDateTime & datetime, WriteBuffer & buf)
         buf.write(time_delimeter);
         buf.write(&digits[datetime.second() * 2], 2);
     }
+}
+
+inline void writeMyDateTimeText(UInt64 packed, int fsp, WriteBuffer & buf)
+{
+    const String & str = MyDateTime(packed, fsp).toString();
+    buf.write(str.c_str(), str.size());
 }
 
 /// In the format YYYY-MM-DD HH:MM:SS, according to the specified time zone.
