@@ -3,7 +3,7 @@
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
-#include <grpcpp/security/server_credentials.h>
+#include <Raft/RaftService.h>
 #include <grpcpp/server_builder.h>
 
 namespace DB
@@ -23,10 +23,6 @@ FlashService::FlashService(const std::string & address_, IServer & server_)
     builder.RegisterService(&server.context().getRaftService());
 
     // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
-    builder.SetMaxReceiveMessageSize(-1);
-    builder.SetMaxSendMessageSize(-1);
-
-    // todo should set a reasonable value??
     builder.SetMaxReceiveMessageSize(-1);
     builder.SetMaxSendMessageSize(-1);
 
