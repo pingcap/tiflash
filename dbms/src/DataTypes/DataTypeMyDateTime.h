@@ -1,17 +1,23 @@
 #pragma once
 
-#include <DataTypes/DataTypeNumberBase.h>
+#include <DataTypes/DataTypeMyTimeBase.h>
 
 
 namespace DB
 {
 
-class DataTypeDate final : public DataTypeNumberBase<UInt16>
+class DataTypeMyDateTime final : public DataTypeMyTimeBase
 {
-public:
-    const char * getFamilyName() const override { return "Date"; }
+    int fraction;
 
-    TypeIndex getTypeId() const override {return TypeIndex::Date;}
+public:
+    DataTypeMyDateTime(int fraction_ = 0);
+
+    const char * getFamilyName() const override { return "MyDateTime"; }
+
+    String getName() const override { return "MyDateTime(" + std::to_string(fraction) + ")"; }
+
+    TypeIndex getTypeId() const override { return TypeIndex::MyDateTime; }
 
     void serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
@@ -23,11 +29,9 @@ public:
     void serializeTextCSV(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeTextCSV(IColumn & column, ReadBuffer & istr, const char delimiter) const override;
 
-    bool canBeUsedAsVersion() const override { return true; }
-    bool isDateOrDateTime() const override { return true; }
-    bool canBeInsideNullable() const override { return true; }
-
     bool equals(const IDataType & rhs) const override;
+
+    int getFraction() const { return fraction; }
 };
 
-}
+} // namespace DB

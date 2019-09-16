@@ -17,6 +17,7 @@
 #include <Core/UUID.h>
 #include <common/StringRef.h>
 #include <Common/Exception.h>
+#include <Common/MyTime.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Arena.h>
 #include <Common/UInt128.h>
@@ -539,6 +540,38 @@ void parseUUID(const UInt8 * src36, std::reverse_iterator<UInt8 *> dst16);
 template <typename IteratorSrc, typename IteratorDst>
 void formatHex(IteratorSrc src, IteratorDst dst, const size_t num_bytes);
 
+inline void readMyDateText(UInt64 & date, ReadBuffer & buf)
+{
+    /// Optimistic path, when whole value is in buffer.
+    if (buf.position() + 10 <= buf.buffer().end())
+    {
+        UInt16 year = (buf.position()[0] - '0') * 1000 + (buf.position()[1] - '0') * 100 + (buf.position()[2] - '0') * 10 + (buf.position()[3] - '0');
+        buf.position() += 5;
+
+        UInt8 month = buf.position()[0] - '0';
+        if (isNumericASCII(buf.position()[1]))
+        {
+            month = month * 10 + buf.position()[1] - '0';
+            buf.position() += 3;
+        }
+        else
+            buf.position() += 2;
+
+        UInt8 day = buf.position()[0] - '0';
+        if (isNumericASCII(buf.position()[1]))
+        {
+            day = day * 10 + buf.position()[1] - '0';
+            buf.position() += 2;
+        }
+        else
+            buf.position() += 1;
+
+        date = MyDate(year, month, day).toPackedUInt();
+    }
+
+    throw Exception("wrong date format.", ErrorCodes::CANNOT_PARSE_DATE);
+}
+
 
 void readDateTextFallback(LocalDate & date, ReadBuffer & buf);
 
@@ -605,6 +638,59 @@ inline T parse(const char * data, size_t size);
 
 
 void readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut);
+
+inline void readMyDateTimeText(UInt64 & packed, int fsp, ReadBuffer & buf)
+{
+
+    const char * s = buf.position();
+    if (s + 19 <= buf.buffer().end())
+    {
+        if (s[4] < '0' || s[4] > '9')
+        {
+            UInt16 year = (s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 + (s[3] - '0');
+            UInt8 month = (s[5] - '0') * 10 + (s[6] - '0');
+            UInt8 day = (s[8] - '0') * 10 + (s[9] - '0');
+
+            UInt8 hour = (s[11] - '0') * 10 + (s[12] - '0');
+            UInt8 minute = (s[14] - '0') * 10 + (s[15] - '0');
+            UInt8 second = (s[17] - '0') * 10 + (s[18] - '0');
+
+            UInt32 micro_second = 0;
+            bool fractional = false;
+            int digit = 0;
+            buf.position() += 19;
+            while(buf.position() <= buf.buffer().end())
+            {
+                char x = *buf.position();
+                if (x == '.')
+                {
+                    fractional = true;
+                }
+                else if(!fractional)
+                {
+                    break;
+                }
+                else if (x <= '9' && x >= '0')
+                {
+                    if (digit < fsp)
+                    {
+                        micro_second = micro_second * 10 + x;
+                        digit ++;
+                    }
+                }
+                else
+                {
+                    break;
+                }
+                buf.position() ++;
+            }
+
+            packed = MyDateTime(year, month, day, hour, minute, second, micro_second, fsp).toPackedUInt();
+        }
+    }
+
+    throw Exception("wrong datetime format.", ErrorCodes::CANNOT_PARSE_DATETIME);
+}
 
 /** In YYYY-MM-DD hh:mm:ss format, according to specified time zone.
   * As an exception, also supported parsing of unix timestamp in form of decimal number.
@@ -787,6 +873,21 @@ inline void readCSVDecimal(Decimal<T> & x, ReadBuffer & buf, PrecType precision,
         assertChar(maybe_quote, buf);
 }
 
+inline void readMyDateTimeCSV(UInt64 & datetime, int fsp, ReadBuffer & buf)
+{
+    if (buf.eof())
+        throwReadAfterEOF();
+
+    char maybe_quote = *buf.position();
+
+    if (maybe_quote == '\'' || maybe_quote == '\"')
+        ++buf.position();
+
+    readMyDateTimeText(datetime, fsp, buf);
+
+    if (maybe_quote == '\'' || maybe_quote == '\"')
+        assertChar(maybe_quote, buf);
+}
 
 inline void readDateTimeCSV(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
