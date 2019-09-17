@@ -208,8 +208,9 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         if (!storage_)
             return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
 
-        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
-        if (auto engine_type = managed_storage->engineType(); engine_type == ::TiDB::StorageEngine::TMT || engine_type == ::TiDB::StorageEngine::DM)
+        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_);
+        if (!managed_storage
+           || !(managed_storage->engineType() == ::TiDB::StorageEngine::TMT || managed_storage->engineType() == ::TiDB::StorageEngine::DM))
         {
             throw Exception("Specifying schema_version for storage: " + storage_->getName()
                             + ", table: " + qualified_name + " is not allowed",
