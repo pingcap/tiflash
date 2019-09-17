@@ -118,7 +118,7 @@ public:
 
     Page    read(PageId page_id) const { return storage.read(page_id, snap); }
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
-    void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler); };
+    void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
 
 private:
     PageStorage &            storage;

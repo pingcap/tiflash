@@ -60,14 +60,14 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
             table_columns.emplace_back(col);
     }
 
-    DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
+    auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
     if (!storage_pool.maxMetaPageId())
     {
         // Create the first segment.
         auto segment_id = storage_pool.newMetaPageId();
         if (segment_id != DELTA_MERGE_FIRST_SEGMENT_ID)
             throw Exception("The first segment id should be " + DB::toString(DELTA_MERGE_FIRST_SEGMENT_ID), ErrorCodes::LOGICAL_ERROR);
-        auto first_segment = Segment::newSegment(dm_context, HandleRange::newAll(), segment_id, 0);
+        auto first_segment = Segment::newSegment(*dm_context, HandleRange::newAll(), segment_id, 0);
         segments.emplace(first_segment->getRange().end, first_segment);
     }
     else
@@ -75,7 +75,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
         auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
         while (segment_id)
         {
-            auto segment = Segment::restoreSegment(dm_context, segment_id);
+            auto segment = Segment::restoreSegment(*dm_context, segment_id);
             segments.emplace(segment->getRange().end, segment);
             segment_id = segment->nextSegmentId();
         }
@@ -114,14 +114,16 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
 {
+    std::unique_lock write_write_lock(write_write_mutex);
+
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
     const size_t rows = to_write.rows();
     if (rows == 0)
         return;
 
-    DMContext dm_context = newDMContext(db_context, db_settings);
-    Block     block      = to_write;
+    auto  dm_context = newDMContext(db_context, db_settings);
+    Block block      = to_write;
 
     // Add an extra handle column, if handle reused the original column data.
     if (pkIsHandle())
@@ -145,9 +147,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
             stableSortBlock(block, sort);
     }
 
-    if (log->debug())
+    if (log->trace())
     {
-        std::shared_lock lock(mutex);
+        std::shared_lock lock(read_write_mutex);
 
         String msg = "Before insert block(with " + DB::toString(rows) + " rows). All segments:{";
         for (auto & [end, segment] : segments)
@@ -157,13 +159,13 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         }
         msg.pop_back();
         msg += "}";
-        LOG_DEBUG(log, msg);
+        LOG_TRACE(log, msg);
     }
 
     // Locate which segments to write
-    WriteActions actions = prepareWriteActions(block, segments, EXTRA_HANDLE_COLUMN_NAME, std::shared_lock(mutex));
+    WriteActions actions = prepareWriteActions(block, segments, EXTRA_HANDLE_COLUMN_NAME, std::shared_lock(read_write_mutex));
 
-    auto               op_context = OpContext::createForLogStorage(dm_context);
+    auto               op_context = OpContext::createForLogStorage(*dm_context);
     AppendWriteBatches wbs;
 
     // Prepare updates' information.
@@ -173,7 +175,49 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
-    commitWrites(std::move(actions), std::move(wbs), dm_context, op_context, db_context, db_settings);
+    commitWrites(std::move(actions), std::move(wbs), *dm_context, op_context, db_context, db_settings);
+}
+
+
+void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
+{
+    std::unique_lock write_write_lock(write_write_mutex);
+
+    EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
+
+    if (delete_range.start >= delete_range.end)
+        return;
+
+    auto dm_context = newDMContext(db_context, db_settings);
+
+    if (log->trace())
+    {
+        std::shared_lock lock(read_write_mutex);
+
+        String msg = "Before delete range" + rangeToString(delete_range) + ". All segments:{";
+        for (auto & [end, segment] : segments)
+        {
+            (void)end;
+            msg += DB::toString(segment->segmentId()) + ":" + segment->getRange().toString() + ",";
+        }
+        msg.pop_back();
+        msg += "}";
+        LOG_TRACE(log, msg);
+    }
+
+    WriteActions actions = prepareWriteActions(delete_range, segments, std::shared_lock(read_write_mutex));
+
+    auto               op_context = OpContext::createForLogStorage(*dm_context);
+    AppendWriteBatches wbs;
+
+    // Prepare updates' information.
+    for (auto & action : actions)
+    {
+        // action.update is set in `prepareWriteActions` for delete_range
+        action.task = action.segment->createAppendTask(op_context, wbs, action.update);
+    }
+
+    commitWrites(std::move(actions), std::move(wbs), *dm_context, op_context, db_context, db_settings);
 }
 
 void DeltaMergeStore::commitWrites(WriteActions &&       actions,
@@ -196,69 +240,38 @@ void DeltaMergeStore::commitWrites(WriteActions &&       actions,
         action.segment->applyAppendTask(op_context, action.task, action.update);
     }
 
+    // Clean up deleted data on disk.
+    {
+        std::unique_lock lock(read_write_mutex);
+
+        EventRecorder recorder(ProfileEvents::DMAppendDeltaCleanUp, ProfileEvents::DMAppendDeltaCleanUpNS);
+        dm_context.storage_pool.log().write(wbs.removed_data);
+    }
+
     // Flush delta if needed.
     for (auto & action : actions)
     {
         const auto & segment = action.segment;
         const auto   range   = segment->getRange();
         // TODO: Do flush by background threads.
-        if (segment->shouldFlush(dm_context))
+        if (segment->shouldFlushDelta(dm_context))
         {
-            auto new_segment = action.segment->flush(dm_context);
+            RemoveWriteBatches remove_wbs;
+            auto               new_segment = action.segment->flushDelta(dm_context, remove_wbs);
             {
-                std::shared_lock lock(mutex);
+                std::unique_lock lock(read_write_mutex);
+
                 segments[range.end] = new_segment;
+
+                dm_context.storage_pool.meta().write(remove_wbs.meta);
+                dm_context.storage_pool.data().write(remove_wbs.data);
+                dm_context.storage_pool.log().write(remove_wbs.log);
             }
         }
     }
 
-    // Clean up deleted data on disk.
-    {
-        EventRecorder recorder(ProfileEvents::DMAppendDeltaCleanUp, ProfileEvents::DMAppendDeltaCleanUpNS);
-        dm_context.storage_pool.log().write(wbs.removed_data);
-    }
-
     // TODO: Should only check the updated segments.
     afterInsertOrDelete(db_context, db_settings);
-}
-
-void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
-{
-    EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
-
-    if (delete_range.start >= delete_range.end)
-        return;
-
-    DMContext dm_context = newDMContext(db_context, db_settings);
-
-    if (log->debug())
-    {
-        std::shared_lock lock(mutex);
-
-        String msg = "Before delete range" + rangeToString(delete_range) + ". All segments:{";
-        for (auto & [end, segment] : segments)
-        {
-            (void)end;
-            msg += DB::toString(segment->segmentId()) + ":" + segment->getRange().toString() + ",";
-        }
-        msg.pop_back();
-        msg += "}";
-        LOG_DEBUG(log, msg);
-    }
-
-    WriteActions actions = prepareWriteActions(delete_range, segments, std::shared_lock(mutex));
-
-    auto               op_context = OpContext::createForLogStorage(dm_context);
-    AppendWriteBatches wbs;
-
-    // Prepare updates' information.
-    for (auto & action : actions)
-    {
-        // action.update is set in `prepareWriteActions` for delete_range
-        action.task = action.segment->createAppendTask(op_context, wbs, action.update);
-    }
-
-    commitWrites(std::move(actions), std::move(wbs), dm_context, op_context, db_context, db_settings);
 }
 
 BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
@@ -269,22 +282,23 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
     SegmentReadTasks   tasks;
     StorageSnapshotPtr storage_snapshot;
 
-    {
-        std::shared_lock lock(mutex);
+    auto dm_context = newDMContext(db_context, db_settings);
 
-        storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
+    {
+        std::shared_lock lock(read_write_mutex);
 
         for (const auto & [handle, segment] : segments)
         {
             (void)handle;
             tasks.emplace_back(std::make_shared<SegmentReadTask>(segment, segment->getReadSnapshot(), HandleRanges{segment->getRange()}));
         }
+
+        // The creation of storage snapshot must be put after creation of segment snapshot.
+        storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
     }
 
-    auto dm_context = newDMContext(db_context, db_settings);
-
     auto stream_creator = [=](const SegmentReadTask & task) {
-        return task.segment->getInputStreamRaw(dm_context, task.read_snapshot, *storage_snapshot, columns_to_read);
+        return task.segment->getInputStreamRaw(*dm_context, task.read_snapshot, *storage_snapshot, columns_to_read);
     };
 
     size_t final_num_stream = std::min(num_streams, tasks.size());
@@ -310,11 +324,10 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     SegmentReadTasks   tasks;
     StorageSnapshotPtr storage_snapshot;
 
-    {
-        std::shared_lock lock(mutex);
+    auto dm_context = newDMContext(db_context, db_settings);
 
-        /// FIXME: the creation of storage_snapshot is not atomic!
-        storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
+    {
+        std::shared_lock lock(read_write_mutex);
 
         auto range_it = sorted_ranges.begin();
         auto seg_it   = segments.upper_bound(range_it->start);
@@ -363,12 +376,13 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                     ++seg_it;
             }
         }
+
+        // The creation of storage snapshot must be put after creation of segment snapshot.
+        storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
     }
 
-    auto dm_context = newDMContext(db_context, db_settings);
-
     auto stream_creator = [=](const SegmentReadTask & task) {
-        return task.segment->getInputStream(dm_context,
+        return task.segment->getInputStream(*dm_context,
                                             task.read_snapshot,
                                             *storage_snapshot,
                                             columns_to_read,
@@ -404,7 +418,7 @@ bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::
         bool       is_split = false;
 
         {
-            std::shared_lock lock(mutex);
+            std::shared_lock lock(read_write_mutex);
 
             auto it = segments.begin();
             while (it != segments.end())
@@ -434,11 +448,11 @@ bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::
         {
             if (is_split)
             {
-                split(dm_context, option);
+                split(*dm_context, option);
             }
             else
             {
-                merge(dm_context, option, next);
+                merge(*dm_context, option, next);
             }
             // Keep checking until there are no options any more.
             continue;
@@ -475,15 +489,20 @@ void DeltaMergeStore::split(DMContext & dm_context, const SegmentPtr & segment)
 {
     LOG_DEBUG(log, "Split segment " + segment->info());
 
-    auto range                         = segment->getRange();
-    auto [new_seg_left, new_seg_right] = segment->split(dm_context);
+    RemoveWriteBatches remove_wbs;
+    auto               range           = segment->getRange();
+    auto [new_seg_left, new_seg_right] = segment->split(dm_context, remove_wbs);
 
     {
-        std::unique_lock lock(mutex);
+        std::unique_lock lock(read_write_mutex);
 
         segments.erase(range.end);
         segments[new_seg_left->getRange().end]  = new_seg_left;
         segments[new_seg_right->getRange().end] = new_seg_right;
+
+        dm_context.storage_pool.meta().write(remove_wbs.meta);
+        dm_context.storage_pool.data().write(remove_wbs.data);
+        dm_context.storage_pool.log().write(remove_wbs.log);
     }
 
 #ifndef NDEBUG
@@ -499,14 +518,19 @@ void DeltaMergeStore::merge(DMContext & dm_context, const SegmentPtr & left, con
     auto left_range  = left->getRange();
     auto right_range = right->getRange();
 
-    auto merged = Segment::merge(dm_context, left, right);
+    RemoveWriteBatches remove_wbs;
+    auto               merged = Segment::merge(dm_context, left, right, remove_wbs);
 
     {
-        std::unique_lock lock(mutex);
+        std::unique_lock lock(read_write_mutex);
 
         segments.erase(left_range.end);
         segments.erase(right_range.end);
         segments.emplace(merged->getRange().end, merged);
+
+        dm_context.storage_pool.meta().write(remove_wbs.meta);
+        dm_context.storage_pool.data().write(remove_wbs.data);
+        dm_context.storage_pool.log().write(remove_wbs.log);
     }
 
 #ifndef NDEBUG
@@ -521,7 +545,7 @@ void DeltaMergeStore::check(const Context & db_context, const DB::Settings & db_
     for (const auto & [end, segment] : segments)
     {
         (void)end;
-        segment->check(dm_context, "Manually");
+        segment->check(*dm_context, "Manually");
     }
 }
 
@@ -666,11 +690,17 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
 
 void DeltaMergeStore::flushCache(const Context & db_context)
 {
-    DMContext dm_context = newDMContext(db_context, db_context.getSettingsRef());
+    auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
     for (auto && [_handle, segment] : segments)
     {
         (void)_handle;
-        segment->flushCache(dm_context);
+        WriteBatch remove_log_wb;
+        segment->flushCache(*dm_context, remove_log_wb);
+
+        {
+            std::unique_lock lock(read_write_mutex);
+            dm_context->storage_pool.log().write(remove_log_wb);
+        }
     }
 }
 

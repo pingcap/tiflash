@@ -101,7 +101,7 @@ public:
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
 
 private:
-    DMContext newDMContext(const Context & db_context, const DB::Settings & db_settings)
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings)
     {
         ColumnDefines store_columns = table_columns;
         if (pkIsHandle())
@@ -110,17 +110,18 @@ private:
             store_columns.push_back(getExtraHandleColumnDefine());
         }
 
-        return DMContext{.db_context    = db_context,
-                         .storage_pool  = storage_pool,
-                         .store_columns = std::move(store_columns),
-                         .handle_column = getExtraHandleColumnDefine(),
-                         .min_version   = min_version,
+        auto * ctx = new DMContext{.db_context    = db_context,
+                                   .storage_pool  = storage_pool,
+                                   .store_columns = std::move(store_columns),
+                                   .handle_column = getExtraHandleColumnDefine(),
+                                   .min_version   = min_version,
 
-                         .not_compress            = settings.not_compress_columns,
-                         .delta_limit_rows        = db_settings.dm_segment_delta_limit_rows,
-                         .delta_limit_bytes       = db_settings.dm_segment_delta_limit_bytes,
-                         .delta_cache_limit_rows  = db_settings.dm_segment_delta_cache_limit_rows,
-                         .delta_cache_limit_bytes = db_settings.dm_segment_delta_cache_limit_bytes};
+                                   .not_compress            = settings.not_compress_columns,
+                                   .delta_limit_rows        = db_settings.dm_segment_delta_limit_rows,
+                                   .delta_limit_bytes       = db_settings.dm_segment_delta_limit_bytes,
+                                   .delta_cache_limit_rows  = db_settings.dm_segment_delta_cache_limit_rows,
+                                   .delta_cache_limit_bytes = db_settings.dm_segment_delta_cache_limit_bytes};
+        return DMContextPtr(ctx);
     }
 
     bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
@@ -160,10 +161,14 @@ private:
     /// end of range -> segment
     SegmentSortedMap segments;
 
-    std::shared_mutex mutex;
+    // Synchronize between one write thread and multiple read threads.
+    std::shared_mutex read_write_mutex;
+
+    // Used to guarantee only one thread can do write.
+    std::mutex write_write_mutex;
 
     Logger * log;
-};
+}; // namespace DM
 
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 

@@ -79,7 +79,15 @@ void DiskValueSpace::restore(const OpContext & context)
     }
 
     // Try flush now, in case of last flush failure recover.
-    tryFlushCache(context);
+    WriteBatch remove_data_wb;
+    auto new_instance = tryFlushCache(context, remove_data_wb);
+    if (new_instance)
+    {
+        chunks.swap(new_instance->chunks);
+        cache.swap(new_instance->cache);
+        cache_chunks = new_instance->cache_chunks;
+    }
+    context.data_storage.write(remove_data_wb);
 }
 
 
@@ -274,7 +282,7 @@ Chunk DiskValueSpace::writeDelete(const OpContext &, const HandleRange & delete_
     return Chunk(delete_range);
 }
 
-void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, WriteBatch & data_wb)
+void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, WriteBatch & data_wb_remove)
 {
     MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
     serializeChunks(buf, new_chunks.begin(), new_chunks.end(), {});
@@ -283,7 +291,7 @@ void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, Write
 
     for (const auto & c : chunks)
         for (const auto & m : c.getMetas())
-            data_wb.delPage(m.second.page_id);
+            data_wb_remove.delPage(m.second.page_id);
 
     chunks.swap(new_chunks);
 
@@ -493,7 +501,8 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
             if (chunk.isDeleteRange())
                 res.emplace_back(chunk.getDeleteRange());
             if (block_rows_end != block_rows_start)
-                res.emplace_back(read({handle, getVersionColumnDefine()}, page_reader, block_rows_start, block_rows_end - block_rows_start));
+                res.emplace_back(
+                    read({handle, getVersionColumnDefine()}, page_reader, block_rows_start, block_rows_end - block_rows_start));
 
             block_rows_start = block_rows_end;
         }
@@ -502,10 +511,10 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
     return res;
 }
 
-bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
+DiskValueSpacePtr DiskValueSpace::tryFlushCache(const OpContext & context, WriteBatch & remove_data_wb, bool force)
 {
     if (cache_chunks == 0)
-        return false;
+        return {};
 
     // If last chunk is a delete range, we should flush cache.
     HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
@@ -514,12 +523,12 @@ bool DiskValueSpace::tryFlushCache(const OpContext & context, bool force)
 
     const size_t cache_rows = cacheRows();
     if (!force && cache_rows < context.dm_context.delta_cache_limit_rows && cacheBytes() < context.dm_context.delta_cache_limit_bytes)
-        return false;
+        return {};
 
-    return doFlushCache(context);
+    return doFlushCache(context, remove_data_wb);
 }
 
-bool DiskValueSpace::doFlushCache(const OpContext & context)
+DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteBatch & remove_data_wb)
 {
     const size_t cache_rows      = cacheRows();
     const size_t total_rows      = num_rows();
@@ -527,13 +536,16 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
 
     HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
 
-    if (cache_chunks == 1)
+    if (cache_chunks <= 1)
     {
         // One chunk no need to compact.
         cache.clear();
         cache_chunks = 0;
-        return true;
+        return {};
     }
+
+    // Create an new instance.
+    auto new_instance = std::make_shared<DiskValueSpace>(should_cache, page_id, chunks);
 
     EventRecorder recorder(ProfileEvents::DMFlushDeltaCache, ProfileEvents::DMFlushDeltaCacheNS);
 
@@ -542,7 +554,6 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     /// Flush cache to disk and replace the fragment chunks.
 
     WriteBatch data_wb_insert;
-    WriteBatch data_wb_remove;
     WriteBatch meta_wb;
 
     size_t cache_start = chunks.size() - cache_chunks;
@@ -552,7 +563,7 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
         for (const auto & [col_id, col_meta] : old_chunk.getMetas())
         {
             (void)col_id;
-            data_wb_remove.delPage(col_meta.page_id);
+            remove_data_wb.delPage(col_meta.page_id);
         }
     }
 
@@ -604,19 +615,17 @@ bool DiskValueSpace::doFlushCache(const OpContext & context)
     // The following code are pure memory operations,
     // they are considered safe and won't fail.
 
-    chunks.swap(new_chunks);
-    cache.clear();
-    cache_chunks = 0;
+    new_instance->chunks.swap(new_chunks);
+    new_instance->cache.clear();
+    new_instance->cache_chunks = 0;
 
     // ============================================================
-
-    context.data_storage.write(data_wb_remove);
 
     recorder.submit();
 
     LOG_DEBUG(log, "Done flush cache");
 
-    return true;
+    return new_instance;
 }
 
 ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const
