@@ -225,6 +225,7 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
                     throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                 short_value = std::make_shared<const TiKVValue>(data, slen);
             }
+            // flash only need short value (if have), just ignore others.
         }
     }
     return std::make_tuple(lock_type, primary, ts, ttl, short_value);
