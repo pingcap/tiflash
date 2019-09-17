@@ -221,7 +221,8 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
             {
                 size_t slen = static_cast<UInt8>(*data);
                 data += 1, len -= 1;
-                assert(len >= slen);
+                if (len < slen)
+                    throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                 short_value = std::make_shared<const TiKVValue>(data, slen);
             }
         }
@@ -247,10 +248,10 @@ inline DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
         return std::make_tuple(write_type, ts, nullptr);
     assert(*data == SHORT_VALUE_PREFIX);
     data += 1, len -= 1;
-    auto slen = (size_t)*data;
+    size_t slen = static_cast<UInt8>(*data);
     data += 1, len -= 1;
     if (slen != len)
-        throw Exception("unexpected eof.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("content len not equal to short value len", ErrorCodes::LOGICAL_ERROR);
     return std::make_tuple(write_type, ts, std::make_shared<const TiKVValue>(data, len));
 }
 
