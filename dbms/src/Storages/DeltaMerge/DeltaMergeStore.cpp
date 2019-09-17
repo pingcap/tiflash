@@ -149,7 +149,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     {
         std::shared_lock lock(mutex);
 
-        String msg = "Before insert block. All segments:{";
+        String msg = "Before insert block(with " + DB::toString(rows) + " rows). All segments:{";
         for (auto & [end, segment] : segments)
         {
             (void)end;
