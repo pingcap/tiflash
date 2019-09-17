@@ -101,6 +101,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
                 // It is a TiDB-known column, use column info.
                 dag.setVoidResultFieldType(columnInfoToFieldType(column_info));
                 found = true;
+                break;
             }
         }
         if (!found)
