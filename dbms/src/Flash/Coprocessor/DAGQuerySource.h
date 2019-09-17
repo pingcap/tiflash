@@ -80,6 +80,8 @@ public:
 
     std::vector<tipb::FieldType> getResultFieldTypes() const;
 
+    void setVoidResultFieldType(tipb::FieldType && ft) { void_result_ft = std::move(ft); }
+
     ASTPtr getAST() const { return ast; };
 
 protected:
@@ -100,6 +102,8 @@ protected:
     const UInt64 region_conf_version;
 
     const tipb::DAGRequest & dag_request;
+
+    tipb::FieldType void_result_ft;
 
     Int32 ts_index = -1;
     Int32 sel_index = -1;

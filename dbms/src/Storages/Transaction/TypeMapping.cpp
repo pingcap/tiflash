@@ -1,5 +1,7 @@
 #include <type_traits>
 
+#include <Common/FieldVisitors.h>
+#include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -8,6 +10,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionHelpers.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -201,6 +204,109 @@ TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type)
     ci.flen = field_type.flen();
     ci.decimal = field_type.decimal();
     return ci.getCodecFlag();
+}
+
+template <typename T>
+bool tryGetDecimalType(const IDataType * nested_type, ColumnInfo & column_info)
+{
+    using TypeDec = DataTypeDecimal<T>;
+    if (checkDataType<TypeDec>(nested_type))
+    {
+        auto decimal_type = checkAndGetDataType<TypeDec>(nested_type);
+        column_info.flen = decimal_type->getPrec();
+        column_info.decimal = decimal_type->getScale();
+        column_info.tp = TiDB::TypeNewDecimal;
+        return true;
+    }
+    return false;
+}
+
+ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value)
+{
+    ColumnInfo column_info;
+    column_info.id = id;
+    column_info.name = column.name;
+    const IDataType * nested_type = column.type.get();
+
+    // Fill not null.
+    if (!column.type->isNullable())
+    {
+        column_info.setNotNullFlag();
+    }
+    else
+    {
+        auto nullable_type = checkAndGetDataType<DataTypeNullable>(nested_type);
+        nested_type = nullable_type->getNestedType().get();
+    }
+
+    // Fill unsigned flag.
+    if (nested_type->isUnsignedInteger())
+    {
+        column_info.setUnsignedFlag();
+    }
+
+    // Fill flen and decimal.
+    if (tryGetDecimalType<Decimal32>(nested_type, column_info)) {}
+    else if (tryGetDecimalType<Decimal64>(nested_type, column_info))
+    {
+    }
+    else if (tryGetDecimalType<Decimal128>(nested_type, column_info))
+    {
+    }
+    else if (tryGetDecimalType<Decimal256>(nested_type, column_info))
+    {
+    }
+
+    // Fill elems for enum.
+    if (checkDataType<DataTypeEnum16>(nested_type))
+    {
+        auto enum16_type = checkAndGetDataType<DataTypeEnum16>(nested_type);
+        column_info.tp = TiDB::TypeEnum;
+        for (auto & element : enum16_type->getValues())
+        {
+            column_info.elems.emplace_back(element.first, element.second);
+        }
+    }
+
+    // Fill decimal for date time.
+    if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
+        column_info.decimal = type->getFraction();
+
+        // Fill tp.
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(tt, v, cf, ct, w)                       \
+    if (checkDataType<DataType##ct>(nested_type)) \
+        column_info.tp = TiDB::Type##tt;          \
+    else
+    COLUMN_TYPES(M)
+#undef M
+    if (checkDataType<DataTypeUInt8>(nested_type))
+        column_info.tp = TiDB::TypeTiny;
+    else if (checkDataType<DataTypeUInt16>(nested_type))
+        column_info.tp = TiDB::TypeShort;
+    else if (checkDataType<DataTypeUInt32>(nested_type))
+        column_info.tp = TiDB::TypeLong;
+    else
+        throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type.", ErrorCodes::LOGICAL_ERROR);
+
+    // UInt64 is hijacked by the macro expansion, we check it again.
+    if (checkDataType<DataTypeUInt64>(nested_type))
+        column_info.tp = TiDB::TypeLongLong;
+
+    // Fill default value, currently we only support int.
+    if (!default_value.isNull())
+    {
+        // convert any type to string , this is TiDB's style.
+        column_info.origin_default_value = applyVisitor(FieldVisitorToString(), default_value);
+    }
+    else
+    {
+        column_info.setNoDefaultValueFlag();
+    }
+
+    return column_info;
 }
 
 } // namespace DB

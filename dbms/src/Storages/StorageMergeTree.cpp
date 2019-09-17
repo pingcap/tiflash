@@ -143,10 +143,13 @@ BlockInputStreams StorageMergeTree::read(
         {
             LOG_DEBUG(log, "Mutable table dedup read.");
             Names filtered_names;
-            filtered_names.push_back(MutableSupport::version_column_name);
-            filtered_names.push_back(MutableSupport::delmark_column_name);
-            for (size_t i = 0; i < res.size(); ++i)
-                res[i] = std::make_shared<RemoveColumnsBlockInputStream>(res[i], filtered_names);
+            if (std::find(column_names.begin(), column_names.end(), MutableSupport::version_column_name) == column_names.end())
+                filtered_names.push_back(MutableSupport::version_column_name);
+            if (std::find(column_names.begin(), column_names.end(), MutableSupport::delmark_column_name) == column_names.end())
+                filtered_names.push_back(MutableSupport::delmark_column_name);
+            if (!filtered_names.empty())
+                for (size_t i = 0; i < res.size(); ++i)
+                    res[i] = std::make_shared<RemoveColumnsBlockInputStream>(res[i], filtered_names);
         }
         else
             LOG_DEBUG(log, "Mutable table raw read.");

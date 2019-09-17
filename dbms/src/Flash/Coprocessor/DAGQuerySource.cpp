@@ -92,6 +92,8 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
         case tipb::ExecType::TypeTableScan:
             for (auto & ci : executor.tbl_scan().columns())
             {
+                if (ci.column_id() == -1)
+                    continue;
                 field_type.set_tp(ci.tp());
                 field_type.set_flag(ci.flag());
                 field_type.set_flen(ci.columnlen());
@@ -130,6 +132,8 @@ std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
     {
         if (fillExecutorOutputFieldTypes(dag_request.executors(i), executor_output))
         {
+            if (executor_output.empty())
+                executor_output.push_back(void_result_ft);
             break;
         }
     }

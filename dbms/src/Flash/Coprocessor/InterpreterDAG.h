@@ -26,7 +26,7 @@ class Context;
 class InterpreterDAG : public IInterpreter
 {
 public:
-    InterpreterDAG(Context & context_, const DAGQuerySource & dag_);
+    InterpreterDAG(Context & context_, DAGQuerySource & dag_);
 
     ~InterpreterDAG() = default;
 
@@ -87,7 +87,7 @@ private:
 private:
     Context & context;
 
-    const DAGQuerySource & dag;
+    DAGQuerySource & dag;
 
     NamesWithAliases final_project;
     NamesAndTypesList source_columns;

@@ -22,6 +22,7 @@
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -36,7 +37,7 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
+InterpreterDAG::InterpreterDAG(Context & context_, DAGQuerySource & dag_)
     : context(context_), dag(dag_), log(&Logger::get("InterpreterDAG"))
 {}
 
@@ -68,28 +69,47 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
+
+        if (cid == -1)
+            // Column ID -1 means TiDB expects no specific column, mostly it is for cases like `select count(*)`.
+            // This means we can return whatever column, we'll choose it later if no other columns are specified either.
+            continue;
+
         if (cid < 1 || cid > (Int64)storage->getTableInfo().columns.size())
-        {
-            if (cid == -1)
-            {
-                // for sql that do not need read any column(e.g. select count(*) from t), the column id will be -1
-                continue;
-            }
             // cid out of bound
             throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
-        }
+
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
-        NameAndTypePair nameAndTypePair = storage->getColumns().getPhysical(name);
-        source_columns.push_back(nameAndTypePair);
+        auto pair = storage->getColumns().getPhysical(name);
+        source_columns.emplace_back(std::move(pair));
     }
     if (required_columns.empty())
     {
-        // if no column is selected, use the smallest column
+        // No column specified, we choose the smallest one, this is called `void` column.
         String smallest_column_name = ExpressionActions::getSmallestColumn(storage->getColumns().getAllPhysical());
         required_columns.push_back(smallest_column_name);
         auto pair = storage->getColumns().getPhysical(smallest_column_name);
         source_columns.push_back(pair);
+
+        // Correspondingly, set the `void` column field type into dag for further needs such as encoding the results.
+        bool found = false;
+        for (const auto & column_info : storage->getTableInfo().columns)
+        {
+            if (column_info.name == smallest_column_name)
+            {
+                // It is a TiDB-known column, use column info.
+                dag.setVoidResultFieldType(columnInfoToFieldType(column_info));
+                found = true;
+            }
+        }
+        if (!found)
+        {
+            // It is a TiFlash-specific column, reverse get a column info.
+            // All TiFlash-specific columns have a valid mapped TiDB type, we are safe to call reverse getting.
+            auto column_info = reverseGetColumnInfo(pair, -1, Field());
+            dag.setVoidResultFieldType(columnInfoToFieldType(column_info));
+        }
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns, context);
