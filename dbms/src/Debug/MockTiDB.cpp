@@ -1,6 +1,5 @@
 #include <Debug/MockTiDB.h>
 
-#include <Common/FieldVisitors.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -10,7 +9,6 @@
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
