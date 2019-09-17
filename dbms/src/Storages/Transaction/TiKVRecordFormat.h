@@ -196,6 +196,7 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
     String primary;
     UInt64 ts;
     UInt64 ttl = 0;
+    std::shared_ptr<const TiKVValue> short_value = nullptr;
 
     const char * data = value.data();
     size_t len = value.dataSize();
@@ -208,21 +209,24 @@ inline DecodedLockCFValue decodeLockCfValue(const TiKVValue & value)
     len -= primary_len, data += primary_len;
     cur = TiKV::readVarUInt(ts, data, len); // ts
     len -= cur - data, data = cur;
-    if (len == 0)
-        return std::make_tuple(lock_type, primary, ts, ttl, nullptr);
-    cur = TiKV::readVarUInt(ttl, data, len); // ttl
-    len -= cur - data, data = cur;
-    if (len == 0)
-        return std::make_tuple(lock_type, primary, ts, ttl, nullptr);
-    char flag = *data;
-    data += 1, len -= 1; //  SHORT_VALUE_PREFIX
-    assert(flag == SHORT_VALUE_PREFIX);
-    (void)flag;
-    auto slen = (size_t)*data;
-    data += 1, len -= 1;
-    assert(len == slen);
-    (void)slen;
-    return std::make_tuple(lock_type, primary, ts, ttl, std::make_shared<const TiKVValue>(data, len));
+    if (len > 0)
+    {
+        cur = TiKV::readVarUInt(ttl, data, len); // ttl
+        len -= cur - data, data = cur;
+        if (len > 0)
+        {
+            char flag = *data;
+            data += 1, len -= 1; //  SHORT_VALUE_PREFIX
+            if (flag == SHORT_VALUE_PREFIX)
+            {
+                size_t slen = static_cast<UInt8>(*data);
+                data += 1, len -= 1;
+                assert(len >= slen);
+                short_value = std::make_shared<const TiKVValue>(data, slen);
+            }
+        }
+    }
+    return std::make_tuple(lock_type, primary, ts, ttl, short_value);
 }
 
 using DecodedWriteCFValue = std::tuple<UInt8, Timestamp, std::shared_ptr<const TiKVValue>>;
