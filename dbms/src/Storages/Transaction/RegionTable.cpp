@@ -347,7 +347,7 @@ void RegionTable::tryFlushRegion(RegionID region_id)
         tryFlushRegion(region_id, table_id, false);
 }
 
-void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist)
+bool RegionTable::tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist)
 {
     const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
         std::lock_guard<std::mutex> lock(mutex);
@@ -383,7 +383,7 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id, const boo
     });
 
     if (!status)
-        return;
+        return false;
 
     std::exception_ptr first_exception;
 
@@ -406,7 +406,7 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id, const boo
         if (cache_bytes)
             dirty_regions.insert(region_id);
         else
-            dirty_regions.erase(region_id);
+            clearDirtyFlag(region_id);
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -414,6 +414,8 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id, const boo
 
     if (first_exception)
         std::rethrow_exception(first_exception);
+
+    return true;
 }
 
 bool RegionTable::tryFlushRegions()
@@ -452,7 +454,7 @@ bool RegionTable::tryFlushRegions()
             if (shouldFlush(region))
             {
                 to_flush = DataToFlush{table_id, region.region_id, true};
-                dirty_regions.erase(region.region_id);
+                clearDirtyFlag(region.region_id);
                 return true;
             }
             return false;
@@ -465,6 +467,19 @@ bool RegionTable::tryFlushRegions()
     tryFlushRegion(to_flush.region_id, to_flush.table_id, true);
 
     return true;
+}
+
+void RegionTable::clearDirtyFlag(RegionID region_id)
+{
+    std::lock_guard lock(dirty_regions_mutex);
+    dirty_regions.erase(region_id);
+    dirty_regions_cv.notify_all();
+}
+
+void RegionTable::waitTillRegionFlushed(const RegionID region_id)
+{
+    std::unique_lock lock(dirty_regions_mutex);
+    dirty_regions_cv.wait(lock, [this, region_id]{ return dirty_regions.count(region_id) == 0;});
 }
 
 void RegionTable::traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback) const

@@ -20,6 +20,9 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -238,6 +241,110 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
 }
 
 
+namespace
+{
+
+void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info)
+{
+    std::vector<RegionID> region_ids;
+    region_ids.reserve(regions_info.size());
+    for (const auto & info : regions_info)
+        region_ids.push_back(info.region_id);
+    throw RegionException(region_ids);
+}
+
+inline void doLearnerRead(const TiDB::TableID table_id,         //
+    const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
+    TMTContext & tmt, Poco::Logger * log)
+{
+    assert(log != nullptr);
+
+    MvccQueryInfo::RegionsQueryInfo regions_info;
+    if (!regions_query_info.empty())
+    {
+        regions_info = regions_query_info;
+    }
+    else
+    {
+        // Only for test, because regions_query_info should never be empty if query is from TiDB or TiSpark.
+        auto regions = tmt.getRegionTable().getRegionsByTable(table_id);
+        regions_info.reserve(regions.size());
+        for (const auto & [id, region] : regions)
+        {
+            if (region == nullptr)
+                continue;
+            regions_info.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}});
+        }
+    }
+
+    KVStorePtr & kvstore = tmt.getKVStore();
+    RegionMap kvstore_region;
+    // check region is not null and store region map.
+    for (const auto & info : regions_info)
+    {
+        auto region = kvstore->getRegion(info.region_id);
+        if (region == nullptr)
+        {
+            LOG_WARNING(log, "[region " << info.region_id << "] is not found in KVStore, try again");
+            throwRetryRegion(regions_info);
+        }
+        kvstore_region.emplace(info.region_id, std::move(region));
+    }
+    // make sure regions are not duplicated.
+    if (unlikely(kvstore_region.size() != regions_info.size()))
+        throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
+
+    auto start_time = Clock::now();
+    /// Blocking learner read. Note that learner read must be performed ahead of data read,
+    /// otherwise the desired index will be blocked by the lock of data read.
+    for (auto && [region_id, region] : kvstore_region)
+    {
+        (void)region_id;
+        region->waitIndex(region->learnerRead());
+    }
+    auto end_time = Clock::now();
+    LOG_DEBUG(log,
+        "[Learner Read] wait index cost " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
+
+    // After raft index is satisfied, we flush region to StorageDeltaMerge so that we can read all data
+    start_time = Clock::now();
+    std::set<RegionID> regions_flushing_in_bg_threads;
+    auto & region_table = tmt.getRegionTable();
+    for (auto && [region_id, region] : kvstore_region)
+    {
+        (void)region;
+        bool is_flushed = region_table.tryFlushRegion(region_id, table_id, false);
+        // If region is flushing by other bg threads, we should mark those regions to wait.
+        if (!is_flushed)
+        {
+            regions_flushing_in_bg_threads.insert(region_id);
+            LOG_DEBUG(log, "[Learner Read] region " << region_id << " is flushing by other thread.");
+        }
+    }
+    end_time = Clock::now();
+    LOG_DEBUG(log,
+        "[Learner Read] flush " << kvstore_region.size() - regions_flushing_in_bg_threads.size() << " regions of " << kvstore_region.size()
+                                << " to StorageDeltaMerge cost "
+                                << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
+
+    // Maybe there is some data not flush to store yet, we should wait till all regions is flushed.
+    if (!regions_flushing_in_bg_threads.empty())
+    {
+        start_time = Clock::now();
+        for (const auto & region_id : regions_flushing_in_bg_threads)
+        {
+            region_table.waitTillRegionFlushed(region_id);
+        }
+        end_time = Clock::now();
+        LOG_DEBUG(log,
+            "[Learner Read] wait bg flush " << regions_flushing_in_bg_threads.size() << " regions to StorageDeltaMerge cost "
+                                            << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
+                                            << " ms");
+    }
+}
+
+} // namespace
+
 BlockInputStreams StorageDeltaMerge::read( //
     const Names & column_names,
     const SelectQueryInfo & query_info,
@@ -279,11 +386,32 @@ BlockInputStreams StorageDeltaMerge::read( //
         return store->readRaw(context, context.getSettingsRef(), to_read, num_streams);
     else
     {
-        // read with specify tso
-        UInt64 max_version = DEFAULT_MAX_READ_TSO;
-        if (query_info.mvcc_query_info)
-            max_version = query_info.mvcc_query_info->read_tso;
-        return store->read(context, context.getSettingsRef(), to_read, ranges, num_streams, max_version, max_block_size);
+        if (unlikely(!query_info.mvcc_query_info))
+            throw Exception("mvcc query info is null", ErrorCodes::LOGICAL_ERROR);
+
+        TMTContext & tmt = context.getTMTContext();
+        if (unlikely(!tmt.isInitialized()))
+            throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+
+        const auto & mvcc_query_info = *query_info.mvcc_query_info;
+#if 0
+        // Read with specify tso, check if tso is smaller than TiDB GcSafePoint
+        const auto safe_point = tmt.getPDClient()->getGCSafePoint();
+        if (mvcc_query_info.read_tso < safe_point)
+            throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
+                    + " is smaller than tidb gc safe point: " + toString(safe_point),
+                ErrorCodes::LOGICAL_ERROR);
+#endif
+
+        // With `no_kvstore` is true, we do not do learner read
+        if (likely(!select_query.no_kvstore))
+        {
+            /// Learner read.
+            doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, tmt, log);
+        }
+
+        return store->read(
+            context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso, max_block_size);
     }
 }
 
