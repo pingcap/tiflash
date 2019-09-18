@@ -37,7 +37,7 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
-InterpreterDAG::InterpreterDAG(Context & context_, DAGQuerySource & dag_)
+InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_), dag(dag_), log(&Logger::get("InterpreterDAG"))
 {}
 
@@ -99,7 +99,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             if (column_info.name == smallest_column_name)
             {
                 // It is a TiDB-known column, use column info.
-                dag.setVoidResultFieldType(columnInfoToFieldType(column_info));
+                dag.getDAGContext().void_result_ft = columnInfoToFieldType(column_info);
                 found = true;
                 break;
             }
@@ -109,7 +109,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             // It is a TiFlash-specific column, reverse get a column info.
             // All TiFlash-specific columns have a valid mapped TiDB type, we are safe to call reverse getting.
             auto column_info = reverseGetColumnInfo(pair, -1, Field());
-            dag.setVoidResultFieldType(columnInfoToFieldType(column_info));
+            dag.getDAGContext().void_result_ft = columnInfoToFieldType(column_info);
         }
     }
 

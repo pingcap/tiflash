@@ -289,7 +289,7 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     else if (checkDataType<DataTypeUInt32>(nested_type))
         column_info.tp = TiDB::TypeLong;
     else
-        throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type.", ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type", ErrorCodes::LOGICAL_ERROR);
 
     // UInt64 is hijacked by the macro expansion, we check it again.
     if (checkDataType<DataTypeUInt64>(nested_type))

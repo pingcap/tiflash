@@ -133,7 +133,7 @@ std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
         if (fillExecutorOutputFieldTypes(dag_request.executors(i), executor_output))
         {
             if (executor_output.empty())
-                executor_output.push_back(void_result_ft);
+                executor_output.push_back(dag_context.void_result_ft);
             break;
         }
     }
