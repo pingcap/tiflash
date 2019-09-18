@@ -15,6 +15,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Aggregator.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
@@ -86,28 +87,22 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     if (required_columns.empty())
     {
-        // No column specified, we choose the smallest one, this is called `void` column.
-        String smallest_column_name = ExpressionActions::getSmallestColumn(storage->getColumns().getAllPhysical());
-        required_columns.push_back(smallest_column_name);
-        auto pair = storage->getColumns().getPhysical(smallest_column_name);
-        source_columns.push_back(pair);
-
-        // Correspondingly, set the `void` column field type into dag for further needs such as encoding the results.
-        bool found = false;
-        for (const auto & column_info : storage->getTableInfo().columns)
+        // No column specified, we choose the handle column as it will be emitted by storage read anyhow.
+        // Set `void` column field type correspondingly for further needs, i.e. encoding results.
+        if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
         {
-            if (column_info.name == smallest_column_name)
-            {
-                // It is a TiDB-known column, use column info.
-                dag.getDAGContext().void_result_ft = columnInfoToFieldType(column_info);
-                found = true;
-                break;
-            }
+            required_columns.push_back(pk_handle_col->get().name);
+            auto pair = storage->getColumns().getPhysical(pk_handle_col->get().name);
+            source_columns.push_back(pair);
+            // For PK handle, use original column info of itself.
+            dag.getDAGContext().void_result_ft = columnInfoToFieldType(pk_handle_col->get());
         }
-        if (!found)
+        else
         {
-            // It is a TiFlash-specific column, reverse get a column info.
-            // All TiFlash-specific columns have a valid mapped TiDB type, we are safe to call reverse getting.
+            required_columns.push_back(MutableSupport::tidb_pk_column_name);
+            auto pair = storage->getColumns().getPhysical(MutableSupport::tidb_pk_column_name);
+            source_columns.push_back(pair);
+            // For implicit handle, reverse get a column info.
             auto column_info = reverseGetColumnInfo(pair, -1, Field());
             dag.getDAGContext().void_result_ft = columnInfoToFieldType(column_info);
         }

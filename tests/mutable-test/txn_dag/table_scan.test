@@ -33,7 +33,7 @@
 # TiDB may push down table scan with -1 column, use keyword _void testing this case.
 => DBGInvoke dag('select _void from default.test') " --dag_planner="optree
 ┌─_void─┐
-│     0 │
+│    50 │
 └───────┘
 
 # Clean up.

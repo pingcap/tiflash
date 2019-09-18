@@ -232,56 +232,82 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     }
 
     // Fill tp.
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(tt, v, cf, ct, w)                       \
-    if (checkDataType<DataType##ct>(nested_type)) \
-        column_info.tp = TiDB::Type##tt;          \
-    else
-    COLUMN_TYPES(M)
-#undef M
-    if (checkDataType<DataTypeUInt8>(nested_type))
-        column_info.tp = TiDB::TypeTiny;
-    else if (checkDataType<DataTypeUInt16>(nested_type))
-        column_info.tp = TiDB::TypeShort;
-    else if (checkDataType<DataTypeUInt32>(nested_type))
-        column_info.tp = TiDB::TypeLong;
-    else if (checkDataType<DataTypeDecimal<Decimal64>>(nested_type))
-        column_info.tp = TiDB::TypeNewDecimal;
-    else if (checkDataType<DataTypeDecimal<Decimal128>>(nested_type))
-        column_info.tp = TiDB::TypeNewDecimal;
-    else if (checkDataType<DataTypeDecimal<Decimal256>>(nested_type))
-        column_info.tp = TiDB::TypeNewDecimal;
-    else
-        throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type", ErrorCodes::LOGICAL_ERROR);
-    // UInt64 is hijacked by the macro expansion, we check it again.
-    if (checkDataType<DataTypeUInt64>(nested_type))
-        column_info.tp = TiDB::TypeLongLong;
+    switch (nested_type->getTypeId())
+    {
+        case TypeIndex::Nothing:
+            column_info.tp = TiDB::TypeNull;
+            break;
+        case TypeIndex::UInt8:
+        case TypeIndex::Int8:
+            column_info.tp = TiDB::TypeTiny;
+            break;
+        case TypeIndex::UInt16:
+        case TypeIndex::Int16:
+            column_info.tp = TiDB::TypeShort;
+            break;
+        case TypeIndex::UInt32:
+        case TypeIndex::Int32:
+            column_info.tp = TiDB::TypeLong;
+            break;
+        case TypeIndex::UInt64:
+        case TypeIndex::Int64:
+            column_info.tp = TiDB::TypeLongLong;
+            break;
+        case TypeIndex::Float32:
+            column_info.tp = TiDB::TypeFloat;
+            break;
+        case TypeIndex::Float64:
+            column_info.tp = TiDB::TypeDouble;
+            break;
+        case TypeIndex::Date:
+        case TypeIndex::MyDate:
+            column_info.tp = TiDB::TypeDate;
+            break;
+        case TypeIndex::DateTime:
+        case TypeIndex::MyDateTime:
+            column_info.tp = TiDB::TypeDatetime;
+            break;
+        case TypeIndex::MyTimeStamp:
+            column_info.tp = TiDB::TypeTimestamp;
+            break;
+        case TypeIndex::MyTime:
+            column_info.tp = TiDB::TypeTime;
+            break;
+        case TypeIndex::String:
+        case TypeIndex::FixedString:
+            column_info.tp = TiDB::TypeString;
+            break;
+        case TypeIndex::Decimal32:
+        case TypeIndex::Decimal64:
+        case TypeIndex::Decimal128:
+        case TypeIndex::Decimal256:
+            column_info.tp = TiDB::TypeNewDecimal;
+            break;
+        case TypeIndex::Enum8:
+        case TypeIndex::Enum16:
+            column_info.tp = TiDB::TypeEnum;
+            break;
+        default:
+            throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type", ErrorCodes::LOGICAL_ERROR);
+    }
 
     // Fill unsigned flag.
     if (nested_type->isUnsignedInteger())
-    {
         column_info.setUnsignedFlag();
-    }
 
     // Fill flen and decimal for decimal.
-    {
-        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal32>>(nested_type))
-            setDecimalPrecScale(decimal_type, column_info);
-        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal64>>(nested_type))
-            setDecimalPrecScale(decimal_type, column_info);
-        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal128>>(nested_type))
-            setDecimalPrecScale(decimal_type, column_info);
-        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal256>>(nested_type))
-            setDecimalPrecScale(decimal_type, column_info);
-    }
+    if (auto decimal_type32 = checkAndGetDataType<DataTypeDecimal<Decimal32>>(nested_type))
+        setDecimalPrecScale(decimal_type32, column_info);
+    else if (auto decimal_type64 = checkAndGetDataType<DataTypeDecimal<Decimal64>>(nested_type))
+        setDecimalPrecScale(decimal_type64, column_info);
+    else if (auto decimal_type128 = checkAndGetDataType<DataTypeDecimal<Decimal128>>(nested_type))
+        setDecimalPrecScale(decimal_type128, column_info);
+    else if (auto decimal_type256 = checkAndGetDataType<DataTypeDecimal<Decimal256>>(nested_type))
+        setDecimalPrecScale(decimal_type256, column_info);
 
     // Fill decimal for date time.
     if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
-    {
         column_info.decimal = type->getFraction();
-    }
 
     // Fill elems for enum.
     if (checkDataType<DataTypeEnum16>(nested_type))
@@ -295,14 +321,10 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
 
     // Fill default value, currently we only support int.
     if (!default_value.isNull())
-    {
         // convert any type to string , this is TiDB's style.
         column_info.origin_default_value = applyVisitor(FieldVisitorToString(), default_value);
-    }
     else
-    {
         column_info.setNoDefaultValueFlag();
-    }
 
     return column_info;
 }
