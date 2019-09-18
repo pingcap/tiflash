@@ -419,11 +419,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     {
         if (name == MutableSupport::delmark_column_name)
         {
-            block.insert({std::move(delmark_col), std::make_shared<DataTypeUInt8>(), MutableSupport::delmark_column_name});
+            block.insert({std::move(delmark_col), MutableSupport::delmark_column_type, MutableSupport::delmark_column_name});
         }
         else if (name == MutableSupport::version_column_name)
         {
-            block.insert({std::move(version_col), std::make_shared<DataTypeUInt64>(), MutableSupport::version_column_name});
+            block.insert({std::move(version_col), MutableSupport::version_column_type, MutableSupport::version_column_name});
         }
         else
         {
