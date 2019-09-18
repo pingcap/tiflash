@@ -290,10 +290,14 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
         throw Exception(err_msg, GRPCErrorCode);
     }
 
+    if (!response.has_region())
+        return {};
     std::vector<metapb::Peer> slaves;
-    for (size_t i = 0; i < response.slaves_size(); i++)
+    for (size_t i = 0; i < response.region().peers_size(); i++)
     {
-        slaves.push_back(response.slaves(i));
+        const auto & peer = response.region().peers(i);
+        if (peer.is_learner())
+            slaves.push_back(peer);
     }
     return std::make_tuple(response.region(), response.leader(), slaves);
 }
@@ -319,10 +323,15 @@ std::tuple<metapb::Region, metapb::Peer, std::vector<metapb::Peer>> Client::getR
         throw Exception(err_msg, GRPCErrorCode);
     }
 
+    if (!response.has_region())
+        return {};
+
     std::vector<metapb::Peer> slaves;
-    for (size_t i = 0; i < response.slaves_size(); i++)
+    for (size_t i = 0; i < response.region().peers_size(); i++)
     {
-        slaves.push_back(response.slaves(i));
+        const auto & peer = response.region().peers(i);
+        if (peer.is_learner())
+            slaves.push_back(peer);
     }
     return std::make_tuple(response.region(), response.leader(), slaves);
 }
