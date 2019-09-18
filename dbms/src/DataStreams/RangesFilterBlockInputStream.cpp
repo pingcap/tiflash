@@ -38,14 +38,53 @@ struct PKColumnIterator : public std::iterator<std::random_access_iterator_tag, 
 };
 
 template <typename HandleType>
-Block RangesFilterBlockInputStream<HandleType>::readImpl()
+std::pair<size_t, size_t> RangesFilterBlockInputStream<HandleType>::findBound(const IColumn * column, HandleRange<HandleType> range, size_t rows)
 {
     static const auto func_cmp = [](const UInt64 & a, const Handle & b) -> bool { return static_cast<HandleType>(a) < b; };
 
+    auto handle_begin = static_cast<HandleType>(column->getUInt(0));
+    auto handle_end = static_cast<HandleType>(column->getUInt(rows -1));
+
+    if (handle_begin >= range.second || handle_end < range.first)
+    {
+        return std::make_pair(0,0);
+    }
+    if (handle_begin >= range.first)
+    {
+        if (handle_end < range.second)
+        {
+            return std::make_pair(0,rows);
+        }
+        else
+        {
+            size_t pos = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column),
+                    range.second, func_cmp).pos;
+            return std::make_pair(0, pos);
+        }
+    }
+    else
+    {
+        size_t pos_begin = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column),
+                range.first, func_cmp).pos;
+
+        size_t pos_end = rows;
+        if (handle_end >= range.second)
+        {
+            pos_end = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column),
+                    range.second, func_cmp).pos;
+        }
+        return std::make_pair(pos_begin, pos_end);
+    }
+}
+
+template <typename HandleType>
+Block RangesFilterBlockInputStream<HandleType>::readImpl()
+{
+    bool skip_filter = isAllValueCoveredByRanges(ranges);
     while (true)
     {
         Block block = input->read();
-        if (!block)
+        if (!block || skip_filter)
             return block;
 
         const ColumnWithTypeAndName & handle_column = block.getByPosition(handle_column_index);
@@ -53,50 +92,65 @@ Block RangesFilterBlockInputStream<HandleType>::readImpl()
 
         size_t rows = block.rows();
 
-        auto handle_begin = static_cast<HandleType>(column->getUInt(0));
-        auto handle_end = static_cast<HandleType>(column->getUInt(rows - 1));
-
-        if (handle_begin >= ranges.second || ranges.first > handle_end)
-            continue;
-
-        if (handle_begin >= ranges.first)
+        std::vector<std::pair<size_t, size_t>> pos_ranges;
+        for (auto & range : ranges)
         {
-            if (handle_end < ranges.second)
+            auto pair = findBound(column, range, rows);
+            if (pair.first < pair.second) {
+                pos_ranges.push_back(std::move(pair));
+            }
+        }
+        if (pos_ranges.empty())
+        {
+            continue;
+        }
+        std::sort(pos_ranges.begin(), pos_ranges.end(),
+                [](const std::pair<size_t, size_t> & a, const std::pair<size_t, size_t> b) { return a.first < b.first;});
+        std::vector<std::pair<size_t, size_t>> merged_pos_ranges;
+        size_t start = pos_ranges[0].first, end = pos_ranges[0].second;
+        for (size_t i = 1; i < pos_ranges.size(); i++)
+        {
+            if (pos_ranges[i].first > end)
             {
-                return block;
+                merged_pos_ranges.emplace_back(std::make_pair(start, end));
+                start = pos_ranges[i].first;
+                end = pos_ranges[i].second;
             }
             else
             {
-                size_t pos = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column), ranges.second, func_cmp).pos;
-                size_t pop_num = rows - pos;
+                end = pos_ranges[i].second;
+            }
+        }
+        merged_pos_ranges.emplace_back(std::make_pair(start, end));
+
+        if (merged_pos_ranges.size() == 1)
+        {
+            if (merged_pos_ranges[0].first == 0 && merged_pos_ranges[0].second == rows) {
+                return block;
+            }
+            if (merged_pos_ranges[0].first == 0)
+            {
+                size_t pop_num = rows - merged_pos_ranges[0].second;
                 for (size_t i = 0; i < block.columns(); i++)
                 {
-                    ColumnWithTypeAndName & ori_column = block.getByPosition(i);
+                    ColumnWithTypeAndName &ori_column = block.getByPosition(i);
                     MutableColumnPtr mutable_holder = (*std::move(ori_column.column)).mutate();
                     mutable_holder->popBack(pop_num);
                     ori_column.column = std::move(mutable_holder);
                 }
+                return block;
             }
         }
-        else
+
+        for (size_t i = 0; i < block.columns(); i++)
         {
-            size_t pos_begin = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column), ranges.first, func_cmp).pos;
-            size_t pos_end = rows;
-            if (handle_end >= ranges.second)
-                pos_end = std::lower_bound(PKColumnIterator(0, column), PKColumnIterator(rows, column), ranges.second, func_cmp).pos;
-
-            size_t len = pos_end - pos_begin;
-            if (!len)
-                continue;
-            for (size_t i = 0; i < block.columns(); i++)
-            {
-                ColumnWithTypeAndName & ori_column = block.getByPosition(i);
-                auto new_column = ori_column.column->cloneEmpty();
-                new_column->insertRangeFrom(*ori_column.column, pos_begin, len);
-                ori_column.column = std::move(new_column);
+            ColumnWithTypeAndName & org_column = block.getByPosition(i);
+            auto new_column = org_column.column->cloneEmpty();
+            for (auto & pair : merged_pos_ranges) {
+                new_column->insertRangeFrom(*org_column.column, pair.first, pair.second - pair.first);
             }
+            org_column.column = std::move(new_column);
         }
-
         return block;
     }
 }

@@ -1,5 +1,6 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 
+#include <Core/TMTPKType.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -22,6 +23,7 @@
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -138,6 +140,13 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.region_id = dag.getRegionID();
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
+    for (auto & scan_range : dag.getRegionScanRanges())
+    {
+        TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(scan_range.first, table_id);
+        TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(scan_range.second, table_id);
+        info.scan_ranges.push_back(std::make_pair(std::move(start), std::move(end)));
+    }
+
     auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
     if (!current_region)
     {

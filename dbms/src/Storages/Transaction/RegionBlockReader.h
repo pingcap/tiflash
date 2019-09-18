@@ -36,6 +36,8 @@ std::tuple<Block, bool> readRegionBlock(const TiDB::TableInfo & table_info,
     const Names & column_names_to_read,
     RegionDataReadInfoList & data_list,
     Timestamp start_ts,
-    bool force_decode);
+    bool force_decode,
+    std::vector<HandleRange<HandleID>> & scan_ranges
+    );
 
 } // namespace DB

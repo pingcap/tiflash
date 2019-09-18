@@ -8,6 +8,7 @@
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/RegionBlockReaderHelper.hpp>
+#include <Storages/Transaction/CHTableHandle.h>
 
 namespace DB
 {
@@ -95,12 +96,34 @@ inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
     }
 }
 
+template <typename HandleType>
+bool checkScanRanges(HandleType handle, std::vector<HandleRange<HandleType>> & scan_ranges)
+{
+    bool should_skip = false;
+    if (!scan_ranges.empty())
+    {
+        should_skip = true;
+        for (auto & handle_range : scan_ranges)
+        {
+            if (handle >= handle_range.first && handle < handle_range.second)
+            {
+                should_skip = false;
+                break;
+            }
+        }
+    }
+    return should_skip;
+}
+
 template <TMTPKType pk_type>
 void setPKVersionDel(ColumnUInt8 & delmark_col,
     ColumnUInt64 & version_col,
     MutableColumnPtr & pk_column,
     const RegionDataReadInfoList & data_list,
-    const Timestamp tso)
+    const Timestamp tso,
+    std::vector<HandleRange<Int64>> & scan_ranges_for_int64,
+    std::vector<HandleRange<UInt64>> & scan_ranges_for_uint64
+    )
 {
     ColumnUInt8::Container & delmark_data = delmark_col.getData();
     ColumnUInt64::Container & version_data = version_col.getData();
@@ -114,6 +137,15 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
 
         // Ignore data after the start_ts.
         if (commit_ts > tso)
+            continue;
+
+        bool should_skip = false;
+        if constexpr (pk_type == TMTPKType::UINT64)
+            should_skip = checkScanRanges<UInt64>(UInt64(handle), scan_ranges_for_uint64);
+        else if constexpr (pk_type == TMTPKType::INT64)
+            should_skip = checkScanRanges<Int64>(handle, scan_ranges_for_int64);
+
+        if (should_skip)
             continue;
 
         delmark_data.emplace_back(write_type == Region::DelFlag);
@@ -219,11 +251,12 @@ bool DecodeRow(const TiKVValue & value, const ColumnIdToInfoIndexMap & column_id
 
 
 std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
-    const ColumnsDescription & columns,
-    const Names & column_names_to_read,
-    RegionDataReadInfoList & data_list,
-    Timestamp start_ts,
-    bool force_decode)
+                                            const ColumnsDescription & columns,
+                                            const Names & column_names_to_read,
+                                            RegionDataReadInfoList & data_list,
+                                            Timestamp start_ts,
+                                            bool force_decode,
+                                            std::vector<HandleRange<HandleID>> & scan_ranges)
 {
     auto delmark_col = ColumnUInt8::create();
     auto version_col = ColumnUInt64::create();
@@ -278,8 +311,27 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
 
+    std::vector<HandleRange<UInt64>> scan_ranges_for_uint64;
+    std::vector<HandleRange<Int64>> scan_ranges_for_int64 = scan_ranges;
     if (pk_type == TMTPKType::UINT64)
+    {
         ReorderRegionDataReadList(data_list);
+        for (auto & range : scan_ranges)
+        {
+            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
+            for (int i = 0; i < (int)n; i++)
+            {
+                scan_ranges_for_uint64.push_back(new_range[i]);
+            }
+        }
+        if (isAllValueCoveredByRanges<UInt64>(scan_ranges_for_uint64))
+            scan_ranges_for_uint64.clear();
+    }
+    else
+    {
+        if (isAllValueCoveredByRanges<Int64>(scan_ranges_for_int64))
+            scan_ranges_for_int64.clear();
+    }
 
     {
         auto func = setPKVersionDel<TMTPKType::UNSPECIFIED>;
@@ -296,7 +348,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 break;
         }
 
-        func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts);
+        func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list,
+                start_ts, scan_ranges_for_int64, scan_ranges_for_uint64);
     }
 
     const size_t target_col_size = column_names_to_read.size() - MustHaveColCnt;
@@ -312,10 +365,21 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
         for (const auto & [handle, write_type, commit_ts, value_ptr] : data_list)
         {
-            std::ignore = handle;
-
             // Ignore data after the start_ts.
             if (commit_ts > start_ts)
+                continue;
+
+            bool should_skip = false;
+            if (pk_type == TMTPKType::UINT64)
+            {
+                should_skip = checkScanRanges<UInt64>(UInt64(handle), scan_ranges_for_uint64);
+            }
+            else
+            {
+                should_skip = checkScanRanges<Int64>(handle, scan_ranges_for_int64);
+            }
+
+            if (should_skip)
                 continue;
 
             decoded_data.clear();

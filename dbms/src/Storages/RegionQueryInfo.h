@@ -11,6 +11,7 @@ struct RegionQueryInfo
     UInt64 version;
     UInt64 conf_version;
     HandleRange<HandleID> range_in_table;
+    std::vector<HandleRange<HandleID>> scan_ranges;
 
     bool operator<(const RegionQueryInfo & o) const { return range_in_table < o.range_in_table; }
 };

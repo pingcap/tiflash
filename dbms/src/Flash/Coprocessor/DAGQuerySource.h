@@ -6,6 +6,7 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGRegionInfo.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
@@ -27,8 +28,7 @@ public:
     static const String TOPN_NAME;
     static const String LIMIT_NAME;
 
-    DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
-        const tipb::DAGRequest & dag_request_);
+    DAGQuerySource(Context & context_, DAGContext & dag_context_, DAGRegionInfo & region_info, const tipb::DAGRequest & dag_request_);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -36,9 +36,10 @@ public:
 
     DAGContext & getDAGContext() const { return dag_context; };
 
-    RegionID getRegionID() const { return region_id; }
-    UInt64 getRegionVersion() const { return region_version; }
-    UInt64 getRegionConfVersion() const { return region_conf_version; }
+    RegionID getRegionID() const { return region_info.region_id; }
+    UInt64 getRegionVersion() const { return region_info.region_version; }
+    UInt64 getRegionConfVersion() const { return region_info.region_conf_version; }
+    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & getRegionScanRanges() const { return region_info.scan_ranges; }
 
     bool hasSelection() const { return sel_index != -1; };
     bool hasAggregation() const { return agg_index != -1; };
@@ -95,9 +96,7 @@ protected:
     Context & context;
     DAGContext & dag_context;
 
-    const RegionID region_id;
-    const UInt64 region_version;
-    const UInt64 region_conf_version;
+    const DAGRegionInfo & region_info;
 
     const tipb::DAGRequest & dag_request;
 

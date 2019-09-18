@@ -151,4 +151,28 @@ inline bool operator<=(const HandleType & handle_id, const Handle<HandleType> & 
 template <typename HandleType>
 using HandleRange = std::pair<TiKVHandle::Handle<HandleType>, TiKVHandle::Handle<HandleType>>;
 
+template <typename HandleType>
+bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> ranges)
+{
+    if (ranges.empty())
+        return false;
+    std::sort(ranges.begin(), ranges.end(),
+    [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first;});
+
+    HandleRange<HandleType> merged_range;
+    merged_range.first = ranges[0].first;
+    merged_range.second = ranges[0].second;
+
+    for (size_t i = 1; i < ranges.size(); i++)
+    {
+        if (merged_range.second >= ranges[i].first)
+            merged_range.second = merged_range.second >= ranges[i].second ? merged_range.second : ranges[i].second;
+        else
+            break;
+    }
+
+    return merged_range.first == TiKVHandle::Handle<HandleType>::normal_min
+    && merged_range.second == TiKVHandle::Handle<HandleType>::max;
+}
+
 } // namespace DB

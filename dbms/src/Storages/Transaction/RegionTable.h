@@ -202,7 +202,9 @@ public:
         RegionVersion conf_version,
         bool resolve_locks,
         Timestamp start_ts,
-        DB::HandleRange<HandleID> & handle_range);
+        DB::HandleRange<HandleID> & handle_range,
+        std::vector<HandleRange<HandleID>> & scan_ranges
+        );
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
     void dumpRegionsByTable(const TableID table_id, size_t & count, InternalRegions * regions) const;

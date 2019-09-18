@@ -521,7 +521,9 @@ tipb::SelectResponse executeDAGRequest(
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     context.setSetting("dag_planner", "optree");
     tipb::SelectResponse dag_response;
-    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, dag_response, true);
+    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> scan_ranges;
+    DAGRegionInfo region_info(region_id, region_version, region_conf_version, scan_ranges);
+    DAGDriver driver(context, dag_request, region_info, dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;

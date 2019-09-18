@@ -73,12 +73,13 @@ void RegionTable::writeBlockByRegion(
 
         /// Read region data as block.
         auto start_time = Clock::now();
+        std::vector<HandleRange<HandleID>> scan_range;
         auto [block, ok] = readRegionBlock(storage->getTableInfo(),
             storage->getColumns(),
             storage->getColumns().getNamesOfPhysical(),
             data_list_read,
             std::numeric_limits<Timestamp>::max(),
-            force_decode);
+            force_decode, scan_range);
         if (!ok)
             return false;
         region_decode_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
@@ -125,7 +126,8 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
     RegionVersion conf_version,
     bool resolve_locks,
     Timestamp start_ts,
-    DB::HandleRange<HandleID> & handle_range)
+    DB::HandleRange<HandleID> & handle_range,
+    std::vector<HandleRange<HandleID>> & scan_ranges)
 {
     if (!region)
         throw Exception("[RegionTable::readBlockByRegion] region is null", ErrorCodes::LOGICAL_ERROR);
@@ -181,7 +183,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
     Block block;
     {
         bool ok = false;
-        std::tie(block, ok) = readRegionBlock(table_info, columns, column_names_to_read, data_list_read, start_ts, true);
+        std::tie(block, ok) = readRegionBlock(table_info, columns, column_names_to_read, data_list_read, start_ts, true, scan_ranges);
         if (!ok)
             // TODO: Enrich exception message.
             throw Exception("Read region " + std::to_string(region->id()) + " of table " + std::to_string(table_info.id) + " failed",

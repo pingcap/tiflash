@@ -14,7 +14,7 @@ class RangesFilterBlockInputStream : public IProfilingBlockInputStream
 
 public:
     RangesFilterBlockInputStream(
-        const BlockInputStreamPtr & input_, const HandleRange<HandleType> & ranges_, const size_t handle_column_index_)
+        const BlockInputStreamPtr & input_, const std::vector<HandleRange<HandleType>> & ranges_, const size_t handle_column_index_)
         : input(input_), ranges(ranges_), handle_column_index(handle_column_index_)
     {}
 
@@ -29,11 +29,13 @@ protected:
 
     String getName() const override { return "RangesFilter"; }
 
+    std::pair<size_t, size_t> findBound(const IColumn * column, HandleRange<HandleType> range, size_t rows);
+
     Block readImpl() override;
 
 private:
     BlockInputStreamPtr input;
-    const HandleRange<HandleType> ranges;
+    const std::vector<HandleRange<HandleType>> ranges;
     const size_t handle_column_index;
     Logger * log = &Logger::get("RangesFilterBlockInputStream");
 };

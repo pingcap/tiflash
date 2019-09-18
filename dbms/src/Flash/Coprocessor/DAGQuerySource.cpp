@@ -28,14 +28,9 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
     index = value;
 }
 
-DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_,
-    UInt64 region_conf_version_, const tipb::DAGRequest & dag_request_)
-    : context(context_),
-      dag_context(dag_context_),
-      region_id(region_id_),
-      region_version(region_version_),
-      region_conf_version(region_conf_version_),
-      dag_request(dag_request_)
+DAGQuerySource::DAGQuerySource(
+    Context & context_, DAGContext & dag_context_, DAGRegionInfo & region_info_, const tipb::DAGRequest & dag_request_)
+    : context(context_), dag_context(dag_context_), region_info(region_info_), dag_request(dag_request_)
 {
     for (int i = 0; i < dag_request.executors_size(); i++)
     {
