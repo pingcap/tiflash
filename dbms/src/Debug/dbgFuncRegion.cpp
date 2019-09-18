@@ -81,7 +81,7 @@ void dbgFuncTryFlush(Context & context, const ASTs & args, DBGInvoker::Printer o
 
     bool force_flush = false;
     if (!args.empty())
-        force_flush = (String(typeid_cast<const ASTIdentifier &>(*args[1]).name) == "true");
+        force_flush = (String(typeid_cast<const ASTIdentifier &>(*args[0]).name) == "true");
 
     tmt.getRegionTable().tryFlushRegions(force_flush);
 

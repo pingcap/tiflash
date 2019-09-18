@@ -278,11 +278,16 @@ BlockInputStreams StorageDeltaMerge::read( //
     if (select_query.raw_for_mutable)
         return store->readRaw(context, context.getSettingsRef(), to_read, num_streams);
     else
-        return store->read(
-            context, context.getSettingsRef(), to_read, ranges, num_streams, std::numeric_limits<UInt64>::max(), max_block_size);
+    {
+        // read with specify tso
+        UInt64 max_version = DEFAULT_MAX_READ_TSO;
+        if (query_info.mvcc_query_info)
+            max_version = query_info.mvcc_query_info->read_tso;
+        return store->read(context, context.getSettingsRef(), to_read, ranges, num_streams, max_version, max_block_size);
+    }
 }
 
-void StorageDeltaMerge::check(const Context & context) { store->check(context, context.getSettingsRef()); }
+void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context, context.getSettingsRef()); }
 
 //==========================================================================================
 // DDL methods.
@@ -476,19 +481,10 @@ void StorageDeltaMerge::shutdown()
     tmt_context.getRegionTable().removeTable(tidb_table_info.id);
 }
 
-StorageDeltaMerge::~StorageDeltaMerge()
-{
-    shutdown();
-}
+StorageDeltaMerge::~StorageDeltaMerge() { shutdown(); }
 
-DataTypePtr StorageDeltaMerge::getPKTypeImpl() const
-{
-    return store->getPKDataType();
-}
+DataTypePtr StorageDeltaMerge::getPKTypeImpl() const { return store->getPKDataType(); }
 
-SortDescription StorageDeltaMerge::getPrimarySortDescription() const
-{
-    return store->getPrimarySortDescription();
-}
+SortDescription StorageDeltaMerge::getPrimarySortDescription() const { return store->getPrimarySortDescription(); }
 
 } // namespace DB
