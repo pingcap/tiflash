@@ -31,9 +31,6 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || 
 
     static bool overflow(const Field & field, const ColumnInfo & column_info)
     {
-        if (field.isNull())
-            return false;
-
         if constexpr (tp == TypeTiny)
             return concreteOverflow<Int8>(field, column_info);
 
@@ -59,7 +56,7 @@ private:
 
 /// Specialized for Date/DateTime/Timestamp, using unflatten/flatten to transform Int to UInt back and forth.
 template <TP tp>
-struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeDatetime || tp == TypeTimestamp>::type>
+struct DatumOp<tp, typename std::enable_if<tp == TypeDate || tp == TypeNewDate || tp == TypeDatetime || tp == TypeTimestamp>::type>
 {
     static void unflatten(const Field & orig, std::optional<Field> & copy) { copy = static_cast<UInt64>(orig.get<Int64>()); }
 
@@ -81,6 +78,9 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeEnum>::type>
 
 DatumFlat::DatumFlat(const DB::Field & field, TP tp) : DatumBase(field, tp)
 {
+    if (orig.isNull())
+        return;
+
     switch (tp)
     {
 #ifdef M
@@ -99,6 +99,9 @@ bool DatumFlat::invalidNull(const ColumnInfo & column_info) { return column_info
 
 bool DatumFlat::overflow(const ColumnInfo & column_info)
 {
+    if (orig.isNull())
+        return false;
+
     switch (tp)
     {
 #ifdef M
@@ -116,6 +119,9 @@ bool DatumFlat::overflow(const ColumnInfo & column_info)
 
 DatumBumpy::DatumBumpy(const DB::Field & field, TP tp) : DatumBase(field, tp)
 {
+    if (orig.isNull())
+        return;
+
     switch (tp)
     {
 #ifdef M
