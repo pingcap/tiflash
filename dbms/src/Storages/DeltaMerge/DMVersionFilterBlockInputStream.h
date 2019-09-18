@@ -10,13 +10,15 @@ namespace DM
 {
 
 /// Use the latest rows. For rows with the same handle, only take the rows with biggest version and version <= version_limit.
-static constexpr int DM_VESION_FILTER_MODE_MVCC = 0;
+static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
 /// Remove the outdated rows. For rows with the same handle, take all rows with version >= version_limit. And if all of them are smaller than version_limit, then take the biggest one, if it is not deleted.
-static constexpr int DM_VESION_FILTER_MODE_COMPACT = 1;
+static constexpr int DM_VERSION_FILTER_MODE_COMPACT = 1;
 
 template <int MODE>
 class DMVersionFilterBlockInputStream : public IProfilingBlockInputStream
 {
+    static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
+
 public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefine & handle_define, UInt64 version_limit_)
         : version_limit(version_limit_),
@@ -43,11 +45,11 @@ protected:
 #define cur_version (*version_col_data)[i]
 #define next_version (*version_col_data)[i + 1]
 #define deleted (*delete_col_data)[i]
-        if constexpr (MODE == DM_VESION_FILTER_MODE_MVCC)
+        if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
             return !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
         }
-        else if constexpr (MODE == DM_VESION_FILTER_MODE_COMPACT)
+        else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
             return cur_version >= version_limit || (cur_handle != next_handle && !deleted);
         }

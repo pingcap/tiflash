@@ -195,10 +195,10 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 
 void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 query_schema_version)
 {
-    String qualified_name = database_name + "." + table_name;
+    const String qualified_name = database_name + "." + table_name;
 
     /// Get current schema version in schema syncer for a chance to shortcut.
-    auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
+    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableStructureReadLockPtr, Int64, bool> {
@@ -208,17 +208,21 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         if (!storage_)
             return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
 
-        // TODO handle if storage_ is a DeltaMerge?
-        const auto merge_tree = dynamic_cast<const StorageMergeTree *>(storage_.get());
-        if (!merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
-            throw Exception("Specifying schema_version for non-TMT storage: " + storage_->getName() + ", table: " + qualified_name + " is not allowed", ErrorCodes::LOGICAL_ERROR);
+        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_);
+        if (!managed_storage
+           || !(managed_storage->engineType() == ::TiDB::StorageEngine::TMT || managed_storage->engineType() == ::TiDB::StorageEngine::DM))
+        {
+            throw Exception("Specifying schema_version for storage: " + storage_->getName()
+                            + ", table: " + qualified_name + " is not allowed",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
 
         /// Lock storage.
         auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
 
         /// Check schema version.
-        auto storage_schema_version = merge_tree->getTableInfo().schema_version;
-        // Not allow storage schema version greater than query schema version in any case.
+        auto storage_schema_version = managed_storage->getTableInfo().schema_version;
+        // Not allow storage schema version greater than query schema version in any case. TODO support time travel
         if (storage_schema_version > query_schema_version)
             throw Exception("Table " + qualified_name + " schema version " + toString(storage_schema_version) + " newer than query schema version " + toString(query_schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
 
@@ -770,7 +774,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
         const String & request_str = settings.regions;
 
-        if (request_str.size() > 0)
+        if (!request_str.empty())
         {
             Poco::JSON::Parser parser;
             Poco::Dynamic::Var result = parser.parse(request_str);
@@ -821,10 +825,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 throw Exception("PARTITION SELECT only supports MergeTree family.");
             }
         }
-
-        //if (storage->getData().merging_params.mode == MergeTreeData::MergingParams::Txn) {
-        //    TMTContext & tmt = context.getTMTContext();
-        //}
 
         if (!dry_run)
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
