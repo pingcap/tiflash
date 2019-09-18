@@ -207,18 +207,10 @@ TiDB::CodecFlag getCodecFlagByFieldType(const tipb::FieldType & field_type)
 }
 
 template <typename T>
-bool tryGetDecimalType(const IDataType * nested_type, ColumnInfo & column_info)
+void setDecimalPrecScale(const T * decimal_type, ColumnInfo & column_info)
 {
-    using TypeDec = DataTypeDecimal<T>;
-    if (checkDataType<TypeDec>(nested_type))
-    {
-        auto decimal_type = checkAndGetDataType<TypeDec>(nested_type);
-        column_info.flen = decimal_type->getPrec();
-        column_info.decimal = decimal_type->getScale();
-        column_info.tp = TiDB::TypeNewDecimal;
-        return true;
-    }
-    return false;
+    column_info.flen = decimal_type->getPrec();
+    column_info.decimal = decimal_type->getScale();
 }
 
 ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value)
@@ -239,40 +231,7 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
         nested_type = nullable_type->getNestedType().get();
     }
 
-    // Fill unsigned flag.
-    if (nested_type->isUnsignedInteger())
-    {
-        column_info.setUnsignedFlag();
-    }
-
-    // Fill flen and decimal.
-    if (tryGetDecimalType<Decimal32>(nested_type, column_info)) {}
-    else if (tryGetDecimalType<Decimal64>(nested_type, column_info))
-    {
-    }
-    else if (tryGetDecimalType<Decimal128>(nested_type, column_info))
-    {
-    }
-    else if (tryGetDecimalType<Decimal256>(nested_type, column_info))
-    {
-    }
-
-    // Fill elems for enum.
-    if (checkDataType<DataTypeEnum16>(nested_type))
-    {
-        auto enum16_type = checkAndGetDataType<DataTypeEnum16>(nested_type);
-        column_info.tp = TiDB::TypeEnum;
-        for (auto & element : enum16_type->getValues())
-        {
-            column_info.elems.emplace_back(element.first, element.second);
-        }
-    }
-
-    // Fill decimal for date time.
-    if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
-        column_info.decimal = type->getFraction();
-
-        // Fill tp.
+    // Fill tp.
 #ifdef M
 #error "Please undefine macro M first."
 #endif
@@ -288,12 +247,51 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
         column_info.tp = TiDB::TypeShort;
     else if (checkDataType<DataTypeUInt32>(nested_type))
         column_info.tp = TiDB::TypeLong;
+    else if (checkDataType<DataTypeDecimal<Decimal64>>(nested_type))
+        column_info.tp = TiDB::TypeNewDecimal;
+    else if (checkDataType<DataTypeDecimal<Decimal128>>(nested_type))
+        column_info.tp = TiDB::TypeNewDecimal;
+    else if (checkDataType<DataTypeDecimal<Decimal256>>(nested_type))
+        column_info.tp = TiDB::TypeNewDecimal;
     else
         throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type", ErrorCodes::LOGICAL_ERROR);
-
     // UInt64 is hijacked by the macro expansion, we check it again.
     if (checkDataType<DataTypeUInt64>(nested_type))
         column_info.tp = TiDB::TypeLongLong;
+
+    // Fill unsigned flag.
+    if (nested_type->isUnsignedInteger())
+    {
+        column_info.setUnsignedFlag();
+    }
+
+    // Fill flen and decimal for decimal.
+    {
+        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal32>>(nested_type))
+            setDecimalPrecScale(decimal_type, column_info);
+        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal64>>(nested_type))
+            setDecimalPrecScale(decimal_type, column_info);
+        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal128>>(nested_type))
+            setDecimalPrecScale(decimal_type, column_info);
+        if (auto decimal_type = checkAndGetDataType<DataTypeDecimal<Decimal256>>(nested_type))
+            setDecimalPrecScale(decimal_type, column_info);
+    }
+
+    // Fill decimal for date time.
+    if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
+    {
+        column_info.decimal = type->getFraction();
+    }
+
+    // Fill elems for enum.
+    if (checkDataType<DataTypeEnum16>(nested_type))
+    {
+        auto enum16_type = checkAndGetDataType<DataTypeEnum16>(nested_type);
+        for (auto & element : enum16_type->getValues())
+        {
+            column_info.elems.emplace_back(element.first, element.second);
+        }
+    }
 
     // Fill default value, currently we only support int.
     if (!default_value.isNull())
