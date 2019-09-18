@@ -650,11 +650,13 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
     else if (command.type == AlterCommand::RENAME_COLUMN)
     {
         for (auto && c : table_columns)
+        {
             if (c.id == command.column_id)
             {
                 c.name = command.new_column_name;
                 break;
             }
+        }
     }
     else
     {
