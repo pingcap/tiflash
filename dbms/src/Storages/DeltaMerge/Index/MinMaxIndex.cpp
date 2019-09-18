@@ -41,11 +41,11 @@ MinMaxIndex::MinMaxIndex(const IDataType & type, const IColumn & column, const C
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<UInt32>>(*column_ptr, del_mark, offset, limit);
+        minmax = std::make_shared<MinMaxValueFixed<typename DataTypeDate::FieldType>>(*column_ptr, del_mark, offset, limit);
     else if (typeid_cast<const DataTypeDateTime *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<Int64>>(*column_ptr, del_mark, offset, limit);
+        minmax = std::make_shared<MinMaxValueFixed<typename DataTypeDateTime::FieldType>>(*column_ptr, del_mark, offset, limit);
     else if (typeid_cast<const DataTypeUUID *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<UInt128>>(*column_ptr, del_mark, offset, limit);
+        minmax = std::make_shared<MinMaxValueFixed<typename DataTypeUUID::FieldType>>(*column_ptr, del_mark, offset, limit);
     else if (typeid_cast<const DataTypeEnum<Int8> *>(&type))
         minmax = std::make_shared<MinMaxValueFixed<Int8>>(*column_ptr, del_mark, offset, limit);
     else if (typeid_cast<const DataTypeEnum<Int16> *>(&type))

@@ -70,8 +70,6 @@ Code: 36. DB::Exception: Received from {#WORD} DB::Exception: Storage engine Del
 │ 3 │ 2048 │ 65536 │   \N │
 └───┴──────┴───────┴──────┘
 
-# TODO rename column is not support in CH
-
 
 ## rename table
 >> drop table if exists dm_test_renamed

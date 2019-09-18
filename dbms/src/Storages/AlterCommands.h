@@ -2,6 +2,7 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -15,7 +16,7 @@ struct AlterCommand
         DROP_COLUMN,
         MODIFY_COLUMN,
         MODIFY_PRIMARY_KEY,
-        // Rename column is only for tmt schema sync.
+        // Rename column is only for tmt/dm schema sync.
         RENAME_COLUMN,
     };
 
@@ -23,7 +24,10 @@ struct AlterCommand
 
     String column_name;
 
-    // Only for Rename column.
+    /// Only for DM identify column by column_id but not column_name
+    ColumnID column_id;
+
+    /// Only for Rename column.
     String new_column_name;
 
     /// For DROP COLUMN ... FROM PARTITION
