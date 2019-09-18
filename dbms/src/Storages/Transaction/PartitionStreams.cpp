@@ -4,6 +4,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageDebugging.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
@@ -92,17 +93,28 @@ void RegionTable::writeBlockByRegion(
         {
             case ::TiDB::StorageEngine::TMT:
             {
-                auto * tmt_storage = dynamic_cast<StorageMergeTree *>(storage.get());
+
+                auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                 TxnMergeTreeBlockOutputStream output(*tmt_storage);
                 output.write(std::move(block));
                 break;
             }
             case ::TiDB::StorageEngine::DM:
             {
-                auto * dm_storage = dynamic_cast<StorageDeltaMerge *>(storage.get());
+                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
                 // imported data from TiDB, ASTInsertQuery.is_import need to be true
                 ASTPtr query(new ASTInsertQuery(dm_storage->getDatabaseName(), dm_storage->getTableName(), /* is_import_= */ true));
                 BlockOutputStreamPtr output = dm_storage->write(query, context.getSettingsRef());
+                output->writePrefix();
+                output->write(block);
+                output->writeSuffix();
+                break;
+            }
+            case ::TiDB::StorageEngine::DEBUGGING_MEMORY:
+            {
+                auto debugging_storage = std::dynamic_pointer_cast<StorageDebugging>(storage);
+                ASTPtr query(new ASTInsertQuery(debugging_storage->getDatabaseName(), debugging_storage->getTableName(), true));
+                BlockOutputStreamPtr output = debugging_storage->write(query, context.getSettingsRef());
                 output->writePrefix();
                 output->write(block);
                 output->writeSuffix();

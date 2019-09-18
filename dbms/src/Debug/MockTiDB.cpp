@@ -179,16 +179,14 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
 
     // set storage engine type
     std::transform(engine_type.begin(), engine_type.end(), engine_type.begin(), [](unsigned char c) { return std::tolower(c); });
-    if (!(engine_type == "tmt" || engine_type == "dm"))
-    {
-        throw Exception("Unknown engine type : " + engine_type +", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
-    }
     if (engine_type == "tmt")
         table_info.engine_type = TiDB::StorageEngine::TMT;
     else if (engine_type == "dm")
         table_info.engine_type = TiDB::StorageEngine::DM;
+    else if (engine_type == "buggy")
+        table_info.engine_type = TiDB::StorageEngine::DEBUGGING_MEMORY;
     else
-        throw Exception("Unknown engine type : " + engine_type +", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Unknown engine type : " + engine_type + ", must be 'tmt' or 'dm'", ErrorCodes::BAD_ARGUMENTS);
 
     auto table = std::make_shared<Table>(database_name, table_name, std::move(table_info));
     tables_by_id.emplace(table->table_info.id, table);

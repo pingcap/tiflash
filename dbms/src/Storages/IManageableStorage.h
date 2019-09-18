@@ -37,7 +37,7 @@ public:
 
     virtual BlockInputStreamPtr status() { return {}; }
 
-    virtual void check(const Context &) {}
+    virtual void checkStatus(const Context &) {}
 
     virtual ::TiDB::StorageEngine engineType() const = 0;
 
