@@ -7,9 +7,14 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnArray.h>
 
+#include <Common/MyTime.h>
+
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyTimeBase.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeFixedString.h>
@@ -725,12 +730,16 @@ private:
 
         bool is_date = false;
         bool is_date_time = false;
+        bool is_my_date = false;
+        bool is_my_datetime = false;
         bool is_uuid = false;
         bool is_enum8 = false;
         bool is_enum16 = false;
 
         const auto legal_types = (is_date = checkAndGetDataType<DataTypeDate>(number_type))
             || (is_date_time = checkAndGetDataType<DataTypeDateTime>(number_type))
+            || (is_my_datetime = checkAndGetDataType<DataTypeMyDateTime>(number_type))
+            || (is_my_date = checkAndGetDataType<DataTypeMyDate>(number_type))
             || (is_uuid = checkAndGetDataType<DataTypeUUID>(number_type))
             || (is_enum8 = checkAndGetDataType<DataTypeEnum8>(number_type))
             || (is_enum16 = checkAndGetDataType<DataTypeEnum16>(number_type));
@@ -755,6 +764,16 @@ private:
             ColumnPtr parsed_const_date_holder = DataTypeDate().createColumnConst(block.rows(), UInt64(date));
             const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
             executeNumLeftType<DataTypeDate::FieldType>(block, result,
+                left_is_num ? col_left_untyped : parsed_const_date,
+                left_is_num ? parsed_const_date : col_right_untyped);
+        }
+        else if (is_my_date || is_my_datetime)
+        {
+            Field parsed_time = parseMyDateTime(string_value.toString());
+            const DataTypePtr & time_type = left_is_num ? left_type : right_type;
+            ColumnPtr parsed_const_date_holder = time_type->createColumnConst(block.rows(), parsed_time);
+            const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
+            executeNumLeftType<DataTypeMyTimeBase::FieldType>(block, result,
                 left_is_num ? col_left_untyped : parsed_const_date,
                 left_is_num ? parsed_const_date : col_right_untyped);
         }
@@ -987,8 +1006,8 @@ public:
         const DataTypeTuple * left_tuple = nullptr;
 
         false
-            || (left_is_date         = checkAndGetDataType<DataTypeDate>(arguments[0].get()))
-            || (left_is_date_time    = checkAndGetDataType<DataTypeDateTime>(arguments[0].get()))
+            || (left_is_date         = checkAndGetDataType<DataTypeDate>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[0].get()))
+            || (left_is_date_time    = checkAndGetDataType<DataTypeDateTime>(arguments[0].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[0].get()))
             || (left_is_enum8        = checkAndGetDataType<DataTypeEnum8>(arguments[0].get()))
             || (left_is_uuid         = checkAndGetDataType<DataTypeUUID>(arguments[0].get()))
             || (left_is_enum16       = checkAndGetDataType<DataTypeEnum16>(arguments[0].get()))
@@ -1008,8 +1027,8 @@ public:
         const DataTypeTuple * right_tuple = nullptr;
 
         false
-            || (right_is_date = checkAndGetDataType<DataTypeDate>(arguments[1].get()))
-            || (right_is_date_time = checkAndGetDataType<DataTypeDateTime>(arguments[1].get()))
+            || (right_is_date = checkAndGetDataType<DataTypeDate>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDate>(arguments[1].get()))
+            || (right_is_date_time = checkAndGetDataType<DataTypeDateTime>(arguments[1].get()) || checkAndGetDataType<DataTypeMyDateTime>(arguments[1].get()))
             || (right_is_uuid = checkAndGetDataType<DataTypeUUID>(arguments[1].get()))
             || (right_is_enum8 = checkAndGetDataType<DataTypeEnum8>(arguments[1].get()))
             || (right_is_enum16 = checkAndGetDataType<DataTypeEnum16>(arguments[1].get()))
