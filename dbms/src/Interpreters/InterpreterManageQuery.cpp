@@ -43,7 +43,7 @@ BlockIO InterpreterManageQuery::execute()
         }
         case ManageOperation::Enum::Check:
         {
-            manageable_storage->check(context);
+            manageable_storage->checkStatus(context);
             return {};
         }
     }

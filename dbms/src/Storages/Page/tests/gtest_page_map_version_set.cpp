@@ -547,6 +547,10 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
     }
 
     auto s1 = versions.getSnapshot();
+
+    // Apply edit that
+    // * update Page 0 with checksum = 0x456
+    // * delete Page 1
     {
         PageEntriesEdit edit;
         PageEntry       e;
@@ -556,6 +560,10 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
         versions.apply(edit);
     }
     ASSERT_EQ(versions.size(), 2UL); // previous version is hold by `s1`, list size grow to 2
+
+    // check that snapshot s1 is not effected by later edits.
+    ASSERT_EQ(s1->version()->at(0).checksum, 0x123UL);
+    ASSERT_EQ(s1->version()->at(1).checksum, 0x1234UL);
 
     auto s2 = versions.getSnapshot();
     auto p0 = s2->version()->find(0);
