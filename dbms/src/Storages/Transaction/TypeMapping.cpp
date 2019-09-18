@@ -268,9 +268,11 @@ ColumnInfo getColumnInfoByDataType(const DataTypePtr & type)
             break;
 
         case TypeIndex::Date:
+        case TypeIndex::MyDate:
             col.tp = TiDB::TypeDate;
             break;
         case TypeIndex::DateTime:
+        case TypeIndex::MyDateTime:
             col.tp = TiDB::TypeDatetime;
             break;
 
@@ -303,7 +305,9 @@ ColumnInfo getColumnInfoByDataType(const DataTypePtr & type)
         case TypeIndex::Int256:
             break;
 
-        // Unkonwn
+        // Unkown
+        case TypeIndex::MyTimeStamp:
+        case TypeIndex::MyTime:
         case TypeIndex::Enum8:
         case TypeIndex::Enum16:
         case TypeIndex::UUID:
