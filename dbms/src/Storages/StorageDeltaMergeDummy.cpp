@@ -198,7 +198,7 @@ BlockInputStreamPtr StorageDeltaMergeDummy::status()
     return std::make_shared<OneBlockInputStream>(block);
 }
 
-void StorageDeltaMergeDummy::check(const Context &)
+void StorageDeltaMergeDummy::checkStatus(const Context &)
 {
     delta_tree->checkAll();
 

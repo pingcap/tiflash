@@ -40,10 +40,12 @@ public:
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }
 
+    static constexpr const char * pk_name = "pk";
+
     static ColumnDefines getDefaultColumns()
     {
         ColumnDefines columns;
-        columns.emplace_back(ColumnDefine(1, "pk", std::make_shared<DataTypeInt64>()));
+        columns.emplace_back(ColumnDefine(1, pk_name, std::make_shared<DataTypeInt64>()));
         columns.emplace_back(getVersionColumnDefine());
         columns.emplace_back(getTagColumnDefine());
         return columns;
@@ -57,12 +59,12 @@ public:
      * @param reversed  increasing/decreasing insert `pk`'s value
      * @return
      */
-    static Block prepareSimpleWriteBlock(size_t beg, size_t end, bool reversed)
+    static Block prepareSimpleWriteBlock(size_t beg, size_t end, bool reversed, UInt64 tso = 2)
     {
         Block        block;
         const size_t num_rows = (end - beg);
         {
-            ColumnWithTypeAndName col1(std::make_shared<DataTypeInt64>(), "pk");
+            ColumnWithTypeAndName col1(std::make_shared<DataTypeInt64>(), pk_name);
             {
                 IColumn::MutablePtr m_col = col1.type->createColumn();
                 // insert form large to small
@@ -88,7 +90,7 @@ public:
                 IColumn::MutablePtr m_col = version_col.type->createColumn();
                 for (size_t i = 0; i < num_rows; ++i)
                 {
-                    Field field = UInt64(2);
+                    Field field = tso;
                     m_col->insert(field);
                 }
                 version_col.column = std::move(m_col);
@@ -107,6 +109,51 @@ public:
                 tag_col.column = std::move(m_col);
             }
             block.insert(tag_col);
+        }
+        return block;
+    }
+
+    /// prepare a row like this:
+    /// {"pk":pk, "version":tso, "delete_mark":mark, "colname":value}
+    static Block prepareOneRowBlock(Int64 pk, UInt64 tso, UInt8 mark, const String & colname, const String & value)
+    {
+        Block        block;
+        const size_t num_rows = 1;
+        {
+            ColumnWithTypeAndName col1(EXTRA_HANDLE_COLUMN_TYPE, pk_name);
+            {
+                IColumn::MutablePtr m_col = col1.type->createColumn();
+                // insert form large to small
+                m_col->insert(pk);
+                col1.column = std::move(m_col);
+            }
+            block.insert(col1);
+
+            ColumnWithTypeAndName version_col(VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME);
+            {
+                IColumn::MutablePtr m_col = version_col.type->createColumn();
+                m_col->insert(tso);
+                version_col.column = std::move(m_col);
+            }
+            block.insert(version_col);
+
+            ColumnWithTypeAndName tag_col(TAG_COLUMN_TYPE, TAG_COLUMN_NAME);
+            {
+                IColumn::MutablePtr m_col       = tag_col.type->createColumn();
+                auto &              column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
+                column_data.resize(num_rows);
+                column_data[0] = mark;
+                tag_col.column = std::move(m_col);
+            }
+            block.insert(tag_col);
+
+            ColumnWithTypeAndName str_col(DataTypeFactory::instance().get("String"), colname);
+            {
+                IColumn::MutablePtr m_col = str_col.type->createColumn();
+                m_col->insert(value);
+                str_col.column = std::move(m_col);
+            }
+            block.insert(str_col);
         }
         return block;
     }
