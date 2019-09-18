@@ -122,9 +122,7 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
 {
     if (region.pause_flush)
         return false;
-    if (region.must_flush)
-        return true;
-    if (!region.updated || !region.cache_bytes)
+    if (!region.cache_bytes)
         return false;
     auto period_time = Clock::now() - region.last_flush_time;
     return flush_thresholds.traverse<bool>([&](const FlushThresholds::FlushThresholdsData & data) -> bool {
@@ -137,11 +135,11 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     });
 }
 
-void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cache_size, const bool try_persist)
+void RegionTable::flushRegion(TableID table_id, RegionID region_id, const bool try_persist)
 {
     const auto & tmt = context.getTMTContext();
 
-    /// Store region ptr first, for ABA avoidance when removing region data.
+    /// Store region ptr first
     RegionPtr region = tmt.getKVStore()->getRegion(region_id);
     {
         if (!region)
@@ -161,13 +159,6 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
 
     /// Remove data in region.
     {
-        // avoid ABA problem.
-        if (region != tmt.getKVStore()->getRegion(region_id))
-        {
-            LOG_DEBUG(log, "[flushRegion] region is moved out and back, ignore removing data.");
-            return;
-        }
-
         {
             auto remover = region->createCommittedRemover(table_id);
             for (const auto & [handle, write_type, commit_ts, value] : data_list_to_remove)
@@ -179,7 +170,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
             }
         }
 
-        cache_size = region->dataSize();
+        size_t cache_size = region->dataSize();
 
         if (cache_size == 0)
         {
@@ -193,7 +184,7 @@ void RegionTable::flushRegion(TableID table_id, RegionID region_id, size_t & cac
     }
 }
 
-static const Int64 FTH_BYTES_1 = 1024;             // 1 KB
+static const Int64 FTH_BYTES_1 = 1;                // 1 B
 static const Int64 FTH_BYTES_2 = 1024 * 1024;      // 1 MB
 static const Int64 FTH_BYTES_3 = 1024 * 1024 * 10; // 10 MBs
 static const Int64 FTH_BYTES_4 = 1024 * 1024 * 50; // 50 MBs
@@ -268,8 +259,9 @@ void RegionTable::updateRegion(const Region & region, const TableIDSet & relativ
     for (auto table_id : relative_table_ids)
     {
         auto & internal_region = getOrInsertRegion(table_id, region);
-        internal_region.updated = true;
         internal_region.cache_bytes = cache_bytes;
+        if (internal_region.cache_bytes)
+            dirty_regions.insert(internal_region.region_id);
     }
 }
 
@@ -299,8 +291,8 @@ void RegionTable::applySnapshotRegions(const RegionMap & region_map)
 
             auto & internal_region = getOrInsertRegion(table_id, *region);
             internal_region.cache_bytes = cache_bytes;
-            if (cache_bytes)
-                internal_region.updated = true;
+            if (internal_region.cache_bytes)
+                dirty_regions.insert(internal_region.region_id);
         }
     }
 }
@@ -325,8 +317,9 @@ void RegionTable::updateRegionForSplit(const Region & split_region, const Region
             continue;
 
         auto & internal_region = getOrInsertRegion(table_id, split_region);
-        internal_region.must_flush = true;
         internal_region.cache_bytes = split_region.dataSize();
+        if (internal_region.cache_bytes)
+            dirty_regions.insert(internal_region.region_id);
     }
 }
 
@@ -378,10 +371,10 @@ void RegionTable::tryFlushRegion(RegionID region_id)
     }
 
     for (const auto table_id : table_ids)
-        tryFlushRegion(region_id, table_id);
+        tryFlushRegion(region_id, table_id, false);
 }
 
-void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
+void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist)
 {
     const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
         std::lock_guard<std::mutex> lock(mutex);
@@ -406,7 +399,6 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
         }
     };
 
-    size_t cache_bytes;
     bool status = func_update_region([&](InternalRegion & region) -> bool {
         if (region.pause_flush)
         {
@@ -414,7 +406,6 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
             return false;
         }
         region.pause_flush = true;
-        cache_bytes = region.cache_bytes;
         return true;
     });
 
@@ -425,19 +416,26 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
 
     try
     {
-        flushRegion(table_id, region_id, cache_bytes, false);
+        flushRegion(table_id, region_id, try_persist);
     }
     catch (...)
     {
         first_exception = std::current_exception();
     }
 
-    func_update_region([&](InternalRegion & region) -> bool {
-        region.pause_flush = false;
-        region.must_flush = false;
-        region.updated = false;
-        region.cache_bytes = cache_bytes;
-        region.last_flush_time = Clock::now();
+    func_update_region([&](InternalRegion & internal_region) -> bool {
+        internal_region.pause_flush = false;
+        size_t cache_bytes = 0;
+        if (auto region = context.getTMTContext().getKVStore()->getRegion(internal_region.region_id); region)
+            cache_bytes = region->dataSize();
+
+        internal_region.cache_bytes = cache_bytes;
+        if (cache_bytes)
+            dirty_regions.insert(region_id);
+        else
+            dirty_regions.erase(region_id);
+
+        internal_region.last_flush_time = Clock::now();
         return true;
     });
 
@@ -447,60 +445,57 @@ void RegionTable::tryFlushRegion(RegionID region_id, TableID table_id)
 
 bool RegionTable::tryFlushRegions()
 {
-    std::map<std::pair<TableID, RegionID>, size_t> to_flush;
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (dirty_regions.empty())
+            return false;
+    }
+
+    struct DataToFlush
+    {
+        TableID table_id;
+        RegionID region_id;
+        bool got = false;
+    };
+    DataToFlush to_flush;
     { // judge choose region to flush
-        traverseInternalRegions([&](TableID table_id, InternalRegion & region) {
+        const auto traverse = [this](std::function<bool(TableID, InternalRegion &)> && callback) {
+            std::lock_guard<std::mutex> lock(mutex);
+
+            for (const auto & region_id : dirty_regions)
+            {
+                for (auto it = regions.find(region_id); it != regions.end(); ++it)
+                {
+                    for (const auto & table_id : it->second)
+                    {
+                        for (auto table_it = tables.find(table_id); table_it != tables.end(); ++table_it)
+                        {
+                            for (auto & region_info : table_it->second.regions)
+                                if (callback(table_id, region_info.second))
+                                    return;
+                        }
+                    }
+                }
+            }
+        };
+
+        traverse([&](TableID table_id, InternalRegion & region) {
             if (shouldFlush(region))
             {
-                to_flush.insert_or_assign({table_id, region.region_id}, region.cache_bytes);
-                // Stop other flush threads.
-                region.pause_flush = true;
+                to_flush = DataToFlush{table_id, region.region_id, true};
+                dirty_regions.erase(region.region_id);
+                return true;
             }
+            return false;
         });
+
+        if (!to_flush.got)
+            return false;
     }
 
-    std::exception_ptr first_exception;
+    tryFlushRegion(to_flush.region_id, to_flush.table_id, true);
 
-    try
-    {
-        for (auto & [id, cache_bytes] : to_flush)
-            flushRegion(id.first, id.second, cache_bytes);
-    }
-    catch (...)
-    {
-        first_exception = std::current_exception();
-    }
-
-    { // Now reset status information.
-        Timepoint now = Clock::now();
-        traverseInternalRegions([&](TableID table_id, InternalRegion & region) {
-            if (auto it = to_flush.find({table_id, region.region_id}); it != to_flush.end())
-            {
-                region.pause_flush = false;
-                region.must_flush = false;
-                region.updated = false;
-                region.cache_bytes = it->second;
-                region.last_flush_time = now;
-            }
-        });
-    }
-
-    if (first_exception)
-        std::rethrow_exception(first_exception);
-
-    return !to_flush.empty();
-}
-
-void RegionTable::traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback)
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    for (auto && [table_id, table] : tables)
-    {
-        for (auto & region_info : table.regions)
-        {
-            callback(table_id, region_info.second);
-        }
-    }
+    return true;
 }
 
 void RegionTable::traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback)

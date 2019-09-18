@@ -45,8 +45,6 @@ public:
         RegionID region_id;
         HandleRange<HandleID> range_in_table;
         bool pause_flush = false;
-        bool must_flush = false;
-        bool updated = false;
         Int64 cache_bytes = 0;
         Timepoint last_flush_time = Clock::now();
     };
@@ -123,6 +121,7 @@ private:
 
     TableMap tables;
     RegionInfoMap regions;
+    std::unordered_set<RegionID> dirty_regions;
 
     FlushThresholds flush_thresholds;
 
@@ -140,7 +139,7 @@ private:
 
     bool shouldFlush(const InternalRegion & region) const;
 
-    void flushRegion(TableID table_id, RegionID partition_id, size_t & cache_size, const bool try_persist = true);
+    void flushRegion(TableID table_id, RegionID region_id, const bool try_persist = true);
 
     // For debug
     friend class MockTiDB;
@@ -178,9 +177,8 @@ public:
     bool tryFlushRegions();
 
     void tryFlushRegion(RegionID region_id);
-    void tryFlushRegion(RegionID region_id, TableID table_id);
+    void tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist);
 
-    void traverseInternalRegions(std::function<void(TableID, InternalRegion &)> && callback);
     void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
 
