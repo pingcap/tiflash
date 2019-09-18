@@ -97,7 +97,7 @@ Block RangesFilterBlockInputStream<HandleType>::readImpl()
         {
             auto pair = findBound(column, range, rows);
             if (pair.first < pair.second) {
-                pos_ranges.push_back(std::move(pair));
+                pos_ranges.emplace_back(std::move(pair));
             }
         }
         if (pos_ranges.empty())

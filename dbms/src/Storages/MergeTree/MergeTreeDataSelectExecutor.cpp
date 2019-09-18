@@ -202,7 +202,7 @@ std::vector<HandleRange<HandleType>> mergeHandleRanges(HandleRange<HandleType> a
     {
         auto [merged, is_overlap] = mergeHandleRange(a, range);
         if (is_overlap) {
-            ret.push_back(merged);
+            ret.emplace_back(std::move(merged));
         }
     }
     return ret;

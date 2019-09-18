@@ -144,7 +144,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(scan_range.first, table_id);
         TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(scan_range.second, table_id);
-        info.scan_ranges.push_back(std::make_pair(std::move(start), std::move(end)));
+        info.scan_ranges.emplace_back(std::make_pair(start, end));
     }
 
     auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);

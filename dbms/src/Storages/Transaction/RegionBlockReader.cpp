@@ -2,13 +2,13 @@
 #include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
+#include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/RegionBlockReaderHelper.hpp>
-#include <Storages/Transaction/CHTableHandle.h>
 
 namespace DB
 {
