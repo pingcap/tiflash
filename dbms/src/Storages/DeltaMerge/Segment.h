@@ -25,6 +25,13 @@ struct RemoveWriteBatches
     WriteBatch meta;
     WriteBatch data;
     WriteBatch log;
+
+    void write(StoragePool & storage)
+    {
+        storage.meta().write(meta);
+        storage.data().write(data);
+        storage.log().write(log);
+    }
 };
 
 struct DeltaValueSpace

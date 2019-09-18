@@ -263,9 +263,7 @@ void DeltaMergeStore::commitWrites(WriteActions &&       actions,
 
                 segments[range.end] = new_segment;
 
-                dm_context.storage_pool.meta().write(remove_wbs.meta);
-                dm_context.storage_pool.data().write(remove_wbs.data);
-                dm_context.storage_pool.log().write(remove_wbs.log);
+                remove_wbs.write(dm_context.storage_pool);
             }
         }
     }
@@ -500,9 +498,7 @@ void DeltaMergeStore::split(DMContext & dm_context, const SegmentPtr & segment)
         segments[new_seg_left->getRange().end]  = new_seg_left;
         segments[new_seg_right->getRange().end] = new_seg_right;
 
-        dm_context.storage_pool.meta().write(remove_wbs.meta);
-        dm_context.storage_pool.data().write(remove_wbs.data);
-        dm_context.storage_pool.log().write(remove_wbs.log);
+        remove_wbs.write(dm_context.storage_pool);
     }
 
 #ifndef NDEBUG
@@ -528,9 +524,7 @@ void DeltaMergeStore::merge(DMContext & dm_context, const SegmentPtr & left, con
         segments.erase(right_range.end);
         segments.emplace(merged->getRange().end, merged);
 
-        dm_context.storage_pool.meta().write(remove_wbs.meta);
-        dm_context.storage_pool.data().write(remove_wbs.data);
-        dm_context.storage_pool.log().write(remove_wbs.log);
+        remove_wbs.write(dm_context.storage_pool);
     }
 
 #ifndef NDEBUG
@@ -630,7 +624,9 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
         if (unlikely(!exist_column))
         {
             // Fall back to find column by name, this path should only call by tests.
-            LOG_WARNING(log, "Try to apply alter to column: " + command.column_name + ", id:" + toString(command.column_id) + ", but not found by id, fall back locating col by name.");
+            LOG_WARNING(log,
+                        "Try to apply alter to column: " + command.column_name + ", id:" + toString(command.column_id)
+                            + ", but not found by id, fall back locating col by name.");
             for (auto && column_define : table_columns)
             {
                 if (column_define.name == command.column_name)
