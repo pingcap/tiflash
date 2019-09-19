@@ -157,6 +157,9 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
 
 void PageStorage::write(const WriteBatch & wb)
 {
+    if (wb.empty())
+        return;
+
     PageEntriesEdit             edit;
     std::lock_guard<std::mutex> lock(write_mutex);
     getWriter().write(wb, edit);

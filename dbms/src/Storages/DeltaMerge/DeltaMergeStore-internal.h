@@ -12,11 +12,11 @@ namespace DM
 DeltaMergeStore::WriteActions prepareWriteActions(const Block &                             block,
                                                   const DeltaMergeStore::SegmentSortedMap & segments,
                                                   const String &                            handle_name,
-                                                  std::shared_lock<std::shared_mutex>       segments_read_lock);
+                                                  std::shared_lock<std::shared_mutex> &&    segments_read_lock);
 
 DeltaMergeStore::WriteActions prepareWriteActions(const HandleRange &                       delete_range,
                                                   const DeltaMergeStore::SegmentSortedMap & segments,
-                                                  std::shared_lock<std::shared_mutex>       segments_read_lock);
+                                                  std::shared_lock<std::shared_mutex> &&    segments_read_lock);
 
 
 } // namespace DM
