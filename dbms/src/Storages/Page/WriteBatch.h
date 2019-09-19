@@ -52,6 +52,8 @@ public:
         writes.emplace_back(w);
     }
 
+    bool empty() const { return writes.empty(); }
+
     const Writes & getWrites() const { return writes; }
 
     size_t putWriteCount() const
