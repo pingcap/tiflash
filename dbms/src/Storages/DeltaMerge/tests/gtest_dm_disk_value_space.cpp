@@ -76,9 +76,9 @@ protected:
 
 TEST_F(DiskValueSpace_test, LogStorageWriteRead)
 {
-    const size_t   value_beg      = 20;
-    const size_t   num_rows_write = 80;
-    DiskValueSpace delta(true, 0);
+    const size_t value_beg      = 20;
+    const size_t num_rows_write = 80;
+    auto         delta          = std::make_shared<DiskValueSpace>(true, 0);
     {
         // write to DiskValueSpace
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(value_beg, value_beg + num_rows_write / 2, false);
@@ -88,23 +88,27 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
         Chunks                    chunks2 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block2));
         for (auto & chunk : chunks1)
         {
-            delta.appendChunkWithCache(opc, std::move(chunk), block1);
+            delta->appendChunkWithCache(opc, std::move(chunk), block1);
         }
 
         for (auto & chunk : chunks2)
+
         {
-            delta.appendChunkWithCache(opc, std::move(chunk), block2);
+            delta->appendChunkWithCache(opc, std::move(chunk), block2);
         }
 
-        EXPECT_EQ(num_rows_write, delta.num_rows(0, 2));
-        delta.tryFlushCache(opc, true);
-        EXPECT_EQ(num_rows_write, delta.num_rows(0, 1));
+        EXPECT_EQ(num_rows_write, delta->num_rows(0, 2));
+        WriteBatch remove_wb;
+        delta = delta->tryFlushCache(opc, remove_wb, true);
+        opc.data_storage.write(remove_wb);
+        EXPECT_FALSE(!delta);
+        EXPECT_EQ(num_rows_write, delta->num_rows(0, 1));
     }
 
     {
         // read using `getInputStream`
         PageReader          page_reader(dm_context->storage_pool.log());
-        BlockInputStreamPtr in            = delta.getInputStream(table_columns, page_reader);
+        BlockInputStreamPtr in            = delta->getInputStream(table_columns, page_reader);
         size_t              num_rows_read = 0;
         while (Block block = in->read())
         {
@@ -122,7 +126,7 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
         const size_t read_offset     = 15;
         const size_t num_rows_expect = 20;
         PageReader   page_reader(dm_context->storage_pool.log());
-        Block        block = delta.read(table_columns, page_reader, read_offset, num_rows_expect);
+        Block        block = delta->read(table_columns, page_reader, read_offset, num_rows_expect);
 
         // check the order of cols is the same as read_columns
         const Names colnames = block.getNames();
@@ -152,7 +156,7 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
         // read using `read` of chunk_index
         const size_t chunk_index = 0;
         PageReader   page_reader(dm_context->storage_pool.log());
-        Block        block = delta.read(table_columns, page_reader, chunk_index);
+        Block        block = delta->read(table_columns, page_reader, chunk_index);
 
         // check the order of cols is the same as read_columns
         const Names col_names = block.getNames();
