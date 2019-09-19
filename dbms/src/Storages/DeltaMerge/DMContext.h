@@ -39,5 +39,7 @@ struct DMContext
     const size_t delta_cache_limit_bytes;
 };
 
+using DMContextPtr = std::shared_ptr<DMContext>;
+
 } // namespace DM
 } // namespace DB

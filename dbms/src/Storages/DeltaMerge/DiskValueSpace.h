@@ -98,7 +98,7 @@ public:
     static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
 
     /// Replace current chunks.
-    void setChunks(Chunks && new_chunks, WriteBatch & meta_wb, WriteBatch & data_wb);
+    void setChunks(Chunks && new_chunks, WriteBatch & meta_wb, WriteBatch & data_wb_remove);
 
     /// Append the chunk to this value space, and could cache the block in memory if it is too fragment.
     void appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block);
@@ -123,7 +123,7 @@ public:
                                   size_t               rows_end,
                                   size_t               deletes_end) const;
 
-    bool tryFlushCache(const OpContext & context, bool force = false);
+    DiskValueSpacePtr tryFlushCache(const OpContext & context, WriteBatch & remove_data_wb, bool force = false);
 
     ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
@@ -137,7 +137,7 @@ public:
     const Chunks & getChunks() const { return chunks; }
 
 private:
-    bool doFlushCache(const OpContext & context);
+    DiskValueSpacePtr doFlushCache(const OpContext & context, WriteBatch & remove_data_wb);
 
     size_t rowsFromBack(size_t chunks) const;
     size_t cacheRows() const;
