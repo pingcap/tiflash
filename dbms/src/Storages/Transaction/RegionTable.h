@@ -117,15 +117,13 @@ public:
     };
 
 private:
-    const std::string parent_path;
-
     TableMap tables;
     RegionInfoMap regions;
     std::unordered_set<RegionID> dirty_regions;
 
     FlushThresholds flush_thresholds;
 
-    Context & context;
+    Context * const context;
 
     mutable std::mutex mutex;
     Logger * log;
@@ -139,17 +137,13 @@ private:
 
     bool shouldFlush(const InternalRegion & region) const;
 
-    void flushRegion(TableID table_id, RegionID region_id, const bool try_persist = true);
+    void flushRegion(TableID table_id, RegionID region_id, const bool try_persist = true) const;
 
-    // For debug
-    friend class MockTiDB;
-    friend struct MockTiDBTable;
-
-    void mockDropRegionsInTable(TableID table_id);
     void doShrinkRegionRange(const Region & region);
+    void doUpdateRegion(const Region & region, TableID table_id);
 
 public:
-    RegionTable(Context & context_, const std::string & parent_path_);
+    RegionTable(Context & context_);
     void restore();
 
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
@@ -161,7 +155,6 @@ public:
     void updateRegion(const Region & region, const TableIDSet & relative_table_ids);
     /// A new region arrived by apply snapshot command, this function store the region into selected partitions.
     void applySnapshotRegion(const Region & region);
-    void applySnapshotRegions(const RegionMap & regions);
 
     void updateRegionForSplit(const Region & split_region, const RegionID source_region);
 
@@ -179,8 +172,8 @@ public:
     void tryFlushRegion(RegionID region_id);
     void tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist);
 
-    void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback);
-    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id);
+    void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback) const;
+    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,
