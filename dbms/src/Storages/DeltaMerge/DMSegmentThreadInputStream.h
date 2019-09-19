@@ -43,7 +43,7 @@ protected:
 
                 cur_segment_id = task->segment->segmentId();
                 cur_stream     = stream_creator(*task);
-                LOG_DEBUG(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
+                LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
             }
 
             Block res = cur_stream->read();
@@ -56,9 +56,9 @@ protected:
             }
             else
             {
+                LOG_TRACE(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
                 cur_segment_id = 0;
                 cur_stream     = {};
-                LOG_DEBUG(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
             }
         }
     }

@@ -130,7 +130,9 @@ TEST_F(Segment_test, WriteRead)
 
     {
         // flush segment
-        segment->flush(dmContext());
+        RemoveWriteBatches remove_wbs;
+        segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
     }
 
     {
@@ -223,8 +225,11 @@ TEST_F(Segment_test, Split)
 
     SegmentPtr new_segment;
     // test split segment
-    std::tie(segment, new_segment) = segment->split(dmContext());
-
+    {
+        RemoveWriteBatches remove_wbs;
+        std::tie(segment, new_segment) = segment->split(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
     // check segment range
     const auto s1_range = segment->getRange();
     EXPECT_EQ(s1_range.start, old_range.start);
@@ -273,7 +278,9 @@ TEST_F(Segment_test, Split)
 
     // merge segments
     {
-        segment = Segment::merge(dmContext(), segment, new_segment);
+        RemoveWriteBatches remove_wbs;
+        segment = Segment::merge(dmContext(), segment, new_segment, remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
         {
             // check merged segment range
             const auto & merged_range = segment->getRange();
