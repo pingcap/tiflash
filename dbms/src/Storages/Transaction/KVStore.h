@@ -61,8 +61,6 @@ public:
 
     size_t regionSize() const;
 
-    void updateRegionTableBySnapshot(RegionTable & region_table);
-
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
