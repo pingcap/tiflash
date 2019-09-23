@@ -10,12 +10,18 @@ class DataTypeMyDateTime final : public DataTypeMyTimeBase
 {
     int fraction;
 
+    bool has_explicit_time_zone;
+
+    const DateLUTImpl & time_zone;
+
 public:
-    DataTypeMyDateTime(int fraction_ = 0);
+    DataTypeMyDateTime(int fraction_ = 0, String time_zone_ = "");
 
     const char * getFamilyName() const override { return "MyDateTime"; }
 
-    String getName() const override { return "MyDateTime(" + std::to_string(fraction) + ")"; }
+    String getName() const override;
+
+    const DateLUTImpl & getTimeZone() const { return time_zone; }
 
     TypeIndex getTypeId() const override { return TypeIndex::MyDateTime; }
 

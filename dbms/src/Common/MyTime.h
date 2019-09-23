@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Field.h>
+#include <common/DateLUTImpl.h>
 
 namespace DB
 {
@@ -63,5 +64,7 @@ struct MyDate : public MyTimeBase
 };
 
 Field parseMyDateTime(const String & str);
+
+void myTimeConvert(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
 
 } // namespace DB

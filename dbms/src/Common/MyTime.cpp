@@ -465,4 +465,15 @@ String MyDateTime::toString() const
     return result;
 }
 
+void myTimeConvert(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
+{
+    std::cout << time_zone_from.getTimeZone() << " " << time_zone_to.getTimeZone() << std::endl;
+    MyDateTime from_my_time(from_time, 6);
+    time_t epoch = time_zone_from.makeDateTime(
+        from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
+    MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch),
+        time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second, 6);
+    to_time = to_my_time.toPackedUInt();
+}
+
 } // namespace DB

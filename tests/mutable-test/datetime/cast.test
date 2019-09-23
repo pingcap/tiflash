@@ -29,8 +29,32 @@
 │ 1991-09-05 11:11:11.00000 │ 1991-09-05          │
 └───────────────────────────┴─────────────────────┘
 
+# +9 because of DST
 >> select cast('1991-09-05 11:11:11.1' as MyDateTime(5)) from test
 ┌─CAST(\'1991-09-05 11:11:11.1\', \'MyDateTime(5)\')─┐
 │                          1991-09-05 11:11:11.10000 │
 └────────────────────────────────────────────────────┘
 
+>> drop table if exists test
+
+>> create table test ( a MyDateTime(5, 'UTC')) engine = Log;
+
+>> insert into test values('1991-09-05 11:11:11.123');
+
+>> select cast(a as MyDateTime(6, 'Asia/Shanghai')) from test;
+┌─CAST(a, \'MyDateTime(6, \\\'Asia/Shanghai\\\')\')─┐
+│                        1991-09-05 20:11:11.123000 │
+└───────────────────────────────────────────────────┘
+
+>> drop table if exists test
+
+>> create table test (a MyDateTime(5, 'Asia/Shanghai')) engine = Log;
+
+>> insert into test values('1991-09-05 11:11:11.321');
+
+>> select cast(a as MyDateTime(3, 'UTC')) from test;
+┌─CAST(a, \'MyDateTime(3, \\\'UTC\\\')\')─┐
+│                 1991-09-05 02:11:11.321 │
+└─────────────────────────────────────────┘
+
+>> drop table if exists test
