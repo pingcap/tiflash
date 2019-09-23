@@ -80,7 +80,7 @@ void DiskValueSpace::restore(const OpContext & context)
 
     // Try flush now, in case of last flush failure recover.
     WriteBatch remove_data_wb;
-    auto new_instance = tryFlushCache(context, remove_data_wb);
+    auto       new_instance = tryFlushCache(context, remove_data_wb);
     if (new_instance)
     {
         chunks.swap(new_instance->chunks);

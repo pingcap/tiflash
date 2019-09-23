@@ -115,6 +115,9 @@ private:
 using Chunks    = std::vector<Chunk>;
 using GenPageId = std::function<PageId()>;
 
+Chunk  createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, WriteBatch & wb);
+Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id, WriteBatch & wb);
+
 void   serializeChunks(WriteBuffer &           buf,
                        Chunks::const_iterator  begin,
                        Chunks ::const_iterator end,

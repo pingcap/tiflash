@@ -343,13 +343,23 @@ SegmentPair Segment::split(DMContext & dm_context, RemoveWriteBatches & remove_w
     LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] start to split.");
 
     StorageSnapshot storage_snapshot(dm_context.storage_pool);
+    SegmentPair     res;
+    if (stable->num_rows() > 0)
+    {
+        auto split_point = getSplitPointFast(dm_context, storage_snapshot.data_reader);
+        res              = doSplit2(dm_context, split_point, remove_wbs);
+    }
+    else
+    {
+        auto read_info
+            = getReadInfo<false>(dm_context, {delta, delta->num_rows(), delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
+        Handle split_point = getSplitPointSlow(dm_context, storage_snapshot.data_reader, read_info);
+        res                = doSplit(dm_context, storage_snapshot.data_reader, read_info, split_point, remove_wbs);
+    }
 
-    auto read_info
-        = getReadInfo<false>(dm_context, {delta, delta->num_rows(), delta->num_deletes()}, storage_snapshot, dm_context.store_columns);
-    Handle split_point = getSplitPoint(dm_context, storage_snapshot.data_reader, read_info);
-    auto   res         = doSplit(dm_context, storage_snapshot.data_reader, read_info, split_point, remove_wbs);
-
-    LOG_DEBUG(log, "Segment [" + DB::toString(segment_id) + "] done split.");
+    LOG_DEBUG(log,
+              "Segment [" + DB::toString(segment_id) + "] split into [" + DB::toString(res.first->segmentId()) + "] and ["
+                  + DB::toString(res.second->segmentId()) + "].");
 
     return res;
 }
@@ -570,6 +580,123 @@ BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_pag
 }
 
 
+Handle Segment::getSplitPointSlow(DMContext & dm_context, const PageReader & data_page_reader, const ReadInfo & read_info) const
+{
+    EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
+
+    auto & handle = dm_context.handle_column;
+    auto   stream = getPlacedStream(data_page_reader,
+                                  {range},
+                                  {dm_context.handle_column},
+                                  EMPTY_FILTER,
+                                  read_info.delta_value_space,
+                                  read_info.index_begin,
+                                  read_info.index_end,
+                                  DEFAULT_BLOCK_SIZE);
+
+    size_t split_row_index = estimatedRows() / 2;
+    Handle split_handle    = 0;
+    size_t count           = 0;
+
+    stream->readPrefix();
+    while (true)
+    {
+        Block block = stream->read();
+        if (!block)
+            break;
+        count += block.rows();
+        if (count > split_row_index)
+        {
+            size_t offset_in_block = block.rows() - (count - split_row_index);
+            split_handle           = block.getByName(handle.name).column->getInt(offset_in_block);
+            break;
+        }
+    }
+    stream->readSuffix();
+
+    recorder.submit();
+
+    return split_handle;
+}
+
+Handle Segment::getSplitPointFast(DMContext & dm_context, const PageReader & data_page_reader) const
+{
+    EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
+
+    auto & chunks = stable->getChunks();
+    if (unlikely(chunks.empty()))
+        throw Exception("getSplitPointFast can only works on stable value space");
+    size_t split_row_index = stable->num_rows() / 2;
+    auto   block           = stable->read({dm_context.handle_column}, data_page_reader, split_row_index, 1);
+    return block.getByPosition(0).column->getInt(0);
+}
+
+SegmentPair Segment::doSplit2(DMContext & dm_context, Handle split_point, RemoveWriteBatches & remove_wbs) const
+{
+    EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
+
+    auto & storage_pool = dm_context.storage_pool;
+
+    HandleRange my_range    = {range.start, split_point};
+    HandleRange other_range = {split_point, range.end};
+
+    auto other_segment_id = storage_pool.newMetaPageId();
+    auto other_delta_id   = storage_pool.newMetaPageId();
+    auto other_stable_id  = storage_pool.newMetaPageId();
+
+    auto new_me = std::make_shared<Segment>(this->epoch + 1, //
+                                            my_range,
+                                            this->segment_id,
+                                            other_segment_id,
+                                            this->delta->pageId(),
+                                            this->stable->pageId());
+
+    auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
+                                           other_range,
+                                           other_segment_id,
+                                           this->next_segment_id,
+                                           other_delta_id,
+                                           other_stable_id);
+
+    WriteBatch meta_wb;
+    WriteBatch log_wb;
+    WriteBatch data_wb;
+
+    Chunks my_delta_chunks = this->delta->getChunks();
+    Chunks my_stable_chunks;
+
+    //    Chunks other_delta_chunks = createRefChunks(my_delta_chunks, std::bind(&StoragePool::newLogPageId, &storage_pool), log_wb);
+    Chunks other_delta_chunks = my_delta_chunks;
+    Chunks other_stable_chunks;
+
+    GenPageId data_gen_page_id = std::bind(&StoragePool::newDataPageId, &storage_pool);
+    for (auto & chunk : this->stable->getChunks())
+    {
+        auto [handle_first, handle_last] = chunk.getHandleFirstLast();
+        if (my_range.intersect(handle_first, handle_last))
+            my_stable_chunks.push_back(chunk);
+        if (other_range.intersect(handle_first, handle_last))
+            other_stable_chunks.push_back(chunk);
+
+        //            other_stable_chunks.push_back(createRefChunk(chunk, data_gen_page_id, data_wb));
+    }
+
+    new_me->serialize(meta_wb);
+    new_me->delta->setChunks(std::move(my_delta_chunks), meta_wb, remove_wbs.log);
+    new_me->stable->setChunks(std::move(my_stable_chunks), meta_wb, remove_wbs.data);
+
+    other->serialize(meta_wb);
+    other->delta->setChunks(std::move(other_delta_chunks), meta_wb, remove_wbs.log);
+    other->stable->setChunks(std::move(other_stable_chunks), meta_wb, remove_wbs.data);
+
+    // Commit.
+    storage_pool.log().write(log_wb);
+    storage_pool.data().write(data_wb);
+    storage_pool.meta().write(meta_wb);
+
+    return {new_me, other};
+}
+
 SegmentPair Segment::doSplit(DMContext &          dm_context,
                              const PageReader &   data_page_reader,
                              const ReadInfo &     read_info,
@@ -655,6 +782,46 @@ SegmentPair Segment::doSplit(DMContext &          dm_context,
     return {new_me, other};
 }
 
+SegmentPtr Segment::doMerge2(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, RemoveWriteBatches & remove_wbs)
+{
+    if (unlikely(left->range.end != right->range.start || left->next_segment_id != right->segment_id))
+        throw Exception("The ranges of merge segments are not consecutive: first end: " + DB::toString(left->range.end)
+                        + ", second start: " + DB::toString(right->range.start));
+
+    EventRecorder recorder(ProfileEvents::DMSegmentMerge, ProfileEvents::DMSegmentMergeNS);
+
+    auto &      storage_pool = dm_context.storage_pool;
+    HandleRange merge_range  = {left->range.start, right->range.end};
+
+    Chunks merged_delta_chunks = left->delta->getChunks();
+    merged_delta_chunks.insert(merged_delta_chunks.end(), right->delta->getChunks().begin(), right->delta->getChunks().end());
+    Chunks merged_stable_chunks = left->stable->getChunks();
+    merged_stable_chunks.insert(merged_stable_chunks.end(), right->stable->getChunks().begin(), right->stable->getChunks().end());
+
+    auto merged = std::make_shared<Segment>(left->epoch + 1, //
+                                            merge_range,
+                                            left->segment_id,
+                                            right->next_segment_id,
+                                            left->delta->pageId(),
+                                            left->stable->pageId());
+
+    WriteBatch meta_wb;
+
+    merged->serialize(meta_wb);
+    merged->delta->setChunks(std::move(merged_delta_chunks), meta_wb, remove_wbs.log);
+    merged->stable->setChunks(std::move(merged_stable_chunks), meta_wb, remove_wbs.data);
+
+    // Remove right's meta data.
+    remove_wbs.meta.delPage(right->segment_id);
+    remove_wbs.meta.delPage(right->delta->pageId());
+    remove_wbs.meta.delPage(right->stable->pageId());
+
+    // Commit meta updates.
+    storage_pool.meta().write(meta_wb);
+
+    return merged;
+}
+
 SegmentPtr Segment::doMerge(DMContext &          dm_context,
                             const PageReader &   data_page_reader,
                             const SegmentPtr &   left,
@@ -733,10 +900,10 @@ SegmentPtr Segment::doMerge(DMContext &          dm_context,
     right_copy.delta->setChunks({}, meta_wb, remove_wbs.log);
     right_copy.stable->setChunks({}, meta_wb, remove_wbs.data);
 
-    // Remove other's meta data.
-    remove_wbs.meta.delPage(left->segment_id);
-    remove_wbs.meta.delPage(left->delta->pageId());
-    remove_wbs.meta.delPage(left->stable->pageId());
+    // Remove right's meta data.
+    remove_wbs.meta.delPage(right->segment_id);
+    remove_wbs.meta.delPage(right->delta->pageId());
+    remove_wbs.meta.delPage(right->stable->pageId());
 
     // Commit meta updates.
     storage_pool.meta().write(meta_wb);
@@ -886,44 +1053,6 @@ void Segment::placeDelete(const DMContext &          dm_context,
         DM::placeDelete(merged_stream, block, *delta_tree, getPkSort(handle), placed_delta_deletes);
     }
     ++placed_delta_deletes;
-}
-
-Handle Segment::getSplitPoint(DMContext & dm_context, const PageReader & data_page_reader, const ReadInfo & read_info) const
-{
-    EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
-
-    auto & handle = dm_context.handle_column;
-    auto   stream = getPlacedStream(data_page_reader,
-                                  {range},
-                                  {dm_context.handle_column},
-                                  EMPTY_FILTER,
-                                  read_info.delta_value_space,
-                                  read_info.index_begin,
-                                  read_info.index_end,
-                                  DEFAULT_BLOCK_SIZE);
-
-    stream->readPrefix();
-    size_t split_row_index = estimatedRows() / 2;
-    Handle split_handle    = 0;
-    size_t count           = 0;
-    while (true)
-    {
-        Block block = stream->read();
-        if (!block)
-            break;
-        count += block.rows();
-        if (count > split_row_index)
-        {
-            size_t offset_in_block = block.rows() - (count - split_row_index);
-            split_handle           = block.getByName(handle.name).column->getInt(offset_in_block);
-            break;
-        }
-    }
-    stream->readSuffix();
-
-    recorder.submit();
-
-    return split_handle;
 }
 
 MinMaxIndexPtr Segment::getMinMax(const ColumnDefine & column_define) const

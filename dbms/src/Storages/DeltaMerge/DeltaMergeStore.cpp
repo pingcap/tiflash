@@ -502,8 +502,8 @@ void DeltaMergeStore::split(DMContext & dm_context, const SegmentPtr & segment)
     }
 
 #ifndef NDEBUG
-    new_seg_left->check(dm_context, "After split(left). " + new_seg_left->simpleInfo());
-    new_seg_right->check(dm_context, "After split(right). " + new_seg_right->simpleInfo());
+//    new_seg_left->check(dm_context, "After split(left). " + new_seg_left->simpleInfo());
+//    new_seg_right->check(dm_context, "After split(right). " + new_seg_right->simpleInfo());
 #endif
 }
 
