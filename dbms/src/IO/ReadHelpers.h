@@ -567,6 +567,7 @@ inline void readMyDateText(UInt64 & date, ReadBuffer & buf)
             buf.position() += 1;
 
         date = MyDate(year, month, day).toPackedUInt();
+        return;
     }
 
     throw Exception("wrong date format.", ErrorCodes::CANNOT_PARSE_DATE);
@@ -674,7 +675,7 @@ inline void readMyDateTimeText(UInt64 & packed, int fsp, ReadBuffer & buf)
                 {
                     if (digit < fsp)
                     {
-                        micro_second = micro_second * 10 + x;
+                        micro_second = micro_second * 10 + (x - '0');
                         digit ++;
                     }
                 }
@@ -684,8 +685,11 @@ inline void readMyDateTimeText(UInt64 & packed, int fsp, ReadBuffer & buf)
                 }
                 buf.position() ++;
             }
+            for(;digit<6;digit++)
+                micro_second *= 10;
 
             packed = MyDateTime(year, month, day, hour, minute, second, micro_second, fsp).toPackedUInt();
+            return;
         }
     }
 
