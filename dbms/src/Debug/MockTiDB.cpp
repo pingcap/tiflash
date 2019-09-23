@@ -51,7 +51,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
             {
                 for (auto & e : region_table.getRegionsByTable(partition.id))
                     kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
-                region_table.mockDropRegionsInTable(partition.id);
+                region_table.removeTable(partition.id);
             }
         }
     }
@@ -63,7 +63,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
     {
         for (auto & e : region_table.getRegionsByTable(table->id()))
             kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
-        region_table.mockDropRegionsInTable(table->id());
+        region_table.removeTable(table->id());
     }
 
     return table;
