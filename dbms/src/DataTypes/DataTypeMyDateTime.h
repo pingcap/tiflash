@@ -15,7 +15,7 @@ class DataTypeMyDateTime final : public DataTypeMyTimeBase
     const DateLUTImpl & time_zone;
 
 public:
-    DataTypeMyDateTime(int fraction_ = 0, String time_zone_ = "");
+    DataTypeMyDateTime(int fraction_ = 0, const String & time_zone_ = "");
 
     const char * getFamilyName() const override { return "MyDateTime"; }
 

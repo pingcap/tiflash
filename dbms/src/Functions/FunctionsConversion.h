@@ -129,7 +129,7 @@ struct ConvertImpl<DataTypeMyDateTime, DataTypeMyDateTime, Name>
             for (size_t i = 0; i < size; ++i)
             {
                 UInt64 result_time = 0;
-                myTimeConvert(vec_from[i], result_time, time_zone_orig, time_zone_to);
+                convertTimeZone(vec_from[i], result_time, time_zone_orig, time_zone_to);
                 vec_to[i] = result_time;
             }
 

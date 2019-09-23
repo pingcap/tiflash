@@ -16,7 +16,7 @@
 namespace DB
 {
 
-DataTypeMyDateTime::DataTypeMyDateTime(int fraction_, String time_zone_)
+DataTypeMyDateTime::DataTypeMyDateTime(int fraction_, const String & time_zone_)
     : fraction(fraction_), has_explicit_time_zone(!time_zone_.empty()), time_zone(DateLUT::instance(time_zone_))
 {
     if (fraction < 0 || fraction > 6)
@@ -131,7 +131,7 @@ static DataTypePtr create(const ASTPtr & arguments)
 
     if (arguments->children.size() != 1 && arguments->children.size() != 2)
         throw Exception(
-            "MyDateTime data type can optionally have one or two argument - fractional", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            "MyDateTime data type can optionally have one or two argument - fractional and timezone", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     const ASTLiteral * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
     if (!arg1 || arg1->value.getType() != Field::Types::UInt64)
