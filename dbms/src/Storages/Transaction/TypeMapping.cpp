@@ -117,7 +117,7 @@ std::enable_if_t<IsSignedType<T>, DataTypePtr> getDataTypeByColumnInfoBase(const
 template <typename T, bool should_widen>
 std::enable_if_t<IsDecimalType<T>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
 {
-    DataTypePtr t = createDecimal(column_info.flen, column_info.decimal);
+    DataTypePtr t = createDecimal(column_info.flen == 0 && column_info.decimal == 0 ? 1 : column_info.flen, column_info.decimal);
 
     if (should_widen)
     {
