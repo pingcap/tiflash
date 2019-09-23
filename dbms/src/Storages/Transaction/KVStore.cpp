@@ -411,14 +411,6 @@ void KVStore::removeRegion(const RegionID region_id, RegionTable * region_table,
     LOG_INFO(log, "Remove [region " << region_id << "] done");
 }
 
-void KVStore::updateRegionTableBySnapshot(RegionTable & region_table)
-{
-    auto manage_lock = genRegionManageLock();
-    LOG_INFO(log, "start to update RegionTable by snapshot");
-    region_table.applySnapshotRegions(regions());
-    LOG_INFO(log, "update RegionTable done");
-}
-
 KVStoreTaskLock KVStore::genTaskLock() const { return KVStoreTaskLock(task_mutex); }
 RegionMap & KVStore::regionsMut() { return region_manager.regions; }
 const RegionMap & KVStore::regions() const { return region_manager.regions; }

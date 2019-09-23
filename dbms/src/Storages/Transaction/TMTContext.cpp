@@ -11,10 +11,9 @@ namespace DB
 {
 
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
-    const std::string & region_mapping_path)
+    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path)
     : kvstore(std::make_shared<KVStore>(kvstore_path)),
-      region_table(context, region_mapping_path),
+      region_table(context),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
       region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key, learner_value)),
@@ -29,7 +28,6 @@ void TMTContext::restore()
 {
     kvstore->restore([&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); });
     region_table.restore();
-    kvstore->updateRegionTableBySnapshot(region_table);
     initialized = true;
 }
 
