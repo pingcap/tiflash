@@ -5,6 +5,7 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -108,32 +109,14 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     return outputDAGResponse(context, schema, dag_response);
 }
 
+const String VOID_COL_NAME = "_void";
+
 struct ExecutorCtx
 {
     tipb::Executor * input;
     DAGSchema output;
     std::unordered_map<String, tipb::Expr *> col_ref_map;
 };
-
-tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
-{
-    tipb::FieldType ret;
-    ret.set_tp(ci.tp);
-    ret.set_flag(ci.flag);
-    ret.set_flen(ci.flen);
-    ret.set_decimal(ci.decimal);
-    return ret;
-}
-
-ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
-{
-    ColumnInfo ret;
-    ret.tp = static_cast<TiDB::TP>(field_type.tp());
-    ret.flag = field_type.flag();
-    ret.flen = field_type.flen();
-    ret.decimal = field_type.decimal();
-    return ret;
-}
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
     std::unordered_map<String, tipb::Expr *> & col_ref_map)
@@ -376,7 +359,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                 ci->set_flag(info.second.flag);
                 ci->set_columnlen(info.second.flen);
                 ci->set_decimal(info.second.decimal);
-                if (info.second.elems.size() != 0)
+                if (!info.second.elems.empty())
                 {
                     for (auto & pair : info.second.elems)
                     {
@@ -500,14 +483,38 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         column_pruner(executor_ctx_map[last_executor]);
 
         const auto & last_output = executor_ctx_map[last_executor].output;
-        for (const auto & field : final_output)
+
+        // For testing VOID column, ignore any other select expressions, unless table contains it.
+        if (std::find(final_output.begin(), final_output.end(), VOID_COL_NAME) != final_output.end()
+            && std::find_if(
+                   last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == VOID_COL_NAME; })
+                == last_output.end())
         {
-            auto iter
-                = std::find_if(last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
-            if (iter == last_output.end())
-                throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
-            dag_request.add_output_offsets(iter - last_output.begin());
-            schema.push_back(*iter);
+            dag_request.add_output_offsets(0);
+
+            // Set column ID to -1 to trigger `void` column in DAG processing.
+            tipb::ColumnInfo * ci = ts->add_columns();
+            ci->set_column_id(-1);
+
+            // Set column name to VOID and tp to Nullable(UInt64),
+            // as chunk decoding doesn't do strict field type check so Nullable(UInt64) should be enough.
+            ColumnInfo ti_ci;
+            ti_ci.name = VOID_COL_NAME;
+            ti_ci.tp = TiDB::TypeLongLong;
+            ti_ci.setNotNullFlag();
+            schema.emplace_back(DAGColumnInfo{VOID_COL_NAME, std::move(ti_ci)});
+        }
+        else
+        {
+            for (const auto & field : final_output)
+            {
+                auto iter = std::find_if(
+                    last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
+                if (iter == last_output.end())
+                    throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
+                dag_request.add_output_offsets(iter - last_output.begin());
+                schema.push_back(*iter);
+            }
         }
     }
 

@@ -277,6 +277,8 @@ struct TableInfo
     ColumnID getColumnID(const String & name) const;
     String getColumnName(const ColumnID id) const;
 
+    std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
+
     TableInfo producePartitionTableInfo(TableID table_or_partition_id) const;
 
     bool isLogicalPartitionTable() const { return is_partition_table && belonging_table_id == -1 && partition.enable; }

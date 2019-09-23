@@ -9,6 +9,7 @@
 
 #include <Core/Field.h>
 #include <Core/NamesAndTypes.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -29,5 +30,8 @@ bool isInOrGlobalInOperator(const String & name);
 bool exprHasValidFieldType(const tipb::Expr & expr);
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
 extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
+
+tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci);
+TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 
 } // namespace DB
