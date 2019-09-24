@@ -649,7 +649,9 @@ SegmentPair Segment::doSplit2(DMContext & dm_context, Handle split_point, Remove
                                             this->segment_id,
                                             other_segment_id,
                                             this->delta->pageId(),
-                                            this->stable->pageId());
+                                            this->delta->getChunks(),
+                                            this->stable->pageId(),
+                                            this->stable->getChunks());
 
     auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
                                            other_range,
@@ -662,11 +664,13 @@ SegmentPair Segment::doSplit2(DMContext & dm_context, Handle split_point, Remove
     WriteBatch log_wb;
     WriteBatch data_wb;
 
-    Chunks my_delta_chunks = this->delta->getChunks();
+
+    GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
+
+    Chunks my_delta_chunks = createRefChunks(this->delta->getChunks(), log_gen_page_id, log_wb);
     Chunks my_stable_chunks;
 
-    //    Chunks other_delta_chunks = createRefChunks(my_delta_chunks, std::bind(&StoragePool::newLogPageId, &storage_pool), log_wb);
-    Chunks other_delta_chunks = my_delta_chunks;
+    Chunks other_delta_chunks = createRefChunks(this->delta->getChunks(), log_gen_page_id, log_wb);
     Chunks other_stable_chunks;
 
     GenPageId data_gen_page_id = std::bind(&StoragePool::newDataPageId, &storage_pool);
@@ -674,11 +678,9 @@ SegmentPair Segment::doSplit2(DMContext & dm_context, Handle split_point, Remove
     {
         auto [handle_first, handle_last] = chunk.getHandleFirstLast();
         if (my_range.intersect(handle_first, handle_last))
-            my_stable_chunks.push_back(chunk);
+            my_stable_chunks.push_back(createRefChunk(chunk, data_gen_page_id, data_wb));
         if (other_range.intersect(handle_first, handle_last))
-            other_stable_chunks.push_back(chunk);
-
-        //            other_stable_chunks.push_back(createRefChunk(chunk, data_gen_page_id, data_wb));
+            other_stable_chunks.push_back(createRefChunk(chunk, data_gen_page_id, data_wb));
     }
 
     new_me->serialize(meta_wb);
