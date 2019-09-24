@@ -114,6 +114,7 @@ std::set<PageId> PageEntriesView::validPageIds() const
 
 std::set<PageId> PageEntriesView::validNormalPageIds() const
 {
+    // TODO add test cases for this function
     std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
     for (auto node = tail; node != nullptr; node = node->prev)
     {
@@ -125,17 +126,16 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
     {
         auto node = link_nodes.top();
         link_nodes.pop();
-        if (!node->isBase())
-        {
-            for (auto deleted_id : node->ref_deletions)
-            {
-                valid_normal_pages.erase(deleted_id);
-            }
-        }
         for (auto & [page_id, entry] : node->normal_pages)
         {
-            if (!entry.isTombstone())
+            if (entry.isTombstone())
+            {
+                valid_normal_pages.erase(page_id);
+            }
+            else
+            {
                 valid_normal_pages.insert(page_id);
+            }
         }
     }
     return valid_normal_pages;
