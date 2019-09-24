@@ -68,7 +68,7 @@ struct RegionCFDataBase
 
     TableIDSet getAllTables() const;
 
-    void deleteRange(const RegionRange & range);
+    size_t deleteRange(const RegionRange & range);
 
     ExtraCFData<Trait> & getExtra();
 
