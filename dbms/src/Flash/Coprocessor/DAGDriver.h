@@ -1,6 +1,7 @@
 #pragma once
 
 #include <DataStreams/BlockIO.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
 #include <tipb/select.pb.h>
 
@@ -15,7 +16,8 @@ class DAGDriver
 {
 public:
     DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
-        UInt64 region_conf_version_, tipb::SelectResponse & dag_response_, bool internal_ = false);
+        UInt64 region_conf_version_, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
+        tipb::SelectResponse & dag_response_, bool internal_ = false);
 
     void execute();
 
@@ -27,6 +29,7 @@ private:
     RegionID region_id;
     UInt64 region_version;
     UInt64 region_conf_version;
+    std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
 
     tipb::SelectResponse & dag_response;
 

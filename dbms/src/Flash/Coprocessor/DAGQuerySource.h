@@ -8,6 +8,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/IQuerySource.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -28,7 +29,7 @@ public:
     static const String LIMIT_NAME;
 
     DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_, UInt64 region_conf_version_,
-        const tipb::DAGRequest & dag_request_);
+        const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_, const tipb::DAGRequest & dag_request_);
 
     std::tuple<std::string, ASTPtr> parse(size_t max_query_size) override;
     String str(size_t max_query_size) override;
@@ -39,6 +40,7 @@ public:
     RegionID getRegionID() const { return region_id; }
     UInt64 getRegionVersion() const { return region_version; }
     UInt64 getRegionConfVersion() const { return region_conf_version; }
+    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & getKeyRanges() const { return key_ranges; }
 
     bool hasSelection() const { return sel_index != -1; };
     bool hasAggregation() const { return agg_index != -1; };
@@ -98,6 +100,7 @@ protected:
     const RegionID region_id;
     const UInt64 region_version;
     const UInt64 region_conf_version;
+    const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges;
 
     const tipb::DAGRequest & dag_request;
 
