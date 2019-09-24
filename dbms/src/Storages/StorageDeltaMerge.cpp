@@ -394,14 +394,12 @@ BlockInputStreams StorageDeltaMerge::read( //
             throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
         const auto & mvcc_query_info = *query_info.mvcc_query_info;
-#if 0
         // Read with specify tso, check if tso is smaller than TiDB GcSafePoint
         const auto safe_point = tmt.getPDClient()->getGCSafePoint();
         if (mvcc_query_info.read_tso < safe_point)
             throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
                     + " is smaller than tidb gc safe point: " + toString(safe_point),
                 ErrorCodes::LOGICAL_ERROR);
-#endif
 
         // With `no_kvstore` is true, we do not do learner read
         if (likely(!select_query.no_kvstore))
