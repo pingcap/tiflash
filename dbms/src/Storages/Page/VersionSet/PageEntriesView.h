@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 namespace DB
 {
 
@@ -13,9 +15,9 @@ private:
 public:
     explicit PageEntriesView(std::shared_ptr<PageEntriesForDelta> tail_) : tail(std::move(tail_)) {}
 
-    const PageEntry * find(PageId page_id) const;
+    std::optional<PageEntry> find(PageId page_id) const;
 
-    const PageEntry & at(PageId page_id) const;
+    const PageEntry at(PageId page_id) const;
 
     std::pair<bool, PageId> isRefId(PageId page_id) const;
 
@@ -37,7 +39,7 @@ public:
     }
 
 private:
-    const PageEntry * findNormalPageEntry(PageId page_id) const;
+    std::optional<PageEntry> findNormalPageEntry(PageId page_id) const;
 
     PageId resolveRefId(PageId page_id) const;
 

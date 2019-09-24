@@ -112,8 +112,8 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 
     try
     { // this may throw an exception if ref to non-exist page
-        auto entry = snapshot->version()->find(page_id);
-        if (entry != nullptr)
+        const auto entry = snapshot->version()->find(page_id);
+        if (entry)
             return *entry; // A copy of PageEntry
         else
             return {}; // return invalid PageEntry
@@ -183,8 +183,8 @@ Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
         snapshot = this->getSnapshot();
     }
 
-    auto page_entry = snapshot->version()->find(page_id);
-    if (page_entry == nullptr)
+    const auto page_entry = snapshot->version()->find(page_id);
+    if (!page_entry)
         throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
     const auto       file_id_level = page_entry->fileIdLevel();
     PageIdAndEntries to_read       = {{page_id, *page_entry}};
@@ -202,8 +202,8 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto page_entry = snapshot->version()->find(page_id);
-        if (page_entry == nullptr)
+        const auto page_entry = snapshot->version()->find(page_id);
+        if (!page_entry)
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         auto file_id_level                       = page_entry->fileIdLevel();
         auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
@@ -235,8 +235,8 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
     std::map<PageFileIdAndLevel, std::pair<PageIdAndEntries, ReaderPtr>> file_read_infos;
     for (auto page_id : page_ids)
     {
-        auto page_entry = snapshot->version()->find(page_id);
-        if (page_entry == nullptr)
+        const auto page_entry = snapshot->version()->find(page_id);
+        if (!page_entry)
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
         auto file_id_level                       = page_entry->fileIdLevel();
         auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
@@ -268,8 +268,8 @@ void PageStorage::traverse(const std::function<void(const Page & page)> & accept
         auto valid_pages_ids = snapshot->version()->validPageIds();
         for (auto page_id : valid_pages_ids)
         {
-            auto page_entry = snapshot->version()->find(page_id);
-            if (unlikely(page_entry == nullptr))
+            const auto page_entry = snapshot->version()->find(page_id);
+            if (unlikely(!page_entry))
                 throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage", ErrorCodes::LOGICAL_ERROR);
             file_and_pages[page_entry->fileIdLevel()].emplace_back(page_id);
         }
@@ -309,8 +309,8 @@ void PageStorage::traversePageEntries( //
     auto valid_pages_ids = snapshot->version()->validPageIds();
     for (auto page_id : valid_pages_ids)
     {
-        auto page_entry = snapshot->version()->find(page_id);
-        if (unlikely(page_entry == nullptr))
+        const auto page_entry = snapshot->version()->find(page_id);
+        if (unlikely(!page_entry))
             throw Exception("Page[" + DB::toString(page_id) + "] not found when traversing PageStorage's entries",
                             ErrorCodes::LOGICAL_ERROR);
         acceptor(page_id, *page_entry);
@@ -359,8 +359,8 @@ bool PageStorage::gc()
             auto valid_normal_page_ids = snapshot->version()->validNormalPageIds();
             for (auto page_id : valid_normal_page_ids)
             {
-                auto page_entry = snapshot->version()->find(page_id);
-                if (unlikely(page_entry == nullptr))
+                const auto page_entry = snapshot->version()->find(page_id);
+                if (unlikely(!page_entry))
                 {
                     throw Exception("PageStorage GC: Normal Page " + DB::toString(page_id) + " not found.", ErrorCodes::LOGICAL_ERROR);
                 }
@@ -518,8 +518,8 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                 {
                     try
                     {
-                        auto page_entry = current->find(page_id);
-                        if (page_entry == nullptr)
+                        const auto page_entry = current->find(page_id);
+                        if (!page_entry)
                             continue;
                         // This page is covered by newer file.
                         if (page_entry->fileIdLevel() != file_id_level)

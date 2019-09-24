@@ -5,7 +5,7 @@ namespace DB
 
 ////  PageEntryMapView
 
-const PageEntry * PageEntriesView::find(PageId page_id) const
+std::optional<PageEntry> PageEntriesView::find(PageId page_id) const
 {
     // First we find ref-pairs to get the normal page id
     bool   found          = false;
@@ -14,7 +14,7 @@ const PageEntry * PageEntriesView::find(PageId page_id) const
     {
         if (node->isRefDeleted(page_id))
         {
-            return nullptr;
+            return std::nullopt;
         }
 
         auto iter = node->page_ref.find(page_id);
@@ -28,12 +28,12 @@ const PageEntry * PageEntriesView::find(PageId page_id) const
     if (!found)
     {
         // The page have been deleted.
-        return nullptr;
+        return std::nullopt;
     }
 
     auto entry = findNormalPageEntry(normal_page_id);
     // RefPage exists, but normal Page do NOT exist. Should NOT call here
-    if (entry == nullptr)
+    if (!entry)
     {
         throw DB::Exception("Accessing RefPage" + DB::toString(page_id) + " to non-exist Page" + DB::toString(normal_page_id),
                             ErrorCodes::LOGICAL_ERROR);
@@ -41,27 +41,27 @@ const PageEntry * PageEntriesView::find(PageId page_id) const
     return entry;
 }
 
-const PageEntry & PageEntriesView::at(const PageId page_id) const
+const PageEntry PageEntriesView::at(const PageId page_id) const
 {
     auto entry = this->find(page_id);
-    if (entry == nullptr)
+    if (!entry)
     {
         throw DB::Exception("Accessing non-exist Page[" + DB::toString(page_id) + "]", ErrorCodes::LOGICAL_ERROR);
     }
     return *entry;
 }
 
-const PageEntry * PageEntriesView::findNormalPageEntry(PageId page_id) const
+std::optional<PageEntry> PageEntriesView::findNormalPageEntry(PageId page_id) const
 {
     for (auto node = tail; node != nullptr; node = node->prev)
     {
         auto iter = node->normal_pages.find(page_id);
         if (iter != node->normal_pages.end())
         {
-            return &iter->second;
+            return iter->second;
         }
     }
-    return nullptr;
+    return std::nullopt;
 }
 
 std::pair<bool, PageId> PageEntriesView::isRefId(PageId page_id) const
