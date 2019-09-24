@@ -203,13 +203,13 @@ void RegionData::deleteRange(const ColumnFamilyType cf, const RegionRange & rang
     switch (cf)
     {
         case Write:
-            write_cf.deleteRange(range);
+            cf_data_size -= write_cf.deleteRange(range);
             break;
         case Default:
-            default_cf.deleteRange(range);
+            cf_data_size -= default_cf.deleteRange(range);
             break;
         case Lock:
-            lock_cf.deleteRange(range);
+            cf_data_size -= lock_cf.deleteRange(range);
             break;
         default:
             throw Exception("[RegionData::deleteRange] with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
