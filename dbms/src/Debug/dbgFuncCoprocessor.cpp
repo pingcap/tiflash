@@ -54,7 +54,8 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
             auto mmt = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -96,7 +97,8 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
@@ -528,7 +530,7 @@ tipb::SelectResponse executeDAGRequest(
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     context.setSetting("dag_planner", "optree");
     tipb::SelectResponse dag_response;
-    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, dag_response, true);
+    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, {}, dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;

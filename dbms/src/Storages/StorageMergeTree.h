@@ -10,6 +10,7 @@
 #include <Storages/MergeTree/MergeTreeDataMerger.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
+#include <Core/TMTPKType.h>
 
 namespace TiDB
 {
@@ -92,6 +93,8 @@ public:
     const MergeTreeData & getData() const { return data; }
 
     String getDataPath() const override { return full_path; }
+
+    bool pkIsUInt64() const { return getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64; }
 
 private:
     String path;
