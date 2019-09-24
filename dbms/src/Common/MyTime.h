@@ -26,7 +26,7 @@ struct MyTimeBase
     UInt8 second;
     UInt32 micro_second; // ms second <= 999999
 
-    UInt8 fsp;
+    UInt8 fsp; // TODO:: It's seemed useless and can be removed
 
     MyTimeBase() = default;
     MyTimeBase(UInt64 packed, UInt8 fsp_ = 0);
