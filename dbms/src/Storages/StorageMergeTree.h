@@ -3,6 +3,7 @@
 #include <ext/shared_ptr_helper.h>
 
 #include <Common/SimpleIncrement.h>
+#include <Core/TMTPKType.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
@@ -10,7 +11,6 @@
 #include <Storages/MergeTree/MergeTreeDataMerger.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
-#include <Core/TMTPKType.h>
 
 namespace TiDB
 {
