@@ -73,8 +73,9 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     page_storage.write(wb);
 }
 
-void RegionPersister::restore(RegionMap & regions, RegionClientCreateFunc * func)
+RegionMap RegionPersister::restore(RegionClientCreateFunc * func)
 {
+    RegionMap regions;
     auto acceptor = [&](const Page & page) {
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         auto region = Region::deserialize(buf, func);
@@ -85,6 +86,7 @@ void RegionPersister::restore(RegionMap & regions, RegionClientCreateFunc * func
     page_storage.traverse(acceptor);
 
     LOG_INFO(log, "restore " << regions.size() << " regions");
+    return regions;
 }
 
 bool RegionPersister::gc() { return page_storage.gc(); }

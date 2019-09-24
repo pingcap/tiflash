@@ -6,6 +6,8 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -15,6 +17,7 @@
 
 #include <Common/FieldVisitors.h>
 #include <Common/NaNUtils.h>
+#include <Common/MyTime.h>
 #include <Common/typeid_cast.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeUUID.h>
@@ -224,12 +227,15 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
             return convertDecimalType(src, *ptype);
 
         const bool is_date = typeid_cast<const DataTypeDate *>(&type);
+        const bool is_my_date = typeid_cast<const DataTypeMyDate *>(&type);
         bool is_datetime = false;
+        bool is_my_datetime = false;
         bool is_enum = false;
         bool is_uuid = false;
 
-        if (!is_date)
+        if (!is_date && !is_my_date)
             if (!(is_datetime = typeid_cast<const DataTypeDateTime *>(&type)))
+            if (!(is_my_datetime = typeid_cast<const DataTypeMyDateTime *>(&type)))
                 if (!(is_uuid = typeid_cast<const DataTypeUUID *>(&type)))
                     if (!(is_enum = dynamic_cast<const IDataTypeEnum *>(&type)))
                         throw Exception{"Logical error: unknown numeric type " + type.getName(), ErrorCodes::LOGICAL_ERROR};
@@ -246,6 +252,11 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
             {
                 /// Convert 'YYYY-MM-DD' Strings to Date
                 return UInt64(stringToDate(src.get<const String &>()));
+            }
+            else if (is_my_date || is_my_datetime)
+            {
+                /// Convert 'YYYY-MM-DD' Strings to Date
+                return (parseMyDateTime(src.get<const String &>()));
             }
             else if (is_datetime)
             {

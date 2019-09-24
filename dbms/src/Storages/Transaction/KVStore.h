@@ -3,6 +3,7 @@
 #include <Storages/Transaction/RegionClientCreate.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
+#include <Storages/Transaction/RegionsRangeIndex.h>
 
 namespace DB
 {
@@ -38,13 +39,12 @@ public:
 
     using RegionsAppliedindexMap = std::unordered_map<RegionID, std::pair<RegionPtr, UInt64>>;
     using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
-    /// Get all regions whose range overlapped with start/end key.
-    RegionsAppliedindexMap getRegionsByRange(const RegionRange & range) const;
+    /// Get and callback all regions whose range overlapped with start/end key.
+    void handleRegionsByRangeOverlap(const RegionRange & range, std::function<void(RegionMap, const KVStoreTaskLock &)> && callback) const;
 
-    void traverseRegions(std::function<void(RegionID region_id, const RegionPtr & region)> && callback) const;
+    void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check);
-    bool onSnapshot(RegionPtr, Context *);
+    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check = {});
 
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
@@ -61,17 +61,17 @@ public:
 
     size_t regionSize() const;
 
-    void updateRegionTableBySnapshot(RegionTable & region_table);
-
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
-    void removeRegion(const RegionID region_id, RegionTable * region_table);
+    void removeRegion(const RegionID region_id, RegionTable * region_table, const KVStoreTaskLock & task_lock);
     KVStoreTaskLock genTaskLock() const;
 
-    RegionMap & regions();
+    using RegionManageLock = std::lock_guard<std::mutex>;
+    RegionManageLock genRegionManageLock() const;
+
+    RegionMap & regionsMut();
     const RegionMap & regions() const;
-    std::mutex & mutex() const;
 
 private:
     RegionManager region_manager;
@@ -82,6 +82,9 @@ private:
 
     // onServiceCommand and onSnapshot should not be called concurrently
     mutable std::mutex task_mutex;
+    // region_range_index must be protected by task_mutex. It's used to search for region by range.
+    // region merge/split/apply-snapshot/remove will change the range.
+    RegionsRangeIndex region_range_index;
 
     // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
     std::unique_ptr<RaftCommandResult> raft_cmd_res;

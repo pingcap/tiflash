@@ -15,6 +15,8 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
@@ -241,7 +243,7 @@ struct ToDateTimeImpl
 };
 
 template <typename Name> struct ConvertImpl<DataTypeDate, DataTypeDateTime, Name>
-    : DateTimeTransformImpl<UInt32, Int64, ToDateTimeImpl> {};
+    : DateTimeTransformImpl<UInt16, UInt32, ToDateTimeImpl> {};
 
 
 /// Implementation of toDate function.
@@ -260,7 +262,7 @@ struct ToDateTransform32Or64
 /** Conversion of DateTime to Date: throw off time component.
   */
 template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeDate, Name>
-    : DateTimeTransformImpl<Int64, UInt32, ToDateImpl> {};
+    : DateTimeTransformImpl<UInt32, UInt16, ToDateImpl> {};
 
 /** Special case of converting (U)Int32 or (U)Int64 (and also, for convenience, Float32, Float64) to Date.
   * If number is less than 65536, then it is treated as DayNum, and if greater or equals, then as unix timestamp.
@@ -309,6 +311,24 @@ struct FormatImpl<DataTypeDateTime>
     static void execute(const DataTypeDateTime::FieldType x, WriteBuffer & wb, const DataTypeDateTime *, const DateLUTImpl * time_zone)
     {
         writeDateTimeText(x, wb, *time_zone);
+    }
+};
+
+template <>
+struct FormatImpl<DataTypeMyDate>
+{
+    static void execute(const DataTypeMyDate::FieldType x, WriteBuffer & wb, const DataTypeMyDate *, const DateLUTImpl *)
+    {
+        writeMyDateText((x), wb);
+    }
+};
+
+template <>
+struct FormatImpl<DataTypeMyDateTime>
+{
+    static void execute(const DataTypeMyDateTime::FieldType x, WriteBuffer & wb, const DataTypeMyDateTime *tp, const DateLUTImpl *)
+    {
+        writeMyDateTimeText(x, tp->getFraction(), wb);
     }
 };
 
@@ -435,6 +455,21 @@ template <> inline void parseImpl<DataTypeDate>(DataTypeDate::FieldType & x, Rea
     readDateText(tmp, rb);
     x = tmp;
 }
+
+template <> inline void parseImpl<DataTypeMyDate>(DataTypeMyDate::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+{
+    UInt64 tmp(0);
+    readMyDateText(tmp, rb);
+    x = tmp;
+}
+
+template <> inline void parseImpl<DataTypeMyDateTime>(DataTypeMyDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl *)
+{
+    UInt64 tmp(0);
+    readMyDateTimeText(tmp, 6, rb); // set max fsp doesn't matter
+    x = tmp;
+}
+
 
 template <> inline void parseImpl<DataTypeDateTime>(DataTypeDateTime::FieldType & x, ReadBuffer & rb, const DateLUTImpl * time_zone)
 {
@@ -886,6 +921,8 @@ private:
         else if (checkDataType<DataTypeFloat64>(from_type)) ConvertImpl<DataTypeFloat64, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeDate>(from_type)) ConvertImpl<DataTypeDate, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeDateTime>(from_type)) ConvertImpl<DataTypeDateTime, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeMyDate>(from_type)) ConvertImpl<DataTypeMyDate, ToDataType, Name>::execute(block, arguments, result);
+        else if (checkDataType<DataTypeMyDateTime>(from_type)) ConvertImpl<DataTypeMyDateTime, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeUUID>(from_type)) ConvertImpl<DataTypeUUID, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeString>(from_type)) ConvertImpl<DataTypeString, ToDataType, Name>::execute(block, arguments, result);
         else if (checkDataType<DataTypeFixedString>(from_type)) ConvertImpl<DataTypeFixedString, ToDataType, Name>::execute(block, arguments, result);
@@ -1269,6 +1306,8 @@ using FunctionToFloat32 = FunctionConvert<DataTypeFloat32, NameToFloat32, Positi
 using FunctionToFloat64 = FunctionConvert<DataTypeFloat64, NameToFloat64, PositiveMonotonicity>;
 using FunctionToDate = FunctionConvert<DataTypeDate, NameToDate, ToIntMonotonicity<UInt16>>;
 using FunctionToDateTime = FunctionConvert<DataTypeDateTime, NameToDateTime, ToIntMonotonicity<UInt32>>;
+using FunctionToMyDate = FunctionConvert<DataTypeMyDate, NameToDate, ToIntMonotonicity<UInt64>>;
+using FunctionToMyDateTime = FunctionConvert<DataTypeMyDateTime, NameToDateTime, ToIntMonotonicity<UInt64>>;
 using FunctionToUUID = FunctionConvert<DataTypeUUID, NameToUUID, ToIntMonotonicity<UInt128>>;
 using FunctionToString = FunctionConvert<DataTypeString, NameToString, ToStringMonotonicity>;
 using FunctionToUnixTimestamp = FunctionConvert<DataTypeUInt32, NameToUnixTimestamp, ToIntMonotonicity<UInt32>>;
@@ -1286,12 +1325,10 @@ template <> struct FunctionTo<DataTypeInt32> { using Type = FunctionToInt32; };
 template <> struct FunctionTo<DataTypeInt64> { using Type = FunctionToInt64; };
 template <> struct FunctionTo<DataTypeFloat32> { using Type = FunctionToFloat32; };
 template <> struct FunctionTo<DataTypeFloat64> { using Type = FunctionToFloat64; };
-template <> struct FunctionTo<DataTypeDecimal32> { using Type = FunctionToDecimal<Decimal32>; };
-template <> struct FunctionTo<DataTypeDecimal64> { using Type = FunctionToDecimal<Decimal64>; };
-template <> struct FunctionTo<DataTypeDecimal128> { using Type = FunctionToDecimal<Decimal128>; };
-template <> struct FunctionTo<DataTypeDecimal256> { using Type = FunctionToDecimal<Decimal256>; };
 template <> struct FunctionTo<DataTypeDate> { using Type = FunctionToDate; };
 template <> struct FunctionTo<DataTypeDateTime> { using Type = FunctionToDateTime; };
+template <> struct FunctionTo<DataTypeMyDate> { using Type = FunctionToMyDate; };
+template <> struct FunctionTo<DataTypeMyDateTime> { using Type = FunctionToMyDateTime; };
 template <> struct FunctionTo<DataTypeUUID> { using Type = FunctionToUUID; };
 template <> struct FunctionTo<DataTypeString> { using Type = FunctionToString; };
 template <> struct FunctionTo<DataTypeFixedString> { using Type = FunctionToFixedString; };
@@ -1841,7 +1878,11 @@ private:
             return createDecimalWrapper<Decimal256>(decimal_type->getPrec(), decimal_type->getScale());
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeDate>(to_type.get()))
             return createWrapper(from_type, to_actual_type);
+        else if (const auto to_actual_type = checkAndGetDataType<DataTypeMyDate>(to_type.get()))
+            return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeDateTime>(to_type.get()))
+            return createWrapper(from_type, to_actual_type);
+        else if (const auto to_actual_type = checkAndGetDataType<DataTypeMyDateTime>(to_type.get()))
             return createWrapper(from_type, to_actual_type);
         else if (const auto to_actual_type = checkAndGetDataType<DataTypeString>(to_type.get()))
             return createWrapper(from_type, to_actual_type);

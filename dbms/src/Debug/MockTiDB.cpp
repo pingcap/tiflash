@@ -1,10 +1,10 @@
 #include <Debug/MockTiDB.h>
 
 #include <Common/FieldVisitors.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeSet.h>
@@ -50,8 +50,8 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
             if (drop_regions)
             {
                 for (auto & e : region_table.getRegionsByTable(partition.id))
-                    kvstore->removeRegion(e.first, &region_table);
-                region_table.mockDropRegionsInTable(partition.id);
+                    kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
+                region_table.removeTable(partition.id);
             }
         }
     }
@@ -62,8 +62,8 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
     if (drop_regions)
     {
         for (auto & e : region_table.getRegionsByTable(table->id()))
-            kvstore->removeRegion(e.first, &region_table);
-        region_table.mockDropRegionsInTable(table->id());
+            kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
+        region_table.removeTable(table->id());
     }
 
     return table;
@@ -177,6 +177,8 @@ ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id, 
     else if (checkDataType<DataTypeUInt32>(nested_type))
         column_info.tp = TiDB::TypeLong;
 
+    if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
+        column_info.decimal = type->getFraction();
     // UInt64 is hijacked by the macro expansion, we check it again.
     if (checkDataType<DataTypeUInt64>(nested_type))
         column_info.tp = TiDB::TypeLongLong;
