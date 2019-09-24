@@ -218,7 +218,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
     // if `page_id` is a ref-id, collapse the ref-path to actual PageId
     // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
     const PageId normal_page_id = view->resolveRefId(rec.ori_page_id);
-    auto         old_entry      = view->findNormalPageEntry(normal_page_id);
+    const auto   old_entry      = view->findNormalPageEntry(normal_page_id);
     if (likely(old_entry != nullptr))
     {
         // if RefPage{ref_id} already exist, release that ref first
@@ -234,7 +234,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         // increase entry's ref-count
         auto new_entry = *old_entry;
         new_entry.ref += 1;
-        current_version->normal_pages[rec.page_id] = new_entry;
+        current_version->normal_pages[normal_page_id] = new_entry;
     }
     else
     {

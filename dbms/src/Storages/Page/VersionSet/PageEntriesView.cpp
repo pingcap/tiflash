@@ -134,7 +134,7 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
         }
         for (auto & [page_id, entry] : node->normal_pages)
         {
-            if (entry.ref != 0)
+            if (!entry.isTombstone())
                 valid_normal_pages.insert(page_id);
         }
     }
