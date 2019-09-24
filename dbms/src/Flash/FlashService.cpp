@@ -1,8 +1,9 @@
 #include <Flash/FlashService.h>
 
 #include <Core/Types.h>
-#include <Flash/Coprocessor/CoprocessorHandler.h>
-#include <grpcpp/security/server_credentials.h>
+#include <Flash/BatchCommandsHandler.h>
+#include <Flash/CoprocessorHandler.h>
+#include <Raft/RaftService.h>
 #include <grpcpp/server_builder.h>
 
 namespace DB
@@ -14,13 +15,14 @@ extern const int NOT_IMPLEMENTED;
 }
 
 FlashService::FlashService(const std::string & address_, IServer & server_)
-    : server(server_), address(address_), log(&Logger::get("FlashService"))
+    : address(address_), server(server_), log(&Logger::get("FlashService"))
 {
     grpc::ServerBuilder builder;
     builder.AddListeningPort(address, grpc::InsecureServerCredentials());
     builder.RegisterService(this);
+    builder.RegisterService(&server.context().getRaftService());
 
-    // todo should set a reasonable value??
+    // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
     builder.SetMaxReceiveMessageSize(-1);
     builder.SetMaxSendMessageSize(-1);
 
@@ -54,8 +56,46 @@ grpc::Status FlashService::Coprocessor(
 
     auto ret = cop_handler.execute();
 
-    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done");
+    LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle coprocessor request done: " << ret.error_code() << ", " << ret.error_message());
     return ret;
+}
+
+grpc::Status FlashService::BatchCommands(
+    grpc::ServerContext * grpc_context, grpc::ServerReaderWriter<::tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream)
+{
+    auto [context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    tikvpb::BatchCommandsRequest request;
+    while (stream->Read(&request))
+    {
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());
+
+        tikvpb::BatchCommandsResponse response;
+        BatchCommandsContext batch_commands_context(
+            context, [this](grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); }, *grpc_context);
+        BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
+        auto ret = batch_commands_handler.execute();
+        if (!ret.ok())
+        {
+            LOG_DEBUG(
+                log, __PRETTY_FUNCTION__ << ": Handle batch commands request done: " << ret.error_code() << ", " << ret.error_message());
+            return ret;
+        }
+
+        if (!stream->Write(response))
+        {
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Write response failed for unknown reason.");
+            return grpc::Status(grpc::StatusCode::UNKNOWN, "Write response failed for unknown reason.");
+        }
+
+        LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle batch commands request done: " << ret.error_code() << ", " << ret.error_message());
+    }
+
+    return grpc::Status::OK;
 }
 
 String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const String & name, const String & default_val)
@@ -66,7 +106,7 @@ String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const Str
         return String(grpc_context->client_metadata().find(name)->second.data());
 }
 
-std::tuple<Context, ::grpc::Status> FlashService::createDBContext(grpc::ServerContext * grpc_context)
+std::tuple<Context, grpc::Status> FlashService::createDBContext(grpc::ServerContext * grpc_context)
 {
     /// Create DB context.
     Context context = server.context();
@@ -101,7 +141,7 @@ std::tuple<Context, ::grpc::Status> FlashService::createDBContext(grpc::ServerCo
     std::string expr_field_type_check = getClientMetaVarWithDefault(grpc_context, "dag_expr_field_type_strict_check", "1");
     context.setSetting("dag_expr_field_type_strict_check", expr_field_type_check);
 
-    return std::make_tuple(context, ::grpc::Status::OK);
+    return std::make_tuple(context, grpc::Status::OK);
 }
 
 } // namespace DB

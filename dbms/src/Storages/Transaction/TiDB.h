@@ -43,20 +43,20 @@ using DB::Timestamp;
     M(Float, 4, Float, Float32, false)               \
     M(Double, 5, Float, Float64, false)              \
     M(Null, 6, Nil, Nothing, false)                  \
-    M(Timestamp, 7, UInt, DateTime, false)           \
+    M(Timestamp, 7, Int, MyDateTime, false)          \
     M(LongLong, 8, Int, Int64, false)                \
     M(Int24, 9, VarInt, Int32, true)                 \
-    M(Date, 10, UInt, Date, false)                   \
+    M(Date, 10, Int, MyDate, false)                  \
     M(Time, 11, Duration, Int64, false)              \
-    M(Datetime, 12, UInt, DateTime, false)           \
+    M(Datetime, 12, Int, MyDateTime, false)          \
     M(Year, 13, Int, Int16, false)                   \
-    M(NewDate, 14, Int, Date, false)                 \
+    M(NewDate, 14, Int, MyDate, false)               \
     M(Varchar, 15, CompactBytes, String, false)      \
     M(Bit, 16, VarInt, UInt64, false)                \
     M(JSON, 0xf5, Json, String, false)               \
     M(NewDecimal, 0xf6, Decimal, Decimal32, false)   \
     M(Enum, 0xf7, VarUInt, Enum16, false)            \
-    M(Set, 0xf8, CompactBytes, String, false)        \
+    M(Set, 0xf8, VarUInt, UInt64, false)             \
     M(TinyBlob, 0xf9, CompactBytes, String, false)   \
     M(MediumBlob, 0xfa, CompactBytes, String, false) \
     M(LongBlob, 0xfb, CompactBytes, String, false)   \
@@ -276,6 +276,8 @@ struct TableInfo
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(const ColumnID id) const;
+
+    std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
 
     TableInfo producePartitionTableInfo(TableID table_or_partition_id) const;
 

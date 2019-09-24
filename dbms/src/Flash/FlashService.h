@@ -24,16 +24,18 @@ public:
 
     ~FlashService() final;
 
-    grpc::Status Coprocessor(grpc::ServerContext * context, const coprocessor::Request * request, coprocessor::Response * response);
+    grpc::Status Coprocessor(
+        grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response) override;
+
+    grpc::Status BatchCommands(grpc::ServerContext * grpc_context,
+        grpc::ServerReaderWriter<tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream) override;
 
 private:
     std::tuple<Context, ::grpc::Status> createDBContext(grpc::ServerContext * grpc_contex);
 
 private:
-    IServer & server;
-
     std::string address;
-
+    IServer & server;
     GRPCServerPtr grpc_server;
 
     Logger * log;

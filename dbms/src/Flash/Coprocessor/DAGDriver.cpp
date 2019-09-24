@@ -32,8 +32,7 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
       log(&Logger::get("DAGDriver"))
 {}
 
-void DAGDriver::execute()
-try
+void DAGDriver::execute() try
 {
     context.setSetting("read_tso", UInt64(dag_request.start_ts()));
 
@@ -62,12 +61,13 @@ try
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
 
-    BlockOutputStreamPtr outputStreamPtr = std::make_shared<DAGBlockOutputStream>(dag_response,
+    BlockOutputStreamPtr dag_output_stream = std::make_shared<DAGBlockOutputStream>(dag_response,
         context.getSettings().dag_records_per_chunk,
         dag_request.encode_type(),
         dag.getResultFieldTypes(),
         streams.in->getHeader());
-    copyData(*streams.in, *outputStreamPtr);
+    copyData(*streams.in, *dag_output_stream);
+
     // add ExecutorExecutionSummary info
     for (auto & p_streams : dag_context.profile_streams_list)
     {

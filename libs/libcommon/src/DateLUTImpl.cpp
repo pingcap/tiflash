@@ -18,6 +18,9 @@
 #include <cstring>
 #include <iostream>
 
+#define DATE_LUT_MIN 0
+
+
 namespace
 {
 
@@ -51,17 +54,17 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
     if (!cctz::load_time_zone(time_zone.data(), &cctz_time_zone))
         throw Poco::Exception("Cannot load time zone " + time_zone_);
 
-    cctz::time_zone::absolute_lookup start_of_epoch_lookup = cctz_time_zone.lookup(std::chrono::time_point<std::chrono::system_clock, std::chrono::seconds>(std::chrono::seconds(DATE_LUT_MIN)));
+    cctz::time_zone::absolute_lookup start_of_epoch_lookup = cctz_time_zone.lookup(std::chrono::system_clock::from_time_t(start_of_day));
     offset_at_start_of_epoch = start_of_epoch_lookup.offset;
     offset_is_whole_number_of_hours_everytime = true;
 
-    cctz::civil_day date{1000, 1, 1};
+    cctz::civil_day date{1970, 1, 1};
 
     do
     {
         cctz::time_zone::civil_lookup lookup = cctz_time_zone.lookup(date);
 
-        start_of_day = lookup.pre.time_since_epoch().count(); /*fuck chrono*/    /// Ambiguity is possible.
+        start_of_day = std::chrono::system_clock::to_time_t(lookup.pre);    /// Ambiguity is possible.
 
         Values & values = lut[i];
         values.year = date.year();
@@ -98,7 +101,7 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
                 ///  when UTC offset was changed. Search is performed with 15-minute granularity, assuming it is enough.
 
                 time_t time_at_offset_change = 900;
-                while (time_at_offset_change < 65536)
+                while (time_at_offset_change < 86400)
                 {
                     auto utc_offset_at_current_time = cctz_time_zone.lookup(std::chrono::system_clock::from_time_t(
                         lut[i - 1].date + time_at_offset_change)).offset;
@@ -109,10 +112,11 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
                     time_at_offset_change += 900;
                 }
 
-                lut[i - 1].time_at_offset_change = time_at_offset_change >= 65536 ? 0 : time_at_offset_change;
+                lut[i - 1].time_at_offset_change = time_at_offset_change;
 
-/*                std::cerr << lut[i - 1].year << "-" << int(lut[i - 1].month) << "-" << int(lut[i - 1].day_of_month)
-                    << " offset was changed at " << lut[i - 1].time_at_offset_change << " for " << lut[i - 1].amount_of_offset_change << " seconds.\n";*/
+                /// We doesn't support cases when time change results in switching to previous day.
+                if (static_cast<int>(lut[i - 1].time_at_offset_change) + static_cast<int>(lut[i - 1].amount_of_offset_change) < 0)
+                    lut[i - 1].time_at_offset_change = -lut[i - 1].amount_of_offset_change;
             }
         }
 
@@ -125,7 +129,7 @@ DateLUTImpl::DateLUTImpl(const std::string & time_zone_)
     /// Fill excessive part of lookup table. This is needed only to simplify handling of overflow cases.
     while (i < DATE_LUT_SIZE)
     {
-        lut[i] = lut[0];
+        lut[i] = lut[DATE_LUT_MAX_DAY_NUM];
         ++i;
     }
 
