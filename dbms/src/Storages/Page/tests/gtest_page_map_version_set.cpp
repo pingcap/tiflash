@@ -220,6 +220,23 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
     EXPECT_EQ(versions.size(), 1UL);
 }
 
+namespace
+{
+std::set<PageId> getNormalPageIDs(const PageEntriesVersionSet::SnapshotPtr &s)
+{
+    std::set<PageId> ids;
+    for (auto iter = s->version()->pages_cbegin(); iter != s->version()->pages_cend(); iter++)
+        ids.insert(iter->first);
+    return ids;
+}
+
+std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::SnapshotPtr &s)
+{
+    return s->version()->validNormalPageIds();
+}
+
+} // namespace
+
 TYPED_TEST_P(PageMapVersionSet_test, Restore)
 {
     TypeParam versions(this->config_);
@@ -278,19 +295,37 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     ASSERT_NE(entry3, nullptr);
     ASSERT_EQ(entry3->checksum, 3UL);
 
-    std::set<PageId> valid_normal_page_ids;
-    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
+    std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s);
+    ASSERT_FALSE(valid_normal_page_ids.count(1) > 0);
+    ASSERT_FALSE(valid_normal_page_ids.count(2) > 0);
+    ASSERT_TRUE(valid_normal_page_ids.count(3) > 0);
+}
+
+TYPED_TEST_P(PageMapVersionSet_test, PutRefPage)
+{
+    TypeParam versions(this->config_);
     {
-        for (auto iter = s->version()->pages_cbegin(); iter != s->version()->pages_cend(); iter++)
-            valid_normal_page_ids.insert(iter->first);
+        PageEntriesEdit edit;
+        PageEntry e;
+        e.checksum = 0xf;
+        edit.put(2, e);
+        versions.apply(edit);
     }
-    else
+    auto s1 = versions.getSnapshot();
+    ASSERT_EQ(s1->version()->at(2).checksum, 0xfUL);
+
+    //  Put RefPage3 -> Page2
     {
-        valid_normal_page_ids = s->version()->validNormalPageIds();
+        PageEntriesEdit edit;
+        edit.ref(3, 2);
+        versions.apply(edit);
     }
-    ASSERT_EQ(valid_normal_page_ids.count(1), 0UL);
-    ASSERT_EQ(valid_normal_page_ids.count(2), 0UL);
-    ASSERT_EQ(valid_normal_page_ids.count(3), 1UL);
+    auto s2 = versions.getSnapshot();
+    ASSERT_EQ(s2->version()->at(3).checksum, 0xfUL);
+
+    std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s2);
+    ASSERT_TRUE(valid_normal_page_ids.count(2) > 0);
+    ASSERT_FALSE(valid_normal_page_ids.count(3) > 0);
 }
 
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
@@ -637,6 +672,7 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            GcConcurrencyDelPage,
                            GcPageMove,
                            GcConcurrencySetPage,
+                           PutRefPage,
                            UpdateOnRefPage,
                            UpdateOnRefPage2,
                            IsRefId,
