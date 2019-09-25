@@ -359,7 +359,7 @@ bool PageStorage::gc()
             auto valid_normal_page_ids = snapshot->version()->validNormalPageIds();
             for (auto page_id : valid_normal_page_ids)
             {
-                const auto page_entry = snapshot->version()->find(page_id);
+                const auto page_entry = snapshot->version()->findNormalPageEntry(page_id);
                 if (unlikely(!page_entry))
                 {
                     throw Exception("PageStorage GC: Normal Page " + DB::toString(page_id) + " not found.", ErrorCodes::LOGICAL_ERROR);

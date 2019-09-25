@@ -26,6 +26,7 @@ public:
 
     // For iterate over all normal pages
     std::set<PageId> validNormalPageIds() const;
+    std::optional<PageEntry> findNormalPageEntry(PageId page_id) const;
 
     PageId maxId() const;
 
@@ -39,8 +40,6 @@ public:
     }
 
 private:
-    std::optional<PageEntry> findNormalPageEntry(PageId page_id) const;
-
     PageId resolveRefId(PageId page_id) const;
 
     friend class DeltaVersionEditAcceptor;
