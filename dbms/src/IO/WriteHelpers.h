@@ -626,7 +626,7 @@ inline void writeDateTimeText(const LocalDateTime & datetime, WriteBuffer & buf)
 
 inline void writeMyDateTimeText(UInt64 packed, int fsp, WriteBuffer & buf)
 {
-    const String & str = MyDateTime(packed, fsp).toString();
+    const String & str = MyDateTime(packed).toString(fsp);
     buf.write(str.c_str(), str.size());
 }
 
