@@ -32,7 +32,6 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/FieldVisitors.h>
-#include <Common/MyTime.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionsMiscellaneous.h>
@@ -96,42 +95,6 @@ struct ConvertImpl
 
             for (size_t i = 0; i < size; ++i)
                 vec_to[i] = static_cast<ToFieldType>(vec_from[i]);
-
-            block.getByPosition(result).column = std::move(col_to);
-        }
-        else
-            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
-                    + " of first argument of function " + Name::name,
-                ErrorCodes::ILLEGAL_COLUMN);
-    }
-};
-
-template <typename Name>
-struct ConvertImpl<DataTypeMyDateTime, DataTypeMyDateTime, Name>
-{
-    using FromFieldType = typename DataTypeMyDateTime::FieldType;
-    using ToFieldType = typename DataTypeMyDateTime::FieldType;
-
-    static void execute(Block & block, const ColumnNumbers & arguments, size_t result)
-    {
-        if (const ColumnVector<FromFieldType> * col_from
-            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
-        {
-            auto col_to = ColumnVector<ToFieldType>::create();
-
-            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
-            typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
-            size_t size = vec_from.size();
-            vec_to.resize(size);
-
-            const auto & time_zone_orig = checkAndGetDataType<DataTypeMyDateTime>(block.getByPosition(arguments[0]).type.get()) -> getTimeZone();
-            const auto & time_zone_to = checkAndGetDataType<DataTypeMyDateTime>(block.getByPosition(result).type.get()) -> getTimeZone();
-            for (size_t i = 0; i < size; ++i)
-            {
-                UInt64 result_time = 0;
-                convertTimeZone(vec_from[i], result_time, time_zone_orig, time_zone_to);
-                vec_to[i] = result_time;
-            }
 
             block.getByPosition(result).column = std::move(col_to);
         }

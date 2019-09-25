@@ -87,10 +87,8 @@ std::pair<std::vector<String>, String> splitDatetime(String format)
     return std::make_pair(parseDateFormat(format), std::move(frac));
 }
 
-MyTimeBase::MyTimeBase(UInt64 packed, UInt8 fsp_)
+MyTimeBase::MyTimeBase(UInt64 packed)
 {
-    fsp = fsp_;
-
     UInt64 ymdhms = packed >> 24;
     UInt64 ymd = ymdhms >> 17;
     day = UInt8(ymd & ((1 << 5) - 1));
@@ -106,8 +104,8 @@ MyTimeBase::MyTimeBase(UInt64 packed, UInt8 fsp_)
     micro_second = packed % (1 << 24);
 }
 
-MyTimeBase::MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_, UInt8 fsp_)
-    : year(year_), month(month_), day(day_), hour(hour_), minute(minute_), second(second_), micro_second(micro_second_), fsp(fsp_)
+MyTimeBase::MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
+    : year(year_), month(month_), day(day_), hour(hour_), minute(minute_), second(second_), micro_second(micro_second_)
 {}
 
 UInt64 MyTimeBase::toPackedUInt() const
@@ -450,10 +448,10 @@ Field parseMyDateTime(const String & str)
             micro_second *= 10;
     }
 
-    return MyDateTime(year, month, day, hour, minute, second, micro_second, 0).toPackedUInt();
+    return MyDateTime(year, month, day, hour, minute, second, micro_second).toPackedUInt();
 }
 
-String MyDateTime::toString() const
+String MyDateTime::toString(int fsp) const
 {
     String result = dateFormat("%Y-%m-%d %H:%i:%s");
     if (fsp > 0)
@@ -467,11 +465,11 @@ String MyDateTime::toString() const
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
 {
-    MyDateTime from_my_time(from_time, 6);
+    MyDateTime from_my_time(from_time);
     time_t epoch = time_zone_from.makeDateTime(
         from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
     MyDateTime to_my_time(time_zone_to.toYear(epoch), time_zone_to.toMonth(epoch), time_zone_to.toDayOfMonth(epoch),
-        time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second, 6);
+        time_zone_to.toHour(epoch), time_zone_to.toMinute(epoch), time_zone_to.toSecond(epoch), from_my_time.micro_second);
     to_time = to_my_time.toPackedUInt();
 }
 

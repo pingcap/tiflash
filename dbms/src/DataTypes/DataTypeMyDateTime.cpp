@@ -16,9 +16,9 @@
 namespace DB
 {
 
-DataTypeMyDateTime::DataTypeMyDateTime(int fraction_, const String & time_zone_)
-    : fraction(fraction_), has_explicit_time_zone(!time_zone_.empty()), time_zone(DateLUT::instance(time_zone_))
+DataTypeMyDateTime::DataTypeMyDateTime(int fraction_)
 {
+    fraction = fraction_;
     if (fraction < 0 || fraction > 6)
         throw Exception("fraction must >= 0 and < 6", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
@@ -26,15 +26,6 @@ DataTypeMyDateTime::DataTypeMyDateTime(int fraction_, const String & time_zone_)
 void DataTypeMyDateTime::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
 {
     writeMyDateTimeText(static_cast<const ColumnUInt64 &>(column).getData()[row_num], fraction, ostr);
-}
-
-String DataTypeMyDateTime::getName() const
-{
-    if (!has_explicit_time_zone)
-    {
-        return "MyDateTime(" + std::to_string(fraction) + ")";
-    }
-    return "MyDateTime(" + std::to_string(fraction) + ", '" + time_zone.getTimeZone() + "')";
 }
 
 void DataTypeMyDateTime::serializeTextEscaped(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
@@ -109,12 +100,9 @@ void DataTypeMyDateTime::deserializeTextCSV(IColumn & column, ReadBuffer & istr,
 
 bool DataTypeMyDateTime::equals(const IDataType & rhs) const
 {
-    if (typeid(rhs) == typeid(*this))
-    {
-        auto type = typeid_cast<const DataTypeMyDateTime *>(&rhs);
-        return time_zone.getTimeZone() == type->getTimeZone().getTimeZone();
-    }
-    return false;
+    /// DateTime with different timezones are equal, because:
+    /// "all types with different time zones are equivalent and may be used interchangingly."
+    return typeid(rhs) == typeid(*this);
 }
 
 
@@ -129,23 +117,15 @@ static DataTypePtr create(const ASTPtr & arguments)
     if (!arguments)
         return std::make_shared<DataTypeMyDateTime>(0);
 
-    if (arguments->children.size() != 1 && arguments->children.size() != 2)
+    if (arguments->children.size() != 1)
         throw Exception(
-            "MyDateTime data type can optionally have one or two argument - fractional and timezone", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            "MyDateTime data type can optionally have only one argument - fractional", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-    const ASTLiteral * arg1 = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
-    if (!arg1 || arg1->value.getType() != Field::Types::UInt64)
-        throw Exception("First parameter for MyDateTime data type must be uint literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    const ASTLiteral * arg = typeid_cast<const ASTLiteral *>(arguments->children[0].get());
+    if (!arg || arg->value.getType() != Field::Types::UInt64)
+        throw Exception("Parameter for MyDateTime data type must be uint literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-    if (arguments->children.size() == 2)
-    {
-        const ASTLiteral * arg2 = typeid_cast<const ASTLiteral *>(arguments->children[1].get());
-        if (!arg2 || arg2->value.getType() != Field::Types::String)
-            throw Exception("Second parameter for MyDateTime data type must be string literal", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        return std::make_shared<DataTypeMyDateTime>(arg1->value.get<int>(), arg2->value.get<String>());
-    }
-
-    return std::make_shared<DataTypeMyDateTime>(arg1->value.get<int>());
+    return std::make_shared<DataTypeMyDateTime>(arg->value.get<int>());
 }
 
 void registerDataTypeMyDateTime(DataTypeFactory & factory)

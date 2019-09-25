@@ -131,11 +131,7 @@ std::enable_if_t<IsDecimalType<T>, DataTypePtr> getDataTypeByColumnInfoBase(cons
 template <typename T, bool should_widen>
 std::enable_if_t<std::is_same_v<T, DataTypeMyDateTime>, DataTypePtr> getDataTypeByColumnInfoBase(const ColumnInfo & column_info, const T *)
 {
-    DataTypePtr t;
-    if (column_info.tp == TiDB::TypeTimestamp)
-        t = std::make_shared<T>(column_info.decimal, "UTC");
-    else
-        t = std::make_shared<T>(column_info.decimal);
+    DataTypePtr t = std::make_shared<T>(column_info.decimal);
 
     if (should_widen)
     {
