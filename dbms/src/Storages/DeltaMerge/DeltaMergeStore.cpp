@@ -407,8 +407,13 @@ bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::
     auto   dm_context           = newDMContext(db_context, db_settings);
     size_t segment_rows_setting = db_settings.dm_segment_rows;
 
+    const size_t max_num_jobs = 1;
+    size_t num_jobs_done = 0;
     while (true)
     {
+        // FIXME: temporary trivial check for endless loop
+        if (num_jobs_done >= max_num_jobs)
+            break;
         /// TODO: fix this naive algorithm, to reduce merge/split frequency.
 
         SegmentPtr option;
@@ -453,6 +458,7 @@ bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::
                 merge(*dm_context, option, next);
             }
             // Keep checking until there are no options any more.
+            ++num_jobs_done;
             continue;
         }
         else
@@ -485,7 +491,7 @@ bool DeltaMergeStore::shouldMerge(const SegmentPtr & left, const SegmentPtr & ri
 
 void DeltaMergeStore::split(DMContext & dm_context, const SegmentPtr & segment)
 {
-    LOG_DEBUG(log, "Split segment " + segment->info());
+    LOG_DEBUG(log, "Split segment " << segment->info() << " #rows: " << segment->getEstimatedRows());
 
     RemoveWriteBatches remove_wbs;
     auto               range           = segment->getRange();

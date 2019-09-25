@@ -109,7 +109,7 @@ struct RidGenerator
             {
                 auto ss = static_cast<DeltaMergeBlockInputStream<DeltaValueSpace, DefaultDeltaTree::EntryIterator> *>(stable_stream.get());
                 ss->getHeader();
-                throw Exception("Illegal stable data, the next row is expected larger than the previous row");
+                throw Exception("Illegal stable data, the next row@" + DB::toString(row + 1) + " is expected larger than the previous row@" + DB::toString(row));
             }
         }
 #endif
