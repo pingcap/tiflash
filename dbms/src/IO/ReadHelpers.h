@@ -688,7 +688,7 @@ inline void readMyDateTimeText(UInt64 & packed, int fsp, ReadBuffer & buf)
             for(;digit<6;digit++)
                 micro_second *= 10;
 
-            packed = MyDateTime(year, month, day, hour, minute, second, micro_second, fsp).toPackedUInt();
+            packed = MyDateTime(year, month, day, hour, minute, second, micro_second).toPackedUInt();
             return;
         }
     }
