@@ -128,6 +128,34 @@ struct ConvertFromDecimal
 
             block.getByPosition(result).column = std::move(col_to);
         }
+        else if constexpr (std::is_same_v<String, ToFieldType>)
+        {
+
+            const auto * col_from = checkAndGetColumn<ColumnDecimal<DecimalFieldType>>(block.getByPosition(arguments[0]).column.get());
+            auto col_to = ColumnString::create();
+
+            const typename ColumnDecimal<DecimalFieldType>::Container & vec_from = col_from->getData();
+            ColumnString::Chars_t & data_to = col_to->getChars();
+            ColumnString::Offsets & offsets_to = col_to->getOffsets();
+            size_t size = vec_from.size();
+
+            data_to.resize(size * decimal_max_prec + size);
+
+            offsets_to.resize(size);
+
+            WriteBufferFromVector<ColumnString::Chars_t> write_buffer(data_to);
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                writeText(vec_from[i], vec_from.getScale(), write_buffer);
+                writeChar(0, write_buffer);
+                offsets_to[i] = write_buffer.count();
+            }
+
+            data_to.resize(write_buffer.count());
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
         else
             throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
                     + " of first argument of function " + Name::name,
@@ -340,7 +368,6 @@ struct FormatImpl<DataTypeEnum<FieldType>>
         writeString(type->getNameForValue(x), wb);
     }
 };
-
 
 /// DataTypeEnum<T> to DataType<T> free conversion
 template <typename FieldType, typename Name>
