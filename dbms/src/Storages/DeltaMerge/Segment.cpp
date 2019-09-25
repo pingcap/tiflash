@@ -358,8 +358,8 @@ SegmentPair Segment::split(DMContext & dm_context, RemoveWriteBatches & remove_w
     }
 
     LOG_DEBUG(log,
-              "Segment [" + DB::toString(segment_id) + "] split into [" + DB::toString(res.first->segmentId()) + "] and ["
-                  + DB::toString(res.second->segmentId()) + "].");
+              "Segment [" << segment_id << "] split into " //
+                          << res.first->info() << " and " << res.second->info());
 
     return res;
 }
@@ -561,7 +561,8 @@ BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_pag
     if (read_ranges.size() == 1)
     {
         LOG_TRACE(log, "Segment [" + DB::toString(segment_id) + "] is read by " + DB::toString(1) + " ranges");
-        return placed_stream_creator(read_ranges[0]);
+        const HandleRange real_range = range.shrink(read_ranges[0]);
+        return placed_stream_creator(real_range);
     }
     else
     {
