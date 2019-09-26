@@ -185,8 +185,13 @@ try
         ASTPtr astptr(new ASTIdentifier("t", ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
-        storage           = StorageDeltaMerge::create(
-            ".", /* db_name= */ "default", /* name= */ "t", std::nullopt, ColumnsDescription{names_and_types_list}, astptr, DMTestEnv::getContext());
+        storage = StorageDeltaMerge::create(".",
+                                            /* db_name= */ "default",
+                                            /* name= */ "t",
+                                            std::nullopt,
+                                            ColumnsDescription{names_and_types_list},
+                                            astptr,
+                                            DMTestEnv::getContext());
         storage->startup();
     }
 
@@ -201,10 +206,14 @@ try
     }
 
     // get read stream from DeltaMergeStorage
+    Context &                  global_ctx = DMTestEnv::getContext();
     QueryProcessingStage::Enum stage2;
     SelectQueryInfo            query_info;
-    query_info.query        = std::make_shared<ASTSelectQuery>();
-    BlockInputStreamPtr dms = storage->read(column_names, query_info, DMTestEnv::getContext(), stage2, 8192, 1)[0];
+    query_info.query                          = std::make_shared<ASTSelectQuery>();
+    query_info.mvcc_query_info                = std::make_unique<MvccQueryInfo>();
+    query_info.mvcc_query_info->resolve_locks = global_ctx.getSettingsRef().resolve_locks;
+    query_info.mvcc_query_info->read_tso      = global_ctx.getSettingsRef().read_tso;
+    BlockInputStreamPtr dms                   = storage->read(column_names, query_info, global_ctx, stage2, 8192, 1)[0];
     dms->readPrefix();
 
     size_t num_rows_read = 0;
