@@ -1,6 +1,8 @@
 #pragma once
 
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -145,7 +147,9 @@ public:
     bool tryFlushRegions();
 
     void tryFlushRegion(RegionID region_id);
-    void tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist);
+    bool tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist);
+
+    void waitTillRegionFlushed(RegionID region_id);
 
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
@@ -191,6 +195,8 @@ private:
     void doShrinkRegionRange(const Region & region);
     void doUpdateRegion(const Region & region, TableID table_id);
 
+    void clearDirtyFlag(RegionID region_id);
+
     struct TableOptimizeChecker
     {
         std::mutex mutex;
@@ -203,6 +209,8 @@ private:
     TableMap tables;
     RegionInfoMap regions;
     std::unordered_set<RegionID> dirty_regions;
+    std::mutex dirty_regions_mutex;
+    std::condition_variable dirty_regions_cv;
     std::unordered_set<TableID> table_to_optimize;
 
     FlushThresholds flush_thresholds;
