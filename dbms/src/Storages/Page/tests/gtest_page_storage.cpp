@@ -56,7 +56,7 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        return std::make_shared<PageStorage>(path, config_);
+        return std::make_shared<PageStorage>("test.t", path, config_);
     }
 
 protected:

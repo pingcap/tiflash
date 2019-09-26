@@ -56,7 +56,7 @@ public:
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
 public:
-    PageStorage(const String & storage_path, const Config & config_);
+    PageStorage(String name, const String & storage_path, const Config & config_);
 
     PageId getMaxId();
 
@@ -90,6 +90,7 @@ private:
     gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
 
 private:
+    String storage_name; // Identify between different Storage
     String storage_path;
     Config config;
 

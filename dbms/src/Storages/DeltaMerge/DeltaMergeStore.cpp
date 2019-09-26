@@ -38,13 +38,14 @@ namespace DM
 
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
-                                 const String &        name,
+                                 const String &        db_name,
+                                 const String &        tbl_name,
                                  const ColumnDefines & columns,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
     : path(path_),
-      storage_pool(path),
-      table_name(name),
+      storage_pool(db_name + "." + tbl_name, path),
+      table_name(tbl_name),
       table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
       settings(settings_),

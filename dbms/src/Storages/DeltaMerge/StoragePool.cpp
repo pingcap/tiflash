@@ -6,10 +6,10 @@ namespace DM
 {
 
 // TODO: Load configs from settings.
-StoragePool::StoragePool(const String & path)
-    : log_storage(path + "/log", {}),
-      data_storage(path + "/data", {}),
-      meta_storage(path + "/meta", {}),
+StoragePool::StoragePool(const String &name, const String & path)
+    : log_storage(name + ".log", path + "/log", {}),
+      data_storage(name + ".data", path + "/data", {}),
+      meta_storage(name + ".meta", path + "/meta", {}),
       max_log_page_id(log_storage.getMaxId()),
       max_data_page_id(data_storage.getMaxId()),
       max_meta_page_id(meta_storage.getMaxId())

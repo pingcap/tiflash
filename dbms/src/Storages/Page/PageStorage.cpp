@@ -1,6 +1,7 @@
-#include <Storages/Page/PageStorage.h>
-
 #include <set>
+#include <utility>
+
+#include <Storages/Page/PageStorage.h>
 
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/File.h>
@@ -51,8 +52,9 @@ PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file,
     return page_files;
 }
 
-PageStorage::PageStorage(const String & storage_path_, const Config & config_)
-    : storage_path(storage_path_),
+PageStorage::PageStorage(String name, const String & storage_path_, const Config & config_)
+    : storage_name(std::move(name)),
+      storage_path(storage_path_),
       config(config_),
       versioned_page_entries(),
       page_file_log(&Poco::Logger::get("PageFile")),
@@ -120,7 +122,7 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
     }
     catch (DB::Exception & e)
     {
-        LOG_WARNING(log, e.message());
+        LOG_WARNING(log, storage_name << " " << e.message());
         return {}; // return invalid PageEntry
     }
 }
@@ -336,8 +338,6 @@ bool PageStorage::gc()
         return false;
     }
 
-    LOG_DEBUG(log, "PageStorage GC start");
-
     PageFileIdAndLevel writing_file_id_level;
     {
         std::lock_guard<std::mutex> lock(write_mutex);
@@ -387,12 +387,14 @@ bool PageStorage::gc()
             || (merge_files.size() >= 2 && candidate_total_size >= config.merge_hint_low_used_file_total_size);
         if (!should_merge)
         {
-            LOG_DEBUG(log,
-                      "GC exit without merging. merge file size: " << merge_files.size() << ", candidate size: " << candidate_total_size);
+            LOG_TRACE(log,
+                      storage_name << " GC exit without merging. merge file size: " << merge_files.size()
+                                   << ", candidate size: " << candidate_total_size);
             return false;
         }
 
-        LOG_INFO(log, "GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
+        LOG_INFO(log,
+                 storage_name << " GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
 
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
         gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files);
@@ -530,7 +532,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                     catch (DB::Exception & e)
                     {
                         // ignore if it2 is a ref to non-exist page
-                        LOG_WARNING(log, "Ignore invalid RefPage while gcMigratePages: " + e.message());
+                        LOG_WARNING(log, storage_name << " Ignore invalid RefPage while gcMigratePages: " << e.message());
                     }
                 }
             }
@@ -580,8 +582,8 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         gc_file.setFormal();
         const auto id = gc_file.fileIdLevel();
         LOG_INFO(log,
-                 "GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages << " RefPages to PageFile_"
-                                     << id.first << "_" << id.second);
+                 storage_name << " GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages
+                              << " RefPages to PageFile_" << id.first << "_" << id.second);
     }
     return gc_file_edit;
 }
