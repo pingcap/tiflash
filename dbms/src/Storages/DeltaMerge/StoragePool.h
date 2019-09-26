@@ -37,13 +37,14 @@ public:
     bool gc(const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);
 
 private:
-    PageStorage log_storage;
-    PageStorage data_storage;
-    PageStorage meta_storage;
-
+    // These should init before PageStorages
     std::atomic<PageId> max_log_page_id;
     std::atomic<PageId> max_data_page_id;
     std::atomic<PageId> max_meta_page_id;
+
+    PageStorage log_storage;
+    PageStorage data_storage;
+    PageStorage meta_storage;
 
     std::atomic<Timepoint> last_try_gc_time = Clock::now();
 

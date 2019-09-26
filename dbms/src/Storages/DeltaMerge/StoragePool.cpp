@@ -7,12 +7,12 @@ namespace DM
 
 // TODO: Load configs from settings.
 StoragePool::StoragePool(const String &name, const String & path)
-    : log_storage(name + ".log", path + "/log", {}),
-      data_storage(name + ".data", path + "/data", {}),
-      meta_storage(name + ".meta", path + "/meta", {}),
-      max_log_page_id(log_storage.getMaxId()),
-      max_data_page_id(data_storage.getMaxId()),
-      max_meta_page_id(meta_storage.getMaxId())
+    : max_log_page_id(0),
+      max_data_page_id(0),
+      max_meta_page_id(0),
+      log_storage(name + ".log", path + "/log", {}, &max_log_page_id),
+      data_storage(name + ".data", path + "/data", {}, &max_data_page_id),
+      meta_storage(name + ".meta", path + "/meta", {}, &max_meta_page_id)
 {
 }
 

@@ -37,7 +37,6 @@ TEST_F(PageEntryMap_test, Empty)
         item_count += 1;
     }
     ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->maxId(), 0UL);
 
 
     // add some Pages, RefPages
@@ -53,7 +52,6 @@ TEST_F(PageEntryMap_test, Empty)
         item_count += 1;
     }
     ASSERT_EQ(item_count, 2UL);
-    ASSERT_EQ(map->maxId(), 1UL);
 
     map->clear();
     item_count = 0;
@@ -62,7 +60,6 @@ TEST_F(PageEntryMap_test, Empty)
         item_count += 1;
     }
     ASSERT_EQ(item_count, 0UL);
-    ASSERT_EQ(map->maxId(), 0UL);
 }
 
 TEST_F(PageEntryMap_test, UpdatePageEntry)

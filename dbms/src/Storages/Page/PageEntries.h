@@ -26,7 +26,7 @@ template <typename T>
 class PageEntriesMixin
 {
 public:
-    explicit PageEntriesMixin(bool is_base_) : normal_pages(), page_ref(), ref_deletions(), max_page_id(0), is_base(is_base_) {}
+    explicit PageEntriesMixin(bool is_base_) : normal_pages(), page_ref(), ref_deletions(), is_base(is_base_) {}
 
 public:
     static std::shared_ptr<T> createBase() { return std::make_shared<T>(true); }
@@ -105,11 +105,8 @@ public:
     {
         page_ref.clear();
         normal_pages.clear();
-        max_page_id = 0;
         ref_deletions.clear();
     }
-
-    PageId maxId() const { return max_page_id; }
 
 public:
     using const_normal_page_iterator = std::unordered_map<PageId, PageEntry>::const_iterator;
@@ -123,7 +120,6 @@ protected:
     // RefPageId deletions
     std::unordered_set<PageId> ref_deletions;
 
-    PageId max_page_id;
     bool   is_base;
 
 protected:
@@ -158,7 +154,6 @@ private:
     {
         page_ref      = rhs.page_ref;
         normal_pages  = rhs.normal_pages;
-        max_page_id   = rhs.max_page_id;
         ref_deletions = rhs.ref_deletions;
     }
 
@@ -174,7 +169,6 @@ public:
         {
             normal_pages.swap(rhs.normal_pages);
             page_ref.swap(rhs.page_ref);
-            max_page_id = rhs.max_page_id;
             is_base     = rhs.is_base;
             ref_deletions.swap(rhs.ref_deletions);
         }
@@ -217,8 +211,6 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
         normal_pages[normal_page_id].ref = page_ref_count + is_new_ref_pair_inserted;
     }
 
-    // update max_page_id
-    max_page_id = std::max(max_page_id, page_id);
 }
 
 template <typename T>
@@ -273,7 +265,6 @@ void PageEntriesMixin<T>::ref(const PageId ref_id, const PageId page_id)
             page_ref[ref_id] = normal_page_id;
         }
     }
-    max_page_id = std::max(max_page_id, std::max(ref_id, page_id));
 }
 
 template <typename T>
@@ -443,7 +434,6 @@ public:
                 normal_pages[it.first] = it.second;
             }
         }
-        max_page_id = std::max(max_page_id, rhs.max_page_id);
     }
 
     bool shouldCompactToBase(const ::DB::MVCC::VersionSetConfig & config)

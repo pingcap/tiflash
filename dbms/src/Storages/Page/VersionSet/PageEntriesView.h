@@ -28,8 +28,6 @@ public:
     std::set<PageId> validNormalPageIds() const;
     std::optional<PageEntry> findNormalPageEntry(PageId page_id) const;
 
-    PageId maxId() const;
-
     inline std::shared_ptr<PageEntriesForDelta> getSharedTailVersion() const { return tail; }
 
     inline std::shared_ptr<PageEntriesForDelta> transferTailVersionOwn()

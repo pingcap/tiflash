@@ -199,8 +199,6 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
         rec.entry.ref                                 = old_entry->ref + !is_ref_exist;
         current_version->normal_pages[normal_page_id] = rec.entry;
     }
-
-    current_version->max_page_id = std::max(current_version->max_page_id, rec.page_id);
 }
 
 void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
@@ -253,7 +251,6 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
             current_version->page_ref[rec.page_id] = normal_page_id;
         }
     }
-    current_version->max_page_id = std::max(current_version->max_page_id, rec.page_id);
 }
 
 void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit)

@@ -141,14 +141,17 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
 /// Analyze meta file, and return <available meta size, available data size>.
 std::pair<UInt64, UInt64> analyzeMetaFile( //
-    const String &    path,
-    PageFileId        file_id,
-    UInt32            level,
-    const char *      meta_data,
-    const size_t      meta_data_size,
-    PageEntriesEdit & edit,
-    Logger *          log)
+    const String &        path,
+    PageFileId            file_id,
+    UInt32                level,
+    const char *          meta_data,
+    const size_t          meta_data_size,
+    PageEntriesEdit &     edit,
+    std::atomic<PageId> * max_page_id,
+    Logger *              log)
 {
+    assert(max_page_id != nullptr);
+
     const char * meta_data_end = meta_data + meta_data_size;
 
     UInt64 page_data_file_size = 0;
@@ -201,6 +204,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 pc.checksum = PageUtil::get<Checksum>(pos);
 
                 edit.put(page_id, pc);
+                *max_page_id = std::max<PageId>(*max_page_id, page_id);
                 page_data_file_size += pc.size;
                 break;
             }
@@ -208,6 +212,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             {
                 auto page_id = PageUtil::get<PageId>(pos);
                 edit.del(page_id); // Reserve the order of removal.
+                *max_page_id = std::max<PageId>(*max_page_id, page_id);
                 break;
             }
             case WriteBatch::WriteType::REF:
@@ -215,6 +220,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 const auto ref_id  = PageUtil::get<PageId>(pos);
                 const auto page_id = PageUtil::get<PageId>(pos);
                 edit.ref(ref_id, page_id);
+                *max_page_id = std::max<PageId>(*max_page_id, page_id);
             }
             }
         }
@@ -280,7 +286,10 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
 // PageFile::Reader
 // =========================================================
 
-PageFile::Reader::Reader(PageFile & page_file) : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path)) {}
+PageFile::Reader::Reader(PageFile & page_file)
+    : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path))
+{
+}
 
 PageFile::Reader::~Reader()
 {
@@ -460,7 +469,7 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
     return PageFile(file_id, level, parent_path, false, false, log);
 }
 
-void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
+void PageFile::readAndSetPageMetas(PageEntriesEdit & edit, std::atomic<PageId> * max_page_id)
 {
     const auto   path = metaPath();
     Poco::File   file(path);
@@ -475,9 +484,14 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
 
     PageUtil::readFile(file_fd, 0, data, file_size, path);
 
+    // If max_page_id is nullptr, we will ignore that
+    std::atomic<PageId> ignored_max_page_id = 0;
+    if (max_page_id == nullptr)
+        max_page_id = &ignored_max_page_id;
+
     // analyze meta file and update page_entries
     std::tie(this->meta_file_pos, this->data_file_pos)
-        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, edit, log);
+        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, edit, max_page_id, log);
 }
 
 void PageFile::setFormal()
