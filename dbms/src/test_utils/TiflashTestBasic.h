@@ -1,7 +1,9 @@
 #pragma once
 
-#include <Interpreters/Context.h>
 #include <gtest/gtest.h>
+
+#include <Interpreters/Context.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -20,7 +22,8 @@ public:
         }
         catch (Exception & e)
         {
-            context.createTMTContext({}, "", "", {"default"}, "./__tmp_data/kvstore", "./__tmp_data/regmap", TiDB::StorageEngine::TMT);
+            context.createTMTContext({}, "", "", {"default"}, "./__tmp_data/kvstore", TiDB::StorageEngine::TMT);
+            context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;
         return context;

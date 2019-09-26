@@ -282,7 +282,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
         if (internal_region.cache_bytes)
             dirty_regions.insert(region_id);
         else
-            dirty_regions.erase(region_id);
+            clearDirtyFlag(region_id);
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -308,6 +308,7 @@ RegionID RegionTable::pickRegionToFlush()
             if (shouldFlush(doGetInternalRegion(table_id, region_id)))
             {
                 dirty_regions.erase(dirty_it);
+                clearDirtyFlag(region.region_id);
                 return region_id;
             }
 
@@ -328,6 +329,19 @@ bool RegionTable::tryFlushRegions()
     }
 
     return false;
+}
+
+void RegionTable::clearDirtyFlag(RegionID region_id)
+{
+    std::lock_guard lock(dirty_regions_mutex);
+    dirty_regions.erase(region_id);
+    dirty_regions_cv.notify_all();
+}
+
+void RegionTable::waitTillRegionFlushed(const RegionID region_id)
+{
+    std::unique_lock lock(dirty_regions_mutex);
+    dirty_regions_cv.wait(lock, [this, region_id]{ return dirty_regions.count(region_id) == 0;});
 }
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
