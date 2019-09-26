@@ -417,20 +417,7 @@ bool PageStorage::gc()
     }
 
     // Delete obsolete files that are not used by any version, without lock
-    for (const auto & page_file : page_files)
-    {
-        const auto page_id_and_lvl = page_file.fileIdLevel();
-        if (page_id_and_lvl >= writing_file_id_level)
-        {
-            continue;
-        }
-
-        if (live_files.count(page_id_and_lvl) == 0)
-        {
-            // the page file is not used by any version, remove reader cache
-            page_file.destroy();
-        }
-    }
+    gcRemoveObsoleteFiles(page_files, writing_file_id_level, live_files);
     return true;
 }
 
@@ -487,6 +474,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
 
     size_t num_successful_migrate_pages = 0;
     size_t num_valid_ref_pages          = 0;
+    size_t num_del_page_meta            = 0;
     auto * current                      = snapshot->version();
     {
         PageEntriesEdit legacy_edit; // All page entries in `merge_files`
@@ -506,8 +494,8 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                 continue;
             }
 
+            PageIdAndEntries page_id_and_entries; // The valid pages that we need to migrate to `gc_file`
             auto             to_merge_file_reader = to_merge_file.createReader();
-            PageIdAndEntries page_id_and_entries;
             {
                 const auto & page_ids = it->second.second;
                 for (auto page_id : page_ids)
@@ -550,17 +538,26 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         }
 
         {
-            // Migrate RefPages which are still valid.
+            // Migrate valid RefPages and DelPage.
             WriteBatch batch;
             for (const auto & rec : legacy_edit.getRecords())
             {
-                // Get `normal_page_id` from memory's `page_entry_map`. Note: can not get `normal_page_id` from disk,
-                // if it is a record of RefPage to another RefPage, the later ref-id is resolve to the actual `normal_page_id`.
-                auto [is_ref, normal_page_id] = current->isRefId(rec.page_id);
-                if (is_ref)
+                if (rec.type == WriteBatch::WriteType::REF)
                 {
-                    batch.putRefPage(rec.page_id, normal_page_id);
-                    num_valid_ref_pages += 1;
+                    // Get `normal_page_id` from memory's `page_entry_map`. Note: can not get `normal_page_id` from disk,
+                    // if it is a record of RefPage to another RefPage, the later ref-id is resolve to the actual `normal_page_id`.
+                    auto [is_ref, normal_page_id] = current->isRefId(rec.page_id);
+                    if (is_ref)
+                    {
+                        batch.putRefPage(rec.page_id, normal_page_id);
+                        num_valid_ref_pages += 1;
+                    }
+                }
+                else if (rec.type == WriteBatch::WriteType::DEL)
+                {
+                    // DelPage should be migrate to new PageFile
+                    batch.delPage(rec.page_id);
+                    num_del_page_meta += 1;
                 }
             }
             gc_file_writer->write(batch, gc_file_edit);
@@ -576,10 +573,38 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         gc_file.setFormal();
         const auto id = gc_file.fileIdLevel();
         LOG_INFO(log,
-                 storage_name << " GC have migrated " << num_successful_migrate_pages << " regions and " << num_valid_ref_pages
-                              << " RefPages to PageFile_" << id.first << "_" << id.second);
+                 storage_name << " GC have migrated " << num_successful_migrate_pages //
+                              << " regions and " << num_valid_ref_pages               //
+                              << " RefPages and " << num_del_page_meta                //
+                              << " DelPage to PageFile_" << id.first << "_" << id.second);
     }
     return gc_file_edit;
+}
+
+/**
+ * Delete obsolete files that are not used by any version
+ * @param page_files            All avaliable files in disk
+ * @param writing_file_id_level The PageFile id which is writing to
+ * @param live_files            The live files after gc
+ */
+void PageStorage::gcRemoveObsoleteFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                        const PageFileIdAndLevel &                       writing_file_id_level,
+                                        const std::set<PageFileIdAndLevel> &             live_files)
+{
+    for (const auto & page_file : page_files)
+    {
+        const auto page_id_and_lvl = page_file.fileIdLevel();
+        if (page_id_and_lvl >= writing_file_id_level)
+        {
+            continue;
+        }
+
+        if (live_files.count(page_id_and_lvl) == 0)
+        {
+            // the page file is not used by any version, remove reader cache
+            page_file.destroy();
+        }
+    }
 }
 
 } // namespace DB

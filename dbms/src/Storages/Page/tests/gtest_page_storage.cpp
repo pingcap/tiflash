@@ -324,6 +324,65 @@ TEST_F(PageStorage_test, GcMoveRefPage)
     ASSERT_EQ(normal_page_id, 1UL);
 }
 
+TEST_F(PageStorage_test, GcMovePageDelMeta)
+{
+    const size_t buf_sz = 256;
+    char         c_buff[buf_sz];
+
+    {
+        // Page1 should be written to PageFile{1, 0}
+        WriteBatch batch;
+        memset(c_buff, 0xf, buf_sz);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(2, 0, buff, buf_sz);
+        buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(3, 0, buff, buf_sz);
+
+        storage->write(batch);
+    }
+
+    {
+        // DelPage1 should be written to PageFile{2, 0}
+        WriteBatch batch;
+        batch.delPage(1);
+
+        storage->write(batch);
+    }
+
+    PageFileIdAndLevel        id_and_lvl = {2, 0}; // PageFile{2, 0} is ready to be migrated by gc
+    PageStorage::GcLivesPages livesPages{{id_and_lvl, {0, {}}}};
+    PageStorage::GcCandidates candidates{
+        id_and_lvl,
+    };
+    const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
+    auto            s0         = storage->getSnapshot();
+    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates);
+
+    // We should see migration of DelPage1
+    bool exist = false;
+    for (const auto & rec : edit.getRecords())
+    {
+        if (rec.type == WriteBatch::WriteType::DEL && rec.page_id == 1)
+        {
+            exist = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(exist);
+    s0.reset();
+
+    auto live_files = storage->versioned_page_entries.gcApply(edit);
+    EXPECT_EQ(live_files.find(id_and_lvl), live_files.end());
+    storage->gcRemoveObsoleteFiles(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
+
+    // reopen PageStorage, Page 1 should be deleted
+    storage = reopenWithConfig(config);
+    auto s1 = storage->getSnapshot();
+    ASSERT_EQ(s1->version()->find(1), std::nullopt);
+}
+
 /**
  * PageStorage tests with predefine Page1 && Page2
  */
