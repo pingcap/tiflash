@@ -170,6 +170,8 @@ template <TMTPKType pk_type>
 BlockInputStreamPtr makeMultiWayMergeSortInput(const BlockInputStreams & inputs, const SortDescription & description,
     const size_t version_column_index, const size_t delmark_column_index, size_t max_block_size)
 {
+    if (pk_type != TMTPKType::UNSPECIFIED && inputs.size() == 1)
+        return std::make_shared<TMTSingleSortedBlockInputStream>(inputs[0]);
     return std::make_shared<TMTSortedBlockInputStream<pk_type>>(
         inputs, description, version_column_index, delmark_column_index, max_block_size);
 };
