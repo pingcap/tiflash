@@ -37,3 +37,6 @@
 [submodule "contrib/kvproto"]
 	path = contrib/kvproto
 	url = https://github.com/pingcap/kvproto.git
+[submodule "contrib/client-c"]
+	path = contrib/client-c
+	url = git@github.com:tikv/client-c.git
