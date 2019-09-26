@@ -33,7 +33,6 @@ private:
 
     bool first = true;
     bool finish = false;
-    UInt64 pre_block_last_pk;
     Block cur_block;
     Block next_block;
     Logger * log = &Logger::get("TMTSingleSortedBlockInputStream");

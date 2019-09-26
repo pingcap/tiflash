@@ -80,8 +80,6 @@ Block TMTSingleSortedBlockInputStream::readImpl()
                     return tmp_block;
                 first = false;
                 cur_block = std::move(tmp_block);
-                // just make it diff from the first element.
-                pre_block_last_pk = getPkInBlockAt(cur_block, 0) + 1;
                 continue;
             }
             next_block = std::move(tmp_block);
@@ -98,14 +96,12 @@ Block TMTSingleSortedBlockInputStream::readImpl()
         const UInt8 * delmark_column
             = static_cast<const ColumnUInt8 *>(cur_block.getByPosition(delmark_column_index).column.get())->getData().data();
 
-        if (isPKDiffEachInSortedColumn(pk_column, rows) && pk_column[0] != pre_block_last_pk && pk_column[rows - 1] != next_block_first_pk)
-            if (memoryIsZero(delmark_column, rows))
-            {
-                pre_block_last_pk = pk_column[rows - 1];
-                auto tmp_block = std::move(cur_block);
-                updateNextBlock();
-                return tmp_block;
-            }
+        if (isPKDiffEachInSortedColumn(pk_column, rows) && pk_column[rows - 1] != next_block_first_pk && memoryIsZero(delmark_column, rows))
+        {
+            auto tmp_block = std::move(cur_block);
+            updateNextBlock();
+            return tmp_block;
+        }
 
         IColumn::Filter filter(rows, 0);
         for (size_t pos = 1; pos < rows; ++pos)
@@ -118,14 +114,12 @@ Block TMTSingleSortedBlockInputStream::readImpl()
 
         if (memoryIsZero(filter.data(), rows))
         {
-            pre_block_last_pk = pk_column[rows - 1];
             updateNextBlock();
             continue;
         }
         else
         {
             Block res = filterBlock(cur_block, filter);
-            pre_block_last_pk = pk_column[rows - 1];
             updateNextBlock();
             return res;
         }
