@@ -106,11 +106,8 @@ struct RidGenerator
         {
             auto res = compareTuple(stable_block_columns, row, stable_block_columns, row + 1, sort_desc);
             if (unlikely(res >= 0))
-            {
-                auto ss = static_cast<DeltaMergeBlockInputStream<DeltaValueSpace, DefaultDeltaTree::EntryIterator> *>(stable_stream.get());
-                ss->getHeader();
-                throw Exception("Illegal stable data, the next row@" + DB::toString(row + 1) + " is expected larger than the previous row@" + DB::toString(row));
-            }
+                throw Exception("Illegal stable data, the next row@" + DB::toString(row + 1) + " is expected larger than the previous row@"
+                                + DB::toString(row));
         }
 #endif
         return true;

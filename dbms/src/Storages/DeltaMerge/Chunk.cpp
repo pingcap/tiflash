@@ -92,17 +92,14 @@ Chunk createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, Wr
 
         wb.putRefPage(m.page_id, col_meta.page_id);
         ref_chunk.insert(m);
-
-
-        if (m.page_id == 1825 || col_meta.page_id == 1825)
-            m.page_id += 0;
     }
     return ref_chunk;
 }
 
 Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id, WriteBatch & wb)
 {
-    Chunks ref_chunks(chunks.size());
+    Chunks ref_chunks;
+    ref_chunks.reserve(chunks.size());
     for (auto & chunk : chunks)
         ref_chunks.push_back(createRefChunk(chunk, gen_data_page_id, wb));
     return ref_chunks;

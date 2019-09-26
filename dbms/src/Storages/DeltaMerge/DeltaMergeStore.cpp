@@ -175,7 +175,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
-    commitWrites(std::move(actions), std::move(wbs), *dm_context, op_context, db_context, db_settings);
+    commitWrites(std::move(actions), std::move(wbs), *dm_context, op_context, db_context, db_settings, true);
 }
 
 
@@ -217,7 +217,9 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         action.task = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
-    commitWrites(std::move(actions), std::move(wbs), *dm_context, op_context, db_context, db_settings);
+    // TODO: We need to do a delta merge after write a delete range, otherwise, the rows got deleted could never be acutally removed.
+
+    commitWrites(std::move(actions), std::move(wbs), *dm_context, op_context, db_context, db_settings, false);
 }
 
 void DeltaMergeStore::commitWrites(WriteActions &&       actions,
@@ -225,7 +227,8 @@ void DeltaMergeStore::commitWrites(WriteActions &&       actions,
                                    DMContext &           dm_context,
                                    OpContext &           op_context,
                                    const Context &       db_context,
-                                   const DB::Settings &  db_settings)
+                                   const DB::Settings &  db_settings,
+                                   bool                  is_upsert)
 {
     // Commit updates to disk.
     {
@@ -248,28 +251,68 @@ void DeltaMergeStore::commitWrites(WriteActions &&       actions,
         dm_context.storage_pool.log().write(wbs.removed_data);
     }
 
-    // Flush delta if needed.
+    RemoveWriteBatches remove_wbs;
+
+    // Split or merge delta if needed.
+
+    // TODO: maybe we should do checking only after we have accumulated enough updates.
+
+    size_t               segment_rows_setting = db_settings.dm_segment_rows;
+    std::set<SegmentPtr> to_delta_merge_segments;
+
     for (auto & action : actions)
     {
         const auto & segment = action.segment;
         const auto   range   = segment->getRange();
-        // TODO: Do flush by background threads.
-        if (segment->shouldFlushDelta(dm_context))
+
+        if (shouldSplit(segment, segment_rows_setting))
         {
-            RemoveWriteBatches remove_wbs;
-            auto               new_segment = action.segment->flushDelta(dm_context, remove_wbs);
+            auto [new_seg_left, new_seg_right] = segment->split(dm_context, remove_wbs);
+
             {
                 std::unique_lock lock(read_write_mutex);
 
-                segments[range.end] = new_segment;
-
-                remove_wbs.write(dm_context.storage_pool);
+                segments.erase(range.end);
+                segments[new_seg_left->getRange().end]  = new_seg_left;
+                segments[new_seg_right->getRange().end] = new_seg_right;
             }
+
+            if (new_seg_left->shouldFlushDelta(dm_context))
+                to_delta_merge_segments.insert(new_seg_left);
+            if (new_seg_right->shouldFlushDelta(dm_context))
+                to_delta_merge_segments.insert(new_seg_right);
+
+#ifndef NDEBUG
+            new_seg_left->check(dm_context, "After split(left). " + new_seg_left->simpleInfo());
+            new_seg_right->check(dm_context, "After split(right). " + new_seg_right->simpleInfo());
+#endif
+        }
+        else
+        {
+            if (segment->shouldFlushDelta(dm_context))
+                to_delta_merge_segments.insert(segment);
         }
     }
 
-    // TODO: Should only check the updated segments.
-    afterInsertOrDelete(db_context, db_settings);
+    for (auto & segment : to_delta_merge_segments)
+    {
+        const auto & range       = segment->getRange();
+        const auto   new_segment = segment->flushDelta(dm_context, remove_wbs);
+        {
+            std::unique_lock lock(read_write_mutex);
+
+            segments[range.end] = new_segment;
+        }
+    }
+
+    remove_wbs.write(dm_context.storage_pool);
+
+    // Merge if needed.
+
+    // TODO: we should only check those segments which has got delete range written into.
+
+    if (!is_upsert)
+        afterDelete(db_context, db_settings);
 }
 
 BlockInputStreams DeltaMergeStore::readRaw(const Context &       db_context,
@@ -402,23 +445,17 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     return res;
 }
 
-bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::Settings & db_settings)
+bool DeltaMergeStore::afterDelete(const Context & db_context, const DB::Settings & db_settings)
 {
     auto   dm_context           = newDMContext(db_context, db_settings);
     size_t segment_rows_setting = db_settings.dm_segment_rows;
 
-    const size_t max_num_jobs = 1;
-    size_t num_jobs_done = 0;
     while (true)
     {
-        // FIXME: temporary trivial check for endless loop
-        if (num_jobs_done >= max_num_jobs)
-            break;
         /// TODO: fix this naive algorithm, to reduce merge/split frequency.
 
-        SegmentPtr option;
+        SegmentPtr current;
         SegmentPtr next;
-        bool       is_split = false;
 
         {
             std::shared_lock lock(read_write_mutex);
@@ -427,38 +464,22 @@ bool DeltaMergeStore::afterInsertOrDelete(const Context & db_context, const DB::
             while (it != segments.end())
             {
                 auto & segment = it->second;
-                if (shouldSplit(segment, segment_rows_setting))
-                {
-                    option   = segment;
-                    is_split = true;
-                    break;
-                }
                 ++it;
                 if (it == segments.end())
                     break;
                 auto & next_segment = it->second;
                 if (shouldMerge(segment, next_segment, segment_rows_setting))
                 {
-                    option   = segment;
-                    next     = next_segment;
-                    is_split = false;
+                    current = segment;
+                    next    = next_segment;
                     break;
                 }
             }
         }
 
-        if (option)
+        if (current)
         {
-            if (is_split)
-            {
-                split(*dm_context, option);
-            }
-            else
-            {
-                merge(*dm_context, option, next);
-            }
-            // Keep checking until there are no options any more.
-            ++num_jobs_done;
+            merge(*dm_context, current, next);
             continue;
         }
         else
@@ -515,7 +536,7 @@ void DeltaMergeStore::split(DMContext & dm_context, const SegmentPtr & segment)
 
 void DeltaMergeStore::merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right)
 {
-    LOG_DEBUG(log, "Merge segment, left:" + left->info() + ", right:" + right->info());
+    LOG_DEBUG(log, "Merge segment, left:" << left->info() << ", right:" << right->info());
 
     auto left_range  = left->getRange();
     auto right_range = right->getRange();
@@ -631,8 +652,8 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
         {
             // Fall back to find column by name, this path should only call by tests.
             LOG_WARNING(log,
-                        "Try to apply alter to column: " + command.column_name + ", id:" + toString(command.column_id)
-                            + ", but not found by id, fall back locating col by name.");
+                        "Try to apply alter to column: " << command.column_name << ", id:" << toString(command.column_id)
+                                                         << ", but not found by id, fall back locating col by name.");
             for (auto && column_define : table_columns)
             {
                 if (column_define.name == command.column_name)

@@ -34,6 +34,40 @@ struct RemoveWriteBatches
     }
 };
 
+struct DeltaValueSpace
+{
+    DeltaValueSpace(const ColumnDefine & handle_define, const ColumnDefines & column_defines, const Block & block)
+    {
+        columns.reserve(column_defines.size());
+        columns_ptr.reserve(column_defines.size());
+        for (const auto & c : column_defines)
+        {
+
+            auto & col = block.getByName(c.name).column;
+            columns.emplace_back(col);
+            columns_ptr.emplace_back(col.get());
+
+            if (c.name == handle_define.name)
+                handle_column = toColumnVectorDataPtr<Handle>(col);
+        }
+    }
+
+    void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
+    {
+        des.insertFrom(*(columns_ptr[column_index]), value_id);
+    }
+
+    Handle getHandle(size_t value_id) //
+    {
+        return (*handle_column)[value_id];
+    }
+
+    Columns                        columns;
+    ColumnRawPtrs                  columns_ptr;
+    PaddedPODArray<Handle> const * handle_column;
+};
+using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
+
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot
 {
@@ -68,6 +102,8 @@ public:
         DeltaIndex::Iterator index_end;
 
         ColumnDefines read_columns;
+
+        explicit operator bool() const { return (bool)delta_value_space; }
     };
 
     Segment(const Segment &) = delete;
@@ -181,7 +217,7 @@ private:
                         Handle               split_point,
                         RemoveWriteBatches & remove_wbs) const;
 
-    SegmentPair doSplit2(DMContext & dm_context, Handle split_point, RemoveWriteBatches & remove_wbs) const;
+    SegmentPair doRefSplit(DMContext & dm_context, Handle split_point, RemoveWriteBatches & remove_wbs) const;
 
     /// Merge this segment and the other into one.
     /// Generates a new segment object, the current object is not modified.
@@ -193,7 +229,7 @@ private:
                               const ReadInfo &     right_snapshot,
                               RemoveWriteBatches & remove_wbs);
 
-    static SegmentPtr doMerge2(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, RemoveWriteBatches & remove_wbs);
+    static SegmentPtr doMergeFast(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, RemoveWriteBatches & remove_wbs);
 
     /// Reset the content of this segment.
     /// Generates a new segment object, the current object is not modified.

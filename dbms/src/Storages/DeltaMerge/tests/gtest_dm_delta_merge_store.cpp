@@ -399,6 +399,9 @@ try
 
             LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1," << num_rows_write_in_total << "]");
         }
+
+        if (num_rows_write_in_total >= 1000)
+            break;
     }
 }
 catch (const Exception & e)

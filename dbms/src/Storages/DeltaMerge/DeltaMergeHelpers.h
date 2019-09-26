@@ -271,39 +271,5 @@ inline String rangeToString(const Range<T> & range)
     return rangeToString<T, true>(range.start, range.end);
 }
 
-struct DeltaValueSpace
-{
-    DeltaValueSpace(const ColumnDefine & handle_define, const ColumnDefines & column_defines, const Block & block)
-    {
-        columns.reserve(column_defines.size());
-        columns_ptr.reserve(column_defines.size());
-        for (const auto & c : column_defines)
-        {
-
-            auto & col = block.getByName(c.name).column;
-            columns.emplace_back(col);
-            columns_ptr.emplace_back(col.get());
-
-            if (c.name == handle_define.name)
-                handle_column = toColumnVectorDataPtr<Handle>(col);
-        }
-    }
-
-    void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
-    {
-        des.insertFrom(*(columns_ptr[column_index]), value_id);
-    }
-
-    Handle getHandle(size_t value_id) //
-    {
-        return (*handle_column)[value_id];
-    }
-
-    Columns                        columns;
-    ColumnRawPtrs                  columns_ptr;
-    PaddedPODArray<Handle> const * handle_column;
-};
-using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
-
 } // namespace DM
 } // namespace DB
