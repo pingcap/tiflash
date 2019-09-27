@@ -126,6 +126,16 @@ public:
             sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
     }
 
+    ExpressionActions(const std::vector<NameAndTypePair> & input_columns_, const Settings & settings_)
+        : settings(settings_)
+    {
+        for (const auto & input_elem : input_columns_)
+        {
+            input_columns.emplace_back(input_elem.name, input_elem.type);
+            sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
+        }
+    }
+
     /// For constant columns the columns themselves can be contained in `input_columns_`.
     ExpressionActions(const ColumnsWithTypeAndName & input_columns_, const Settings & settings_)
         : settings(settings_)

@@ -44,7 +44,7 @@ static String genFuncString(const String & func_name, const Names & argument_nam
     return ss.str();
 }
 
-DAGExpressionAnalyzer::DAGExpressionAnalyzer(const NamesAndTypesList & source_columns_, const Context & context_)
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(const std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(source_columns_),
       context(context_),
       after_agg(false),
@@ -177,7 +177,10 @@ void DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const 
     }
 }
 
-const NamesAndTypesList & DAGExpressionAnalyzer::getCurrentInputColumns() { return after_agg ? aggregated_columns : source_columns; }
+const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns()
+{
+    return after_agg ? aggregated_columns : source_columns;
+}
 
 void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project)
 {
@@ -194,10 +197,9 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
     bool need_update_aggregated_columns = false;
     NamesAndTypesList updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
-    auto agg_col_names = aggregated_columns.getNames();
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
-        String & name = agg_col_names[i];
+        String & name = aggregated_columns[i].name;
         String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
         if (name != updated_name)
         {
@@ -208,13 +210,13 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns.getTypes()[i]);
+            updated_aggregated_columns.emplace_back(name, aggregated_columns[i].type);
             step.required_output.push_back(name);
         }
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        String & name = agg_col_names[i + aggregation.agg_func_size()];
+        String & name = aggregated_columns[i + aggregation.agg_func_size()].name;
         String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
         if (name != updated_name)
         {
@@ -225,7 +227,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns.getTypes()[i]);
+            updated_aggregated_columns.emplace_back(name, aggregated_columns[i].type);
             step.required_output.push_back(name);
         }
     }

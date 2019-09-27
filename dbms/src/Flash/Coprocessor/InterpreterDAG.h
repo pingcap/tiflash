@@ -90,7 +90,6 @@ private:
     const DAGQuerySource & dag;
 
     NamesWithAliases final_project;
-    NamesAndTypesList source_columns;
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;

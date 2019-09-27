@@ -123,6 +123,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
 
     Names required_columns;
+    std::vector<NameAndTypePair> source_columns;
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
@@ -164,23 +165,8 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         }
     }
 
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns, context);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
-    if (!dag.hasAggregation())
-    {
-        // if the dag request does not contain agg, then the final output is
-        // based on the output of table scan
-        for (auto i : dag.getDAGRequest().output_offsets())
-        {
-            if (i >= required_columns.size())
-            {
-                // array index out of bound
-                throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
-            }
-            // do not have alias
-            final_project.emplace_back(required_columns[i], "");
-        }
-    }
     // todo handle alias column
     const Settings & settings = context.getSettingsRef();
 
@@ -259,6 +245,22 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
                 p_stream->setQuota(quota);
             }
         });
+    }
+
+    if (!dag.hasAggregation())
+    {
+        // if the dag request does not contain agg, then the final output is
+        // based on the output of table scan
+        for (auto i : dag.getDAGRequest().output_offsets())
+        {
+            if (i >= (Int64)analyzer->getCurrentInputColumns().size())
+            {
+                // array index out of bound
+                throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+            }
+            // do not have alias
+            final_project.emplace_back(analyzer->getCurrentInputColumns()[i].name, "");
+        }
     }
 }
 

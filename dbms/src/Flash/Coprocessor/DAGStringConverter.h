@@ -22,7 +22,7 @@ public:
 
     String buildSqlString();
 
-    const NamesAndTypesList & getCurrentColumns()
+    const std::vector<NameAndTypePair> & getCurrentColumns()
     {
         if (afterAgg)
         {
@@ -50,8 +50,8 @@ protected:
     Context & context;
     const tipb::DAGRequest & dag_request;
     // used by columnRef, which starts with 1, and refs column index in the original ts/agg output
-    NamesAndTypesList columns_from_ts;
-    NamesAndTypesList columns_from_agg;
+    std::vector<NameAndTypePair> columns_from_ts;
+    std::vector<NameAndTypePair> columns_from_agg;
     // used by output_offset, which starts with 0, and refs the index in the selected output of ts/agg operater
     Names output_from_ts;
     Names output_from_agg;

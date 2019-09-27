@@ -49,7 +49,7 @@ const String & getFunctionName(const tipb::Expr & expr)
     }
 }
 
-String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col, bool for_parser)
+String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, bool for_parser)
 {
     std::stringstream ss;
     Int64 column_id = 0;
@@ -99,7 +99,7 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
             {
                 throw Exception("Column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
             }
-            return input_col.getNames()[column_id];
+            return input_col[column_id].name;
         case tipb::ExprType::Count:
         case tipb::ExprType::Sum:
         case tipb::ExprType::Avg:
@@ -149,7 +149,7 @@ String exprToString(const tipb::Expr & expr, const NamesAndTypesList & input_col
 
 const String & getTypeName(const tipb::Expr & expr) { return tipb::ExprType_Name(expr.tp()); }
 
-String getName(const tipb::Expr & expr, const NamesAndTypesList & current_input_columns)
+String getName(const tipb::Expr & expr, const std::vector<NameAndTypePair> & current_input_columns)
 {
     return exprToString(expr, current_input_columns, false);
 }
