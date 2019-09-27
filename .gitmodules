@@ -41,3 +41,6 @@
 	path = contrib/tipb
 	url = https://github.com/pingcap/tipb.git
 	branch = master
+[submodule "contrib/client-c"]
+	path = contrib/client-c
+	url = git@github.com:tikv/client-c.git
