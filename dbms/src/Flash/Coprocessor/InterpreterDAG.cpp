@@ -1,5 +1,6 @@
 #include <Flash/Coprocessor/InterpreterDAG.h>
 
+#include <Core/TMTPKType.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -18,11 +19,13 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
 
@@ -42,6 +45,59 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_), dag(dag_), log(&Logger::get("InterpreterDAG"))
 {}
 
+template <typename HandleType>
+bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges)
+{
+    if (ranges.empty())
+        return false;
+    std::sort(ranges.begin(), ranges.end(),
+        [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
+
+    HandleRange<HandleType> merged_range;
+    merged_range.first = ranges[0].first;
+    merged_range.second = ranges[0].second;
+
+    for (size_t i = 1; i < ranges.size(); i++)
+    {
+        if (merged_range.second >= ranges[i].first)
+            merged_range.second = merged_range.second >= ranges[i].second ? merged_range.second : ranges[i].second;
+        else
+            break;
+    }
+
+    return merged_range.first == TiKVHandle::Handle<HandleType>::normal_min && merged_range.second == TiKVHandle::Handle<HandleType>::max;
+}
+
+bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, TableID table_id, bool pk_is_uint64)
+{
+    if (key_ranges.empty())
+        return true;
+
+    std::vector<HandleRange<Int64>> scan_ranges;
+    for (auto & range : key_ranges)
+    {
+        TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(range.first, table_id);
+        TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(range.second, table_id);
+        scan_ranges.emplace_back(std::make_pair(start, end));
+    }
+
+    if (pk_is_uint64)
+    {
+        std::vector<HandleRange<UInt64>> update_ranges;
+        for (auto & range : scan_ranges)
+        {
+            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
+
+            for (int i = 0; i < n; i++)
+            {
+                update_ranges.emplace_back(new_range[i]);
+            }
+        }
+        return isAllValueCoveredByRanges<UInt64>(update_ranges);
+    }
+    else
+        return isAllValueCoveredByRanges<Int64>(scan_ranges);
+}
 // the flow is the same as executeFetchcolumns
 void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
@@ -143,6 +199,9 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         max_streams *= settings.max_streams_to_max_threads_ratio;
     }
+
+    if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64()))
+        throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
 
     //todo support index in
     SelectQueryInfo query_info;

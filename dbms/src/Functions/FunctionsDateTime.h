@@ -3,6 +3,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeString.h>
 
@@ -616,7 +617,6 @@ struct DateTimeTransformImpl
         }
     }
 };
-
 
 template <typename ToDataType, typename Transform>
 class FunctionDateOrDateTimeToSomething : public IFunction
@@ -1276,6 +1276,68 @@ public:
     }
 };
 
+template <bool convert_from_utc>
+class FunctionMyTimeZoneConverter : public IFunction
+{
+    using FromFieldType = typename DataTypeMyDateTime::FieldType;
+    using ToFieldType = typename DataTypeMyDateTime::FieldType;
+public:
+    static constexpr auto name = convert_from_utc ? "ConvertTimeZoneFromUTC": "ConvertTimeZoneToUTC";
+    static FunctionPtr create(const Context &) {return std::make_shared<FunctionMyTimeZoneConverter>(); };
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (arguments.size() != 2)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+                + toString(arguments.size()) + ", should be 2",
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
+            throw Exception{
+                "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName() +
+                ". Should be MyDateTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+
+        return arguments[0].type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
+    {
+        if (const ColumnVector<FromFieldType> * col_from
+            = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get()))
+        {
+            auto col_to = ColumnVector<ToFieldType>::create();
+            const typename ColumnVector<FromFieldType>::Container & vec_from = col_from->getData();
+            typename ColumnVector<ToFieldType>::Container & vec_to = col_to->getData();
+            size_t size = vec_from.size();
+            vec_to.resize(size);
+
+            const auto & time_zone_utc = DateLUT::instance("UTC");
+            const auto & time_zone_other = extractTimeZoneFromFunctionArguments(block, arguments, 1, 0);
+            for (size_t i = 0; i < size; ++i)
+            {
+                UInt64 result_time = 0;
+                if constexpr (convert_from_utc)
+                    convertTimeZone(vec_from[i], result_time, time_zone_utc, time_zone_other);
+                else
+                    convertTimeZone(vec_from[i], result_time, time_zone_other, time_zone_utc);
+                vec_to[i] = result_time;
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        }
+        else
+            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+            + " of first argument of function " + name,
+            ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 /// Just changes time zone information for data type. The calculation is free.
 class FunctionToTimeZone : public IFunction
