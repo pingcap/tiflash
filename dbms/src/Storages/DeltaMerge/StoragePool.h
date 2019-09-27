@@ -20,7 +20,7 @@ public:
     using Duration  = Clock::duration;
     using Seconds   = std::chrono::seconds;
 
-    explicit StoragePool(const String & path);
+    StoragePool(const String & name, const String & path);
 
     PageId maxLogPageId() { return max_log_page_id; }
     PageId maxDataPageId() { return max_data_page_id; }

@@ -10,8 +10,12 @@ namespace DB
 namespace DM
 {
 
+const Chunk::Version Chunk::CURRENT_VERSION = 1;
+
 void Chunk::serialize(WriteBuffer & buf) const
 {
+    writeVarUInt(Chunk::CURRENT_VERSION, buf); // Add binary version
+
     writeIntBinary(handle_start, buf);
     writeIntBinary(handle_end, buf);
     writePODBinary(is_delete_range, buf);
@@ -37,6 +41,12 @@ void Chunk::serialize(WriteBuffer & buf) const
 
 Chunk Chunk::deserialize(ReadBuffer & buf)
 {
+    // Check binary version
+    Chunk::Version chunk_batch_version;
+    readVarUInt(chunk_batch_version, buf);
+    if (chunk_batch_version != Chunk::CURRENT_VERSION)
+        throw Exception("Chunk binary version not match: " + DB::toString(chunk_batch_version), ErrorCodes::LOGICAL_ERROR);
+
     Handle start, end;
     readIntBinary(start, buf);
     readIntBinary(end, buf);

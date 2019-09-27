@@ -43,7 +43,8 @@ public:
 
     DeltaMergeStore(Context &             db_context, //
                     const String &        path_,
-                    const String &        name,
+                    const String &        db_name,
+                    const String &        tbl_name,
                     const ColumnDefines & columns,
                     const ColumnDefine &  handle,
                     const Settings &      settings_);
