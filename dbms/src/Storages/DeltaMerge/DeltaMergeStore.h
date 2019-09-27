@@ -126,7 +126,7 @@ private:
 
     bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
-    bool afterInsertOrDelete(const Context & db_context, const DB::Settings & db_settings);
+    bool afterDelete(const Context & db_context, const DB::Settings & db_settings);
     bool shouldSplit(const SegmentPtr & segment, size_t segment_rows_setting);
     bool shouldMerge(const SegmentPtr & left, const SegmentPtr & right, size_t segment_rows_setting);
     void split(DMContext & dm_context, const SegmentPtr & segment);
@@ -141,7 +141,8 @@ private:
                       DMContext &           dm_context,
                       OpContext &           op_context,
                       const Context &       db_context,
-                      const DB::Settings &  db_settings);
+                      const DB::Settings &  db_settings,
+                      bool                  is_upsert);
 
 private:
     String      path;
