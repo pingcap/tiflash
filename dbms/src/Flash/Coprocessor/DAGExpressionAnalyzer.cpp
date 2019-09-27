@@ -199,8 +199,8 @@ void constructTZExpr(tipb::Expr & tz_expr, const tipb::DAGRequest & rqst, bool f
         tz_expr.set_tp(tipb::ExprType::String);
         tz_expr.set_val(rqst.time_zone_name());
         auto * field_type = tz_expr.mutable_field_type();
-        field_type->set_tp(0xfe);
-        field_type->set_flag(1);
+        field_type->set_tp(TiDB::TypeString);
+        field_type->set_flag(TiDB::ColumnFlagNotNull);
     }
     else
     {
@@ -209,12 +209,12 @@ void constructTZExpr(tipb::Expr & tz_expr, const tipb::DAGRequest & rqst, bool f
         encodeDAGInt64(from_utc ? rqst.time_zone_offset() : -rqst.time_zone_offset(), ss);
         tz_expr.set_val(ss.str());
         auto * field_type = tz_expr.mutable_field_type();
-        field_type->set_tp(8);
-        field_type->set_flag(1);
+        field_type->set_tp(TiDB::TypeLongLong);
+        field_type->set_flag(TiDB::ColumnFlagNotNull);
     }
 }
 
-bool hasMeaningfullTZInfo(const tipb::DAGRequest & rqst)
+bool hasMeaningfulTZInfo(const tipb::DAGRequest &rqst)
 {
     if (rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0)
         return rqst.time_zone_name() != "UTC";
@@ -233,10 +233,25 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
     return cast_expr_name;
 }
 
-bool DAGExpressionAnalyzer::appendTimeZoneCastAfterTS(
-    ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst)
+// add timezone cast after table scan, this is used for session level timezone support
+// the basic idea of supporting session level timezone is that:
+// 1. for every timestamp column used in the dag request, after reading it from table scan, we add
+//    cast function to convert its timezone to the timezone specified in DAG request
+// 2. for every timestamp column that will be returned to TiDB, we add cast function to convert its
+//    timezone to UTC
+// for timestamp columns without any transformation or calculation(e.g. select ts_col from table),
+// this will introduce two useless casts, in order to avoid these redundant cast, when cast the ts
+// column to the columns with session-level timezone info, the original ts columns with UTC
+// timezone are still kept
+// for DAG request that does not contain agg, the final project will select the ts column with UTC
+// timezone, which is exactly what TiDB want
+// for DAG request that contains agg, any ts column after agg has session-level timezone info(since the ts
+// column with UTC timezone will never be used in during agg), all the column with ts datatype will
+// convert back to UTC timezone
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
+        ExpressionActionsChain &chain, std::vector<bool> is_ts_column, const tipb::DAGRequest &rqst)
 {
-    if (!hasMeaningfullTZInfo(rqst))
+    if (!hasMeaningfulTZInfo(rqst))
         return false;
 
     bool ret = false;
@@ -269,7 +284,7 @@ void DAGExpressionAnalyzer::appendAggSelect(
     bool need_update_aggregated_columns = false;
     NamesAndTypesList updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
-    bool need_append_timezone_cast = hasMeaningfullTZInfo(rqst);
+    bool need_append_timezone_cast = hasMeaningfulTZInfo(rqst);
     tipb::Expr tz_expr;
     if (need_append_timezone_cast)
         constructTZExpr(tz_expr, rqst, false);
@@ -358,8 +373,8 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
             type_expr.set_tp(tipb::ExprType::String);
             type_expr.set_val(expected_type->getName());
             auto * type_field_type = type_expr.mutable_field_type();
-            type_field_type->set_tp(0xfe);
-            type_field_type->set_flag(1);
+            type_field_type->set_tp(TiDB::TypeString);
+            type_field_type->set_flag(TiDB::ColumnFlagNotNull);
             getActions(type_expr, actions);
 
             Names cast_argument_names;

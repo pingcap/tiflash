@@ -48,7 +48,12 @@ public:
         if (chain.steps.empty())
         {
             chain.settings = settings;
-            chain.steps.emplace_back(std::make_shared<ExpressionActions>(columns, settings));
+            NamesAndTypesList column_list;
+            for (const auto & col : columns)
+            {
+                column_list.emplace_back(col.name, col.type);
+            }
+            chain.steps.emplace_back(std::make_shared<ExpressionActions>(column_list, settings));
         }
     }
     void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
@@ -57,7 +62,8 @@ public:
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     String applyFunction(const String & func_name, Names & arg_names, ExpressionActionsPtr & actions);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
-    bool appendTimeZoneCastAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst);
+    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain &chain, std::vector<bool> is_ts_column,
+                                    const tipb::DAGRequest &rqst);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
 };
 

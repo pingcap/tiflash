@@ -279,7 +279,7 @@ void InterpreterDAG::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pi
         return;
 
     ExpressionActionsChain chain;
-    if (analyzer->appendTimeZoneCastAfterTS(chain, is_ts_column, dag.getDAGRequest()))
+    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column, dag.getDAGRequest()))
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
 }
 
