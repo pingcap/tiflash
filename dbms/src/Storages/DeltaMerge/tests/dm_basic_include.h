@@ -31,6 +31,7 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
 }
 #define ASSERT_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
 #define EXPECT_RANGE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
+#define GET_GTEST_FULL_NAME (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." + ::testing::UnitTest::GetInstance()->current_test_info()->name())
 
 class DMTestEnv
 {

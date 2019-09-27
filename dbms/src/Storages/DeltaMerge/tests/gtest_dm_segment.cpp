@@ -295,7 +295,7 @@ TEST_F(Segment_test, Split)
                                               /* storage_snap= */ {dmContext().storage_pool},
                                               /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter */ {},
+                                              /* filter= */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                                               /* expected_block_size= */ 1024);
             in->readPrefix();

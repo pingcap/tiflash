@@ -408,6 +408,7 @@ void KVStore::removeRegion(const RegionID region_id, RegionTable * region_table,
     if (region_table)
         region_table->removeRegion(region_id);
 
+
     LOG_INFO(log, "Remove [region " << region_id << "] done");
 }
 
