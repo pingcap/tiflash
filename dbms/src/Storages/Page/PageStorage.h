@@ -56,7 +56,9 @@ public:
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
 public:
-    PageStorage(String name, const String & storage_path, const Config & config_, std::atomic<PageId> * max_page_id = nullptr);
+    PageStorage(String name, const String & storage_path, const Config & config_);
+
+    PageId getMaxId();
 
     void write(const WriteBatch & write_batch);
 

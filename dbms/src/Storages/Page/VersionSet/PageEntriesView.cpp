@@ -141,4 +141,14 @@ std::set<PageId> PageEntriesView::validNormalPageIds() const
     return valid_normal_pages;
 }
 
+PageId PageEntriesView::maxId() const
+{
+    PageId max_id = 0;
+    for (auto node = tail; node != nullptr; node = node->prev)
+    {
+        max_id = std::max(max_id, node->maxId());
+    }
+    return max_id;
+}
+
 } // namespace DB

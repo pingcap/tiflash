@@ -52,7 +52,7 @@ PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file,
     return page_files;
 }
 
-PageStorage::PageStorage(String name, const String & storage_path_, const Config & config_, std::atomic<PageId> * max_page_id)
+PageStorage::PageStorage(String name, const String & storage_path_, const Config & config_)
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
@@ -68,7 +68,7 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     for (auto & page_file : page_files)
     {
         PageEntriesEdit edit;
-        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit, max_page_id);
+        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
 
         // Only level 0 is writable.
         if (page_file.getLevel() == 0)
@@ -97,6 +97,12 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     }
     versioned_page_entries.restore(builder.build());
 #endif
+}
+
+PageId PageStorage::getMaxId()
+{
+    std::lock_guard<std::mutex> write_lock(write_mutex);
+    return versioned_page_entries.getSnapshot()->version()->maxId();
 }
 
 PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
