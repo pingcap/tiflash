@@ -180,13 +180,14 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
     }
 
     // update normal page's entry
-    auto old_entry = view->findNormalPageEntry(normal_page_id);
-    if (is_ref_exist && old_entry == nullptr)
+    const auto old_entry = view->findNormalPageEntry(normal_page_id);
+    if (is_ref_exist && !old_entry)
     {
         throw DB::Exception("Accessing RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(normal_page_id),
                             ErrorCodes::LOGICAL_ERROR);
     }
-    if (old_entry == nullptr)
+
+    if (!old_entry)
     {
         // Page{normal_page_id} not exist
         rec.entry.ref                                 = 1;
@@ -219,7 +220,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
     // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
     const PageId normal_page_id = view->resolveRefId(rec.ori_page_id);
     const auto   old_entry      = view->findNormalPageEntry(normal_page_id);
-    if (likely(old_entry != nullptr))
+    if (likely(old_entry))
     {
         // if RefPage{ref_id} already exist, release that ref first
         auto [is_ref_id, old_normal_id] = view->isRefId(rec.page_id);
@@ -279,8 +280,8 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
 
 void DeltaVersionEditAcceptor::decreasePageRef(const PageId page_id)
 {
-    auto old_entry = view->findNormalPageEntry(page_id);
-    if (old_entry != nullptr)
+    const auto old_entry = view->findNormalPageEntry(page_id);
+    if (!old_entry)
     {
         auto entry = *old_entry;
         entry.ref  = old_entry->ref <= 1 ? 0 : old_entry->ref - 1;

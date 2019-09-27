@@ -4,6 +4,7 @@
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
+#include <optional>
 
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
@@ -59,18 +60,18 @@ public:
     template <bool must_exist = false>
     void ref(PageId ref_id, PageId page_id);
 
-    inline const PageEntry * find(const PageId page_id) const
+    inline std::optional<PageEntry> find(const PageId page_id) const
     {
         auto ref_iter = page_ref.find(page_id);
         if (ref_iter == page_ref.end())
-            return nullptr;
+            return std::nullopt;
         else
         {
             auto normal_iter = normal_pages.find(ref_iter->second);
             if (normal_iter == normal_pages.end())
-                return nullptr;
+                return std::nullopt;
             else
-                return &normal_iter->second;
+                return normal_iter->second;
         }
     }
 
@@ -138,6 +139,10 @@ protected:
 
     inline bool isRefDeleted(PageId page_id) const { return ref_deletions.count(page_id) > 0; }
 
+protected:
+    template <bool must_exist = true>
+    void decreasePageRef(PageId page_id);
+
 private:
     PageId resolveRefId(PageId page_id) const
     {
@@ -148,9 +153,6 @@ private:
         auto [is_ref, normal_page_id] = isRefId(page_id);
         return is_ref ? normal_page_id : page_id;
     }
-
-    template <bool must_exist = true>
-    void decreasePageRef(PageId page_id);
 
     void copyEntries(const PageEntriesMixin & rhs)
     {
@@ -414,6 +416,7 @@ public:
 
     void merge(PageEntriesForDelta & rhs)
     {
+        // TODO we need more test on this function
         assert(!rhs.isBase()); // rhs must be delta
         for (auto page_id : rhs.ref_deletions)
         {
@@ -422,6 +425,7 @@ public:
             {
                 ref_deletions.insert(page_id);
             }
+            decreasePageRef<false>(page_id);
         }
         for (auto it : rhs.page_ref)
         {

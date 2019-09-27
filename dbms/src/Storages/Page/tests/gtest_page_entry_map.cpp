@@ -79,7 +79,7 @@ TEST_F(PageEntryMap_test, UpdatePageEntry)
     ASSERT_EQ(map->at(page_id).checksum, entry1.checksum);
 
     map->del(page_id);
-    ASSERT_EQ(map->find(page_id), nullptr);
+    ASSERT_EQ(map->find(page_id), std::nullopt);
 }
 
 TEST_F(PageEntryMap_test, PutDel)
@@ -90,7 +90,7 @@ TEST_F(PageEntryMap_test, PutDel)
     p0entry.checksum = 0x123;
     map->put(0, p0entry);
     {
-        ASSERT_NE(map->find(0), nullptr);
+        ASSERT_NE(map->find(0), std::nullopt);
         const PageEntry & entry = map->at(0);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -99,7 +99,7 @@ TEST_F(PageEntryMap_test, PutDel)
     // add RefPage2 -> Page0
     map->ref(2, 0);
     {
-        ASSERT_NE(map->find(2), nullptr);
+        ASSERT_NE(map->find(2), std::nullopt);
         const PageEntry & entry = map->at(2);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -109,10 +109,10 @@ TEST_F(PageEntryMap_test, PutDel)
     // remove RefPage0
     map->del(0);
     // now RefPage0 removed
-    ASSERT_EQ(map->find(0), nullptr);
+    ASSERT_EQ(map->find(0), std::nullopt);
     {
         // RefPage2 exist
-        ASSERT_NE(map->find(2), nullptr);
+        ASSERT_NE(map->find(2), std::nullopt);
         const PageEntry & entry = map->at(2);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -121,8 +121,8 @@ TEST_F(PageEntryMap_test, PutDel)
 
     // remove RefPage2
     map->del(2);
-    ASSERT_EQ(map->find(0), nullptr);
-    ASSERT_EQ(map->find(2), nullptr);
+    ASSERT_EQ(map->find(0), std::nullopt);
+    ASSERT_EQ(map->find(2), std::nullopt);
 }
 
 TEST_F(PageEntryMap_test, UpdateRefPageEntry)
@@ -132,11 +132,11 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
     PageEntry    entry0;
     entry0.checksum = 0x123;
     map->put(page_id, entry0);
-    ASSERT_NE(map->find(page_id), nullptr);
+    ASSERT_NE(map->find(page_id), std::nullopt);
     ASSERT_EQ(map->at(page_id).checksum, entry0.checksum);
 
     map->ref(ref_id, page_id);
-    ASSERT_NE(map->find(ref_id), nullptr);
+    ASSERT_NE(map->find(ref_id), std::nullopt);
     ASSERT_EQ(map->at(ref_id).checksum, entry0.checksum);
 
     // update on Page0, both Page0 and RefPage1 entry get update
@@ -155,11 +155,11 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry)
 
     // delete pages
     map->del(page_id);
-    ASSERT_EQ(map->find(page_id), nullptr);
-    ASSERT_NE(map->find(ref_id), nullptr);
+    ASSERT_EQ(map->find(page_id), std::nullopt);
+    ASSERT_NE(map->find(ref_id), std::nullopt);
 
     map->del(ref_id);
-    ASSERT_EQ(map->find(ref_id), nullptr);
+    ASSERT_EQ(map->find(ref_id), std::nullopt);
 }
 
 TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
@@ -169,7 +169,7 @@ TEST_F(PageEntryMap_test, UpdateRefPageEntry2)
     map->put(0, entry0);
     map->ref(1, 0);
     map->del(0);
-    ASSERT_EQ(map->find(0), nullptr);
+    ASSERT_EQ(map->find(0), std::nullopt);
     ASSERT_EQ(map->at(1).checksum, 0xfUL);
 
     // update Page0, both Page0 and RefPage1 got update
@@ -195,7 +195,7 @@ TEST_F(PageEntryMap_test, AddRefToNonExistPage)
     ASSERT_NO_THROW(map->ref<false>(3, 2));
     // FIXME we can find iterator by RefPage's id
     //auto iter_to_non_exist_ref_page = map->find(3);
-    //ASSERT_NE(iter_to_non_exist_ref_page, nullptr);
+    //ASSERT_NE(iter_to_non_exist_ref_page, std::nullopt);
     // FIXME but if we want to access that non-exist Page, we get an exception
     //ASSERT_THROW({ iter_to_non_exist_ref_page.pageEntry(); }, DB::Exception);
     // if try to access to non exist page, we get an exception
@@ -216,7 +216,7 @@ TEST_F(PageEntryMap_test, PutDuplicateRef)
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 
     map->del(0);
-    ASSERT_EQ(map->find(0), nullptr);
+    ASSERT_EQ(map->find(0), std::nullopt);
     ASSERT_EQ(map->at(1).checksum, p0entry.checksum);
 }
 
@@ -233,7 +233,7 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // add RefPage3 -> RefPage2 -> Page0
     map->ref(3, 2);
     {
-        ASSERT_NE(map->find(3), nullptr);
+        ASSERT_NE(map->find(3), std::nullopt);
         const PageEntry & entry = map->at(3);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -243,10 +243,10 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // remove RefPage2
     map->del(2);
     // now RefPage2 removed
-    ASSERT_EQ(map->find(2), nullptr);
+    ASSERT_EQ(map->find(2), std::nullopt);
     {
         // RefPage0 exist
-        ASSERT_NE(map->find(0), nullptr);
+        ASSERT_NE(map->find(0), std::nullopt);
         const PageEntry & entry = map->at(0);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -254,7 +254,7 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     }
     {
         // RefPage3 exist
-        ASSERT_NE(map->find(3), nullptr);
+        ASSERT_NE(map->find(3), std::nullopt);
         const PageEntry & entry = map->at(3);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -264,11 +264,11 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // remove RefPage0
     map->del(0);
     // now RefPage0 is removed
-    ASSERT_EQ(map->find(0), nullptr);
-    ASSERT_EQ(map->find(2), nullptr);
+    ASSERT_EQ(map->find(0), std::nullopt);
+    ASSERT_EQ(map->find(2), std::nullopt);
     {
         // RefPage3 exist
-        ASSERT_NE(map->find(3), nullptr);
+        ASSERT_NE(map->find(3), std::nullopt);
         const PageEntry & entry = map->at(3);
         EXPECT_EQ(entry.file_id, p0entry.file_id);
         EXPECT_EQ(entry.level, p0entry.level);
@@ -278,9 +278,9 @@ TEST_F(PageEntryMap_test, PutRefOnRef)
     // remove RefPage3
     map->del(3);
     // now RefPage3 is removed
-    ASSERT_EQ(map->find(3), nullptr);
-    ASSERT_EQ(map->find(0), nullptr);
-    ASSERT_EQ(map->find(2), nullptr);
+    ASSERT_EQ(map->find(3), std::nullopt);
+    ASSERT_EQ(map->find(0), std::nullopt);
+    ASSERT_EQ(map->find(2), std::nullopt);
 }
 
 TEST_F(PageEntryMap_test, ReBindRef)

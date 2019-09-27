@@ -9,6 +9,7 @@ namespace DB
 {
 namespace DM
 {
+
 void Chunk::serialize(WriteBuffer & buf) const
 {
     writeIntBinary(handle_start, buf);
@@ -69,6 +70,39 @@ Chunk Chunk::deserialize(ReadBuffer & buf)
             chunk.rows = d.rows;
     }
     return chunk;
+}
+
+Chunk createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, WriteBatch & wb)
+{
+    if (chunk.isDeleteRange())
+        return Chunk(chunk.getDeleteRange());
+
+    auto [handle_first, handle_end] = chunk.getHandleFirstLast();
+    Chunk ref_chunk(handle_first, handle_end);
+    for (auto && [col_id, col_meta] : chunk.getMetas())
+    {
+        ColumnMeta m;
+
+        m.col_id  = col_id;
+        m.page_id = gen_data_page_id();
+        m.rows    = col_meta.rows;
+        m.bytes   = col_meta.bytes;
+        m.type    = col_meta.type;
+        m.minmax  = col_meta.minmax;
+
+        wb.putRefPage(m.page_id, col_meta.page_id);
+        ref_chunk.insert(m);
+    }
+    return ref_chunk;
+}
+
+Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id, WriteBatch & wb)
+{
+    Chunks ref_chunks;
+    ref_chunks.reserve(chunks.size());
+    for (auto & chunk : chunks)
+        ref_chunks.push_back(createRefChunk(chunk, gen_data_page_id, wb));
+    return ref_chunks;
 }
 
 void serializeChunks(
@@ -241,7 +275,7 @@ void readChunkData(MutableColumns &      columns,
                                 ErrorCodes::NOT_IMPLEMENTED);
             }
 
-            // Read from disk according as chunk meta
+            // Read from disk according to chunk meta
             MutableColumnPtr disk_col = disk_meta.type->createColumn();
             deserializeColumn(*disk_col, disk_meta, page, rows_offset + rows_limit);
 
