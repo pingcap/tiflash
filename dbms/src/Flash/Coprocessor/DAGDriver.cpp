@@ -102,7 +102,7 @@ catch (const LockException & e)
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.getStackTrace().toString());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)

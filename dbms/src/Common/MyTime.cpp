@@ -473,4 +473,15 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
     to_time = to_my_time.toPackedUInt();
 }
 
+void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone)
+{
+    MyDateTime from_my_time(from_time);
+    time_t epoch = time_zone.makeDateTime(
+        from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
+    epoch += offset;
+    MyDateTime to_my_time(time_zone.toYear(epoch), time_zone.toMonth(epoch), time_zone.toDayOfMonth(epoch),
+                          time_zone.toHour(epoch), time_zone.toMinute(epoch), time_zone.toSecond(epoch), from_my_time.micro_second);
+    to_time = to_my_time.toPackedUInt();
+}
+
 } // namespace DB

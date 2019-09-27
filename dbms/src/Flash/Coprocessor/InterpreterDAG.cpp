@@ -123,6 +123,8 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
 
     Names required_columns;
+    std::vector<NameAndTypePair> source_columns;
+    std::vector<bool> is_ts_column;
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
@@ -140,6 +142,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         required_columns.push_back(name);
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
+        is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
     }
     if (required_columns.empty())
     {
@@ -150,6 +153,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             required_columns.push_back(pk_handle_col->get().name);
             auto pair = storage->getColumns().getPhysical(pk_handle_col->get().name);
             source_columns.push_back(pair);
+            is_ts_column.push_back(false);
             // For PK handle, use original column info of itself.
             dag.getDAGContext().void_result_ft = columnInfoToFieldType(pk_handle_col->get());
         }
@@ -158,13 +162,14 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             required_columns.push_back(MutableSupport::tidb_pk_column_name);
             auto pair = storage->getColumns().getPhysical(MutableSupport::tidb_pk_column_name);
             source_columns.push_back(pair);
+            is_ts_column.push_back(false);
             // For implicit handle, reverse get a column info.
             auto column_info = reverseGetColumnInfo(pair, -1, Field());
             dag.getDAGContext().void_result_ft = columnInfoToFieldType(column_info);
         }
     }
 
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(source_columns, context);
+    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     if (!dag.hasAggregation())
     {
@@ -260,6 +265,22 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             }
         });
     }
+
+    addTimeZoneCastAfterTS(is_ts_column, pipeline);
+}
+
+// add timezone cast for timestamp type, this is used to support session level timezone
+void InterpreterDAG::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline)
+{
+    bool hasTSColumn = false;
+    for (auto b : is_ts_column)
+        hasTSColumn |= b;
+    if (!hasTSColumn)
+        return;
+
+    ExpressionActionsChain chain;
+    if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column, dag.getDAGRequest()))
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
 }
 
 InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
@@ -284,7 +305,7 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         chain.clear();
 
         // add cast if type is not match
-        analyzer->appendAggSelect(chain, dag.getAggregation());
+        analyzer->appendAggSelect(chain, dag.getAggregation(), dag.getDAGRequest());
         //todo use output_offset to reconstruct the final project columns
         for (auto element : analyzer->getCurrentInputColumns())
         {

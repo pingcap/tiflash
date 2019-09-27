@@ -47,7 +47,11 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         // no column selected, must be something wrong
         throw Exception("No column is selected in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    columns_from_ts = storage->getColumns().getAllPhysical();
+    const auto & column_list = storage->getColumns().getAllPhysical();
+    for (auto & column : column_list)
+    {
+        columns_from_ts.emplace_back(column.name, column.type);
+    }
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
