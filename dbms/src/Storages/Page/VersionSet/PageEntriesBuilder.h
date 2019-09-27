@@ -45,9 +45,9 @@ public:
             if (rec.type != WriteBatch::WriteType::PUT)
                 continue;
             // Gc only apply PUT for updating page entries
-            auto old_page_entry = old_version->find(rec.page_id);
+            const auto old_page_entry = old_version->find(rec.page_id);
             // If the gc page have already been removed, or is a ref to non-exist page, just ignore it
-            if (old_page_entry == nullptr)
+            if (!old_page_entry)
                 continue;
             // In case of page being updated during GC process.
             if (old_page_entry->fileIdLevel() < rec.entry.fileIdLevel())

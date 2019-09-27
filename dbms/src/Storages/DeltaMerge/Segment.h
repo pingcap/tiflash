@@ -102,6 +102,8 @@ public:
         DeltaIndex::Iterator index_end;
 
         ColumnDefines read_columns;
+
+        explicit operator bool() const { return (bool)delta_value_space; }
     };
 
     Segment(const Segment &) = delete;
@@ -202,6 +204,11 @@ private:
                                         const IndexIterator &      delta_index_end,
                                         size_t                     expected_block_size) const;
 
+    /// Merge delta & stable, and then take the middle one.
+    Handle getSplitPointSlow(DMContext & dm_context, const PageReader & data_page_reader, const ReadInfo & read_info) const;
+    /// Only look up in the stable vs.
+    Handle getSplitPointFast(DMContext & dm_context, const PageReader & data_page_reader) const;
+
     /// Split this segment into two.
     /// Generates two new segment objects, the current object is not modified.
     SegmentPair doSplit(DMContext &          dm_context,
@@ -209,6 +216,9 @@ private:
                         const ReadInfo &     read_info,
                         Handle               split_point,
                         RemoveWriteBatches & remove_wbs) const;
+
+    SegmentPair doRefSplit(DMContext & dm_context, Handle split_point, RemoveWriteBatches & remove_wbs) const;
+
     /// Merge this segment and the other into one.
     /// Generates a new segment object, the current object is not modified.
     static SegmentPtr doMerge(DMContext &          dm_context,
@@ -218,6 +228,9 @@ private:
                               const SegmentPtr &   right,
                               const ReadInfo &     right_snapshot,
                               RemoveWriteBatches & remove_wbs);
+
+    static SegmentPtr doMergeFast(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, RemoveWriteBatches & remove_wbs);
+
     /// Reset the content of this segment.
     /// Generates a new segment object, the current object is not modified.
     SegmentPtr reset(DMContext & dm_context, BlockInputStreamPtr & input_stream, RemoveWriteBatches & remove_wbs) const;
@@ -240,8 +253,6 @@ private:
                      const PageReader &         data_page_reader,
                      const DeltaValueSpacePtr & delta_value_space,
                      const HandleRange &        delete_range) const;
-
-    Handle getSplitPoint(DMContext & dm_context, const PageReader & data_page_reader, const ReadInfo & read_info) const;
 
     MinMaxIndexPtr getMinMax(const ColumnDefine & column_define) const;
 

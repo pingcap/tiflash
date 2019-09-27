@@ -603,6 +603,7 @@ public:
         Int64  delta;
 
     public:
+        Iterator() = default;
         Iterator(const std::shared_ptr<DTEntriesCopy> & entries_, size_t index_, Int64 delta_)
             : entries_holder(entries_), entries(entries_.get()), index(index_), delta(delta_)
         {
