@@ -60,7 +60,7 @@ try
 }
 catch (const LockException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.displayText());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.getStackTrace().toString());
     cop_response->Clear();
     kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
     lock_info->set_key(e.lock_infos[0]->key);
@@ -72,7 +72,7 @@ catch (const LockException & e)
 }
 catch (const RegionException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.displayText());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.getStackTrace().toString());
     cop_response->Clear();
     errorpb::Error * region_err;
     switch (e.status)
@@ -95,7 +95,7 @@ catch (const RegionException & e)
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.getStackTrace().toString());
     cop_response->Clear();
     cop_response->set_other_error(e.message());
 

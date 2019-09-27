@@ -38,20 +38,27 @@ using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts);
+    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts,
+    Int64 tz_offset, const String & tz_name);
 tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 1 || args.size() > 2)
-        throw Exception("Args not matched, should be: query[, region-id]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 1 || args.size() > 4)
+        throw Exception("Args not matched, should be: query[, region-id, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
-    if (args.size() == 2)
+    if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    Int64 tz_offset = 0;
+    String tz_name = "";
+    if (args.size() >= 3)
+        tz_offset = get<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    if (args.size() >= 4)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
     auto [table_id, schema, dag_request] = compileQuery(
@@ -63,7 +70,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
                 throw Exception("Not TMT", ErrorCodes::BAD_ARGUMENTS);
             return mmt->getTableInfo();
         },
-        start_ts);
+        start_ts, tz_offset, tz_name);
 
     RegionPtr region;
     if (region_id == InvalidRegionID)
@@ -86,23 +93,29 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 2 || args.size() > 3)
-        throw Exception("Args not matched, should be: query, region-id[, start-ts]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 2 || args.size() > 5)
+        throw Exception("Args not matched, should be: query, region-id[, start-ts, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = DEFAULT_MAX_READ_TSO;
-    if (args.size() == 3)
+    if (args.size() >= 3)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
+    Int64 tz_offset = 0;
+    String tz_name = "";
+    if (args.size() >= 3)
+        tz_offset = safeGet<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    if (args.size() >= 4)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
 
     auto [table_id, schema, dag_request] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
-        start_ts);
+        start_ts, tz_offset, tz_name);
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -165,6 +178,14 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         else if (func_name_lowercase == "or")
         {
             expr->set_sig(tipb::ScalarFuncSig::LogicalOr);
+            auto * ft = expr->mutable_field_type();
+            // TODO: TiDB will infer Int64.
+            ft->set_tp(TiDB::TypeTiny);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else if (func_name_lowercase == "greater")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::GTInt);
             auto * ft = expr->mutable_field_type();
             // TODO: TiDB will infer Int64.
             ft->set_tp(TiDB::TypeTiny);
@@ -239,10 +260,13 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
 }
 
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts)
+    Context & context, const String & query, SchemaFetcher schema_fetcher,
+    Timestamp start_ts, Int64 tz_offset, const String & tz_name)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
+    dag_request.set_time_zone_name(tz_name);
+    dag_request.set_time_zone_offset(tz_offset);
 
     dag_request.set_start_ts(start_ts);
 
@@ -291,8 +315,11 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             ci.tp = column_info.tp;
             ci.flag = column_info.flag;
             ci.flen = column_info.flen;
-            ci.decimal = column_info.flen;
+            ci.decimal = column_info.decimal;
             ci.elems = column_info.elems;
+            // a hack to test timestamp type in mock test
+            if (column_info.tp == TiDB::TypeDatetime && ci.decimal == 5)
+                ci.tp = TiDB::TypeTimestamp;
             ts_output.emplace_back(std::make_pair(column_info.name, std::move(ci)));
         }
         executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, tipb::Expr *>{}});
@@ -429,6 +456,14 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                     auto ft = agg_func->mutable_field_type();
                     ft->set_tp(TiDB::TypeLongLong);
                     ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+                }
+                else if (func->name == "max")
+                {
+                    agg_func->set_tp(tipb::Max);
+                    if (agg_func->children_size() != 1)
+                        throw Exception("udaf max only accept 1 argument");
+                    auto ft = agg_func->mutable_field_type();
+                    ft->set_tp(agg_func->children(0).field_type().tp());
                 }
                 // TODO: Other agg func.
                 else
