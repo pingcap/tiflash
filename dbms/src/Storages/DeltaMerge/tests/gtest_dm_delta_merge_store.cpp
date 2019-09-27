@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 #include "dm_basic_include.h"
 
+#include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
+#include <Poco/FormattingChannel.h>
+#include <Poco/PatternFormatter.h>
 
 #include <Storages/DeltaMerge/DeltaMergeStore-internal.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -19,6 +22,16 @@ public:
     DeltaMergeStore_test() : name("t"), path("./" + name) {}
 
 protected:
+    static void SetUpTestCase()
+    {
+        Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
+        Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
+        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
+        Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
+        Logger::root().setChannel(formatting_channel);
+        Logger::root().setLevel("trace");
+    }
+
     void SetUp() override
     {
         // drop former-gen table's data in disk
@@ -324,74 +337,83 @@ TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
 }
 
 TEST_F(DeltaMergeStore_test, Split)
+try
 {
-    const String      col_name_c1 = "col2";
-    const ColId       col_id_c1   = 2;
-    const DataTypePtr col_type_c1 = DataTypeFactory::instance().get("Int64");
-    {
-        ColumnDefines table_column_defines = DMTestEnv::getDefaultColumns();
-        ColumnDefine  cd(col_id_c1, col_name_c1, col_type_c1);
-        table_column_defines.emplace_back(cd);
-        store = reload(table_column_defines);
-    }
+    // set some params to smaller threshold so that we can trigger split faster
+    auto settings                        = context->getSettings();
+    settings.dm_segment_rows             = 11;
+    settings.dm_segment_delta_limit_rows = 7;
 
-    const size_t num_rows_write = 2097153;
+    size_t num_rows_write_in_total = 0;
+
+    const size_t num_rows_per_write = 5;
+    while (true)
     {
-        // write to store
-        Block block;
         {
-            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-            // Add a column of col1:String for test
-            ColumnWithTypeAndName col1(std::make_shared<DataTypeInt64>(), col_name_c1);
-            {
-                IColumn::MutablePtr m_col2 = col1.type->createColumn();
-                for (size_t i = 0; i < num_rows_write; i++)
-                {
-                    Int64 num = i;
-                    m_col2->insert(Field(num));
-                }
-                col1.column = std::move(m_col2);
-            }
-            block.insert(col1);
+            // write to store
+            Block block = DMTestEnv::prepareSimpleWriteBlock( //
+                num_rows_write_in_total + 1,                  //
+                num_rows_write_in_total + 1 + num_rows_per_write,
+                false);
+
+            store->write(*context, settings, block);
+            num_rows_write_in_total += num_rows_per_write;
         }
-        store->write(*context, context->getSettingsRef(), block);
-    }
 
-    {
-        // read all columns from store
-        const auto &        columns = store->getTableColumns();
-        BlockInputStreamPtr in      = store->read(*context,
-                                             context->getSettingsRef(),
-                                             columns,
-                                             {HandleRange::newAll()},
-                                             /* num_streams= */ 1,
-                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                             /* expected_block_size= */ 1024)[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
         {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
+            // read all columns from store
+            const auto &      columns = store->getTableColumns();
+            BlockInputStreams ins     = store->read(*context,
+                                                context->getSettingsRef(),
+                                                columns,
+                                                {HandleRange::newAll()},
+                                                /* num_streams= */ 1,
+                                                /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                                /* expected_block_size= */ 1024);
+            ASSERT_EQ(ins.size(), 1UL);
+            BlockInputStreamPtr in = ins[0];
+
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1," << num_rows_write_in_total << "]");
+
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            Int64 expected_row_pk = 1;
+            while (Block block = in->read())
             {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
+                num_rows_read += block.rows();
+                for (auto && iter : block)
                 {
-                    if (iter.name == "pk")
+                    auto c = iter.column;
+                    for (size_t i = 0; i < c->size(); ++i)
                     {
-                        EXPECT_EQ(c->getInt(i) % 1024, i);
-                    }
-                    else if (iter.name == col_name_c1)
-                    {
-                        EXPECT_EQ(c->getInt(i) % 1024, i);
+                        if (iter.name == "pk")
+                        {
+                            EXPECT_EQ(c->getInt(i), expected_row_pk++);
+                            std::cerr << "pk:" << c->getInt(i) << std::endl;
+                        }
                     }
                 }
             }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write_in_total);
+
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1," << num_rows_write_in_total << "]");
         }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+
+        if (num_rows_write_in_total >= 1000)
+            break;
     }
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
 }
 
 TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)

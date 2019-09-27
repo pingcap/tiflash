@@ -222,6 +222,9 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEditWithReadLock3)
 
 namespace
 {
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
 std::set<PageId> getNormalPageIDs(const PageEntriesVersionSet::SnapshotPtr &s)
 {
     std::set<PageId> ids;
@@ -234,6 +237,7 @@ std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::Snapshot
 {
     return s->version()->validNormalPageIds();
 }
+#pragma clang diagnostic pop
 
 } // namespace
 
@@ -288,11 +292,11 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
 
     auto s     = versions.getSnapshot();
     auto entry = s->version()->find(1);
-    ASSERT_EQ(entry, nullptr);
+    ASSERT_EQ(entry, std::nullopt);
     auto entry2 = s->version()->find(2);
-    ASSERT_EQ(entry2, nullptr);
+    ASSERT_EQ(entry2, std::nullopt);
     auto entry3 = s->version()->find(3);
-    ASSERT_NE(entry3, nullptr);
+    ASSERT_NE(entry3, std::nullopt);
     ASSERT_EQ(entry3->checksum, 3UL);
 
     std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s);
@@ -362,7 +366,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
     // Page0 don't update to page_map
     auto snapshot = versions.getSnapshot();
     auto entry    = snapshot->version()->find(pid);
-    ASSERT_EQ(entry, nullptr);
+    ASSERT_EQ(entry, std::nullopt);
 }
 
 #pragma clang diagnostic push
@@ -497,7 +501,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
         versions.apply(edit);
     }
     auto s4 = versions.getSnapshot();
-    ASSERT_EQ(s4->version()->find(2), nullptr);
+    ASSERT_EQ(s4->version()->find(2), std::nullopt);
     ASSERT_EQ(s4->version()->at(3).checksum, 0xffUL);
     s4.reset();
     ASSERT_EQ(s3->version()->at(2).checksum, 0xffUL);
@@ -505,7 +509,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage)
     s3.reset();
 
     auto s5 = versions.getSnapshot();
-    ASSERT_EQ(s5->version()->find(2), nullptr);
+    ASSERT_EQ(s5->version()->find(2), std::nullopt);
     ASSERT_EQ(s5->version()->at(3).checksum, 0xffUL);
 }
 
@@ -522,7 +526,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
         versions.apply(edit);
     }
     auto s1 = versions.getSnapshot();
-    ASSERT_EQ(s1->version()->find(2), nullptr);
+    ASSERT_EQ(s1->version()->find(2), std::nullopt);
     ASSERT_EQ(s1->version()->at(3).checksum, 0xfUL);
 
     {
@@ -534,7 +538,7 @@ TYPED_TEST_P(PageMapVersionSet_test, UpdateOnRefPage2)
         versions.apply(edit);
     }
     auto s2 = versions.getSnapshot();
-    ASSERT_EQ(s2->version()->find(2), nullptr);
+    ASSERT_EQ(s2->version()->find(2), std::nullopt);
     ASSERT_EQ(s2->version()->at(3).checksum, 0x9UL);
 }
 
@@ -602,11 +606,35 @@ TYPED_TEST_P(PageMapVersionSet_test, Snapshot)
 
     auto s2 = versions.getSnapshot();
     auto p0 = s2->version()->find(0);
-    ASSERT_NE(p0, nullptr);
+    ASSERT_NE(p0, std::nullopt);
     ASSERT_EQ(p0->checksum, 0x456UL); // entry is updated in snapshot 2
     auto p1 = s2->version()->find(1);
-    ASSERT_EQ(p1, nullptr);
+    ASSERT_EQ(p1, std::nullopt);
 }
+
+namespace
+{
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-function"
+String liveFilesToString(const std::set<PageFileIdAndLevel> &files)
+{
+    std::stringstream ss;
+    bool is_first = true;
+    for (const auto & file: files)
+    {
+        if (!is_first)
+        {
+            ss << ",";
+        }
+        ss << "{" << file.first << "," << file.second << "}";
+        is_first = false;
+    }
+    return ss.str();
+}
+#pragma clang diagnostic pop
+
+} // namespace
 
 TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
 {
@@ -642,23 +670,26 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
     }
     auto s3 = versions.getSnapshot();
     s3.reset(); // do compact on version-list, and
+    //std::cerr << "s3 reseted." << std::endl;
     auto livefiles = versions.listAllLiveFiles();
-    ASSERT_EQ(livefiles.size(), 4UL);
+    ASSERT_EQ(livefiles.size(), 4UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current, s1, s2
     ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL); // hold by current, s1, s2
     ASSERT_EQ(livefiles.count(std::make_pair(3, 1)), 1UL); // hold by s2
 
     s2.reset();
+    //std::cerr << "s2 reseted." << std::endl;
     livefiles = versions.listAllLiveFiles();
-    ASSERT_EQ(livefiles.size(), 3UL);
+    ASSERT_EQ(livefiles.size(), 3UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current, s1
     ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL); // hold by current, s1
 
     s1.reset();
+    //std::cerr << "s1 reseted." << std::endl;
     livefiles = versions.listAllLiveFiles();
-    ASSERT_EQ(livefiles.size(), 2UL);
+    ASSERT_EQ(livefiles.size(), 2UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current
     ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL); // hold by current
 }

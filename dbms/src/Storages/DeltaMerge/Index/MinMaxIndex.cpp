@@ -79,11 +79,11 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf)
     FOR_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
     if (typeid_cast<const DataTypeDate *>(&type))
-        v->minmax = MinMaxValueFixed<UInt32>::read(type, buf);
+        v->minmax = MinMaxValueFixed<typename DataTypeDate::FieldType>::read(type, buf);
     else if (typeid_cast<const DataTypeDateTime *>(&type))
-        v->minmax = MinMaxValueFixed<Int64>::read(type, buf);
+        v->minmax = MinMaxValueFixed<typename DataTypeDateTime::FieldType>::read(type, buf);
     else if (typeid_cast<const DataTypeUUID *>(&type))
-        v->minmax = MinMaxValueFixed<UInt128>::read(type, buf);
+        v->minmax = MinMaxValueFixed<typename DataTypeUUID::FieldType>::read(type, buf);
     else if (typeid_cast<const DataTypeEnum<Int8> *>(&type))
         v->minmax = MinMaxValueFixed<Int8>::read(type, buf);
     else if (typeid_cast<const DataTypeEnum<Int16> *>(&type))

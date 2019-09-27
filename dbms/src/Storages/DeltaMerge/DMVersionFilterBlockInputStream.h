@@ -11,7 +11,8 @@ namespace DM
 
 /// Use the latest rows. For rows with the same handle, only take the rows with biggest version and version <= version_limit.
 static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
-/// Remove the outdated rows. For rows with the same handle, take all rows with version >= version_limit. And if all of them are smaller than version_limit, then take the biggest one, if it is not deleted.
+/// Remove the outdated rows. For rows with the same handle, take all rows with version >= version_limit.
+/// And if all of them are smaller than version_limit, then take the biggest one, if it is not deleted.
 static constexpr int DM_VERSION_FILTER_MODE_COMPACT = 1;
 
 template <int MODE>

@@ -80,7 +80,7 @@ void DiskValueSpace::restore(const OpContext & context)
 
     // Try flush now, in case of last flush failure recover.
     WriteBatch remove_data_wb;
-    auto new_instance = tryFlushCache(context, remove_data_wb);
+    auto       new_instance = tryFlushCache(context, remove_data_wb);
     if (new_instance)
     {
         chunks.swap(new_instance->chunks);
@@ -630,7 +630,7 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
 
 ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const
 {
-    return std::make_shared<ChunkBlockInputStream>(chunks, RSOperatorPtr(), read_columns, page_reader);
+    return std::make_shared<ChunkBlockInputStream>(chunks, 0, HandleRange::newAll(), read_columns, page_reader, RSOperatorPtr());
 }
 
 size_t DiskValueSpace::num_rows() const
