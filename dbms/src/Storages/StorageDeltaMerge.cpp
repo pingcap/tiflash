@@ -120,8 +120,8 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 
     assert(!handle_column_define.name.empty());
     assert(!table_column_defines.empty());
-    store = std::make_shared<DeltaMergeStore>(
-        global_context, path, table_name, std::move(table_column_defines), std::move(handle_column_define), DeltaMergeStore::Settings());
+    store = std::make_shared<DeltaMergeStore>(global_context, path, db_name, table_name, std::move(table_column_defines),
+        std::move(handle_column_define), DeltaMergeStore::Settings());
 }
 
 void StorageDeltaMerge::drop()
@@ -522,8 +522,9 @@ void StorageDeltaMerge::rename(const String & new_path_to_db, const String & new
 
     // rename path and generate a new store
     Poco::File(path).renameTo(new_path);
-    store = std::make_shared<DeltaMergeStore>(
-        global_context, new_path, new_table_name, std::move(table_column_defines), std::move(handle_column_define), settings);
+    store = std::make_shared<DeltaMergeStore>(global_context, //
+        new_path, new_database_name, new_table_name,          //
+        std::move(table_column_defines), std::move(handle_column_define), settings);
 
     path = new_path;
     db_name = new_database_name;

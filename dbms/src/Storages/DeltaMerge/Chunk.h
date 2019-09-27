@@ -36,6 +36,10 @@ using ColumnMetas = std::vector<ColumnMeta>;
 class Chunk
 {
 public:
+    // Binary version of chunk
+    using Version = UInt32;
+    static const Version CURRENT_VERSION;
+public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
     Chunk() : Chunk(0, 0) {}
