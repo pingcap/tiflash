@@ -114,7 +114,7 @@ BlockInputStreamPtr DBGInvoker::invoke(Context & context, const std::string & or
         auto it_schemaful = schemaful_funcs.find(name);
         if (it_schemaful != schemaful_funcs.end())
             res = invokeSchemaful(context, name, it_schemaful->second, args);
-        if (it_schemaful == schemaful_funcs.end())
+        else
             throw Exception("DBG function not found", ErrorCodes::BAD_ARGUMENTS);
     }
 
