@@ -12,6 +12,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -214,7 +216,7 @@ void constructTZExpr(tipb::Expr & tz_expr, const tipb::DAGRequest & rqst, bool f
     }
 }
 
-bool hasMeaningfulTZInfo(const tipb::DAGRequest &rqst)
+bool hasMeaningfulTZInfo(const tipb::DAGRequest & rqst)
 {
     if (rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0)
         return rqst.time_zone_name() != "UTC";
@@ -249,7 +251,7 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // column with UTC timezone will never be used in during agg), all the column with ts datatype will
 // convert back to UTC timezone
 bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
-        ExpressionActionsChain &chain, std::vector<bool> is_ts_column, const tipb::DAGRequest &rqst)
+    ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst)
 {
     if (!hasMeaningfulTZInfo(rqst))
         return false;
@@ -391,6 +393,35 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
     return expr_name;
 }
 
+void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, const TMTStoragePtr & storage)
+{
+    for (auto & child : expr.children())
+    {
+        makeExplicitSetForIndex(child, storage);
+    }
+    if (expr.tp() != tipb::ExprType::ScalarFunc)
+    {
+        return;
+    }
+    const String & func_name = getFunctionName(expr);
+    // only support col_name in (value_list)
+    if (isInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
+    {
+        NamesAndTypesList column_list;
+        for (const auto & col : getCurrentInputColumns())
+        {
+            column_list.emplace_back(col.name, col.type);
+        }
+        ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(column_list, settings);
+        String name = getActions(expr.children(0), temp_actions);
+        ASTPtr name_ast = std::make_shared<ASTIdentifier>(name);
+        if (storage->mayBenefitFromIndexForIn(name_ast))
+        {
+            makeExplicitSet(expr, temp_actions->getSampleBlock(), true, name);
+        }
+    }
+}
+
 void DAGExpressionAnalyzer::makeExplicitSet(
     const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name)
 {
@@ -400,7 +431,7 @@ void DAGExpressionAnalyzer::makeExplicitSet(
     }
     DataTypes set_element_types;
     // todo support tuple in, i.e. (a,b) in ((1,2), (3,4)), currently TiDB convert tuple in into a series of or/and/eq exprs
-    // which means tuple in is never be pushed to coprocessor, but it is quite in-efficient
+    //  which means tuple in is never be pushed to coprocessor, but it is quite in-efficient
     set_element_types.push_back(sample_block.getByName(left_arg_name).type);
 
     // todo if this is a single value in, then convert it to equal expr

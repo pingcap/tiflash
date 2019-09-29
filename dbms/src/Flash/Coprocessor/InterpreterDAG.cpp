@@ -13,6 +13,7 @@
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Aggregator.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -208,9 +209,18 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64()))
         throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
 
+    if (dag.hasSelection())
+    {
+        for (auto & condition : dag.getSelection().conditions())
+        {
+            analyzer->makeExplicitSetForIndex(condition, storage);
+        }
+    }
     //todo support index in
     SelectQueryInfo query_info;
+    // set query to avoid unexpected NPE
     query_info.query = dag.getAST();
+    query_info.dag_query = std::make_shared<DAGQueryInfo>(dag, analyzer->getPreparedSets(), source_columns);
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;

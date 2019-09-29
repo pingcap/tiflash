@@ -17,6 +17,8 @@ using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
 struct MvccQueryInfo;
 
+struct DAGQueryInfo;
+
 /** Query along with some additional data,
   *  that can be used during query processing
   *  inside storage engines.
@@ -31,11 +33,15 @@ struct SelectQueryInfo
 
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
 
+    std::shared_ptr<DAGQueryInfo> dag_query;
+
     SelectQueryInfo() = default;
 
     SelectQueryInfo(const SelectQueryInfo & query_info_);
 
     SelectQueryInfo(SelectQueryInfo && query_info_);
+
+    bool fromAST() const { return dag_query == nullptr; };
 };
 
 } // namespace DB
