@@ -71,6 +71,7 @@ DBGInvoker::DBGInvoker()
     regFunc("reset_schemas", dbgFuncResetSchemas);
 
     regFunc("dump_region_table", ClusterManage::dumpRegionTable);
+    regFunc("find_region_by_range", ClusterManage::findRegionByRange);
 }
 
 void replaceSubstr(std::string & str, const std::string & target, const std::string & replacement)
