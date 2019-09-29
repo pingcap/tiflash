@@ -588,9 +588,6 @@ bool KeyCondition::mayBeTrueInRangeImpl(const std::vector<Range> & key_ranges, c
             element.function == RPNElement::FUNCTION_IN_SET
             || element.function == RPNElement::FUNCTION_NOT_IN_SET)
         {
-            //auto in_func = typeid_cast<const ASTFunction *>(element.in_function.get());
-            //const ASTs & args = typeid_cast<const ASTExpressionList &>(*in_func->arguments).children;
-            //PreparedSets::const_iterator it = prepared_sets.find(args[1].get());
             rpn_stack.emplace_back(element.set_index->mayBeTrueInRange(key_ranges, data_types));
             if (element.function == RPNElement::FUNCTION_NOT_IN_SET)
                 rpn_stack.back() = !rpn_stack.back();
