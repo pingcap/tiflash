@@ -56,7 +56,7 @@ public:
 
 public:
     TableID newTable(const String & database_name, const String & table_name,
-            const ColumnsDescription & columns, Timestamp tso, int pk_index);
+            const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name);
 
     DatabaseID newDataBase(const String & database_name);
 
