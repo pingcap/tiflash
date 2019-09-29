@@ -437,6 +437,12 @@ bool RPNBuilder<NodeT, PreparedSetsT>::atomFromNodeTree(
 
         std::string func_name = getFuncName(node);
 
+        // make sure that RPNElement of FUNCTION_IN_SET/FUNCTION_NOT_IN_SET
+        // has valid set in PreparedSets
+        if (func_name == "in" || func_name == "notIn")
+            if (!is_set_const)
+                return false;
+
         /// Transformed constant must weaken the condition, for example "x > 5" must weaken to "round(x) >= 5"
         if (is_constant_transformed)
         {
