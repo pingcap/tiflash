@@ -81,8 +81,7 @@ Block VersionFilterBlockInputStream::readImpl()
         if (filter_start == data_start && memoryIsZero(col_filter.data(), rows))
             continue;
 
-        deleteRows(block, col_filter);
-        return block;
+        return filterBlock(block, col_filter);
     }
 }
 

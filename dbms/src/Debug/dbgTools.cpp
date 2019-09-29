@@ -8,7 +8,6 @@
 #include <Raft/RaftContext.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/MyTimeParser.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
@@ -207,22 +206,9 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
         case TiDB::TypeDouble:
             return convertNumber<Float64>(field);
         case TiDB::TypeDate:
-        {
-            auto text = field.get<String>();
-            ReadBufferFromMemory buf(text.data(), text.size());
-            DayNum_t date;
-            readDateText(date, buf);
-            return static_cast<UInt64>(date);
-        }
         case TiDB::TypeDatetime:
         case TiDB::TypeTimestamp:
-        {
-            auto text = field.get<String>();
-            ReadBufferFromMemory buf(text.data(), text.size());
-            time_t dt;
-            readDateTimeText(dt, buf);
-            return static_cast<Int64>(dt);
-        }
+            return parseMyDateTime(field.safeGet<String>());
         case TiDB::TypeVarchar:
         case TiDB::TypeTinyBlob:
         case TiDB::TypeMediumBlob:
@@ -268,10 +254,12 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
 {
     std::vector<Field> fields;
     ASTs::const_iterator it;
+    int idx = 0;
     while ((it = begin++) != end)
     {
         auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
         fields.emplace_back(field);
+        idx++;
     }
     if (fields.size() != table_info.columns.size())
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);

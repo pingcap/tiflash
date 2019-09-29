@@ -1,7 +1,7 @@
 #include <Common/Decimal.h>
+#include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/MyTimeParser.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace TiDB
@@ -41,7 +41,7 @@ Field ColumnInfo::defaultValueToField() const
         case TypeDate:
         case TypeDatetime:
         case TypeTimestamp:
-            return DB::parseMyDatetime(value.convert<String>());
+            return DB::parseMyDateTime(value.convert<String>());
         case TypeVarchar:
         case TypeTinyBlob:
         case TypeMediumBlob:
@@ -58,12 +58,14 @@ Field ColumnInfo::defaultValueToField() const
         case TypeNewDecimal:
             return getDecimalValue(value.convert<String>());
         case TypeTime:
+            return Field();
         case TypeYear:
+            return Field();
         case TypeSet:
-            // TODO support it !
+            // blocked by TiDB https://github.com/pingcap/tidb/issues/12160
             return Field();
         default:
-            throw Exception("Have not proccessed type: " + std::to_string(tp));
+            throw Exception("Have not processed type: " + std::to_string(tp));
     }
     return Field();
 }
@@ -132,7 +134,7 @@ Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
     tp_json->set("Flag", flag);
     tp_json->set("Flen", flen);
     tp_json->set("Decimal", decimal);
-    if (elems.size() > 0)
+    if (!elems.empty())
     {
         Poco::JSON::Array::Ptr elem_arr = new Poco::JSON::Array();
         for (auto & elem : elems)
@@ -470,6 +472,21 @@ String TableInfo::getColumnName(const ColumnID id) const
     throw DB::Exception(
         std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + db_name + "." + name,
         DB::ErrorCodes::LOGICAL_ERROR);
+}
+
+std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleColumn() const
+{
+    if (!pk_is_handle)
+        return std::nullopt;
+
+    for (auto & col : columns)
+    {
+        if (col.hasPriKeyFlag())
+            return std::optional<std::reference_wrapper<const ColumnInfo>>(col);
+    }
+
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Cannot get handle column for table " + db_name + "." + name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 TableInfo TableInfo::producePartitionTableInfo(TableID table_or_partition_id) const

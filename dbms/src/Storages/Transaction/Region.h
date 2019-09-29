@@ -160,12 +160,16 @@ public:
 
     using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
 
-    /// only can be used for applying snapshot. only can be called by single thread.
+    /// Only can be used for applying snapshot. only can be called by single thread.
+    /// Try to fill record with delmark if it exists in ch but has been remove by GC in leader.
     void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
-    void compareAndCompleteSnapshot(const Timestamp safe_point, const Region & source_region);
+    /// Traverse all data in source_region and get handle with largest version.
+    void compareAndUpdateHandleMaps(const Region & source_region, std::unordered_map<TableID, HandleMap> & handle_maps);
 
     static ColumnFamilyType getCf(const std::string & cf);
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
+    metapb::Region getMetaRegion() const;
+    raft_serverpb::MergeState getMergeState() const;
 
     void tryPreDecodeTiKVValue();
 
@@ -177,7 +181,7 @@ private:
 
     TableID doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value);
     TableID doRemove(const std::string & cf, const TiKVKey & key);
-    void doDeleteRange(const std::string & cf, const TiKVKey & start_key, const TiKVKey & end_key);
+    void doDeleteRange(const std::string & cf, const RegionRange & range);
 
     RegionDataReadInfo readDataByWriteIt(
         const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
@@ -208,6 +212,8 @@ class RegionRaftCommandDelegate : public Region, private boost::noncopyable
 public:
     /// Only after the task mutex of KVStore is locked, region can apply raft command.
     void onCommand(enginepb::CommandRequest &&, const KVStore &, RegionTable *, RaftCommandResult &);
+    const RegionRangeKeys & getRange();
+    UInt64 appliedIndex();
 
 private:
     RegionRaftCommandDelegate() = delete;

@@ -1402,12 +1402,12 @@ DDLWorker & Context::getDDLWorker() const
     return *shared->ddl_worker;
 }
 
-void Context::initializeRaftService(const std::string & service_addr)
+void Context::initializeRaftService()
 {
     auto lock = getLock();
     if (shared->raft_service)
         throw Exception("Raft Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
+    shared->raft_service = std::make_shared<RaftService>(*this);
 }
 
 void Context::shutdownRaftService()
@@ -1422,13 +1422,12 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & learner_key,
                                const std::string & learner_value,
                                const std::unordered_set<std::string> & ignore_databases,
-                               const std::string & kvstore_path,
-                               const std::string & region_mapping_path)
+                               const std::string & kvstore_path)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path);
 }
 
 void Context::initializePartPathSelector(const std::vector<std::string> & all_path)

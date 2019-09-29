@@ -12,8 +12,8 @@ class TMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
     TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, const size_t version_column_index_,
-        const size_t delmark_column_index_, size_t max_block_size_, WriteBuffer * out_row_sources_buf_ = nullptr)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, out_row_sources_buf_, true),
+        const size_t delmark_column_index_, size_t max_block_size_)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, nullptr, true),
           version_column_index(version_column_index_),
           delmark_column_index(delmark_column_index_)
     {}
@@ -48,8 +48,6 @@ private:
     UInt64 max_version = 0;
     /// Deleted mark for current primary key.
     UInt8 max_delmark = 0;
-
-    PODArray<RowSourcePart> current_row_sources; /// Sources of rows with the current primary key
 
     size_t by_column = 0;
     size_t by_row = 0;

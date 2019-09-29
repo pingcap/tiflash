@@ -24,6 +24,18 @@ inline void deleteRows(Block & block, const IColumn::Filter & filter)
     }
 }
 
+inline Block filterBlock(const Block & block, const IColumn::Filter & filter)
+{
+    Block res;
+    for (size_t i = 0, num_columns = block.columns(); i < num_columns; ++i)
+    {
+        ColumnWithTypeAndName column = block.getByPosition(i);
+        column.column = column.column->filter(filter, 0);
+        res.insert(std::move(column));
+    }
+    return res;
+}
+
 
 inline size_t setFilterByDelMarkColumn(const Block & block, IColumn::Filter & filter)
 {

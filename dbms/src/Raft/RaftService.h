@@ -23,7 +23,7 @@ using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 class RaftService final : public enginepb::Engine::Service, public std::enable_shared_from_this<RaftService>, private boost::noncopyable
 {
 public:
-    RaftService(const std::string & address_, Context & db_context);
+    RaftService(Context & db_context);
 
     ~RaftService() final;
 
@@ -37,10 +37,6 @@ private:
         grpc::ServerContext * grpc_context, CommandServerReader * reader, enginepb::SnapshotDone * response) override;
 
 private:
-    std::string address;
-
-    GRPCServerPtr grpc_server;
-
     Context & db_context;
     KVStorePtr kvstore;
 

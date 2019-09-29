@@ -26,19 +26,23 @@ public:
     void setRegion(metapb::Region region);
     void setVersion(const UInt64 version);
     void setConfVersion(const UInt64 version);
+    UInt64 getVersion() const;
+    UInt64 getConfVersion() const;
     void setStartKey(std::string key);
     void setEndKey(std::string key);
     ImutRegionRangePtr getRange() const;
     const metapb::Region & getRegion() const;
+    metapb::Region & getMutRegion();
     raft_serverpb::PeerState getState() const;
     void setState(raft_serverpb::PeerState value);
     void clearMergeState();
     bool operator==(const RegionState & region_state) const;
     const Base & getBase() const;
+    const raft_serverpb::MergeState & getMergeState() const;
+    raft_serverpb::MergeState & getMutMergeState();
 
 private:
     void updateRegionRange();
-    metapb::Region & getMutRegion();
 
 private:
     ImutRegionRangePtr region_range = nullptr;

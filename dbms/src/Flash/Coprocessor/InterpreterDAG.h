@@ -83,6 +83,7 @@ private:
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(Pipeline & pipeline, Int32 index);
+    void addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
 
 private:
     Context & context;
@@ -90,7 +91,6 @@ private:
     const DAGQuerySource & dag;
 
     NamesWithAliases final_project;
-    NamesAndTypesList source_columns;
 
     /// How many streams we ask for storage to produce, and in how many threads we will do further processing.
     size_t max_streams = 1;

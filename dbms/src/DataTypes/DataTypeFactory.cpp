@@ -107,6 +107,8 @@ void DataTypeFactory::registerSimpleDataType(const String & name, SimpleCreator 
 void registerDataTypeNumbers(DataTypeFactory & factory);
 void registerDataTypeDate(DataTypeFactory & factory);
 void registerDataTypeDateTime(DataTypeFactory & factory);
+void registerDataTypeMyDateTime(DataTypeFactory & factory);
+void registerDataTypeMyDate(DataTypeFactory & factory);
 void registerDataTypeString(DataTypeFactory & factory);
 void registerDataTypeFixedString(DataTypeFactory & factory);
 void registerDataTypeDecimal(DataTypeFactory & factory);
@@ -126,6 +128,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeNumbers(*this);
     registerDataTypeDate(*this);
     registerDataTypeDateTime(*this);
+    registerDataTypeMyDateTime(*this);
     registerDataTypeString(*this);
     registerDataTypeFixedString(*this);
     registerDataTypeDecimal(*this);
@@ -138,6 +141,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeAggregateFunction(*this);
     registerDataTypeNested(*this);
     registerDataTypeInterval(*this);
+    registerDataTypeMyDate(*this);
 }
 
 }

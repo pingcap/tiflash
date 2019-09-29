@@ -22,18 +22,29 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-grpc::Status CoprocessorHandler::execute() try
+grpc::Status CoprocessorHandler::execute()
+try
 {
     switch (cop_request->tp())
     {
         case COP_REQ_TYPE_DAG:
         {
+            std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+            for (auto & range : cop_request->ranges())
+            {
+                std::string start_key(range.start());
+                DecodedTiKVKey start(std::move(start_key));
+                std::string end_key(range.end());
+                DecodedTiKVKey end(std::move(end_key));
+                key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+            }
             tipb::DAGRequest dag_request;
             dag_request.ParseFromString(cop_request->data());
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
             tipb::SelectResponse dag_response;
             DAGDriver driver(cop_context.db_context, dag_request, cop_context.kv_context.region_id(),
-                cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), dag_response);
+                cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), std::move(key_ranges),
+                dag_response);
             driver.execute();
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
             cop_response->set_data(dag_response.SerializeAsString());
@@ -49,7 +60,7 @@ grpc::Status CoprocessorHandler::execute() try
 }
 catch (const LockException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.displayText());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.getStackTrace().toString());
     cop_response->Clear();
     kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
     lock_info->set_key(e.lock_infos[0]->key);
@@ -61,7 +72,7 @@ catch (const LockException & e)
 }
 catch (const RegionException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.displayText());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.getStackTrace().toString());
     cop_response->Clear();
     errorpb::Error * region_err;
     switch (e.status)
@@ -84,7 +95,7 @@ catch (const RegionException & e)
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.displayText());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.getStackTrace().toString());
     cop_response->Clear();
     cop_response->set_other_error(e.message());
 

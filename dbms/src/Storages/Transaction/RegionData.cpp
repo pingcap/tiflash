@@ -198,18 +198,18 @@ RegionData::RegionData(RegionData && data)
 
 UInt8 RegionData::getWriteType(const ConstWriteCFIter & write_it) { return RegionWriteCFDataTrait::getWriteType(write_it->second); }
 
-void RegionData::deleteRange(const ColumnFamilyType cf, const TiKVKey & start_key, const TiKVKey & end_key)
+void RegionData::deleteRange(const ColumnFamilyType cf, const RegionRange & range)
 {
     switch (cf)
     {
         case Write:
-            write_cf.deleteRange(start_key, end_key);
+            cf_data_size -= write_cf.deleteRange(range);
             break;
         case Default:
-            default_cf.deleteRange(start_key, end_key);
+            cf_data_size -= default_cf.deleteRange(range);
             break;
         case Lock:
-            lock_cf.deleteRange(start_key, end_key);
+            cf_data_size -= lock_cf.deleteRange(range);
             break;
         default:
             throw Exception("[RegionData::deleteRange] with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);

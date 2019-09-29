@@ -336,7 +336,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string learner_value;
     std::unordered_set<std::string> ignore_databases{"system"};
     std::string kvstore_path = path + "kvstore/";
-    std::string region_mapping_path = path + "regmap/";
 
     if (config().has("raft"))
     {
@@ -393,16 +392,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             kvstore_path = config().getString("raft.kvstore_path");
         }
-
-        if (config().has("raft.regmap"))
-        {
-            region_mapping_path = config().getString("raft.regmap");
-        }
     }
 
     {
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, region_mapping_path);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path);
     }
 
     /// Then, load remaining databases
@@ -452,10 +446,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     if (need_raft_service)
-    {
-        String raft_service_addr = config().getString("raft.service_addr");
-        global_context->initializeRaftService(raft_service_addr);
-    }
+        global_context->initializeRaftService();
 
     SCOPE_EXIT({
         LOG_INFO(log, "Shutting down raft service.");

@@ -38,6 +38,7 @@ struct numeric_limits<__uint128_t>
 #include <DataStreams/ReplacingDeletingSortedBlockInputStream.h>
 #include <DataStreams/ReplacingSortedBlockInputStream.h>
 #include <DataStreams/SummingSortedBlockInputStream.h>
+#include <DataStreams/TMTSingleSortedBlockInputStream.h>
 #include <DataStreams/TMTSortedBlockInputStream.h>
 #include <DataStreams/TMTUnionBlockInputStream.h>
 #include <DataStreams/VersionFilterBlockInputStream.h>

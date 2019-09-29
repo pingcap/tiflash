@@ -29,12 +29,14 @@ static void assignOrThrowException(Int32 & index, Int32 value, const String & na
 }
 
 DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, RegionID region_id_, UInt64 region_version_,
-    UInt64 region_conf_version_, const tipb::DAGRequest & dag_request_)
+    UInt64 region_conf_version_, const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges_,
+    const tipb::DAGRequest & dag_request_)
     : context(context_),
       dag_context(dag_context_),
       region_id(region_id_),
       region_version(region_version_),
       region_conf_version(region_conf_version_),
+      key_ranges(key_ranges_),
       dag_request(dag_request_)
 {
     for (int i = 0; i < dag_request.executors_size(); i++)
@@ -92,6 +94,8 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
         case tipb::ExecType::TypeTableScan:
             for (auto & ci : executor.tbl_scan().columns())
             {
+                if (ci.column_id() == -1)
+                    continue;
                 field_type.set_tp(ci.tp());
                 field_type.set_flag(ci.flag());
                 field_type.set_flen(ci.columnlen());
@@ -130,6 +134,8 @@ std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
     {
         if (fillExecutorOutputFieldTypes(dag_request.executors(i), executor_output))
         {
+            if (executor_output.empty())
+                executor_output.push_back(dag_context.void_result_ft);
             break;
         }
     }

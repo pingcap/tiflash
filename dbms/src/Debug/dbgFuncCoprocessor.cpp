@@ -5,6 +5,7 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -37,23 +38,31 @@ using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts);
+    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts,
+    Int64 tz_offset, const String & tz_name);
 tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 1 || args.size() > 2)
-        throw Exception("Args not matched, should be: query[, region-id]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 1 || args.size() > 4)
+        throw Exception("Args not matched, should be: query[, region-id, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
-    if (args.size() == 2)
+    if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    Int64 tz_offset = 0;
+    String tz_name = "";
+    if (args.size() >= 3)
+        tz_offset = get<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    if (args.size() >= 4)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
             auto mmt = std::dynamic_pointer_cast<StorageMergeTree>(storage);
@@ -61,7 +70,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
                 throw Exception("Not TMT", ErrorCodes::BAD_ARGUMENTS);
             return mmt->getTableInfo();
         },
-        start_ts);
+        start_ts, tz_offset, tz_name);
 
     RegionPtr region;
     if (region_id == InvalidRegionID)
@@ -84,22 +93,29 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 2 || args.size() > 3)
-        throw Exception("Args not matched, should be: query, region-id[, start-ts]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 2 || args.size() > 5)
+        throw Exception("Args not matched, should be: query, region-id[, start-ts, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     Timestamp start_ts = DEFAULT_MAX_READ_TSO;
-    if (args.size() == 3)
+    if (args.size() >= 3)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
+    Int64 tz_offset = 0;
+    String tz_name = "";
+    if (args.size() >= 3)
+        tz_offset = safeGet<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
+    if (args.size() >= 4)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
 
-    auto [table_id, schema, dag_request] = compileQuery(context, query,
+    auto [table_id, schema, dag_request] = compileQuery(
+        context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
-        start_ts);
+        start_ts, tz_offset, tz_name);
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -108,32 +124,14 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     return outputDAGResponse(context, schema, dag_response);
 }
 
+const String VOID_COL_NAME = "_void";
+
 struct ExecutorCtx
 {
     tipb::Executor * input;
     DAGSchema output;
     std::unordered_map<String, tipb::Expr *> col_ref_map;
 };
-
-tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci)
-{
-    tipb::FieldType ret;
-    ret.set_tp(ci.tp);
-    ret.set_flag(ci.flag);
-    ret.set_flen(ci.flen);
-    ret.set_decimal(ci.decimal);
-    return ret;
-}
-
-ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
-{
-    ColumnInfo ret;
-    ret.tp = static_cast<TiDB::TP>(field_type.tp());
-    ret.flag = field_type.flag();
-    ret.flen = field_type.flen();
-    ret.decimal = field_type.decimal();
-    return ret;
-}
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
     std::unordered_map<String, tipb::Expr *> & col_ref_map)
@@ -180,6 +178,14 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         else if (func_name_lowercase == "or")
         {
             expr->set_sig(tipb::ScalarFuncSig::LogicalOr);
+            auto * ft = expr->mutable_field_type();
+            // TODO: TiDB will infer Int64.
+            ft->set_tp(TiDB::TypeTiny);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else if (func_name_lowercase == "greater")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::GTInt);
             auto * ft = expr->mutable_field_type();
             // TODO: TiDB will infer Int64.
             ft->set_tp(TiDB::TypeTiny);
@@ -254,10 +260,13 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
 }
 
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts)
+    Context & context, const String & query, SchemaFetcher schema_fetcher,
+    Timestamp start_ts, Int64 tz_offset, const String & tz_name)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
+    dag_request.set_time_zone_name(tz_name);
+    dag_request.set_time_zone_offset(tz_offset);
 
     dag_request.set_start_ts(start_ts);
 
@@ -306,8 +315,11 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             ci.tp = column_info.tp;
             ci.flag = column_info.flag;
             ci.flen = column_info.flen;
-            ci.decimal = column_info.flen;
+            ci.decimal = column_info.decimal;
             ci.elems = column_info.elems;
+            // a hack to test timestamp type in mock test
+            if (column_info.tp == TiDB::TypeDatetime && ci.decimal == 5)
+                ci.tp = TiDB::TypeTimestamp;
             ts_output.emplace_back(std::make_pair(column_info.name, std::move(ci)));
         }
         executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, tipb::Expr *>{}});
@@ -376,7 +388,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                 ci->set_flag(info.second.flag);
                 ci->set_columnlen(info.second.flen);
                 ci->set_decimal(info.second.decimal);
-                if (info.second.elems.size() != 0)
+                if (!info.second.elems.empty())
                 {
                     for (auto & pair : info.second.elems)
                     {
@@ -445,6 +457,14 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                     ft->set_tp(TiDB::TypeLongLong);
                     ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
                 }
+                else if (func->name == "max")
+                {
+                    agg_func->set_tp(tipb::Max);
+                    if (agg_func->children_size() != 1)
+                        throw Exception("udaf max only accept 1 argument");
+                    auto ft = agg_func->mutable_field_type();
+                    ft->set_tp(agg_func->children(0).field_type().tp());
+                }
                 // TODO: Other agg func.
                 else
                 {
@@ -500,14 +520,38 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         column_pruner(executor_ctx_map[last_executor]);
 
         const auto & last_output = executor_ctx_map[last_executor].output;
-        for (const auto & field : final_output)
+
+        // For testing VOID column, ignore any other select expressions, unless table contains it.
+        if (std::find(final_output.begin(), final_output.end(), VOID_COL_NAME) != final_output.end()
+            && std::find_if(
+                   last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == VOID_COL_NAME; })
+                == last_output.end())
         {
-            auto iter
-                = std::find_if(last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
-            if (iter == last_output.end())
-                throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
-            dag_request.add_output_offsets(iter - last_output.begin());
-            schema.push_back(*iter);
+            dag_request.add_output_offsets(0);
+
+            // Set column ID to -1 to trigger `void` column in DAG processing.
+            tipb::ColumnInfo * ci = ts->add_columns();
+            ci->set_column_id(-1);
+
+            // Set column name to VOID and tp to Nullable(UInt64),
+            // as chunk decoding doesn't do strict field type check so Nullable(UInt64) should be enough.
+            ColumnInfo ti_ci;
+            ti_ci.name = VOID_COL_NAME;
+            ti_ci.tp = TiDB::TypeLongLong;
+            ti_ci.setNotNullFlag();
+            schema.emplace_back(DAGColumnInfo{VOID_COL_NAME, std::move(ti_ci)});
+        }
+        else
+        {
+            for (const auto & field : final_output)
+            {
+                auto iter = std::find_if(
+                    last_output.begin(), last_output.end(), [&](const auto & last_field) { return last_field.first == field; });
+                if (iter == last_output.end())
+                    throw Exception("Column not found after pruning: " + field, ErrorCodes::LOGICAL_ERROR);
+                dag_request.add_output_offsets(iter - last_output.begin());
+                schema.push_back(*iter);
+            }
         }
     }
 
@@ -521,7 +565,7 @@ tipb::SelectResponse executeDAGRequest(
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     context.setSetting("dag_planner", "optree");
     tipb::SelectResponse dag_response;
-    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, dag_response, true);
+    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, {}, dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;

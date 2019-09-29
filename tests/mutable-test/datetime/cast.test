@@ -1,0 +1,61 @@
+>> DBGInvoke __enable_schema_sync_service('false')
+
+>> drop table if exists test
+
+>> create table test (
+	a MyDateTime(5),
+	b MyDate
+	) engine = Log
+
+>> insert into test values ('1991-09-05 11:11:11', '1991-09-05')
+
+>> select cast('1991-09-05 11:11:11' as MyDateTime) from test
+┌─CAST(\'1991-09-05 11:11:11\', \'MyDateTime\')─┐
+│                           1991-09-05 11:11:11 │
+└───────────────────────────────────────────────┘
+
+>> select cast('1991-09-05 11:11:11' as MyDateTime(3)) from test
+┌─CAST(\'1991-09-05 11:11:11\', \'MyDateTime(3)\')─┐
+│                          1991-09-05 11:11:11.000 │
+└──────────────────────────────────────────────────┘
+
+>> select cast('1991-09-05' as MyDate) from test
+┌─CAST(\'1991-09-05\', \'MyDate\')─┐
+│                       1991-09-05 │
+└──────────────────────────────────┘
+
+>> select cast(a as String), cast(b as String) from test
+┌─CAST(a, \'String\')───────┬─CAST(b, \'String\')─┐
+│ 1991-09-05 11:11:11.00000 │ 1991-09-05          │
+└───────────────────────────┴─────────────────────┘
+
+# +9 because of DST
+>> select cast('1991-09-05 11:11:11.1' as MyDateTime(5)) from test
+┌─CAST(\'1991-09-05 11:11:11.1\', \'MyDateTime(5)\')─┐
+│                          1991-09-05 11:11:11.10000 │
+└────────────────────────────────────────────────────┘
+
+>> drop table if exists test
+
+>> create table test ( a MyDateTime(5)) engine = Log;
+
+>> insert into test values('1991-09-05 11:11:11.123');
+
+>> select ConvertTimeZoneFromUTC(a, 'Asia/Shanghai') from test;
+┌─ConvertTimeZoneFromUTC(a, \'Asia/Shanghai\')─┐
+│                    1991-09-05 20:11:11.12300 │
+└──────────────────────────────────────────────┘
+
+>> drop table if exists test
+
+>> create table test (a MyDateTime(5)) engine = Log;
+
+>> insert into test values('1991-09-05 11:11:11.321');
+
+>> select ConvertTimeZoneToUTC(a, 'Asia/Shanghai') from test;
+┌─ConvertTimeZoneToUTC(a, \'Asia/Shanghai\')─┐
+│                  1991-09-05 02:11:11.32100 │
+└────────────────────────────────────────────┘
+
+
+>> drop table if exists test

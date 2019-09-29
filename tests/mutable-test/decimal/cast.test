@@ -17,3 +17,20 @@
 ┌─plus(plus(plus(i, f), d), d2)─┐
 │                          -0.4 │
 └───────────────────────────────┘
+
+>> select cast(d as String) from test
+┌─CAST(d, \'String\')─┐
+│ -5                  │
+└─────────────────────┘
+
+>> select cast(d as Int) from test
+┌─CAST(d, \'Int\')─┐
+│               -5 │
+└──────────────────┘
+
+>> select cast(d as Float64) from test
+┌─CAST(d, \'Float64\')─┐
+│                   -5 │
+└──────────────────────┘
+
+

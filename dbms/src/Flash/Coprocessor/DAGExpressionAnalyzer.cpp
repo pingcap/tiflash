@@ -6,6 +6,7 @@
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
@@ -44,7 +45,7 @@ static String genFuncString(const String & func_name, const Names & argument_nam
     return ss.str();
 }
 
-DAGExpressionAnalyzer::DAGExpressionAnalyzer(const NamesAndTypesList & source_columns_, const Context & context_)
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(const std::vector<NameAndTypePair> && source_columns_, const Context & context_)
     : source_columns(source_columns_),
       context(context_),
       after_agg(false),
@@ -177,28 +178,129 @@ void DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const 
     }
 }
 
-const NamesAndTypesList & DAGExpressionAnalyzer::getCurrentInputColumns() { return after_agg ? aggregated_columns : source_columns; }
+const std::vector<NameAndTypePair> & DAGExpressionAnalyzer::getCurrentInputColumns()
+{
+    return after_agg ? aggregated_columns : source_columns;
+}
 
 void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project)
 {
     initChain(chain, getCurrentInputColumns());
-    for (auto name : final_project)
+    for (const auto & name : final_project)
     {
         chain.steps.back().required_output.push_back(name.first);
     }
 }
 
-void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & aggregation)
+void constructTZExpr(tipb::Expr & tz_expr, const tipb::DAGRequest & rqst, bool from_utc)
+{
+    if (rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0)
+    {
+        tz_expr.set_tp(tipb::ExprType::String);
+        tz_expr.set_val(rqst.time_zone_name());
+        auto * field_type = tz_expr.mutable_field_type();
+        field_type->set_tp(TiDB::TypeString);
+        field_type->set_flag(TiDB::ColumnFlagNotNull);
+    }
+    else
+    {
+        tz_expr.set_tp(tipb::ExprType::Int64);
+        std::stringstream ss;
+        encodeDAGInt64(from_utc ? rqst.time_zone_offset() : -rqst.time_zone_offset(), ss);
+        tz_expr.set_val(ss.str());
+        auto * field_type = tz_expr.mutable_field_type();
+        field_type->set_tp(TiDB::TypeLongLong);
+        field_type->set_flag(TiDB::ColumnFlagNotNull);
+    }
+}
+
+bool hasMeaningfulTZInfo(const tipb::DAGRequest &rqst)
+{
+    if (rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0)
+        return rqst.time_zone_name() != "UTC";
+    if (rqst.has_time_zone_offset())
+        return rqst.has_time_zone_offset() != 0;
+    return false;
+}
+
+String DAGExpressionAnalyzer::appendTimeZoneCast(
+    const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions)
+{
+    Names cast_argument_names;
+    cast_argument_names.push_back(ts_col);
+    cast_argument_names.push_back(tz_col);
+    String cast_expr_name = applyFunction(func_name, cast_argument_names, actions);
+    return cast_expr_name;
+}
+
+// add timezone cast after table scan, this is used for session level timezone support
+// the basic idea of supporting session level timezone is that:
+// 1. for every timestamp column used in the dag request, after reading it from table scan, we add
+//    cast function to convert its timezone to the timezone specified in DAG request
+// 2. for every timestamp column that will be returned to TiDB, we add cast function to convert its
+//    timezone to UTC
+// for timestamp columns without any transformation or calculation(e.g. select ts_col from table),
+// this will introduce two useless casts, in order to avoid these redundant cast, when cast the ts
+// column to the columns with session-level timezone info, the original ts columns with UTC
+// timezone are still kept
+// for DAG request that does not contain agg, the final project will select the ts column with UTC
+// timezone, which is exactly what TiDB want
+// for DAG request that contains agg, any ts column after agg has session-level timezone info(since the ts
+// column with UTC timezone will never be used in during agg), all the column with ts datatype will
+// convert back to UTC timezone
+bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
+        ExpressionActionsChain &chain, std::vector<bool> is_ts_column, const tipb::DAGRequest &rqst)
+{
+    if (!hasMeaningfulTZInfo(rqst))
+        return false;
+
+    bool ret = false;
+    initChain(chain, getCurrentInputColumns());
+    ExpressionActionsPtr actions = chain.getLastActions();
+    tipb::Expr tz_expr;
+    constructTZExpr(tz_expr, rqst, true);
+    String tz_col;
+    String func_name
+        = rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0 ? "ConvertTimeZoneFromUTC" : "ConvertTimeZoneByOffset";
+    for (size_t i = 0; i < is_ts_column.size(); i++)
+    {
+        if (is_ts_column[i])
+        {
+            if (tz_col.length() == 0)
+                tz_col = getActions(tz_expr, actions);
+            String casted_name = appendTimeZoneCast(tz_col, source_columns[i].name, func_name, actions);
+            source_columns.emplace_back(source_columns[i].name, source_columns[i].type);
+            source_columns[i].name = casted_name;
+            ret = true;
+        }
+    }
+    return ret;
+}
+
+void DAGExpressionAnalyzer::appendAggSelect(
+    ExpressionActionsChain & chain, const tipb::Aggregation & aggregation, const tipb::DAGRequest & rqst)
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
     NamesAndTypesList updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
-    auto agg_col_names = aggregated_columns.getNames();
+    bool need_append_timezone_cast = hasMeaningfulTZInfo(rqst);
+    tipb::Expr tz_expr;
+    if (need_append_timezone_cast)
+        constructTZExpr(tz_expr, rqst, false);
+    String tz_col;
+    String tz_cast_func_name
+        = rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0 ? "ConvertTimeZoneToUTC" : "ConvertTimeZoneByOffset";
     for (Int32 i = 0; i < aggregation.agg_func_size(); i++)
     {
-        String & name = agg_col_names[i];
+        String & name = aggregated_columns[i].name;
         String updated_name = appendCastIfNeeded(aggregation.agg_func(i), step.actions, name);
+        if (need_append_timezone_cast && aggregation.agg_func(i).field_type().tp() == TiDB::TypeTimestamp)
+        {
+            if (tz_col.length() == 0)
+                tz_col = getActions(tz_expr, step.actions);
+            updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, step.actions);
+        }
         if (name != updated_name)
         {
             need_update_aggregated_columns = true;
@@ -208,14 +310,20 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns.getTypes()[i]);
+            updated_aggregated_columns.emplace_back(name, aggregated_columns[i].type);
             step.required_output.push_back(name);
         }
     }
     for (Int32 i = 0; i < aggregation.group_by_size(); i++)
     {
-        String & name = agg_col_names[i + aggregation.agg_func_size()];
+        String & name = aggregated_columns[i + aggregation.agg_func_size()].name;
         String updated_name = appendCastIfNeeded(aggregation.group_by(i), step.actions, name);
+        if (need_append_timezone_cast && aggregation.group_by(i).field_type().tp() == TiDB::TypeTimestamp)
+        {
+            if (tz_col.length() == 0)
+                tz_col = getActions(tz_expr, step.actions);
+            updated_name = appendTimeZoneCast(tz_col, updated_name, tz_cast_func_name, step.actions);
+        }
         if (name != updated_name)
         {
             need_update_aggregated_columns = true;
@@ -225,7 +333,7 @@ void DAGExpressionAnalyzer::appendAggSelect(ExpressionActionsChain & chain, cons
         }
         else
         {
-            updated_aggregated_columns.emplace_back(name, aggregated_columns.getTypes()[i]);
+            updated_aggregated_columns.emplace_back(name, aggregated_columns[i].type);
             step.required_output.push_back(name);
         }
     }
@@ -263,11 +371,10 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
             // first construct the second argument
             tipb::Expr type_expr;
             type_expr.set_tp(tipb::ExprType::String);
-            std::stringstream ss;
             type_expr.set_val(expected_type->getName());
             auto * type_field_type = type_expr.mutable_field_type();
-            type_field_type->set_tp(0xfe);
-            type_field_type->set_flag(1);
+            type_field_type->set_tp(TiDB::TypeString);
+            type_field_type->set_flag(TiDB::ColumnFlagNotNull);
             getActions(type_expr, actions);
 
             Names cast_argument_names;

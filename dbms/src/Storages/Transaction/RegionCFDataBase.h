@@ -20,7 +20,8 @@ enum CFModifyFlag : UInt8
     */
 };
 
-using RegionRange = std::pair<TiKVKey, TiKVKey>;
+struct TiKVRangeKey;
+using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
 
 template <typename Trait>
 struct RegionCFDataBase
@@ -67,7 +68,7 @@ struct RegionCFDataBase
 
     TableIDSet getAllTables() const;
 
-    void deleteRange(const TiKVKey & start_key, const TiKVKey & end_key);
+    size_t deleteRange(const RegionRange & range);
 
     ExtraCFData<Trait> & getExtra();
 

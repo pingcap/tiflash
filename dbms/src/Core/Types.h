@@ -133,6 +133,10 @@ enum class TypeIndex
     Function,
     AggregateFunction,
     LowCardinality,
+    MyDate,
+    MyDateTime,
+    MyTimeStamp,
+    MyTime
 };
 
 template <typename T> struct TypeId;

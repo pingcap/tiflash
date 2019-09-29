@@ -1,5 +1,6 @@
 #include <Storages/Transaction/RegionCFDataBase.h>
 #include <Storages/Transaction/RegionCFDataTrait.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
 
 namespace DB
 {
@@ -206,9 +207,7 @@ size_t RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDat
         {
             const auto & key = getTiKVKey(it->second);
 
-            bool ok = start_key ? key >= start_key : true;
-            ok = ok && (end_key ? key < end_key : true);
-            if (ok)
+            if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
             {
                 size_changed += calcTiKVKeyValueSize(it->second);
                 tar_map.insert(std::move(*it));
@@ -289,8 +288,12 @@ typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getDataMut()
 }
 
 template <typename Trait>
-void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVKey & end_key)
+size_t RegionCFDataBase<Trait>::deleteRange(const RegionRange & range)
 {
+    size_t size_changed = 0;
+
+    const auto & [start_key, end_key] = range;
+
     for (auto data_it = data.begin(); data_it != data.end();)
     {
         auto & ori_map = data_it->second;
@@ -299,10 +302,11 @@ void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVK
         {
             const auto & key = getTiKVKey(it->second);
 
-            bool ok = start_key ? key >= start_key : true;
-            ok = ok && (end_key ? key < end_key : true);
-            if (ok)
+            if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
+            {
+                size_changed += calcTiKVKeyValueSize(it->second);
                 it = ori_map.erase(it);
+            }
             else
                 ++it;
         }
@@ -312,6 +316,8 @@ void RegionCFDataBase<Trait>::deleteRange(const TiKVKey & start_key, const TiKVK
         else
             ++data_it;
     }
+
+    return size_changed;
 }
 
 template <typename Trait>
