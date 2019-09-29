@@ -478,6 +478,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
     auto [largest_file_id, level] = *(merge_files.rbegin());
     PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
 
+    // We should check these nums, if any of them is non-zero, we should set `gc_file` to formal.
     size_t num_successful_migrate_pages = 0;
     size_t num_valid_ref_pages          = 0;
     size_t num_del_page_meta            = 0;
@@ -508,7 +509,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                 {
                     try
                     {
-                        const auto page_entry = current->find(page_id);
+                        const auto page_entry = current->findNormalPageEntry(page_id);
                         if (!page_entry)
                             continue;
                         // This page is covered by newer file.
@@ -570,14 +571,15 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         }
     } // free gc_file_writer and sync
 
-    if (gc_file_edit.empty() && num_valid_ref_pages == 0)
+    const auto id = gc_file.fileIdLevel();
+    if (gc_file_edit.empty() && num_valid_ref_pages == 0 && num_del_page_meta == 0)
     {
+        LOG_INFO(log, storage_name << " No valid pages, deleting PageFile_" << id.first << "_" << id.second);
         gc_file.destroy();
     }
     else
     {
         gc_file.setFormal();
-        const auto id = gc_file.fileIdLevel();
         LOG_INFO(log,
                  storage_name << " GC have migrated " << num_successful_migrate_pages //
                               << " regions and " << num_valid_ref_pages               //

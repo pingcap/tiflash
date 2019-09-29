@@ -273,6 +273,81 @@ TEST_F(PageStorage_test, GcMigrateValidRefPages)
     ASSERT_FALSE(is_deleted_ref_id_exists);
 }
 
+TEST_F(PageStorage_test, GcMoveNormalPage)
+{
+    const size_t buf_sz = 256;
+    char         c_buff[buf_sz];
+
+    {
+        WriteBatch batch;
+        memset(c_buff, 0xf, buf_sz);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buf_sz);
+        batch.putRefPage(2, 1);
+        batch.putRefPage(3, 2);
+
+        batch.delPage(1);
+
+        storage->write(batch);
+    }
+
+    PageFileIdAndLevel        id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
+    PageStorage::GcLivesPages livesPages{{id_and_lvl,
+                                          {buf_sz,
+                                           {
+                                               1,
+                                           }}}};
+    PageStorage::GcCandidates candidates{
+        id_and_lvl,
+    };
+    auto            s0         = storage->getSnapshot();
+    const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
+    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates);
+    auto            live_files = storage->versioned_page_entries.gcApply(edit);
+    storage->gcRemoveObsoleteFiles(page_files, {2, 0}, live_files);
+
+    // After migrate, RefPage 3 -> 1 is still valid
+    bool exist = false;
+    for (const auto & rec : edit.getRecords())
+    {
+        if (rec.type == WriteBatch::WriteType::REF && rec.page_id == 3 && rec.ori_page_id == 1)
+        {
+            exist = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(exist);
+    s0.reset();
+
+    // reopen PageStorage, RefPage 3 -> 1 is still valid
+    storage = reopenWithConfig(config);
+    auto s1 = storage->getSnapshot();
+
+    auto [is_ref, normal_page_id] = s1->version()->isRefId(3);
+    ASSERT_TRUE(is_ref);
+    ASSERT_EQ(normal_page_id, 1UL);
+
+    std::tie(is_ref, normal_page_id) = s1->version()->isRefId(2);
+    ASSERT_TRUE(is_ref);
+    ASSERT_EQ(normal_page_id, 1UL);
+
+    // Page 1 is deleted.
+    auto entry1 = s1->version()->find(1);
+    ASSERT_FALSE(entry1);
+
+    // Normal page 1 is moved to PageFile_1_1
+    entry1 = s1->version()->findNormalPageEntry(normal_page_id);
+    ASSERT_TRUE(entry1);
+    ASSERT_EQ(entry1->fileIdLevel().first, 1UL);
+    ASSERT_EQ(entry1->fileIdLevel().second, 1UL);
+
+    Page page = storage->read(3, s1);
+    ASSERT_EQ(page.data.size(), buf_sz);
+
+    page = storage->read(2, s1);
+    ASSERT_EQ(page.data.size(), buf_sz);
+}
+
 TEST_F(PageStorage_test, GcMoveRefPage)
 {
     const size_t buf_sz = 256;

@@ -111,7 +111,7 @@ int main(int argc, char ** argv)
         auto page_ids = snapshot->version()->validPageIds();
         for (auto page_id : page_ids)
         {
-            const DB::PageEntry * entry = snapshot->version()->find(page_id);
+            const auto entry = snapshot->version()->find(page_id);
             printPageEntry(page_id, *entry);
         }
 #if 0
