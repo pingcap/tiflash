@@ -366,6 +366,8 @@ bool PageStorage::gc()
                 }
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry->fileIdLevel()];
                 valid_size += page_entry->size;
+                valid_page_ids_in_file.emplace_back(page_id);
+            }
 #else
             for (auto iter = snapshot->version()->pages_cbegin(); iter != snapshot->version()->pages_cend(); ++iter)
             {
@@ -373,9 +375,9 @@ bool PageStorage::gc()
                 const PageEntry & page_entry                 = iter->second;
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry.fileIdLevel()];
                 valid_size += page_entry.size;
-#endif
                 valid_page_ids_in_file.emplace_back(page_id);
             }
+#endif
         }
 
         // Select gc candidate files into `merge_files`

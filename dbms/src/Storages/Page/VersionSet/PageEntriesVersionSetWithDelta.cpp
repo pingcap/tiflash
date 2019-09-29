@@ -13,25 +13,27 @@ namespace DB
 
 std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit)
 {
-    std::unique_lock lock(read_mutex);
+    if (!edit.empty())
+    {
+        std::unique_lock lock(read_mutex);
 
-    if (current.use_count() == 1 && current->isBase())
-    {
-        // If no readers, we could directly merge edits
-        EditAcceptor::gcApplyInplace(current, edit);
-    }
-    else
-    {
-        if (current.use_count() != 1)
+        if (current.use_count() == 1 && current->isBase())
         {
-            VersionPtr v = VersionType::createDelta();
-            appendVersion(std::move(v));
+            // If no readers, we could directly merge edits
+            EditAcceptor::gcApplyInplace(current, edit);
         }
-        auto         view = std::make_shared<PageEntriesView>(current);
-        EditAcceptor builder(view.get());
-        builder.gcApply(edit);
+        else
+        {
+            if (current.use_count() != 1)
+            {
+                VersionPtr v = VersionType::createDelta();
+                appendVersion(std::move(v));
+            }
+            auto view = std::make_shared<PageEntriesView>(current);
+            EditAcceptor builder(view.get());
+            builder.gcApply(edit);
+        }
     }
-
     return listAllLiveFiles();
 }
 
