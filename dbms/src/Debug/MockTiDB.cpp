@@ -133,7 +133,8 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
     return schema_id;
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name,
+        const ColumnsDescription & columns, Timestamp tso, int pk_index)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -158,9 +159,15 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     for (auto & column : columns.getAllPhysical())
     {
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, Field()));
+        if (pk_index == i-2)
+        {
+            if (!column.type->isInteger() && !column.type->isUnsignedInteger())
+                throw Exception("MockTiDB pk column must be integer or unsigned integer type", ErrorCodes::LOGICAL_ERROR);
+            table_info.columns.back().setPriKeyFlag();
+        }
     }
 
-    table_info.pk_is_handle = false;
+    table_info.pk_is_handle = pk_index >= 0;
     table_info.comment = "Mocked.";
     table_info.update_timestamp = tso;
 
