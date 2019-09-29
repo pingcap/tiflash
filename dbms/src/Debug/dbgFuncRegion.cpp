@@ -128,7 +128,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
     for (auto it = args_begin; it != args_end; it += len)
     {
         HandleID handle_id = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[0]).value);
-        Timestamp tso = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
+        Timestamp tso = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[1]).value);
         UInt8 del = (UInt8)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*it[2]).value);
         {
             std::vector<Field> fields;
