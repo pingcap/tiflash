@@ -220,7 +220,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     SelectQueryInfo query_info;
     // set query to avoid unexpected NPE
     query_info.query = dag.getAST();
-    query_info.dag_query = std::make_shared<DAGQueryInfo>(dag, analyzer->getPreparedSets(), source_columns);
+    query_info.dag_query = std::make_unique<DAGQueryInfo>(dag, analyzer->getPreparedSets(), source_columns);
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
