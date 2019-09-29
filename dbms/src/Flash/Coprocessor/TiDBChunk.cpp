@@ -6,6 +6,8 @@
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeMyDate.h>
+#include <DataTypes/DataTypeMyDateTime.h>
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Functions/FunctionHelpers.h>
 
@@ -142,14 +144,14 @@ bool flashNumColToDAGCol(
     return false;
 }
 
-bool flashDateColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
+bool flashDateOrDateTimeColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
     const DataTypePtr & data_type, size_t start_index, size_t end_index)
 {
     if ((field_type.tp() == TiDB::TypeDate || field_type.tp() == TiDB::TypeDatetime || field_type.tp() == TiDB::TypeTimestamp)
-        && checkDataType<DataTypeDate>(data_type.get()))
+        && (checkDataType<DataTypeMyDate>(data_type.get()) || checkDataType<DataTypeMyDateTime>(data_type.get())))
     {
-        const ColumnVector<UInt32> * flash_col = checkAndGetColumn<ColumnVector<UInt32>>(flash_col_untyped);
-        const auto & date_lut = DateLUT::instance();
+        using DateFieldType = DataTypeMyTimeBase::FieldType;
+        const ColumnVector<DateFieldType> * flash_col = checkAndGetColumn<ColumnVector<DateFieldType>>(flash_col_untyped);
         for (size_t i = start_index; i < end_index; i++)
         {
             if (flash_col->isNullAt(i))
@@ -157,32 +159,7 @@ bool flashDateColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_unt
                 dag_column.appendNull();
                 continue;
             }
-            DayNum_t day_num(flash_col->getElement(i));
-            TiDBTime time = TiDBTime(day_num, date_lut, field_type);
-            dag_column.appendTime(time);
-        }
-        return true;
-    }
-    return false;
-}
-
-bool flashDateTimeColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
-    const DataTypePtr & data_type, size_t start_index, size_t end_index)
-{
-    if ((field_type.tp() == TiDB::TypeDate || field_type.tp() == TiDB::TypeDatetime || field_type.tp() == TiDB::TypeTimestamp)
-        && checkDataType<DataTypeDateTime>(data_type.get()))
-    {
-        const ColumnVector<Int64> * flash_col = checkAndGetColumn<ColumnVector<Int64>>(flash_col_untyped);
-        const auto & date_lut = DateLUT::instance();
-        for (size_t i = start_index; i < end_index; i++)
-        {
-            if (flash_col->isNullAt(i))
-            {
-                dag_column.appendNull();
-                continue;
-            }
-            time_t time_num(flash_col->getElement(i));
-            TiDBTime time = TiDBTime(time_num, date_lut, field_type);
+            TiDBTime time = TiDBTime(flash_col->getElement(i), field_type);
             dag_column.appendTime(time);
         }
         return true;
@@ -229,8 +206,7 @@ void flashColToDAGCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & fla
     const bool is_num = col->isNumeric();
     if (is_num)
     {
-        if (!(flashDateColToDAGCol(dag_column, col, field_type, flash_col.type, start_index, end_index)
-                || flashDateTimeColToDAGCol(dag_column, col, field_type, flash_col.type, start_index, end_index)
+        if (!(flashDateOrDateTimeColToDAGCol(dag_column, col, field_type, flash_col.type, start_index, end_index)
                 || flashNumColToDAGCol<UInt8>(dag_column, col, field_type, start_index, end_index)
                 || flashNumColToDAGCol<UInt16>(dag_column, col, field_type, start_index, end_index)
                 || flashNumColToDAGCol<UInt32>(dag_column, col, field_type, start_index, end_index)

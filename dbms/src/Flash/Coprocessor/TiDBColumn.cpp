@@ -71,13 +71,13 @@ void TiDBColumn::appendUInt64(UInt64 value)
 
 void TiDBColumn::appendTime(const TiDBTime & time)
 {
-    encodeLittleEndian<UInt32>(time.hour, data);
-    encodeLittleEndian<UInt32>(time.microsecond, data);
-    encodeLittleEndian<UInt16>(time.year, data);
-    encodeLittleEndian<UInt8>(time.month, data);
-    encodeLittleEndian<UInt8>(time.day, data);
-    encodeLittleEndian<UInt8>(time.minute, data);
-    encodeLittleEndian<UInt8>(time.second, data);
+    encodeLittleEndian<UInt32>(time.my_date_time.hour, data);
+    encodeLittleEndian<UInt32>(time.my_date_time.micro_second, data);
+    encodeLittleEndian<UInt16>(time.my_date_time.year, data);
+    encodeLittleEndian<UInt8>(time.my_date_time.month, data);
+    encodeLittleEndian<UInt8>(time.my_date_time.day, data);
+    encodeLittleEndian<UInt8>(time.my_date_time.minute, data);
+    encodeLittleEndian<UInt8>(time.my_date_time.second, data);
     encodeLittleEndian<UInt8>(time.time_type, data);
     encodeLittleEndian<Int8>(time.fsp, data);
     finishAppendFixed();
