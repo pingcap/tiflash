@@ -250,7 +250,7 @@ TEST_F(PageStorage_test, GcMigrateValidRefPages)
     PageStorage::SnapshotPtr        snapshot = storage->getSnapshot();
     //candidates.insert(PageFileIdAndLevel{1, 0});
     candidates.insert(PageFileIdAndLevel{2, 0});
-    const PageEntriesEdit gc_file_edit = storage->gcMigratePages(snapshot, lives_pages, candidates);
+    const PageEntriesEdit gc_file_edit = storage->gcMigratePages(snapshot, lives_pages, candidates, 3);
     ASSERT_FALSE(gc_file_edit.empty());
     // check the ref is migrated.
     // check the deleted ref is not migrated.
@@ -302,7 +302,7 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     };
     auto            s0         = storage->getSnapshot();
     const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
-    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates);
+    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     auto            live_files = storage->versioned_page_entries.gcApply(edit);
     storage->gcRemoveObsoleteFiles(page_files, {2, 0}, live_files);
 
@@ -376,7 +376,7 @@ TEST_F(PageStorage_test, GcMoveRefPage)
         id_and_lvl,
     };
     auto            s0   = storage->getSnapshot();
-    PageEntriesEdit edit = storage->gcMigratePages(s0, livesPages, candidates);
+    PageEntriesEdit edit = storage->gcMigratePages(s0, livesPages, candidates, 2);
 
     // After migrate, RefPage 3 -> 1 is still valid
     bool exist = false;
@@ -433,7 +433,7 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     };
     const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
     auto            s0         = storage->getSnapshot();
-    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates);
+    PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
 
     // We should see migration of DelPage1
     bool exist = false;
