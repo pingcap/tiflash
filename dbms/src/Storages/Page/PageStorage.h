@@ -81,13 +81,15 @@ private:
     // gc helper functions
     using GcCandidates = std::set<PageFileIdAndLevel>;
     using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
-    GcCandidates gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                        const GcLivesPages &                             file_valid_pages,
-                                        const PageFileIdAndLevel &                       writing_file_id_level,
-                                        UInt64 &                                         candidate_total_size,
-                                        size_t &                                         migrate_page_count) const;
-    PageEntriesEdit
-    gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const;
+    GcCandidates    gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                           const GcLivesPages &                             file_valid_pages,
+                                           const PageFileIdAndLevel &                       writing_file_id_level,
+                                           UInt64 &                                         candidate_total_size,
+                                           size_t &                                         migrate_page_count) const;
+    PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
+                                   const GcLivesPages & file_valid_pages,
+                                   const GcCandidates & merge_files,
+                                   size_t               migrate_page_count) const;
 
     static void gcRemoveObsoleteFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
                                       const PageFileIdAndLevel &                       writing_file_id_level,

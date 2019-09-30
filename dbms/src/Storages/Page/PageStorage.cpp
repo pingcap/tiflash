@@ -366,6 +366,8 @@ bool PageStorage::gc()
                 }
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry->fileIdLevel()];
                 valid_size += page_entry->size;
+                valid_page_ids_in_file.emplace_back(page_id);
+            }
 #else
             for (auto iter = snapshot->version()->pages_cbegin(); iter != snapshot->version()->pages_cend(); ++iter)
             {
@@ -373,9 +375,9 @@ bool PageStorage::gc()
                 const PageEntry & page_entry                 = iter->second;
                 auto && [valid_size, valid_page_ids_in_file] = file_valid_pages[page_entry.fileIdLevel()];
                 valid_size += page_entry.size;
-#endif
                 valid_page_ids_in_file.emplace_back(page_id);
             }
+#endif
         }
 
         // Select gc candidate files into `merge_files`
@@ -393,11 +395,8 @@ bool PageStorage::gc()
             return false;
         }
 
-        LOG_INFO(log,
-                 storage_name << " GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count << " regions");
-
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
-        gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files);
+        gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files, migrate_page_count);
     }
 
     std::set<PageFileIdAndLevel> live_files;
@@ -469,15 +468,33 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     return merge_files;
 }
 
-PageEntriesEdit
-PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & file_valid_pages, const GcCandidates & merge_files) const
+PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
+                                            const GcLivesPages & file_valid_pages,
+                                            const GcCandidates & merge_files,
+                                            const size_t         migrate_page_count) const
 {
     PageEntriesEdit gc_file_edit;
 
     // merge `merge_files` to PageFile which PageId = max of all `merge_files` and level = level + 1
     auto [largest_file_id, level] = *(merge_files.rbegin());
-    PageFile gc_file              = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
 
+    {
+        // In case that those files are hold by snapshot and do gcMigrate to same PageFile again, we need to check if gc_file is already exist.
+        PageFile gc_file = PageFile::openPageFileForRead(largest_file_id, level + 1, storage_path, page_file_log);
+        if (gc_file.isExist())
+        {
+            LOG_INFO(log, storage_name << " GC migration to PageFile_" << largest_file_id << "_" << level + 1 << " is done before.");
+            return gc_file_edit;
+        }
+    }
+
+    // Create a tmp PageFile for migration
+    PageFile gc_file = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
+    LOG_INFO(log,
+             storage_name << " GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count
+                          << " regions to PageFile_" << largest_file_id << "_" << level + 1);
+
+    // We should check these nums, if any of them is non-zero, we should set `gc_file` to formal.
     size_t num_successful_migrate_pages = 0;
     size_t num_valid_ref_pages          = 0;
     size_t num_del_page_meta            = 0;
@@ -508,7 +525,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
                 {
                     try
                     {
-                        const auto page_entry = current->find(page_id);
+                        const auto page_entry = current->findNormalPageEntry(page_id);
                         if (!page_entry)
                             continue;
                         // This page is covered by newer file.
@@ -570,14 +587,15 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
         }
     } // free gc_file_writer and sync
 
-    if (gc_file_edit.empty() && num_valid_ref_pages == 0)
+    const auto id = gc_file.fileIdLevel();
+    if (gc_file_edit.empty() && num_valid_ref_pages == 0 && num_del_page_meta == 0)
     {
+        LOG_INFO(log, storage_name << " No valid pages, deleting PageFile_" << id.first << "_" << id.second);
         gc_file.destroy();
     }
     else
     {
         gc_file.setFormal();
-        const auto id = gc_file.fileIdLevel();
         LOG_INFO(log,
                  storage_name << " GC have migrated " << num_successful_migrate_pages //
                               << " regions and " << num_valid_ref_pages               //
@@ -589,7 +607,7 @@ PageStorage::gcMigratePages(const SnapshotPtr & snapshot, const GcLivesPages & f
 
 /**
  * Delete obsolete files that are not used by any version
- * @param page_files            All avaliable files in disk
+ * @param page_files            All available files in disk
  * @param writing_file_id_level The PageFile id which is writing to
  * @param live_files            The live files after gc
  */
@@ -607,7 +625,7 @@ void PageStorage::gcRemoveObsoleteFiles(const std::set<PageFile, PageFile::Compa
 
         if (live_files.count(page_id_and_lvl) == 0)
         {
-            // the page file is not used by any version, remove reader cache
+            // the page file is not used by any version, remove the page file in disk
             page_file.destroy();
         }
     }

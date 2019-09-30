@@ -1,10 +1,10 @@
 #pragma once
 
 #include <cassert>
+#include <optional>
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
-#include <optional>
 
 #include <IO/WriteHelpers.h>
 #include <common/likely.h>
@@ -73,6 +73,15 @@ public:
             else
                 return normal_iter->second;
         }
+    }
+
+    inline std::optional<PageEntry> findNormalPageEntry(PageId page_id) const
+    {
+        auto iter = normal_pages.find(page_id);
+        if (iter == normal_pages.end())
+            return std::nullopt;
+        else
+            return iter->second;
     }
 
     inline PageEntry & at(const PageId page_id)
