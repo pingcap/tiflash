@@ -163,32 +163,35 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         {
             expr->set_sig(tipb::ScalarFuncSig::EQInt);
             auto * ft = expr->mutable_field_type();
-            // TODO: TiDB will infer Int64.
-            ft->set_tp(TiDB::TypeTiny);
+            ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
         else if (func_name_lowercase == "and")
         {
             expr->set_sig(tipb::ScalarFuncSig::LogicalAnd);
             auto * ft = expr->mutable_field_type();
-            // TODO: TiDB will infer Int64.
-            ft->set_tp(TiDB::TypeTiny);
+            ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
         else if (func_name_lowercase == "or")
         {
             expr->set_sig(tipb::ScalarFuncSig::LogicalOr);
             auto * ft = expr->mutable_field_type();
-            // TODO: TiDB will infer Int64.
-            ft->set_tp(TiDB::TypeTiny);
+            ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
         else if (func_name_lowercase == "greater")
         {
             expr->set_sig(tipb::ScalarFuncSig::GTInt);
             auto * ft = expr->mutable_field_type();
-            // TODO: TiDB will infer Int64.
-            ft->set_tp(TiDB::TypeTiny);
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else if (func_name_lowercase == "greaterorequals")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::GEInt);
+            auto *ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
         else

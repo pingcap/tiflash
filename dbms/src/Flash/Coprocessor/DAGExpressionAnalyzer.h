@@ -9,6 +9,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
 {
@@ -60,11 +61,12 @@ public:
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
+    void makeExplicitSetForIndex(const tipb::Expr & expr, const TMTStoragePtr & storage);
     String applyFunction(const String & func_name, Names & arg_names, ExpressionActionsPtr & actions);
     Int32 getImplicitCastCount() { return implicit_cast_count; };
-    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain &chain, std::vector<bool> is_ts_column,
-                                    const tipb::DAGRequest &rqst);
+    bool appendTimeZoneCastsAfterTS(ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst);
     String appendTimeZoneCast(const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions);
+    DAGPreparedSets getPreparedSets() { return prepared_sets; }
 };
 
 } // namespace DB

@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <Flash/Coprocessor/DAGQueryInfo.h>
 
 namespace DB
 {
@@ -31,11 +32,15 @@ struct SelectQueryInfo
 
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
 
+    std::unique_ptr<DAGQueryInfo> dag_query;
+
     SelectQueryInfo() = default;
 
     SelectQueryInfo(const SelectQueryInfo & query_info_);
 
     SelectQueryInfo(SelectQueryInfo && query_info_);
+
+    bool fromAST() const { return dag_query == nullptr; };
 };
 
 } // namespace DB
