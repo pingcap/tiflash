@@ -111,6 +111,7 @@ public:
     bool               isValid() const { return file_id; }
     UInt64             getDataFileAppendPos() const { return data_file_pos; }
     UInt64             getDataFileSize() const;
+    bool               isExist() const;
 
 private:
     /// Create a new page file.
