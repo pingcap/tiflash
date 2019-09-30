@@ -467,16 +467,12 @@ bool RegionTable::tryFlushRegions()
     return true;
 }
 
-void RegionTable::traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback) const
+void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto it = tables.find(table_id);
-    if (it == tables.end())
-        return;
-
-    for (const auto & region_info : it->second.regions)
-        callback(region_info.second);
+    if (auto it = tables.find(table_id); it != tables.end())
+        callback(it->second.regions);
 }
 
 std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const TableID table_id) const

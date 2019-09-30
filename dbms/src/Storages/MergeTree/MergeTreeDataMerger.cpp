@@ -677,10 +677,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
             const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
 
             std::vector<HandleRange<HandleID>> ranges;
-            tmt.getRegionTable().traverseInternalRegionsByTable(
+            tmt.getRegionTable().handleInternalRegionsByTable(
                 data.table_info->id,
-                [&](const RegionTable::InternalRegion & region) {
-                    ranges.push_back(region.range_in_table);
+                [&](const RegionTable::InternalRegions & regions) {
+                    ranges.reserve(regions.size());
+                    for (const auto & region : regions)
+                        ranges.push_back(region.second.range_in_table);
                 });
 
             if (pk_is_uint64)
