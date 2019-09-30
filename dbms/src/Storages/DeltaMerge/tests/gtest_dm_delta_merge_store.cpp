@@ -389,7 +389,7 @@ try
                         if (iter.name == "pk")
                         {
                             EXPECT_EQ(c->getInt(i), expected_row_pk++);
-                            std::cerr << "pk:" << c->getInt(i) << std::endl;
+                            //std::cerr << "pk:" << c->getInt(i) << std::endl;
                         }
                     }
                 }

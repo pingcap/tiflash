@@ -25,7 +25,7 @@ public:
     std::set<PageId> validPageIds() const;
 
     // For iterate over all normal pages
-    std::set<PageId> validNormalPageIds() const;
+    std::set<PageId>         validNormalPageIds() const;
     std::optional<PageEntry> findNormalPageEntry(PageId page_id) const;
 
     PageId maxId() const;

@@ -512,6 +512,14 @@ void PageFile::destroy() const
     }
 }
 
+bool PageFile::isExist() const
+{
+    Poco::File file(folderPath());
+    Poco::File data_file(dataPath());
+    Poco::File meta_file(metaPath());
+    return (file.exists() && data_file.exists() && meta_file.exists());
+}
+
 UInt64 PageFile::getDataFileSize() const
 {
     Poco::File file(dataPath());
