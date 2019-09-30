@@ -71,6 +71,8 @@ try
         streams.in->getHeader());
     copyData(*streams.in, *dag_output_stream);
 
+    if (!dag_request.has_collect_execution_summaries() || !dag_request.collect_execution_summaries())
+        return;
     // add ExecutorExecutionSummary info
     for (auto & p_streams : dag_context.profile_streams_list)
     {
