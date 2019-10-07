@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Field.h>
+#include <common/DateLUTImpl.h>
 
 namespace DB
 {
@@ -25,11 +26,9 @@ struct MyTimeBase
     UInt8 second;
     UInt32 micro_second; // ms second <= 999999
 
-    UInt8 fsp;
-
     MyTimeBase() = default;
-    MyTimeBase(UInt64 packed, UInt8 fsp_ = 0);
-    MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_, UInt8 fsp_);
+    MyTimeBase(UInt64 packed);
+    MyTimeBase(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_);
 
     UInt64 toPackedUInt() const;
 
@@ -44,24 +43,26 @@ protected:
 
 struct MyDateTime : public MyTimeBase
 {
-    MyDateTime(UInt64 packed, UInt8 fsp) : MyTimeBase(packed, fsp) {}
+    MyDateTime(UInt64 packed) : MyTimeBase(packed) {}
 
-    MyDateTime(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_, UInt8 fsp_)
-        : MyTimeBase(year_, month_, day_, hour_, minute_, second_, micro_second_, fsp_)
+    MyDateTime(UInt16 year_, UInt8 month_, UInt8 day_, UInt16 hour_, UInt8 minute_, UInt8 second_, UInt32 micro_second_)
+        : MyTimeBase(year_, month_, day_, hour_, minute_, second_, micro_second_)
     {}
 
-    String toString() const;
+    String toString(int fsp) const;
 };
 
 struct MyDate : public MyTimeBase
 {
     MyDate(UInt64 packed) : MyTimeBase(packed) {}
 
-    MyDate(UInt16 year_, UInt8 month_, UInt8 day_) : MyTimeBase(year_, month_, day_, 0, 0, 0, 0, 0) {}
+    MyDate(UInt16 year_, UInt8 month_, UInt8 day_) : MyTimeBase(year_, month_, day_, 0, 0, 0, 0) {}
 
     String toString() const { return dateFormat("%Y-%m-%d"); }
 };
 
 Field parseMyDateTime(const String & str);
+
+void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to);
 
 } // namespace DB

@@ -1,3 +1,4 @@
+#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataStreams/TMTSortedBlockInputStream.h>
 
@@ -12,16 +13,6 @@ extern const int LOGICAL_ERROR;
 template <TMTPKType pk_type>
 void TMTSortedBlockInputStream<pk_type>::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
 {
-    if (out_row_sources_buf)
-    {
-        /// true flag value means "skip row"
-        current_row_sources.back().setSkipFlag(false);
-
-        out_row_sources_buf->write(
-            reinterpret_cast<const char *>(current_row_sources.data()), current_row_sources.size() * sizeof(RowSourcePart));
-        current_row_sources.resize(0);
-    }
-
     ++merged_rows;
     for (size_t i = 0; i < num_columns; ++i)
         merged_columns[i]->insertFrom(*(*selected_row.columns)[i], selected_row.row_num);
@@ -148,7 +139,6 @@ void TMTSortedBlockInputStream<pk_type>::mergeOptimized(MutableColumns & merged_
                     max_delmark = (UInt8)1;
                     current_key.reset();
                     selected_row.reset();
-                    current_row_sources.resize(0);
 
                     if (current.notSame(cur_block_cursor))
                         queue.push(current);
@@ -160,10 +150,6 @@ void TMTSortedBlockInputStream<pk_type>::mergeOptimized(MutableColumns & merged_
                     current_key.swap(next_key);
                 }
             }
-
-            /// Initially, skip all rows. Unskip last on insert.
-            if (out_row_sources_buf)
-                current_row_sources.emplace_back(current.impl->order, true);
 
             UInt64 version = static_cast<const ColumnUInt64 *>(current->all_columns[version_column_index])->getElement(current->pos);
             UInt8 delmark = static_cast<const ColumnUInt8 *>(current->all_columns[delmark_column_index])->getElement(current->pos);
@@ -266,8 +252,6 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
         return false;
     }
 
-    size_t source_num = current.impl->order;
-
     bool direct_move = true;
 
     {
@@ -276,34 +260,19 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
         // reverse_filter - 1: delete, 0: remain.
         // filter         - 0: delete, 1: remain.
         const IColumn::Filter & reverse_filter = del_column->getData();
-        IColumn::Filter filter(reverse_filter.size());
-        bool no_delete = true;
+        direct_move = memoryIsZero(reverse_filter.data(), reverse_filter.size());
 
-        for (size_t i = 0; i < reverse_filter.size(); i++)
-        {
-            no_delete &= !reverse_filter[i];
-            filter[i] = reverse_filter[i] ^ (UInt8)1;
-        }
-
-        direct_move = no_delete;
         if (!direct_move)
         {
+            IColumn::Filter filter(reverse_filter.size());
+            for (size_t i = 0; i < reverse_filter.size(); i++)
+                filter[i] = reverse_filter[i] ^ (UInt8)1;
+
             for (size_t i = 0; i < num_columns; ++i)
             {
                 ColumnPtr column = cur_block->getByPosition(i).column->filter(filter, -1);
                 merged_columns[i] = (*std::move(column)).mutate();
             }
-
-            RowSourcePart row_source(source_num);
-            current_row_sources.resize(filter.size());
-            for (size_t i = 0; i < filter.size(); ++i)
-            {
-                row_source.setSkipFlag(reverse_filter[i]);
-                current_row_sources[i] = row_source.data;
-            }
-            if (out_row_sources_buf)
-                out_row_sources_buf->write(reinterpret_cast<const char *>(current_row_sources.data()), current_row_sources.size());
-            current_row_sources.resize(0);
         }
     }
 
@@ -313,15 +282,6 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
         {
             ColumnPtr column = cur_block->getByPosition(i).column;
             merged_columns[i] = (*std::move(column)).mutate();
-        }
-
-        if (out_row_sources_buf)
-        {
-            for (size_t i = 0; i < merged_rows; ++i)
-            {
-                RowSourcePart row_source(source_num);
-                out_row_sources_buf->write(row_source.data);
-            }
         }
     }
 

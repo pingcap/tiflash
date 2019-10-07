@@ -172,7 +172,7 @@ public:
     void tryFlushRegion(RegionID region_id);
     void tryFlushRegion(RegionID region_id, TableID table_id, const bool try_persist);
 
-    void traverseInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegion &)> && callback) const;
+    void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
