@@ -3,6 +3,7 @@
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <common/logger_useful.h>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,10 @@ public:
         {
             throw Exception("PartPathSelector need at least one path to give out");
         }
+        for (size_t i = 0; i < all_path_.size(); i++)
+        {
+            normal_path_to_index_map.emplace(all_path_[i], i);
+        }
         fast_path_start_index = all_path_.size();
         if (!all_fast_path.empty())
         {
@@ -37,17 +42,28 @@ public:
         }
     }
 
-    const String getPathForPart(MergeTreeData & data, const String & part_name,
-            const MergeTreePartInfo & info, size_t part_size=0) const;
+    const String getPathForPart(MergeTreeData & data, const String & part_name, const MergeTreePartInfo & info, size_t part_size = 0) const;
 
-    const std::vector<String> & getAllPath()
+    const std::vector<String> & getAllPath() { return all_path_; }
+
+    bool hasFastPath() const { return all_path_.size() > fast_path_start_index; }
+
+    size_t getRandomFastPathIndex() const
     {
-        return all_path_;
+        if (unlikely(all_path_.size() <= fast_path_start_index))
+        {
+            throw Exception("There is no fast path configured.");
+        }
+        return std::rand() % (all_path_.size() - fast_path_start_index) + fast_path_start_index;
     }
 
-    bool hasFastPath() const
+    size_t getRandomNormalPathIndex() const
     {
-        return all_path_.size() != fast_path_start_index;
+        if (unlikely(fast_path_start_index <= 0))
+        {
+            throw Exception("There is no normal path configured.");
+        }
+        return std::rand() % fast_path_start_index;
     }
 
     struct Settings
@@ -58,8 +74,10 @@ public:
 
 private:
     std::vector<String> all_path_;
+    std::unordered_map<String, size_t> normal_path_to_index_map;
     size_t fast_path_start_index;
     Logger * log;
+
 private:
     const Settings settings;
 };

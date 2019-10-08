@@ -7,12 +7,16 @@
 
 namespace DB
 {
-const String PartPathSelector::getPathForPart(MergeTreeData & data, const String & part_name,
-        const MergeTreePartInfo & info, size_t part_size) const
+const String PartPathSelector::getPathForPart(
+    MergeTreeData & data, const String & part_name, const MergeTreePartInfo & info, size_t part_size) const
 {
     // test whether this part can be put on fast path and return the path if it can
     if (hasFastPath())
     {
+        if (info.level == 0)
+        {
+            return all_path_[getRandomFastPathIndex()];
+        }
         size_t max_available_space = DiskSpaceMonitor::getUnreservedFreeSpace(all_path_[fast_path_start_index]);
         size_t path_index = fast_path_start_index;
         for (size_t i = fast_path_start_index + 1; i < all_path_.size(); i++)
@@ -24,11 +28,8 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
                 path_index = i;
             }
         }
-        if (info.level == 0)
-        {
-            return all_path_[path_index];
-        }
-        else if (max_available_space >= settings.min_space_reserved_for_level_zero_parts
+
+        if (max_available_space >= settings.min_space_reserved_for_level_zero_parts
             && part_size <= settings.part_other_than_level_zero_max_ratio * max_available_space)
         {
             return all_path_[path_index];
@@ -40,33 +41,36 @@ const String PartPathSelector::getPathForPart(MergeTreeData & data, const String
     {
         return all_path_[0];
     }
-    // find the normal path with least size of parts of this table
-    std::unordered_map<String, UInt64> path_size_map;
-    for (auto it = all_path_.begin(); it != all_path_.begin() + fast_path_start_index; it++)
+    if (info.level == 0)
     {
-        path_size_map.emplace(*it, 0);
+        return all_path_[getRandomNormalPathIndex()];
     }
+    // find the normal path with least size of parts of this table
+    std::vector<UInt64> path_parts_size;
+    path_parts_size.resize(fast_path_start_index, 0);
     for (const auto & part : data.getDataPartsVector())
     {
-        if (unlikely(path_size_map.find(part->full_path_prefix) == path_size_map.end()))
+        if (unlikely(normal_path_to_index_map.find(part->full_path_prefix) == normal_path_to_index_map.end()))
         {
             throw Exception("Part " + part->relative_path + " got unexpected path " + part->full_path_prefix, ErrorCodes::LOGICAL_ERROR);
         }
-        path_size_map[part->full_path_prefix] += part->bytes_on_disk;
+        path_parts_size[normal_path_to_index_map.at(part->full_path_prefix)] += part->bytes_on_disk;
     }
-    String result_path = all_path_[0];
-    UInt64 parts_size_on_result_path = path_size_map[result_path];
-    for (const auto & element : path_size_map)
+    size_t result_path_index = 0;
+    UInt64 parts_size_on_result_path = path_parts_size[0];
+    for (size_t i = 1; i < fast_path_start_index; i++)
     {
-        if (element.second < parts_size_on_result_path)
+        if (path_parts_size[i] < parts_size_on_result_path)
         {
-            result_path = element.first;
-            parts_size_on_result_path = element.second;
+            result_path_index = i;
+            parts_size_on_result_path = path_parts_size[i];
         }
-        LOG_TRACE(log, "Path " << element.first << " size is " << element.second << " bytes.");
+        LOG_TRACE(log, "Path " << all_path_[i] << " size is " << path_parts_size[i] << " bytes.");
     }
-    LOG_DEBUG(log, "database: " << data.getDatabaseName() << " table: " << data.getTableName() << " part name: " << part_name << " path: " << result_path);
+    LOG_TRACE(log,
+        "database: " << data.getDatabaseName() << " table: " << data.getTableName() << " part name: " << part_name
+                     << " path: " << all_path_[result_path_index]);
 
-    return result_path;
+    return all_path_[result_path_index];
 }
 } // namespace DB
