@@ -12,7 +12,7 @@ const Int8 VAR_SIZE = 0;
 class TiDBColumn
 {
 public:
-    TiDBColumn(Int8 element_len, const String & default_value_);
+    TiDBColumn(Int8 element_len);
 
     void appendNull();
     void appendInt64(Int64 value);

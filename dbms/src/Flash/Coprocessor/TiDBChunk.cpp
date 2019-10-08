@@ -27,23 +27,23 @@ TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
             case TiDB::TypeLongLong:
             case TiDB::TypeYear:
             case TiDB::TypeDouble:
-                columns.emplace_back(8, "00000000");
+                columns.emplace_back(8);
                 break;
             case TiDB::TypeFloat:
-                columns.emplace_back(4, "0000");
+                columns.emplace_back(4);
                 break;
             case TiDB::TypeDecimal:
-                columns.emplace_back(40, "0000000000000000000000000000000000000000");
+                columns.emplace_back(40);
                 break;
             case TiDB::TypeDate:
             case TiDB::TypeDatetime:
             case TiDB::TypeNewDate:
             case TiDB::TypeTimestamp:
-                columns.emplace_back(16, "0000000000000000");
+                columns.emplace_back(16);
                 break;
             case TiDB::TypeVarchar:
             case TiDB::TypeVarString:
-                columns.emplace_back(VAR_SIZE, "");
+                columns.emplace_back(VAR_SIZE);
                 break;
             default:
                 throw Exception("not supported field type in array encode.");

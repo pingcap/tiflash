@@ -5,9 +5,11 @@
 namespace DB
 {
 
-TiDBColumn::TiDBColumn(Int8 element_len_, const String & default_value_)
-    : length(0), null_cnt(0), default_value(default_value_), current_data_size(0), fixed_size(element_len_)
-{}
+TiDBColumn::TiDBColumn(Int8 element_len_) : length(0), null_cnt(0), current_data_size(0), fixed_size(element_len_)
+{
+    if (fixed_size != VAR_SIZE)
+        default_value = String(fixed_size, '0');
+}
 
 void TiDBColumn::appendNullBitMap(bool value)
 {
