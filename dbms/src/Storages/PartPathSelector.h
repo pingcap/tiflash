@@ -17,17 +17,17 @@ class PartPathSelector
 {
 public:
     PartPathSelector(std::vector<String> && all_normal_path, std::vector<std::string> && all_fast_path)
-        : all_path_(all_normal_path), log(&Logger::get("PartPathSelector"))
+        : normal_and_fast_path(all_normal_path), log(&Logger::get("PartPathSelector"))
     {
-        if (all_path_.empty())
+        if (normal_and_fast_path.empty())
         {
             throw Exception("PartPathSelector need at least one path to give out");
         }
-        for (size_t i = 0; i < all_path_.size(); i++)
+        for (size_t i = 0; i < normal_and_fast_path.size(); i++)
         {
-            normal_path_to_index_map.emplace(all_path_[i], i);
+            normal_path_to_index_map.emplace(normal_and_fast_path[i], i);
         }
-        fast_path_start_index = all_path_.size();
+        fast_path_start_index = normal_and_fast_path.size();
         if (!all_fast_path.empty())
         {
             for (auto & path : all_fast_path)
@@ -37,24 +37,24 @@ public:
                 {
                     throw Exception("Fast path shouldn't be included in normal path");
                 }
-                all_path_.emplace_back(std::move(path));
+                normal_and_fast_path.emplace_back(std::move(path));
             }
         }
     }
 
     const String getPathForPart(MergeTreeData & data, const String & part_name, const MergeTreePartInfo & info, size_t part_size = 0) const;
 
-    const std::vector<String> & getAllPath() { return all_path_; }
+    const std::vector<String> & getAllPath() { return normal_and_fast_path; }
 
-    bool hasFastPath() const { return all_path_.size() > fast_path_start_index; }
+    bool hasFastPath() const { return normal_and_fast_path.size() > fast_path_start_index; }
 
     size_t getRandomFastPathIndex() const
     {
-        if (unlikely(all_path_.size() <= fast_path_start_index))
+        if (unlikely(normal_and_fast_path.size() <= fast_path_start_index))
         {
             throw Exception("There is no fast path configured.");
         }
-        return std::rand() % (all_path_.size() - fast_path_start_index) + fast_path_start_index;
+        return std::rand() % (normal_and_fast_path.size() - fast_path_start_index) + fast_path_start_index;
     }
 
     size_t getRandomNormalPathIndex() const
@@ -73,7 +73,7 @@ public:
     };
 
 private:
-    std::vector<String> all_path_;
+    std::vector<String> normal_and_fast_path;
     std::unordered_map<String, size_t> normal_path_to_index_map;
     size_t fast_path_start_index;
     Logger * log;

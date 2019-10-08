@@ -15,13 +15,13 @@ const String PartPathSelector::getPathForPart(
     {
         if (info.level == 0)
         {
-            return all_path_[getRandomFastPathIndex()];
+            return normal_and_fast_path[getRandomFastPathIndex()];
         }
-        size_t max_available_space = DiskSpaceMonitor::getUnreservedFreeSpace(all_path_[fast_path_start_index]);
+        size_t max_available_space = DiskSpaceMonitor::getUnreservedFreeSpace(normal_and_fast_path[fast_path_start_index]);
         size_t path_index = fast_path_start_index;
-        for (size_t i = fast_path_start_index + 1; i < all_path_.size(); i++)
+        for (size_t i = fast_path_start_index + 1; i < normal_and_fast_path.size(); i++)
         {
-            size_t s = DiskSpaceMonitor::getUnreservedFreeSpace(all_path_[i]);
+            size_t s = DiskSpaceMonitor::getUnreservedFreeSpace(normal_and_fast_path[i]);
             if (s > max_available_space)
             {
                 max_available_space = s;
@@ -32,18 +32,18 @@ const String PartPathSelector::getPathForPart(
         if (max_available_space >= settings.min_space_reserved_for_level_zero_parts
             && part_size <= settings.part_other_than_level_zero_max_ratio * max_available_space)
         {
-            return all_path_[path_index];
+            return normal_and_fast_path[path_index];
         }
     }
 
     // there is only one normal path, just return it
     if (fast_path_start_index == 1)
     {
-        return all_path_[0];
+        return normal_and_fast_path[0];
     }
     if (info.level == 0)
     {
-        return all_path_[getRandomNormalPathIndex()];
+        return normal_and_fast_path[getRandomNormalPathIndex()];
     }
     // find the normal path with least size of parts of this table
     std::vector<UInt64> path_parts_size;

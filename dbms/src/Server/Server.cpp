@@ -130,7 +130,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
                 all_fast_path.emplace_back(getCanonicalPath(std::string(*it)));
-                LOG_DEBUG(log, "Fast data part candidate path: " << std::string(*it));
+                LOG_DEBUG(log, "Fast data part candidate path: " << getCanonicalPath(std::string(*it)));
             }
         }
     }
