@@ -237,7 +237,7 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
 
 void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss)
 {
-    if (table_info.columns.size() != fields.size())
+    if (table_info.columns.size() != fields.size() + table_info.pk_is_handle)
         throw Exception("Encoding row has different sizes between columns and values", ErrorCodes::LOGICAL_ERROR);
     for (size_t i = 0; i < fields.size(); i++)
     {
@@ -261,7 +261,7 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
         fields.emplace_back(field);
         idx++;
     }
-    if (fields.size() != table_info.columns.size())
+    if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
 
     TMTContext & tmt = context.getTMTContext();
