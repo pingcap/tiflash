@@ -67,6 +67,7 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("dump_all_region", dbgFuncDumpAllRegion);
     regSchemalessFunc("dump_all_mock_region", dbgFuncDumpAllMockRegion);
     regSchemalessFunc("dump_region_table", ClusterManage::dumpRegionTable);
+    regSchemalessFunc("find_region_by_range", ClusterManage::findRegionByRange);
 
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
