@@ -65,12 +65,12 @@ const String PartPathSelector::getPathForPart(
             result_path_index = i;
             parts_size_on_result_path = path_parts_size[i];
         }
-        LOG_TRACE(log, "Path " << all_path_[i] << " size is " << path_parts_size[i] << " bytes.");
+        LOG_TRACE(log, "Path " << normal_and_fast_path[i] << " size is " << path_parts_size[i] << " bytes.");
     }
     LOG_TRACE(log,
         "database: " << data.getDatabaseName() << " table: " << data.getTableName() << " part name: " << part_name
-                     << " path: " << all_path_[result_path_index]);
+                     << " path: " << normal_and_fast_path[result_path_index]);
 
-    return all_path_[result_path_index];
+    return normal_and_fast_path[result_path_index];
 }
 } // namespace DB
