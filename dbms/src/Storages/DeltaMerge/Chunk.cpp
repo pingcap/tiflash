@@ -133,6 +133,17 @@ void serializeChunks(
         extra2->serialize(buf);
 }
 
+void serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, const Chunks & extra_chunks)
+{
+    auto size = (UInt64)(end - begin) + extra_chunks.size();
+    writeIntBinary(size, buf);
+
+    for (; begin != end; ++begin)
+        (*begin).serialize(buf);
+    for (auto & chunk : extra_chunks)
+        chunk.serialize(buf);
+}
+
 Chunks deserializeChunks(ReadBuffer & buf)
 {
     Chunks chunks;

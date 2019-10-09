@@ -130,17 +130,15 @@ TEST_F(Segment_test, WriteRead)
 
     {
         // flush segment
-        RemoveWriteBatches remove_wbs;
-        segment->flushDelta(dmContext(), remove_wbs);
-        remove_wbs.write(dmContext().storage_pool);
+        segment = segment->mergeDelta(dmContext());
     }
 
     {
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot(dmContext().storage_pool),
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -166,9 +164,9 @@ TEST_F(Segment_test, WriteRead)
     {
         // read after delete range
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
                                           /* segment_snap= */ segment->getReadSnapshot(),
                                           /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ tableColumns(),
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -203,9 +201,9 @@ TEST_F(Segment_test, Split)
     {
         // read written data
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
                                           /* segment_snap= */ segment->getReadSnapshot(),
                                           /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ tableColumns(),
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -226,9 +224,7 @@ TEST_F(Segment_test, Split)
     SegmentPtr new_segment;
     // test split segment
     {
-        RemoveWriteBatches remove_wbs;
-        std::tie(segment, new_segment) = segment->split(dmContext(), remove_wbs);
-        remove_wbs.write(dmContext().storage_pool);
+        std::tie(segment, new_segment) = segment->split(dmContext());
     }
     // check segment range
     const auto s1_range = segment->getRange();
@@ -243,9 +239,9 @@ TEST_F(Segment_test, Split)
     {
         {
             auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
                                               /* segment_snap= */ segment->getReadSnapshot(),
                                               /* storage_snap= */ {dmContext().storage_pool},
-                                              /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
                                               /* filter */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -259,9 +255,9 @@ TEST_F(Segment_test, Split)
         }
         {
             auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
                                               /* segment_snap= */ segment->getReadSnapshot(),
                                               /* storage_snap= */ {dmContext().storage_pool},
-                                              /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
                                               /* filter */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -278,9 +274,7 @@ TEST_F(Segment_test, Split)
 
     // merge segments
     {
-        RemoveWriteBatches remove_wbs;
-        segment = Segment::merge(dmContext(), segment, new_segment, remove_wbs);
-        remove_wbs.write(dmContext().storage_pool);
+        segment = Segment::merge(dmContext(), segment, new_segment);
         {
             // check merged segment range
             const auto & merged_range = segment->getRange();
@@ -291,9 +285,9 @@ TEST_F(Segment_test, Split)
         {
             size_t num_rows_read = 0;
             auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
                                               /* segment_snap= */ segment->getReadSnapshot(),
                                               /* storage_snap= */ {dmContext().storage_pool},
-                                              /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
                                               /* filter= */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -356,15 +350,27 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
             column_i32_after_ddl,
         };
 
-        // read written data
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ columns_to_read,
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        BlockInputStreamPtr in;
+        try
+        {
+            // read written data
+            in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                         /* columns_to_read= */ columns_to_read,
+                                         /* segment_snap= */ segment->getReadSnapshot(),
+                                         /* storage_snap= */ {dmContext().storage_pool},
+                                         /* read_ranges= */ {HandleRange::newAll()},
+                                         /* filter */ {},
+                                         /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                         /* expected_block_size= */ 1024);
+        }
+        catch (const Exception & e)
+        {
+            const auto text = e.displayText();
+            std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
+
+            throw;
+        }
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -427,9 +433,9 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
 
         // read written data
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ columns_to_read,
                                           /* segment_snap= */ segment->getReadSnapshot(),
                                           /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ columns_to_read,
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),

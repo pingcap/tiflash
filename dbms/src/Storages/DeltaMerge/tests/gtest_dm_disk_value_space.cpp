@@ -81,11 +81,14 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
     auto         delta          = std::make_shared<DiskValueSpace>(true, 0);
     {
         // write to DiskValueSpace
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(value_beg, value_beg + num_rows_write / 2, false);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(value_beg + num_rows_write / 2, value_beg + num_rows_write, false);
-        DiskValueSpace::OpContext opc     = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
-        Chunks                    chunks1 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block1));
-        Chunks                    chunks2 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block2));
+        Block      block1 = DMTestEnv::prepareSimpleWriteBlock(value_beg, value_beg + num_rows_write / 2, false);
+        Block      block2 = DMTestEnv::prepareSimpleWriteBlock(value_beg + num_rows_write / 2, value_beg + num_rows_write, false);
+        auto       opc    = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
+        WriteBatch wb;
+        Chunks     chunks1 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
+        Chunks     chunks2 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
+        dm_context->storage_pool.log().write(wb);
+
         for (auto & chunk : chunks1)
         {
             delta->appendChunkWithCache(opc, std::move(chunk), block1);

@@ -388,7 +388,14 @@ try
                     {
                         if (iter.name == "pk")
                         {
-                            EXPECT_EQ(c->getInt(i), expected_row_pk++);
+                            auto v = expected_row_pk++;
+                            auto e = c->getInt(i);
+                            if (e != v)
+                            {
+                                //
+                                std::cerr << "pk:" << c->getInt(i) << std::endl;
+                            }
+//                            EXPECT_EQ(c->getInt(i), expected_row_pk++);
                             //std::cerr << "pk:" << c->getInt(i) << std::endl;
                         }
                     }

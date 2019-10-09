@@ -430,7 +430,49 @@ BlockInputStreams StorageDeltaMerge::read( //
     }
 }
 
-void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context, context.getSettingsRef()); }
+void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
+
+void StorageDeltaMerge::deleteRows(const Context & context, size_t rows)
+{
+    size_t total_rows = 0;
+
+    {
+        ColumnDefines to_read{getExtraHandleColumnDefine()};
+        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64)[0];
+        stream->readPrefix();
+        Block block;
+        while ((block = stream->read()))
+            total_rows += block.rows();
+        stream->readSuffix();
+    }
+
+    rows = std::min(total_rows, rows);
+    auto start_index = rand() % (total_rows - rows + 1);
+
+    DM::HandleRange range = DM::HandleRange::newAll();
+    {
+        ColumnDefines to_read{getExtraHandleColumnDefine()};
+        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64)[0];
+        stream->readPrefix();
+        Block block;
+        size_t index = 0;
+        while ((block = stream->read()))
+        {
+            auto & data = toColumnVectorData<Handle>(block.getByPosition(0).column);
+            for (size_t i = 0; i < data.size(); ++i)
+            {
+                if (index == start_index)
+                    range.start = data[i];
+                if (index == start_index + rows)
+                    range.end = data[i];
+                ++index;
+            }
+        }
+        stream->readSuffix();
+    }
+
+    store->deleteRange(context, context.getSettingsRef(), range);
+}
 
 //==========================================================================================
 // DDL methods.
@@ -443,9 +485,9 @@ void StorageDeltaMerge::alterFromTiDB(
 }
 
 void StorageDeltaMerge::alter(
-    const AlterCommands & commands, const String & database_name, const String & table_name, const Context & context)
+    const AlterCommands & commands, const String & database_name, const String & table_name_, const Context & context)
 {
-    alterImpl(commands, database_name, table_name, std::nullopt, context);
+    alterImpl(commands, database_name, table_name_, std::nullopt, context);
 }
 
 /// If any ddl statement change StorageDeltaMerge's schema,
@@ -459,7 +501,7 @@ static void updateDeltaMergeTableCreateStatement(            //
 
 void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     const String & database_name,
-    const String & table_name,
+    const String & table_name_,
     const OptionTableInfoConstRef table_info,
     const Context & context)
 {
@@ -516,7 +558,7 @@ void StorageDeltaMerge::alterImpl(const AlterCommands & commands,
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
     updateDeltaMergeTableCreateStatement(
-        database_name, table_name, new_columns, hidden_columns, table_info, store->getTableColumns(), context);
+        database_name, table_name_, new_columns, hidden_columns, table_info, store->getTableColumns(), context);
     setColumns(std::move(new_columns));
 }
 

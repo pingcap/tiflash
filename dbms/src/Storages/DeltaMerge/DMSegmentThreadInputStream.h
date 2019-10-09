@@ -13,9 +13,11 @@ public:
     /// If handle_real_type_ is empty, means do not convert handle column back to real type.
     DMSegmentThreadInputStream(const SegmentReadTaskPoolPtr & task_pool_,
                                const SegmentStreamCreator &   stream_creator_,
+                               const AfterSegmentRead &       after_segment_read_,
                                const ColumnDefines &          columns_to_read_)
         : task_pool(task_pool_),
           stream_creator(stream_creator_),
+          after_segment_read(after_segment_read_),
           columns_to_read(columns_to_read_),
           header(toEmptyBlock(columns_to_read)),
           log(&Logger::get("DMSegmentThreadInputStream"))
@@ -41,9 +43,9 @@ protected:
                     return {};
                 }
 
-                cur_segment_id = task->segment->segmentId();
-                cur_stream     = stream_creator(*task);
-                LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment_id) + "]");
+                cur_segment = task->segment;
+                cur_stream  = stream_creator(*task);
+                LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
             }
 
             Block res = cur_stream->read();
@@ -56,9 +58,10 @@ protected:
             }
             else
             {
-                LOG_TRACE(log, "Finish reading segment [" + DB::toString(cur_segment_id) + "]");
-                cur_segment_id = 0;
-                cur_stream     = {};
+                after_segment_read(cur_segment);
+                LOG_TRACE(log, "Finish reading segment [" + DB::toString(cur_segment->segmentId()) + "]");
+                cur_segment = {};
+                cur_stream  = {};
             }
         }
     }
@@ -74,12 +77,13 @@ protected:
 private:
     SegmentReadTaskPoolPtr task_pool;
     SegmentStreamCreator   stream_creator;
+    AfterSegmentRead       after_segment_read;
     ColumnDefines          columns_to_read;
     Block                  header;
 
     bool                done = false;
     BlockInputStreamPtr cur_stream;
-    UInt64              cur_segment_id;
+    SegmentPtr          cur_segment;
 
     Logger * log;
 };

@@ -46,6 +46,11 @@ BlockIO InterpreterManageQuery::execute()
             manageable_storage->checkStatus(context);
             return {};
         }
+        case ManageOperation::Enum ::DeleteRows:
+        {
+            manageable_storage->deleteRows(context, ast.rows);
+            return {};
+        }
     }
     return {};
 }

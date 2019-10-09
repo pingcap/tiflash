@@ -31,20 +31,78 @@ struct BlockOrDelete
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
-struct AppendWriteBatches
+struct WriteBatches
 {
+    WriteBatch log;
     WriteBatch data;
     WriteBatch meta;
+
+    Ids writtenLog;
+    Ids writtenData;
+
+    WriteBatch removed_log;
     WriteBatch removed_data;
+    WriteBatch removed_meta;
+
+    void writeLogAndData(StoragePool & storage_pool)
+    {
+        storage_pool.log().write(log);
+        storage_pool.data().write(data);
+
+        for (auto & w : log.getWrites())
+            writtenLog.push_back(w.page_id);
+        for (auto & w : data.getWrites())
+            writtenData.push_back(w.page_id);
+
+        log.clear();
+        data.clear();
+    }
+
+    void rollbackWrittenLogAndData(StoragePool & storage_pool)
+    {
+        WriteBatch log_wb;
+        for (auto p : writtenLog)
+            log_wb.delPage(p);
+        WriteBatch data_wb;
+        for (auto p : writtenData)
+            data_wb.delPage(p);
+
+        storage_pool.log().write(log_wb);
+        storage_pool.data().write(data_wb);
+    }
+
+    void writeMeta(StoragePool & storage_pool)
+    {
+        storage_pool.meta().write(meta);
+        meta.clear();
+    }
+
+    void writeRemoves(StoragePool & storage_pool)
+    {
+        storage_pool.log().write(removed_log);
+        storage_pool.data().write(removed_data);
+        storage_pool.meta().write(removed_meta);
+
+        removed_log.clear();
+        removed_data.clear();
+        removed_meta.clear();
+    }
+
+    void writeAll(StoragePool & storage_pool)
+    {
+        writeLogAndData(storage_pool);
+        writeMeta(storage_pool);
+        writeRemoves(storage_pool);
+    }
 };
 
 struct AppendTask
 {
     bool   append_cache; // If not append cache, then clear cache.
-    size_t remove_chunk_back;
+    size_t remove_chunks_back;
     Chunks append_chunks;
 };
-using AppendTaskPtr = std::unique_ptr<AppendTask>;
+using AppendTaskPtr = std::shared_ptr<AppendTask>;
 
 class DiskValueSpace;
 using DiskValueSpacePtr = std::shared_ptr<DiskValueSpace>;
@@ -88,12 +146,12 @@ public:
     /// Called after the instance is created from existing metadata.
     void restore(const OpContext & context);
 
-    AppendTaskPtr     createAppendTask(const OpContext & context, AppendWriteBatches & wbs, const BlockOrDelete & update) const;
+    AppendTaskPtr     createAppendTask(const OpContext & context, WriteBatches & wbs, const BlockOrDelete & update) const;
     DiskValueSpacePtr applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
     /// Write the blocks from input_stream into underlying storage, the returned chunks can be added to
     /// specified value space instance by #setChunks or #appendChunkWithCache later.
-    static Chunks writeChunks(const OpContext & context, const BlockInputStreamPtr & input_stream);
+    static Chunks writeChunks(const OpContext & context, const BlockInputStreamPtr & input_stream, WriteBatch & wb);
 
     static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
 
@@ -133,22 +191,27 @@ public:
     size_t num_bytes() const;
     size_t num_chunks() const;
 
+    size_t cacheRows() const;
+    size_t cacheBytes() const;
+
     PageId         pageId() const { return page_id; }
     const Chunks & getChunks() const { return chunks; }
+    Chunks         getChunksBefore(size_t rows, size_t deletes) const;
+    Chunks         getChunksAfter(size_t rows, size_t deletes) const;
+
+    void check(const PageReader & meta_page_reader, const String & when);
 
 private:
     DiskValueSpacePtr doFlushCache(const OpContext & context, WriteBatch & remove_data_wb);
 
     size_t rowsFromBack(size_t chunks) const;
-    size_t cacheRows() const;
-    size_t cacheBytes() const;
 
     /// Return (chunk_index, offset_in_chunk)
     std::pair<size_t, size_t> findChunk(size_t rows) const;
     std::pair<size_t, size_t> findChunk(size_t rows, size_t deletes) const;
 
 private:
-    bool should_cache;
+    bool is_delta_vs;
 
     // page_id and chunks are the only vars needed to persist.
     PageId page_id;
