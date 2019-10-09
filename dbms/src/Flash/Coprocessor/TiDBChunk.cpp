@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/TiDBChunk.h>
 
 #include <Columns/ColumnDecimal.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <DataTypes/DataTypeDate.h>
@@ -8,6 +9,7 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Functions/FunctionHelpers.h>
 
@@ -71,17 +73,17 @@ void decimalToVector(T dec, std::vector<Int32> & vec, UInt32 scale)
 }
 
 template <typename T>
-bool flashDecimalColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
-    const DataTypePtr & data_type, size_t start_index, size_t end_index)
+bool flashDecimalColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
+    const tipb::FieldType & field_type, const IDataType * data_type, size_t start_index, size_t end_index)
 {
-    if (checkColumn<ColumnDecimal<T>>(flash_col_untyped) && checkDataType<DataTypeDecimal<T>>(data_type.get())
+    if (checkColumn<ColumnDecimal<T>>(flash_col_untyped) && checkDataType<DataTypeDecimal<T>>(data_type)
         && field_type.tp() == TiDB::TypeNewDecimal)
     {
         const ColumnDecimal<T> * flash_col = checkAndGetColumn<ColumnDecimal<T>>(flash_col_untyped);
-        const DataTypeDecimal<T> * type = checkAndGetDataType<DataTypeDecimal<T>>(data_type.get());
+        const DataTypeDecimal<T> * type = checkAndGetDataType<DataTypeDecimal<T>>(data_type);
         for (size_t i = start_index; i < end_index; i++)
         {
-            if (flash_col->isNullAt(i))
+            if (null_col != nullptr && null_col->isNullAt(i))
             {
                 dag_column.appendNull();
                 continue;
@@ -98,14 +100,14 @@ bool flashDecimalColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_
 }
 
 template <typename T>
-bool flashNumColToDAGCol(
-    TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type, size_t start_index, size_t end_index)
+bool flashNumColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
+    const tipb::FieldType & field_type, size_t start_index, size_t end_index)
 {
     if (const ColumnVector<T> * flash_col = checkAndGetColumn<ColumnVector<T>>(flash_col_untyped))
     {
         for (size_t i = start_index; i < end_index; i++)
         {
-            if (flash_col->isNullAt(i))
+            if (null_col != nullptr && null_col->isNullAt(i))
             {
                 dag_column.appendNull();
                 continue;
@@ -144,17 +146,17 @@ bool flashNumColToDAGCol(
     return false;
 }
 
-bool flashDateOrDateTimeColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type,
-    const DataTypePtr & data_type, size_t start_index, size_t end_index)
+bool flashDateOrDateTimeColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
+    const tipb::FieldType & field_type, const IDataType * data_type, size_t start_index, size_t end_index)
 {
     if ((field_type.tp() == TiDB::TypeDate || field_type.tp() == TiDB::TypeDatetime || field_type.tp() == TiDB::TypeTimestamp)
-        && (checkDataType<DataTypeMyDate>(data_type.get()) || checkDataType<DataTypeMyDateTime>(data_type.get())))
+        && (checkDataType<DataTypeMyDate>(data_type) || checkDataType<DataTypeMyDateTime>(data_type)))
     {
         using DateFieldType = DataTypeMyTimeBase::FieldType;
-        const ColumnVector<DateFieldType> * flash_col = checkAndGetColumn<ColumnVector<DateFieldType>>(flash_col_untyped);
+        auto * flash_col = checkAndGetColumn<ColumnVector<DateFieldType>>(flash_col_untyped);
         for (size_t i = start_index; i < end_index; i++)
         {
-            if (flash_col->isNullAt(i))
+            if (null_col != nullptr && null_col->isNullAt(i))
             {
                 dag_column.appendNull();
                 continue;
@@ -167,17 +169,17 @@ bool flashDateOrDateTimeColToDAGCol(TiDBColumn & dag_column, const IColumn * fla
     return false;
 }
 
-bool flashStringColToDAGCol(
-    TiDBColumn & dag_column, const IColumn * flash_col_untyped, const tipb::FieldType & field_type, size_t start_index, size_t end_index)
+bool flashStringColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
+    const tipb::FieldType & field_type, size_t start_index, size_t end_index)
 {
     // columnFixedString is not used so do not check it
-    const ColumnString * flash_col = checkAndGetColumn<ColumnString>(flash_col_untyped);
+    auto * flash_col = checkAndGetColumn<ColumnString>(flash_col_untyped);
     if (flash_col)
     {
         for (size_t i = start_index; i < end_index; i++)
         {
             // todo check if we can convert flash_col to DAG col directly since the internal representation is almost the same
-            if (flash_col->isNullAt(i))
+            if (null_col != nullptr && null_col->isNullAt(i))
             {
                 dag_column.appendNull();
                 continue;
@@ -203,31 +205,38 @@ void flashColToDAGCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & fla
     size_t start_index, size_t end_index)
 {
     const IColumn * col = flash_col.column.get();
+    const IDataType * type = flash_col.type.get();
+    const IColumn * null_col = nullptr;
+
+    if (type->isNullable())
+    {
+        null_col = col;
+        type = dynamic_cast<const DataTypeNullable *>(type)->getNestedType().get();
+        col = dynamic_cast<const ColumnNullable *>(col)->getNestedColumnPtr().get();
+    }
     const bool is_num = col->isNumeric();
     if (is_num)
     {
-        if (!(flashDateOrDateTimeColToDAGCol(dag_column, col, field_type, flash_col.type, start_index, end_index)
-                || flashNumColToDAGCol<UInt8>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<UInt16>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<UInt32>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<UInt16>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<UInt32>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<UInt64>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<UInt128>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<Int8>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<Int32>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<Int64>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<Float32>(dag_column, col, field_type, start_index, end_index)
-                || flashNumColToDAGCol<Float64>(dag_column, col, field_type, start_index, end_index)))
+        if (!(flashDateOrDateTimeColToDAGCol(dag_column, col, null_col, field_type, type, start_index, end_index)
+                || flashNumColToDAGCol<UInt8>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt16>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt32>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt64>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<UInt128>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Int8>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Int32>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Int64>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Float32>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Float64>(dag_column, col, null_col, field_type, start_index, end_index)))
         {
             throw Exception("Illegal column " + col->getName() + " when try to convert flash col to DAG col");
         }
     }
-    else if (!(flashDecimalColToDAGCol<Decimal32>(dag_column, col, field_type, flash_col.type, start_index, end_index)
-                 || flashDecimalColToDAGCol<Decimal64>(dag_column, col, field_type, flash_col.type, start_index, end_index)
-                 || flashDecimalColToDAGCol<Decimal128>(dag_column, col, field_type, flash_col.type, start_index, end_index)
-                 || flashDecimalColToDAGCol<Decimal256>(dag_column, col, field_type, flash_col.type, start_index, end_index)
-                 || flashStringColToDAGCol(dag_column, col, field_type, start_index, end_index)))
+    else if (!(flashDecimalColToDAGCol<Decimal32>(dag_column, col, null_col, field_type, type, start_index, end_index)
+                 || flashDecimalColToDAGCol<Decimal64>(dag_column, col, null_col, field_type, type, start_index, end_index)
+                 || flashDecimalColToDAGCol<Decimal128>(dag_column, col, null_col, field_type, type, start_index, end_index)
+                 || flashDecimalColToDAGCol<Decimal256>(dag_column, col, null_col, field_type, type, start_index, end_index)
+                 || flashStringColToDAGCol(dag_column, col, null_col, field_type, start_index, end_index)))
     {
         throw Exception("Illegal column " + col->getName() + " when try to convert flash col to DAG col");
     }
