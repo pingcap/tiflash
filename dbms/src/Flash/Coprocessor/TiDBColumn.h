@@ -36,10 +36,10 @@ private:
     UInt32 length;
     UInt32 null_cnt;
     std::vector<UInt8> null_bitmap;
-    std::vector<Int32> var_offsets;
+    std::vector<Int64> var_offsets;
     std::stringstream data;
     std::string default_value;
-    UInt32 current_data_size;
+    UInt64 current_data_size;
     Int8 fixed_size;
 };
 

@@ -35,20 +35,26 @@ TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
                 columns.emplace_back(4);
                 break;
             case TiDB::TypeDecimal:
+            case TiDB::TypeNewDecimal:
                 columns.emplace_back(40);
                 break;
             case TiDB::TypeDate:
             case TiDB::TypeDatetime:
             case TiDB::TypeNewDate:
             case TiDB::TypeTimestamp:
-                columns.emplace_back(16);
+                columns.emplace_back(20);
                 break;
             case TiDB::TypeVarchar:
             case TiDB::TypeVarString:
+            case TiDB::TypeString:
+            case TiDB::TypeBlob:
+            case TiDB::TypeTinyBlob:
+            case TiDB::TypeMediumBlob:
+            case TiDB::TypeLongBlob:
                 columns.emplace_back(VAR_SIZE);
                 break;
             default:
-                throw Exception("not supported field type in array encode.");
+                throw Exception("not supported field type in array encode: " + type.DebugString());
         }
     }
 }
@@ -95,6 +101,7 @@ bool flashDecimalColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_
             TiDBDecimal tiDecimal(scale, digits, dec.value < 0);
             dag_column.appendDecimal(tiDecimal);
         }
+        return true;
     }
     return false;
 }
@@ -188,6 +195,11 @@ bool flashStringColToDAGCol(TiDBColumn & dag_column, const IColumn * flash_col_u
             {
                 case TiDB::TypeVarchar:
                 case TiDB::TypeVarString:
+                case TiDB::TypeString:
+                case TiDB::TypeBlob:
+                case TiDB::TypeLongBlob:
+                case TiDB::TypeMediumBlob:
+                case TiDB::TypeTinyBlob:
                     dag_column.appendBytes(flash_col->getDataAt(i));
                     break;
                 default:
@@ -224,6 +236,7 @@ void flashColToDAGCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & fla
                 || flashNumColToDAGCol<UInt64>(dag_column, col, null_col, field_type, start_index, end_index)
                 || flashNumColToDAGCol<UInt128>(dag_column, col, null_col, field_type, start_index, end_index)
                 || flashNumColToDAGCol<Int8>(dag_column, col, null_col, field_type, start_index, end_index)
+                || flashNumColToDAGCol<Int16>(dag_column, col, null_col, field_type, start_index, end_index)
                 || flashNumColToDAGCol<Int32>(dag_column, col, null_col, field_type, start_index, end_index)
                 || flashNumColToDAGCol<Int64>(dag_column, col, null_col, field_type, start_index, end_index)
                 || flashNumColToDAGCol<Float32>(dag_column, col, null_col, field_type, start_index, end_index)

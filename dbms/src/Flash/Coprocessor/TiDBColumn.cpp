@@ -9,6 +9,7 @@ TiDBColumn::TiDBColumn(Int8 element_len_) : length(0), null_cnt(0), current_data
 {
     if (fixed_size != VAR_SIZE)
         default_value = String(fixed_size, '0');
+    var_offsets.push_back(0);
 }
 
 void TiDBColumn::appendNullBitMap(bool value)
@@ -80,8 +81,12 @@ void TiDBColumn::appendTime(const TiDBTime & time)
     encodeLittleEndian<UInt8>(time.my_date_time.day, data);
     encodeLittleEndian<UInt8>(time.my_date_time.minute, data);
     encodeLittleEndian<UInt8>(time.my_date_time.second, data);
+    // Encode an useless u16 to make byte alignment 16 bytes.
+    encodeLittleEndian<UInt16>(0, data);
     encodeLittleEndian<UInt8>(time.time_type, data);
     encodeLittleEndian<Int8>(time.fsp, data);
+    // Encode an useless u16 to make byte alignment 20 bytes.
+    encodeLittleEndian<UInt16>(0, data);
     finishAppendFixed();
 }
 
@@ -98,7 +103,11 @@ void TiDBColumn::appendDecimal(const TiDBDecimal & decimal)
     finishAppendFixed();
 }
 
-void TiDBColumn::appendBytes(const StringRef & value) { data.write(value.data, value.size); }
+void TiDBColumn::appendBytes(const StringRef & value)
+{
+    data.write(value.data, value.size);
+    finishAppendVar(value.size);
+}
 
 void TiDBColumn::appendBytes(const DB::String & value)
 {
@@ -135,7 +144,7 @@ void TiDBColumn::encodeColumn(std::stringstream & ss)
     {
         for (auto c : var_offsets)
         {
-            encodeLittleEndian<Int32>(c, ss);
+            encodeLittleEndian<Int64>(c, ss);
         }
     }
     ss << data.str();

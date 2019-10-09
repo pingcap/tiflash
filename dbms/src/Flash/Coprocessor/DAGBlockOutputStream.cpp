@@ -83,6 +83,12 @@ void DAGBlockOutputStream::encodeWithArrayEncodeType(const DB::Block & block)
 {
     // Encode data in chunk by array encode
     size_t rows = block.rows();
+    TiDBChunk dagChunk = TiDBChunk(result_field_types);
+    dagChunk.buildDAGChunkFromBlock(block, result_field_types, 0, rows);
+    std::stringstream ss;
+    dagChunk.encodeChunk(ss);
+    dag_response.set_row_batch_data(ss.str());
+    /*
     for (size_t row_index = 0; row_index < rows; row_index += records_per_chunk)
     {
         TiDBChunk dagChunk = TiDBChunk(result_field_types);
@@ -94,6 +100,7 @@ void DAGBlockOutputStream::encodeWithArrayEncodeType(const DB::Block & block)
         chunk->set_rows_data(ss.str());
         dag_response.add_output_counts(upper - row_index);
     }
+     */
 }
 
 void DAGBlockOutputStream::write(const Block & block)
