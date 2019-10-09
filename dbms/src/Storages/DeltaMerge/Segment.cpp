@@ -943,7 +943,7 @@ SegmentPtr Segment::reset(DMContext & dm_context, BlockInputStreamPtr & input_st
 
     WriteBatch meta_wb;
 
-    new_me->delta->setChunks({}, meta_wb, remove_wbs.log);
+    new_me->delta->setChunks(std::move(new_delta_chunks), meta_wb, remove_wbs.log);
     new_me->stable->setChunks(std::move(new_stable_chunks), meta_wb, remove_wbs.data);
 
     // Commit updates.
