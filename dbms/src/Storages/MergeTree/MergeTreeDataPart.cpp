@@ -146,7 +146,7 @@ MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & na
 {
     if (storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
         tmt_property = std::make_unique<TMTDataPartProperty>();
-    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name);
+    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name, info);
 }
 
 MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & name_)
@@ -154,7 +154,7 @@ MergeTreeDataPart::MergeTreeDataPart(MergeTreeData & storage_, const String & na
 {
     if (storage.merging_params.mode == MergeTreeData::MergingParams::Txn)
         tmt_property = std::make_unique<TMTDataPartProperty>();
-    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name);
+    full_path_prefix = storage.context.getPartPathSelector().getPathForPart(storage, name, info);
 }
 
 /// Takes into account the fact that several columns can e.g. share their .size substreams.
