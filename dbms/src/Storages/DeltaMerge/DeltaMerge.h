@@ -28,9 +28,6 @@ private:
     using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
     using SharedLock         = std::shared_lock<std::shared_mutex>;
 
-    size_t      handle_column_pos;
-    HandleRange handle_range;
-
     ChunkBlockInputStreamPtr stable_input_stream;
     ChunkBlockInputStream *  stable_input_stream_raw_ptr;
 
@@ -59,16 +56,12 @@ private:
     bool delta_done  = false;
 
 public:
-    DeltaMergeBlockInputStream(size_t                           handle_column_pos_,
-                               const HandleRange &              handle_range_,
-                               const ChunkBlockInputStreamPtr & stable_input_stream_,
+    DeltaMergeBlockInputStream(const ChunkBlockInputStreamPtr & stable_input_stream_,
                                const DeltaValueSpacePtr &       delta_value_space_,
                                IndexIterator                    index_begin,
                                IndexIterator                    index_end,
                                size_t                           max_block_size_)
-        : handle_column_pos(handle_column_pos_),
-          handle_range(handle_range_),
-          stable_input_stream(stable_input_stream_),
+        : stable_input_stream(stable_input_stream_),
           stable_input_stream_raw_ptr(stable_input_stream.get()),
           delta_value_space(delta_value_space_),
           entry_it(index_begin),
@@ -125,13 +118,7 @@ protected:
             if (limit == max_block_size)
                 continue;
 
-            Block block = header.cloneWithColumns(std::move(columns));
-
-            Block res = HandleFilter::filterSorted(handle_range, std::move(block), handle_column_pos);
-            if (!res || !res.rows())
-                continue;
-            else
-                return res;
+            return header.cloneWithColumns(std::move(columns));
         }
         return {};
     }
@@ -160,11 +147,8 @@ private:
                 writeDeleteFromDelta(1);
                 break;
             case DT_INS:
-                if (handle_range.check(delta_value_space->getHandle(tuple_id)))
-                {
-                    writeInsertFromDelta(output_columns, tuple_id);
-                    --output_write_limit;
-                }
+                writeInsertFromDelta(output_columns, tuple_id);
+                --output_write_limit;
                 break;
             default:
                 throw Exception("Entry type " + DTTypeString(entry_it.getType()) + " is not supported, is end: "
