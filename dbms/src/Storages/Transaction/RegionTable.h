@@ -120,6 +120,7 @@ private:
     TableMap tables;
     RegionInfoMap regions;
     std::unordered_set<RegionID> dirty_regions;
+    std::unordered_set<TableID> table_to_clean;
 
     FlushThresholds flush_thresholds;
 
@@ -162,6 +163,8 @@ public:
     void shrinkRegionRange(const Region & region);
 
     void removeRegion(const RegionID region_id);
+
+    TableID popOneTableToClean();
 
     /// Try pick some regions and flush.
     /// Note that flush is organized by partition. i.e. if a regions is selected to be flushed, all regions belong to its partition will also flushed.

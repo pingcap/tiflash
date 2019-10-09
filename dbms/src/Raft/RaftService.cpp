@@ -2,6 +2,7 @@
 #include <Raft/RaftService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
 
@@ -31,7 +32,15 @@ RaftService::RaftService(const std::string & address_, DB::Context & db_context_
     persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); }, false);
 
     table_flush_handle = background_pool.addTask([this] {
-        RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+        auto & tmt = db_context.getTMTContext();
+        RegionTable & region_table = tmt.getRegionTable();
+
+        // if all regions of table is removed, try to optimize data.
+        if (auto table_id = region_table.popOneTableToClean(); table_id != InvalidTableID)
+        {
+            LOG_INFO(log, "try to final optimize table " << table_id);
+            tryOptimizeStorageFinal(db_context, table_id);
+        }
         return region_table.tryFlushRegions();
     });
 

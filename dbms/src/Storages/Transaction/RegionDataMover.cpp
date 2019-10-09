@@ -2,6 +2,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/RegionDataMover.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -91,5 +92,23 @@ void getHandleMapByRange(
 
 template void getHandleMapByRange<Int64>(Context &, StorageMergeTree &, const HandleRange<Int64> &, HandleMap &);
 template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const HandleRange<UInt64> &, HandleMap &);
+
+void tryOptimizeStorageFinal(Context & context, TableID table_id)
+{
+    auto & tmt = context.getTMTContext();
+    auto storage = tmt.getStorages().get(table_id);
+    if (!storage)
+        return;
+
+    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+    auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
+
+    if (merge_tree->is_dropped)
+        return;
+
+    std::stringstream ss;
+    ss << "OPTIMIZE TABLE " << storage->getDatabaseName() << "." << storage->getTableName() << " PARTITION ID '0' FINAL";
+    executeQuery(ss.str(), context, true, QueryProcessingStage::Complete);
+}
 
 } // namespace DB
