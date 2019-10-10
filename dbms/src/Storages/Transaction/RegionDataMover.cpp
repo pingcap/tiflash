@@ -34,8 +34,7 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
     return executeQuery(query, context, true, QueryProcessingStage::Complete).in;
 }
 
-void getHandleMapByRange(
-    Context & context, StorageMergeTree & storage, const HandleRange & handle_range, HandleMap & output_data)
+void getHandleMapByRange(Context & context, StorageMergeTree & storage, const HandleRange & handle_range, HandleMap & output_data)
 {
     SortDescription pk_columns = storage.getData().getPrimarySortDescription();
     if (pk_columns.size() != 1)

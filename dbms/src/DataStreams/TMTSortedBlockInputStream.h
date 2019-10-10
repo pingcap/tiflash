@@ -1,9 +1,9 @@
 #pragma once
 
 #include <DataStreams/MergingSortedBlockInputStream.h>
+#include <Storages/MergeTree/TMTMustColumns.h>
 #include <common/logger_useful.h>
 #include <Core/TMTSortCursor.hpp>
-#include <Storages/MergeTree/TMTMustColumns.h>
 
 namespace DB
 {
@@ -12,7 +12,8 @@ class TMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
     TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, size_t max_block_size_)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, nullptr, true){}
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, nullptr, true)
+    {}
 
     String getName() const override { return "TMTSortedBlockInputStream"; }
 

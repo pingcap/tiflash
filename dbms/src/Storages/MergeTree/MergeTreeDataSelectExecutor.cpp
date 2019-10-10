@@ -55,6 +55,7 @@ struct numeric_limits<__uint128_t>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeThreadBlockInputStream.h>
 #include <Storages/MergeTree/TMTDataPartProperty.h>
+#include <Storages/MergeTree/TMTMustColumns.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/Transaction/KVStore.h>
@@ -63,7 +64,6 @@ struct numeric_limits<__uint128_t>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutorCommon.hpp>
-#include <Storages/MergeTree/TMTMustColumns.h>
 
 namespace ProfileEvents
 {
@@ -913,14 +913,12 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 return std::make_shared<VersionFilterBlockInputStream>(source_stream, mvcc_query_info.read_tso);
             };
 
-            const auto func_make_range_filter_input
-                = [&](const BlockInputStreamPtr & source_stream, const HandleRange & handle_ranges) {
-                      return std::make_shared<RangesFilterBlockInputStream>(source_stream, handle_ranges);
-                  };
+            const auto func_make_range_filter_input = [&](const BlockInputStreamPtr & source_stream, const HandleRange & handle_ranges) {
+                return std::make_shared<RangesFilterBlockInputStream>(source_stream, handle_ranges);
+            };
 
             const auto func_make_multi_way_merge_sort_input = [&](const BlockInputStreams & merging) -> BlockInputStreamPtr {
-                return makeMultiWayMergeSortInput(
-                    merging, data.getPrimarySortDescription(), DEFAULT_MERGE_BLOCK_SIZE);
+                return makeMultiWayMergeSortInput(merging, data.getPrimarySortDescription(), DEFAULT_MERGE_BLOCK_SIZE);
             };
 
             for (size_t thread_idx = 0; thread_idx < concurrent_num; ++thread_idx)

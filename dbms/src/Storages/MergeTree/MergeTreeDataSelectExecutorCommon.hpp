@@ -164,8 +164,7 @@ BlockInputStreamPtr makeMultiWayMergeSortInput(const BlockInputStreams & inputs,
 {
     if (inputs.size() == 1)
         return std::make_shared<TMTSingleSortedBlockInputStream>(inputs[0]);
-    return std::make_shared<TMTSortedBlockInputStream>(
-        inputs, description, max_block_size);
+    return std::make_shared<TMTSortedBlockInputStream>(inputs, description, max_block_size);
 };
 
 } // namespace DB

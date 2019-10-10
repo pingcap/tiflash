@@ -12,10 +12,7 @@ class RangesFilterBlockInputStream : public IProfilingBlockInputStream
     using Handle = TiKVHandle::Handle;
 
 public:
-    RangesFilterBlockInputStream(
-        const BlockInputStreamPtr & input_, const HandleRange & ranges_)
-        : input(input_), ranges(ranges_)
-    {}
+    RangesFilterBlockInputStream(const BlockInputStreamPtr & input_, const HandleRange & ranges_) : input(input_), ranges(ranges_) {}
 
 protected:
     Block getHeader() const override { return input->getHeader(); }

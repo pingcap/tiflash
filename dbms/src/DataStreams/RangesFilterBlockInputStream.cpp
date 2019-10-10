@@ -103,6 +103,6 @@ namespace TiKVHandle
 {
 const Handle Handle::normal_min = Handle(HandleIDType::NORMAL, std::numeric_limits<HandleType>::min());
 const Handle Handle::max = Handle(HandleIDType::MAX, 0);
-}
+} // namespace TiKVHandle
 
 } // namespace DB

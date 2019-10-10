@@ -1,9 +1,9 @@
 #pragma once
 
+#include <Common/Exception.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/Types.h>
 #include <common/likely.h>
-#include <Common/Exception.h>
 
 namespace DB
 {
@@ -112,20 +112,14 @@ inline bool operator==(const Int64 & handle_id, const Handle & handle)
     return handle.type == HandleIDType::NORMAL && handle_id == handle.handle_id;
 }
 
-inline bool operator>=(const Int64 & handle_id, const Handle & handle)
-{
-    return !(handle_id < handle);
-}
+inline bool operator>=(const Int64 & handle_id, const Handle & handle) { return !(handle_id < handle); }
 
 inline bool operator>(const Int64 & handle_id, const Handle & handle)
 {
     return handle.type == HandleIDType::NORMAL && handle_id > handle.handle_id;
 }
 
-inline bool operator<=(const Int64 & handle_id, const Handle & handle)
-{
-    return !(handle_id > handle);
-}
+inline bool operator<=(const Int64 & handle_id, const Handle & handle) { return !(handle_id > handle); }
 
 } // namespace TiKVHandle
 
