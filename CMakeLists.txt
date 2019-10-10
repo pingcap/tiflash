@@ -46,6 +46,12 @@ if (COMPILER_GCC OR COMPILER_CLANG)
     set (CXX_WARNING_FLAGS "${CXX_WARNING_FLAGS} -Wnon-virtual-dtor")
 endif ()
 
+if (COMPILER_CLANG)
+    # Clang doesn't have int128 predefined macros, workaround by manually defining them
+    # Reference: https://stackoverflow.com/questions/41198673/uint128-t-not-working-with-clang-and-libstdc
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__GLIBCXX_BITSIZE_INT_N_0=128 -D__GLIBCXX_TYPE_INT_N_0=__int128")
+endif ()
+
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
