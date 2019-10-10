@@ -8,6 +8,7 @@
 #include <stack>
 #include <unordered_set>
 
+#include <Common/CurrentMetrics.h>
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/mvcc/VersionSet.h>
@@ -21,6 +22,11 @@ extern const Event PSMVCCApplyOnCurrentBase;
 extern const Event PSMVCCApplyOnCurrentDelta;
 extern const Event PSMVCCApplyOnNewDelta;
 } // namespace ProfileEvents
+
+namespace CurrentMetrics
+{
+extern const Metric PSMVCCNumSnapshots;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -61,6 +67,8 @@ public:
           snapshots(std::move(std::make_shared<Snapshot>(this, nullptr))), //
           config(config_)
     {
+        // The placeholder snapshot should not be counted.
+        CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
     virtual ~VersionSetWithDelta()
@@ -68,6 +76,9 @@ public:
         current.reset();
         // snapshot list is empty
         assert(snapshots->prev == snapshots.get());
+
+        // Ignore the destructor of placeholder snapshot
+        CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
     void apply(TVersionEdit & edit)
@@ -114,7 +125,10 @@ public:
         Snapshot * next;
 
     public:
-        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this) {}
+        Snapshot(VersionSetWithDelta * vset_, VersionPtr tail_) : vset(vset_), view(std::move(tail_)), prev(this), next(this)
+        {
+            CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
+        }
 
         ~Snapshot()
         {
@@ -123,6 +137,8 @@ public:
             std::unique_lock lock = vset->acquireForLock();
             prev->next            = next;
             next->prev            = prev;
+
+            CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
         }
 
         const TVersionView * version() const { return &view; }
@@ -327,6 +343,8 @@ protected:
     VersionPtr                   current;
     SnapshotPtr                  snapshots;
     ::DB::MVCC::VersionSetConfig config;
+
+    friend class VersionSetWithDeltaCompactTest;
 };
 
 } // namespace MVCC

@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 
+#include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
@@ -240,7 +241,7 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
     }
 
     {
-        auto snap = storage->getSnapshot();
+        auto snap      = storage->getSnapshot();
         auto ref_entry = snap->version()->find(1);
         ASSERT_FALSE(ref_entry);
 
@@ -261,7 +262,7 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
     storage = reopenWithConfig(config);
 
     {
-        auto snap = storage->getSnapshot();
+        auto snap      = storage->getSnapshot();
         auto ref_entry = snap->version()->find(1);
         ASSERT_FALSE(ref_entry);
 
@@ -799,11 +800,32 @@ TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
     ASSERT_FALSE(storage->getEntry(3).isValid());
 }
 
+namespace
+{
+
+CurrentMetrics::Value getPSMVCCNumSnapshots()
+{
+    for (size_t i = 0, end = CurrentMetrics::end(); i < end; ++i)
+    {
+        if (i == CurrentMetrics::PSMVCCNumSnapshots)
+        {
+            return CurrentMetrics::values[i].load(std::memory_order_relaxed);
+        }
+    }
+    throw Exception(std::string(CurrentMetrics::getDescription(CurrentMetrics::PSMVCCNumSnapshots)) + " not found.");
+}
+
+} // namespace
+
+
 TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
 {
-    char      ch_before         = 0x01;
-    char      ch_update         = 0xFF;
-    auto      snapshot          = storage->getSnapshot();
+    char ch_before = 0x01;
+    char ch_update = 0xFF;
+
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
+    auto snapshot = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
     PageEntry p1_snapshot_entry = storage->getEntry(1, snapshot);
 
     {
@@ -865,9 +887,13 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     char      ch_before         = 0x01;
     char      ch_update         = 0xFF;
     PageEntry p1_snapshot_entry = storage->getEntry(1);
-    auto      s1                = storage->getSnapshot();
-    auto      s2                = storage->getSnapshot();
-    auto      s3                = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
+    auto s1 = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
+    auto s2 = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 2);
+    auto s3 = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 3);
 
     {
         // write new version of Page1
@@ -916,6 +942,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s1.reset(); /// free snapshot 1
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 2);
 
     // getEntry with snapshot
     p1_entry = storage->getEntry(1, s2);
@@ -941,6 +968,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s2.reset(); /// free snapshot 2
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
 
     // getEntry with snapshot
     p1_entry = storage->getEntry(1, s3);
@@ -958,6 +986,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s3.reset(); /// free snapshot 3
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
 
     // without snapshot
     p1_entry = storage->getEntry(1);
