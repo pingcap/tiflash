@@ -47,13 +47,14 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
 {}
 
 template <typename HandleType>
-bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges)
+bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, const std::vector<HandleRange<HandleType>> & region_ranges)
 {
     if (ranges.empty())
         return false;
     std::sort(ranges.begin(), ranges.end(),
         [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
 
+    std::vector<HandleRange<HandleType>> merged_ranges;
     HandleRange<HandleType> merged_range;
     merged_range.first = ranges[0].first;
     merged_range.second = ranges[0].second;
@@ -63,41 +64,77 @@ bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges)
         if (merged_range.second >= ranges[i].first)
             merged_range.second = merged_range.second >= ranges[i].second ? merged_range.second : ranges[i].second;
         else
-            break;
+        {
+            merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
+            merged_range.first = ranges[i].first;
+            merged_range.second = ranges[i].second;
+        }
     }
+    merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
 
-    return merged_range.first == TiKVHandle::Handle<HandleType>::normal_min && merged_range.second == TiKVHandle::Handle<HandleType>::max;
+    for (const auto & region_range : region_ranges)
+    {
+        bool covered = false;
+        for (const auto & range : merged_ranges)
+        {
+            if (region_range.first >= range.first && region_range.second <= range.second)
+            {
+                covered = true;
+                break;
+            }
+        }
+        if (!covered && region_range.second > region_range.first)
+            return false;
+    }
+    return true;
 }
 
-bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, TableID table_id, bool pk_is_uint64)
+bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, TableID table_id, bool pk_is_uint64,
+    const ImutRegionRangePtr & region_key_range)
 {
     if (key_ranges.empty())
         return true;
 
-    std::vector<HandleRange<Int64>> scan_ranges;
+    std::vector<HandleRange<Int64>> handle_ranges;
     for (auto & range : key_ranges)
     {
         TiKVRange::Handle start = TiKVRange::getRangeHandle<true>(range.first, table_id);
         TiKVRange::Handle end = TiKVRange::getRangeHandle<false>(range.second, table_id);
-        scan_ranges.emplace_back(std::make_pair(start, end));
+        handle_ranges.emplace_back(std::make_pair(start, end));
     }
+
+    std::vector<HandleRange<Int64>> region_handle_ranges;
+    auto & raw_keys = region_key_range->rawKeys();
+    TiKVRange::Handle region_start = TiKVRange::getRangeHandle<true>(raw_keys.first, table_id);
+    TiKVRange::Handle region_end = TiKVRange::getRangeHandle<false>(raw_keys.second, table_id);
+    region_handle_ranges.emplace_back(std::make_pair(region_start, region_end));
 
     if (pk_is_uint64)
     {
-        std::vector<HandleRange<UInt64>> update_ranges;
-        for (auto & range : scan_ranges)
+        std::vector<HandleRange<UInt64>> update_handle_ranges;
+        for (auto & range : handle_ranges)
         {
             const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
 
             for (int i = 0; i < n; i++)
             {
-                update_ranges.emplace_back(new_range[i]);
+                update_handle_ranges.emplace_back(new_range[i]);
             }
         }
-        return isAllValueCoveredByRanges<UInt64>(update_ranges);
+        std::vector<HandleRange<UInt64>> update_region_handle_ranges;
+        for (auto & range : region_handle_ranges)
+        {
+            const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
+
+            for (int i = 0; i < n; i++)
+            {
+                update_region_handle_ranges.emplace_back(new_range[i]);
+            }
+        }
+        return isAllValueCoveredByRanges<UInt64>(update_handle_ranges, update_region_handle_ranges);
     }
     else
-        return isAllValueCoveredByRanges<Int64>(scan_ranges);
+        return isAllValueCoveredByRanges<Int64>(handle_ranges, region_handle_ranges);
 }
 // the flow is the same as executeFetchcolumns
 void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
@@ -206,9 +243,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         max_streams *= settings.max_streams_to_max_threads_ratio;
     }
 
-    if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64()))
-        throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
-
     if (dag.hasSelection())
     {
         for (auto & condition : dag.getSelection().conditions())
@@ -235,6 +269,8 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         region_ids.push_back(info.region_id);
         throw RegionException(std::move(region_ids), RegionTable::RegionReadStatus::NOT_FOUND);
     }
+    if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange()))
+        throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
