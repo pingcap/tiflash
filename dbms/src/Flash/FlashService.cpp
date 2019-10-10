@@ -4,6 +4,7 @@
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Raft/RaftService.h>
+#include <Server/IServer.h>
 #include <grpcpp/server_builder.h>
 
 namespace DB
@@ -14,31 +15,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-FlashService::FlashService(const std::string & address_, IServer & server_)
-    : address(address_), server(server_), log(&Logger::get("FlashService"))
-{
-    grpc::ServerBuilder builder;
-    builder.AddListeningPort(address, grpc::InsecureServerCredentials());
-    builder.RegisterService(this);
-    builder.RegisterService(&server.context().getRaftService());
-
-    // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
-    builder.SetMaxReceiveMessageSize(-1);
-    builder.SetMaxSendMessageSize(-1);
-
-    grpc_server = builder.BuildAndStart();
-
-    LOG_INFO(log, "Flash service listening on [" << address << "]");
-}
-
-FlashService::~FlashService()
-{
-    // wait 5 seconds for pending rpcs to gracefully stop
-    gpr_timespec deadline{5, 0, GPR_TIMESPAN};
-    LOG_DEBUG(log, "Begin to shutting down grpc server");
-    grpc_server->Shutdown(deadline);
-    grpc_server->Wait();
-}
+FlashService::FlashService(IServer & server_) : server(server_), log(&Logger::get("FlashService")) {}
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
