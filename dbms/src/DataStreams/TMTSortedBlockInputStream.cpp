@@ -10,16 +10,14 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-template <TMTPKType pk_type>
-void TMTSortedBlockInputStream<pk_type>::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
+void TMTSortedBlockInputStream::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
 {
     ++merged_rows;
     for (size_t i = 0; i < num_columns; ++i)
         merged_columns[i]->insertFrom(*(*selected_row.columns)[i], selected_row.row_num);
 }
 
-template <TMTPKType pk_type>
-Block TMTSortedBlockInputStream<pk_type>::readImpl()
+Block TMTSortedBlockInputStream::readImpl()
 {
     if (finished)
     {
@@ -44,8 +42,7 @@ Block TMTSortedBlockInputStream<pk_type>::readImpl()
     return res;
 }
 
-template <TMTPKType pk_type>
-void TMTSortedBlockInputStream<pk_type>::mergeOptimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue)
+void TMTSortedBlockInputStream::mergeOptimized(MutableColumns & merged_columns, std::priority_queue<TMTSortCursorPK> & queue)
 {
     size_t merged_rows = 0;
 
@@ -121,7 +118,7 @@ void TMTSortedBlockInputStream<pk_type>::mergeOptimized(MutableColumns & merged_
             setPrimaryKeyRefOptimized(next_key, current);
 
             const auto key_differs
-                = cmpTMTCursor<true, true, pk_type>(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
+                = cmpTMTCursor<true, true>(*current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
 
             if (key_differs.all)
             {
@@ -213,8 +210,7 @@ void TMTSortedBlockInputStream<pk_type>::mergeOptimized(MutableColumns & merged_
     finished = true;
 }
 
-template <TMTPKType pk_type>
-bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns)
+bool TMTSortedBlockInputStream::insertByColumn(TMTSortCursorPK current, size_t & merged_rows, MutableColumns & merged_columns)
 {
     if (current.notSame(cur_block_cursor))
         throw Exception("[TMTSortedBlockInputStream::insertByColumn] current != cur_block_cursor", ErrorCodes::LOGICAL_ERROR);
@@ -233,7 +229,7 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
             RowRef key;
             setPrimaryKeyRefOptimized(key, current);
 
-            const auto key_differs = cmpTMTCursor<true, true, pk_type>(*cur_key.columns, cur_key.row_num, *key.columns, key.row_num);
+            const auto key_differs = cmpTMTCursor<true, true>(*cur_key.columns, cur_key.row_num, *key.columns, key.row_num);
 
             if (!key_differs.all)
             {
@@ -291,16 +287,11 @@ bool TMTSortedBlockInputStream<pk_type>::insertByColumn(TMTSortCursorPK current,
     return true;
 }
 
-template <TMTPKType pk_type>
-void TMTSortedBlockInputStream<pk_type>::initQueue()
+void TMTSortedBlockInputStream::initQueue()
 {
     for (size_t i = 0; i < cursors.size(); ++i)
         if (!cursors[i].empty())
             tmt_queue.push(TMTSortCursorPK(&cursors[i]));
 }
-
-template class TMTSortedBlockInputStream<TMTPKType::UNSPECIFIED>;
-template class TMTSortedBlockInputStream<TMTPKType::UINT64>;
-template class TMTSortedBlockInputStream<TMTPKType::INT64>;
 
 } // namespace DB

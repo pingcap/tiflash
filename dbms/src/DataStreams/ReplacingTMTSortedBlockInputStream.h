@@ -9,13 +9,12 @@ namespace DB
 {
 
 // bottleneck is about memory copy and io
-template <typename HandleType>
 class ReplacingTMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
-    using Handle = TiKVHandle::Handle<HandleType>;
+    using Handle = TiKVHandle::Handle;
 
 public:
-    ReplacingTMTSortedBlockInputStream(const std::vector<HandleRange<HandleType>> & ranges_,
+    ReplacingTMTSortedBlockInputStream(const std::vector<HandleRange> & ranges_,
         const BlockInputStreams & inputs_,
         const SortDescription & description_,
         const String & version_column,

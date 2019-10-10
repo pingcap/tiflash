@@ -1,5 +1,4 @@
 #include <Columns/ColumnsNumber.h>
-#include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
@@ -61,41 +60,6 @@ static Field GenDecodeRow(const ColumnInfo & col_info)
     }
 }
 
-inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
-{
-    // resort the data_list
-    // if the order in int64 is like -3 -1 0 1 2 3, the real order in uint64 is 0 1 2 3 -3 -1
-    if (data_list.size() > 2)
-    {
-        bool need_check = false;
-        {
-            const auto h1 = std::get<0>(data_list.front());
-            const auto h2 = std::get<0>(data_list.back());
-            if ((h1 ^ h2) & SIGN_MASK)
-                need_check = true;
-        }
-
-        if (need_check)
-        {
-            auto it = data_list.begin();
-            for (; it != data_list.end();)
-            {
-                const auto handle = std::get<0>(*it);
-
-                if (handle & SIGN_MASK)
-                    ++it;
-                else
-                    break;
-            }
-
-            std::reverse(it, data_list.end());
-            std::reverse(data_list.begin(), it);
-            std::reverse(data_list.begin(), data_list.end());
-        }
-    }
-}
-
-template <TMTPKType pk_type>
 void setPKVersionDel(ColumnUInt8 & delmark_col,
     ColumnUInt64 & version_col,
     MutableColumnPtr & pk_column,
@@ -118,13 +82,7 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
 
         delmark_data.emplace_back(write_type == Region::DelFlag);
         version_data.emplace_back(commit_ts);
-
-        if constexpr (pk_type == TMTPKType::INT64)
-            typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(static_cast<Int64>(handle));
-        else if constexpr (pk_type == TMTPKType::UINT64)
-            typeid_cast<ColumnVector<UInt64> &>(*pk_column).insert(static_cast<UInt64>(handle));
-        else
-            pk_column->insert(Field(static_cast<Int64>(handle)));
+        typeid_cast<ColumnVector<Int64> &>(*pk_column).insert(handle);
     }
 }
 
@@ -276,28 +234,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         column_map.insert(handle_col_id, std::move(mut_col), std::move(ch_col), -1, data_list.size());
     }
 
-    const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
-
-    if (pk_type == TMTPKType::UINT64)
-        ReorderRegionDataReadList(data_list);
-
-    {
-        auto func = setPKVersionDel<TMTPKType::UNSPECIFIED>;
-
-        switch (pk_type)
-        {
-            case TMTPKType::INT64:
-                func = setPKVersionDel<TMTPKType::INT64>;
-                break;
-            case TMTPKType::UINT64:
-                func = setPKVersionDel<TMTPKType::UINT64>;
-                break;
-            default:
-                break;
-        }
-
-        func(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts);
-    }
+    setPKVersionDel(*delmark_col, *version_col, column_map.getMutableColumnPtr(handle_col_id), data_list, start_ts);
 
     const size_t target_col_size = column_names_to_read.size() - MustHaveColCnt;
 

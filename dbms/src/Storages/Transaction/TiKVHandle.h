@@ -39,14 +39,9 @@ inline static const char * handleIDTypeToString(HandleIDType type)
     throw Exception("handleIDTypeToString fail", ErrorCodes::LOGICAL_ERROR);
 }
 
-template <bool isInt64>
-struct DummyIdentity
-{
-};
-
-template <typename HandleType>
 struct Handle
 {
+    using HandleType = Int64;
     HandleIDType type = HandleIDType::NORMAL;
     HandleType handle_id = HandleType{0};
 
@@ -62,7 +57,7 @@ struct Handle
 
     bool operator<=(const Handle & handle) const { return !(*this > handle); }
 
-    HandleType operator-(const Handle & handle) const { return subtract(handle, DummyIdentity<std::is_same_v<HandleType, Int64>>()); }
+    HandleType operator-(const Handle & handle) const { return subtract(handle); }
 
     bool operator==(const Handle & handle) const { return type == handle.type && handle_id == handle.handle_id; }
 
@@ -99,56 +94,41 @@ struct Handle
     Handle(const HandleType handle_id_) : type(HandleIDType::NORMAL), handle_id(handle_id_) {}
 
 private:
-    HandleType subtract(const Handle & handle, DummyIdentity<true>) const
+    HandleType subtract(const Handle & handle) const
     {
         if (type == handle.type && type == HandleIDType::NORMAL)
             return handle_id - handle.handle_id;
         throw Exception("can not compute if type of either one is not HandleIDType::NORMAL", ErrorCodes::LOGICAL_ERROR);
     }
-
-    // can not use operator - when HandleType is not Int64
-    HandleType subtract(const Handle & handle, DummyIdentity<false>) const = delete;
 };
 
-template <typename HandleType>
-const Handle<HandleType> Handle<HandleType>::normal_min = Handle<HandleType>(HandleIDType::NORMAL, std::numeric_limits<HandleType>::min());
-
-template <typename HandleType>
-const Handle<HandleType> Handle<HandleType>::max = Handle<HandleType>(HandleIDType::MAX, 0);
-
-template <typename HandleType>
-inline bool operator<(const HandleType & handle_id, const Handle<HandleType> & handle)
+inline bool operator<(const Int64 & handle_id, const Handle & handle)
 {
     return handle.type == HandleIDType::MAX || handle_id < handle.handle_id;
 }
 
-template <typename HandleType>
-inline bool operator==(const HandleType & handle_id, const Handle<HandleType> & handle)
+inline bool operator==(const Int64 & handle_id, const Handle & handle)
 {
     return handle.type == HandleIDType::NORMAL && handle_id == handle.handle_id;
 }
 
-template <typename HandleType>
-inline bool operator>=(const HandleType & handle_id, const Handle<HandleType> & handle)
+inline bool operator>=(const Int64 & handle_id, const Handle & handle)
 {
     return !(handle_id < handle);
 }
 
-template <typename HandleType>
-inline bool operator>(const HandleType & handle_id, const Handle<HandleType> & handle)
+inline bool operator>(const Int64 & handle_id, const Handle & handle)
 {
     return handle.type == HandleIDType::NORMAL && handle_id > handle.handle_id;
 }
 
-template <typename HandleType>
-inline bool operator<=(const HandleType & handle_id, const Handle<HandleType> & handle)
+inline bool operator<=(const Int64 & handle_id, const Handle & handle)
 {
     return !(handle_id > handle);
 }
 
 } // namespace TiKVHandle
 
-template <typename HandleType>
-using HandleRange = std::pair<TiKVHandle::Handle<HandleType>, TiKVHandle::Handle<HandleType>>;
+using HandleRange = std::pair<TiKVHandle::Handle, TiKVHandle::Handle>;
 
 } // namespace DB

@@ -14,99 +14,7 @@ extern const int LOGICAL_ERROR;
 
 namespace CHTableHandle
 {
-
-static const UInt64 SIGN_MARK = UInt64(1) << 63;
-
-using UInt64TableHandle = TiKVHandle::Handle<UInt64>;
-
-using UInt64TableHandleRange = HandleRange<UInt64>;
-
-using HandleIDType = TiKVHandle::HandleIDType;
-
-inline bool withSignMark(const HandleID & handle_id) { return (handle_id & SIGN_MARK) != 0; }
-
-// It's a very important role: the user's pk order is not equal with the handle order in tikv.
-// for example: user insert row with only pk (1<<64)-1, and 1, but we get the tikv handle -1, 1.
-// so, for any range presented by Int64, if the type of pk is UInt64, we should transform it into to several ranges to get the real order.
-inline std::tuple<int, std::array<UInt64TableHandleRange, 2>> splitForUInt64TableHandle(const HandleRange<Int64> & ori_range)
-{
-    static const UInt64 unsigned_2_power_max = UInt64(1) << 63; // 100000...
-
-    const UInt64TableHandle & begin = {ori_range.first.type, static_cast<UInt64>(ori_range.first.handle_id)};
-    const UInt64TableHandle & end = {ori_range.second.type, static_cast<UInt64>(ori_range.second.handle_id)};
-
-    if (begin.type == end.type)
-    {
-        if (begin.type != HandleIDType::NORMAL)
-        {
-            // return original one
-            return {1, {UInt64TableHandleRange{begin, end}, UInt64TableHandleRange{}}};
-        }
-
-        // both are normal
-
-        if ((begin.handle_id & SIGN_MARK) == (end.handle_id & SIGN_MARK))
-        {
-            // both negative or both positive. relative order are same.
-            return {1, {UInt64TableHandleRange{{begin.handle_id}, {end.handle_id}}, UInt64TableHandleRange{}}};
-        }
-        else
-        {
-            // one is negative, the other is positive
-            return {
-                2,
-                {
-                    UInt64TableHandleRange{{0}, {end.handle_id}},
-                    UInt64TableHandleRange{{begin.handle_id}, UInt64TableHandle::max},
-                },
-            };
-        }
-    }
-    else
-    {
-        switch (begin.type)
-        {
-            case HandleIDType::NORMAL:
-                // only can be max
-                if (end.type != HandleIDType::MAX)
-                    throw Exception("end.type != HandleIDType::MAX", ErrorCodes::LOGICAL_ERROR);
-
-                if (withSignMark(begin.handle_id))
-                {
-                    if (unsigned_2_power_max == begin.handle_id)
-                        return {
-                            1, {UInt64TableHandleRange{UInt64TableHandle::normal_min, UInt64TableHandle::max}, UInt64TableHandleRange{}}};
-
-                    return {
-                        2,
-                        {
-                            UInt64TableHandleRange{{0}, {unsigned_2_power_max}},
-                            UInt64TableHandleRange{{begin.handle_id}, UInt64TableHandle::max},
-                        },
-                    };
-                }
-                else
-                {
-                    return {
-                        1,
-                        {
-                            UInt64TableHandleRange{{begin.handle_id}, {unsigned_2_power_max}},
-                            UInt64TableHandleRange{},
-                        },
-                    };
-                }
-                break;
-            case HandleIDType::MAX:
-                // can not into here
-                throw Exception("begin.type == HandleIDType::MAX && end.type != HandleIDType::MAX", ErrorCodes::LOGICAL_ERROR);
-                break;
-        }
-    }
-    throw Exception("splitForUInt64TableHandle should not happen", ErrorCodes::LOGICAL_ERROR);
-}
-
-template <typename HandleType>
-inline void merge_ranges(std::vector<DB::HandleRange<HandleType>> & ranges)
+inline void merge_ranges(std::vector<DB::HandleRange> & ranges)
 {
     if (ranges.empty())
         return;
@@ -124,12 +32,6 @@ inline void merge_ranges(std::vector<DB::HandleRange<HandleType>> & ranges)
     size = size + 1;
     ranges.resize(size);
 }
-
-inline bool needSplit(const HandleRange<Int64> & ori_range)
-{
-    return (ori_range.first.handle_id & SIGN_MARK) != (ori_range.second.handle_id & SIGN_MARK);
-}
-
 } // namespace CHTableHandle
 
 } // namespace DB

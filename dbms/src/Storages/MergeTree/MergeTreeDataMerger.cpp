@@ -672,11 +672,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 throw Exception("TMTContext is not initialized, throw exception", ErrorCodes::LOGICAL_ERROR);
             }
 
-            const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
-
             const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
 
-            std::vector<HandleRange<HandleID>> ranges;
+            std::vector<HandleRange> ranges;
             tmt.getRegionTable().handleInternalRegionsByTable(
                 data.table_info->id,
                 [&](const RegionTable::InternalRegions & regions) {
@@ -685,27 +683,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                         ranges.push_back(region.second.range_in_table);
                 });
 
-            if (pk_is_uint64)
-            {
-                std::vector<HandleRange<UInt64>> new_ranges;
-
-                for (const auto & range : ranges)
-                {
-                    auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(range);
-
-                    for (auto i = 0; i < n; ++i)
-                        new_ranges.push_back(new_range[i]);
-                }
-
-                CHTableHandle::merge_ranges(new_ranges);
-                merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<UInt64>>(
-                    new_ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
-                    handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id, final);
-            }
-            else
             {
                 CHTableHandle::merge_ranges(ranges);
-                merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream<Int64>>(
+                merged_stream = std::make_unique<ReplacingTMTSortedBlockInputStream>(
                     ranges, src_streams, sort_desc, data.merging_params.version_column, MutableSupport::delmark_column_name,
                     handle_col_name, DEFAULT_MERGE_BLOCK_SIZE, tmt.getPDClient()->getGCSafePoint(), data.table_info->id, final);
             }

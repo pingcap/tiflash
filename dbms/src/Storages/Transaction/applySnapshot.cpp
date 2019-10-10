@@ -1,7 +1,5 @@
-#include <Core/TMTPKType.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
@@ -81,17 +79,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
                 if (merge_tree->is_dropped)
                     continue;
 
-                const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
-
-                if (pk_is_uint64)
-                {
-                    const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[0], handle_maps[table_id]);
-                    if (n > 1)
-                        getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[1], handle_maps[table_id]);
-                }
-                else
-                    getHandleMapByRange<Int64>(*context, *merge_tree, handle_range, handle_maps[table_id]);
+                getHandleMapByRange(*context, *merge_tree, handle_range, handle_maps[table_id]);
             }
         }
 

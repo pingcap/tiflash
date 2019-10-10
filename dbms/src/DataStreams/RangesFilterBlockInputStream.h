@@ -7,15 +7,14 @@
 namespace DB
 {
 
-template <typename HandleType>
 class RangesFilterBlockInputStream : public IProfilingBlockInputStream
 {
-    using Handle = TiKVHandle::Handle<HandleType>;
+    using Handle = TiKVHandle::Handle;
 
 public:
     RangesFilterBlockInputStream(
-        const BlockInputStreamPtr & input_, const HandleRange<HandleType> & ranges_, const size_t handle_column_index_)
-        : input(input_), ranges(ranges_), handle_column_index(handle_column_index_)
+        const BlockInputStreamPtr & input_, const HandleRange & ranges_)
+        : input(input_), ranges(ranges_)
     {}
 
 protected:
@@ -33,8 +32,7 @@ protected:
 
 private:
     BlockInputStreamPtr input;
-    const HandleRange<HandleType> ranges;
-    const size_t handle_column_index;
+    const HandleRange ranges;
     Logger * log = &Logger::get("RangesFilterBlockInputStream");
 };
 

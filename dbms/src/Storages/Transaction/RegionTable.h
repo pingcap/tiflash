@@ -38,12 +38,12 @@ public:
     struct InternalRegion
     {
         InternalRegion(const InternalRegion & p) : region_id(p.region_id), range_in_table(p.range_in_table) {}
-        InternalRegion(const RegionID region_id_, const HandleRange<HandleID> & range_in_table_ = {0, 0})
+        InternalRegion(const RegionID region_id_, const HandleRange & range_in_table_ = {0, 0})
             : region_id(region_id_), range_in_table(range_in_table_)
         {}
 
         RegionID region_id;
-        HandleRange<HandleID> range_in_table;
+        HandleRange range_in_table;
         bool pause_flush = false;
         Int64 cache_bytes = 0;
         Timepoint last_flush_time = Clock::now();
@@ -196,7 +196,7 @@ public:
         RegionVersion conf_version,
         bool resolve_locks,
         Timestamp start_ts,
-        DB::HandleRange<HandleID> & handle_range);
+        DB::HandleRange & handle_range);
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
     void dumpRegionsByTable(const TableID table_id, size_t & count, InternalRegions * regions) const;

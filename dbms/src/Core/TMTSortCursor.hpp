@@ -2,7 +2,6 @@
 
 #include <Columns/ColumnsNumber.h>
 #include <Core/SortCursor.h>
-#include <Core/TMTPKType.h>
 
 namespace DB
 {
@@ -19,14 +18,13 @@ static_assert(sizeof(TMTCmpOptimizedRes) == 4);
 /// type of version column is uint64.
 /// type of delmark column is uint8.
 /// order of sorting will always be pk -> version -> delmark
-template <bool just_diff, bool only_pk, TMTPKType pk_type>
+template <bool just_diff, bool only_pk>
 inline TMTCmpOptimizedRes cmpTMTCursor(
     const ColumnRawPtrs & lsort_columns, const size_t lhs_pos, const ColumnRawPtrs & rsort_columns, const size_t rhs_pos)
 {
     TMTCmpOptimizedRes res{.all = 0};
 
     // PK
-    if constexpr (pk_type == TMTPKType::INT64)
     {
         auto h1 = static_cast<const ColumnInt64 *>(lsort_columns[0])->getElement(lhs_pos);
         auto h2 = static_cast<const ColumnInt64 *>(rsort_columns[0])->getElement(rhs_pos);
@@ -39,24 +37,6 @@ inline TMTCmpOptimizedRes cmpTMTCursor(
         {
             res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
         }
-    }
-    else if constexpr (pk_type == TMTPKType::UINT64)
-    {
-        auto h1 = static_cast<const ColumnUInt64 *>(lsort_columns[0])->getElement(lhs_pos);
-        auto h2 = static_cast<const ColumnUInt64 *>(rsort_columns[0])->getElement(rhs_pos);
-
-        if constexpr (just_diff)
-        {
-            res.diffs[0] = h1 != h2;
-        }
-        else
-        {
-            res.diffs[0] = h1 == h2 ? 0 : (h1 > h2 ? 1 : -1);
-        }
-    }
-    else
-    {
-        res.diffs[0] = lsort_columns[0]->compareAt(lhs_pos, rhs_pos, *(rsort_columns[0]), 0);
     }
 
     if constexpr (only_pk)
@@ -99,7 +79,7 @@ inline TMTCmpOptimizedRes cmpTMTCursor(
 
 
 /// optimize SortCursor for TMT engine which must have 3 column: PK, VERSION, DELMARK.
-template <bool only_pk = false, TMTPKType pk_type = TMTPKType::UNSPECIFIED>
+template <bool only_pk = false>
 struct TMTSortCursor
 {
     SortCursorImpl * impl = nullptr;
@@ -116,7 +96,7 @@ struct TMTSortCursor
 
     TMTCmpOptimizedRes cmpIgnOrder(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
     {
-        return cmpTMTCursor<false, only_pk, pk_type>(impl->sort_columns, lhs_pos, rhs.impl->sort_columns, rhs_pos);
+        return cmpTMTCursor<false, only_pk>(impl->sort_columns, lhs_pos, rhs.impl->sort_columns, rhs_pos);
     }
 
     bool greaterAt(const TMTSortCursor & rhs, const size_t lhs_pos, const size_t rhs_pos) const
@@ -180,12 +160,7 @@ struct TMTSortCursor
     bool operator<(const TMTSortCursor & rhs) const { return greater(rhs); }
 };
 
-using TMTSortCursorInt64PK = TMTSortCursor<true, TMTPKType::INT64>;
-using TMTSortCursorUInt64PK = TMTSortCursor<true, TMTPKType::UINT64>;
-using TMTSortCursorUnspecifiedPK = TMTSortCursor<true, TMTPKType::UNSPECIFIED>;
-
-using TMTSortCursorInt64 = TMTSortCursor<false, TMTPKType::INT64>;
-using TMTSortCursorUInt64 = TMTSortCursor<false, TMTPKType::UINT64>;
-using TMTSortCursorUnspecified = TMTSortCursor<false, TMTPKType::UNSPECIFIED>;
+using TMTSortCursorInt64PK = TMTSortCursor<true>;
+using TMTSortCursorInt64 = TMTSortCursor<false>;
 
 } // namespace DB

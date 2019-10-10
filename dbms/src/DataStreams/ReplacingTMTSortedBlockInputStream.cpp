@@ -5,16 +5,14 @@
 namespace DB
 {
 
-template <typename HandleType>
-void ReplacingTMTSortedBlockInputStream<HandleType>::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
+void ReplacingTMTSortedBlockInputStream::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
 {
     ++merged_rows;
     for (size_t i = 0; i < num_columns; ++i)
         merged_columns[i]->insertFrom(*(*selected_row.columns)[i], selected_row.row_num);
 }
 
-template <typename HandleType>
-Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
+Block ReplacingTMTSortedBlockInputStream::readImpl()
 {
     if (finished && deleted_by_range && log->debug())
     {
@@ -54,8 +52,7 @@ Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
     return header.cloneWithColumns(std::move(merged_columns));
 }
 
-template <typename HandleType>
-void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merged_columns)
+void ReplacingTMTSortedBlockInputStream::merge(MutableColumns & merged_columns)
 {
     size_t merged_rows = 0;
 
@@ -71,7 +68,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
 
         setPrimaryKeyRef(next_key, current);
 
-        const auto key_differs = cmpTMTCursor<true, false, TMTPKType::UNSPECIFIED>(
+        const auto key_differs = cmpTMTCursor<true, false>(
             *current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
 
         if ((key_differs.diffs[0] | key_differs.diffs[1]) == 0) // handle and tso are equal.
@@ -128,8 +125,7 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
     finished = true;
 }
 
-template <typename HandleType>
-bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOptimizedRes res)
+bool ReplacingTMTSortedBlockInputStream::shouldOutput(const TMTCmpOptimizedRes res)
 {
     if (isDefiniteDeleted())
     {
@@ -158,19 +154,17 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOp
     return false;
 }
 
-template <typename HandleType>
-bool ReplacingTMTSortedBlockInputStream<HandleType>::behindGcTso()
+bool ReplacingTMTSortedBlockInputStream::behindGcTso()
 {
     const ColumnUInt64 * column = static_cast<const ColumnUInt64 *>((*selected_row.columns)[version_column_number]);
     return column->getElement(selected_row.row_num) < gc_tso;
 }
 
-template <typename HandleType>
-bool ReplacingTMTSortedBlockInputStream<HandleType>::isDefiniteDeleted()
+bool ReplacingTMTSortedBlockInputStream::isDefiniteDeleted()
 {
     if (begin_handle_ranges.empty())
         return true;
-    Handle pk_handle = static_cast<HandleType>((*(*selected_row.columns)[pk_column_number]).getUInt(selected_row.row_num));
+    Handle pk_handle = static_cast<const ColumnInt64 *>((*selected_row.columns)[pk_column_number])->getElement(selected_row.row_num);
     int pa = std::upper_bound(begin_handle_ranges.begin(), begin_handle_ranges.end(), pk_handle) - begin_handle_ranges.begin();
     if (pa == 0)
         return true;
@@ -182,15 +176,13 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::isDefiniteDeleted()
     }
 }
 
-template <typename HandleType>
-bool ReplacingTMTSortedBlockInputStream<HandleType>::hasDeleteFlag()
+bool ReplacingTMTSortedBlockInputStream::hasDeleteFlag()
 {
     const ColumnUInt8 * column = static_cast<const ColumnUInt8 *>((*selected_row.columns)[del_column_number]);
     return MutableSupport::DelMark::isDel(column->getElement(selected_row.row_num));
 }
 
-template <typename HandleType>
-void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const char * msg, bool is_output)
+void ReplacingTMTSortedBlockInputStream::logRowGoing(const char * msg, bool is_output)
 {
     // Disable debug log
     return;
@@ -207,15 +199,11 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const char * ms
                    << ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") << ". why{" << msg << "}, output: " << is_output);
 }
 
-template <typename HandleType>
-void ReplacingTMTSortedBlockInputStream<HandleType>::initQueue()
+void ReplacingTMTSortedBlockInputStream::initQueue()
 {
     for (size_t i = 0; i < cursors.size(); ++i)
         if (!cursors[i].empty())
             tmt_queue.push(TMTSortCursorFull(&cursors[i]));
 }
-
-template class ReplacingTMTSortedBlockInputStream<Int64>;
-template class ReplacingTMTSortedBlockInputStream<UInt64>;
 
 } // namespace DB

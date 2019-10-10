@@ -14,9 +14,8 @@ extern const int LOGICAL_ERROR;
 
 static const std::string RegionDataMoverName = "RegionDataMover";
 
-template <typename HandleType>
 BlockInputStreamPtr createBlockInputStreamFromRange(
-    Context & context, const StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
+    Context & context, const StorageMergeTree & storage, const HandleRange & handle_range, const std::string & pk_name)
 {
     std::stringstream ss;
     ss << "SELRAW NOKVSTORE " << MutableSupport::version_column_name << ", " << MutableSupport::delmark_column_name << ", " << pk_name
@@ -26,7 +25,7 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
     if (handle_range.second.type == TiKVHandle::HandleIDType::NORMAL)
         ss << " < " << handle_range.second.handle_id << ")";
     else
-        ss << " <= " << std::numeric_limits<HandleType>::max() << ")";
+        ss << " <= " << std::numeric_limits<Int64>::max() << ")";
 
     std::string query = ss.str();
 
@@ -35,9 +34,8 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
     return executeQuery(query, context, true, QueryProcessingStage::Complete).in;
 }
 
-template <typename HandleType>
 void getHandleMapByRange(
-    Context & context, StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, HandleMap & output_data)
+    Context & context, StorageMergeTree & storage, const HandleRange & handle_range, HandleMap & output_data)
 {
     SortDescription pk_columns = storage.getData().getPrimarySortDescription();
     if (pk_columns.size() != 1)
@@ -89,9 +87,6 @@ void getHandleMapByRange(
         "[getHandleMapByRange] execute sql and handle data, cost "
             << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows << " rows");
 }
-
-template void getHandleMapByRange<Int64>(Context &, StorageMergeTree &, const HandleRange<Int64> &, HandleMap &);
-template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const HandleRange<UInt64> &, HandleMap &);
 
 void tryOptimizeStorageFinal(Context & context, TableID table_id)
 {

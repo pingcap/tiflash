@@ -12,7 +12,7 @@ namespace DB
 namespace TiKVRange
 {
 
-using Handle = TiKVHandle::Handle<HandleID>;
+using Handle = TiKVHandle::Handle;
 
 template <bool start>
 inline Handle getRangeHandle(const DecodedTiKVKey & key, const TableID table_id)
@@ -70,7 +70,7 @@ inline Handle getRangeHandle(const TiKVKey & tikv_key, const TableID table_id)
 }
 
 template <typename KeyType>
-inline HandleRange<HandleID> getHandleRangeByTable(const KeyType & start_key, const KeyType & end_key, const TableID table_id)
+inline HandleRange getHandleRangeByTable(const KeyType & start_key, const KeyType & end_key, const TableID table_id)
 {
     static_assert(std::is_same_v<KeyType, DecodedTiKVKey> || std::is_same_v<KeyType, TiKVKey>);
 

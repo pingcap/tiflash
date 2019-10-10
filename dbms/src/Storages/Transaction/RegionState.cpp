@@ -66,7 +66,7 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
 
 const std::pair<DecodedTiKVKey, DecodedTiKVKey> & RegionRangeKeys::rawKeys() const { return raw; }
 
-HandleRange<HandleID> RegionRangeKeys::getHandleRangeByTable(const TableID table_id) const
+HandleRange RegionRangeKeys::getHandleRangeByTable(const TableID table_id) const
 {
     return TiKVRange::getHandleRangeByTable(rawKeys().first, rawKeys().second, table_id);
 }

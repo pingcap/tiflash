@@ -3,20 +3,16 @@
 #include <DataStreams/MergingSortedBlockInputStream.h>
 #include <common/logger_useful.h>
 #include <Core/TMTSortCursor.hpp>
+#include <Storages/MergeTree/TMTMustColumns.h>
 
 namespace DB
 {
 
-template <TMTPKType pk_type>
 class TMTSortedBlockInputStream : public MergingSortedBlockInputStream
 {
 public:
-    TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, const size_t version_column_index_,
-        const size_t delmark_column_index_, size_t max_block_size_)
-        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, nullptr, true),
-          version_column_index(version_column_index_),
-          delmark_column_index(delmark_column_index_)
-    {}
+    TMTSortedBlockInputStream(const BlockInputStreams & inputs_, const SortDescription & description_, size_t max_block_size_)
+        : MergingSortedBlockInputStream(inputs_, description_, max_block_size_, 0, nullptr, true){}
 
     String getName() const override { return "TMTSortedBlockInputStream"; }
 
@@ -25,13 +21,9 @@ protected:
     void initQueue() override;
 
 private:
-    using TMTSortCursorPK = TMTSortCursor<true, pk_type>;
+    using TMTSortCursorPK = TMTSortCursor<true>;
     using TMTPKQueue = std::priority_queue<TMTSortCursorPK>;
     TMTPKQueue tmt_queue;
-
-    size_t version_column_index;
-    size_t delmark_column_index;
-
     Logger * log = &Logger::get("TMTSortedBlockInputStream");
 
     /// All data has been read.

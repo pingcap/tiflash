@@ -125,7 +125,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
     RegionVersion conf_version,
     bool resolve_locks,
     Timestamp start_ts,
-    DB::HandleRange<HandleID> & handle_range)
+    DB::HandleRange & handle_range)
 {
     if (!region)
         throw Exception("[RegionTable::readBlockByRegion] region is null", ErrorCodes::LOGICAL_ERROR);

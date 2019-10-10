@@ -39,7 +39,7 @@ public:
     const RegionRange & comparableKeys() const;
     static RegionRange makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key);
     const std::pair<DecodedTiKVKey, DecodedTiKVKey> & rawKeys() const;
-    HandleRange<HandleID> getHandleRangeByTable(const TableID table_id) const;
+    HandleRange getHandleRangeByTable(const TableID table_id) const;
     explicit RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key);
 
 private:

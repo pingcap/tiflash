@@ -43,10 +43,9 @@ static inline size_t computeMinMarksForSeek(const Settings & settings, const Mer
     return min_marks_for_seek;
 }
 
-template <typename TargetType>
 static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart & data_part,
-    const TiKVHandle::Handle<TargetType> & handle_begin,
-    const TiKVHandle::Handle<TargetType> & handle_end,
+    const TiKVHandle::Handle & handle_begin,
+    const TiKVHandle::Handle & handle_end,
     const MarkRanges & ori_mark_ranges,
     const size_t min_marks_for_seek,
     const Settings & settings)
@@ -56,11 +55,7 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
 
     if (data_part.tmt_property->initialized)
     {
-        TiKVHandle::Handle<TargetType> index_right_handle;
-        {
-            UInt64 tmp = data_part.tmt_property->max_pk.get<UInt64>();
-            index_right_handle = static_cast<TargetType>(tmp);
-        }
+        TiKVHandle::Handle index_right_handle = data_part.tmt_property->max_pk.get<Int64>();
         if (handle_begin > index_right_handle)
             return {};
     }
@@ -81,11 +76,11 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
         MarkRange range = ranges_stack.back();
         ranges_stack.pop_back();
 
-        TiKVHandle::Handle<TargetType> index_left_handle = static_cast<TargetType>(index[0]->getUInt(range.begin));
-        TiKVHandle::Handle<TargetType> index_right_handle = TiKVHandle::Handle<TargetType>::max;
+        TiKVHandle::Handle index_left_handle = index[0]->getInt(range.begin);
+        TiKVHandle::Handle index_right_handle = TiKVHandle::Handle::max;
 
         if (range.end != marks_count)
-            index_right_handle = static_cast<TargetType>(index[0]->getUInt(range.end));
+            index_right_handle = index[0]->getInt(range.end);
 
         if (handle_begin > index_right_handle || index_left_handle >= handle_end)
             continue;
@@ -112,11 +107,10 @@ static inline MarkRanges markRangesFromRegionRange(const MergeTreeData::DataPart
     return res;
 }
 
-template <typename TargetType>
 static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_data,
-    std::vector<std::pair<DB::HandleRange<TargetType>, size_t>> & handle_ranges,
+    std::vector<std::pair<DB::HandleRange, size_t>> & handle_ranges,
     std::vector<RangesInDataParts> & region_group_range_parts,
-    std::vector<DB::HandleRange<TargetType>> & region_group_handle_ranges,
+    std::vector<DB::HandleRange> & region_group_handle_ranges,
     const RangesInDataParts & parts_with_ranges,
     size_t & region_sum_marks,
     size_t & region_sum_ranges,
@@ -151,7 +145,7 @@ static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_d
         const auto & handle_range = handle_ranges[idx];
         for (const RangesInDataPart & ranges : parts_with_ranges)
         {
-            MarkRanges mark_ranges = markRangesFromRegionRange<TargetType>(
+            MarkRanges mark_ranges = markRangesFromRegionRange(
                 *ranges.data_part, handle_range.first.first, handle_range.first.second, ranges.ranges, min_marks_for_seek, settings);
 
             if (mark_ranges.empty())
@@ -166,14 +160,12 @@ static inline void computeHandleRanges(std::vector<std::deque<size_t>> & block_d
     }
 }
 
-template <TMTPKType pk_type>
-BlockInputStreamPtr makeMultiWayMergeSortInput(const BlockInputStreams & inputs, const SortDescription & description,
-    const size_t version_column_index, const size_t delmark_column_index, size_t max_block_size)
+BlockInputStreamPtr makeMultiWayMergeSortInput(const BlockInputStreams & inputs, const SortDescription & description, size_t max_block_size)
 {
-    if (pk_type != TMTPKType::UNSPECIFIED && inputs.size() == 1)
+    if (inputs.size() == 1)
         return std::make_shared<TMTSingleSortedBlockInputStream>(inputs[0]);
-    return std::make_shared<TMTSortedBlockInputStream<pk_type>>(
-        inputs, description, version_column_index, delmark_column_index, max_block_size);
+    return std::make_shared<TMTSortedBlockInputStream>(
+        inputs, description, max_block_size);
 };
 
 } // namespace DB

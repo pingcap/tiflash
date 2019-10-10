@@ -2,6 +2,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <common/logger_useful.h>
+#include <Storages/MergeTree/TMTMustColumns.h>
 
 namespace DB
 {
@@ -9,8 +10,8 @@ namespace DB
 class VersionFilterBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    VersionFilterBlockInputStream(const BlockInputStreamPtr & input_, const size_t version_column_index_, UInt64 filter_greater_version_)
-        : input(input_), version_column_index(version_column_index_), filter_greater_version(filter_greater_version_)
+    VersionFilterBlockInputStream(const BlockInputStreamPtr & input_, UInt64 filter_greater_version_)
+        : input(input_), filter_greater_version(filter_greater_version_)
     {}
 
 protected:
@@ -28,7 +29,6 @@ protected:
 
 private:
     BlockInputStreamPtr input;
-    const size_t version_column_index;
     const UInt64 filter_greater_version;
     Logger * log = &Logger::get("VersionFilterBlockInputStream");
 };
