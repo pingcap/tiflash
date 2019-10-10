@@ -83,7 +83,7 @@ bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, co
                 break;
             }
         }
-        if (!covered)
+        if (!covered && region_range.second > region_range.first)
             return false;
     }
     return true;
