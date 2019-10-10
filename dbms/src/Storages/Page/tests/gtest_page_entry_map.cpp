@@ -125,6 +125,55 @@ TEST_F(PageEntryMap_test, PutDel)
     ASSERT_EQ(map->find(2), std::nullopt);
 }
 
+TEST_F(PageEntryMap_test, IdempotentDel)
+{
+    PageEntry p0entry;
+    p0entry.file_id  = 1;
+    p0entry.checksum = 0x123;
+    map->put(0, p0entry);
+    {
+        ASSERT_NE(map->find(0), std::nullopt);
+        const PageEntry & entry = map->at(0);
+        EXPECT_EQ(entry.file_id, p0entry.file_id);
+        EXPECT_EQ(entry.checksum, p0entry.checksum);
+    }
+    map->ref(2, 0);
+    {
+        ASSERT_NE(map->find(2), std::nullopt);
+        const PageEntry & entry = map->at(2);
+        EXPECT_EQ(entry.file_id, p0entry.file_id);
+        EXPECT_EQ(entry.checksum, p0entry.checksum);
+    }
+
+    map->del(0);
+    {
+        // Should not found Page0, but Page2 is still available
+        ASSERT_EQ(map->find(0), std::nullopt);
+        auto entry = map->find(2);
+        ASSERT_TRUE(entry);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
+        entry = map->findNormalPageEntry(0);
+        ASSERT_TRUE(entry);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
+    }
+
+    // Del should be idempotent
+    map->del(0);
+    {
+        ASSERT_EQ(map->find(0), std::nullopt);
+        auto entry = map->find(2);
+        ASSERT_TRUE(entry);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
+        entry = map->findNormalPageEntry(0);
+        ASSERT_TRUE(entry);
+        EXPECT_EQ(entry->file_id, p0entry.file_id);
+        EXPECT_EQ(entry->checksum, p0entry.checksum);
+    }
+}
+
 TEST_F(PageEntryMap_test, UpdateRefPageEntry)
 {
     const PageId page_id = 0;

@@ -204,6 +204,82 @@ TEST_F(PageStorage_test, WriteReadAfterGc)
     }
 }
 
+TEST_F(PageStorage_test, IdempotentDelAndRef)
+{
+    const size_t buf_sz = 1024;
+    char         c_buff[buf_sz];
+
+    {
+        // Page1 should be written to PageFile{1, 0}
+        WriteBatch batch;
+        memset(c_buff, 0xf, buf_sz);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buf_sz);
+
+        storage->write(batch);
+    }
+
+    {
+        // RefPage 2 -> 1, Del Page 1 should be written to PageFile{2, 0}
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        batch.delPage(1);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1000, 0, buff, buf_sz);
+
+        storage->write(batch);
+    }
+
+    {
+        // Another RefPage 2 -> 1, Del Page 1 should be written to PageFile{3, 0}
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        batch.delPage(1);
+
+        storage->write(batch);
+    }
+
+    {
+        auto snap = storage->getSnapshot();
+        auto ref_entry = snap->version()->find(1);
+        ASSERT_FALSE(ref_entry);
+
+        ref_entry = snap->version()->find(2);
+        ASSERT_TRUE(ref_entry);
+        ASSERT_EQ(ref_entry->file_id, 1UL);
+        ASSERT_EQ(ref_entry->ref, 1UL);
+
+        auto normal_entry = snap->version()->findNormalPageEntry(1);
+        ASSERT_TRUE(normal_entry);
+        ASSERT_EQ(normal_entry->file_id, 1UL);
+        ASSERT_EQ(normal_entry->ref, 1UL);
+
+        // Point to the same entry
+        ASSERT_EQ(ref_entry->offset, normal_entry->offset);
+    }
+
+    storage = reopenWithConfig(config);
+
+    {
+        auto snap = storage->getSnapshot();
+        auto ref_entry = snap->version()->find(1);
+        ASSERT_FALSE(ref_entry);
+
+        ref_entry = snap->version()->find(2);
+        ASSERT_TRUE(ref_entry);
+        ASSERT_EQ(ref_entry->file_id, 1UL);
+        ASSERT_EQ(ref_entry->ref, 1UL);
+
+        auto normal_entry = snap->version()->findNormalPageEntry(1);
+        ASSERT_TRUE(normal_entry);
+        ASSERT_EQ(normal_entry->file_id, 1UL);
+        ASSERT_EQ(normal_entry->ref, 1UL);
+
+        // Point to the same entry
+        ASSERT_EQ(ref_entry->offset, normal_entry->offset);
+    }
+}
+
 TEST_F(PageStorage_test, GcMigrateValidRefPages)
 {
     const size_t buf_sz      = 1024;

@@ -3,6 +3,10 @@
 
 #include <type_traits>
 
+#define protected public
+#include <Storages/Page/mvcc/VersionSetWithDelta.h>
+#undef protected
+
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/FormattingChannel.h>
@@ -62,6 +66,7 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
         PageEntry       e;
         e.checksum = 0x456;
         edit.put(1, e);
+        edit.ref(2, 0);
         versions.apply(edit);
     }
     LOG_TRACE(&Logger::root(), "apply    B:" + versions.toDebugStringUnlocked());
@@ -69,8 +74,10 @@ TYPED_TEST_P(PageMapVersionSet_test, ApplyEdit)
     EXPECT_EQ(versions.size(), 1UL);
     auto entry = s2->version()->at(0);
     ASSERT_EQ(entry.checksum, 0x123UL);
+    ASSERT_EQ(entry.ref, 2UL);
     auto entry2 = s2->version()->at(1);
     ASSERT_EQ(entry2.checksum, 0x456UL);
+    ASSERT_EQ(entry2.ref, 1UL);
     s2.reset(); // release snapshot
     EXPECT_EQ(versions.size(), 1UL);
 }
@@ -225,7 +232,8 @@ namespace
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
-std::set<PageId> getNormalPageIDs(const PageEntriesVersionSet::SnapshotPtr &s)
+
+std::set<PageId> getNormalPageIDs(const PageEntriesVersionSet::SnapshotPtr & s)
 {
     std::set<PageId> ids;
     for (auto iter = s->version()->pages_cbegin(); iter != s->version()->pages_cend(); iter++)
@@ -233,10 +241,11 @@ std::set<PageId> getNormalPageIDs(const PageEntriesVersionSet::SnapshotPtr &s)
     return ids;
 }
 
-std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::SnapshotPtr &s)
+std::set<PageId> getNormalPageIDs(const PageEntriesVersionSetWithDelta::SnapshotPtr & s)
 {
     return s->version()->validNormalPageIds();
 }
+
 #pragma clang diagnostic pop
 
 } // namespace
@@ -246,10 +255,10 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     TypeParam versions(this->config_);
     if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
     {
+        // For PageEntriesVersionSet, we need a builder
         auto s1 = versions.getSnapshot();
 
         typename TypeParam::BuilderType builder(s1->version(), true, &Poco::Logger::root());
-
         {
             PageEntriesEdit edit;
             PageEntry       e;
@@ -271,6 +280,7 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     }
     else
     {
+        // For PageEntriesVersionSetWithDelta, we directly apply edit to versions
         {
             PageEntriesEdit edit;
             PageEntry       e;
@@ -305,12 +315,12 @@ TYPED_TEST_P(PageMapVersionSet_test, Restore)
     ASSERT_TRUE(valid_normal_page_ids.count(3) > 0);
 }
 
-TYPED_TEST_P(PageMapVersionSet_test, PutRefPage)
+TYPED_TEST_P(PageMapVersionSet_test, PutOrDelRefPage)
 {
     TypeParam versions(this->config_);
     {
         PageEntriesEdit edit;
-        PageEntry e;
+        PageEntry       e;
         e.checksum = 0xf;
         edit.put(2, e);
         versions.apply(edit);
@@ -324,12 +334,144 @@ TYPED_TEST_P(PageMapVersionSet_test, PutRefPage)
         edit.ref(3, 2);
         versions.apply(edit);
     }
-    auto s2 = versions.getSnapshot();
-    ASSERT_EQ(s2->version()->at(3).checksum, 0xfUL);
+    auto s2                      = versions.getSnapshot();
+    auto ensure_snapshot2_status = [&s2]() {
+        // Check the ref-count
+        auto entry3 = s2->version()->at(3);
+        ASSERT_EQ(entry3.checksum, 0xfUL);
+        ASSERT_EQ(entry3.ref, 2UL);
 
-    std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s2);
-    ASSERT_TRUE(valid_normal_page_ids.count(2) > 0);
-    ASSERT_FALSE(valid_normal_page_ids.count(3) > 0);
+        auto entry2 = s2->version()->at(2);
+        ASSERT_EQ(entry2.checksum, 0xfUL);
+        ASSERT_EQ(entry2.ref, 2UL);
+
+        auto normal_entry2 = s2->version()->findNormalPageEntry(2);
+        ASSERT_TRUE(normal_entry2);
+        ASSERT_EQ(normal_entry2->checksum, 0xfUL);
+        ASSERT_EQ(normal_entry2->ref, 2UL);
+
+        std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s2);
+        ASSERT_TRUE(valid_normal_page_ids.count(2) > 0);
+        ASSERT_FALSE(valid_normal_page_ids.count(3) > 0);
+    };
+    ensure_snapshot2_status();
+
+    // Del Page2
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        versions.apply(edit);
+    }
+    auto s3                      = versions.getSnapshot();
+    auto ensure_snapshot3_status = [&s3]() {
+        // Check that NormalPage2's ref-count is decreased.
+        auto entry3 = s3->version()->at(3);
+        ASSERT_EQ(entry3.checksum, 0xfUL);
+        ASSERT_EQ(entry3.ref, 1UL);
+
+        auto entry2 = s3->version()->find(2);
+        ASSERT_FALSE(entry2);
+
+        auto normal_entry2 = s3->version()->findNormalPageEntry(2);
+        ASSERT_TRUE(normal_entry2);
+        ASSERT_EQ(normal_entry2->checksum, 0xfUL);
+        ASSERT_EQ(normal_entry2->ref, 1UL);
+
+        std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s3);
+        ASSERT_TRUE(valid_normal_page_ids.count(2) > 0);
+        ASSERT_FALSE(valid_normal_page_ids.count(3) > 0);
+    };
+    ensure_snapshot3_status();
+
+    // Del RefPage3
+    {
+        PageEntriesEdit edit;
+        edit.del(3);
+        versions.apply(edit);
+    }
+    auto s4                      = versions.getSnapshot();
+    auto ensure_snapshot4_status = [&s4]() {
+        auto entry3 = s4->version()->find(3);
+        ASSERT_FALSE(entry3);
+
+        auto entry2 = s4->version()->find(2);
+        ASSERT_FALSE(entry2);
+
+        auto normal_entry2 = s4->version()->findNormalPageEntry(2);
+        if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSet>)
+        {
+            // For PageEntriesVersionSet, we delete the normal page
+            ASSERT_FALSE(normal_entry2);
+        }
+        else
+        {
+            // For PageEntriesVersionSetWithDelta, a tombstone is left.
+            ASSERT_TRUE(normal_entry2);
+            ASSERT_EQ(normal_entry2->checksum, 0xfUL);
+            ASSERT_TRUE(normal_entry2->isTombstone());
+        }
+
+        // We can not get 2 or 3 as normal page
+        std::set<PageId> valid_normal_page_ids = getNormalPageIDs(s4);
+        ASSERT_FALSE(valid_normal_page_ids.count(2) > 0);
+        ASSERT_FALSE(valid_normal_page_ids.count(3) > 0);
+    };
+    ensure_snapshot4_status();
+
+    // Test if one snapshot removed, other snapshot is not affected.
+    s3.reset();
+    ensure_snapshot4_status();
+    ensure_snapshot2_status();
+
+    s2.reset();
+    ensure_snapshot4_status();
+}
+
+TYPED_TEST_P(PageMapVersionSet_test, IdempotentDel)
+{
+    TypeParam versions(this->config_);
+    {
+        PageEntriesEdit edit;
+        PageEntry       e;
+        e.checksum = 0xf;
+        edit.put(2, e);
+        edit.ref(3, 2);
+        versions.apply(edit);
+    }
+    auto s1 = versions.getSnapshot();
+    ASSERT_EQ(s1->version()->at(2).checksum, 0xfUL);
+
+    // Del Page2
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        versions.apply(edit);
+    }
+    auto s2 = versions.getSnapshot();
+    {
+        auto ref_entry = s2->version()->at(3);
+        ASSERT_EQ(ref_entry.checksum, 0xfUL);
+        auto normal_entry = s2->version()->findNormalPageEntry(2);
+        ASSERT_TRUE(normal_entry);
+        ASSERT_EQ(normal_entry->ref, 1UL);
+        ASSERT_EQ(ref_entry.checksum, normal_entry->checksum);
+    }
+
+    // Del Page2 again, should be idempotent.
+    {
+        PageEntriesEdit edit;
+        edit.del(2);
+        versions.apply(edit);
+    }
+    auto s3 = versions.getSnapshot();
+    {
+        auto ref_entry = s3->version()->at(3);
+        ASSERT_EQ(ref_entry.checksum, 0xfUL);
+        auto normal_entry = s3->version()->findNormalPageEntry(2);
+        ASSERT_TRUE(normal_entry);
+        ASSERT_EQ(normal_entry->ref, 1UL);
+        ASSERT_EQ(ref_entry.checksum, normal_entry->checksum);
+    }
 }
 
 TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
@@ -617,11 +759,11 @@ namespace
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-function"
-String liveFilesToString(const std::set<PageFileIdAndLevel> &files)
+String                   liveFilesToString(const std::set<PageFileIdAndLevel> & files)
 {
     std::stringstream ss;
-    bool is_first = true;
-    for (const auto & file: files)
+    bool              is_first = true;
+    for (const auto & file : files)
     {
         if (!is_first)
         {
@@ -703,7 +845,8 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            GcConcurrencyDelPage,
                            GcPageMove,
                            GcConcurrencySetPage,
-                           PutRefPage,
+                           PutOrDelRefPage,
+                           IdempotentDel,
                            UpdateOnRefPage,
                            UpdateOnRefPage2,
                            IsRefId,
