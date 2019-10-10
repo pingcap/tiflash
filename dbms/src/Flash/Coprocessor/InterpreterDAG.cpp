@@ -47,7 +47,7 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
 {}
 
 template <typename HandleType>
-bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, std::vector<HandleRange<HandleType>> & region_ranges)
+bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, const std::vector<HandleRange<HandleType>> & region_ranges)
 {
     if (ranges.empty())
         return false;
@@ -72,10 +72,10 @@ bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, st
     }
     merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
 
-    for (auto & region_range : region_ranges)
+    for (const auto & region_range : region_ranges)
     {
         bool covered = false;
-        for (auto & range : merged_ranges)
+        for (const auto & range : merged_ranges)
         {
             if (region_range.first >= range.first && region_range.second <= range.second)
             {
