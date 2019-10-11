@@ -72,21 +72,22 @@ using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 struct SegmentSnapshot
 {
     DiskValueSpacePtr delta;
-    size_t            delta_rows;
-    size_t            delta_deletes;
+    size_t            delta_rows    = 0;
+    size_t            delta_deletes = 0;
 
+    SegmentSnapshot() = default;
     SegmentSnapshot(const DiskValueSpacePtr & delta_, size_t delta_rows_, size_t delta_deletes_)
         : delta{delta_}, delta_rows(delta_rows_), delta_deletes(delta_deletes_)
     {
     }
+
+    explicit operator bool() { return (bool)delta; }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by succeeding ranges.
 ///
 /// The data of stable value space is stored in "data" storage, while data of delta value space is stored in "log" storage.
 /// And all meta data is stored in "meta" storage.
-///
-/// TODO: Currently we don't support DDL, e.g. update column type. Will add it later.
 class Segment : private boost::noncopyable
 {
 public:
@@ -196,7 +197,6 @@ private:
 
     template <class IndexIterator = DeltaIndex::Iterator>
     BlockInputStreamPtr getPlacedStream(const PageReader &         data_page_reader,
-                                        const HandleRanges &       read_ranges,
                                         const ColumnDefines &      read_columns,
                                         const RSOperatorPtr &      filter,
                                         const DeltaValueSpacePtr & delta_value_space,

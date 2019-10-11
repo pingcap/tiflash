@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 #include "region_helper.h"
 
 #include <Storages/Transaction/CHTableHandle.h>
@@ -30,7 +32,7 @@ inline TiKVKey genIndex(const TableID tableId, const Int64 id)
     return RecordKVFormat::encodeAsTiKVKey(key);
 }
 
-int main(int, char **)
+TEST(TiKVKeyValue_test, PortedTests)
 {
     bool res = true;
     {
@@ -292,6 +294,84 @@ int main(int, char **)
 
         assert(range.comparableKeys().first.compare(RecordKVFormat::genKey(1, 2, 3)) == 0);
     }
+}
 
-    return res ? 0 : 1;
+namespace
+{
+
+// In python, we can convert a test case from `s`
+// 'range = parseTestCase({{{}}});\nASSERT_EQ(range, expected_range);'.format(','.join(map(lambda x: '{{{}}}'.format(','.join(map(lambda y: '0x{:02x}'.format(int(y, 16)), x.strip('[').strip(']').split()))), s.split(','))))
+
+HandleRange<HandleID> parseTestCase(std::vector<std::vector<u_char>> && seq)
+{
+    std::string start_key_s, end_key_s;
+    for (const auto ch : seq[0])
+        start_key_s += ch;
+    for (const auto ch : seq[1])
+        end_key_s += ch;
+    RegionRangeKeys range{RecordKVFormat::encodeAsTiKVKey(start_key_s), RecordKVFormat::encodeAsTiKVKey(end_key_s)};
+    return range.getHandleRangeByTable(45);
+}
+
+HandleRange<HandleID> parseTestCase2(std::vector<std::vector<u_char>> && seq)
+{
+    std::string start_key_s, end_key_s;
+    for (const auto ch : seq[0])
+        start_key_s += ch;
+    for (const auto ch : seq[1])
+        end_key_s += ch;
+    RegionRangeKeys range{TiKVKey::copyFrom(start_key_s), TiKVKey::copyFrom(end_key_s)};
+    return range.getHandleRangeByTable(45);
+}
+
+std::string rangeToString(const HandleRange<HandleID> &r)
+{
+    std::stringstream ss;
+    ss << "[" << r.first.toString() << "," << r.second.toString() << ")";
+    return ss.str();
+}
+
+} // namespace
+
+TEST(RegionRange_test, GetHandleRangeByTableID)
+try
+{
+    HandleRange<HandleID> range;
+    HandleRange<HandleID> expected_range;
+
+    // clang-format off
+    range = parseTestCase({{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x2D,},{}});
+    expected_range = {TiKVHandle::Handle<HandleID>::normal_min, TiKVHandle::Handle<HandleID>::max};
+    EXPECT_EQ(range, expected_range) << rangeToString(range) << " <-> " << rangeToString(expected_range);
+
+    range = parseTestCase({{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x2d,0x5f,0x69,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x01,0x03,0x80,0x00,0x00,0x00,0x00,0x5a,0x0f,0x00,0x03,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x02},{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x2d,0x5f,0x72,0x80,0x00,0x00,0x00,0x00,0x00,0xaa,0x40}});
+    expected_range = {TiKVHandle::Handle<HandleID>::normal_min, 43584};
+    EXPECT_EQ(range, expected_range) << rangeToString(range) << " <-> " << rangeToString(expected_range);
+
+    range = parseTestCase({{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x2d,0x5f,0x72,0x80,0x00,0x00,0x00,0x00,0x00,0xaa,0x40},{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x2d,0x5f,0x72,0x80,0x00,0x00,0x00,0x00,0x02,0x21,0x40}});
+    expected_range = {43584, 139584};
+    EXPECT_EQ(range, expected_range) << rangeToString(range) << " <-> " << rangeToString(expected_range);
+
+    range = parseTestCase({{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x2d,0x5f,0x72,0x80,0x00,0x00,0x00,0x00,0x10,0xc7,0x40},{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0x2d,0x5f,0x72,0x80,0x00,0x00,0x00,0x00,0x12,0x3e,0x40}});
+    expected_range = {1099584, 1195584};
+    EXPECT_EQ(range, expected_range) << rangeToString(range) << " <-> " << rangeToString(expected_range);
+
+
+    // [74 80 0 0 0 0 0 0 ff 2d 5f 69 80 0 0 0 0 ff 0 0 1 3 80 0 0 0 ff 0 5a cf 64 3 80 0 0 ff 0 0 0 0 2 0 0 0 fc],[74 80 0 0 0 0 0 0 ff 2d 5f 72 80 0 0 0 0 ff 0 b8 b 0 0 0 0 0 fa]
+    range = parseTestCase2({{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0x2d,0x5f,0x69,0x80,0x00,0x00,0x00,0x00,0xff,0x00,0x00,0x01,0x03,0x80,0x00,0x00,0x00,0xff,0x00,0x5a,0xcf,0x64,0x03,0x80,0x00,0x00,0xff,0x00,0x00,0x00,0x00,0x02,0x00,0x00,0x00,0xfc},{0x74,0x80,0x00,0x00,0x00,0x00,0x00,0x00,0xff,0x2d,0x5f,0x72,0x80,0x00,0x00,0x00,0x00,0xff,0x00,0xb8,0x0b,0x00,0x00,0x00,0x00,0x00,0xfa}});
+    expected_range = {TiKVHandle::Handle<HandleID>::normal_min, 47115};
+    EXPECT_EQ(range, expected_range) << rangeToString(range) << " <-> " << rangeToString(expected_range);
+
+    // clang-format on
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
 }
