@@ -53,7 +53,8 @@ grpc::Status FlashService::BatchCommands(
 
         tikvpb::BatchCommandsResponse response;
         BatchCommandsContext batch_commands_context(
-            context, [this](grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); }, *grpc_context);
+            context, [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
+            *grpc_context);
         BatchCommandsHandler batch_commands_handler(batch_commands_context, request, response);
         auto ret = batch_commands_handler.execute();
         if (!ret.ok())
@@ -75,22 +76,20 @@ grpc::Status FlashService::BatchCommands(
     return grpc::Status::OK;
 }
 
-String getClientMetaVarWithDefault(grpc::ServerContext * grpc_context, const String & name, const String & default_val)
+String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {
-    if (grpc_context->client_metadata().count(name) != 1)
-        return default_val;
-    else
-        return String(grpc_context->client_metadata().find(name)->second.data());
+    if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
+        return it->second.data();
+    return default_val;
 }
 
-std::tuple<Context, grpc::Status> FlashService::createDBContext(grpc::ServerContext * grpc_context)
+std::tuple<Context, grpc::Status> FlashService::createDBContext(const grpc::ServerContext * grpc_context) const
 {
     /// Create DB context.
     Context context = server.context();
     context.setGlobalContext(server.context());
 
     /// Set a bunch of client information.
-    auto client_meta = grpc_context->client_metadata();
     String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
     context.setCurrentQueryId(query_id);
     ClientInfo & client_info = context.getClientInfo();

@@ -1,6 +1,5 @@
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
-#include <common/ThreadPool.h>
 
 namespace DB
 {
@@ -10,37 +9,39 @@ BatchCommandsHandler::BatchCommandsHandler(BatchCommandsContext & batch_commands
     : batch_commands_context(batch_commands_context_), request(request_), response(response_), log(&Logger::get("BatchCommandsHandler"))
 {}
 
+ThreadPool::Job BatchCommandsHandler::handleCommandJob(
+    const tikvpb::BatchCommandsRequest::Request & req, tikvpb::BatchCommandsResponse::Response & resp, grpc::Status & ret) const
+{
+    return [&]() {
+        if (!req.has_coprocessor())
+        {
+            ret = grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+            return;
+        }
+
+        const auto & cop_req = req.coprocessor();
+        auto cop_resp = resp.mutable_coprocessor();
+
+        auto [context, status] = batch_commands_context.db_context_creation_func(&batch_commands_context.grpc_server_context);
+        if (!status.ok())
+        {
+            ret = status;
+            return;
+        }
+
+        CoprocessorContext cop_context(context, cop_req.context(), batch_commands_context.grpc_server_context);
+        CoprocessorHandler cop_handler(cop_context, &cop_req, cop_resp);
+
+        ret = cop_handler.execute();
+    };
+}
+
 grpc::Status BatchCommandsHandler::execute()
 {
     if (request.requests_size() == 0)
         return grpc::Status::OK;
 
     // TODO: Fill transport_layer_load into BatchCommandsResponse.
-
-    auto command_handler_func
-        = [](BatchCommandsContext::DBContextCreationFunc db_context_creation_func, grpc::ServerContext * grpc_server_context,
-              const tikvpb::BatchCommandsRequest::Request & req, tikvpb::BatchCommandsResponse::Response & resp, grpc::Status & ret) {
-              if (!req.has_coprocessor())
-              {
-                  ret = grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-                  return;
-              }
-
-              const auto & cop_req = req.coprocessor();
-              auto cop_resp = resp.mutable_coprocessor();
-
-              auto [context, status] = db_context_creation_func(grpc_server_context);
-              if (!status.ok())
-              {
-                  ret = status;
-                  return;
-              }
-
-              CoprocessorContext cop_context(context, cop_req.context(), *grpc_server_context);
-              CoprocessorHandler cop_handler(cop_context, &cop_req, cop_resp);
-
-              ret = cop_handler.execute();
-          };
 
     /// Shortcut for only one request by not going to thread pool.
     if (request.requests_size() == 1)
@@ -51,7 +52,7 @@ grpc::Status BatchCommandsHandler::execute()
         auto resp = response.add_responses();
         response.add_request_ids(request.request_ids(0));
         auto ret = grpc::Status::OK;
-        command_handler_func(batch_commands_context.db_context_creation_func, &batch_commands_context.grpc_server_context, req, *resp, ret);
+        handleCommandJob(req, *resp, ret)();
         return ret;
     }
 
@@ -65,7 +66,7 @@ grpc::Status BatchCommandsHandler::execute()
 
     ThreadPool thread_pool(max_threads);
 
-    std::vector<grpc::Status> rets;
+    std::vector<grpc::Status> rets(request.requests_size());
     size_t i = 0;
 
     for (const auto & req : request.requests())
@@ -73,10 +74,8 @@ grpc::Status BatchCommandsHandler::execute()
         auto resp = response.add_responses();
         response.add_request_ids(request.request_ids(i++));
         rets.emplace_back(grpc::Status::OK);
-        thread_pool.schedule([&]() {
-            command_handler_func(
-                batch_commands_context.db_context_creation_func, &batch_commands_context.grpc_server_context, req, *resp, rets.back());
-        });
+
+        thread_pool.schedule(handleCommandJob(req, *resp, rets.back()));
     }
 
     thread_pool.wait();
@@ -85,7 +84,10 @@ grpc::Status BatchCommandsHandler::execute()
     for (const auto & ret : rets)
     {
         if (!ret.ok())
+        {
+            response.Clear();
             return ret;
+        }
     }
 
     return grpc::Status::OK;
