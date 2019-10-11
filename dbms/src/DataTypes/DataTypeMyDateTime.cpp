@@ -20,7 +20,7 @@ DataTypeMyDateTime::DataTypeMyDateTime(int fraction_)
 {
     fraction = fraction_;
     if (fraction < 0 || fraction > 6)
-        throw Exception("fraction must >= 0 and < 6", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        throw Exception("fraction must >= 0 and <= 6", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
 void DataTypeMyDateTime::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
