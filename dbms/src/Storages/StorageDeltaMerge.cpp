@@ -5,6 +5,7 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageTinyLog.h>
@@ -377,10 +378,6 @@ BlockInputStreams StorageDeltaMerge::read( //
     }
 
 
-    HandleRanges ranges;
-
-    ranges.emplace_back(DB::DM::HandleRange::newAll());
-
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
     if (select_query.raw_for_mutable)
         return store->readRaw(context, context.getSettingsRef(), to_read, num_streams);
@@ -407,6 +404,26 @@ BlockInputStreams StorageDeltaMerge::read( //
             /// Learner read.
             doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, tmt, log);
         }
+
+        HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
+
+#ifndef NDEBUG
+        {
+            std::stringstream ss;
+            for (const auto &region: mvcc_query_info.regions_query_info)
+            {
+                const auto & range = region.range_in_table;
+                ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+            }
+            LOG_TRACE(log, "reading ranges: orig: " << ss.str());
+        }
+        {
+            std::stringstream ss;
+            for (const auto &range : ranges)
+                ss << range.toString() << ",";
+            LOG_TRACE(log, "reading ranges: " << ss.str());
+        }
+#endif
 
         return store->read(
             context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso, max_block_size);
