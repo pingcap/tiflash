@@ -218,6 +218,9 @@ void Segment::applyAppendTask(const OpContext & opc, const AppendTaskPtr & task,
 
 void Segment::check(DMContext & dm_context, const String & when) const
 {
+    // This method is broken.
+    if (true)
+        return;
     auto & handle = dm_context.handle_column;
 
     size_t stable_rows = stable->num_rows();
@@ -233,7 +236,6 @@ void Segment::check(DMContext & dm_context, const String & when) const
                                   << DB::toString(delta_tree->numInserts()) + ", deletes:" << DB::toString(delta_tree->numDeletes()));
 
     auto stream = getPlacedStream(storage_snapshot.data_reader,
-                                  {range},
                                   read_info.read_columns,
                                   EMPTY_FILTER,
                                   read_info.delta_value_space,
@@ -279,16 +281,38 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
 {
     auto & handle    = dm_context.handle_column;
     auto   read_info = getReadInfo<true>(dm_context, segment_snap, storage_snaps, columns_to_read);
-    auto   stream    = getPlacedStream(storage_snaps.data_reader,
-                                  read_ranges,
-                                  read_info.read_columns,
-                                  filter,
-                                  read_info.delta_value_space,
-                                  read_info.index_begin,
-                                  read_info.index_end,
-                                  expected_block_size);
-    stream           = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, handle, max_version);
-    return stream;
+
+    auto create_stream = [&](const HandleRange & read_range) {
+        auto stream = getPlacedStream(storage_snaps.data_reader,
+                                      read_info.read_columns,
+                                      filter,
+                                      read_info.delta_value_space,
+                                      read_info.index_begin,
+                                      read_info.index_end,
+                                      expected_block_size);
+        stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range, 0);
+        return std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, handle, max_version);
+    };
+
+    if (read_ranges.size() == 1)
+    {
+        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(1) << " ranges");
+        return create_stream(range.shrink(read_ranges[0]));
+    }
+    else
+    {
+        BlockInputStreams streams;
+        for (auto & read_range : read_ranges)
+        {
+            HandleRange real_range = range.shrink(read_range);
+            if (!real_range.none())
+                streams.push_back(create_stream(real_range));
+        }
+
+        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(streams.size()) << " ranges");
+
+        return std::make_shared<ConcatBlockInputStream>(streams);
+    }
 }
 
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_context,
@@ -315,20 +339,16 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
     }
 
     BlockInputStreamPtr delta_stream = std::make_shared<ChunkBlockInputStream>(delta_snap->getChunks(), //
-                                                                               0,
-                                                                               HandleRange::newAll(),
                                                                                new_columns_to_read,
                                                                                storage_snaps.log_reader,
                                                                                EMPTY_FILTER);
-    delta_stream                     = std::make_shared<DMHandleFilterBlockInputStream>(delta_stream, range, 0, false);
+    delta_stream                     = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
 
     BlockInputStreamPtr stable_stream = std::make_shared<ChunkBlockInputStream>(stable->getChunks(), //
-                                                                                0,
-                                                                                range,
                                                                                 new_columns_to_read,
                                                                                 storage_snaps.data_reader,
                                                                                 EMPTY_FILTER);
-    stable_stream                     = std::make_shared<DMHandleFilterBlockInputStream>(stable_stream, range, 0, true);
+    stable_stream                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(stable_stream, range, 0);
 
     BlockInputStreams streams;
     streams.push_back(delta_stream);
@@ -423,7 +443,6 @@ SegmentPtr Segment::flushDelta(DMContext & dm_context, RemoveWriteBatches & remo
 
     auto read_info   = getReadInfo<false>(dm_context, {delta, delta->num_rows(), delta->num_deletes()}, storage_snapshot, columns);
     auto data_stream = getPlacedStream(storage_snapshot.data_reader,
-                                       {range},
                                        read_info.read_columns,
                                        EMPTY_FILTER,
                                        read_info.delta_value_space,
@@ -554,7 +573,6 @@ ColumnDefines Segment::arrangeReadColumns(const ColumnDefine & handle, const Col
 
 template <class IndexIterator>
 BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_page_reader,
-                                             const HandleRanges &       read_ranges,
                                              const ColumnDefines &      read_columns,
                                              const RSOperatorPtr &      filter,
                                              const DeltaValueSpacePtr & delta_value_space,
@@ -562,40 +580,14 @@ BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_pag
                                              const IndexIterator &      delta_index_end,
                                              size_t                     expected_block_size) const
 {
-    auto placed_stream_creator = [&](const HandleRange & read_range) {
-        auto stable_input_stream
-            = std::make_shared<ChunkBlockInputStream>(stable->getChunks(), 0, read_range, read_columns, data_page_reader, filter);
-        return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator>>( //
-            0,
-            read_range,
-            stable_input_stream,
-            delta_value_space,
-            delta_index_begin,
-            delta_index_end,
-            expected_block_size);
-    };
 
-
-    if (read_ranges.size() == 1)
-    {
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(1) << " ranges");
-        const HandleRange real_range = range.shrink(read_ranges[0]);
-        return placed_stream_creator(real_range);
-    }
-    else
-    {
-        BlockInputStreams streams;
-        for (auto & read_range : read_ranges)
-        {
-            HandleRange real_range = range.shrink(read_range);
-            if (!real_range.none())
-                streams.push_back(placed_stream_creator(real_range));
-        }
-
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(streams.size()) << " ranges");
-
-        return std::make_shared<ConcatBlockInputStream>(streams);
-    }
+    auto stable_input_stream = std::make_shared<ChunkBlockInputStream>(stable->getChunks(), read_columns, data_page_reader, filter);
+    return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator>>( //
+        stable_input_stream,
+        delta_value_space,
+        delta_index_begin,
+        delta_index_end,
+        expected_block_size);
 }
 
 Handle Segment::getSplitPointFast(DMContext & dm_context, const PageReader & data_page_reader) const
@@ -616,7 +608,6 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const PageReader & dat
 
     auto & handle = dm_context.handle_column;
     auto   stream = getPlacedStream(data_page_reader,
-                                  {range},
                                   {dm_context.handle_column},
                                   EMPTY_FILTER,
                                   read_info.delta_value_space,
@@ -739,13 +730,13 @@ SegmentPair Segment::doSplit(DMContext &          dm_context,
     {
         // Write my data
         BlockInputStreamPtr my_data = getPlacedStream(data_page_reader,
-                                                      {my_range},
                                                       read_info.read_columns,
                                                       EMPTY_FILTER,
                                                       read_info.delta_value_space,
                                                       read_info.index_begin,
                                                       read_info.index_end,
                                                       STABLE_CHUNK_ROWS);
+        my_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data  = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
         auto tmp = DiskValueSpace::writeChunks(opc, my_data);
         my_new_stable_chunks.swap(tmp);
@@ -754,13 +745,13 @@ SegmentPair Segment::doSplit(DMContext &          dm_context,
     {
         // Write new segment's data
         BlockInputStreamPtr other_data = getPlacedStream(data_page_reader,
-                                                         {other_range},
                                                          read_info.read_columns,
                                                          EMPTY_FILTER,
                                                          read_info.delta_value_space,
                                                          read_info.index_begin,
                                                          read_info.index_end,
                                                          STABLE_CHUNK_ROWS);
+        other_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
         auto tmp   = DiskValueSpace::writeChunks(opc, other_data);
         other_new_stable_chunks.swap(tmp);
@@ -863,23 +854,23 @@ SegmentPtr Segment::doMerge(DMContext &          dm_context,
     Chunks new_stable_chunks;
     {
         BlockInputStreamPtr left_data = left->getPlacedStream(data_page_reader,
-                                                              {left->range},
                                                               left_read_info.read_columns,
                                                               EMPTY_FILTER,
                                                               left_read_info.delta_value_space,
                                                               left_read_info.index_begin,
                                                               left_read_info.index_end,
                                                               STABLE_CHUNK_ROWS);
+        left_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(left_data, left->range, 0);
         left_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(left_data, handle, min_version);
 
         BlockInputStreamPtr right_data = right->getPlacedStream(data_page_reader,
-                                                                {right->range},
                                                                 right_read_info.read_columns,
                                                                 EMPTY_FILTER,
                                                                 right_read_info.delta_value_space,
                                                                 right_read_info.index_begin,
                                                                 right_read_info.index_end,
                                                                 STABLE_CHUNK_ROWS);
+        right_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(right_data, right->range, 0);
         right_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(right_data, handle, min_version);
 
         BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams({left_data, right_data}));
@@ -955,7 +946,7 @@ SegmentPtr Segment::reset(DMContext & dm_context, BlockInputStreamPtr & input_st
     new_me->delta->setChunks({}, meta_wb, remove_wbs.log);
     new_me->stable->setChunks(std::move(new_stable_chunks), meta_wb, remove_wbs.data);
 
-    // Commit meta updates.
+    // Commit updates.
     storage_pool.meta().write(meta_wb);
 
     return new_me;
@@ -1008,7 +999,6 @@ void Segment::placeUpsert(const DMContext &          dm_context,
 
     BlockInputStreamPtr merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
         data_page_reader,
-        {range},
         {handle, getVersionColumnDefine()},
         EMPTY_FILTER,
         delta_value_space,
@@ -1039,13 +1029,15 @@ void Segment::placeDelete(const DMContext &          dm_context,
     {
         BlockInputStreamPtr delete_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
             data_page_reader,
-            {delete_range},
             {handle, getVersionColumnDefine()},
-            EMPTY_FILTER,
+            withHanleRange(EMPTY_FILTER, delete_range),
             delta_value_space,
             delta_index_begin,
             delta_index_end,
             DEFAULT_BLOCK_SIZE);
+
+        delete_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(delete_stream, delete_range, 0);
+
         // Try to merge into big block. 128 MB should be enough.
         SquashingBlockInputStream squashed_delete_stream(delete_stream, 0, 128 * (1UL << 20));
 
@@ -1063,7 +1055,6 @@ void Segment::placeDelete(const DMContext &          dm_context,
     {
         BlockInputStreamPtr merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
             data_page_reader,
-            {range},
             {handle, getVersionColumnDefine()},
             EMPTY_FILTER,
             delta_value_space,
