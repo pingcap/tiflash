@@ -19,9 +19,9 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
     Context & context, const StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
 {
     std::stringstream ss;
-    ss << "SELRAW NOKVSTORE " << MutableSupport::version_column_name << ", " << MutableSupport::delmark_column_name << ", " << pk_name
-       << " FROM " << storage.getDatabaseName() << "." << storage.getTableName() << " WHERE (" << handle_range.first.handle_id
-       << " <= " << pk_name << ") AND (" << pk_name;
+    ss << "SELRAW NOKVSTORE `" << MutableSupport::version_column_name << "`, `" << MutableSupport::delmark_column_name << "`, `" << pk_name
+       << "` FROM `" << storage.getDatabaseName() << "`.`" << storage.getTableName() << "` WHERE (" << handle_range.first.handle_id
+       << " <= `" << pk_name << "`) AND (`" << pk_name << "`";
 
     if (handle_range.second.type == TiKVHandle::HandleIDType::NORMAL)
         ss << " < " << handle_range.second.handle_id << ")";
