@@ -83,14 +83,14 @@ inline Block filterUnsorted(const HandleRange & handle_range, Block && block, si
 }
 } // namespace HandleFilter
 
+template <bool is_block_sorted>
 class DMHandleFilterBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     DMHandleFilterBlockInputStream(const BlockInputStreamPtr & input,
                                    HandleRange                 handle_range_,
-                                   size_t                      handle_col_pos_,
-                                   bool                        is_block_sorted_)
-        : handle_range(handle_range_), handle_col_pos(handle_col_pos_), is_block_sorted(is_block_sorted_)
+                                   size_t                      handle_col_pos_)
+        : handle_range(handle_range_), handle_col_pos(handle_col_pos_)
     {
         children.push_back(input);
     }
@@ -120,7 +120,6 @@ protected:
 private:
     HandleRange handle_range;
     size_t      handle_col_pos;
-    bool        is_block_sorted;
 };
 
 } // namespace DM

@@ -20,8 +20,11 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DummyDeltaMergeBlockInputStream.h>
 #include <Storages/DeltaMerge/DummyDeltaMergeBlockOutputStream.h>
+#include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeDummy.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 
 namespace DB
 {
@@ -213,11 +216,13 @@ try
     query_info.mvcc_query_info                = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = global_ctx.getSettingsRef().resolve_locks;
     query_info.mvcc_query_info->read_tso      = global_ctx.getSettingsRef().read_tso;
-    BlockInputStreamPtr dms                   = storage->read(column_names, query_info, global_ctx, stage2, 8192, 1)[0];
-    dms->readPrefix();
+    BlockInputStreams ins                     = storage->read(column_names, query_info, global_ctx, stage2, 8192, 1);
+    ASSERT_EQ(ins.size(), 1UL);
+    BlockInputStreamPtr in = ins[0];
+    in->readPrefix();
 
     size_t num_rows_read = 0;
-    while (Block block = dms->read())
+    while (Block block = in->read())
     {
         num_rows_read += block.rows();
         for (auto & iter : block)
@@ -236,7 +241,7 @@ try
             }
         }
     }
-    dms->readSuffix();
+    in->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
 
 
@@ -249,6 +254,85 @@ catch (const Exception & e)
     std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
 
     throw;
+}
+
+
+TEST(StorageDeltaMerge_internal_test, GetMergedQueryRanges)
+{
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = std::make_pair(100, 200);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(200, 250);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(300, 400);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(425, 475);
+    regions.emplace_back(region);
+
+    auto ranges = ::DB::getQueryRanges(regions);
+    ASSERT_EQ(ranges.size(), 3UL);
+    ASSERT_EQ(ranges[0], ::DB::DM::HandleRange(100, 250));
+    ASSERT_EQ(ranges[1], ::DB::DM::HandleRange(300, 400));
+    ASSERT_EQ(ranges[2], ::DB::DM::HandleRange(425, 475));
+}
+
+TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
+{
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = std::make_pair(2360148,2456148);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(1961680,2057680);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2264148,2360148);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2057680,2153680);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2153680,2264148);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2552148,2662532);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2758532,2854532);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2854532,2950532);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2456148,2552148);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(2662532,2758532);
+    regions.emplace_back(region);
+
+    auto ranges = ::DB::getQueryRanges(regions);
+    ASSERT_EQ(ranges.size(), 1UL);
+    ASSERT_EQ(ranges[0], ::DB::DM::HandleRange(1961680, 2950532)) << ranges[0].toString();
+}
+
+TEST(StorageDeltaMerge_internal_test, GetFullQueryRanges)
+{
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = {TiKVHandle::Handle<HandleID>::normal_min, TiKVHandle::Handle<HandleID>::max};
+    regions.emplace_back(region);
+
+    auto ranges = ::DB::getQueryRanges(regions);
+    ASSERT_EQ(ranges.size(), 1UL);
+    const auto full_range = ::DB::DM::HandleRange::newAll();
+    ASSERT_EQ(ranges[0], full_range);
+}
+
+TEST(StorageDeltaMerge_internal_test, OverlapQueryRanges)
+{
+    MvccQueryInfo::RegionsQueryInfo regions;
+    RegionQueryInfo                 region;
+    region.range_in_table = std::make_pair(100, 200);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(150, 250);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(300, 400);
+    regions.emplace_back(region);
+    region.range_in_table = std::make_pair(425, 475);
+
+    ASSERT_ANY_THROW(auto ranges = ::DB::getQueryRanges(regions));
 }
 
 } // namespace tests

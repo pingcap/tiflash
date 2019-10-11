@@ -37,6 +37,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
 
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
@@ -793,6 +794,14 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 const auto & epoch = region.region_epoch();
                 info.version = epoch.version();
                 info.conf_version = epoch.conf_ver();
+                if (const auto & managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage))
+                {
+                    // Extract the handle range according to current table
+                    TiKVKey start_key = RecordKVFormat::encodeAsTiKVKey(region.start_key());
+                    TiKVKey end_key = RecordKVFormat::encodeAsTiKVKey(region.end_key());
+                    RegionRangeKeys region_range(std::move(start_key), std::move(end_key));
+                    info.range_in_table = region_range.getHandleRangeByTable(managed_storage->getTableInfo().id);
+                }
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
 
