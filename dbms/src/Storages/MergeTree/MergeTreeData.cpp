@@ -153,7 +153,7 @@ MergeTreeData::MergeTreeData(
 
     auto path_exists = Poco::File(full_path).exists();
     /// Creating directories, if not exist.
-    for (const String & path : context.getAllPath())
+    for (const String & path : context.getPartPathSelector().getAllPath())
     {
         String candidate_path = getDataPartsPath(path);
         Poco::File(candidate_path).createDirectories();
@@ -445,7 +445,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
     Strings part_file_names;
     Strings part_file_parent_paths;
     Poco::DirectoryIterator end;
-    for (const auto & path : context.getAllPath())
+    for (const auto & path : context.getPartPathSelector().getAllPath())
     {
         String data_path = getDataPartsPath(path);
         LOG_DEBUG(log, "Loading data parts from path: " << data_path);
@@ -653,7 +653,7 @@ void MergeTreeData::clearOldTemporaryDirectories(ssize_t custom_directories_life
         : current_time - settings.temporary_directories_lifetime.totalSeconds();
 
     /// Delete temporary directories older than a day.
-    for (auto & path : context.getAllPath())
+    for (auto & path : context.getPartPathSelector().getAllPath())
     {
         Poco::DirectoryIterator end;
         String storage_path = getDataPartsPath(path);
@@ -812,7 +812,7 @@ void MergeTreeData::dropAllData()
 
     LOG_TRACE(log, "dropAllData: removing data from filesystem.");
 
-    for (const auto & path : context.getAllPath())
+    for (const auto & path : context.getPartPathSelector().getAllPath())
     {
         Poco::File(getDataPartsPath(path)).remove(true);
     }
@@ -2065,7 +2065,7 @@ size_t MergeTreeData::getPartitionSize(const std::string & partition_id) const
 
     Poco::DirectoryIterator end;
 
-    for (const auto & path : context.getAllPath())
+    for (const auto & path : context.getPartPathSelector().getAllPath())
     {
         String parts_path = getDataPartsPath(path);
         for (Poco::DirectoryIterator it(parts_path); it != end; ++it)

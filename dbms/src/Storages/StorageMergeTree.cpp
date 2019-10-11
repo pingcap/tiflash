@@ -291,7 +291,7 @@ void StorageMergeTree::rename(const String & new_path_to_db, const String & new_
 
     data.setPath(new_full_path);
 
-    for (auto & path : context.getAllPath())
+    for (auto & path : context.getPartPathSelector().getAllPath())
     {
         std::string orig_parts_path = path + "data/" + escapeForFileName(data.database_name) + '/' + escapeForFileName(data.table_name) + '/';
         std::string new_parts_path = path + "data/" + escapeForFileName(new_database_name) + '/' + escapeForFileName(new_table_name) + '/';
@@ -490,7 +490,7 @@ bool StorageMergeTree::merge(
     auto structure_lock = lockStructure(true, __PRETTY_FUNCTION__);
 
     size_t disk_space = DiskSpaceMonitor::getUnreservedFreeSpace(full_path);
-    for (const auto & path : context.getAllPath())
+    for (const auto & path : context.getPartPathSelector().getAllPath())
     {
         size_t available_space = DiskSpaceMonitor::getUnreservedFreeSpace(path);
         if (available_space <= disk_space)

@@ -77,7 +77,9 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
                 continue;
             {
                 auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-                auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
+                auto table_lock = merge_tree->lockStructure(false, __PRETTY_FUNCTION__);
+                if (merge_tree->is_dropped)
+                    continue;
 
                 const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
 

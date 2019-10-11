@@ -2,6 +2,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/RegionDataMover.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -18,9 +19,9 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
     Context & context, const StorageMergeTree & storage, const HandleRange<HandleType> & handle_range, const std::string & pk_name)
 {
     std::stringstream ss;
-    ss << "SELRAW NOKVSTORE " << MutableSupport::version_column_name << ", " << MutableSupport::delmark_column_name << ", " << pk_name
-       << " FROM " << storage.getDatabaseName() << "." << storage.getTableName() << " WHERE (" << handle_range.first.handle_id
-       << " <= " << pk_name << ") AND (" << pk_name;
+    ss << "SELRAW NOKVSTORE `" << MutableSupport::version_column_name << "`, `" << MutableSupport::delmark_column_name << "`, `" << pk_name
+       << "` FROM `" << storage.getDatabaseName() << "`.`" << storage.getTableName() << "` WHERE (" << handle_range.first.handle_id
+       << " <= `" << pk_name << "`) AND (`" << pk_name << "`";
 
     if (handle_range.second.type == TiKVHandle::HandleIDType::NORMAL)
         ss << " < " << handle_range.second.handle_id << ")";
@@ -91,5 +92,23 @@ void getHandleMapByRange(
 
 template void getHandleMapByRange<Int64>(Context &, StorageMergeTree &, const HandleRange<Int64> &, HandleMap &);
 template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const HandleRange<UInt64> &, HandleMap &);
+
+void tryOptimizeStorageFinal(Context & context, TableID table_id)
+{
+    auto & tmt = context.getTMTContext();
+    auto storage = tmt.getStorages().get(table_id);
+    if (!storage)
+        return;
+
+    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+    auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
+
+    if (merge_tree->is_dropped)
+        return;
+
+    std::stringstream ss;
+    ss << "OPTIMIZE TABLE `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` PARTITION ID '0' FINAL";
+    executeQuery(ss.str(), context, true, QueryProcessingStage::Complete);
+}
 
 } // namespace DB
