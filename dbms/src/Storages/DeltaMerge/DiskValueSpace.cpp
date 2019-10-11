@@ -630,7 +630,7 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
 
 ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const
 {
-    return std::make_shared<ChunkBlockInputStream>(chunks, 0, HandleRange::newAll(), read_columns, page_reader, RSOperatorPtr());
+    return std::make_shared<ChunkBlockInputStream>(chunks, read_columns, page_reader, RSOperatorPtr());
 }
 
 size_t DiskValueSpace::num_rows() const
