@@ -107,7 +107,7 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
         return;
 
     std::stringstream ss;
-    ss << "OPTIMIZE TABLE " << storage->getDatabaseName() << "." << storage->getTableName() << " PARTITION ID '0' FINAL";
+    ss << "OPTIMIZE TABLE `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` PARTITION ID '0' FINAL";
     executeQuery(ss.str(), context, true, QueryProcessingStage::Complete);
 }
 
