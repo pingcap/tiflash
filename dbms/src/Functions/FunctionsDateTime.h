@@ -1311,6 +1311,7 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override {
+        static DateLUTImpl UTC = DateLUT::instance("UTC");
         if (const ColumnVector<FromFieldType> *col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get())) {
             auto col_to = ColumnVector<ToFieldType>::create();
@@ -1329,7 +1330,7 @@ public:
             for (size_t i = 0; i < size; ++i) {
                 UInt64 result_time = vec_from[i] + offset;
                 // todo maybe affected by daytime saving, need double check
-                convertTimeZoneByOffset(vec_from[i], result_time, offset, DateLUT::instance("UTC"));
+                convertTimeZoneByOffset(vec_from[i], result_time, offset, UTC);
                 vec_to[i] = result_time;
             }
 
@@ -1383,7 +1384,7 @@ public:
             size_t size = vec_from.size();
             vec_to.resize(size);
 
-            const auto & time_zone_utc = DateLUT::instance("UTC");
+            static const auto & time_zone_utc = DateLUT::instance("UTC");
             const auto & time_zone_other = extractTimeZoneFromFunctionArguments(block, arguments, 1, 0);
             for (size_t i = 0; i < size; ++i)
             {
