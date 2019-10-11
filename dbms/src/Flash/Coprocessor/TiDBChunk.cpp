@@ -20,42 +20,7 @@ TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
 {
     for (auto & type : field_types)
     {
-        switch (type.tp())
-        {
-            case TiDB::TypeTiny:
-            case TiDB::TypeShort:
-            case TiDB::TypeInt24:
-            case TiDB::TypeLong:
-            case TiDB::TypeLongLong:
-            case TiDB::TypeYear:
-            case TiDB::TypeDouble:
-                columns.emplace_back(8);
-                break;
-            case TiDB::TypeFloat:
-                columns.emplace_back(4);
-                break;
-            case TiDB::TypeDecimal:
-            case TiDB::TypeNewDecimal:
-                columns.emplace_back(40);
-                break;
-            case TiDB::TypeDate:
-            case TiDB::TypeDatetime:
-            case TiDB::TypeNewDate:
-            case TiDB::TypeTimestamp:
-                columns.emplace_back(20);
-                break;
-            case TiDB::TypeVarchar:
-            case TiDB::TypeVarString:
-            case TiDB::TypeString:
-            case TiDB::TypeBlob:
-            case TiDB::TypeTinyBlob:
-            case TiDB::TypeMediumBlob:
-            case TiDB::TypeLongBlob:
-                columns.emplace_back(VAR_SIZE);
-                break;
-            default:
-                throw Exception("not supported field type in array encode: " + type.DebugString());
-        }
+        columns.emplace_back(getFieldLength(type.tp()));
     }
 }
 

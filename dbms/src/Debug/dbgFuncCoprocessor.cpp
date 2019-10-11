@@ -1,11 +1,15 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/TiDBColumn.h>
+#include <Functions/FunctionHelpers.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -39,26 +43,29 @@ using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts,
-    Int64 tz_offset, const String & tz_name);
+    Int64 tz_offset, const String & tz_name, const String & encode_type);
 tipb::SelectResponse executeDAGRequest(
     Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 1 || args.size() > 4)
-        throw Exception("Args not matched, should be: query[, region-id, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 1 || args.size() > 5)
+        throw Exception("Args not matched, should be: query[, region-id, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    String encode_type = "";
+    if (args.size() >= 3)
+        encode_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     Int64 tz_offset = 0;
     String tz_name = "";
-    if (args.size() >= 3)
-        tz_offset = get<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (args.size() >= 4)
-        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+        tz_offset = get<Int64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    if (args.size() >= 5)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
     auto [table_id, schema, dag_request] = compileQuery(
@@ -70,7 +77,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
                 throw Exception("Not TMT", ErrorCodes::BAD_ARGUMENTS);
             return mmt->getTableInfo();
         },
-        start_ts, tz_offset, tz_name);
+        start_ts, tz_offset, tz_name, encode_type);
 
     RegionPtr region;
     if (region_id == InvalidRegionID)
@@ -93,8 +100,8 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 2 || args.size() > 5)
-        throw Exception("Args not matched, should be: query, region-id[, start-ts, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 2 || args.size() > 6)
+        throw Exception("Args not matched, should be: query, region-id[, start-ts, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
@@ -103,19 +110,22 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
+    String encode_type = "";
+    if (args.size() >= 4)
+        encode_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     Int64 tz_offset = 0;
     String tz_name = "";
-    if (args.size() >= 3)
-        tz_offset = safeGet<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    if (args.size() >= 4)
-        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    if (args.size() >= 5)
+        tz_offset = safeGet<Int64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+    if (args.size() >= 6)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[5]).value);
 
     auto [table_id, schema, dag_request] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
-        start_ts, tz_offset, tz_name);
+        start_ts, tz_offset, tz_name, encode_type);
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -264,7 +274,7 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
 
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Timestamp start_ts, Int64 tz_offset, const String & tz_name)
+    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
@@ -272,6 +282,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     dag_request.set_time_zone_offset(tz_offset);
 
     dag_request.set_start_ts(start_ts);
+    if (encode_type == "arrow")
+        dag_request.set_encode_type(tipb::EncodeType::TypeArrow);
 
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "from DAG compiler", 0);
@@ -574,12 +586,285 @@ tipb::SelectResponse executeDAGRequest(
     return dag_response;
 }
 
-BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
+bool decodeNull(UInt32 i, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const ColumnWithTypeAndName & col)
 {
-    if (dag_response.has_error())
-        throw Exception(dag_response.error().msg(), dag_response.error().code());
+    if (null_count > 0)
+    {
+        size_t index = i >> 3;
+        size_t p = i & 7;
+        if (!(null_bitmap[index] & (1 << p)))
+        {
+            col.column->assumeMutable()->insert(Field());
+            return true;
+        }
+    }
+    return false;
+}
 
-    BlocksList blocks;
+const char * decodeStringCol(const char * pos, UInt8 , UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+      const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+{
+    for (UInt32 i = 0; i < length; i++)
+    {
+        if (decodeNull(i, null_count, null_bitmap, col))
+            continue;
+        const String value = String(pos + offsets[i], pos + offsets[i+1]);
+        col.column->assumeMutable()->insert(Field(value));
+    }
+    return pos + offsets[length];
+}
+
+template <typename T>
+T toCHDecimal(UInt8 digits_int, UInt8 digits_frac, bool negative, const Int32 * word_buf)
+{
+    static_assert(IsDecimal<T>);
+
+    UInt8 word_int = (digits_int + DIGITS_PER_WORD -1) / DIGITS_PER_WORD;
+    UInt8 word_frac = digits_frac / DIGITS_PER_WORD;
+    UInt8 tailing_digit = digits_frac % DIGITS_PER_WORD;
+
+    typename T::NativeType value = 0;
+    const int word_max = int(1e9);
+    for (int i = 0; i < word_int; i++)
+    {
+        value = value * word_max + word_buf[i];
+    }
+    for (int i = 0; i < word_frac; i++)
+    {
+        value = value * word_max + word_buf[i + word_int];
+    }
+    if (tailing_digit > 0)
+    {
+        Int32 tail = word_buf[word_int + word_frac];
+        for (int i = 0; i < DIGITS_PER_WORD - tailing_digit; i++)
+        {
+            tail /= 10;
+        }
+        for (int i = 0; i < tailing_digit; i++)
+        {
+            value *= 10;
+        }
+        value += tail;
+    }
+    return negative ? -value : value;
+}
+
+const char * decodeDecimalCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+        const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+{
+    for (UInt32 i = 0; i < length; i++)
+    {
+        if (decodeNull(i, null_count, null_bitmap, col))
+        {
+            pos += field_length;
+            continue;
+        }
+        UInt8 digits_int = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        UInt8 digits_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        //UInt8 result_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        UInt8 negative = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        Int32 word_buf[MAX_WORD_BUF_LEN];
+        const DataTypePtr decimal_type = col.type->isNullable() ?
+                dynamic_cast<const DataTypeNullable*>(col.type.get())->getNestedType() : col.type;
+        for (int j = 0; j < MAX_WORD_BUF_LEN; j++)
+        {
+            word_buf[j] = toLittleEndian(*(reinterpret_cast<const Int32 *>(pos)));
+            pos += 4;
+        }
+        if (auto * type = checkDecimal<Decimal32>(*decimal_type))
+        {
+            auto res = toCHDecimal<Decimal32>(digits_int, digits_frac, negative, word_buf);
+            col.column->assumeMutable()->insert(DecimalField<Decimal32>(res, type->getScale()));
+        }
+        else if (auto * type = checkDecimal<Decimal64>(*decimal_type))
+        {
+            auto res = toCHDecimal<Decimal64>(digits_int, digits_frac, negative, word_buf);
+            col.column->assumeMutable()->insert(DecimalField<Decimal64>(res, type->getScale()));
+        }
+        else if (auto * type = checkDecimal<Decimal128>(*decimal_type))
+        {
+            auto res = toCHDecimal<Decimal128>(digits_int, digits_frac, negative, word_buf);
+            col.column->assumeMutable()->insert(DecimalField<Decimal128>(res, type->getScale()));
+        }
+        else if (auto * type = checkDecimal<Decimal256>(*decimal_type))
+        {
+            auto res = toCHDecimal<Decimal256>(digits_int, digits_frac, negative, word_buf);
+            col.column->assumeMutable()->insert(DecimalField<Decimal256>(res, type->getScale()));
+        }
+    }
+    return pos;
+}
+
+const char * decodeDateCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+        const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+{
+    for (UInt32 i = 0; i < length; i++)
+    {
+        if (decodeNull(i, null_count, null_bitmap, col))
+        {
+            pos += field_length;
+            continue;
+        }
+        UInt32 hour = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
+        pos += 4;
+        UInt32 micro_second = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
+        pos += 4;
+        UInt16 year = toLittleEndian(*(reinterpret_cast<const UInt16 *>(pos)));
+        pos += 2;
+        UInt8 month = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        UInt8 day = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        UInt8 minute = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        UInt8 second = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        pos += 2;
+        //UInt8 time_type = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
+        pos += 1;
+        //UInt8 fsp = toLittleEndian(*(reinterpret_cast<const Int8 *>(pos)));
+        pos += 1;
+        pos += 2;
+        MyDateTime mt(year, month, day, hour, minute, second, micro_second);
+        col.column->assumeMutable()->insert(Field(mt.toPackedUInt()));
+    }
+    return pos;
+}
+
+const char * decodeNumCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+        const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo & col_info, UInt32 length)
+{
+    for (UInt32 i = 0; i < length; i++, pos += field_length)
+    {
+        if (decodeNull(i, null_count, null_bitmap, col))
+            continue;
+        UInt64 u64;
+        Int64 i64;
+        UInt32 u32;
+        Float32 f32;
+        Float64 f64;
+        switch (col_info.tp)
+        {
+            case TiDB::TypeTiny:
+            case TiDB::TypeShort:
+            case TiDB::TypeInt24:
+            case TiDB::TypeLong:
+            case TiDB::TypeLongLong:
+            case TiDB::TypeYear:
+                if (col_info.flag & TiDB::ColumnFlagUnsigned)
+                {
+                    u64 = toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos)));
+                    col.column->assumeMutable()->insert(Field(u64));
+                }
+                else
+                {
+                    i64 = toLittleEndian(*(reinterpret_cast<const Int64 *>(pos)));
+                    col.column->assumeMutable()->insert(Field(i64));
+                }
+                break;
+            case TiDB::TypeFloat:
+                u32 = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
+                std::memcpy(&f32, &u32, sizeof(Float32));
+                col.column->assumeMutable()->insert(Field((Float64)f32));
+                break;
+            case TiDB::TypeDouble:
+                u64 = toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos)));
+                std::memcpy(&f64, &u64, sizeof(Float64));
+                col.column->assumeMutable()->insert(Field(f64));
+                break;
+            default:
+                throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    return pos;
+}
+
+void decodeArrow(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+{
+    const String & row_data = dag_response.row_batch_data();
+    const char * start = row_data.c_str();
+    const char * pos = start;
+    int column_index = 0;
+    ColumnsWithTypeAndName colunns;
+    while (pos <  start + row_data.size())
+    {
+        UInt32 length = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
+        pos += 4;
+        UInt32 null_count = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
+        pos += 4;
+        std::vector<UInt8> null_bitmap;
+        const auto & field = schema[column_index];
+        const auto & name = field.first;
+        auto data_type = getDataTypeByColumnInfo(field.second);
+        if (null_count > 0)
+        {
+            auto bit_map_length = (length + 7)/8;
+            for (UInt32 i = 0; i < bit_map_length; i++)
+            {
+                null_bitmap.push_back(*pos);
+                pos++;
+            }
+        }
+        Int8 field_length = getFieldLength(field.second.tp);
+        std::vector<UInt64> offsets;
+        if (field_length == VAR_SIZE)
+        {
+            for (UInt32 i = 0; i <= length; i++)
+            {
+                offsets.push_back(toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos))));
+                pos += 8;
+            }
+        }
+        ColumnWithTypeAndName col(data_type, name);
+        col.column->assumeMutable()->reserve(length);
+        switch (field.second.tp)
+        {
+            case TiDB::TypeTiny:
+            case TiDB::TypeShort:
+            case TiDB::TypeInt24:
+            case TiDB::TypeLong:
+            case TiDB::TypeLongLong:
+            case TiDB::TypeYear:
+            case TiDB::TypeFloat:
+            case TiDB::TypeDouble:
+                pos = decodeNumCol(pos, field_length, null_count, null_bitmap,
+                        offsets, col, field.second, length);
+                break;
+            case TiDB::TypeDatetime:
+            case TiDB::TypeDate:
+            case TiDB::TypeTimestamp:
+                pos = decodeDateCol(pos, field_length, null_count, null_bitmap,
+                        offsets, col, field.second, length);
+                break;
+            case TiDB::TypeNewDecimal:
+                pos = decodeDecimalCol(pos, field_length, null_count, null_bitmap,
+                        offsets, col, field.second, length);
+                break;
+            case TiDB::TypeVarString:
+            case TiDB::TypeVarchar:
+            case TiDB::TypeBlob:
+            case TiDB::TypeString:
+            case TiDB::TypeTinyBlob:
+            case TiDB::TypeMediumBlob:
+            case TiDB::TypeLongBlob:
+                pos = decodeStringCol(pos, field_length, null_count, null_bitmap,
+                                       offsets, col, field.second, length);
+                break;
+            default:
+                throw Exception("Not supported yet: field tp = " + std::to_string(field.second.tp));
+        }
+        colunns.emplace_back(std::move(col));
+        column_index++;
+    }
+    blocks.emplace_back(Block(colunns));
+}
+
+void decodeDefault(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+{
     for (const auto & chunk : dag_response.chunks())
     {
         std::vector<std::vector<Field>> rows;
@@ -616,7 +901,22 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
 
         blocks.emplace_back(Block(columns));
     }
+}
 
+BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
+{
+    if (dag_response.has_error())
+        throw Exception(dag_response.error().msg(), dag_response.error().code());
+
+    BlocksList blocks;
+    if (dag_response.row_batch_data().length() > 0)
+    {
+        decodeArrow(schema, dag_response, blocks);
+    }
+    else
+    {
+        decodeDefault(schema, dag_response, blocks);
+    }
     return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 }
 

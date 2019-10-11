@@ -117,14 +117,18 @@ void TiDBColumn::appendBytes(const DB::String & value)
 
 void TiDBColumn::appendFloat32(DB::Float32 value)
 {
-    UInt32 u = *(reinterpret_cast<UInt32 *>(&value));
+    // use memcpy to avoid breaking strict-aliasing rules
+    UInt32 u;
+    std::memcpy(&u, &value, sizeof(value));
     encodeLittleEndian<UInt32>(u, data);
     finishAppendFixed();
 }
 
 void TiDBColumn::appendFloat64(DB::Float64 value)
 {
-    UInt64 u = *(reinterpret_cast<UInt64 *>(&value));
+    // use memcpy to avoid breaking strict-aliasing rules
+    UInt64 u;
+    std::memcpy(&u, &value, sizeof(value));
     encodeLittleEndian<UInt64>(u, data);
     finishAppendFixed();
 }
