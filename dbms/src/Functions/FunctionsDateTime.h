@@ -1311,7 +1311,7 @@ public:
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override {
-        static DateLUTImpl UTC = DateLUT::instance("UTC");
+        static const DateLUTImpl & UTC = DateLUT::instance("UTC");
         if (const ColumnVector<FromFieldType> *col_from
                 = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get())) {
             auto col_to = ColumnVector<ToFieldType>::create();
