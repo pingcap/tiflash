@@ -26,12 +26,9 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
       result_field_types(result_field_types_),
       header(header_)
 {
-    //if (encodeType == tipb::EncodeType::TypeArrow)
-    //{
-    //    throw Exception("Encode type TypeArrow is not supported yet in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
-    //}
     current_chunk = nullptr;
     current_records_num = 0;
+    dag_response.set_encode_type(encodeType);
 }
 
 
@@ -83,16 +80,11 @@ void DAGBlockOutputStream::encodeWithArrayEncodeType(const DB::Block & block)
 {
     // Encode data in chunk by array encode
     size_t rows = block.rows();
-    TiDBChunk dagChunk = TiDBChunk(result_field_types);
-    dagChunk.buildDAGChunkFromBlock(block, result_field_types, 0, rows);
-    std::stringstream ss;
-    dagChunk.encodeChunk(ss);
-    dag_response.set_row_batch_data(ss.str());
-    /*
-    for (size_t row_index = 0; row_index < rows; row_index += records_per_chunk)
+    // todo use records_per_chunk
+    for (size_t row_index = 0; row_index < rows; row_index += rows)
     {
         TiDBChunk dagChunk = TiDBChunk(result_field_types);
-        const size_t upper = std::min(row_index + records_per_chunk, rows);
+        const size_t upper = std::min(row_index + rows, rows);
         dagChunk.buildDAGChunkFromBlock(block, result_field_types, row_index, upper);
         auto * chunk = dag_response.add_chunks();
         std::stringstream ss;
@@ -100,7 +92,6 @@ void DAGBlockOutputStream::encodeWithArrayEncodeType(const DB::Block & block)
         chunk->set_rows_data(ss.str());
         dag_response.add_output_counts(upper - row_index);
     }
-     */
 }
 
 void DAGBlockOutputStream::write(const Block & block)

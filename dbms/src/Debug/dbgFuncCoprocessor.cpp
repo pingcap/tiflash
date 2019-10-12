@@ -800,82 +800,82 @@ const char * decodeNumCol(const char * pos, UInt8 field_length, UInt32 null_coun
 
 void decodeArrow(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
 {
-    const String & row_data = dag_response.row_batch_data();
-    const char * start = row_data.c_str();
-    const char * pos = start;
-    int column_index = 0;
-    ColumnsWithTypeAndName colunns;
-    while (pos <  start + row_data.size())
-    {
-        UInt32 length = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
-        UInt32 null_count = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
-        std::vector<UInt8> null_bitmap;
-        const auto & field = schema[column_index];
-        const auto & name = field.first;
-        auto data_type = getDataTypeByColumnInfo(field.second);
-        if (null_count > 0)
-        {
-            auto bit_map_length = (length + 7)/8;
-            for (UInt32 i = 0; i < bit_map_length; i++)
+    for (const auto & chunk : dag_response.chunks()) {
+        const String &row_data = chunk.rows_data();
+        const char *start = row_data.c_str();
+        const char *pos = start;
+        int column_index = 0;
+        ColumnsWithTypeAndName colunns;
+        while (pos < start + row_data.size()) {
+            UInt32 length = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
+            pos += 4;
+            UInt32 null_count = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
+            pos += 4;
+            std::vector<UInt8> null_bitmap;
+            const auto &field = schema[column_index];
+            const auto &name = field.first;
+            auto data_type = getDataTypeByColumnInfo(field.second);
+            if (null_count > 0)
             {
-                null_bitmap.push_back(*pos);
-                pos++;
+                auto bit_map_length = (length + 7) / 8;
+                for (UInt32 i = 0; i < bit_map_length; i++)
+                {
+                    null_bitmap.push_back(*pos);
+                    pos++;
+                }
             }
-        }
-        Int8 field_length = getFieldLength(field.second.tp);
-        std::vector<UInt64> offsets;
-        if (field_length == VAR_SIZE)
-        {
-            for (UInt32 i = 0; i <= length; i++)
+            Int8 field_length = getFieldLength(field.second.tp);
+            std::vector<UInt64> offsets;
+            if (field_length == VAR_SIZE)
             {
-                offsets.push_back(toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos))));
-                pos += 8;
+                for (UInt32 i = 0; i <= length; i++)
+                {
+                    offsets.push_back(toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos))));
+                    pos += 8;
+                }
             }
-        }
-        ColumnWithTypeAndName col(data_type, name);
-        col.column->assumeMutable()->reserve(length);
-        switch (field.second.tp)
-        {
-            case TiDB::TypeTiny:
-            case TiDB::TypeShort:
-            case TiDB::TypeInt24:
-            case TiDB::TypeLong:
-            case TiDB::TypeLongLong:
-            case TiDB::TypeYear:
-            case TiDB::TypeFloat:
-            case TiDB::TypeDouble:
-                pos = decodeNumCol(pos, field_length, null_count, null_bitmap,
-                        offsets, col, field.second, length);
-                break;
-            case TiDB::TypeDatetime:
-            case TiDB::TypeDate:
-            case TiDB::TypeTimestamp:
-                pos = decodeDateCol(pos, field_length, null_count, null_bitmap,
-                        offsets, col, field.second, length);
-                break;
-            case TiDB::TypeNewDecimal:
-                pos = decodeDecimalCol(pos, field_length, null_count, null_bitmap,
-                        offsets, col, field.second, length);
-                break;
-            case TiDB::TypeVarString:
-            case TiDB::TypeVarchar:
-            case TiDB::TypeBlob:
-            case TiDB::TypeString:
-            case TiDB::TypeTinyBlob:
-            case TiDB::TypeMediumBlob:
-            case TiDB::TypeLongBlob:
-                pos = decodeStringCol(pos, field_length, null_count, null_bitmap,
+            ColumnWithTypeAndName col(data_type, name);
+            col.column->assumeMutable()->reserve(length);
+            switch (field.second.tp) {
+                case TiDB::TypeTiny:
+                case TiDB::TypeShort:
+                case TiDB::TypeInt24:
+                case TiDB::TypeLong:
+                case TiDB::TypeLongLong:
+                case TiDB::TypeYear:
+                case TiDB::TypeFloat:
+                case TiDB::TypeDouble:
+                    pos = decodeNumCol(pos, field_length, null_count, null_bitmap,
                                        offsets, col, field.second, length);
-                break;
-            default:
-                throw Exception("Not supported yet: field tp = " + std::to_string(field.second.tp));
+                    break;
+                case TiDB::TypeDatetime:
+                case TiDB::TypeDate:
+                case TiDB::TypeTimestamp:
+                    pos = decodeDateCol(pos, field_length, null_count, null_bitmap,
+                                        offsets, col, field.second, length);
+                    break;
+                case TiDB::TypeNewDecimal:
+                    pos = decodeDecimalCol(pos, field_length, null_count, null_bitmap,
+                                           offsets, col, field.second, length);
+                    break;
+                case TiDB::TypeVarString:
+                case TiDB::TypeVarchar:
+                case TiDB::TypeBlob:
+                case TiDB::TypeString:
+                case TiDB::TypeTinyBlob:
+                case TiDB::TypeMediumBlob:
+                case TiDB::TypeLongBlob:
+                    pos = decodeStringCol(pos, field_length, null_count, null_bitmap,
+                                          offsets, col, field.second, length);
+                    break;
+                default:
+                    throw Exception("Not supported yet: field tp = " + std::to_string(field.second.tp));
+            }
+            colunns.emplace_back(std::move(col));
+            column_index++;
         }
-        colunns.emplace_back(std::move(col));
-        column_index++;
+        blocks.emplace_back(Block(colunns));
     }
-    blocks.emplace_back(Block(colunns));
 }
 
 void decodeDefault(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
@@ -924,7 +924,7 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
         throw Exception(dag_response.error().msg(), dag_response.error().code());
 
     BlocksList blocks;
-    if (dag_response.row_batch_data().length() > 0)
+    if (dag_response.encode_type() == tipb::EncodeType::TypeArrow)
     {
         decodeArrow(schema, dag_response, blocks);
     }
