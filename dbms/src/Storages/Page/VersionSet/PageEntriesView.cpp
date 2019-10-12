@@ -67,6 +67,7 @@ std::optional<PageEntry> PageEntriesView::findNormalPageEntry(PageId page_id) co
 std::pair<bool, PageId> PageEntriesView::isRefId(PageId page_id) const
 {
     auto node = tail;
+    // For delta, we need to check if page_id is deleted, then try to find in page_ref
     for (; !node->isBase(); node = node->prev)
     {
         if (node->ref_deletions.count(page_id) > 0)
@@ -75,6 +76,7 @@ std::pair<bool, PageId> PageEntriesView::isRefId(PageId page_id) const
         if (iter != node->page_ref.end())
             return {true, iter->second};
     }
+    // For base
     return node->isRefId(page_id);
 }
 

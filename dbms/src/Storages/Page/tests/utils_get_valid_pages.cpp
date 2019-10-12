@@ -32,6 +32,7 @@ void printPageEntry(const DB::PageId pid, const DB::PageEntry & entry)
 }
 
 int main(int argc, char ** argv)
+try
 {
     (void)argc;
     (void)argv;
@@ -59,7 +60,9 @@ int main(int argc, char ** argv)
         Usage(argv[0]);
         return 1;
     }
-    auto page_files = DB::PageStorage::listAllPageFiles(path, true, &Poco::Logger::get("root"));
+
+    // Do not remove any files.
+    auto page_files = DB::PageStorage::listAllPageFiles(path, /* remove_tmp_file= */ false, &Poco::Logger::get("root"));
 
     //DB::PageEntriesVersionSet versions;
     DB::PageEntriesVersionSetWithDelta versions;
@@ -125,4 +128,15 @@ int main(int argc, char ** argv)
 #endif
     }
     return 0;
+}
+catch (const DB::Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    return -1;
 }
