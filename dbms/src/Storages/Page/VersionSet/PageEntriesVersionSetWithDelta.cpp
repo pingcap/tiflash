@@ -208,10 +208,15 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
 void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
 {
     assert(rec.type == WriteBatch::WriteType::DEL);
-    const PageId normal_page_id = view->resolveRefId(rec.page_id);
+    auto [is_ref, normal_page_id] = view->isRefId(rec.page_id);
+    view->resolveRefId(rec.page_id);
     current_version->ref_deletions.insert(rec.page_id);
     current_version->page_ref.erase(rec.page_id);
-    this->decreasePageRef(normal_page_id);
+    if (is_ref)
+    {
+        // If ref exists, we need to decrease entry ref-count
+        this->decreasePageRef(normal_page_id);
+    }
 }
 
 void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
@@ -283,7 +288,7 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
 void DeltaVersionEditAcceptor::decreasePageRef(const PageId page_id)
 {
     const auto old_entry = view->findNormalPageEntry(page_id);
-    if (!old_entry)
+    if (old_entry)
     {
         auto entry = *old_entry;
         entry.ref  = old_entry->ref <= 1 ? 0 : old_entry->ref - 1;

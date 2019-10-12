@@ -107,7 +107,7 @@ public:
         {
             return {false, 0UL};
         }
-        return {ref_pair->second != page_id, ref_pair->second};
+        return {true, ref_pair->second};
     }
 
     inline void clear()
@@ -237,10 +237,13 @@ void PageEntriesMixin<T>::del(PageId page_id)
     assert(is_base); // can only call by base
     // Note: must resolve ref-id before erasing entry in `page_ref`
     const PageId normal_page_id = resolveRefId(page_id);
-    page_ref.erase(page_id);
 
-    // decrease origin page's ref counting
-    decreasePageRef<must_exist>(normal_page_id);
+    const size_t num_erase = page_ref.erase(page_id);
+    if (num_erase > 0)
+    {
+        // decrease origin page's ref counting
+        decreasePageRef<must_exist>(normal_page_id);
+    }
 }
 
 template <typename T>
