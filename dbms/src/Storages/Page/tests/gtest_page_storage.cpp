@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 
+#include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
@@ -201,6 +202,82 @@ TEST_F(PageStorage_test, WriteReadAfterGc)
         {
             EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(num_repeat % 0xff));
         }
+    }
+}
+
+TEST_F(PageStorage_test, IdempotentDelAndRef)
+{
+    const size_t buf_sz = 1024;
+    char         c_buff[buf_sz];
+
+    {
+        // Page1 should be written to PageFile{1, 0}
+        WriteBatch batch;
+        memset(c_buff, 0xf, buf_sz);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1, 0, buff, buf_sz);
+
+        storage->write(batch);
+    }
+
+    {
+        // RefPage 2 -> 1, Del Page 1 should be written to PageFile{2, 0}
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        batch.delPage(1);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(1000, 0, buff, buf_sz);
+
+        storage->write(batch);
+    }
+
+    {
+        // Another RefPage 2 -> 1, Del Page 1 should be written to PageFile{3, 0}
+        WriteBatch batch;
+        batch.putRefPage(2, 1);
+        batch.delPage(1);
+
+        storage->write(batch);
+    }
+
+    {
+        auto snap      = storage->getSnapshot();
+        auto ref_entry = snap->version()->find(1);
+        ASSERT_FALSE(ref_entry);
+
+        ref_entry = snap->version()->find(2);
+        ASSERT_TRUE(ref_entry);
+        ASSERT_EQ(ref_entry->file_id, 1UL);
+        ASSERT_EQ(ref_entry->ref, 1UL);
+
+        auto normal_entry = snap->version()->findNormalPageEntry(1);
+        ASSERT_TRUE(normal_entry);
+        ASSERT_EQ(normal_entry->file_id, 1UL);
+        ASSERT_EQ(normal_entry->ref, 1UL);
+
+        // Point to the same entry
+        ASSERT_EQ(ref_entry->offset, normal_entry->offset);
+    }
+
+    storage = reopenWithConfig(config);
+
+    {
+        auto snap      = storage->getSnapshot();
+        auto ref_entry = snap->version()->find(1);
+        ASSERT_FALSE(ref_entry);
+
+        ref_entry = snap->version()->find(2);
+        ASSERT_TRUE(ref_entry);
+        ASSERT_EQ(ref_entry->file_id, 1UL);
+        ASSERT_EQ(ref_entry->ref, 1UL);
+
+        auto normal_entry = snap->version()->findNormalPageEntry(1);
+        ASSERT_TRUE(normal_entry);
+        ASSERT_EQ(normal_entry->file_id, 1UL);
+        ASSERT_EQ(normal_entry->ref, 1UL);
+
+        // Point to the same entry
+        ASSERT_EQ(ref_entry->offset, normal_entry->offset);
     }
 }
 
@@ -723,11 +800,32 @@ TEST_F(PageStorageWith2Pages_test, AddRefPageToNonExistPage)
     ASSERT_FALSE(storage->getEntry(3).isValid());
 }
 
+namespace
+{
+
+CurrentMetrics::Value getPSMVCCNumSnapshots()
+{
+    for (size_t i = 0, end = CurrentMetrics::end(); i < end; ++i)
+    {
+        if (i == CurrentMetrics::PSMVCCNumSnapshots)
+        {
+            return CurrentMetrics::values[i].load(std::memory_order_relaxed);
+        }
+    }
+    throw Exception(std::string(CurrentMetrics::getDescription(CurrentMetrics::PSMVCCNumSnapshots)) + " not found.");
+}
+
+} // namespace
+
+
 TEST_F(PageStorageWith2Pages_test, SnapshotReadSnapshotVersion)
 {
-    char      ch_before         = 0x01;
-    char      ch_update         = 0xFF;
-    auto      snapshot          = storage->getSnapshot();
+    char ch_before = 0x01;
+    char ch_update = 0xFF;
+
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
+    auto snapshot = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
     PageEntry p1_snapshot_entry = storage->getEntry(1, snapshot);
 
     {
@@ -789,9 +887,13 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     char      ch_before         = 0x01;
     char      ch_update         = 0xFF;
     PageEntry p1_snapshot_entry = storage->getEntry(1);
-    auto      s1                = storage->getSnapshot();
-    auto      s2                = storage->getSnapshot();
-    auto      s3                = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
+    auto s1 = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
+    auto s2 = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 2);
+    auto s3 = storage->getSnapshot();
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 3);
 
     {
         // write new version of Page1
@@ -840,6 +942,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s1.reset(); /// free snapshot 1
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 2);
 
     // getEntry with snapshot
     p1_entry = storage->getEntry(1, s2);
@@ -865,6 +968,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s2.reset(); /// free snapshot 2
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 1);
 
     // getEntry with snapshot
     p1_entry = storage->getEntry(1, s3);
@@ -882,6 +986,7 @@ TEST_F(PageStorageWith2Pages_test, GetIdenticalSnapshots)
     ASSERT_NE(p1_entry.checksum, p1_snapshot_entry.checksum);
 
     s3.reset(); /// free snapshot 3
+    EXPECT_EQ(getPSMVCCNumSnapshots(), 0);
 
     // without snapshot
     p1_entry = storage->getEntry(1);
