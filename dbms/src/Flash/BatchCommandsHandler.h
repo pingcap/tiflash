@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <common/ThreadPool.h>
 #include <common/logger_useful.h>
 #include <grpcpp/server_context.h>
 #pragma GCC diagnostic push
@@ -18,10 +19,10 @@ struct BatchCommandsContext
 
     /// Context creation function for each individual command - they should be handled isolated,
     /// given that context is being used to pass arguments regarding queries.
-    using DBContextCreationFunc = std::function<std::tuple<Context, grpc::Status>(grpc::ServerContext *)>;
+    using DBContextCreationFunc = std::function<std::tuple<Context, grpc::Status>(const grpc::ServerContext *)>;
     DBContextCreationFunc db_context_creation_func;
 
-    grpc::ServerContext & grpc_server_context;
+    const grpc::ServerContext & grpc_server_context;
 
     BatchCommandsContext(
         Context & db_context_, DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_)
@@ -40,7 +41,11 @@ public:
     grpc::Status execute();
 
 protected:
-    BatchCommandsContext & batch_commands_context;
+    ThreadPool::Job handleCommandJob(
+        const tikvpb::BatchCommandsRequest::Request & req, tikvpb::BatchCommandsResponse::Response & resp, grpc::Status & ret) const;
+
+protected:
+    const BatchCommandsContext & batch_commands_context;
     const tikvpb::BatchCommandsRequest & request;
     tikvpb::BatchCommandsResponse & response;
 
