@@ -17,9 +17,9 @@ struct CoprocessorContext
 {
     Context & db_context;
     const kvrpcpb::Context & kv_context;
-    grpc::ServerContext & grpc_server_context;
+    const grpc::ServerContext & grpc_server_context;
 
-    CoprocessorContext(Context & db_context_, const kvrpcpb::Context & kv_context_, grpc::ServerContext & grpc_server_context_)
+    CoprocessorContext(Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_)
         : db_context(db_context_), kv_context(kv_context_), grpc_server_context(grpc_server_context_)
     {}
 };

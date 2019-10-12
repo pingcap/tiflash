@@ -2,6 +2,7 @@
 
 #include <Core/SortDescription.h>
 #include <Common/SimpleIncrement.h>
+#include <Common/escapeForFileName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/ITableDeclaration.h>

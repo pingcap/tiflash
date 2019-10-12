@@ -46,8 +46,8 @@ try
                 cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), std::move(key_ranges),
                 dag_response);
             driver.execute();
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
             cop_response->set_data(dag_response.SerializeAsString());
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
             break;
         }
         case COP_REQ_TYPE_ANALYZE:

@@ -296,6 +296,18 @@ void RegionTable::updateRegionForSplit(const Region & split_region, const Region
     }
 }
 
+TableID RegionTable::popOneTableToClean()
+{
+    TableID res = InvalidTableID;
+    std::lock_guard<std::mutex> lock(mutex);
+    if (auto it = table_to_clean.begin(); it != table_to_clean.end())
+    {
+        res = *it;
+        table_to_clean.erase(it);
+    }
+    return res;
+}
+
 void RegionTable::removeRegion(const RegionID region_id)
 {
     std::unordered_set<TableID> tables;
@@ -317,6 +329,8 @@ void RegionTable::removeRegion(const RegionID region_id)
         {
             auto & table = getOrCreateTable(table_id);
             table.regions.erase(region_id);
+            if (table.regions.empty())
+                table_to_clean.emplace(table_id);
         }
     }
 }
