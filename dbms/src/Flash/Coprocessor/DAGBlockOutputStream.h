@@ -26,7 +26,7 @@ public:
     void writePrefix() override;
     void writeSuffix() override;
     void encodeWithDefaultEncodeType(const Block & block);
-    void encodeWithArrayEncodeType(const Block & block);
+    void encodeWithArrowEncodeType(const Block & block);
 
 private:
     tipb::SelectResponse & dag_response;
