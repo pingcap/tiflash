@@ -600,7 +600,7 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     return dag_response;
 }
 
-bool decodeNull(UInt32 i, UInt32 null_count, const std::vector<UInt8> & null_bitmap, const ColumnWithTypeAndName & col)
+bool checkNull(UInt32 i, UInt32 null_count, const std::vector<UInt8> &null_bitmap, const ColumnWithTypeAndName &col)
 {
     if (null_count > 0)
     {
@@ -620,7 +620,7 @@ const char * arrowStringColToFlashCol(const char * pos, UInt8, UInt32 null_count
 {
     for (UInt32 i = 0; i < length; i++)
     {
-        if (decodeNull(i, null_count, null_bitmap, col))
+        if (checkNull(i, null_count, null_bitmap, col))
             continue;
         const String value = String(pos + offsets[i], pos + offsets[i + 1]);
         col.column->assumeMutable()->insert(Field(value));
@@ -668,7 +668,7 @@ const char * arrowDecimalColToFlashCol(const char * pos, UInt8 field_length, UIn
 {
     for (UInt32 i = 0; i < length; i++)
     {
-        if (decodeNull(i, null_count, null_bitmap, col))
+        if (checkNull(i, null_count, null_bitmap, col))
         {
             pos += field_length;
             continue;
@@ -718,7 +718,7 @@ const char * arrowDateColToFlashCol(const char * pos, UInt8 field_length, UInt32
 {
     for (UInt32 i = 0; i < length; i++)
     {
-        if (decodeNull(i, null_count, null_bitmap, col))
+        if (checkNull(i, null_count, null_bitmap, col))
         {
             pos += field_length;
             continue;
@@ -754,7 +754,7 @@ const char * arrowNumColToFlashCol(const char * pos, UInt8 field_length, UInt32 
 {
     for (UInt32 i = 0; i < length; i++, pos += field_length)
     {
-        if (decodeNull(i, null_count, null_bitmap, col))
+        if (checkNull(i, null_count, null_bitmap, col))
             continue;
         UInt64 u64;
         Int64 i64;
