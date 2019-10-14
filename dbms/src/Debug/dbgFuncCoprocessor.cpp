@@ -41,11 +41,9 @@ using TiDB::TableInfo;
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts,
-    Int64 tz_offset, const String & tz_name, const String & encode_type);
-tipb::SelectResponse executeDAGRequest(
-    Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
+    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type);
+tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
@@ -100,8 +98,8 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
-    tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region->id(), region->version(),
-            region->confVer(), key_ranges);
+    tipb::SelectResponse dag_response
+        = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
@@ -109,7 +107,8 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 {
     if (args.size() < 2 || args.size() > 6)
-        throw Exception("Args not matched, should be: query, region-id[, start-ts, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: query, region-id[, start-ts, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
@@ -142,8 +141,8 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
-    tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region_id, region->version(),
-            region->confVer(), key_ranges);
+    tipb::SelectResponse dag_response
+        = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
@@ -214,7 +213,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         else if (func_name_lowercase == "greaterorequals")
         {
             expr->set_sig(tipb::ScalarFuncSig::GEInt);
-            auto *ft = expr->mutable_field_type();
+            auto * ft = expr->mutable_field_type();
             ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
@@ -286,8 +285,7 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
     compileExpr(input, ast, cond, referred_columns, col_ref_map);
 }
 
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher,
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
     Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type)
 {
     DAGSchema schema;
@@ -589,8 +587,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request));
 }
 
-tipb::SelectResponse executeDAGRequest(
-    Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
+tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges)
 {
     static Logger * log = &Logger::get("MockDAG");
@@ -618,14 +615,14 @@ bool decodeNull(UInt32 i, UInt32 null_count, const std::vector<UInt8> & null_bit
     return false;
 }
 
-const char * decodeStringCol(const char * pos, UInt8 , UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-      const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowStringColToFlashCol(const char * pos, UInt8, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
         if (decodeNull(i, null_count, null_bitmap, col))
             continue;
-        const String value = String(pos + offsets[i], pos + offsets[i+1]);
+        const String value = String(pos + offsets[i], pos + offsets[i + 1]);
         col.column->assumeMutable()->insert(Field(value));
     }
     return pos + offsets[length];
@@ -636,7 +633,7 @@ T toCHDecimal(UInt8 digits_int, UInt8 digits_frac, bool negative, const Int32 * 
 {
     static_assert(IsDecimal<T>);
 
-    UInt8 word_int = (digits_int + DIGITS_PER_WORD -1) / DIGITS_PER_WORD;
+    UInt8 word_int = (digits_int + DIGITS_PER_WORD - 1) / DIGITS_PER_WORD;
     UInt8 word_frac = digits_frac / DIGITS_PER_WORD;
     UInt8 tailing_digit = digits_frac % DIGITS_PER_WORD;
 
@@ -666,8 +663,8 @@ T toCHDecimal(UInt8 digits_int, UInt8 digits_frac, bool negative, const Int32 * 
     return negative ? -value : value;
 }
 
-const char * decodeDecimalCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-        const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowDecimalColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
@@ -685,8 +682,8 @@ const char * decodeDecimalCol(const char * pos, UInt8 field_length, UInt32 null_
         UInt8 negative = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
         pos += 1;
         Int32 word_buf[MAX_WORD_BUF_LEN];
-        const DataTypePtr decimal_type = col.type->isNullable() ?
-                dynamic_cast<const DataTypeNullable*>(col.type.get())->getNestedType() : col.type;
+        const DataTypePtr decimal_type
+            = col.type->isNullable() ? dynamic_cast<const DataTypeNullable *>(col.type.get())->getNestedType() : col.type;
         for (int j = 0; j < MAX_WORD_BUF_LEN; j++)
         {
             word_buf[j] = toLittleEndian(*(reinterpret_cast<const Int32 *>(pos)));
@@ -716,8 +713,8 @@ const char * decodeDecimalCol(const char * pos, UInt8 field_length, UInt32 null_
     return pos;
 }
 
-const char * decodeDateCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-        const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
+const char * arrowDateColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++)
     {
@@ -752,8 +749,8 @@ const char * decodeDateCol(const char * pos, UInt8 field_length, UInt32 null_cou
     return pos;
 }
 
-const char * decodeNumCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-        const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo & col_info, UInt32 length)
+const char * arrowNumColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
+    const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo & col_info, UInt32 length)
 {
     for (UInt32 i = 0; i < length; i++, pos += field_length)
     {
@@ -800,22 +797,24 @@ const char * decodeNumCol(const char * pos, UInt8 field_length, UInt32 null_coun
     return pos;
 }
 
-void decodeArrow(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+void arrowChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
 {
-    for (const auto & chunk : dag_response.chunks()) {
-        const String &row_data = chunk.rows_data();
-        const char *start = row_data.c_str();
-        const char *pos = start;
+    for (const auto & chunk : dag_response.chunks())
+    {
+        const String & row_data = chunk.rows_data();
+        const char * start = row_data.c_str();
+        const char * pos = start;
         int column_index = 0;
         ColumnsWithTypeAndName colunns;
-        while (pos < start + row_data.size()) {
+        while (pos < start + row_data.size())
+        {
             UInt32 length = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
             pos += 4;
             UInt32 null_count = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
             pos += 4;
             std::vector<UInt8> null_bitmap;
-            const auto &field = schema[column_index];
-            const auto &name = field.first;
+            const auto & field = schema[column_index];
+            const auto & name = field.first;
             auto data_type = getDataTypeByColumnInfo(field.second);
             if (null_count > 0)
             {
@@ -838,7 +837,8 @@ void decodeArrow(const DAGSchema & schema, const tipb::SelectResponse & dag_resp
             }
             ColumnWithTypeAndName col(data_type, name);
             col.column->assumeMutable()->reserve(length);
-            switch (field.second.tp) {
+            switch (field.second.tp)
+            {
                 case TiDB::TypeTiny:
                 case TiDB::TypeShort:
                 case TiDB::TypeInt24:
@@ -847,18 +847,15 @@ void decodeArrow(const DAGSchema & schema, const tipb::SelectResponse & dag_resp
                 case TiDB::TypeYear:
                 case TiDB::TypeFloat:
                 case TiDB::TypeDouble:
-                    pos = decodeNumCol(pos, field_length, null_count, null_bitmap,
-                                       offsets, col, field.second, length);
+                    pos = arrowNumColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
                     break;
                 case TiDB::TypeDatetime:
                 case TiDB::TypeDate:
                 case TiDB::TypeTimestamp:
-                    pos = decodeDateCol(pos, field_length, null_count, null_bitmap,
-                                        offsets, col, field.second, length);
+                    pos = arrowDateColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
                     break;
                 case TiDB::TypeNewDecimal:
-                    pos = decodeDecimalCol(pos, field_length, null_count, null_bitmap,
-                                           offsets, col, field.second, length);
+                    pos = arrowDecimalColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
                     break;
                 case TiDB::TypeVarString:
                 case TiDB::TypeVarchar:
@@ -867,8 +864,7 @@ void decodeArrow(const DAGSchema & schema, const tipb::SelectResponse & dag_resp
                 case TiDB::TypeTinyBlob:
                 case TiDB::TypeMediumBlob:
                 case TiDB::TypeLongBlob:
-                    pos = decodeStringCol(pos, field_length, null_count, null_bitmap,
-                                          offsets, col, field.second, length);
+                    pos = arrowStringColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
                     break;
                 default:
                     throw Exception("Not supported yet: field tp = " + std::to_string(field.second.tp));
@@ -880,7 +876,7 @@ void decodeArrow(const DAGSchema & schema, const tipb::SelectResponse & dag_resp
     }
 }
 
-void decodeDefault(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+void defaultChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
 {
     for (const auto & chunk : dag_response.chunks())
     {
@@ -928,11 +924,11 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
     BlocksList blocks;
     if (dag_response.encode_type() == tipb::EncodeType::TypeArrow)
     {
-        decodeArrow(schema, dag_response, blocks);
+        arrowChunkToBlocks(schema, dag_response, blocks);
     }
     else
     {
-        decodeDefault(schema, dag_response, blocks);
+        defaultChunkToBlocks(schema, dag_response, blocks);
     }
     return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 }
