@@ -172,10 +172,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             // This means we can return whatever column, we'll choose it later if no other columns are specified either.
             continue;
 
-        if (cid < 1 || cid > (Int64)storage->getTableInfo().columns.size())
-            // cid out of bound
-            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
-
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
         auto pair = storage->getColumns().getPhysical(name);
