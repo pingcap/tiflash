@@ -524,17 +524,16 @@ SortDescription InterpreterDAG::getSortDescription(Strings & order_column_names)
 {
     // construct SortDescription
     SortDescription order_descr;
-    const tipb::TopN & topN = dag.getTopN();
-    order_descr.reserve(topN.order_by_size());
-    for (int i = 0; i < topN.order_by_size(); i++)
+    const tipb::TopN & topn = dag.getTopN();
+    order_descr.reserve(topn.order_by_size());
+    for (int i = 0; i < topn.order_by_size(); i++)
     {
         String name = order_column_names[i];
-        int direction = topN.order_by(i).desc() ? -1 : 1;
+        int direction = topn.order_by(i).desc() ? -1 : 1;
+        // MySQL/TiDB treats NULL as "minimum".
+        int nulls_direction = -1;
         // todo get this information from DAGRequest
-        // currently use NULLS LAST
-        int nulls_direction = direction;
-        // todo get this information from DAGRequest
-        // currently use the defalut value
+        // currently use the default value
         std::shared_ptr<Collator> collator;
 
         order_descr.emplace_back(name, direction, nulls_direction, collator);
