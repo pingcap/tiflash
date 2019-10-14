@@ -46,8 +46,8 @@ try
                 cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), std::move(key_ranges),
                 dag_response);
             driver.execute();
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
             cop_response->set_data(dag_response.SerializeAsString());
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
             break;
         }
         case COP_REQ_TYPE_ANALYZE:
@@ -112,6 +112,13 @@ catch (const std::exception & e)
     cop_response->Clear();
     cop_response->set_other_error(e.what());
     return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+}
+catch (...)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": catch other exception.");
+    cop_response->Clear();
+    cop_response->set_other_error("other exception");
+    return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
 }
 
 } // namespace DB

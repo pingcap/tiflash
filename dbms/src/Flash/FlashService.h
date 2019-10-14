@@ -25,7 +25,7 @@ public:
         grpc::ServerReaderWriter<tikvpb::BatchCommandsResponse, tikvpb::BatchCommandsRequest> * stream) override;
 
 private:
-    std::tuple<Context, ::grpc::Status> createDBContext(grpc::ServerContext * grpc_contex);
+    std::tuple<Context, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_contex) const;
 
 private:
     IServer & server;
