@@ -6,6 +6,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TiKVClient.h>
 #include <Storages/Transaction/applySnapshot.h>
 
 namespace DB
@@ -39,7 +40,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     if (context)
     {
         auto & tmt = context->getTMTContext();
-        Timestamp safe_point = tmt.getPDClient()->getGCSafePoint();
+        Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient());
 
         std::unordered_map<TableID, HandleMap> handle_maps;
 

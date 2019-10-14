@@ -43,13 +43,8 @@ public:
     void setSchemaSyncer(SchemaSyncerPtr);
 
     pingcap::pd::ClientPtr getPDClient() const;
-    void setPDClient(pingcap::pd::ClientPtr);
 
     pingcap::kv::RegionClientPtr createRegionClient(pingcap::kv::RegionVerID region_version_id) const;
-
-    pingcap::kv::RegionCachePtr getRegionCache() const;
-
-    pingcap::kv::RpcClientPtr getRpcClient();
 
     void restore();
 
