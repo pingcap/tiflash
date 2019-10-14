@@ -290,7 +290,7 @@ KeyCondition::KeyCondition(
           */
         Block block_with_constants = getBlockWithConstants(query_info.query, context, all_columns);
 
-        /// Trasform WHERE section to Reverse Polish notation
+        /// Transform WHERE section to Reverse Polish notation
         const ASTSelectQuery & select = typeid_cast<const ASTSelectQuery &>(*query_info.query);
         if (select.where_expression)
         {
