@@ -2,7 +2,7 @@
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <Core/ColumnsWithTypeAndName.h>
-#include <pd/IClient.h>
+#include <pingcap/pd/IClient.h>
 
 namespace DB
 {

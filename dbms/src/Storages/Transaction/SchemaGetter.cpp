@@ -1,6 +1,6 @@
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/SchemaGetter.h>
-#include <tikv/Scanner.h>
+#include <pingcap/kv/Scanner.h>
 
 namespace DB
 {
