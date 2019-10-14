@@ -3,7 +3,7 @@
 #include <Debug/MockSchemaGetter.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <tikv/Snapshot.h>
+#include <pingcap/kv/Snapshot.h>
 
 namespace DB
 {

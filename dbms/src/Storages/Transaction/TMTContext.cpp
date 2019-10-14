@@ -5,7 +5,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
-#include <pd/MockPDClient.h>
+#include <pingcap/pd/MockPDClient.h>
 
 namespace DB
 {

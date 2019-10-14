@@ -1,5 +1,5 @@
-#include <pd/IClient.h>
-#include <tikv/Backoff.h>
+#include <pingcap/pd/IClient.h>
+#include <pingcap/kv/Backoff.h>
 
 namespace DB
 {
