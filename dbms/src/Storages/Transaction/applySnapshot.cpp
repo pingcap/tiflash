@@ -6,7 +6,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/TiKVClient.h>
+#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/applySnapshot.h>
 
 namespace DB
