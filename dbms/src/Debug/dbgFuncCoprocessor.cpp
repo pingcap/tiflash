@@ -298,6 +298,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     dag_request.set_start_ts(start_ts);
     if (encode_type == "arrow")
         dag_request.set_encode_type(tipb::EncodeType::TypeArrow);
+    else
+        dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
 
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "from DAG compiler", 0);

@@ -12,7 +12,7 @@ TiDBColumn::TiDBColumn(Int8 element_len_) : length(0), null_cnt(0), current_data
     var_offsets.push_back(0);
 }
 
-void TiDBColumn::reset()
+void TiDBColumn::clear()
 {
     length = 0;
     null_cnt = 0;

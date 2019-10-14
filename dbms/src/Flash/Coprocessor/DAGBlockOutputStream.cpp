@@ -58,13 +58,14 @@ void DAGBlockOutputStream::writeSuffix()
             chunk_for_arrow_encode->encodeChunk(ss);
             chunk->set_rows_data(ss.str());
             dag_response.add_output_counts(chunk_for_arrow_encode->getRecordSize());
-            chunk_for_arrow_encode->reset();
+            chunk_for_arrow_encode->clear();
         }
     }
 }
 
 void DAGBlockOutputStream::encodeWithDefaultEncodeType(const Block & block)
 {
+    // TODO: Check compatibility between field_tp_and_flags and block column types.
     // Encode data to chunk by default encode
     size_t rows = block.rows();
     for (size_t i = 0; i < rows; i++)
@@ -99,7 +100,6 @@ void DAGBlockOutputStream::encodeWithArrowEncodeType(const DB::Block &block)
     size_t batch_encode_size;
     for (size_t row_index = 0; row_index < rows; row_index += batch_encode_size)
     {
-        //TiDBChunk dagChunk = TiDBChunk(result_field_types);
         if (chunk_for_arrow_encode->getRecordSize() >= records_per_chunk)
         {
             auto * chunk = dag_response.add_chunks();
@@ -107,7 +107,7 @@ void DAGBlockOutputStream::encodeWithArrowEncodeType(const DB::Block &block)
             chunk_for_arrow_encode->encodeChunk(ss);
             chunk->set_rows_data(ss.str());
             dag_response.add_output_counts(chunk_for_arrow_encode->getRecordSize());
-            chunk_for_arrow_encode->reset();
+            chunk_for_arrow_encode->clear();
         }
         batch_encode_size = records_per_chunk - chunk_for_arrow_encode->getRecordSize();
         const size_t upper = std::min(row_index + batch_encode_size, rows);
@@ -119,8 +119,6 @@ void DAGBlockOutputStream::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw Exception("Output column size mismatch with field type size", ErrorCodes::LOGICAL_ERROR);
-
-    // TODO: Check compatibility between field_tp_and_flags and block column types.
 
     if (encodeType == tipb::EncodeType::TypeDefault)
     {

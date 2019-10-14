@@ -27,10 +27,10 @@ public:
 
     TiDBColumn & getColumn(int index) { return columns[index]; };
     UInt32 getRecordSize();
-    void reset()
+    void clear()
     {
         for (auto & c : columns)
-            c.reset();
+            c.clear();
     }
 
 private:
