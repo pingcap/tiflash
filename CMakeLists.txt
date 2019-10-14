@@ -56,8 +56,6 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument")
-    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-implicit-float-conversion")
-    set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-string-plus-int")
 endif ()
 
 if (ARCH_LINUX)
