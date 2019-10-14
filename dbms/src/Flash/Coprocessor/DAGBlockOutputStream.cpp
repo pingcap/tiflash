@@ -1,7 +1,6 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 
 #include <DataTypes/DataTypeNullable.h>
-#include <Flash/Coprocessor/TiDBChunk.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -26,9 +25,11 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
       result_field_types(result_field_types_),
       header(header_)
 {
-    current_chunk = nullptr;
+    chunk_for_default_encode = nullptr;
     current_records_num = 0;
     dag_response.set_encode_type(encodeType);
+    if (encodeType == tipb::EncodeType::TypeArrow)
+        chunk_for_arrow_encode = std::make_unique<TiDBChunk>(result_field_types);
 }
 
 
@@ -40,10 +41,25 @@ void DAGBlockOutputStream::writePrefix()
 void DAGBlockOutputStream::writeSuffix()
 {
     // error handle,
-    if (current_chunk != nullptr && current_records_num > 0)
+    if (encodeType == tipb::EncodeType::TypeDefault)
     {
-        current_chunk->set_rows_data(current_ss.str());
-        dag_response.add_output_counts(current_records_num);
+        if (chunk_for_default_encode != nullptr && current_records_num > 0)
+        {
+            chunk_for_default_encode->set_rows_data(current_ss.str());
+            dag_response.add_output_counts(current_records_num);
+        }
+    }
+    else if (encodeType == tipb::EncodeType::TypeArrow)
+    {
+        if (chunk_for_arrow_encode->getRecordSize() > 0)
+        {
+            auto * chunk = dag_response.add_chunks();
+            std::stringstream ss;
+            chunk_for_arrow_encode->encodeChunk(ss);
+            chunk->set_rows_data(ss.str());
+            dag_response.add_output_counts(chunk_for_arrow_encode->getRecordSize());
+            chunk_for_arrow_encode->reset();
+        }
     }
 }
 
@@ -53,15 +69,15 @@ void DAGBlockOutputStream::encodeWithDefaultEncodeType(const Block & block)
     size_t rows = block.rows();
     for (size_t i = 0; i < rows; i++)
     {
-        if (current_chunk == nullptr || current_records_num >= records_per_chunk)
+        if (chunk_for_default_encode == nullptr || current_records_num >= records_per_chunk)
         {
-            if (current_chunk)
+            if (chunk_for_default_encode)
             {
                 // set the current ss to current chunk
-                current_chunk->set_rows_data(current_ss.str());
+                chunk_for_default_encode->set_rows_data(current_ss.str());
                 dag_response.add_output_counts(current_records_num);
             }
-            current_chunk = dag_response.add_chunks();
+            chunk_for_default_encode = dag_response.add_chunks();
             current_ss.str("");
             current_records_num = 0;
         }
@@ -80,16 +96,22 @@ void DAGBlockOutputStream::encodeWithArrowEncodeType(const DB::Block &block)
 {
     // Encode data in chunk by array encode
     size_t rows = block.rows();
-    for (size_t row_index = 0; row_index < rows; row_index += records_per_chunk)
+    size_t batch_encode_size;
+    for (size_t row_index = 0; row_index < rows; row_index += batch_encode_size)
     {
-        TiDBChunk dagChunk = TiDBChunk(result_field_types);
-        const size_t upper = std::min(row_index + records_per_chunk, rows);
-        dagChunk.buildDAGChunkFromBlock(block, result_field_types, row_index, upper);
-        auto * chunk = dag_response.add_chunks();
-        std::stringstream ss;
-        dagChunk.encodeChunk(ss);
-        chunk->set_rows_data(ss.str());
-        dag_response.add_output_counts(upper - row_index);
+        //TiDBChunk dagChunk = TiDBChunk(result_field_types);
+        if (chunk_for_arrow_encode->getRecordSize() >= records_per_chunk)
+        {
+            auto * chunk = dag_response.add_chunks();
+            std::stringstream ss;
+            chunk_for_arrow_encode->encodeChunk(ss);
+            chunk->set_rows_data(ss.str());
+            dag_response.add_output_counts(chunk_for_arrow_encode->getRecordSize());
+            chunk_for_arrow_encode->reset();
+        }
+        batch_encode_size = records_per_chunk - chunk_for_arrow_encode->getRecordSize();
+        const size_t upper = std::min(row_index + batch_encode_size, rows);
+        chunk_for_arrow_encode->buildDAGChunkFromBlock(block, result_field_types, row_index, upper);
     }
 }
 

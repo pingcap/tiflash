@@ -61,6 +61,8 @@ public:
     //void appendJson();
     void appendDecimal(const TiDBDecimal & decimal);
     void encodeColumn(std::stringstream & ss);
+    void reset();
+    UInt32 getLength() { return length; };
 
 private:
     bool isFixed() { return fixed_size != VAR_SIZE; };

@@ -19,15 +19,19 @@ public:
     void encodeChunk(std::stringstream & ss)
     {
         for (auto & c : columns)
-        {
             c.encodeColumn(ss);
-        }
     }
 
     void buildDAGChunkFromBlock(
         const Block & block, const std::vector<tipb::FieldType> & field_types, size_t start_index, size_t end_index);
 
     TiDBColumn & getColumn(int index) { return columns[index]; };
+    UInt32 getRecordSize();
+    void reset()
+    {
+        for (auto & c : columns)
+            c.reset();
+    }
 
 private:
     std::vector<TiDBColumn> columns;

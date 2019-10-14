@@ -24,6 +24,13 @@ TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
     }
 }
 
+UInt32 TiDBChunk::getRecordSize()
+{
+    if (columns.empty())
+        return 0;
+    return columns.back().getLength();
+}
+
 template <typename T>
 void decimalToVector(T dec, std::vector<Int32> & vec, UInt32 scale)
 {

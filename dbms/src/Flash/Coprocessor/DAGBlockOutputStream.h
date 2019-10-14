@@ -4,6 +4,7 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/TiDBChunk.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>
@@ -37,7 +38,8 @@ private:
 
     Block header;
 
-    tipb::Chunk * current_chunk;
+    tipb::Chunk * chunk_for_default_encode;
+    std::unique_ptr<TiDBChunk> chunk_for_arrow_encode;
     Int64 current_records_num;
     std::stringstream current_ss;
 };

@@ -12,6 +12,17 @@ TiDBColumn::TiDBColumn(Int8 element_len_) : length(0), null_cnt(0), current_data
     var_offsets.push_back(0);
 }
 
+void TiDBColumn::reset()
+{
+    length = 0;
+    null_cnt = 0;
+    null_bitmap.clear();
+    var_offsets.clear();
+    var_offsets.push_back(0);
+    data.str("");
+    current_data_size = 0;
+}
+
 void TiDBColumn::appendNullBitMap(bool value)
 {
     size_t index = length >> 3;
