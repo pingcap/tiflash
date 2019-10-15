@@ -144,11 +144,11 @@ struct ExecutorCtx
 {
     tipb::Executor * input;
     DAGSchema output;
-    std::unordered_map<String, tipb::Expr *> col_ref_map;
+    std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
 };
 
 void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::unordered_set<String> & referred_columns,
-    std::unordered_map<String, tipb::Expr *> & col_ref_map)
+    std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map)
 {
     if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
@@ -159,7 +159,9 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
 
         referred_columns.emplace((*ft).first);
-        col_ref_map.emplace((*ft).first, expr);
+        if (col_ref_map.find((*ft).first) == col_ref_map.end())
+            col_ref_map[(*ft).first] = {};
+        col_ref_map[(*ft).first].push_back(expr);
     }
     else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
     {
@@ -205,6 +207,20 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         {
             expr->set_sig(tipb::ScalarFuncSig::GEInt);
             auto *ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else if (func_name_lowercase == "less")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::LTInt);
+            auto * ft = expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+        else if (func_name_lowercase == "lessorequals")
+        {
+            expr->set_sig(tipb::ScalarFuncSig::LEInt);
+            auto * ft = expr->mutable_field_type();
             ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
@@ -259,7 +275,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
 }
 
 void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter, std::unordered_set<String> & referred_columns,
-    std::unordered_map<String, tipb::Expr *> & col_ref_map)
+    std::unordered_map<String, std::vector<tipb::Expr *>> & col_ref_map)
 {
     if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
@@ -339,7 +355,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                 ci.tp = TiDB::TypeTimestamp;
             ts_output.emplace_back(std::make_pair(column_info.name, std::move(ci)));
         }
-        executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, tipb::Expr *>{}});
+        executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, std::vector<tipb::Expr *>>{}});
         last_executor = ts_exec;
     }
 
@@ -349,7 +365,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         tipb::Executor * filter_exec = dag_request.add_executors();
         filter_exec->set_tp(tipb::ExecType::TypeSelection);
         tipb::Selection * filter = filter_exec->mutable_selection();
-        std::unordered_map<String, tipb::Expr *> col_ref_map;
+        std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
         compileFilter(executor_ctx_map[last_executor].output, ast_query.where_expression, filter, referred_columns, col_ref_map);
         executor_ctx_map.emplace(filter_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::move(col_ref_map)});
         last_executor = filter_exec;
@@ -361,7 +377,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         tipb::Executor * topn_exec = dag_request.add_executors();
         topn_exec->set_tp(tipb::ExecType::TypeTopN);
         tipb::TopN * topn = topn_exec->mutable_topn();
-        std::unordered_map<String, tipb::Expr *> col_ref_map;
+        std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
         for (const auto & child : ast_query.order_expression_list->children)
         {
             ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
@@ -385,7 +401,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         auto limit_length = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
         limit->set_limit(limit_length);
         executor_ctx_map.emplace(
-            limit_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, tipb::Expr *>{}});
+            limit_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, std::vector<tipb::Expr *>>{}});
         last_executor = limit_exec;
     }
 
@@ -425,7 +441,9 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                 throw Exception("Column not found when pruning: " + pair.first, ErrorCodes::LOGICAL_ERROR);
             std::stringstream ss;
             encodeDAGInt64(iter - last_output.begin(), ss);
-            pair.second->set_val(ss.str());
+            auto s_val = ss.str();
+            for (auto * expr : pair.second)
+                expr->set_val(s_val);
         }
         executor_ctx.output = last_output;
     };
@@ -452,7 +470,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
             tipb::Executor * agg_exec = dag_request.add_executors();
             agg_exec->set_tp(tipb::ExecType::TypeAggregation);
             tipb::Aggregation * agg = agg_exec->mutable_aggregation();
-            std::unordered_map<String, tipb::Expr *> col_ref_map;
+            std::unordered_map<String, std::vector<tipb::Expr *>> col_ref_map;
             for (const auto & expr : ast_query.select_expression_list->children)
             {
                 const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());

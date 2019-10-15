@@ -114,8 +114,10 @@ bool isUInt8Type(const DataTypePtr & type)
 
 String DAGExpressionAnalyzer::applyFunction(const String & func_name, Names & arg_names, ExpressionActionsPtr & actions)
 {
-    const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
     String result_name = genFuncString(func_name, arg_names);
+    if (actions->getSampleBlock().has(result_name))
+        return result_name;
+    const FunctionBuilderPtr & function_builder = FunctionFactory::instance().get(func_name, context);
     const ExpressionAction & apply_function = ExpressionAction::applyFunction(function_builder, arg_names, result_name);
     actions->add(apply_function);
     return result_name;
@@ -377,11 +379,11 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
             auto * type_field_type = type_expr.mutable_field_type();
             type_field_type->set_tp(TiDB::TypeString);
             type_field_type->set_flag(TiDB::ColumnFlagNotNull);
-            getActions(type_expr, actions);
+            auto type_expr_name = getActions(type_expr, actions);
 
             Names cast_argument_names;
             cast_argument_names.push_back(expr_name);
-            cast_argument_names.push_back(getName(type_expr, getCurrentInputColumns()));
+            cast_argument_names.push_back(type_expr_name);
             String cast_expr_name = applyFunction("CAST", cast_argument_names, actions);
             return cast_expr_name;
         }
@@ -450,23 +452,22 @@ static String getUniqueName(const Block & block, const String & prefix)
 
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions)
 {
-    String expr_name = getName(expr, getCurrentInputColumns());
-    if ((isLiteralExpr(expr) || isFunctionExpr(expr)) && actions->getSampleBlock().has(expr_name))
-    {
-        return expr_name;
-    }
     if (isLiteralExpr(expr))
     {
         Field value = decodeLiteral(expr);
-        DataTypePtr type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : applyVisitor(FieldToDataType(), value);
+        DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
+        DataTypePtr target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
+        String name = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
+        if (actions->getSampleBlock().has(name))
+            return name;
 
         ColumnWithTypeAndName column;
-        column.column = type->createColumnConst(1, convertFieldToType(value, *type));
-        column.name = expr_name;
-        column.type = type;
+        column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
+        column.name = name;
+        column.type = target_type;
 
         actions->add(ExpressionAction::addColumn(column));
-        return column.name;
+        return name;
     }
     else if (isColumnExpr(expr))
     {
@@ -476,7 +477,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
         //todo check if the column type need to be cast to field type
-        return expr_name;
+        return getCurrentInputColumns()[column_id].name;
     }
     else if (isFunctionExpr(expr))
     {
@@ -515,13 +516,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             }
         }
 
-        // need to re-construct expr_name, because expr_name generated previously is based on expr tree,
-        // but for function call, it's argument name may be changed as an implicit cast func maybe
-        // inserted(refer to the logic below), so we need to update the expr_name
-        // for example, for a expr and(arg1, arg2), the expr_name is and(arg1_name,arg2_name), but
-        // if the arg1 need to be casted to the type passed by dag request, then the expr_name
-        // should be updated to and(casted_arg1_name, arg2_name)
-        expr_name = applyFunction(func_name, argument_names, actions);
+        String expr_name = applyFunction(func_name, argument_names, actions);
         // add cast if needed
         expr_name = appendCastIfNeeded(expr, actions, expr_name);
         return expr_name;
