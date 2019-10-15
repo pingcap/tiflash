@@ -22,7 +22,7 @@ bool isAggFunctionExpr(const tipb::Expr & expr);
 const String & getFunctionName(const tipb::Expr & expr);
 const String & getAggFunctionName(const tipb::Expr & expr);
 bool isColumnExpr(const tipb::Expr & expr);
-ColumnID getColumnID(const tipb::Expr & expr);
+String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 bool isInOrGlobalInOperator(const String & name);

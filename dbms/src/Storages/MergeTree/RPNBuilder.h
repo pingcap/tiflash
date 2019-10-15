@@ -21,7 +21,7 @@ template <typename NodeT, typename PreparedSetsT>
 class RPNBuilder
 {
 public:
-    RPNBuilder(const ExpressionActionsPtr & key_expr_, ColumnIndices & key_columns_, const NamesAndTypesList & source_columns_)
+    RPNBuilder(const ExpressionActionsPtr & key_expr_, ColumnIndices & key_columns_, const std::vector<NameAndTypePair> & source_columns_)
         : key_expr(key_expr_), key_columns(key_columns_), source_columns(source_columns_)
     {}
 
@@ -62,6 +62,6 @@ public:
 protected:
     const ExpressionActionsPtr & key_expr;
     ColumnIndices & key_columns;
-    const NamesAndTypesList & source_columns;
+    const std::vector<NameAndTypePair> & source_columns;
 };
 } // namespace DB
