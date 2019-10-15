@@ -37,7 +37,7 @@ private:
     Poco::Logger * log;
 
 public:
-    DAGExpressionAnalyzer(const std::vector<NameAndTypePair> && source_columns_, const Context & context_);
+    DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_);
     void appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name);
     void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names);
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,

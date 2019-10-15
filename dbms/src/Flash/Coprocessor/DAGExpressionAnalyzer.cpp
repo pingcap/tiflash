@@ -47,8 +47,8 @@ static String genFuncString(const String & func_name, const Names & argument_nam
     return ss.str();
 }
 
-DAGExpressionAnalyzer::DAGExpressionAnalyzer(const std::vector<NameAndTypePair> && source_columns_, const Context & context_)
-    : source_columns(source_columns_),
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
+    : source_columns(std::move(source_columns_)),
       context(context_),
       after_agg(false),
       implicit_cast_count(0),
