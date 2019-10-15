@@ -52,7 +52,6 @@ const String & getFunctionName(const tipb::Expr & expr)
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
     std::stringstream ss;
-    Int64 column_id = 0;
     String func_name;
     Field f;
     switch (expr.tp())
@@ -94,12 +93,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             return std::to_string(TiDB::DatumFlat(t, static_cast<TiDB::TP>(expr.field_type().tp())).field().get<Int64>());
         }
         case tipb::ExprType::ColumnRef:
-            column_id = decodeDAGInt64(expr.val());
-            if (column_id < 0 || column_id >= (ColumnID)input_col.size())
-            {
-                throw Exception("Column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
-            }
-            return input_col[column_id].name;
+            return getColumnNameForColumnExpr(expr, input_col);
         case tipb::ExprType::Count:
         case tipb::ExprType::Sum:
         case tipb::ExprType::Avg:
@@ -247,10 +241,14 @@ Field decodeLiteral(const tipb::Expr & expr)
     }
 }
 
-ColumnID getColumnID(const tipb::Expr & expr)
+String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
-    auto column_id = decodeDAGInt64(expr.val());
-    return column_id;
+    auto column_index = decodeDAGInt64(expr.val());
+    if (column_index < 0 || column_index >= (Int64)input_col.size())
+    {
+        throw Exception("Column index out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+    }
+    return input_col[column_index].name;
 }
 
 bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }

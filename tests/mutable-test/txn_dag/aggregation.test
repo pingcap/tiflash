@@ -21,6 +21,12 @@
 │            1 │   777 │
 └──────────────┴───────┘
 
+=> DBGInvoke dag('select count(col_1),count(col_1) from default.test group by col_2')
+┌─count(col_1)─┬─count(col_1)─┬─col_2─┐
+│            2 │            2 │   666 │
+│            1 │            1 │   777 │
+└──────────────┴──────────────┴───────┘
+
 # DAG read by explicitly specifying region id, where + group by.
 => DBGInvoke dag('select count(col_1) from default.test where col_2 = 666 group by col_2', 4)
 ┌─count(col_1)─┬─col_2─┐

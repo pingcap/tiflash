@@ -58,19 +58,14 @@ const String getFuncName(const ASTPtr & node)
     return "";
 }
 
-const String getColumnName(const tipb::Expr & node, const NamesAndTypesList & source_columns)
+const String getColumnName(const tipb::Expr & node, const std::vector<NameAndTypePair> & source_columns)
 {
-    if (node.tp() == tipb::ExprType::ColumnRef)
-    {
-        auto col_id = getColumnID(node);
-        if (col_id < 0 || col_id >= (Int64)source_columns.size())
-            return "";
-        return source_columns.getNames()[col_id];
-    }
+    if (isColumnExpr(node))
+        return getColumnNameForColumnExpr(node, source_columns);
     return "";
 }
 
-const String getColumnName(const ASTPtr & node, const NamesAndTypesList &) { return node->getColumnName(); }
+const String getColumnName(const ASTPtr & node, const std::vector<NameAndTypePair> &) { return node->getColumnName(); }
 
 bool isFuncNode(const ASTPtr & node) { return typeid_cast<const ASTFunction *>(node.get()); }
 
