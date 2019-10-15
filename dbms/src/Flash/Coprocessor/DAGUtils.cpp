@@ -49,7 +49,7 @@ const String & getFunctionName(const tipb::Expr & expr)
     }
 }
 
-String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col, bool for_parser)
+String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col)
 {
     std::stringstream ss;
     Int64 column_id = 0;
@@ -123,7 +123,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             throw Exception(tipb::ExprType_Name(expr.tp()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
     }
     // build function expr
-    if (isInOrGlobalInOperator(func_name) && for_parser)
+    if (isInOrGlobalInOperator(func_name))
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
         throw Exception("Function " + func_name + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
@@ -132,7 +132,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     bool first = true;
     for (const tipb::Expr & child : expr.children())
     {
-        String s = exprToString(child, input_col, for_parser);
+        String s = exprToString(child, input_col);
         if (first)
         {
             first = false;
@@ -148,11 +148,6 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
 }
 
 const String & getTypeName(const tipb::Expr & expr) { return tipb::ExprType_Name(expr.tp()); }
-
-String getName(const tipb::Expr & expr, const std::vector<NameAndTypePair> & current_input_columns)
-{
-    return exprToString(expr, current_input_columns, false);
-}
 
 bool isAggFunctionExpr(const tipb::Expr & expr)
 {
