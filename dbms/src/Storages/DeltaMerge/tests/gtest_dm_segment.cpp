@@ -1,3 +1,4 @@
+#include <ctime>
 #include <memory>
 
 #include "dm_basic_include.h"
@@ -355,6 +356,11 @@ TEST_P(SegmentDeletion_test, DeleteDataInStable)
         segment->write(dmContext(), {remove});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
+
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
     }
 
     if (merge_delta_after_delete)
@@ -474,6 +480,212 @@ TEST_P(SegmentDeletion_test, DeleteDataInStableAndDelta)
 }
 
 INSTANTIATE_TEST_CASE_P(WhetherReadOrMergeDeltaBeforeDeleteRange, SegmentDeletion_test, testing::Combine(testing::Bool(), testing::Bool()));
+TEST_F(Segment_test, DeleteRead)
+{
+    const size_t num_rows_write = 64;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    {
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
+
+    {
+        // Test delete range [70, 100)
+        HandleRange del{70, 100};
+        segment->write(dmContext(), {del});
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
+
+    {
+        // Read after deletion
+        // The deleted range has no overlap with current data, so there should be no change
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snaps= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); i++)
+                {
+                    if (iter.name == "pk")
+                    {
+                        EXPECT_EQ(c->getInt(i), i);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+    }
+
+    {
+        // Test delete range [63, 70)
+        HandleRange del{63, 70};
+        segment->write(dmContext(), {del});
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
+
+    {
+        // Read after deletion
+        // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snaps= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write - 1);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(0), 0);
+                    EXPECT_EQ(c->getInt(62), 62);
+                }
+                EXPECT_EQ(c->size(), 63UL);
+            }
+        }
+        in->readSuffix();
+    }
+
+    {
+        // Test delete range [1, 32)
+        HandleRange del{1, 32};
+        segment->write(dmContext(), {del});
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
+
+    {
+        // Read after deletion
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snaps= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write - 32);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(0), 0);
+                    EXPECT_EQ(c->getInt(1), 32);
+                }
+            }
+        }
+        in->readSuffix();
+    }
+
+    {
+        // Test delete range [1, 32)
+        // delete should be idempotent
+        HandleRange del{1, 32};
+        segment->write(dmContext(), {del});
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
+
+    {
+        // Read after deletion
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snaps= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write - 32);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(0), 0);
+                    EXPECT_EQ(c->getInt(1), 32);
+                }
+            }
+        }
+        in->readSuffix();
+    }
+
+    {
+        // Test delete range [0, 2)
+        // There is an overlap range [0, 1)
+        HandleRange del{0, 2};
+        segment->write(dmContext(), {del});
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
+
+    {
+        // Read after deletion
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snaps= */ {dmContext().storage_pool},
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ {},
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), num_rows_write - 33);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(0), 32);
+                }
+            }
+        }
+        in->readSuffix();
+    }
+}
 
 TEST_F(Segment_test, Split)
 {
@@ -587,6 +799,217 @@ TEST_F(Segment_test, Split)
             EXPECT_EQ(num_rows_read, num_rows_write);
         }
     }
+}
+
+TEST_F(Segment_test, Restore)
+{
+    // compare will compares the given segments.
+    // If they are equal, result will be true, otherwise it will be false.
+    auto compare = [&](const SegmentPtr & seg1, const SegmentPtr & seg2, bool & result) {
+        result   = false;
+        auto in1 = seg1->getInputStream(/* dm_context= */ dmContext(),
+                                        /* segment_snap= */ seg1->getReadSnapshot(),
+                                        /* storage_snaps= */ {dmContext().storage_pool},
+                                        /* columns_to_read= */ tableColumns(),
+                                        /* read_ranges= */ {HandleRange::newAll()},
+                                        /* filter */ {},
+                                        /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                        /* expected_block_size= */ 1024);
+
+        auto in2 = seg2->getInputStream(/* dm_context= */ dmContext(),
+                                        /* segment_snap= */ seg2->getReadSnapshot(),
+                                        /* storage_snaps= */ {dmContext().storage_pool},
+                                        /* columns_to_read= */ tableColumns(),
+                                        /* read_ranges= */ {HandleRange::newAll()},
+                                        /* filter */ {},
+                                        /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                        /* expected_block_size= */ 1024);
+        in1->readPrefix();
+        in2->readPrefix();
+        for (;;)
+        {
+            Block block1 = in1->read();
+            Block block2 = in2->read();
+            if (!block1)
+            {
+                ASSERT_TRUE(!block2);
+                break;
+            }
+
+            ASSERT_EQ(block1.rows(), block2.rows());
+
+            auto iter1 = block1.begin();
+            auto iter2 = block2.begin();
+
+            for (;;)
+            {
+                if (iter1 == block1.end())
+                {
+                    ASSERT_EQ(iter2, block2.end());
+                    break;
+                }
+
+                auto c1 = iter1->column;
+                auto c2 = iter2->column;
+
+                ASSERT_EQ(c1->size(), c2->size());
+
+                for (Int64 i = 0; i < Int64(c1->size()); i++)
+                {
+                    if (iter1->name == "pk")
+                    {
+                        ASSERT_EQ(iter2->name, "pk");
+                        ASSERT_EQ(c1->getInt(i), c2->getInt(i));
+                    }
+                }
+
+                // Call next
+                iter1++;
+                iter2++;
+            }
+        }
+        in1->readSuffix();
+        in2->readSuffix();
+
+        result = true;
+    };
+
+    const size_t num_rows_write = 64;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+        // flush segment
+        RemoveWriteBatches remove_wbs;
+        segment = segment->flushDelta(dmContext(), remove_wbs);
+        remove_wbs.write(dmContext().storage_pool);
+    }
+
+    SegmentPtr new_segment = segment->restoreSegment(dmContext(), segment->segmentId());
+
+    {
+        // test compare
+        bool result;
+        compare(segment, new_segment, result);
+        ASSERT_TRUE(result);
+    }
+
+    {
+        // Do some update and restore again
+        HandleRange del(0, 32);
+        segment->write(dmContext(), {del});
+        new_segment = segment->restoreSegment(dmContext(), segment->segmentId());
+    }
+
+    {
+        // test compare
+        bool result;
+        compare(new_segment, new_segment, result);
+        ASSERT_TRUE(result);
+    }
+}
+
+TEST_F(Segment_test, MassiveSplit)
+try
+{
+    Settings settings                    = dmContext().db_context.getSettings();
+    settings.dm_segment_rows             = 11;
+    settings.dm_segment_delta_limit_rows = 7;
+
+    segment = reload(DMTestEnv::getDefaultColumns(), std::move(settings));
+
+    size_t       num_rows_written   = 0;
+    const size_t num_rows_per_write = 5;
+
+    const time_t start_time = std::time(nullptr);
+
+    auto temp = new std::vector<Int64>();
+    for (;;)
+    {
+        {
+            // Write to segment
+            Block block = DMTestEnv::prepareSimpleWriteBlock( //
+                num_rows_written,                             //
+                num_rows_written + num_rows_per_write,
+                false);
+            segment->write(dmContext(), std::move(block));
+            num_rows_written += num_rows_per_write;
+        }
+
+        {
+            // Delete some records so that the following condition can be satisfied:
+            // if pk % 5 < 2, then the record would be deleted
+            // if pk % 5 >= 2, then the record would be reserved
+            HandleRange del{Int64(num_rows_written - num_rows_per_write), Int64(num_rows_written - num_rows_per_write + 2)};
+            segment->write(dmContext(), {del});
+        }
+
+        {
+            // flush segment
+            RemoveWriteBatches remove_wbs;
+            segment = segment->flushDelta(dmContext(), remove_wbs);
+            remove_wbs.write(dmContext().storage_pool);
+        }
+
+        for (size_t i = num_rows_written - num_rows_per_write + 2; i < num_rows_written; i++)
+        {
+            temp->push_back(Int64(i));
+        }
+        num_rows_written -= 2;
+
+        {
+            // Read after writing
+            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snaps= */ {dmContext().storage_pool},
+                                              /* columns_to_read= */ tableColumns(),
+                                              /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter */ {},
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                for (auto & iter : block)
+                {
+                    auto c = iter.column;
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        if (iter.name == "pk")
+                        {
+                            auto expect = temp->at(i + num_rows_read);
+                            EXPECT_EQ(c->getInt(Int64(i)), expect);
+                        }
+                    }
+                }
+                num_rows_read += block.rows();
+                sleep(1);
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_written, num_rows_read);
+        }
+
+        {
+            // Run for 10 minutes to make sure Split is stable.
+            const time_t end_time = std::time(nullptr);
+            if ((end_time - start_time) / 60 > 10)
+            {
+                delete temp;
+                return;
+            }
+        }
+    }
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
 }
 
 /// Mock a col from i8 -> i32

@@ -220,7 +220,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
         action.task = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
-    // TODO: We need to do a delta merge after write a delete range, otherwise, the rows got deleted could never be acutally removed.
+    // TODO: We need to do a delta merge after write a delete range, otherwise, the rows got deleted could never be actually removed.
 
     commitWrites(actions, wbs, dm_context, op_context);
 }
