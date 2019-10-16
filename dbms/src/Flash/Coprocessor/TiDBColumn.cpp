@@ -5,6 +5,13 @@
 namespace DB
 {
 
+template <typename T>
+void encodeLittleEndian(const T & value, std::stringstream & ss)
+{
+    auto v = toLittleEndian(value);
+    ss.write(reinterpret_cast<const char *>(&v), sizeof(v));
+}
+
 TiDBColumn::TiDBColumn(Int8 element_len_) : length(0), null_cnt(0), current_data_size(0), fixed_size(element_len_)
 {
     if (fixed_size != VAR_SIZE)
