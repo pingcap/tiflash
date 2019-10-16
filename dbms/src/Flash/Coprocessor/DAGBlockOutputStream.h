@@ -27,8 +27,6 @@ public:
     void write(const Block & block) override;
     void writePrefix() override;
     void writeSuffix() override;
-    void encodeWithDefaultEncodeType(const Block & block);
-    void encodeWithArrowEncodeType(const Block & block);
 
 private:
     std::vector<tipb::FieldType> result_field_types;
