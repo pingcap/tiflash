@@ -61,7 +61,7 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
                 break;
             default:
-                throw Exception("Unsupported executor in DAG request: " + dag_request.executors(i).DebugString());
+                throw Exception("Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
 }
