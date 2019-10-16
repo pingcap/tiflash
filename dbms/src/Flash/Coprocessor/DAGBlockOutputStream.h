@@ -5,7 +5,6 @@
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/DAGChunkBuilder.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Coprocessor/TiDBChunk.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <tipb/select.pb.h>

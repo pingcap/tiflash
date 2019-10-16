@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/TiDBColumn.h>
 
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <IO/Endian.h>
 
 namespace DB
 {

@@ -16,7 +16,7 @@ public:
     {
         dag_response.set_encode_type(tipb::EncodeType::TypeArrow);
         ti_chunk = std::make_unique<TiDBChunk>(result_field_types);
-    };
+    }
 
     void build(const Block & block) override;
 

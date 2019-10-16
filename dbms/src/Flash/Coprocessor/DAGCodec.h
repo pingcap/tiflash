@@ -2,7 +2,6 @@
 
 #include <Common/Decimal.h>
 #include <Core/Field.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 
 namespace DB
 {

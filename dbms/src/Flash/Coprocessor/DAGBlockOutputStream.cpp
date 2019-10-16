@@ -1,11 +1,7 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 
-#include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGArrowChunkBuilder.h>
 #include <Flash/Coprocessor/DAGDefaultChunkBuilder.h>
-#include <Storages/Transaction/Codec.h>
-#include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
