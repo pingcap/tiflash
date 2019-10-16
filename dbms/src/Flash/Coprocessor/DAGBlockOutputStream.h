@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
+#include <Flash/Coprocessor/DAGChunkBuilder.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/TiDBChunk.h>
 #pragma GCC diagnostic push
@@ -30,18 +31,9 @@ public:
     void encodeWithArrowEncodeType(const Block & block);
 
 private:
-    tipb::SelectResponse & dag_response;
-
-    const Int64 records_per_chunk;
-    tipb::EncodeType encodeType;
     std::vector<tipb::FieldType> result_field_types;
-
     Block header;
-
-    tipb::Chunk * chunk_for_default_encode;
-    std::unique_ptr<TiDBChunk> chunk_for_arrow_encode;
-    Int64 current_records_num;
-    std::stringstream current_ss;
+    std::unique_ptr<DAGChunkBuilder> chunk_builder;
 };
 
 } // namespace DB
