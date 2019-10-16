@@ -47,8 +47,8 @@ static String genFuncString(const String & func_name, const Names & argument_nam
     return ss.str();
 }
 
-DAGExpressionAnalyzer::DAGExpressionAnalyzer(const std::vector<NameAndTypePair> && source_columns_, const Context & context_)
-    : source_columns(source_columns_),
+DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
+    : source_columns(std::move(source_columns_)),
       context(context_),
       after_agg(false),
       implicit_cast_count(0),
@@ -68,7 +68,6 @@ void DAGExpressionAnalyzer::appendAggregation(
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & step = chain.steps.back();
 
-    Names agg_argument_names;
     for (const tipb::Expr & expr : agg.agg_func())
     {
         const String & agg_func_name = getAggFunctionName(expr);
@@ -78,13 +77,24 @@ void DAGExpressionAnalyzer::appendAggregation(
         for (Int32 i = 0; i < expr.children_size(); i++)
         {
             String arg_name = getActions(expr.children(i), step.actions);
-            agg_argument_names.push_back(arg_name);
             types[i] = step.actions->getSampleBlock().getByName(arg_name).type;
             aggregate.argument_names[i] = arg_name;
+            step.required_output.push_back(arg_name);
         }
-        String func_string = genFuncString(agg_func_name, agg_argument_names);
+        String func_string = genFuncString(agg_func_name, aggregate.argument_names);
+        bool duplicate = false;
+        for (const auto & pre_agg : aggregate_descriptions)
+        {
+            if (pre_agg.column_name == func_string)
+            {
+                aggregated_columns.emplace_back(func_string, pre_agg.function->getReturnType());
+                duplicate = true;
+                break;
+            }
+        }
+        if (duplicate)
+            continue;
         aggregate.column_name = func_string;
-        //todo de-duplicate aggregation column
         aggregate.parameters = Array();
         aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, types);
         aggregate_descriptions.push_back(aggregate);
@@ -92,8 +102,6 @@ void DAGExpressionAnalyzer::appendAggregation(
         // this is a temp result since implicit cast maybe added on these aggregated_columns
         aggregated_columns.emplace_back(func_string, result_type);
     }
-
-    std::move(agg_argument_names.begin(), agg_argument_names.end(), std::back_inserter(step.required_output));
 
     for (const tipb::Expr & expr : agg.group_by())
     {
@@ -286,7 +294,7 @@ void DAGExpressionAnalyzer::appendAggSelect(
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
-    NamesAndTypesList updated_aggregated_columns;
+    std::vector<NameAndTypePair> updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
     bool need_append_timezone_cast = hasMeaningfulTZInfo(rqst);
     tipb::Expr tz_expr;
@@ -344,12 +352,10 @@ void DAGExpressionAnalyzer::appendAggSelect(
 
     if (need_update_aggregated_columns)
     {
-        auto updated_agg_col_names = updated_aggregated_columns.getNames();
-        auto updated_agg_col_types = updated_aggregated_columns.getTypes();
         aggregated_columns.clear();
         for (size_t i = 0; i < updated_aggregated_columns.size(); i++)
         {
-            aggregated_columns.emplace_back(updated_agg_col_names[i], updated_agg_col_types[i]);
+            aggregated_columns.emplace_back(updated_aggregated_columns[i].name, updated_aggregated_columns[i].type);
         }
     }
 }
@@ -471,13 +477,8 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
     }
     else if (isColumnExpr(expr))
     {
-        ColumnID column_id = getColumnID(expr);
-        if (column_id < 0 || column_id >= (ColumnID)getCurrentInputColumns().size())
-        {
-            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
-        }
         //todo check if the column type need to be cast to field type
-        return getCurrentInputColumns()[column_id].name;
+        return getColumnNameForColumnExpr(expr, getCurrentInputColumns());
     }
     else if (isFunctionExpr(expr))
     {

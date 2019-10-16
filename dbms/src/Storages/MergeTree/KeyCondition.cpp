@@ -282,7 +282,7 @@ KeyCondition::KeyCondition(
 
     if (query_info.fromAST())
     {
-        RPNBuilder<ASTPtr, PreparedSets> rpn_builder(key_expr_, key_columns, all_columns);
+        RPNBuilder<ASTPtr, PreparedSets> rpn_builder(key_expr_, key_columns, {});
         PreparedSets sets(query_info.sets);
 
         /** Evaluation of expressions that depend only on constants.
