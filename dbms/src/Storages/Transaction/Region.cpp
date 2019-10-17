@@ -3,7 +3,7 @@
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <tikv/RegionClient.h>
+#include <pingcap/kv/RegionClient.h>
 #include <Storages/Transaction/RegionHelper.hpp>
 
 namespace DB

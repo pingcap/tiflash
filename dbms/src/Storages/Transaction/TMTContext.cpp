@@ -5,7 +5,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDBSchemaSyncer.h>
-#include <pd/MockPDClient.h>
+#include <pingcap/pd/MockPDClient.h>
 
 namespace DB
 {
@@ -57,27 +57,13 @@ void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
     schema_syncer = rhs;
 }
 
-pingcap::pd::ClientPtr TMTContext::getPDClient() const
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    return pd_client;
-}
-
-void TMTContext::setPDClient(pingcap::pd::ClientPtr rhs)
-{
-    std::lock_guard<std::mutex> lock(mutex);
-    pd_client = rhs;
-}
+pingcap::pd::ClientPtr TMTContext::getPDClient() const { return pd_client; }
 
 pingcap::kv::RegionClientPtr TMTContext::createRegionClient(pingcap::kv::RegionVerID region_version_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
     return pd_client->isMock() ? nullptr : std::make_shared<pingcap::kv::RegionClient>(region_cache, rpc_client, region_version_id);
 }
-
-pingcap::kv::RegionCachePtr TMTContext::getRegionCache() const { return region_cache; }
-
-pingcap::kv::RpcClientPtr TMTContext::getRpcClient() { return rpc_client; }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
 
