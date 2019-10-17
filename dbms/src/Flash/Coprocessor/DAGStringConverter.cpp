@@ -36,10 +36,11 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
     {
         throw Exception("Table " + std::to_string(table_id) + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
     }
-    const auto * merge_tree = dynamic_cast<const StorageMergeTree *>(storage.get());
-    if (!merge_tree)
+
+    const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    if (!managed_storage)
     {
-        throw Exception("Only MergeTree table is supported in DAG request", ErrorCodes::COP_BAD_DAG_REQUEST);
+        throw Exception("Only Manageable table is supported in DAG request", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
 
     if (ts.columns_size() == 0)
@@ -59,7 +60,7 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         {
             throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
         }
-        String name = merge_tree->getTableInfo().columns[cid - 1].name;
+        String name = managed_storage->getTableInfo().columns[cid - 1].name;
         output_from_ts.push_back(std::move(name));
     }
     ss << "FROM " << storage->getDatabaseName() << "." << storage->getTableName() << " ";
