@@ -245,13 +245,13 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
 namespace
 {
 
-void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info)
+void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, RegionTable::RegionReadStatus status)
 {
     std::vector<RegionID> region_ids;
     region_ids.reserve(regions_info.size());
     for (const auto & info : regions_info)
         region_ids.push_back(info.region_id);
-    throw RegionException(region_ids);
+    throw RegionException(std::move(region_ids), status);
 }
 
 inline void doLearnerRead(const TiDB::TableID table_id,         //
@@ -287,7 +287,7 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
         if (region == nullptr)
         {
             LOG_WARNING(log, "[region " << info.region_id << "] is not found in KVStore, try again");
-            throwRetryRegion(regions_info);
+            throwRetryRegion(regions_info, RegionTable::RegionReadStatus::NOT_FOUND);
         }
         kvstore_region.emplace(info.region_id, std::move(region));
     }
@@ -617,10 +617,9 @@ void updateDeltaMergeTableCreateStatement(                   //
         {
             if (hidden_columns.has(column_define.name))
                 continue;
-            TiDB::ColumnInfo column_info = getColumnInfoByDataType(column_define.type);
-            column_info.id = column_define.id;
-            column_info.name = column_define.name;
-            column_info.origin_default_value = column_define.default_value;
+            Field default_field;
+            TiDB::ColumnInfo column_info = reverseGetColumnInfo(NameAndTypePair{column_define.name, column_define.type}, column_define.id, default_field);
+            // TODO column_info.origin_default_value = column_define.default_value;
             table_info_from_store.columns.emplace_back(std::move(column_info));
         }
     }
