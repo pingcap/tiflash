@@ -243,7 +243,7 @@ struct TableInfo
 
     TableInfo(const String & table_info_json);
 
-    String serialize(bool escaped) const;
+    String serialize() const;
 
     void deserialize(const String & json_str);
 
