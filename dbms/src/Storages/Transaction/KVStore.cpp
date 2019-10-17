@@ -19,13 +19,13 @@ KVStore::KVStore(const std::string & data_dir)
     : region_persister(data_dir, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
 {}
 
-void KVStore::restore(const RegionClientCreateFunc & region_client_create)
+void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
 {
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionManageLock();
 
     LOG_INFO(log, "start to restore regions");
-    regionsMut() = region_persister.restore(const_cast<RegionClientCreateFunc *>(&region_client_create));
+    regionsMut() = region_persister.restore(const_cast<IndexReaderCreateFunc *>(&index_reader_create));
 
     // init range index
     for (const auto & region : regions())
