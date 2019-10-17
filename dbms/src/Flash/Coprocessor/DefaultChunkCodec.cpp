@@ -14,7 +14,7 @@ namespace DB
 class DefaultChunkCodecStream : public ChunkCodecStream
 {
 public:
-    DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types) {}
+    explicit DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types) {}
     std::stringstream ss;
     String getString() override { return ss.str(); }
     void clear() override { ss.str(""); }

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Flash/Coprocessor/ChunkCodecStream.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 
@@ -14,7 +13,7 @@ using DAGSchema = std::vector<DAGColumnInfo>;
 class ChunkCodecStream
 {
 public:
-    ChunkCodecStream(const std::vector<tipb::FieldType> & field_types_) : field_types(field_types_) {}
+    explicit ChunkCodecStream(const std::vector<tipb::FieldType> & field_types_) : field_types(field_types_) {}
     virtual String getString() = 0;
     virtual void clear() = 0;
     const std::vector<tipb::FieldType> & getFieldTypes() { return field_types; }
