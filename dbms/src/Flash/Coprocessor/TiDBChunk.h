@@ -26,7 +26,6 @@ public:
         const Block & block, const std::vector<tipb::FieldType> & field_types, size_t start_index, size_t end_index);
 
     TiDBColumn & getColumn(int index) { return columns[index]; };
-    UInt32 getRecordSize();
     void clear()
     {
         for (auto & c : columns)

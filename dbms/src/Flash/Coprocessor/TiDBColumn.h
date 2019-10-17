@@ -62,7 +62,6 @@ public:
     void appendDecimal(const TiDBDecimal & decimal);
     void encodeColumn(std::stringstream & ss);
     void clear();
-    UInt32 getLength() { return length; };
 
 private:
     bool isFixed() { return fixed_size != VAR_SIZE; };

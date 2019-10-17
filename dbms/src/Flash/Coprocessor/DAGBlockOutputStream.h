@@ -3,7 +3,7 @@
 #include <Core/Types.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
-#include <Flash/Coprocessor/DAGChunkCodec.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -33,8 +33,8 @@ private:
     std::vector<tipb::FieldType> result_field_types;
     Block header;
     Int64 records_per_chunk;
-    std::unique_ptr<DAGChunkCodec> chunk_codec;
-    std::unique_ptr<DAGChunkCodecStream> chunk_codec_stream;
+    std::unique_ptr<ChunkCodec> chunk_codec;
+    std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     Int64 current_records_num;
 };
 

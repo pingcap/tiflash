@@ -6,15 +6,15 @@
 namespace DB
 {
 
-class DAGChunkCodecStream
+class ChunkCodecStream
 {
 public:
     virtual String getString() = 0;
     virtual void clear() = 0;
-    virtual ~DAGChunkCodecStream() = default;
+    virtual ~ChunkCodecStream() = default;
 };
 
-class DAGDefaultChunkCodecStream : public DAGChunkCodecStream
+class DefaultChunkCodecStream : public ChunkCodecStream
 {
 public:
     std::stringstream ss;
@@ -22,10 +22,10 @@ public:
     void clear() override { ss.str(""); }
 };
 
-class DAGArrowChunkCodecStream : public DAGChunkCodecStream
+class ArrowChunkCodecStream : public ChunkCodecStream
 {
 public:
-    explicit DAGArrowChunkCodecStream(std::vector<tipb::FieldType> & field_types) : DAGChunkCodecStream()
+    explicit ArrowChunkCodecStream(std::vector<tipb::FieldType> & field_types) : ChunkCodecStream()
     {
         ti_chunk = std::make_unique<TiDBChunk>(field_types);
     }

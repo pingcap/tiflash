@@ -5,9 +5,11 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/TiDBColumn.h>
 #include <Functions/FunctionHelpers.h>
 #include <Parsers/ASTAsterisk.h>
@@ -367,7 +369,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
                 ci.tp = TiDB::TypeTimestamp;
             ts_output.emplace_back(std::make_pair(column_info.name, std::move(ci)));
         }
-        executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, std::vector<tipb::Expr *>>{}});
+        executor_ctx_map.emplace(
+            ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, std::vector<tipb::Expr *>>{}});
         last_executor = ts_exec;
     }
 
@@ -412,8 +415,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
         tipb::Limit * limit = limit_exec->mutable_limit();
         auto limit_length = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
         limit->set_limit(limit_length);
-        executor_ctx_map.emplace(
-            limit_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, std::vector<tipb::Expr *>>{}});
+        executor_ctx_map.emplace(limit_exec,
+            ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, std::vector<tipb::Expr *>>{}});
         last_executor = limit_exec;
     }
 
@@ -618,319 +621,21 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     return dag_response;
 }
 
-bool checkNull(UInt32 i, UInt32 null_count, const std::vector<UInt8> &null_bitmap, const ColumnWithTypeAndName &col)
-{
-    if (null_count > 0)
-    {
-        size_t index = i >> 3;
-        size_t p = i & 7;
-        if (!(null_bitmap[index] & (1 << p)))
-        {
-            col.column->assumeMutable()->insert(Field());
-            return true;
-        }
-    }
-    return false;
-}
-
-const char * arrowStringColToFlashCol(const char * pos, UInt8, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-    const std::vector<UInt64> & offsets, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
-{
-    for (UInt32 i = 0; i < length; i++)
-    {
-        if (checkNull(i, null_count, null_bitmap, col))
-            continue;
-        const String value = String(pos + offsets[i], pos + offsets[i + 1]);
-        col.column->assumeMutable()->insert(Field(value));
-    }
-    return pos + offsets[length];
-}
-
-template <typename T>
-T toCHDecimal(UInt8 digits_int, UInt8 digits_frac, bool negative, const Int32 * word_buf)
-{
-    static_assert(IsDecimal<T>);
-
-    UInt8 word_int = (digits_int + DIGITS_PER_WORD - 1) / DIGITS_PER_WORD;
-    UInt8 word_frac = digits_frac / DIGITS_PER_WORD;
-    UInt8 tailing_digit = digits_frac % DIGITS_PER_WORD;
-
-    typename T::NativeType value = 0;
-    const int word_max = int(1e9);
-    for (int i = 0; i < word_int; i++)
-    {
-        value = value * word_max + word_buf[i];
-    }
-    for (int i = 0; i < word_frac; i++)
-    {
-        value = value * word_max + word_buf[i + word_int];
-    }
-    if (tailing_digit > 0)
-    {
-        Int32 tail = word_buf[word_int + word_frac];
-        for (int i = 0; i < DIGITS_PER_WORD - tailing_digit; i++)
-        {
-            tail /= 10;
-        }
-        for (int i = 0; i < tailing_digit; i++)
-        {
-            value *= 10;
-        }
-        value += tail;
-    }
-    return negative ? -value : value;
-}
-
-const char * arrowDecimalColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-    const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
-{
-    for (UInt32 i = 0; i < length; i++)
-    {
-        if (checkNull(i, null_count, null_bitmap, col))
-        {
-            pos += field_length;
-            continue;
-        }
-        UInt8 digits_int = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 digits_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        //UInt8 result_frac = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 negative = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        Int32 word_buf[MAX_WORD_BUF_LEN];
-        const DataTypePtr decimal_type
-            = col.type->isNullable() ? dynamic_cast<const DataTypeNullable *>(col.type.get())->getNestedType() : col.type;
-        for (int j = 0; j < MAX_WORD_BUF_LEN; j++)
-        {
-            word_buf[j] = toLittleEndian(*(reinterpret_cast<const Int32 *>(pos)));
-            pos += 4;
-        }
-        if (auto * type = checkDecimal<Decimal32>(*decimal_type))
-        {
-            auto res = toCHDecimal<Decimal32>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal32>(res, type->getScale()));
-        }
-        else if (auto * type = checkDecimal<Decimal64>(*decimal_type))
-        {
-            auto res = toCHDecimal<Decimal64>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal64>(res, type->getScale()));
-        }
-        else if (auto * type = checkDecimal<Decimal128>(*decimal_type))
-        {
-            auto res = toCHDecimal<Decimal128>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal128>(res, type->getScale()));
-        }
-        else if (auto * type = checkDecimal<Decimal256>(*decimal_type))
-        {
-            auto res = toCHDecimal<Decimal256>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal256>(res, type->getScale()));
-        }
-    }
-    return pos;
-}
-
-const char * arrowDateColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-    const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo &, UInt32 length)
-{
-    for (UInt32 i = 0; i < length; i++)
-    {
-        if (checkNull(i, null_count, null_bitmap, col))
-        {
-            pos += field_length;
-            continue;
-        }
-        UInt32 hour = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
-        UInt32 micro_second = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-        pos += 4;
-        UInt16 year = toLittleEndian(*(reinterpret_cast<const UInt16 *>(pos)));
-        pos += 2;
-        UInt8 month = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 day = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 minute = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        UInt8 second = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        pos += 2;
-        //UInt8 time_type = toLittleEndian(*(reinterpret_cast<const UInt8 *>(pos)));
-        pos += 1;
-        //UInt8 fsp = toLittleEndian(*(reinterpret_cast<const Int8 *>(pos)));
-        pos += 1;
-        pos += 2;
-        MyDateTime mt(year, month, day, hour, minute, second, micro_second);
-        col.column->assumeMutable()->insert(Field(mt.toPackedUInt()));
-    }
-    return pos;
-}
-
-const char * arrowNumColToFlashCol(const char * pos, UInt8 field_length, UInt32 null_count, const std::vector<UInt8> & null_bitmap,
-    const std::vector<UInt64> &, const ColumnWithTypeAndName & col, const ColumnInfo & col_info, UInt32 length)
-{
-    for (UInt32 i = 0; i < length; i++, pos += field_length)
-    {
-        if (checkNull(i, null_count, null_bitmap, col))
-            continue;
-        UInt64 u64;
-        Int64 i64;
-        UInt32 u32;
-        Float32 f32;
-        Float64 f64;
-        switch (col_info.tp)
-        {
-            case TiDB::TypeTiny:
-            case TiDB::TypeShort:
-            case TiDB::TypeInt24:
-            case TiDB::TypeLong:
-            case TiDB::TypeLongLong:
-            case TiDB::TypeYear:
-                if (col_info.flag & TiDB::ColumnFlagUnsigned)
-                {
-                    u64 = toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos)));
-                    col.column->assumeMutable()->insert(Field(u64));
-                }
-                else
-                {
-                    i64 = toLittleEndian(*(reinterpret_cast<const Int64 *>(pos)));
-                    col.column->assumeMutable()->insert(Field(i64));
-                }
-                break;
-            case TiDB::TypeFloat:
-                u32 = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-                std::memcpy(&f32, &u32, sizeof(Float32));
-                col.column->assumeMutable()->insert(Field((Float64)f32));
-                break;
-            case TiDB::TypeDouble:
-                u64 = toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos)));
-                std::memcpy(&f64, &u64, sizeof(Float64));
-                col.column->assumeMutable()->insert(Field(f64));
-                break;
-            default:
-                throw Exception("Should not reach here", ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-    return pos;
-}
-
 void arrowChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
 {
+    ArrowChunkCodec codec;
     for (const auto & chunk : dag_response.chunks())
     {
-        const String & row_data = chunk.rows_data();
-        const char * start = row_data.c_str();
-        const char * pos = start;
-        int column_index = 0;
-        ColumnsWithTypeAndName colunns;
-        while (pos < start + row_data.size())
-        {
-            UInt32 length = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-            pos += 4;
-            UInt32 null_count = toLittleEndian(*(reinterpret_cast<const UInt32 *>(pos)));
-            pos += 4;
-            std::vector<UInt8> null_bitmap;
-            const auto & field = schema[column_index];
-            const auto & name = field.first;
-            auto data_type = getDataTypeByColumnInfo(field.second);
-            if (null_count > 0)
-            {
-                auto bit_map_length = (length + 7) / 8;
-                for (UInt32 i = 0; i < bit_map_length; i++)
-                {
-                    null_bitmap.push_back(*pos);
-                    pos++;
-                }
-            }
-            Int8 field_length = getFieldLength(field.second.tp);
-            std::vector<UInt64> offsets;
-            if (field_length == VAR_SIZE)
-            {
-                for (UInt32 i = 0; i <= length; i++)
-                {
-                    offsets.push_back(toLittleEndian(*(reinterpret_cast<const UInt64 *>(pos))));
-                    pos += 8;
-                }
-            }
-            ColumnWithTypeAndName col(data_type, name);
-            col.column->assumeMutable()->reserve(length);
-            switch (field.second.tp)
-            {
-                case TiDB::TypeTiny:
-                case TiDB::TypeShort:
-                case TiDB::TypeInt24:
-                case TiDB::TypeLong:
-                case TiDB::TypeLongLong:
-                case TiDB::TypeYear:
-                case TiDB::TypeFloat:
-                case TiDB::TypeDouble:
-                    pos = arrowNumColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
-                    break;
-                case TiDB::TypeDatetime:
-                case TiDB::TypeDate:
-                case TiDB::TypeTimestamp:
-                    pos = arrowDateColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
-                    break;
-                case TiDB::TypeNewDecimal:
-                    pos = arrowDecimalColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
-                    break;
-                case TiDB::TypeVarString:
-                case TiDB::TypeVarchar:
-                case TiDB::TypeBlob:
-                case TiDB::TypeString:
-                case TiDB::TypeTinyBlob:
-                case TiDB::TypeMediumBlob:
-                case TiDB::TypeLongBlob:
-                    pos = arrowStringColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, col, field.second, length);
-                    break;
-                default:
-                    throw Exception("Not supported yet: field tp = " + std::to_string(field.second.tp));
-            }
-            colunns.emplace_back(std::move(col));
-            column_index++;
-        }
-        blocks.emplace_back(Block(colunns));
+        blocks.emplace_back(codec.decode(chunk, schema));
     }
 }
 
 void defaultChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
 {
+    DefaultChunkCodec codec;
     for (const auto & chunk : dag_response.chunks())
     {
-        std::vector<std::vector<Field>> rows;
-        std::vector<Field> curr_row;
-        const std::string & data = chunk.rows_data();
-        size_t cursor = 0;
-        while (cursor < data.size())
-        {
-            curr_row.push_back(DecodeDatum(cursor, data));
-            if (curr_row.size() == schema.size())
-            {
-                rows.emplace_back(std::move(curr_row));
-                curr_row.clear();
-            }
-        }
-
-        ColumnsWithTypeAndName columns;
-        for (auto & field : schema)
-        {
-            const auto & name = field.first;
-            auto data_type = getDataTypeByColumnInfo(field.second);
-            ColumnWithTypeAndName col(data_type, name);
-            col.column->assumeMutable()->reserve(rows.size());
-            columns.emplace_back(std::move(col));
-        }
-        for (const auto & row : rows)
-        {
-            for (size_t i = 0; i < row.size(); i++)
-            {
-                const Field & field = row[i];
-                columns[i].column->assumeMutable()->insert(DatumFlat(field, schema[i].second.tp).field());
-            }
-        }
-
-        blocks.emplace_back(Block(columns));
+        blocks.emplace_back(codec.decode(chunk, schema));
     }
 }
 

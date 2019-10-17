@@ -1,7 +1,7 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 
-#include <Flash/Coprocessor/DAGArrowChunkCodec.h>
-#include <Flash/Coprocessor/DAGDefaultChunkCodec.h>
+#include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/DefaultChunkCodec.h>
 
 namespace DB
 {
@@ -22,13 +22,13 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
 {
     if (encodeType == tipb::EncodeType::TypeDefault)
     {
-        chunk_codec = std::make_unique<DAGDefaultChunkCodec>(result_field_types);
-        chunk_codec_stream = std::make_unique<DAGDefaultChunkCodecStream>();
+        chunk_codec = std::make_unique<DefaultChunkCodec>();
+        chunk_codec_stream = std::make_unique<DefaultChunkCodecStream>();
     }
     else if (encodeType == tipb::EncodeType::TypeArrow)
     {
-        chunk_codec = std::make_unique<DAGArrowChunkCodec>(result_field_types);
-        chunk_codec_stream = std::make_unique<DAGArrowChunkCodecStream>(result_field_types);
+        chunk_codec = std::make_unique<ArrowChunkCodec>();
+        chunk_codec_stream = std::make_unique<ArrowChunkCodecStream>(result_field_types);
     }
     dag_response.set_encode_type(encodeType);
 }
@@ -69,7 +69,7 @@ void DAGBlockOutputStream::write(const Block & block)
             encodeChunkToDAGResponse();
         }
         const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
-        chunk_codec->encode(block, row_index, upper, chunk_codec_stream);
+        chunk_codec->encode(block, row_index, upper, result_field_types, chunk_codec_stream);
         current_records_num += (upper - row_index);
         row_index = upper;
     }
