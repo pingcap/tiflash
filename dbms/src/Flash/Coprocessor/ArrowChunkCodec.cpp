@@ -5,12 +5,30 @@
 
 namespace DB
 {
-void ArrowChunkCodec::encode(const DB::Block & block, size_t start, size_t end, const std::vector<tipb::FieldType> & result_field_types,
-    std::unique_ptr<DB::ChunkCodecStream> & stream)
+
+class ArrowChunkCodecStream : public ChunkCodecStream
+{
+public:
+    explicit ArrowChunkCodecStream(std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types)
+    {
+        ti_chunk = std::make_unique<TiDBChunk>(field_types);
+    }
+
+    String getString() override
+    {
+        std::stringstream ss;
+        ti_chunk->encodeChunk(ss);
+        return ss.str();
+    }
+    void clear() override { ti_chunk->clear(); }
+    std::unique_ptr<TiDBChunk> ti_chunk;
+};
+
+void ArrowChunkCodec::encode(const DB::Block & block, size_t start, size_t end, std::unique_ptr<DB::ChunkCodecStream> & stream)
 {
     // Encode data in chunk by arrow encode
     auto * arrow_chunk_codec_stream = dynamic_cast<DB::ArrowChunkCodecStream *>(stream.get());
-    arrow_chunk_codec_stream->ti_chunk->buildDAGChunkFromBlock(block, result_field_types, start, end);
+    arrow_chunk_codec_stream->ti_chunk->buildDAGChunkFromBlock(block, stream->getFieldTypes(), start, end);
 }
 
 Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)
@@ -56,6 +74,11 @@ Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schem
         column_index++;
     }
     return Block(columns);
+}
+
+std::unique_ptr<ChunkCodecStream> ArrowChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
+{
+    return std::make_unique<ArrowChunkCodecStream>(field_types);
 }
 
 } // namespace DB

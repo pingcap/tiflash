@@ -11,19 +11,28 @@ using TiDB::TP;
 
 namespace DB
 {
-void DefaultChunkCodec::encode(const DB::Block & block, size_t start, size_t end, const std::vector<tipb::FieldType> & result_field_types,
-    std::unique_ptr<DB::ChunkCodecStream> & stream)
+class DefaultChunkCodecStream : public ChunkCodecStream
+{
+public:
+    DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types) {}
+    std::stringstream ss;
+    String getString() override { return ss.str(); }
+    void clear() override { ss.str(""); }
+};
+
+void DefaultChunkCodec::encode(const DB::Block & block, size_t start, size_t end, std::unique_ptr<DB::ChunkCodecStream> & stream)
 {
     // TODO: Check compatibility between field_tp_and_flags and block column types.
     auto * default_chunk_codec_stream = dynamic_cast<DB::DefaultChunkCodecStream *>(stream.get());
+    const auto & field_types = stream->getFieldTypes();
     // Encode data to chunk by default encode
     for (size_t i = start; i < end; i++)
     {
         for (size_t j = 0; j < block.columns(); j++)
         {
             const auto & field = (*block.getByPosition(j).column.get())[i];
-            DatumBumpy datum(field, static_cast<TP>(result_field_types[j].tp()));
-            EncodeDatum(datum.field(), getCodecFlagByFieldType(result_field_types[j]), default_chunk_codec_stream->ss);
+            DatumBumpy datum(field, static_cast<TP>(field_types[j].tp()));
+            EncodeDatum(datum.field(), getCodecFlagByFieldType(field_types[j]), default_chunk_codec_stream->ss);
         }
     }
 }
@@ -62,6 +71,11 @@ Block DefaultChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & sch
         }
     }
     return Block(columns);
+}
+
+std::unique_ptr<ChunkCodecStream> DefaultChunkCodec::newCodecStream(const std::vector<tipb::FieldType> & field_types)
+{
+    return std::make_unique<DefaultChunkCodecStream>(field_types);
 }
 
 } // namespace DB

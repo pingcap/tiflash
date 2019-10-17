@@ -23,13 +23,12 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
     if (encodeType == tipb::EncodeType::TypeDefault)
     {
         chunk_codec = std::make_unique<DefaultChunkCodec>();
-        chunk_codec_stream = std::make_unique<DefaultChunkCodecStream>();
     }
     else if (encodeType == tipb::EncodeType::TypeArrow)
     {
         chunk_codec = std::make_unique<ArrowChunkCodec>();
-        chunk_codec_stream = std::make_unique<ArrowChunkCodecStream>(result_field_types);
     }
+    chunk_codec_stream = chunk_codec->newCodecStream(result_field_types);
     dag_response.set_encode_type(encodeType);
 }
 
