@@ -403,6 +403,9 @@ BlockInputStreams StorageDeltaMerge::read( //
         {
             /// Learner read.
             doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, tmt, log);
+
+            /// For learner read from TiDB/TiSpark, we set num_streams by `mvcc_query_info.concurrent`
+            num_streams = std::max(1U, static_cast<UInt32>(mvcc_query_info.concurrent));
         }
 
         HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
