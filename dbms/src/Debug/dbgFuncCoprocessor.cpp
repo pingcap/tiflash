@@ -1,8 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Columns/ColumnNullable.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
@@ -10,8 +8,6 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Flash/Coprocessor/TiDBColumn.h>
-#include <Functions/FunctionHelpers.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>

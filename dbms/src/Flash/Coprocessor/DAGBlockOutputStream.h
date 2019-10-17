@@ -32,7 +32,7 @@ private:
     tipb::SelectResponse & dag_response;
     std::vector<tipb::FieldType> result_field_types;
     Block header;
-    Int64 records_per_chunk;
+    const Int64 records_per_chunk;
     std::unique_ptr<ChunkCodec> chunk_codec;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     Int64 current_records_num;
