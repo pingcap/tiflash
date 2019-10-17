@@ -63,7 +63,7 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
 
-    String rengine_addr;
+    String raft_service_address;
 };
 
 } // namespace DB
