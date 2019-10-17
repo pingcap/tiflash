@@ -139,8 +139,7 @@ public:
         GenPageId     gen_data_page_id;
     };
 
-    DiskValueSpace(bool should_cache_, PageId page_id_);
-    DiskValueSpace(bool should_cache_, PageId page_id_, const Chunks & chunks_);
+    DiskValueSpace(bool should_cache_, PageId page_id_, Chunks && chunks_ = {}, MutableColumnMap && cache_ = {}, size_t cache_chunks_ = 0);
     DiskValueSpace(const DiskValueSpace & other);
 
     /// Called after the instance is created from existing metadata.
@@ -184,6 +183,9 @@ public:
     DiskValueSpacePtr tryFlushCache(const OpContext & context, WriteBatch & remove_data_wb, bool force = false);
 
     ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
+
+    MutableColumnMap cloneCache();
+    size_t           cacheChunks() { return cache_chunks; }
 
     size_t num_rows() const;
     size_t num_rows(size_t chunks_offset, size_t chunk_length) const;

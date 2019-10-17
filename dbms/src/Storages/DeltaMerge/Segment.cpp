@@ -76,25 +76,41 @@ Segment::Segment(UInt64 epoch_, const HandleRange & range_, PageId segment_id_, 
 {
 }
 
-Segment::Segment(UInt64              epoch_,
+//Segment::Segment(UInt64              epoch_,
+//                 const HandleRange & range_,
+//                 PageId              segment_id_,
+//                 PageId              next_segment_id_,
+//                 PageId              delta_id,
+//                 const Chunks &      delta_chunks_,
+//                 PageId              stable_id,
+//                 const Chunks &      stable_chunks_)
+//    : epoch(epoch_),
+//      range(range_),
+//      segment_id(segment_id_),
+//      next_segment_id(next_segment_id_),
+//      delta(std::make_shared<DiskValueSpace>(true, delta_id, delta_chunks_)),
+//      stable(std::make_shared<DiskValueSpace>(false, stable_id, stable_chunks_)),
+//      delta_tree(std::make_shared<DefaultDeltaTree>()),
+//      log(&Logger::get("Segment"))
+//{
+//}
+
+Segment::Segment(UInt64              epoch_, //
                  const HandleRange & range_,
                  PageId              segment_id_,
                  PageId              next_segment_id_,
-                 PageId              delta_id,
-                 const Chunks &      delta_chunks_,
-                 PageId              stable_id,
-                 const Chunks &      stable_chunks_)
+                 DiskValueSpacePtr   delta_,
+                 DiskValueSpacePtr   stable_)
     : epoch(epoch_),
       range(range_),
       segment_id(segment_id_),
       next_segment_id(next_segment_id_),
-      delta(std::make_shared<DiskValueSpace>(true, delta_id, delta_chunks_)),
-      stable(std::make_shared<DiskValueSpace>(false, stable_id, stable_chunks_)),
+      delta(delta_),
+      stable(stable_),
       delta_tree(std::make_shared<DefaultDeltaTree>()),
       log(&Logger::get("Segment"))
 {
 }
-
 
 SegmentPtr Segment::newSegment(DMContext & context, const HandleRange & range, PageId segment_id, PageId next_segment_id)
 {
@@ -185,9 +201,10 @@ void Segment::write(DMContext & dm_context, const BlockOrDelete & update)
 AppendTaskPtr Segment::createAppendTask(const OpContext & opc, WriteBatches & wbs, const BlockOrDelete & update)
 {
     if (update.block)
-        LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] write rows: " << DB::toString(update.block.rows()));
+        LOG_DEBUG(log,
+                  "Segment [" << DB::toString(segment_id) << "] create append task, write rows: " << DB::toString(update.block.rows()));
     else
-        LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] delete range: " << update.delete_range.toString());
+        LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] create append task, delete range: " << update.delete_range.toString());
 
     EventRecorder recorder(ProfileEvents::DMAppendDeltaPrepare, ProfileEvents::DMAppendDeltaPrepareNS);
 
@@ -205,6 +222,12 @@ void Segment::applyAppendTask(const OpContext & opc, const AppendTaskPtr & task,
     EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitMemory, ProfileEvents::DMAppendDeltaCommitMemoryNS);
 
     auto new_delta = delta->applyAppendTask(opc, task, update);
+
+    if (update.block)
+        LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] apply append task, write rows: " << DB::toString(update.block.rows()));
+    else
+        LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] apply append task, delete range: " << update.delete_range.toString());
+
     if (new_delta)
     {
         LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] update delta instance");
@@ -358,7 +381,7 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
         return new_segment->split(dm_context, new_segment_snap, new_storage_snap, wbs);
     };
 
-    if (delta->num_rows() > stable->num_rows())
+    if (segment_snap.delta->num_rows() > segment_snap.stable->num_rows())
         return merge_then_split();
 
     Handle split_point = getSplitPointFast(dm_context, storage_snap.data_reader, *segment_snap.stable);
@@ -366,6 +389,8 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
     bool bad_split_point = split_point == range.start || split_point == range.end;
     if (bad_split_point)
         return merge_then_split();
+    else if (segment_snap.stable->num_chunks() <= 1)
+        res = doSplitPhysical(dm_context, segment_snap, storage_snap, split_point, wbs);
     else
         res = doSplitLogical(dm_context, segment_snap, split_point, wbs);
 
@@ -426,26 +451,26 @@ SegmentPtr Segment::merge(DMContext & dm_context, const SegmentPtr & left, const
     return res;
 }
 
-SegmentPtr Segment::mergeDelta(DMContext &             dm_context,
-                               const SegmentSnapshot & segment_snap,
-                               const StorageSnapshot & storage_snap,
-                               WriteBatches &          wbs) const
+DiskValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_context,
+                                             const SegmentSnapshot & segment_snap,
+                                             const StorageSnapshot & storage_snap,
+                                             WriteBatches &          wbs) const
 {
-    EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
-
     LOG_DEBUG(log,
-              "Segment [" << DB::toString(segment_id) << "] start merge delta. delta chunks: " << DB::toString(delta->num_chunks())
+              "Segment [" << DB::toString(segment_id) << "] prepare merge delta start. delta chunks: " << DB::toString(delta->num_chunks())
                           << ", delta total rows: " << DB::toString(delta->num_rows()));
+
+    EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
     auto & handle      = dm_context.handle_column;
     auto & columns     = dm_context.store_columns;
     auto   min_version = dm_context.min_version;
 
     auto read_info   = getReadInfo<false>(dm_context, columns, segment_snap, storage_snap);
-    auto data_stream = getPlacedStream(read_info.storage_snap.data_reader,
+    auto data_stream = getPlacedStream(storage_snap.data_reader,
                                        read_info.read_columns,
                                        EMPTY_FILTER,
-                                       *read_info.segment_snap.stable,
+                                       *segment_snap.stable,
                                        read_info.delta_value_space,
                                        read_info.index_begin,
                                        read_info.index_end,
@@ -456,24 +481,51 @@ SegmentPtr Segment::mergeDelta(DMContext &             dm_context,
     OpContext opc               = OpContext::createForDataStorage(dm_context);
     Chunks    new_stable_chunks = DiskValueSpace::writeChunks(opc, data_stream, wbs.data);
 
+    auto new_stable = std::make_shared<DiskValueSpace>(*segment_snap.stable);
+    new_stable->setChunks(std::move(new_stable_chunks), wbs.meta, wbs.removed_data);
+
+    LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] prepare merge delta done.");
+
+    return new_stable;
+}
+
+SegmentPtr Segment::applyMergeDelta(DMContext & /*dm_context*/,
+                                    const SegmentSnapshot & segment_snap,
+                                    const StorageSnapshot & /*storage_snap*/,
+                                    WriteBatches &            wbs,
+                                    const DiskValueSpacePtr & new_stable) const
+{
+    LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] apply merge delta start.");
+
     auto remove_delta_chunks = delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
     auto new_delta_chunks    = delta->getChunksAfter(segment_snap.delta_rows, segment_snap.delta_deletes);
+
+    auto new_delta = std::make_shared<DiskValueSpace>(true, //
+                                                      delta->pageId(),
+                                                      std::move(remove_delta_chunks),
+                                                      delta->cloneCache(),
+                                                      delta->cacheChunks());
+    new_delta->setChunks(std::move(new_delta_chunks), wbs.meta, wbs.removed_log);
 
     auto new_me = std::make_shared<Segment>(epoch + 1, //
                                             range,
                                             segment_id,
                                             next_segment_id,
-                                            delta->pageId(),
-                                            remove_delta_chunks,
-                                            stable->pageId(),
-                                            stable->getChunks());
+                                            new_delta,
+                                            new_stable);
 
-    new_me->delta->setChunks(std::move(new_delta_chunks), wbs.meta, wbs.removed_log);
-    new_me->stable->setChunks(std::move(new_stable_chunks), wbs.meta, wbs.removed_data);
-
-    LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] done merge delta.");
+    LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] apply merge delta done.");
 
     return new_me;
+}
+
+SegmentPtr Segment::mergeDelta(DMContext &             dm_context,
+                               const SegmentSnapshot & segment_snap,
+                               const StorageSnapshot & storage_snap,
+                               WriteBatches &          wbs) const
+{
+    auto new_stable = prepareMergeDelta(dm_context, segment_snap, storage_snap, wbs);
+    return applyMergeDelta(dm_context, segment_snap, storage_snap, wbs, new_stable);
 }
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context) const
@@ -487,8 +539,10 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context) const
 
 void Segment::check(DMContext & dm_context, const String & when) const
 {
-    PageReader reader(dm_context.storage_pool.meta(), dm_context.storage_pool.meta().getSnapshot());
+    auto &     storage_pool = dm_context.storage_pool;
+    PageReader reader(storage_pool.meta(), storage_pool.meta().getSnapshot());
     delta->check(reader, when);
+    stable->check(reader, when);
 }
 
 void Segment::flushCache(DMContext & dm_context)
@@ -649,10 +703,8 @@ Segment::doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_
                                             my_range,
                                             this->segment_id,
                                             other_segment_id,
-                                            segment_snap.delta->pageId(),
-                                            segment_snap.delta->getChunks(),
-                                            segment_snap.stable->pageId(),
-                                            segment_snap.stable->getChunks());
+                                            std::make_shared<DiskValueSpace>(*segment_snap.delta),
+                                            std::make_shared<DiskValueSpace>(*segment_snap.stable));
 
     auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
                                            other_range,
@@ -686,6 +738,88 @@ Segment::doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_
     other->serialize(wbs.meta);
     other->delta->setChunks(std::move(other_delta_chunks), wbs.meta, wbs.removed_log);
     other->stable->setChunks(std::move(other_stable_chunks), wbs.meta, wbs.removed_data);
+
+    return {new_me, other};
+}
+SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
+                                     const SegmentSnapshot & segment_snap,
+                                     const StorageSnapshot & storage_snap,
+                                     Handle                  split_point,
+                                     WriteBatches &          wbs) const
+{
+    EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
+
+    auto & handle       = dm_context.handle_column;
+    auto & storage_pool = dm_context.storage_pool;
+    auto   min_version  = dm_context.min_version;
+
+    auto & columns   = dm_context.store_columns;
+    auto   read_info = getReadInfo<false>(dm_context, columns, segment_snap, storage_snap);
+
+    HandleRange my_range    = {range.start, split_point};
+    HandleRange other_range = {split_point, range.end};
+
+    Chunks my_new_stable_chunks;
+    Chunks other_new_stable_chunks;
+
+    OpContext opc = OpContext::createForDataStorage(dm_context);
+    {
+        // Write my data
+        BlockInputStreamPtr my_data = getPlacedStream(storage_snap.data_reader,
+                                                      read_info.read_columns,
+                                                      EMPTY_FILTER,
+                                                      *segment_snap.stable,
+                                                      read_info.delta_value_space,
+                                                      read_info.index_begin,
+                                                      read_info.index_end,
+                                                      STABLE_CHUNK_ROWS);
+        my_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
+        my_data  = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
+        auto tmp = DiskValueSpace::writeChunks(opc, my_data, wbs.data);
+        my_new_stable_chunks.swap(tmp);
+    }
+
+    {
+        // Write new segment's data
+        BlockInputStreamPtr other_data = getPlacedStream(storage_snap.data_reader,
+                                                         read_info.read_columns,
+                                                         EMPTY_FILTER,
+                                                         *segment_snap.stable,
+                                                         read_info.delta_value_space,
+                                                         read_info.index_begin,
+                                                         read_info.index_end,
+                                                         STABLE_CHUNK_ROWS);
+        other_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
+        other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
+        auto tmp   = DiskValueSpace::writeChunks(opc, other_data, wbs.data);
+        other_new_stable_chunks.swap(tmp);
+    }
+
+    auto other_segment_id = storage_pool.newMetaPageId();
+    auto other_delta_id   = storage_pool.newMetaPageId();
+    auto other_stable_id  = storage_pool.newMetaPageId();
+
+    auto new_me = std::make_shared<Segment>(this->epoch + 1, //
+                                            my_range,
+                                            this->segment_id,
+                                            other_segment_id,
+                                            std::make_shared<DiskValueSpace>(*segment_snap.delta),
+                                            std::make_shared<DiskValueSpace>(*segment_snap.stable));
+
+    auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
+                                           other_range,
+                                           other_segment_id,
+                                           this->next_segment_id,
+                                           other_delta_id,
+                                           other_stable_id);
+
+    new_me->serialize(wbs.meta);
+    new_me->delta->setChunks({}, wbs.meta, wbs.removed_log);
+    new_me->stable->setChunks(std::move(my_new_stable_chunks), wbs.meta, wbs.removed_data);
+
+    other->serialize(wbs.meta);
+    other->delta->setChunks({}, wbs.meta, wbs.removed_log);
+    other->stable->setChunks(std::move(other_new_stable_chunks), wbs.meta, wbs.removed_data);
 
     return {new_me, other};
 }

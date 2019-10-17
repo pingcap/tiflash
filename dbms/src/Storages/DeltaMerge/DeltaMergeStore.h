@@ -74,6 +74,8 @@ public:
             return "MergeDelta";
         case BackgroundType ::SegmentMerge:
             return "SegmentMerge";
+        default:
+            return "Unknown";
         }
     }
 
@@ -95,11 +97,11 @@ public:
         std::mutex mutex;
 
     public:
-        void addTask(const BackgroundTask & task, Logger * log_)
+        void addTask(const BackgroundTask & task, const String & whom, Logger * log_)
         {
             LOG_DEBUG(log_,
                       "Segment [" << task.segment->segmentId() << "] task [" << getBackgroundTypeName(task.type)
-                                  << "] add to background task pool");
+                                  << "] add to background task pool by" << whom);
 
             std::scoped_lock lock(mutex);
             tasks.push(task);
@@ -201,15 +203,15 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-    SegmentPtr  segmentMergeDelta(DMContext &             dm_context,
+    void        segmentMergeDelta(DMContext &             dm_context,
                                   const SegmentPtr &      segment,
                                   const SegmentSnapshot & segment_snap,
                                   const StorageSnapshot & storage_snap,
                                   bool                    is_foreground);
 
-    SegmentPtr segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void       segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void       segmentBackgroundMerge(DMContext & dm_context, const SegmentPtr & segment);
+    void segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    void segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    void segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
 
     bool handleBackgroundTask();
 

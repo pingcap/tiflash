@@ -24,18 +24,22 @@ namespace DM
 // DiskValueSpace public methods.
 //==========================================================================================
 
-DiskValueSpace::DiskValueSpace(bool is_delta_vs_, PageId page_id_)
-    : is_delta_vs(is_delta_vs_), page_id(page_id_), log(&Logger::get("DiskValueSpace"))
-{
-}
-
-DiskValueSpace::DiskValueSpace(bool is_delta_vs_, PageId page_id_, const Chunks & chunks_)
-    : is_delta_vs(is_delta_vs_), page_id(page_id_), chunks(chunks_), log(&Logger::get("DiskValueSpace"))
+DiskValueSpace::DiskValueSpace(bool is_delta_vs_, PageId page_id_, Chunks && chunks_, MutableColumnMap && cache_, size_t cache_chunks_)
+    : is_delta_vs(is_delta_vs_),
+      page_id(page_id_),
+      chunks(std::move(chunks_)),
+      cache(std::move(cache_)),
+      cache_chunks(cache_chunks_),
+      log(&Logger::get("DiskValueSpace"))
 {
 }
 
 DiskValueSpace::DiskValueSpace(const DiskValueSpace & other)
-    : is_delta_vs(other.is_delta_vs), page_id(other.page_id), chunks(other.chunks), cache_chunks(other.cache_chunks), log(other.log)
+    : is_delta_vs(other.is_delta_vs), //
+      page_id(other.page_id),
+      chunks(other.chunks),
+      cache_chunks(other.cache_chunks),
+      log(other.log)
 {
     for (auto & [col_id, col] : other.cache)
         cache.emplace(col_id, col->cloneResized(col->size()));
@@ -223,7 +227,8 @@ DiskValueSpacePtr DiskValueSpace::applyAppendTask(const OpContext & context, con
     {
         // If any chunks got removed, then we create a new instance.
         // Make sure a reference to an instance is read constantly by rows.
-        instance = new DiskValueSpace(is_delta_vs, page_id, chunks);
+        Chunks new_chunks(chunks.begin(), chunks.end());
+        instance = new DiskValueSpace(is_delta_vs, page_id, std::move(new_chunks));
         instance->chunks.resize(chunks.size() - task->remove_chunks_back);
     }
 
@@ -498,11 +503,11 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
 
         if (chunk.isDeleteRange() || (chunk_index == chunks.size() - 1 || chunk_index == end_chunk_index))
         {
-            if (chunk.isDeleteRange())
-                res.emplace_back(chunk.getDeleteRange());
             if (block_rows_end != block_rows_start)
                 res.emplace_back(
                     read({handle, getVersionColumnDefine()}, page_reader, block_rows_start, block_rows_end - block_rows_start));
+            if (chunk.isDeleteRange())
+                res.emplace_back(chunk.getDeleteRange());
 
             block_rows_start = block_rows_end;
         }
@@ -545,7 +550,8 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
     }
 
     // Create an new instance.
-    auto new_instance = std::make_shared<DiskValueSpace>(is_delta_vs, page_id, chunks);
+    Chunks tmp_chunks(chunks.begin(), chunks.end());
+    auto   new_instance = std::make_shared<DiskValueSpace>(is_delta_vs, page_id, std::move(tmp_chunks));
 
     EventRecorder recorder(ProfileEvents::DMFlushDeltaCache, ProfileEvents::DMFlushDeltaCacheNS);
 
@@ -661,7 +667,23 @@ void DiskValueSpace::check(const PageReader & meta_page_reader, const String & w
     auto page_checksum = CityHash_v1_0_2::CityHash64(data_buffer, size);
     auto page_entry    = meta_page_reader.storage->getEntry(page_id, meta_page_reader.snap);
     if (page_entry.checksum != page_checksum)
-        throw Exception(when + ", DiskValueSpace [" + DB::toString(page_id) + "] memory and disk content not match");
+    {
+        auto                 page = meta_page_reader.read(page_id);
+        ReadBufferFromMemory rb(page.data.begin(), page.data.size());
+        auto                 disk_chunks = deserializeChunks(rb);
+        throw Exception(when + ", DiskValueSpace [" + DB::toString(page_id) + "] memory and disk content not match, memory: "
+                        + DB::toString(chunks.size()) + ", disk: " + DB::toString(disk_chunks.size()));
+    }
+}
+
+MutableColumnMap DiskValueSpace::cloneCache()
+{
+    MutableColumnMap clone_cache;
+    for (auto & [col_id, col_cache] : cache)
+    {
+        clone_cache.emplace(col_id, col_cache->cloneResized(col_cache->size()));
+    }
+    return clone_cache;
 }
 
 size_t DiskValueSpace::num_rows() const

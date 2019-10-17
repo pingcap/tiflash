@@ -25,20 +25,6 @@ using Segments    = std::vector<SegmentPtr>;
 using SegmentAndStorageSnap = std::pair<SegmentSnapshot, StorageSnapshot>;
 using SegmentSnapAndChunks  = std::pair<SegmentSnapshot, Chunks>;
 
-//struct RemoveWriteBatches
-//{
-//    WriteBatch meta;
-//    WriteBatch data;
-//    WriteBatch log;
-//
-//    void write(StoragePool & storage)
-//    {
-//        storage.meta().write(meta);
-//        storage.data().write(data);
-//        storage.log().write(log);
-//    }
-//};
-
 struct DeltaValueSpace
 {
     DeltaValueSpace(const ColumnDefine & handle_define, const ColumnDefines & column_defines, const Block & block)
@@ -53,8 +39,19 @@ struct DeltaValueSpace
             columns_ptr.emplace_back(col.get());
 
             if (c.name == handle_define.name)
+            {
                 handle_column = toColumnVectorDataPtr<Handle>(col);
+            }
         }
+        rows = block.rows();
+
+        // Debug code !!!
+        //        String s;
+        //        for (size_t i = 0; i < rows; ++i)
+        //        {
+        //            s += DB::toString((*handle_column)[i]) + ",";
+        //        }
+        //        std::cout << s << std::endl;
     }
 
     void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
@@ -67,9 +64,12 @@ struct DeltaValueSpace
         return (*handle_column)[value_id];
     }
 
+    size_t getRows() { return rows; }
+
     Columns                        columns;
     ColumnRawPtrs                  columns_ptr;
     PaddedPODArray<Handle> const * handle_column;
+    size_t                         rows;
 };
 using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 
@@ -125,14 +125,20 @@ public:
             PageId              delta_id,
             PageId              stable_id);
 
+    //    Segment(UInt64              epoch_, //
+    //            const HandleRange & range_,
+    //            PageId              segment_id_,
+    //            PageId              next_segment_id_,
+    //            PageId              delta_id,
+    //            const Chunks &      delta_chunks_,
+    //            PageId              stable_id,
+    //            const Chunks &      stable_chunks_);
     Segment(UInt64              epoch_, //
             const HandleRange & range_,
             PageId              segment_id_,
             PageId              next_segment_id_,
-            PageId              delta_id,
-            const Chunks &      delta_chunks_,
-            PageId              stable_id,
-            const Chunks &      stable_chunks_);
+            DiskValueSpacePtr   delta_,
+            DiskValueSpacePtr   stable_);
 
     static SegmentPtr newSegment(DMContext & context, const HandleRange & range_, PageId segment_id_, PageId next_segment_id_);
     static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
@@ -186,12 +192,22 @@ public:
                             WriteBatches &          wbs);
     static SegmentPtr merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
 
+    DiskValueSpacePtr prepareMergeDelta(DMContext &             dm_context,
+                                        const SegmentSnapshot & segment_snap,
+                                        const StorageSnapshot & storage_snap,
+                                        WriteBatches &          wbs) const;
+    SegmentPtr        applyMergeDelta(DMContext &               dm_context,
+                                      const SegmentSnapshot &   segment_snap,
+                                      const StorageSnapshot &   storage_snap,
+                                      WriteBatches &            wbs,
+                                      const DiskValueSpacePtr & new_stable) const;
+
     /// Note that we should replace this object with return object, or we can not read latest data after `mergeDelta`.
-    SegmentPtr mergeDelta(DMContext &             dm_context, //
+    SegmentPtr mergeDelta(DMContext &             dm_context,
                           const SegmentSnapshot & segment_snap,
                           const StorageSnapshot & storage_snap,
-                          WriteBatches &          wbs) const __attribute__((warn_unused_result));
-    SegmentPtr mergeDelta(DMContext & dm_context) const __attribute__((warn_unused_result));
+                          WriteBatches &          wbs) const;
+    SegmentPtr mergeDelta(DMContext & dm_context) const;
 
     /// Flush delta's cache chunks.
     void flushCache(DMContext & dm_context);
@@ -219,7 +235,7 @@ public:
     // Insert and delete operations' count in DeltaTree
     size_t updatesInDeltaTree() const;
 
-    std::atomic_bool & isForegroundMergeDelta() { return is_foreground_merge_delta; }
+    std::atomic_bool & isMergeDelta() { return is_merge_delta; }
     std::atomic_bool & isBackgroundMergeDelta() { return is_background_merge_delta; }
 
 private:
@@ -247,11 +263,12 @@ private:
     /// Only look up in the stable vs.
     Handle getSplitPointFast(DMContext & dm_context, const PageReader & data_page_reader, const DiskValueSpace & stable_snap) const;
 
-    /// Split this segment into two.
-    /// Generates two new segment objects, the current object is not modified.
-    SegmentPair doSplitPhysical(DMContext & dm_context, const ReadInfo & read_info, Handle split_point, WriteBatches & wbs) const;
-
     SegmentPair doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_snap, Handle split_point, WriteBatches & wbs) const;
+    SegmentPair doSplitPhysical(DMContext &             dm_context,
+                                const SegmentSnapshot & segment_snap,
+                                const StorageSnapshot & storage_snap,
+                                Handle                  split_point,
+                                WriteBatches &          wbs) const;
 
     static SegmentPtr doMergeLogical(DMContext &        dm_context, //
                                      const SegmentPtr & left,
@@ -290,7 +307,7 @@ private:
     size_t estimatedBytes() const;
 
 private:
-    const UInt64      epoch; // After split/merge, epoch got increase by 1.
+    const UInt64      epoch; // After split / merge / merge delta, epoch got increase by 1.
     const HandleRange range;
     const PageId      segment_id;
     const PageId      next_segment_id;
@@ -298,7 +315,7 @@ private:
     DiskValueSpacePtr delta;
     DiskValueSpacePtr stable;
 
-    std::atomic_bool is_foreground_merge_delta = false;
+    std::atomic_bool is_merge_delta            = false;
     std::atomic_bool is_background_merge_delta = false;
 
     mutable DeltaTreePtr delta_tree;
