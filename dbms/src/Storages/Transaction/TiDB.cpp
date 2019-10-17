@@ -25,6 +25,7 @@ Field ColumnInfo::defaultValueToField() const
     }
     switch (tp)
     {
+        // TODO: Consider unsigned?
         // Integer Type.
         case TypeTiny:
         case TypeShort:
@@ -55,7 +56,7 @@ Field ColumnInfo::defaultValueToField() const
             return Field();
         case TypeDecimal:
         case TypeNewDecimal:
-            return getDecimalDefaultValue(value.convert<String>());
+            return getDecimalValue(value.convert<String>());
         case TypeTime:
             return Field();
         case TypeYear:
@@ -69,9 +70,9 @@ Field ColumnInfo::defaultValueToField() const
     return Field();
 }
 
-DB::Field ColumnInfo::getDecimalDefaultValue(const String & str) const
+DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 {
-    DB::ReadBufferFromString buffer(str);
+    DB::ReadBufferFromString buffer(decimal_text);
     auto precision = flen;
     auto scale = decimal;
 
@@ -103,21 +104,20 @@ DB::Field ColumnInfo::getDecimalDefaultValue(const String & str) const
 }
 
 // FIXME it still has bug: https://github.com/pingcap/tidb/issues/11435
-Int64 ColumnInfo::getEnumIndex(const String & default_str) const
+Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
 {
     for (const auto & elem : elems)
     {
-        if (elem.first == default_str)
+        if (elem.first == enum_id_or_text)
         {
             return elem.second;
         }
     }
-    int num = std::stoi(default_str);
+    int num = std::stoi(enum_id_or_text);
     return num;
 }
 
-Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const
-try
+Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -160,8 +160,7 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (ColumnInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json)
-try
+void ColumnInfo::deserialize(Poco::JSON::Object::Ptr json) try
 {
     id = json->getValue<Int64>("id");
     name = json->getObject("name")->getValue<String>("L");
@@ -195,8 +194,7 @@ catch (const Poco::Exception & e)
 
 PartitionDefinition::PartitionDefinition(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const
-try
+Poco::JSON::Object::Ptr PartitionDefinition::getJSONObject() const try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     json->set("id", id);
@@ -217,8 +215,7 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionDef): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json)
-try
+void PartitionDefinition::deserialize(Poco::JSON::Object::Ptr json) try
 {
     id = json->getValue<Int64>("id");
     name = json->getObject("name")->getValue<String>("L");
@@ -233,8 +230,7 @@ catch (const Poco::Exception & e)
 
 PartitionInfo::PartitionInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
-Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const
-try
+Poco::JSON::Object::Ptr PartitionInfo::getJSONObject() const try
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
 
@@ -263,8 +259,7 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (PartitionInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void PartitionInfo::deserialize(Poco::JSON::Object::Ptr json)
-try
+void PartitionInfo::deserialize(Poco::JSON::Object::Ptr json) try
 {
     type = static_cast<PartitionType>(json->getValue<Int32>("type"));
     expr = json->getValue<String>("expr");
@@ -288,8 +283,7 @@ catch (const Poco::Exception & e)
 
 TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
-String TableInfo::serialize(bool escaped) const
-try
+String TableInfo::serialize(bool escaped) const try
 {
     std::stringstream buf;
 
@@ -347,8 +341,7 @@ catch (const Poco::Exception & e)
         std::string(__PRETTY_FUNCTION__) + ": Serialize TiDB schema JSON failed (TableInfo): " + e.displayText(), DB::Exception(e));
 }
 
-void DBInfo::deserialize(const String & json_str)
-try
+void DBInfo::deserialize(const String & json_str) try
 {
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var result = parser.parse(json_str);
@@ -366,8 +359,7 @@ catch (const Poco::Exception & e)
         DB::Exception(e));
 }
 
-void TableInfo::deserialize(const String & json_str)
-try
+void TableInfo::deserialize(const String & json_str) try
 {
     if (json_str.empty())
     {
@@ -453,7 +445,7 @@ CodecFlag ColumnInfo::getCodecFlag() const
 
 ColumnID TableInfo::getColumnID(const String & name) const
 {
-    for (auto col : columns)
+    for (auto & col : columns)
     {
         if (name == col.name)
         {
@@ -465,6 +457,36 @@ ColumnID TableInfo::getColumnID(const String & name) const
         return DB::InvalidColumnID;
 
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
+}
+
+String TableInfo::getColumnName(const ColumnID id) const
+{
+    for (auto & col : columns)
+    {
+        if (id == col.id)
+        {
+            return col.name;
+        }
+    }
+
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Invalidate column id " + std::to_string(id) + " for table " + db_name + "." + name,
+        DB::ErrorCodes::LOGICAL_ERROR);
+}
+
+std::optional<std::reference_wrapper<const ColumnInfo>> TableInfo::getPKHandleColumn() const
+{
+    if (!pk_is_handle)
+        return std::nullopt;
+
+    for (auto & col : columns)
+    {
+        if (col.hasPriKeyFlag())
+            return std::optional<std::reference_wrapper<const ColumnInfo>>(col);
+    }
+
+    throw DB::Exception(
+        std::string(__PRETTY_FUNCTION__) + ": Cannot get handle column for table " + db_name + "." + name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 TableInfo TableInfo::producePartitionTableInfo(TableID table_or_partition_id) const

@@ -22,7 +22,7 @@ struct DatumOp
     static bool overflow(const Field &, const ColumnInfo &) { return false; }
 };
 
-/// Specialized for integer types less than 64b, checks overflow.
+/// Specialized for integer types less than 64 bit, checks overflow.
 template <TP tp>
 struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || tp == TypeLong || tp == TypeInt24>::type>
 {
@@ -31,9 +31,6 @@ struct DatumOp<tp, typename std::enable_if<tp == TypeTiny || tp == TypeShort || 
 
     static bool overflow(const Field & field, const ColumnInfo & column_info)
     {
-        if (field.isNull())
-            return false;
-
         if constexpr (tp == TypeTiny)
             return concreteOverflow<Int8>(field, column_info);
 
@@ -57,8 +54,22 @@ private:
     }
 };
 
+/// Specialized for Enum, using unflatten/flatten to transform UInt to Int back and forth.
+template <TP tp>
+struct DatumOp<tp, typename std::enable_if<tp == TypeEnum>::type>
+{
+    static void unflatten(const Field & orig, std::optional<Field> & copy) { copy = static_cast<Int64>(orig.get<UInt64>()); }
+
+    static void flatten(const Field & orig, std::optional<Field> & copy) { copy = static_cast<UInt64>(orig.get<Int64>()); }
+
+    static bool overflow(const Field &, const ColumnInfo &) { return false; }
+};
+
 DatumFlat::DatumFlat(const DB::Field & field, TP tp) : DatumBase(field, tp)
 {
+    if (orig.isNull())
+        return;
+
     switch (tp)
     {
 #ifdef M
@@ -77,6 +88,9 @@ bool DatumFlat::invalidNull(const ColumnInfo & column_info) { return column_info
 
 bool DatumFlat::overflow(const ColumnInfo & column_info)
 {
+    if (orig.isNull())
+        return false;
+
     switch (tp)
     {
 #ifdef M
@@ -94,6 +108,9 @@ bool DatumFlat::overflow(const ColumnInfo & column_info)
 
 DatumBumpy::DatumBumpy(const DB::Field & field, TP tp) : DatumBase(field, tp)
 {
+    if (orig.isNull())
+        return;
+
     switch (tp)
     {
 #ifdef M

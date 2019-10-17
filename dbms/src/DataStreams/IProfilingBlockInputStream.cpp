@@ -42,6 +42,8 @@ Block IProfilingBlockInputStream::read()
     if (isCancelledOrThrowIfKilled())
         return res;
 
+    auto start_time = info.total_stopwatch.elapsed();
+
     if (!checkTimeLimit())
         limit_exceeded_need_break = true;
 
@@ -83,6 +85,7 @@ Block IProfilingBlockInputStream::read()
     }
 #endif
 
+    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
     return res;
 }
 

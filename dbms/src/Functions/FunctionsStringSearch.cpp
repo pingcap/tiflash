@@ -1025,6 +1025,10 @@ struct NameLike
 {
     static constexpr auto name = "like";
 };
+struct NameLike3Args
+{
+    static constexpr auto name = "like3Args";
+};
 struct NameNotLike
 {
     static constexpr auto name = "notLike";
@@ -1058,6 +1062,7 @@ using FunctionPositionCaseInsensitiveUTF8
 
 using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
 using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
+using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true>, NameLike3Args, 3>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
@@ -1078,6 +1083,7 @@ void registerFunctionsStringSearch(FunctionFactory & factory)
     factory.registerFunction<FunctionPositionCaseInsensitiveUTF8>();
     factory.registerFunction<FunctionMatch>();
     factory.registerFunction<FunctionLike>();
+    factory.registerFunction<FunctionLike3Args>();
     factory.registerFunction<FunctionNotLike>();
     factory.registerFunction<FunctionExtract>();
 }
