@@ -3,7 +3,7 @@
 #include <Core/Types.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
-#include <Flash/Coprocessor/DAGChunkBuilder.h>
+#include <Flash/Coprocessor/DAGChunkCodec.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -26,11 +26,16 @@ public:
     void write(const Block & block) override;
     void writePrefix() override;
     void writeSuffix() override;
+    void encodeChunkToDAGResponse();
 
 private:
+    tipb::SelectResponse & dag_response;
     std::vector<tipb::FieldType> result_field_types;
     Block header;
-    std::unique_ptr<DAGChunkBuilder> chunk_builder;
+    Int64 records_per_chunk;
+    std::unique_ptr<DAGChunkCodec> chunk_codec;
+    std::unique_ptr<DAGChunkCodecStream> chunk_codec_stream;
+    Int64 current_records_num;
 };
 
 } // namespace DB
