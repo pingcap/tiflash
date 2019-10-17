@@ -8,8 +8,13 @@
 
 
 ## create a DeltaMerge table
-=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String', 'buggy')
+=> DBGInvoke __mock_tidb_table(default, test, 'col_1 String', '', 'buggy')
 => DBGInvoke __refresh_schemas()
+=> select database,name,engine from system.tables where database='default' and name='test'
+┌─database─┬─name─┬─engine───────────────────────┐
+│ default  │ test │ BuggyMemory-RejectFirstWrite │
+└──────────┴──────┴──────────────────────────────┘
+
 => DBGInvoke __put_region(4, 0, 100, default, test)
 
 ## insert data and get exception, then rowid==51 is not flush to Storage
