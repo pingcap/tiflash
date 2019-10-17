@@ -130,6 +130,151 @@ inline int memcmp16(const void * a, const void * b)
 }
 
 
+inline time_t dateToDateTime(UInt32 date_data)
+{
+    DayNum_t day_num(date_data);
+    LocalDate local_date(day_num);
+    // todo use timezone info
+    return DateLUT::instance().makeDateTime(local_date.year(), local_date.month(), local_date.day(), 0, 0, 0);
+}
+
+inline std::tuple<DayNum_t, bool> dateTimeToDate(time_t time_data)
+{
+    // todo use timezone info
+    auto & date_lut = DateLUT::instance();
+    auto truncated = date_lut.toHour(time_data) != 0 || date_lut.toMinute(time_data) != 0 || date_lut.toSecond(time_data) != 0;
+    auto values = date_lut.getValues(time_data);
+    auto day_num = date_lut.makeDayNum(values.year, values.month, values.day_of_month);
+    return std::make_tuple(day_num, truncated);
+}
+
+
+template <typename A, typename B, template <typename, typename> class Op, bool is_left_date>
+struct DateDateTimeComparisonImpl
+{
+    static void NO_INLINE vector_vector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    {
+        size_t size = a.size();
+        const A * a_pos = &a[0];
+        const B * b_pos = &b[0];
+        UInt8 * c_pos = &c[0];
+        const A * a_end = a_pos + size;
+        while (a_pos < a_end)
+        {
+            if (is_left_date)
+            {
+                using OpType = B;
+                time_t date_time = dateToDateTime(*a_pos);
+                *c_pos = Op<OpType, OpType>::apply((OpType)date_time, *b_pos);
+            }
+            else
+            {
+                using OpType = A;
+                time_t date_time = dateToDateTime(*b_pos);
+                *c_pos = Op<OpType, OpType>::apply(*a_pos, (OpType)date_time);
+            }
+            ++a_pos;
+            ++b_pos;
+            ++c_pos;
+        }
+    }
+
+    static void NO_INLINE vector_constant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+    {
+        if (!is_left_date)
+        {
+            // datetime vector with date constant
+            using OpType = A;
+            time_t date_time = dateToDateTime(b);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant(a, (OpType) date_time, c);
+        }
+        else
+        {
+            // date vector with datetime constant
+            // first check if datetime constant can be convert to date constant
+            bool truncated;
+            DayNum_t date_num;
+            std::tie(date_num, truncated) = dateTimeToDate((time_t) b);
+            if (!truncated)
+            {
+                using OpType = A;
+                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant(a, (OpType) date_num, c);
+            }
+            else
+            {
+                using OpType = B;
+                size_t size = a.size();
+                const A *a_pos = &a[0];
+                UInt8 *c_pos = &c[0];
+                const A *a_end = a_pos + size;
+
+                while (a_pos < a_end)
+                {
+                    time_t date_time = dateToDateTime(*a_pos);
+                    *c_pos = Op<OpType, OpType>::apply((OpType) date_time, b);
+                    ++a_pos;
+                    ++c_pos;
+                }
+            }
+        }
+    }
+
+    static void constant_vector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    {
+        if (is_left_date)
+        {
+            // date constant with datetime vector
+            using OpType = B;
+            time_t date_time = dateToDateTime(a);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constant_vector((OpType)date_time, b, c);
+        }
+        else
+        {
+            // datetime constant with date vector
+            bool truncated;
+            DayNum_t date_num;
+            std::tie(date_num, truncated) = dateTimeToDate((time_t) a);
+            if (!truncated)
+            {
+                using OpType = B;
+                NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::vector_constant((OpType)a, date_num, c);
+            }
+            else
+            {
+                using OpType = A;
+                size_t size = b.size();
+                const B *b_pos = &b[0];
+                UInt8 *c_pos = &c[0];
+                const B *b_end = b_pos + size;
+
+                while (b_pos < b_end)
+                {
+                    time_t date_time = dateToDateTime(*b_pos);
+                    *c_pos = Op<OpType, OpType>::apply(a, (OpType) date_time);
+                    ++b_pos;
+                    ++c_pos;
+                }
+            }
+        }
+    }
+
+    static void constant_constant(A a, B b, UInt8 & c) {
+        if (is_left_date)
+        {
+            using OpType = B;
+            time_t date_time = dateToDateTime(a);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constant_constant((OpType) date_time, b, c);
+        }
+        else
+        {
+            using OpType = A;
+            time_t date_time = dateToDateTime(b);
+            NumComparisonImpl<OpType, OpType, Op<OpType, OpType>>::constant_constant(a, (OpType) date_time, c);
+        }
+    }
+};
+
+
 template <typename Op>
 struct StringComparisonImpl
 {
@@ -985,6 +1130,69 @@ private:
         }
     }
 
+    bool executeDateWithDateTimeOrDateTimeWithDate(
+        Block &block, size_t result,
+        const IColumn *col_left_untyped, const IColumn *col_right_untyped,
+        const DataTypePtr &left_type, const DataTypePtr &right_type)
+    {
+        if ((checkDataType<DataTypeDate>(left_type.get()) && checkDataType<DataTypeDateTime>(right_type.get()))
+            || (checkDataType<DataTypeDateTime>(left_type.get()) && checkDataType<DataTypeDate>(right_type.get())))
+        {
+            bool is_left_date = checkDataType<DataTypeDate>(left_type.get());
+            if (is_left_date)
+            {
+                return executeDateAndDateTimeCompare<UInt32, Int64, true>(block, result, col_left_untyped, col_right_untyped);
+            }
+            else
+            {
+                return executeDateAndDateTimeCompare<Int64, UInt32, false>(block, result, col_left_untyped, col_right_untyped);
+            }
+        }
+        return false;
+    }
+
+    template <typename T0, typename T1, bool is_left_date>
+    bool executeDateAndDateTimeCompare(Block & block, size_t result, const IColumn * c0, const IColumn * c1)
+    {
+        bool c0_const = c0->isColumnConst();
+        bool c1_const = c1->isColumnConst();
+
+        if (c0_const && c1_const)
+        {
+            UInt8 res = 0;
+            DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::constant_constant(
+                checkAndGetColumnConst<ColumnVector<T0>>(c0)->template getValue<T0>(),
+                checkAndGetColumnConst<ColumnVector<T1>>(c1)-> template getValue<T1>(), res);
+            block.getByPosition(result).column = DataTypeUInt8().createColumnConst(c0->size(), toField(res));
+        }
+        else
+        {
+            auto c_res = ColumnUInt8::create();
+            ColumnUInt8::Container & vec_res = c_res->getData();
+            vec_res.resize(c0->size());
+            if (c0_const)
+            {
+                DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::constant_vector(
+                    checkAndGetColumnConst<ColumnVector<T0>>(c0)-> template getValue<T0>(),
+                    checkAndGetColumn<ColumnVector<T1>>(c1)->getData(), vec_res);
+            }
+            else if (c1_const)
+            {
+                DateDateTimeComparisonImpl<T0, T1, Op, is_left_date>::vector_constant(
+                    checkAndGetColumn<ColumnVector<T0>>(c0)->getData(),
+                    checkAndGetColumnConst<ColumnVector<T1>>(c1)-> template getValue<T1>(), vec_res);
+            }
+            else
+            {
+                DateDateTimeComparisonImpl<T0, T1, Op, true>::vector_vector(
+                    checkAndGetColumn<ColumnVector<T0>>(c0)->getData(),
+                    checkAndGetColumn<ColumnVector<T1>>(c1)->getData(), vec_res);
+            }
+            block.getByPosition(result).column = std::move(c_res);
+        }
+        return true;
+    }
+
 public:
     String getName() const override
     {
@@ -1103,7 +1311,8 @@ public:
 
         if (left_is_num && right_is_num)
         {
-            if (!( executeNumLeftType<UInt8>(block, result, col_left_untyped, col_right_untyped)
+            if (!(executeDateWithDateTimeOrDateTimeWithDate(block, result, col_left_untyped, col_right_untyped, col_with_type_and_name_left.type, col_with_type_and_name_right.type)
+                || executeNumLeftType<UInt8>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<UInt16>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<UInt32>(block, result, col_left_untyped, col_right_untyped)
                 || executeNumLeftType<UInt64>(block, result, col_left_untyped, col_right_untyped)

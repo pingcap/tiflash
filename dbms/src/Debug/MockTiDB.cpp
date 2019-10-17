@@ -1,6 +1,5 @@
 #include <Debug/MockTiDB.h>
 
-#include <Common/FieldVisitors.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -10,10 +9,10 @@
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TypeMapping.h>
 
 namespace DB
 {
@@ -114,90 +113,6 @@ void MockTiDB::dropTable(Context & context, const String & database_name, const 
     version_diff[version] = diff;
 }
 
-template <typename T>
-bool tryGetDecimalType(const IDataType * nested_type, ColumnInfo & column_info)
-{
-    using TypeDec = DataTypeDecimal<T>;
-    if (checkDataType<TypeDec>(nested_type))
-    {
-        auto decimal_type = checkAndGetDataType<TypeDec>(nested_type);
-        column_info.flen = decimal_type->getPrec();
-        column_info.decimal = decimal_type->getScale();
-        column_info.tp = TiDB::TypeNewDecimal;
-        return true;
-    }
-    return false;
-}
-
-ColumnInfo getColumnInfoFromColumn(const NameAndTypePair & column, ColumnID id, const Field & default_value)
-{
-    ColumnInfo column_info;
-    column_info.id = id;
-    column_info.name = column.name;
-    const IDataType * nested_type = column.type.get();
-    if (!column.type->isNullable())
-    {
-        column_info.setNotNullFlag();
-    }
-    else
-    {
-        auto nullable_type = checkAndGetDataType<DataTypeNullable>(nested_type);
-        nested_type = nullable_type->getNestedType().get();
-    }
-    if (nested_type->isUnsignedInteger())
-    {
-        column_info.setUnsignedFlag();
-    }
-    else if (tryGetDecimalType<Decimal32>(nested_type, column_info))
-    {
-    }
-    else if (tryGetDecimalType<Decimal64>(nested_type, column_info))
-    {
-    }
-    else if (tryGetDecimalType<Decimal128>(nested_type, column_info))
-    {
-    }
-    else if (tryGetDecimalType<Decimal256>(nested_type, column_info))
-    {
-    }
-
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(tt, v, cf, ct, w)                       \
-    if (checkDataType<DataType##ct>(nested_type)) \
-        column_info.tp = TiDB::Type##tt;          \
-    else
-    COLUMN_TYPES(M)
-#undef M
-    if (checkDataType<DataTypeUInt8>(nested_type))
-        column_info.tp = TiDB::TypeTiny;
-    else if (checkDataType<DataTypeUInt16>(nested_type))
-        column_info.tp = TiDB::TypeShort;
-    else if (checkDataType<DataTypeUInt32>(nested_type))
-        column_info.tp = TiDB::TypeLong;
-
-    if (auto type = checkAndGetDataType<DataTypeMyDateTime>(nested_type))
-        column_info.decimal = type->getFraction();
-    // UInt64 is hijacked by the macro expansion, we check it again.
-    if (checkDataType<DataTypeUInt64>(nested_type))
-        column_info.tp = TiDB::TypeLongLong;
-
-    // Default value, currently we only support int.
-    if (!default_value.isNull())
-    {
-        // convert any type to string , this is TiDB's style.
-
-        column_info.origin_default_value = applyVisitor(FieldVisitorToString(), default_value);
-    }
-    else
-    {
-        column_info.setNoDefaultValueFlag();
-    }
-
-    return column_info;
-}
-
 DatabaseID MockTiDB::newDataBase(const String & database_name)
 {
     DatabaseID schema_id = 0;
@@ -218,7 +133,8 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
     return schema_id;
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name,
+        const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -238,14 +154,21 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     table_info.db_name = database_name;
     table_info.id = table_id_allocator++;
     table_info.name = table_name;
+    table_info.pk_is_handle = false;
 
-    int i = 0;
+    int i = 1;
     for (auto & column : columns.getAllPhysical())
     {
-        table_info.columns.emplace_back(getColumnInfoFromColumn(column, i++, Field()));
+        table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, Field()));
+        if (handle_pk_name == column.name)
+        {
+            if (!column.type->isInteger() && !column.type->isUnsignedInteger())
+                throw Exception("MockTiDB pk column must be integer or unsigned integer type", ErrorCodes::LOGICAL_ERROR);
+            table_info.columns.back().setPriKeyFlag();
+            table_info.pk_is_handle = true;
+        }
     }
 
-    table_info.pk_is_handle = false;
     table_info.comment = "Mocked.";
     table_info.update_timestamp = tso;
 
@@ -337,7 +260,7 @@ void MockTiDB::addColumnToTable(
         != columns.end())
         throw Exception("Column " + column.name + " already exists in TiDB table " + qualified_name, ErrorCodes::LOGICAL_ERROR);
 
-    ColumnInfo column_info = getColumnInfoFromColumn(column, table->allocColumnID(), default_value);
+    ColumnInfo column_info = reverseGetColumnInfo(column, table->allocColumnID(), default_value);
     columns.emplace_back(column_info);
 
     version++;
@@ -384,7 +307,7 @@ void MockTiDB::modifyColumnInTable(const String & database_name, const String & 
     if (it == columns.end())
         throw Exception("Column " + column.name + " does not exist in TiDB table  " + qualified_name, ErrorCodes::LOGICAL_ERROR);
 
-    ColumnInfo column_info = getColumnInfoFromColumn(column, 0, Field());
+    ColumnInfo column_info = reverseGetColumnInfo(column, 0, Field());
     if (it->hasUnsignedFlag() != column_info.hasUnsignedFlag())
         throw Exception("Modify column " + column.name + " UNSIGNED flag is not allowed", ErrorCodes::LOGICAL_ERROR);
     if (it->tp == column_info.tp && it->hasNotNullFlag() == column_info.hasNotNullFlag())

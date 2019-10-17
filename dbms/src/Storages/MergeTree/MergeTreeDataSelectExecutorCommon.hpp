@@ -18,7 +18,6 @@ static inline void extendMutableEngineColumnNames(Names & column_names_to_read, 
 /// make pk, version, delmark is always the first 3 columns, maybe some sample column will be added later.
 static inline void extendMutableEngineColumnNames(Names & column_names_to_read, const std::string & handle_col_name)
 {
-    // use std::set to make order same.
     std::set<std::string> names;
 
     for (auto & name : column_names_to_read)

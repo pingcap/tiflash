@@ -216,6 +216,53 @@ private:
     FieldWithInfinity(const Type type_);
 };
 
+/// The expression is stored as Reverse Polish Notation.
+struct RPNElement
+{
+    enum Function
+    {
+        /// Atoms of a Boolean expression.
+        FUNCTION_IN_RANGE,
+        FUNCTION_NOT_IN_RANGE,
+        FUNCTION_IN_SET,
+        FUNCTION_NOT_IN_SET,
+        FUNCTION_UNKNOWN, /// Can take any value.
+        /// Operators of the logical expression.
+        FUNCTION_NOT,
+        FUNCTION_AND,
+        FUNCTION_OR,
+        /// Constants
+        ALWAYS_FALSE,
+        ALWAYS_TRUE,
+    };
+
+    RPNElement() {}
+    RPNElement(Function function_) : function(function_) {}
+    RPNElement(Function function_, size_t key_column_) : function(function_), key_column(key_column_) {}
+    RPNElement(Function function_, size_t key_column_, const Range & range_)
+        : function(function_), range(range_), key_column(key_column_) {}
+
+    String toString() const;
+
+    Function function = FUNCTION_UNKNOWN;
+
+    /// For FUNCTION_IN_RANGE and FUNCTION_NOT_IN_RANGE.
+    Range range;
+    size_t key_column;
+    /// For FUNCTION_IN_SET, FUNCTION_NOT_IN_SET
+    using MergeTreeSetIndexPtr = std::shared_ptr<MergeTreeSetIndex>;
+    MergeTreeSetIndexPtr set_index;
+
+    /** A chain of possibly monotone functions.
+      * If the key column is wrapped in functions that can be monotonous in some value ranges
+      * (for example: -toFloat64(toDayOfWeek(date))), then here the functions will be located: toDayOfWeek, toFloat64, negate.
+    */
+    using MonotonicFunctionsChain = std::vector<FunctionBasePtr>;
+    mutable MonotonicFunctionsChain monotonic_functions_chain;    /// The function execution does not violate the constancy.
+};
+
+using RPN = std::vector<RPNElement>;
+using ColumnIndices = std::map<String, size_t>;
 /** Condition on the index.
   *
   * Consists of the conditions for the key belonging to all possible ranges or sets,
@@ -256,57 +303,10 @@ public:
 
     String toString() const;
 
-
-    /// The expression is stored as Reverse Polish Notation.
-    struct RPNElement
-    {
-        enum Function
-        {
-            /// Atoms of a Boolean expression.
-            FUNCTION_IN_RANGE,
-            FUNCTION_NOT_IN_RANGE,
-            FUNCTION_IN_SET,
-            FUNCTION_NOT_IN_SET,
-            FUNCTION_UNKNOWN, /// Can take any value.
-            /// Operators of the logical expression.
-            FUNCTION_NOT,
-            FUNCTION_AND,
-            FUNCTION_OR,
-            /// Constants
-            ALWAYS_FALSE,
-            ALWAYS_TRUE,
-        };
-
-        RPNElement() {}
-        RPNElement(Function function_) : function(function_) {}
-        RPNElement(Function function_, size_t key_column_) : function(function_), key_column(key_column_) {}
-        RPNElement(Function function_, size_t key_column_, const Range & range_)
-            : function(function_), range(range_), key_column(key_column_) {}
-
-        String toString() const;
-
-        Function function = FUNCTION_UNKNOWN;
-
-        /// For FUNCTION_IN_RANGE and FUNCTION_NOT_IN_RANGE.
-        Range range;
-        size_t key_column;
-        /// For FUNCTION_IN_SET, FUNCTION_NOT_IN_SET
-        ASTPtr in_function;
-        using MergeTreeSetIndexPtr = std::shared_ptr<MergeTreeSetIndex>;
-        MergeTreeSetIndexPtr set_index;
-
-        /** A chain of possibly monotone functions.
-          * If the key column is wrapped in functions that can be monotonous in some value ranges
-          * (for example: -toFloat64(toDayOfWeek(date))), then here the functions will be located: toDayOfWeek, toFloat64, negate.
-          */
-        using MonotonicFunctionsChain = std::vector<FunctionBasePtr>;
-        mutable MonotonicFunctionsChain monotonic_functions_chain;    /// The function execution does not violate the constancy.
-    };
-
     static Block getBlockWithConstants(
-        const ASTPtr & query, const Context & context, const NamesAndTypesList & all_columns);
+            const ASTPtr & query, const Context & context, const NamesAndTypesList & all_columns);
 
-    using AtomMap = std::unordered_map<std::string, bool(*)(RPNElement & out, const Field & value, const ASTPtr & node)>;
+    using AtomMap = std::unordered_map<std::string, bool(*)(RPNElement & out, const Field & value)>;
     static const AtomMap atom_map;
 
     static std::optional<Range> applyMonotonicFunctionsChainToRange(
@@ -315,8 +315,6 @@ public:
         DataTypePtr current_type);
 
 private:
-    using RPN = std::vector<RPNElement>;
-    using ColumnIndices = std::map<String, size_t>;
 
     bool mayBeTrueInRange(
         size_t used_key_size,
@@ -327,56 +325,11 @@ private:
 
     bool mayBeTrueInRangeImpl(const std::vector<Range> & key_ranges, const DataTypes & data_types) const;
 
-    void traverseAST(const ASTPtr & node, const Context & context, Block & block_with_constants);
-    bool atomFromAST(const ASTPtr & node, const Context & context, Block & block_with_constants, RPNElement & out);
-    bool operatorFromAST(const ASTFunction * func, RPNElement & out);
-
-    /** Is node the key column
-      *  or expression in which column of key is wrapped by chain of functions,
-      *  that can be monotomic on certain ranges?
-      * If these conditions are true, then returns number of column in key, type of resulting expression
-      *  and fills chain of possibly-monotonic functions.
-      */
-    bool isKeyPossiblyWrappedByMonotonicFunctions(
-        const ASTPtr & node,
-        const Context & context,
-        size_t & out_key_column_num,
-        DataTypePtr & out_key_res_column_type,
-        RPNElement::MonotonicFunctionsChain & out_functions_chain);
-
-    bool isKeyPossiblyWrappedByMonotonicFunctionsImpl(
-        const ASTPtr & node,
-        size_t & out_key_column_num,
-        DataTypePtr & out_key_column_type,
-        std::vector<const ASTFunction *> & out_functions_chain);
-
-    bool canConstantBeWrappedByMonotonicFunctions(
-        const ASTPtr & node,
-        size_t & out_key_column_num,
-        DataTypePtr & out_key_column_type,
-        Field & out_value,
-        DataTypePtr & out_type);
-
-    void getKeyTuplePositionMapping(
-        const ASTPtr & node,
-        const Context & context,
-        std::vector<MergeTreeSetIndex::KeyTuplePositionMapping> & indexes_mapping,
-        const size_t tuple_index,
-        size_t & out_key_column_num);
-
-    bool isTupleIndexable(
-        const ASTPtr & node,
-        const Context & context,
-        RPNElement & out,
-        const SetPtr & prepared_set,
-        size_t & out_key_column_num);
-
     RPN rpn;
 
     SortDescription sort_descr;
     ColumnIndices key_columns;
     ExpressionActionsPtr key_expr;
-    PreparedSets prepared_sets;
 };
 
 }

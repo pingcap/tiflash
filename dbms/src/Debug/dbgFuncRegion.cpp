@@ -6,7 +6,6 @@
 #include <Interpreters/executeQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -140,7 +139,9 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
             }
 
             TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-            TiKVValue value = RecordKVFormat::EncodeRow(table->table_info, fields);
+            std::stringstream ss;
+            RegionBench::encodeRow(table->table_info, fields, ss);
+            TiKVValue value(ss.str());
             UInt64 commit_ts = tso;
             UInt64 prewrite_ts = tso;
             TiKVValue commit_value = del ? RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts)
