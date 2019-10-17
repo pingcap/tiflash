@@ -66,7 +66,8 @@ grpc::Status BatchCommandsHandler::execute()
 
     ThreadPool thread_pool(max_threads);
 
-    std::vector<grpc::Status> rets(request.requests_size());
+    std::vector<grpc::Status> rets;
+    rets.reserve(request.requests_size());
     size_t i = 0;
 
     for (const auto & req : request.requests())
