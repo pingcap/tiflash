@@ -8,7 +8,7 @@ namespace DB
 void ArrowChunkCodec::encode(const DB::Block & block, size_t start, size_t end, const std::vector<tipb::FieldType> & result_field_types,
     std::unique_ptr<DB::ChunkCodecStream> & stream)
 {
-    // Encode data in chunk by array encode
+    // Encode data in chunk by arrow encode
     auto * arrow_chunk_codec_stream = dynamic_cast<DB::ArrowChunkCodecStream *>(stream.get());
     arrow_chunk_codec_stream->ti_chunk->buildDAGChunkFromBlock(block, result_field_types, start, end);
 }

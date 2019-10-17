@@ -40,7 +40,7 @@ inline UInt8 getFieldLength(Int32 tp)
         case TiDB::TypeLongBlob:
             return VAR_SIZE;
         default:
-            throw Exception("not supported field type in array encode: " + std::to_string(tp));
+            throw Exception("not supported field type in arrow encode: " + std::to_string(tp));
     }
 }
 
