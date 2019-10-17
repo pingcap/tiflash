@@ -17,14 +17,13 @@ public:
     explicit DefaultChunkCodecStream(const std::vector<tipb::FieldType> & field_types) : ChunkCodecStream(field_types) {}
     std::stringstream ss;
     String getString() override { return ss.str(); }
+    void encode(const Block & block, size_t start, size_t end) override;
     void clear() override { ss.str(""); }
 };
 
-void DefaultChunkCodec::encode(const DB::Block & block, size_t start, size_t end, std::unique_ptr<DB::ChunkCodecStream> & stream)
+void DefaultChunkCodecStream::encode(const Block & block, size_t start, size_t end)
 {
     // TODO: Check compatibility between field_tp_and_flags and block column types.
-    auto * default_chunk_codec_stream = dynamic_cast<DB::DefaultChunkCodecStream *>(stream.get());
-    const auto & field_types = stream->getFieldTypes();
     // Encode data to chunk by default encode
     for (size_t i = start; i < end; i++)
     {
@@ -32,7 +31,7 @@ void DefaultChunkCodec::encode(const DB::Block & block, size_t start, size_t end
         {
             const auto & field = (*block.getByPosition(j).column.get())[i];
             DatumBumpy datum(field, static_cast<TP>(field_types[j].tp()));
-            EncodeDatum(datum.field(), getCodecFlagByFieldType(field_types[j]), default_chunk_codec_stream->ss);
+            EncodeDatum(datum.field(), getCodecFlagByFieldType(field_types[j]), ss);
         }
     }
 }

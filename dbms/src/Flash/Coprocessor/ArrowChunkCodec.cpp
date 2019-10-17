@@ -21,14 +21,14 @@ public:
         return ss.str();
     }
     void clear() override { ti_chunk->clear(); }
+    void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<TiDBChunk> ti_chunk;
 };
 
-void ArrowChunkCodec::encode(const DB::Block & block, size_t start, size_t end, std::unique_ptr<DB::ChunkCodecStream> & stream)
+void ArrowChunkCodecStream::encode(const Block & block, size_t start, size_t end)
 {
     // Encode data in chunk by arrow encode
-    auto * arrow_chunk_codec_stream = dynamic_cast<DB::ArrowChunkCodecStream *>(stream.get());
-    arrow_chunk_codec_stream->ti_chunk->buildDAGChunkFromBlock(block, stream->getFieldTypes(), start, end);
+    ti_chunk->buildDAGChunkFromBlock(block, field_types, start, end);
 }
 
 Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schema)

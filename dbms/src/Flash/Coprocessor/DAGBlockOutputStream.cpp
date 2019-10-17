@@ -22,17 +22,16 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
 {
     if (encodeType == tipb::EncodeType::TypeDefault)
     {
-        chunk_codec = std::make_unique<DefaultChunkCodec>();
+        chunk_codec_stream = std::make_unique<DefaultChunkCodec>()->newCodecStream(result_field_types);
     }
     else if (encodeType == tipb::EncodeType::TypeArrow)
     {
-        chunk_codec = std::make_unique<ArrowChunkCodec>();
+        chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
     }
     else
     {
         throw Exception("Only Default and Arrow encode type is supported in DAGBlockOutputStream.", ErrorCodes::UNSUPPORTED_PARAMETER);
     }
-    chunk_codec_stream = chunk_codec->newCodecStream(result_field_types);
     dag_response.set_encode_type(encodeType);
 }
 
@@ -72,7 +71,7 @@ void DAGBlockOutputStream::write(const Block & block)
             encodeChunkToDAGResponse();
         }
         const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
-        chunk_codec->encode(block, row_index, upper, chunk_codec_stream);
+        chunk_codec_stream->encode(block, row_index, upper);
         current_records_num += (upper - row_index);
         row_index = upper;
     }

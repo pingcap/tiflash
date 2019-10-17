@@ -33,7 +33,6 @@ private:
     std::vector<tipb::FieldType> result_field_types;
     Block header;
     const Int64 records_per_chunk;
-    std::unique_ptr<ChunkCodec> chunk_codec;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     Int64 current_records_num;
 };

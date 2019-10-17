@@ -17,6 +17,7 @@ public:
     virtual String getString() = 0;
     virtual void clear() = 0;
     const std::vector<tipb::FieldType> & getFieldTypes() { return field_types; }
+    virtual void encode(const Block & block, size_t start, size_t end) = 0;
     virtual ~ChunkCodecStream() = default;
 
 protected:
@@ -27,7 +28,6 @@ class ChunkCodec
 {
 public:
     ChunkCodec() = default;
-    virtual void encode(const Block & block, size_t start, size_t end, std::unique_ptr<ChunkCodecStream> & stream) = 0;
     virtual Block decode(const tipb::Chunk & chunk, const DAGSchema & schema) = 0;
 
     virtual std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & result_field_types) = 0;
