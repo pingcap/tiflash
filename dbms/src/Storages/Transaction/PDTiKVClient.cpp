@@ -28,39 +28,39 @@ int64_t IndexReader::getReadIndex()
     pingcap::kv::Backoffer bo(pingcap::kv::readIndexMaxBackoff);
     auto rpc_call = std::make_shared<pingcap::kv::RpcCall<kvrpcpb::ReadIndexRequest>>(request);
 
-    auto region = cache->getRegionByID(bo, region_id);
-    const auto & learners = region->learners;
-    const std::string suggested_ip = getIP(suggested_address);
-    std::vector<metapb::Peer> candidate_learners;
-    // By default, we should config true ip in our config file.
-    // And we make sure that old config can also work.
-    if (suggested_ip.size() == 0 || suggested_ip == "0.0.0.0")
-        candidate_learners = learners;
-    else
-    {
-        // Try to iterate all learners in pd as no accurate IP specified in config thus I don't know who 'I' am, otherwise only try 'myself'
-        for (const auto & learner : learners)
-        {
-            std::string addr = cache->getStoreAddr(bo, learner.store_id());
-            if (addr.size() > 0 && getIP(addr) == suggested_ip)
-            {
-                candidate_learners.push_back(learner);
-                break;
-            }
-        }
-    }
-
-    // There are two cases that candidates may be empty:
-    // 1. the learner lists is empty. It means there are no learner stores is up.
-    // 2. the learner lists is not empty and we specify a local service address. But we don't find it in learner list, then we
-    // fail the request directly.
-    if (candidate_learners.empty())
-        throw Exception("Cannot find store ip " + suggested_ip + " in region peers, region_id is " + std::to_string(region_id.id)
-                + ", maybe learner storage is down",
-            ErrorCodes::LOGICAL_ERROR);
-
     for (;;)
     {
+        auto region = cache->getRegionByID(bo, region_id);
+        const auto & learners = region->learners;
+        const std::string suggested_ip = getIP(suggested_address);
+        std::vector<metapb::Peer> candidate_learners;
+        // By default, we should config true ip in our config file.
+        // And we make sure that old config can also work.
+        if (suggested_ip.size() == 0 || suggested_ip == "0.0.0.0")
+            candidate_learners = learners;
+        else
+        {
+            // Try to iterate all learners in pd as no accurate IP specified in config thus I don't know who 'I' am, otherwise only try 'myself'
+            for (const auto & learner : learners)
+            {
+                std::string addr = cache->getStoreAddr(bo, learner.store_id());
+                if (addr.size() > 0 && getIP(addr) == suggested_ip)
+                {
+                    candidate_learners.push_back(learner);
+                    break;
+                }
+            }
+        }
+
+        // There are two cases that candidates may be empty:
+        // 1. the learner lists is empty. It means there are no learner stores is up.
+        // 2. the learner lists is not empty and we specify a local service address. But we don't find it in learner list, then we
+        // fail the request directly.
+        if (candidate_learners.empty())
+            throw Exception("Cannot find store ip " + suggested_ip + " in region peers, region_id is " + std::to_string(region_id.id)
+                    + ", maybe learner storage is down",
+                ErrorCodes::LOGICAL_ERROR);
+
         try
         {
             getReadIndexFromLearners(bo, region->meta, candidate_learners, rpc_call);
