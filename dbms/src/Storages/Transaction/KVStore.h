@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Transaction/RegionClientCreate.h>
+#include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/RegionPersister.h>
 #include <Storages/Transaction/RegionsRangeIndex.h>
@@ -33,7 +33,7 @@ class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(const std::string & data_dir);
-    void restore(const RegionClientCreateFunc & region_client_create);
+    void restore(const IndexReaderCreateFunc & index_reader_create);
 
     RegionPtr getRegion(const RegionID region_id) const;
 

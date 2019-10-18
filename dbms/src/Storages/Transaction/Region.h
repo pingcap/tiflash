@@ -2,7 +2,7 @@
 
 #include <shared_mutex>
 
-#include <Storages/Transaction/RegionClientCreate.h>
+#include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/RegionData.h>
 #include <Storages/Transaction/RegionMeta.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
@@ -96,10 +96,10 @@ public:
     };
 
 public:
-    explicit Region(RegionMeta meta_) : meta(std::move(meta_)), client(nullptr), log(&Logger::get(log_name)) {}
+    explicit Region(RegionMeta meta_) : meta(std::move(meta_)), index_reader(nullptr), log(&Logger::get(log_name)) {}
 
-    explicit Region(RegionMeta meta_, const RegionClientCreateFunc & region_client_create)
-        : meta(std::move(meta_)), client(region_client_create(meta.getRegionVerID())), log(&Logger::get(log_name))
+    explicit Region(RegionMeta meta_, const IndexReaderCreateFunc & index_reader_create)
+        : meta(std::move(meta_)), index_reader(index_reader_create(meta.getRegionVerID())), log(&Logger::get(log_name))
     {}
 
     TableID insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
@@ -109,7 +109,7 @@ public:
     CommittedRemover createCommittedRemover(TableID expected_table_id);
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
-    static RegionPtr deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create = nullptr);
+    static RegionPtr deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create = nullptr);
 
     RegionID id() const;
     ImutRegionRangePtr getRange() const;
@@ -197,7 +197,7 @@ private:
 
     RegionMeta meta;
 
-    pingcap::kv::RegionClientPtr client;
+    IndexReaderPtr index_reader;
 
     mutable std::atomic<Timepoint> last_persist_time = Clock::now();
 

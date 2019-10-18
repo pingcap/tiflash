@@ -1,12 +1,8 @@
 #pragma once
 
+#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTStorages.h>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <pingcap/kv/RegionClient.h>
-#pragma GCC diagnostic pop
 
 #include <unordered_set>
 
@@ -37,14 +33,15 @@ public:
 
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-        const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path);
+        const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path,
+        const std::string & regine_addr);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
 
     pingcap::pd::ClientPtr getPDClient() const;
 
-    pingcap::kv::RegionClientPtr createRegionClient(pingcap::kv::RegionVerID region_version_id) const;
+    IndexReaderPtr createIndexReader(pingcap::kv::RegionVerID region_version_id) const;
 
     void restore();
 
@@ -65,6 +62,8 @@ private:
 
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
+
+    String raft_service_address;
 };
 
 } // namespace DB
