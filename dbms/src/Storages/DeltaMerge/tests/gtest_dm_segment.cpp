@@ -236,7 +236,7 @@ TEST_F(Segment_test, WriteRead)
 }
 
 class SegmentDeletion_test : public Segment_test, //
-                             public testing::WithParamInterface<bool>
+                             public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 };
 
@@ -249,7 +249,8 @@ TEST_P(SegmentDeletion_test, DeleteDataInDelta)
         segment->write(dmContext(), std::move(block));
     }
 
-    if (GetParam())
+    auto [read_before_delete, merge_delta_after_delete] = GetParam();
+    if (read_before_delete)
     {
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
@@ -278,6 +279,7 @@ TEST_P(SegmentDeletion_test, DeleteDataInDelta)
         // TODO test delete range not included by segment
     }
 
+    if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
         segment = segment->mergeDelta(dmContext());
@@ -320,7 +322,8 @@ TEST_P(SegmentDeletion_test, DeleteDataInStable)
         segment->write(dmContext(), std::move(block));
     }
 
-    if (GetParam())
+    auto [read_before_delete, merge_delta_after_delete] = GetParam();
+    if (read_before_delete)
     {
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
@@ -354,6 +357,7 @@ TEST_P(SegmentDeletion_test, DeleteDataInStable)
         // TODO test delete range not included by segment
     }
 
+    if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
         segment = segment->mergeDelta(dmContext());
@@ -387,7 +391,89 @@ TEST_P(SegmentDeletion_test, DeleteDataInStable)
     }
 }
 
-INSTANTIATE_TEST_CASE_P(WhetherReadBeforeDeleteRange, SegmentDeletion_test, testing::Bool());
+TEST_P(SegmentDeletion_test, DeleteDataInStableAndDelta)
+{
+    const size_t num_rows_write = 100;
+    {
+        // write [0, 50) to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        segment->write(dmContext(), std::move(block));
+        // flush [0, 50) to segment's stable
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    auto [read_before_delete, merge_delta_after_delete] = GetParam();
+
+    {
+        // write [50, 100) to segment's delta
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    if (read_before_delete)
+    {
+        // read written data
+        auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ EMPTY_FILTER,
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // test delete range [1,99) for data in stable and delta
+        HandleRange remove(1, 99);
+        segment->write(dmContext(), {remove});
+        // TODO test delete range partial overlap with segment
+        // TODO test delete range not included by segment
+    }
+
+    if (merge_delta_after_delete)
+    {
+        // flush segment for apply delete range
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    {
+        // read after delete range
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter= */ EMPTY_FILTER,
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), 2UL);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(0), 0);
+                    EXPECT_EQ(c->getInt(1), 99);
+                }
+            }
+        }
+        in->readSuffix();
+    }
+}
+
+INSTANTIATE_TEST_CASE_P(WhetherReadOrMergeDeltaBeforeDeleteRange, SegmentDeletion_test, testing::Combine(testing::Bool(), testing::Bool()));
 
 TEST_F(Segment_test, Split)
 {
