@@ -12,7 +12,6 @@ using DB::Decimal32;
 using DB::Decimal64;
 using DB::DecimalField;
 using DB::Field;
-using DB::WriteBufferFromOwnString;
 
 ColumnInfo::ColumnInfo(Poco::JSON::Object::Ptr json) { deserialize(json); }
 
@@ -283,7 +282,8 @@ catch (const Poco::Exception & e)
 
 TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
-String TableInfo::serialize(bool escaped) const try
+String TableInfo::serialize() const
+try
 {
     std::stringstream buf;
 
@@ -324,16 +324,7 @@ String TableInfo::serialize(bool escaped) const try
 
     json->stringify(buf);
 
-    if (!escaped)
-    {
-        return buf.str();
-    }
-    else
-    {
-        WriteBufferFromOwnString escaped_buf;
-        writeEscapedString(buf.str(), escaped_buf);
-        return escaped_buf.str();
-    }
+    return buf.str();
 }
 catch (const Poco::Exception & e)
 {
