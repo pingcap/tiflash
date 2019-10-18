@@ -3,6 +3,7 @@
 #include <ext/shared_ptr_helper.h>
 
 #include <Common/SimpleIncrement.h>
+#include <Core/TMTPKType.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/DiskSpaceMonitor.h>
@@ -92,6 +93,8 @@ public:
     const MergeTreeData & getData() const { return data; }
 
     String getDataPath() const override { return full_path; }
+
+    bool pkIsUInt64() const { return getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64; }
 
 private:
     String path;

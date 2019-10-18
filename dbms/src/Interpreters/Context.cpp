@@ -1389,12 +1389,12 @@ DDLWorker & Context::getDDLWorker() const
     return *shared->ddl_worker;
 }
 
-void Context::initializeRaftService(const std::string & service_addr)
+void Context::initializeRaftService()
 {
     auto lock = getLock();
     if (shared->raft_service)
         throw Exception("Raft Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->raft_service = std::make_shared<RaftService>(service_addr, *this);
+    shared->raft_service = std::make_shared<RaftService>(*this);
 }
 
 void Context::shutdownRaftService()

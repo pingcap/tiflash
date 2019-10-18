@@ -43,16 +43,16 @@ using DB::Timestamp;
     M(Float, 4, Float, Float32, false)               \
     M(Double, 5, Float, Float64, false)              \
     M(Null, 6, Nil, Nothing, false)                  \
-    M(Timestamp, 7, Int, MyDateTime, false)          \
+    M(Timestamp, 7, UInt, MyDateTime, false)          \
     M(LongLong, 8, Int, Int64, false)                \
     M(Int24, 9, VarInt, Int32, true)                 \
-    M(Date, 10, Int, MyDate, false)                  \
+    M(Date, 10, UInt, MyDate, false)                  \
     M(Time, 11, Duration, Int64, false)              \
-    M(Datetime, 12, Int, MyDateTime, false)          \
+    M(Datetime, 12, UInt, MyDateTime, false)          \
     M(Year, 13, Int, Int16, false)                   \
     M(NewDate, 14, Int, MyDate, false)               \
     M(Varchar, 15, CompactBytes, String, false)      \
-    M(Bit, 16, CompactBytes, UInt64, false)          \
+    M(Bit, 16, VarInt, UInt64, false)                \
     M(JSON, 0xf5, Json, String, false)               \
     M(NewDecimal, 0xf6, Decimal, Decimal32, false)   \
     M(Enum, 0xf7, VarUInt, Enum16, false)            \
@@ -96,6 +96,16 @@ enum TP
     M(OnUpdateNow, (1 << 13))    \
     M(PartKey, (1 << 14))        \
     M(Num, (1 << 15))
+
+enum ColumnFlag
+{
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(cf, v) ColumnFlag##cf = v,
+    COLUMN_FLAGS(M)
+#undef M
+};
 
 // Codec flags.
 // In format: TiDB codec flag, int value.
@@ -171,9 +181,7 @@ struct ColumnInfo
 
     DB::Field defaultValueToField() const;
     CodecFlag getCodecFlag() const;
-
-private:
-    DB::Field getDecimalDefaultValue(const String & str) const;
+    DB::Field getDecimalValue(const String &) const;
     Int64 getEnumIndex(const String &) const;
 };
 
@@ -267,6 +275,9 @@ struct TableInfo
     Int64 schema_version = -1;
 
     ColumnID getColumnID(const String & name) const;
+    String getColumnName(const ColumnID id) const;
+
+    std::optional<std::reference_wrapper<const ColumnInfo>> getPKHandleColumn() const;
 
     TableInfo producePartitionTableInfo(TableID table_or_partition_id) const;
 

@@ -55,7 +55,8 @@ public:
     using TablePtr = std::shared_ptr<Table>;
 
 public:
-    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso);
+    TableID newTable(const String & database_name, const String & table_name,
+            const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name);
 
     DatabaseID newDataBase(const String & database_name);
 

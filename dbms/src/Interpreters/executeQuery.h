@@ -2,6 +2,7 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
 
 
 namespace DB
@@ -38,5 +39,8 @@ BlockIO executeQuery(
     bool internal = false,    /// If true, this query is caused by another query and thus needn't be registered in the ProcessList.
     QueryProcessingStage::Enum stage = QueryProcessingStage::Complete    /// To which stage the query must be executed.
     );
+
+
+BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage);
 
 }

@@ -21,6 +21,13 @@ if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd -
 fi
 
+if [ -d "$SRCPATH/contrib/tipb" ]; then
+  cd "$SRCPATH/contrib/tipb"
+  rm -rf cpp/tipb
+  ./generate-cpp.sh
+  cd -
+fi
+
 build_dir="$SRCPATH/build_docker"
 mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" \
