@@ -35,10 +35,10 @@ int64_t IndexReader::getReadIndex()
     // By default, we should config true ip in our config file.
     // And we make sure that old config can also work.
     if (suggested_ip.size() == 0 || suggested_ip == "0.0.0.0")
-        candidate_learners = std::move(learners);
+        candidate_learners = learners;
     else
     {
-        for (const auto learner : learners)
+        for (const auto & learner : learners)
         {
             std::string addr = cache->getStoreAddr(bo, learner.store_id());
             if (addr.size() > 0 && getIP(addr) == suggested_ip)
@@ -77,7 +77,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
     pingcap::kv::RpcCallPtr<kvrpcpb::ReadIndexRequest>
         rpc)
 {
-    for (const auto learner : learners)
+    for (const auto & learner : learners)
     {
         std::string addr = cache->getStoreAddr(bo, learner.store_id());
         if (addr == "")
