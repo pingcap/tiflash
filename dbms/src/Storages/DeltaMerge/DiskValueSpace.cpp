@@ -665,8 +665,7 @@ void DiskValueSpace::check(const PageReader & meta_page_reader, const String & w
     auto read_buf = buf.tryGetReadBuffer();
     read_buf->readStrict(data_buffer, size);
     auto page_checksum = CityHash_v1_0_2::CityHash64(data_buffer, size);
-    auto page_entry    = meta_page_reader.storage->getEntry(page_id, meta_page_reader.snap);
-    if (page_entry.checksum != page_checksum)
+    if (meta_page_reader.getPageChecksum(page_id) != page_checksum)
     {
         auto                 page = meta_page_reader.read(page_id);
         ReadBufferFromMemory rb(page.data.begin(), page.data.size());

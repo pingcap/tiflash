@@ -116,7 +116,7 @@ Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id
 }
 
 void serializeChunks(
-    WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, const Chunk * extra1, const Chunk * extra2)
+    WriteBuffer & buf, Chunks::const_iterator begin, Chunks::const_iterator end, const Chunk * extra1, const Chunk * extra2)
 {
     auto size = (UInt64)(end - begin);
     if (extra1)

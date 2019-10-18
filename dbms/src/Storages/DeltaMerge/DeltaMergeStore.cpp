@@ -226,7 +226,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 }
 
 void DeltaMergeStore::commitWrites(const WriteActions & actions,
-                                   const WriteBatches & wbs,
+                                   WriteBatches &       wbs,
                                    const DMContextPtr & dm_context,
                                    OpContext &          op_context,
                                    const Context & /*db_context*/,
@@ -235,8 +235,7 @@ void DeltaMergeStore::commitWrites(const WriteActions & actions,
     // Save generated chunks to disk.
     {
         EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitDisk, ProfileEvents::DMAppendDeltaCommitDiskNS);
-        dm_context->storage_pool.log().write(wbs.log);
-        dm_context->storage_pool.log().write(wbs.data);
+        wbs.writeLogAndData(dm_context->storage_pool);
     }
 
     Segments updated_segments;
@@ -423,13 +422,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     size_t delta_updates = segment->updatesInDeltaTree();
     size_t segment_rows  = segment->getEstimatedRows();
 
-    bool should_split = segment_rows >= dm_context->segment_rows * 2;
-    bool force_split  = segment_rows >= dm_context->segment_rows * 10;
+    bool should_split = segment_rows >= dm_context->segment_limit_rows * 2;
+    bool force_split  = segment_rows >= dm_context->segment_limit_rows * 10;
 
-    bool should_merge = segment_rows < dm_context->segment_rows / 4;
+    bool should_merge = segment_rows < dm_context->segment_limit_rows / 4;
 
     bool should_background_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->delta_limit_rows;
-    bool should_foreground_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->segment_rows * 5;
+    bool should_foreground_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->segment_limit_rows * 5;
 
     if (by_write_thread)
     {
@@ -711,7 +710,7 @@ void DeltaMergeStore::segmentForegroundMerge(DMContext & dm_context, const Segme
             return;
         next_segment = it->second;
 
-        auto limit = dm_context.segment_rows / 4;
+        auto limit = dm_context.segment_limit_rows / 4;
         if (segment->getEstimatedRows() >= limit || next_segment->getEstimatedRows() >= limit)
             return;
     }

@@ -125,12 +125,12 @@ Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id
 
 void serializeChunks(WriteBuffer &           buf,
                      Chunks::const_iterator  begin,
-                     Chunks ::const_iterator end,
+                     Chunks::const_iterator end,
                      const Chunk *           extra1 = nullptr,
                      const Chunk *           extra2 = nullptr);
 void serializeChunks(WriteBuffer &           buf, //
                      Chunks::const_iterator  begin,
-                     Chunks ::const_iterator end,
+                     Chunks::const_iterator end,
                      const Chunks &          extr_chunks);
 
 Chunks deserializeChunks(ReadBuffer & buf);

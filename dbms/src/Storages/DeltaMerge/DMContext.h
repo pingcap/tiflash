@@ -31,7 +31,7 @@ struct DMContext
     const NotCompress & not_compress;
 
     // The rows of segment.
-    const size_t segment_rows;
+    const size_t segment_limit_rows;
 
     // The threshold of delta.
     const size_t delta_limit_rows;

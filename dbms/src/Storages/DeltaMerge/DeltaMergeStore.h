@@ -29,18 +29,6 @@ public:
     struct Settings
     {
         NotCompress not_compress_columns{};
-
-        // TODO: Make this setting table specified.
-
-        //        size_t segment_rows = DELTA_MERGE_DEFAULT_SEGMENT_ROWS;
-        //
-        //        // The threshold of delta.
-        //        size_t segment_delta_limit_rows  = DELTA_MERGE_DEFAULT_SEGMENT_ROWS / 10;
-        //        size_t segment_delta_limit_bytes = 64 * MB;
-        //
-        //        // The threshold of cache in delta.
-        //        size_t segment_delta_cache_limit_rows  = DEFAULT_BLOCK_SIZE;
-        //        size_t segment_delta_cache_limit_bytes = 16 * MB;
     };
 
     struct WriteAction
@@ -81,8 +69,8 @@ public:
 
     struct BackgroundTask
     {
-        DMContextPtr   dm_context;
-        SegmentPtr     segment;
+        DMContextPtr   dm_context = {};
+        SegmentPtr     segment    = {};
         BackgroundType type;
 
         explicit operator bool() { return (bool)segment; }
@@ -188,7 +176,7 @@ private:
                                    .min_version   = min_version,
 
                                    .not_compress            = settings.not_compress_columns,
-                                   .segment_rows            = db_settings.dm_segment_rows,
+                                   .segment_limit_rows      = db_settings.dm_segment_limit_rows,
                                    .delta_limit_rows        = db_settings.dm_segment_delta_limit_rows,
                                    .delta_limit_bytes       = db_settings.dm_segment_delta_limit_bytes,
                                    .delta_cache_limit_rows  = db_settings.dm_segment_delta_cache_limit_rows,
@@ -220,7 +208,7 @@ private:
                     ColumnID &                    max_column_id_used);
 
     void commitWrites(const WriteActions & actions,
-                      const WriteBatches & wbs,
+                      WriteBatches &       wbs,
                       const DMContextPtr & dm_context,
                       OpContext &          op_context,
                       const Context &      db_context,
