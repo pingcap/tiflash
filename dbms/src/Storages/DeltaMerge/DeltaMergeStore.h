@@ -207,12 +207,7 @@ private:
                     const OptionTableInfoConstRef table_info,
                     ColumnID &                    max_column_id_used);
 
-    void commitWrites(const WriteActions & actions,
-                      WriteBatches &       wbs,
-                      const DMContextPtr & dm_context,
-                      OpContext &          op_context,
-                      const Context &      db_context,
-                      bool                 is_upsert);
+    void commitWrites(const WriteActions & actions, WriteBatches & wbs, const DMContextPtr & dm_context, OpContext & op_context);
 
     bool isSegmentValid(const SegmentPtr & segment);
 

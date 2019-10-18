@@ -178,7 +178,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
-    commitWrites(actions, wbs, dm_context, op_context, db_context, true);
+    commitWrites(actions, wbs, dm_context, op_context);
 }
 
 
@@ -222,15 +222,13 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     // TODO: We need to do a delta merge after write a delete range, otherwise, the rows got deleted could never be acutally removed.
 
-    commitWrites(actions, wbs, dm_context, op_context, db_context, false);
+    commitWrites(actions, wbs, dm_context, op_context);
 }
 
 void DeltaMergeStore::commitWrites(const WriteActions & actions,
                                    WriteBatches &       wbs,
                                    const DMContextPtr & dm_context,
-                                   OpContext &          op_context,
-                                   const Context & /*db_context*/,
-                                   bool /*is_upsert*/)
+                                   OpContext &          op_context)
 {
     // Save generated chunks to disk.
     {
@@ -420,19 +418,19 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
     size_t delta_rows    = segment->deltaRows(/* with_delta_cache */ by_write_thread);
     size_t delta_updates = segment->updatesInDeltaTree();
-    size_t segment_rows  = segment->getEstimatedRows();
-
-    bool should_split = segment_rows >= dm_context->segment_limit_rows * 2;
-    bool force_split  = segment_rows >= dm_context->segment_limit_rows * 10;
-
-    bool should_merge = segment_rows < dm_context->segment_limit_rows / 4;
 
     bool should_background_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->delta_limit_rows;
     bool should_foreground_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->segment_limit_rows * 5;
 
     if (by_write_thread)
     {
-        // Only write thread will check split.
+        // Only write thread will check split & merge.
+        size_t segment_rows = segment->getEstimatedRows();
+
+        bool should_split = segment_rows >= dm_context->segment_limit_rows * 2;
+        bool force_split  = segment_rows >= dm_context->segment_limit_rows * 10;
+
+        bool should_merge = segment_rows < dm_context->segment_limit_rows / 4;
 
         if (force_split || (should_split && !segment->isBackgroundMergeDelta()))
         {
@@ -632,7 +630,7 @@ void DeltaMergeStore::segmentMergeDelta(DMContext &             dm_context,
         LOG_DEBUG(log,
                   "Segment [" << segment->segmentId() << "] apply " << (is_foreground ? "foreground" : "background") << " merge delta");
 
-        auto new_segment = segment->applyMergeDelta(dm_context, segment_snap, storage_snap, wbs, new_stable);
+        auto new_segment = segment->applyMergeDelta(segment_snap, wbs, new_stable);
 
         wbs.writeMeta(storage_pool);
 

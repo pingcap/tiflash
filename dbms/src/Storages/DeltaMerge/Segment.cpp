@@ -76,25 +76,6 @@ Segment::Segment(UInt64 epoch_, const HandleRange & range_, PageId segment_id_, 
 {
 }
 
-//Segment::Segment(UInt64              epoch_,
-//                 const HandleRange & range_,
-//                 PageId              segment_id_,
-//                 PageId              next_segment_id_,
-//                 PageId              delta_id,
-//                 const Chunks &      delta_chunks_,
-//                 PageId              stable_id,
-//                 const Chunks &      stable_chunks_)
-//    : epoch(epoch_),
-//      range(range_),
-//      segment_id(segment_id_),
-//      next_segment_id(next_segment_id_),
-//      delta(std::make_shared<DiskValueSpace>(true, delta_id, delta_chunks_)),
-//      stable(std::make_shared<DiskValueSpace>(false, stable_id, stable_chunks_)),
-//      delta_tree(std::make_shared<DefaultDeltaTree>()),
-//      log(&Logger::get("Segment"))
-//{
-//}
-
 Segment::Segment(UInt64              epoch_, //
                  const HandleRange & range_,
                  PageId              segment_id_,
@@ -346,7 +327,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
                                                                                EMPTY_FILTER);
     delta_stream                     = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
 
-    BlockInputStreamPtr stable_stream = std::make_shared<ChunkBlockInputStream>(stable->getChunks(), //
+    BlockInputStreamPtr stable_stream = std::make_shared<ChunkBlockInputStream>(segment_snap.stable->getChunks(), //
                                                                                 new_columns_to_read,
                                                                                 storage_snap.data_reader,
                                                                                 EMPTY_FILTER);
@@ -489,11 +470,7 @@ DiskValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_context,
     return new_stable;
 }
 
-SegmentPtr Segment::applyMergeDelta(DMContext & /*dm_context*/,
-                                    const SegmentSnapshot & segment_snap,
-                                    const StorageSnapshot & /*storage_snap*/,
-                                    WriteBatches &            wbs,
-                                    const DiskValueSpacePtr & new_stable) const
+SegmentPtr Segment::applyMergeDelta(const SegmentSnapshot & segment_snap, WriteBatches & wbs, const DiskValueSpacePtr & new_stable) const
 {
     LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] apply merge delta start.");
 
@@ -525,7 +502,7 @@ SegmentPtr Segment::mergeDelta(DMContext &             dm_context,
                                WriteBatches &          wbs) const
 {
     auto new_stable = prepareMergeDelta(dm_context, segment_snap, storage_snap, wbs);
-    return applyMergeDelta(dm_context, segment_snap, storage_snap, wbs, new_stable);
+    return applyMergeDelta(segment_snap, wbs, new_stable);
 }
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context) const

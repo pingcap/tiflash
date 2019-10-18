@@ -37,8 +37,8 @@ struct WriteBatches
     WriteBatch data;
     WriteBatch meta;
 
-    Ids writtenLog;
-    Ids writtenData;
+    PageIds writtenLog;
+    PageIds writtenData;
 
     WriteBatch removed_log;
     WriteBatch removed_data;

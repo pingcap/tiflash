@@ -44,14 +44,6 @@ struct DeltaValueSpace
             }
         }
         rows = block.rows();
-
-        // Debug code !!!
-        //        String s;
-        //        for (size_t i = 0; i < rows; ++i)
-        //        {
-        //            s += DB::toString((*handle_column)[i]) + ",";
-        //        }
-        //        std::cout << s << std::endl;
     }
 
     void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
@@ -125,14 +117,6 @@ public:
             PageId              delta_id,
             PageId              stable_id);
 
-    //    Segment(UInt64              epoch_, //
-    //            const HandleRange & range_,
-    //            PageId              segment_id_,
-    //            PageId              next_segment_id_,
-    //            PageId              delta_id,
-    //            const Chunks &      delta_chunks_,
-    //            PageId              stable_id,
-    //            const Chunks &      stable_chunks_);
     Segment(UInt64              epoch_, //
             const HandleRange & range_,
             PageId              segment_id_,
@@ -196,17 +180,15 @@ public:
                                         const SegmentSnapshot & segment_snap,
                                         const StorageSnapshot & storage_snap,
                                         WriteBatches &          wbs) const;
-    SegmentPtr        applyMergeDelta(DMContext &               dm_context,
-                                      const SegmentSnapshot &   segment_snap,
-                                      const StorageSnapshot &   storage_snap,
-                                      WriteBatches &            wbs,
-                                      const DiskValueSpacePtr & new_stable) const;
+    SegmentPtr        applyMergeDelta(const SegmentSnapshot & segment_snap, WriteBatches & wbs, const DiskValueSpacePtr & new_stable) const;
 
     /// Note that we should replace this object with return object, or we can not read latest data after `mergeDelta`.
+    WARN_UNUSED_RESULT
     SegmentPtr mergeDelta(DMContext &             dm_context,
                           const SegmentSnapshot & segment_snap,
                           const StorageSnapshot & storage_snap,
                           WriteBatches &          wbs) const;
+    WARN_UNUSED_RESULT
     SegmentPtr mergeDelta(DMContext & dm_context) const;
 
     /// Flush delta's cache chunks.
