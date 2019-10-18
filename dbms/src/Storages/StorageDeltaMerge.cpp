@@ -630,9 +630,9 @@ void updateDeltaMergeTableCreateStatement(                   //
     IDatabase::ASTModifier storage_modifier = [&](IAST & ast) {
         std::shared_ptr<ASTLiteral> literal;
         if (table_info_from_tidb)
-            literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize(true)));
+            literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize()));
         else
-            literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize(true)));
+            literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize()));
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
         auto & args = typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments);
         if (args.children.size() == 1)
