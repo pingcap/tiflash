@@ -38,6 +38,7 @@ int64_t IndexReader::getReadIndex()
         candidate_learners = learners;
     else
     {
+        // Try to iterate all learners in pd as no accurate IP specified in config thus I don't know who 'I' am, otherwise only try 'myself'
         for (const auto & learner : learners)
         {
             std::string addr = cache->getStoreAddr(bo, learner.store_id());
