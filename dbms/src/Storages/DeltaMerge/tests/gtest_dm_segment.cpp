@@ -76,6 +76,9 @@ protected:
                       .min_version   = 0,
 
                       .not_compress            = settings.not_compress_columns,
+
+                      .segment_limit_rows      = db_context->getSettingsRef().dm_segment_limit_rows,
+
                       .delta_limit_rows        = db_context->getSettingsRef().dm_segment_delta_limit_rows,
                       .delta_limit_bytes       = db_context->getSettingsRef().dm_segment_delta_limit_bytes,
                       .delta_cache_limit_rows  = db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
