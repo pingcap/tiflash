@@ -544,7 +544,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
         writeBackQuotedString(pks[i], stmt_buf);
     }
     writeString("), 8192, '", stmt_buf);
-    writeString(table_info.serialize(true), stmt_buf);
+    writeEscapedString(table_info.serialize(), stmt_buf);
     writeString("')", stmt_buf);
 
     return stmt;
