@@ -1,9 +1,9 @@
 #include <memory>
 
+#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <pingcap/kv/RegionClient.h>
 #include <Storages/Transaction/RegionHelper.hpp>
 
 namespace DB
@@ -91,10 +91,10 @@ UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 RegionPtr Region::splitInto(RegionMeta meta)
 {
     RegionPtr new_region;
-    if (client != nullptr)
+    if (index_reader != nullptr)
     {
         new_region = std::make_shared<Region>(std::move(meta), [&](pingcap::kv::RegionVerID ver_id) {
-            return std::make_shared<pingcap::kv::RegionClient>(client->cache, client->client, ver_id);
+            return std::make_shared<IndexReader>(index_reader->cache, index_reader->client, ver_id, index_reader->suggested_address);
         });
     }
     else
@@ -379,7 +379,7 @@ std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
     return {total_size, applied_index};
 }
 
-RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * region_client_create)
+RegionPtr Region::deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create)
 {
     auto version = readBinary2<UInt32>(buf);
     if (version != Region::CURRENT_VERSION)
@@ -387,8 +387,8 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const RegionClientCreateFunc * r
             "[Region::deserialize] unexpected version: " + DB::toString(version) + ", expected: " + DB::toString(CURRENT_VERSION),
             ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
-    auto region = region_client_create == nullptr ? std::make_shared<Region>(RegionMeta::deserialize(buf))
-                                                  : std::make_shared<Region>(RegionMeta::deserialize(buf), *region_client_create);
+    auto region = index_reader_create == nullptr ? std::make_shared<Region>(RegionMeta::deserialize(buf))
+                                                 : std::make_shared<Region>(RegionMeta::deserialize(buf), *index_reader_create);
 
     RegionData::deserialize(buf, region->data);
 
@@ -474,14 +474,14 @@ ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
 UInt64 Region::learnerRead()
 {
-    if (client != nullptr)
-        return client->getReadIndex();
+    if (index_reader != nullptr)
+        return index_reader->getReadIndex();
     return 0;
 }
 
 void Region::waitIndex(UInt64 index)
 {
-    if (client != nullptr)
+    if (index_reader != nullptr)
     {
         if (!meta.checkIndex(index))
         {

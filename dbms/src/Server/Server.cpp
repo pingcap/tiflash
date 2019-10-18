@@ -348,6 +348,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string learner_value;
     std::unordered_set<std::string> ignore_databases{"system"};
     std::string kvstore_path = path + "kvstore/";
+    String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
 
     if (config().has("raft"))
     {
@@ -408,7 +409,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr);
     }
 
     /// Then, load remaining databases
@@ -451,7 +452,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
     std::unique_ptr<FlashService> flash_service = nullptr;
     std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
     {

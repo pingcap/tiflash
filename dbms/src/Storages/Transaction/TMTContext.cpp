@@ -11,7 +11,8 @@ namespace DB
 {
 
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path)
+    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
+    const std::string & raft_service_address_)
     : kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
@@ -21,12 +22,13 @@ TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs
       ignore_databases(ignore_databases_),
       schema_syncer(addrs.size() == 0
               ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(pd_client, region_cache, rpc_client))
-              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client)))
+              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client))),
+      raft_service_address(raft_service_address_)
 {}
 
 void TMTContext::restore()
 {
-    kvstore->restore([&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr { return this->createRegionClient(id); });
+    kvstore->restore([&](pingcap::kv::RegionVerID id) -> IndexReaderPtr { return this->createIndexReader(id); });
     region_table.restore();
     initialized = true;
 }
@@ -59,10 +61,11 @@ void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
 
 pingcap::pd::ClientPtr TMTContext::getPDClient() const { return pd_client; }
 
-pingcap::kv::RegionClientPtr TMTContext::createRegionClient(pingcap::kv::RegionVerID region_version_id) const
+IndexReaderPtr TMTContext::createIndexReader(pingcap::kv::RegionVerID region_version_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return pd_client->isMock() ? nullptr : std::make_shared<pingcap::kv::RegionClient>(region_cache, rpc_client, region_version_id);
+    return pd_client->isMock() ? nullptr
+                               : std::make_shared<IndexReader>(region_cache, rpc_client, region_version_id, raft_service_address);
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
