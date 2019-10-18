@@ -50,7 +50,10 @@ int64_t IndexReader::getReadIndex()
         }
     }
 
-    // If we don't find a local learner, we should not send request to a remote learner.
+    // There are two cases that candidates may be empty:
+    // 1. the learner lists is empty. It means there are no learner stores is up.
+    // 2. the learner lists is not empty and we specify a local service address. But we don't find it in learner list, then we
+    // fail the request directly.
     if (candidate_learners.empty())
         throw Exception("Cannot find store ip " + suggested_ip + " in region peers, region_id is " + std::to_string(region_id.id)
                 + ", maybe learner storage is down",
