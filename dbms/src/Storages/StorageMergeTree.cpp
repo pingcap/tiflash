@@ -408,7 +408,7 @@ void StorageMergeTree::alterInternal(
 
         if (table_info)
         {
-            auto literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize(true)));
+            auto literal = std::make_shared<ASTLiteral>(Field(table_info->get().serialize()));
             typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments).children.back() = literal;
         }
     };
