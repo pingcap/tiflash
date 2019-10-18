@@ -12,7 +12,7 @@ extern const int LOGICAL_ERROR;
 
 std::string getIP(const std::string & address)
 {
-    if (address == "")
+    if (address.size() == 0)
         return "";
     size_t idx = address.find(":");
     if (idx == std::string::npos)
@@ -50,9 +50,9 @@ int64_t IndexReader::getReadIndex()
     }
 
     // If we don't find a local learner, we should not send request to a remote learner.
-    if (candidate_learners.size() == 0)
+    if (candidate_learners.empty())
         throw Exception("Cannot find store ip " + suggested_ip + " in region peers, region_id is " + std::to_string(region_id.id)
-                + ", maybe rngine is down",
+                + ", maybe learner storage is down",
             ErrorCodes::LOGICAL_ERROR);
 
     for (;;)
@@ -80,7 +80,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
     for (const auto & learner : learners)
     {
         std::string addr = cache->getStoreAddr(bo, learner.store_id());
-        if (addr == "")
+        if (addr.size() == 0)
         {
             bo.backoff(pingcap::kv::boRegionMiss,
                 pingcap::Exception(
