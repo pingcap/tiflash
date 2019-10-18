@@ -16,7 +16,6 @@
     <display_name>the flash</display_name>
 
     <raft>
-        <service_addr>0.0.0.0:3930</service_addr>
         <kvstore_path>/data/kvstore</kvstore_path>
         <!--Linux-->
         <pd_addr>pd0:2379</pd_addr>
@@ -25,6 +24,10 @@
         <!-- ignored dbs, extra spaces are trimed -->
         <ignore_databases>system </ignore_databases>
     </raft>
+
+    <flash>
+        <service_addr>0.0.0.0:3930</service_addr>
+    </flash>
 
     <http_port>8123</http_port>
     <tcp_port>9000</tcp_port>

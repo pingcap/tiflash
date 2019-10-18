@@ -1,16 +1,8 @@
 #include "Server.h"
 
-#include <memory>
-#include <sys/resource.h>
-#include <Poco/DirectoryIterator.h>
-#include <Poco/StringTokenizer.h>
-#include <Poco/Net/HTTPServer.h>
-#include <Poco/Net/NetException.h>
-#include <ext/scope_guard.h>
-#include <common/logger_useful.h>
-#include <common/ErrorHandlers.h>
-#include <common/getMemoryAmount.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -20,20 +12,30 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Flash/FlashService.h>
+#include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/loadMetadata.h>
+#include <Poco/DirectoryIterator.h>
+#include <Poco/Net/HTTPServer.h>
+#include <Poco/Net/NetException.h>
+#include <Poco/StringTokenizer.h>
+#include <Raft/RaftService.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Functions/registerFunctions.h>
-#include <TableFunctions/registerTableFunctions.h>
 #include <Storages/registerStorages.h>
-#include <Common/Config/ConfigReloader.h>
+#include <TableFunctions/registerTableFunctions.h>
+#include <common/ErrorHandlers.h>
+#include <common/getMemoryAmount.h>
+#include <common/logger_useful.h>
+#include <sys/resource.h>
+#include <ext/scope_guard.h>
+#include <memory>
 #include "HTTPHandlerFactory.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
@@ -346,7 +348,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string learner_value;
     std::unordered_set<std::string> ignore_databases{"system"};
     std::string kvstore_path = path + "kvstore/";
-    std::string raft_service_addr;
+    /// Then, startup grpc server to serve raft and/or flash services.
+    String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
 
     if (config().has("raft"))
     {
@@ -403,12 +406,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             kvstore_path = config().getString("raft.kvstore_path");
         }
-        raft_service_addr = config().getString("raft.service_addr");
     }
 
     {
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, raft_service_addr);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr);
     }
 
     /// Then, load remaining databases
@@ -445,28 +447,68 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_DEBUG(log, "Shutted down storages.");
     });
 
+    {
+        /// initialize TMTContext
+        global_context->getTMTContext().restore();
+    }
+
+    std::unique_ptr<FlashService> flash_service = nullptr;
+    std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
+    {
+        grpc::ServerBuilder builder;
+        builder.AddListeningPort(flash_server_addr, grpc::InsecureServerCredentials());
+
+        /// Init and register raft service if necessary.
+        if (need_raft_service)
+        {
+            global_context->initializeRaftService();
+            builder.RegisterService(&(global_context->getRaftService()));
+            LOG_INFO(log, "Raft service registered");
+        }
+
+        /// Init and register flash service.
+        flash_service = std::make_unique<FlashService>(*this);
+        builder.RegisterService(flash_service.get());
+        LOG_INFO(log, "Flash service registered");
+
+        /// Kick off grpc server.
+        // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
+        builder.SetMaxReceiveMessageSize(-1);
+        builder.SetMaxSendMessageSize(-1);
+        flash_grpc_server = builder.BuildAndStart();
+        LOG_INFO(log, "Flash grpc server listening on [" << flash_server_addr << "]");
+    }
+
+    SCOPE_EXIT({
+        /// Shut down grpc server.
+        // wait 5 seconds for pending rpcs to gracefully stop
+        gpr_timespec deadline{5, 0, GPR_TIMESPAN};
+        LOG_INFO(log, "Begin to shut down flash grpc server");
+        flash_grpc_server->Shutdown(deadline);
+        flash_grpc_server->Wait();
+        flash_grpc_server.reset();
+        LOG_INFO(log, "Shut down flash grpc server");
+
+        /// Close flash service.
+        LOG_INFO(log, "Begin to shut down flash service");
+        flash_service.reset();
+        LOG_INFO(log, "Shut down flash service");
+
+        /// Close raft service if necessary.
+        if (need_raft_service)
+        {
+            LOG_INFO(log, "Begin to shut down raft service");
+            global_context->shutdownRaftService();
+            LOG_INFO(log, "Shut down raft service");
+        }
+    });
+
     if (has_zookeeper && config().has("distributed_ddl"))
     {
         /// DDL worker should be started after all tables were loaded
         String ddl_zookeeper_path = config().getString("distributed_ddl.path", "/clickhouse/task_queue/ddl/");
         global_context->setDDLWorker(std::make_shared<DDLWorker>(ddl_zookeeper_path, *global_context, &config(), "distributed_ddl"));
     }
-
-    {
-        /// initialize TMTContext
-        global_context->getTMTContext().restore();
-    }
-
-    if (need_raft_service)
-    {
-        global_context->initializeRaftService(raft_service_addr);
-    }
-
-    SCOPE_EXIT({
-        LOG_INFO(log, "Shutting down raft service.");
-        global_context->shutdownRaftService();
-        LOG_INFO(log, "Shutted down raft service.");
-    });
 
     {
         Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);

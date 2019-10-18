@@ -23,6 +23,9 @@ extern const int LOGICAL_ERROR;
 namespace RegionBench
 {
 
+using TiDB::ColumnInfo;
+using TiDB::TableInfo;
+
 RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end)
 {
     enginepb::SnapshotRequest request;
@@ -121,7 +124,130 @@ void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, co
     }
 }
 
-bool isDateTimeType(TiDB::TP tp) { return tp == TiDB::TypeTimestamp || tp == TiDB::TypeDate || tp == TiDB::TypeDatetime; }
+template <typename T>
+T convertNumber(const Field & field)
+{
+    switch (field.getType())
+    {
+        case Field::Types::Int64:
+            return static_cast<T>(field.get<Int64>());
+        case Field::Types::UInt64:
+            return static_cast<T>(field.get<UInt64>());
+        case Field::Types::Float64:
+            return static_cast<T>(field.get<Float64>());
+        case Field::Types::Decimal32:
+            return static_cast<T>(field.get<DecimalField<Decimal32>>());
+        case Field::Types::Decimal64:
+            return static_cast<T>(field.get<DecimalField<Decimal64>>());
+        case Field::Types::Decimal128:
+            return static_cast<T>(field.get<DecimalField<Decimal128>>());
+        case Field::Types::Decimal256:
+            return static_cast<T>(field.get<DecimalField<Decimal256>>());
+        default:
+            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to number", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+Field convertDecimal(const ColumnInfo & column_info, const Field & field)
+{
+    switch (field.getType())
+    {
+        case Field::Types::Int64:
+            return column_info.getDecimalValue(std::to_string(field.get<Int64>()));
+        case Field::Types::UInt64:
+            return column_info.getDecimalValue(std::to_string(field.get<UInt64>()));
+        case Field::Types::Float64:
+            return column_info.getDecimalValue(std::to_string(field.get<Float64>()));
+        case Field::Types::Decimal32:
+            return column_info.getDecimalValue(field.get<Decimal32>().toString(column_info.decimal));
+        case Field::Types::Decimal64:
+            return column_info.getDecimalValue(field.get<Decimal64>().toString(column_info.decimal));
+        case Field::Types::Decimal128:
+            return column_info.getDecimalValue(field.get<Decimal128>().toString(column_info.decimal));
+        case Field::Types::Decimal256:
+            return column_info.getDecimalValue(field.get<Decimal256>().toString(column_info.decimal));
+        default:
+            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to number", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+Field convertEnum(const ColumnInfo & column_info, const Field & field)
+{
+    switch (field.getType())
+    {
+        case Field::Types::Int64:
+        case Field::Types::UInt64:
+            return convertNumber<UInt64>(field);
+        case Field::Types::String:
+            return static_cast<UInt64>(column_info.getEnumIndex(field.get<String>()));
+        default:
+            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Enum", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+Field convertField(const ColumnInfo & column_info, const Field & field)
+{
+    if (field.isNull())
+        return field;
+
+    switch (column_info.tp)
+    {
+        case TiDB::TypeTiny:
+        case TiDB::TypeShort:
+        case TiDB::TypeLong:
+        case TiDB::TypeLongLong:
+        case TiDB::TypeInt24:
+        case TiDB::TypeBit:
+            if (column_info.hasUnsignedFlag())
+                return convertNumber<UInt64>(field);
+            else
+                return convertNumber<Int64>(field);
+        case TiDB::TypeFloat:
+        case TiDB::TypeDouble:
+            return convertNumber<Float64>(field);
+        case TiDB::TypeDate:
+        case TiDB::TypeDatetime:
+        case TiDB::TypeTimestamp:
+            return parseMyDateTime(field.safeGet<String>());
+        case TiDB::TypeVarchar:
+        case TiDB::TypeTinyBlob:
+        case TiDB::TypeMediumBlob:
+        case TiDB::TypeLongBlob:
+        case TiDB::TypeBlob:
+        case TiDB::TypeVarString:
+        case TiDB::TypeString:
+            return field;
+        case TiDB::TypeEnum:
+            return convertEnum(column_info, field);
+        case TiDB::TypeNull:
+            return Field();
+        case TiDB::TypeDecimal:
+        case TiDB::TypeNewDecimal:
+            return convertDecimal(column_info, field);
+        case TiDB::TypeTime:
+            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Time", ErrorCodes::LOGICAL_ERROR);
+        case TiDB::TypeYear:
+            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Year", ErrorCodes::LOGICAL_ERROR);
+        case TiDB::TypeSet:
+            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Set", ErrorCodes::LOGICAL_ERROR);
+        default:
+            return Field();
+    }
+}
+
+void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss)
+{
+    if (table_info.columns.size() != fields.size() + table_info.pk_is_handle)
+        throw Exception("Encoding row has different sizes between columns and values", ErrorCodes::LOGICAL_ERROR);
+    for (size_t i = 0; i < fields.size(); i++)
+    {
+        const TiDB::ColumnInfo & column_info = table_info.columns[i];
+        EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
+        Field field = convertField(column_info, fields[i]);
+        TiDB::DatumBumpy datum = TiDB::DatumBumpy(field, column_info.tp);
+        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
+    }
+}
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
     ASTs::const_iterator end, Context & context, const std::optional<std::tuple<Timestamp, UInt8>> & tso_del)
@@ -132,14 +258,10 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     while ((it = begin++) != end)
     {
         auto field = typeid_cast<const ASTLiteral *>((*it).get())->value;
-        if (isDateTimeType(table_info.columns[idx].tp))
-        {
-            field = parseMyDateTime(field.safeGet<String>());
-        }
         fields.emplace_back(field);
         idx++;
     }
-    if (fields.size() != table_info.columns.size())
+    if (fields.size() + table_info.pk_is_handle != table_info.columns.size())
         throw Exception("Number of insert values and columns do not match.", ErrorCodes::LOGICAL_ERROR);
 
     TMTContext & tmt = context.getTMTContext();
@@ -151,7 +273,9 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     TableID table_id = RecordKVFormat::getTableId(range->rawKeys().first);
 
     TiKVKey key = RecordKVFormat::genKey(table_id, handle_id);
-    TiKVValue value = RecordKVFormat::EncodeRow(table_info, fields);
+    std::stringstream ss;
+    encodeRow(table_info, fields, ss);
+    TiKVValue value(ss.str());
 
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();

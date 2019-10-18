@@ -1276,6 +1276,72 @@ public:
     }
 };
 
+class FunctionMyTimeZoneConvertByOffset : public IFunction
+{
+    using FromFieldType = typename DataTypeMyDateTime::FieldType;
+    using ToFieldType = typename DataTypeMyDateTime::FieldType;
+public:
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionMyTimeZoneConvertByOffset>(); };
+    static constexpr auto name = "ConvertTimeZoneByOffset";
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override {return 2; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (arguments.size() != 2)
+            throw Exception("Number of arguments for function " + getName() + " doesn't match: passed "
+                            + toString(arguments.size()) + ", should be 2",
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        if (!checkDataType<DataTypeMyDateTime>(arguments[0].type.get()))
+            throw Exception{
+                    "Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() +
+                    ". Should be MyDateTime", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+        if (!arguments[1].type->isInteger())
+            throw Exception{
+                    "Illegal type " + arguments[1].type->getName() + " of second argument of function " + getName() +
+                    ". Should be Integer type", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
+
+        return arguments[0].type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override {
+        static const DateLUTImpl & UTC = DateLUT::instance("UTC");
+        if (const ColumnVector<FromFieldType> *col_from
+                = checkAndGetColumn<ColumnVector<FromFieldType>>(block.getByPosition(arguments[0]).column.get())) {
+            auto col_to = ColumnVector<ToFieldType>::create();
+            const typename ColumnVector<FromFieldType>::Container &vec_from = col_from->getData();
+            typename ColumnVector<ToFieldType>::Container &vec_to = col_to->getData();
+            size_t size = vec_from.size();
+            vec_to.resize(size);
+
+            const auto offset_col = block.getByPosition(arguments.back()).column.get();
+            if (!offset_col->isColumnConst())
+                throw Exception{
+                        "Second argument of function " + getName() + " must be an integral constant",
+                        ErrorCodes::ILLEGAL_COLUMN};
+
+            const auto offset = offset_col->getInt(0);
+            for (size_t i = 0; i < size; ++i) {
+                UInt64 result_time = vec_from[i] + offset;
+                // todo maybe affected by daytime saving, need double check
+                convertTimeZoneByOffset(vec_from[i], result_time, offset, UTC);
+                vec_to[i] = result_time;
+            }
+
+            block.getByPosition(result).column = std::move(col_to);
+        } else
+            throw Exception("Illegal column " + block.getByPosition(arguments[0]).column->getName()
+                            + " of first argument of function " + name,
+                            ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+};
 template <bool convert_from_utc>
 class FunctionMyTimeZoneConverter : public IFunction
 {
@@ -1318,7 +1384,7 @@ public:
             size_t size = vec_from.size();
             vec_to.resize(size);
 
-            const auto & time_zone_utc = DateLUT::instance("UTC");
+            static const auto & time_zone_utc = DateLUT::instance("UTC");
             const auto & time_zone_other = extractTimeZoneFromFunctionArguments(block, arguments, 1, 0);
             for (size_t i = 0; i < size; ++i)
             {

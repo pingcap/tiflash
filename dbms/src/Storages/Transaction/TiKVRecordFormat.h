@@ -57,21 +57,6 @@ inline UInt64 decodeUInt64Desc(const UInt64 x) { return ~decodeUInt64(x); }
 
 inline Int64 decodeInt64(const UInt64 x) { return static_cast<Int64>(decodeUInt64(x) ^ SIGN_MASK); }
 
-inline TiKVValue EncodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields)
-{
-    if (table_info.columns.size() != fields.size())
-        throw Exception("Encoding row has different sizes between columns and values", ErrorCodes::LOGICAL_ERROR);
-    std::stringstream ss;
-    for (size_t i = 0; i < fields.size(); i++)
-    {
-        const TiDB::ColumnInfo & column_info = table_info.columns[i];
-        EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
-        TiDB::DatumBumpy datum = TiDB::DatumBumpy(fields[i], column_info.tp);
-        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
-    }
-    return TiKVValue(ss.str());
-}
-
 template <typename T>
 inline T read(const char * s)
 {
