@@ -43,7 +43,7 @@ void RegionTable::writeBlockByRegion(
             if (!scanner.hasNext())
                 return;
 
-            data_list_to_remove.reserve(scanner.writeMapSize());
+            data_list_read.reserve(scanner.writeMapSize());
 
             auto start_time = Clock::now();
             do

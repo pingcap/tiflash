@@ -410,8 +410,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// create TMTContext
         global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr);
-        if (need_raft_service)
-            global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("raft.overlap_threshold", 0.9));
+        global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.9));
     }
 
     /// Then, load remaining databases

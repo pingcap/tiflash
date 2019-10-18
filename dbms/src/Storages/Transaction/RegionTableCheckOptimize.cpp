@@ -11,13 +11,13 @@ namespace DB
 {
 
 template <typename TargetType>
-bool shouldOptimizeTable(const MergeTreeData & data, Logger * log, const double threshold)
+std::tuple<size_t, size_t> shouldOptimizeTable(const MergeTreeData & data)
 {
     size_t selected_marks = 0, overlapped_marks = 0;
     auto data_parts = data.getDataParts();
 
     if (data_parts.empty())
-        return false;
+        return {0, 0};
 
     using PartMap = std::unordered_map<const MergeTreeDataPart *, size_t>;
     std::map<TargetType, PartMap> mmp;
@@ -88,12 +88,7 @@ bool shouldOptimizeTable(const MergeTreeData & data, Logger * log, const double 
         overlapped_marks += *(cnt_list.end() - 2);
     }
 
-    LOG_DEBUG(log,
-        __FUNCTION__ << ": overlapped marks " << overlapped_marks << ", selected marks " << selected_marks << ", threshold " << threshold);
-
-    if (overlapped_marks > selected_marks * threshold)
-        return true;
-    return false;
+    return {selected_marks, overlapped_marks};
 }
 
 bool shouldOptimizeTable(const TableID table_id, TMTContext & tmt, Logger * log, const double threshold)
@@ -102,19 +97,18 @@ bool shouldOptimizeTable(const TableID table_id, TMTContext & tmt, Logger * log,
     if (!storage)
         return false;
     auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-    if (storage->is_dropped)
-        return false;
+
     auto & data = storage->getData();
     const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
+    auto [selected_marks, overlapped_marks] = pk_is_uint64 ? shouldOptimizeTable<UInt64>(data) : shouldOptimizeTable<Int64>(data);
 
-    bool res = pk_is_uint64 ? shouldOptimizeTable<UInt64>(data, log, threshold) : shouldOptimizeTable<Int64>(data, log, threshold);
+    LOG_INFO(log,
+        __FUNCTION__ << ": `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` table id " << table_id
+                     << " overlapped marks " << overlapped_marks << ", selected marks " << selected_marks << ", threshold " << threshold);
 
-    if (res)
-        LOG_DEBUG(log,
-            __FUNCTION__ << ": `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` table id " << table_id
-                         << " need to be optimized");
-
-    return res;
+    if (selected_marks && overlapped_marks > selected_marks * threshold)
+        return true;
+    return false;
 }
 
 void RegionTable::checkTableOptimize()
@@ -154,6 +148,7 @@ void RegionTable::checkTableOptimize(DB::TableID table_id, const double threshol
     auto & tmt = context->getTMTContext();
     if (shouldOptimizeTable(table_id, tmt, log, threshold))
     {
+        LOG_INFO(log, "table " << table_id << " need to be optimized");
         std::lock_guard<std::mutex> lock(mutex);
         table_to_optimize.emplace(table_id);
     }
