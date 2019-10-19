@@ -17,6 +17,7 @@ bool ParserManageQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_flush("FLUSH");
     ParserKeyword s_status("STATUS");
     ParserKeyword s_check("CHECK");
+    ParserKeyword s_delete_rows("DELETE ROWS");
 
     ParserToken s_dot(TokenType::Dot);
     ParserIdentifier name_p;
@@ -37,15 +38,6 @@ bool ParserManageQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
     }
 
-    if (s_flush.ignore(pos, expected))
-        operation = ManageOperation::Enum::Flush;
-    else if (s_status.ignore(pos, expected))
-        operation = ManageOperation::Enum::Status;
-    else if (s_check.ignore(pos, expected))
-        operation = ManageOperation::Enum::Check;
-    else
-        return false;
-
     auto query = std::make_shared<ASTManageQuery>();
     node = query;
 
@@ -54,8 +46,26 @@ bool ParserManageQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (table)
         query->table = typeid_cast<const ASTIdentifier &>(*table).name;
 
+    if (s_flush.ignore(pos, expected))
+        operation = ManageOperation::Enum::Flush;
+    else if (s_status.ignore(pos, expected))
+        operation = ManageOperation::Enum::Status;
+    else if (s_check.ignore(pos, expected))
+        operation = ManageOperation::Enum::Check;
+    else if (s_delete_rows.ignore(pos, expected))
+    {
+        operation = ManageOperation::Enum::DeleteRows;
+        ParserNumber num;
+        ASTPtr rows;
+        if (!num.parse(pos, rows, expected))
+            return false;
+        query->rows = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*rows).value);
+    }
+    else
+        return false;
+
     query->operation = operation;
 
     return true;
 }
-}
+} // namespace DB

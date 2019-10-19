@@ -1,5 +1,7 @@
 #pragma once
 
+#include <queue>
+
 #include <Core/Block.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
@@ -19,7 +21,7 @@ namespace DM
 static constexpr size_t DELTA_MERGE_DEFAULT_SEGMENT_ROWS = DEFAULT_BLOCK_SIZE << 6;
 static const PageId     DELTA_MERGE_FIRST_SEGMENT_ID     = 1;
 
-class DeltaMergeStore
+class DeltaMergeStore : private boost::noncopyable
 {
     using OpContext = DiskValueSpace::OpContext;
 
@@ -27,18 +29,87 @@ public:
     struct Settings
     {
         NotCompress not_compress_columns{};
+    };
 
-        // TODO: Make this setting table specified.
+    struct WriteAction
+    {
+        const SegmentPtr segment;
+        const size_t     offset = 0;
+        const size_t     limit  = 0;
+        BlockOrDelete    update = {};
 
-        //        size_t segment_rows = DELTA_MERGE_DEFAULT_SEGMENT_ROWS;
-        //
-        //        // The threshold of delta.
-        //        size_t segment_delta_limit_rows  = DELTA_MERGE_DEFAULT_SEGMENT_ROWS / 10;
-        //        size_t segment_delta_limit_bytes = 64 * MB;
-        //
-        //        // The threshold of cache in delta.
-        //        size_t segment_delta_cache_limit_rows  = DEFAULT_BLOCK_SIZE;
-        //        size_t segment_delta_cache_limit_bytes = 16 * MB;
+        AppendTaskPtr task = {};
+
+        WriteAction(){};
+        WriteAction(const SegmentPtr & segment_, size_t offset_, size_t limit_) : segment(segment_), offset(offset_), limit(limit_) {}
+        WriteAction(const SegmentPtr & segment_, const BlockOrDelete & update_) : segment(segment_), update(update_) {}
+    };
+
+    using WriteActions     = std::vector<WriteAction>;
+    using SegmentSortedMap = std::map<Handle, SegmentPtr>;
+
+    enum BackgroundType
+    {
+        MergeDelta,
+        SegmentMerge
+    };
+
+    static std::string getBackgroundTypeName(BackgroundType type)
+    {
+        switch (type)
+        {
+        case BackgroundType ::MergeDelta:
+            return "MergeDelta";
+        case BackgroundType ::SegmentMerge:
+            return "SegmentMerge";
+        default:
+            return "Unknown";
+        }
+    }
+
+    struct BackgroundTask
+    {
+        DMContextPtr   dm_context = {};
+        SegmentPtr     segment    = {};
+        BackgroundType type;
+
+        explicit operator bool() { return (bool)segment; }
+    };
+
+    class MergeDeltaTaskPool
+    {
+    private:
+        using TaskQueue = std::queue<BackgroundTask, std::list<BackgroundTask>>;
+        TaskQueue tasks;
+
+        std::mutex mutex;
+
+    public:
+        void addTask(const BackgroundTask & task, const String & whom, Logger * log_)
+        {
+            LOG_DEBUG(log_,
+                      "Segment [" << task.segment->segmentId() << "] task [" << getBackgroundTypeName(task.type)
+                                  << "] add to background task pool by" << whom);
+
+            std::scoped_lock lock(mutex);
+            tasks.push(task);
+        }
+
+        BackgroundTask nextTask(Logger * log_)
+        {
+            std::scoped_lock lock(mutex);
+
+            if (tasks.empty())
+                return {};
+            auto task = tasks.front();
+            tasks.pop();
+
+            LOG_DEBUG(log_,
+                      "Segment [" << task.segment->segmentId() << "] task [" << getBackgroundTypeName(task.type)
+                                  << "] pop from background task pool");
+
+            return task;
+        }
     };
 
     DeltaMergeStore(Context &             db_context, //
@@ -64,7 +135,7 @@ public:
                            const HandleRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
-                           size_t                expected_block_size);
+                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Force flush all data to disk.
     /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
@@ -86,20 +157,7 @@ public:
     DataTypePtr           getPKDataType() const { return table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
 
-    void check(const Context & db_context, const DB::Settings & db_settings);
-
-    struct WriteAction
-    {
-        SegmentPtr segment;
-        size_t     offset;
-        size_t     limit;
-
-        BlockOrDelete update = {};
-        AppendTaskPtr task   = {};
-    };
-
-    using WriteActions     = std::vector<WriteAction>;
-    using SegmentSortedMap = std::map<Handle, SegmentPtr>;
+    void check(const Context & db_context);
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings)
@@ -118,6 +176,7 @@ private:
                                    .min_version   = min_version,
 
                                    .not_compress            = settings.not_compress_columns,
+                                   .segment_limit_rows      = db_settings.dm_segment_limit_rows,
                                    .delta_limit_rows        = db_settings.dm_segment_delta_limit_rows,
                                    .delta_limit_bytes       = db_settings.dm_segment_delta_limit_bytes,
                                    .delta_cache_limit_rows  = db_settings.dm_segment_delta_cache_limit_rows,
@@ -127,23 +186,30 @@ private:
 
     bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
-    bool afterDelete(const Context & db_context, const DB::Settings & db_settings);
-    bool shouldSplit(const SegmentPtr & segment, size_t segment_rows_setting);
-    bool shouldMerge(const SegmentPtr & left, const SegmentPtr & right, size_t segment_rows_setting);
-    void split(DMContext & dm_context, const SegmentPtr & segment);
-    void merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
+    template <bool by_write_thread>
+    void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment);
+
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
+    void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
+    void        segmentMergeDelta(DMContext &             dm_context,
+                                  const SegmentPtr &      segment,
+                                  const SegmentSnapshot & segment_snap,
+                                  const StorageSnapshot & storage_snap,
+                                  bool                    is_foreground);
+
+    void segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    void segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    void segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
+
+    bool handleBackgroundTask();
 
     void applyAlter(const AlterCommand &          command, //
                     const OptionTableInfoConstRef table_info,
                     ColumnID &                    max_column_id_used);
 
-    void commitWrites(WriteActions &&       actions,
-                      AppendWriteBatches && wbs,
-                      DMContext &           dm_context,
-                      OpContext &           op_context,
-                      const Context &       db_context,
-                      const DB::Settings &  db_settings,
-                      bool                  is_upsert);
+    void commitWrites(const WriteActions & actions, WriteBatches & wbs, const DMContextPtr & dm_context, OpContext & op_context);
+
+    bool isSegmentValid(const SegmentPtr & segment);
 
 private:
     String      path;
@@ -155,6 +221,7 @@ private:
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
+    BackgroundProcessingPool::TaskHandle background_task_handle;
 
     Settings settings;
 
@@ -162,6 +229,8 @@ private:
 
     /// end of range -> segment
     SegmentSortedMap segments;
+
+    MergeDeltaTaskPool merge_delta_tasks;
 
     // Synchronize between one write thread and multiple read threads.
     std::shared_mutex read_write_mutex;

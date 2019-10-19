@@ -39,6 +39,7 @@ public:
     // Binary version of chunk
     using Version = UInt32;
     static const Version CURRENT_VERSION;
+
 public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
@@ -122,11 +123,16 @@ using GenPageId = std::function<PageId()>;
 Chunk  createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, WriteBatch & wb);
 Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id, WriteBatch & wb);
 
-void   serializeChunks(WriteBuffer &           buf,
-                       Chunks::const_iterator  begin,
-                       Chunks ::const_iterator end,
-                       const Chunk *           extra1 = nullptr,
-                       const Chunk *           extra2 = nullptr);
+void serializeChunks(WriteBuffer &           buf,
+                     Chunks::const_iterator  begin,
+                     Chunks::const_iterator end,
+                     const Chunk *           extra1 = nullptr,
+                     const Chunk *           extra2 = nullptr);
+void serializeChunks(WriteBuffer &           buf, //
+                     Chunks::const_iterator  begin,
+                     Chunks::const_iterator end,
+                     const Chunks &          extr_chunks);
+
 Chunks deserializeChunks(ReadBuffer & buf);
 
 Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block);

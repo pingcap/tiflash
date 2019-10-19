@@ -64,6 +64,14 @@ public:
         return count;
     }
 
+    void swap(WriteBatch & o) { writes.swap(o.writes); }
+
+    void clear()
+    {
+        Writes tmp;
+        writes.swap(tmp);
+    }
+
 private:
     Writes writes;
 };

@@ -34,6 +34,7 @@ struct SegmentReadTask
 using SegmentReadTaskPtr   = std::shared_ptr<SegmentReadTask>;
 using SegmentReadTasks     = std::vector<SegmentReadTaskPtr>;
 using SegmentStreamCreator = std::function<BlockInputStreamPtr(const SegmentReadTask &)>;
+using AfterSegmentRead     = std::function<void(const SegmentPtr &)>;
 
 class SegmentReadTaskPool : private boost::noncopyable
 {

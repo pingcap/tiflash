@@ -38,6 +38,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_values("VALUES");
     ParserKeyword s_format("FORMAT");
     ParserKeyword s_select("SELECT");
+    ParserKeyword s_selraw("SELRAW");
     ParserKeyword s_with("WITH");
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
@@ -137,7 +138,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (data < end && *data == '\n')
             ++data;
     }
-    else if (s_select.ignore(pos, expected) || s_with.ignore(pos,expected))
+    else if (s_select.ignore(pos, expected) || s_selraw.ignore(pos, expected) || s_with.ignore(pos,expected))
     {
         pos = before_select;
         ParserSelectWithUnionQuery select_p;
