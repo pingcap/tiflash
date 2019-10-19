@@ -12,12 +12,13 @@ namespace ManageOperation
         Flush,
         Status,
         Check,
+        DeleteRows,
     };
 
     inline const char * toString(UInt64 op)
     {
-        static const char * data[] = {"Flush", "Status", "Check"};
-        return op < 3 ? data[op] : "Unknown operation";
+        static const char * data[] = {"Flush", "Status", "Check", "Delete Rows"};
+        return op < 4 ? data[op] : "Unknown operation";
     }
 }
 
@@ -30,6 +31,8 @@ public:
     String table;
 
     ManageOperation::Enum operation;
+
+    size_t rows = 0;
 
     /** Get the text that identifies this element. */
     String getID() const override
@@ -51,6 +54,8 @@ protected:
                       << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table) << " "
                       << (settings.hilite ? hilite_keyword : "") << ManageOperation::toString(operation)
                       << (settings.hilite ? hilite_none : "");
+        if(operation == ManageOperation::Enum::DeleteRows)
+            settings.ostr << " " << rows;
     }
 };
 }

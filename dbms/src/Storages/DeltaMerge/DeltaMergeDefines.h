@@ -86,7 +86,7 @@ using ColumnMap        = std::unordered_map<ColId, ColumnPtr>;
 using MutableColumnMap = std::unordered_map<ColId, MutableColumnPtr>;
 using LockGuard        = std::lock_guard<std::mutex>;
 
-static const UInt64 INITIAL_EPOCH = 5; // Following TiDB, and I have no idea why 5 is chosen.
+static const UInt64 INITIAL_EPOCH = 0;
 
 // TODO maybe we should use those variables instead of macros?
 #define EXTRA_HANDLE_COLUMN_NAME ::DB::MutableSupport::tidb_pk_column_name
@@ -129,8 +129,9 @@ static constexpr Handle P_INF_HANDLE = MAX_INT64; // Used in range, indicating p
 static_assert(static_cast<Int64>(static_cast<UInt64>(MIN_INT64)) == MIN_INT64, "Unsupported compiler!");
 static_assert(static_cast<Int64>(static_cast<UInt64>(MAX_INT64)) == MAX_INT64, "Unsupported compiler!");
 
-static constexpr UInt64 DEL_RANGE_POS_MARK = (1ULL << 63);
+static constexpr bool DM_RUN_CHECK = true;
 
+#define WARN_UNUSED_RESULT __attribute__((warn_unused_result))
 
 } // namespace DM
 } // namespace DB

@@ -116,7 +116,7 @@ Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id
 }
 
 void serializeChunks(
-    WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, const Chunk * extra1, const Chunk * extra2)
+    WriteBuffer & buf, Chunks::const_iterator begin, Chunks::const_iterator end, const Chunk * extra1, const Chunk * extra2)
 {
     auto size = (UInt64)(end - begin);
     if (extra1)
@@ -131,6 +131,17 @@ void serializeChunks(
         extra1->serialize(buf);
     if (extra2)
         extra2->serialize(buf);
+}
+
+void serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, const Chunks & extra_chunks)
+{
+    auto size = (UInt64)(end - begin) + extra_chunks.size();
+    writeIntBinary(size, buf);
+
+    for (; begin != end; ++begin)
+        (*begin).serialize(buf);
+    for (auto & chunk : extra_chunks)
+        chunk.serialize(buf);
 }
 
 Chunks deserializeChunks(ReadBuffer & buf)
