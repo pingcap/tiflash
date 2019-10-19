@@ -17,7 +17,7 @@ public:
                           const ColumnDefines & read_columns_,
                           const PageReader &    page_reader_,
                           const RSOperatorPtr & filter)
-        : chunks(chunks_), skip_chunks(chunks.size(), 0), read_columns(read_columns_), page_reader(page_reader_)
+        : chunks(std::move(chunks_)), skip_chunks(chunks.size(), 0), read_columns(read_columns_), page_reader(page_reader_)
     {
         if (filter)
         {
