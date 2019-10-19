@@ -248,14 +248,13 @@ TEST_F(DeltaTree_test, Delete1)
 {
     int batch_num = 100;
 
-    std::string expectedResult;
     // delete stable from begin to end with merge
     for (int i = 0; i < batch_num; ++i)
     {
         tree.addDelete(0);
         tree.checkAll();
-        expectedResult += "(0|" + std::to_string(i) + "|DEL|1),";
     }
+    std::string expectedResult = "(0|0|DEL|" + DB::toString(batch_num) + "),";
     ASSERT_EQ(expectedResult, treeToString(tree));
 }
 

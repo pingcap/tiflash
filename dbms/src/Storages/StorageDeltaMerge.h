@@ -37,7 +37,7 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
-    void deleteRange(const DM::HandleRange &range_to_delete, const Settings & settings)
+    void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
     {
         return store->deleteRange(global_context, settings, range_to_delete);
     }
@@ -68,8 +68,8 @@ public:
 
     BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
 
-
     void checkStatus(const Context & context) override;
+    void deleteRows(const Context &, size_t rows) override;
 
 protected:
     StorageDeltaMerge(const String & path_,

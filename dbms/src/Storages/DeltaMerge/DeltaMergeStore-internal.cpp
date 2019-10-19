@@ -34,7 +34,7 @@ DeltaMergeStore::WriteActions prepareWriteActions(const Block &                 
                                                  : std::lower_bound(handle_data.cbegin() + offset, handle_data.cend(), range.end);
         size_t limit = end_pos - (handle_data.cbegin() + offset);
 
-        actions.emplace_back(DeltaMergeStore::WriteAction{.segment = segment, .offset = offset, .limit = limit});
+        actions.emplace_back(segment, offset, limit);
 
         offset += limit;
     }
@@ -54,10 +54,7 @@ DeltaMergeStore::WriteActions prepareWriteActions(const HandleRange &           
     {
         (void)handle_;
         if (segment->getRange().intersect(delete_range))
-        {
-            // TODO maybe more precise on `action.update`
-            actions.emplace_back(DeltaMergeStore::WriteAction{.segment = segment, .offset = 0, .limit = 0, .update = delete_range});
-        }
+            actions.emplace_back(segment, delete_range);
     }
 
     return actions;

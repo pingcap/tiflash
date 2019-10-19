@@ -32,7 +32,7 @@ private:
             file.remove(true);
     }
 
-protected:
+public:
     static void SetUpTestCase()
     {
         Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
@@ -51,6 +51,7 @@ protected:
         ASSERT_EQ(segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     }
 
+protected:
     SegmentPtr reload(ColumnDefines && pre_define_columns = {}, DB::Settings && db_settings = DB::Settings())
     {
         storage_pool       = std::make_unique<StoragePool>("test.t1", path);
@@ -75,6 +76,9 @@ protected:
                       .min_version   = 0,
 
                       .not_compress            = settings.not_compress_columns,
+
+                      .segment_limit_rows      = db_context->getSettingsRef().dm_segment_limit_rows,
+
                       .delta_limit_rows        = db_context->getSettingsRef().dm_segment_delta_limit_rows,
                       .delta_limit_bytes       = db_context->getSettingsRef().dm_segment_delta_limit_bytes,
                       .delta_cache_limit_rows  = db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
@@ -128,21 +132,133 @@ TEST_F(Segment_test, WriteRead)
         segment->check(dmContext(), "test");
     }
 
-    {
-        // flush segment
-        RemoveWriteBatches remove_wbs;
-        segment->flushDelta(dmContext(), remove_wbs);
-        remove_wbs.write(dmContext().storage_pool);
+    { // Round 1
+        {
+            // read written data (only in delta)
+            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snap= */ {dmContext().storage_pool},
+                                              /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter= */ EMPTY_FILTER,
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write);
+        }
+
+        {
+            // flush segment
+            segment = segment->mergeDelta(dmContext());
+        }
+
+        {
+            // read written data (only in stable)
+            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                              /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter= */ EMPTY_FILTER,
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write);
+        }
     }
 
+    const size_t num_rows_write_2 = 55;
+
+    {
+        // write more rows to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write, num_rows_write + num_rows_write_2, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    { // Round 2
+        {
+            // read written data (both in delta and stable)
+            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                              /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter= */ EMPTY_FILTER,
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
+        }
+
+        {
+            // flush segment
+            segment = segment->mergeDelta(dmContext());
+        }
+
+        {
+            // read written data (only in stable)
+            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
+                                              /* segment_snap= */ segment->getReadSnapshot(),
+                                              /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                              /* read_ranges= */ {HandleRange::newAll()},
+                                              /* filter= */ EMPTY_FILTER,
+                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                              /* expected_block_size= */ 1024);
+            size_t num_rows_read = 0;
+            in->readPrefix();
+            while (Block block = in->read())
+            {
+                num_rows_read += block.rows();
+            }
+            in->readSuffix();
+            ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
+        }
+    }
+}
+
+class SegmentDeletion_test : public Segment_test, //
+                             public testing::WithParamInterface<std::tuple<bool, bool>>
+{
+};
+
+TEST_P(SegmentDeletion_test, DeleteDataInDelta)
+{
+    const size_t num_rows_write = 100;
+    {
+        // write to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    auto [read_before_delete, merge_delta_after_delete] = GetParam();
+    if (read_before_delete)
     {
         // read written data
         auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
                                           /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
+                                          /* filter */ EMPTY_FILTER,
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
         size_t num_rows_read = 0;
@@ -156,21 +272,27 @@ TEST_F(Segment_test, WriteRead)
     }
 
     {
-        // test delete range [1,99)
+        // test delete range [1,99) for data in delta
         HandleRange remove(1, 99);
         segment->write(dmContext(), {remove});
         // TODO test delete range partial overlap with segment
         // TODO test delete range not included by segment
     }
 
+    if (merge_delta_after_delete)
+    {
+        // flush segment for apply delete range
+        segment = segment->mergeDelta(dmContext());
+    }
+
     {
         // read after delete range
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ {dmContext().storage_pool},
                                           /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
                                           /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
+                                          /* filter= */ EMPTY_FILTER,
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
                                           /* expected_block_size= */ 1024);
         in->readPrefix();
@@ -191,6 +313,168 @@ TEST_F(Segment_test, WriteRead)
     }
 }
 
+TEST_P(SegmentDeletion_test, DeleteDataInStable)
+{
+    const size_t num_rows_write = 100;
+    {
+        // write to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    auto [read_before_delete, merge_delta_after_delete] = GetParam();
+    if (read_before_delete)
+    {
+        // read written data
+        auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ EMPTY_FILTER,
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // flush segment
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    {
+        // test delete range [1,99) for data in stable
+        HandleRange remove(1, 99);
+        segment->write(dmContext(), {remove});
+        // TODO test delete range partial overlap with segment
+        // TODO test delete range not included by segment
+    }
+
+    if (merge_delta_after_delete)
+    {
+        // flush segment for apply delete range
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    {
+        // read after delete range
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter= */ EMPTY_FILTER,
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), 2UL);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(0), 0);
+                    EXPECT_EQ(c->getInt(1), 99);
+                }
+            }
+        }
+        in->readSuffix();
+    }
+}
+
+TEST_P(SegmentDeletion_test, DeleteDataInStableAndDelta)
+{
+    const size_t num_rows_write = 100;
+    {
+        // write [0, 50) to segment
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        segment->write(dmContext(), std::move(block));
+        // flush [0, 50) to segment's stable
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    auto [read_before_delete, merge_delta_after_delete] = GetParam();
+
+    {
+        // write [50, 100) to segment's delta
+        Block block = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
+        segment->write(dmContext(), std::move(block));
+    }
+
+    if (read_before_delete)
+    {
+        // read written data
+        auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter */ EMPTY_FILTER,
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        size_t num_rows_read = 0;
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+        }
+        in->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+
+    {
+        // test delete range [1,99) for data in stable and delta
+        HandleRange remove(1, 99);
+        segment->write(dmContext(), {remove});
+        // TODO test delete range partial overlap with segment
+        // TODO test delete range not included by segment
+    }
+
+    if (merge_delta_after_delete)
+    {
+        // flush segment for apply delete range
+        segment = segment->mergeDelta(dmContext());
+    }
+
+    {
+        // read after delete range
+        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
+                                          /* segment_snap= */ segment->getReadSnapshot(),
+                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
+                                          /* read_ranges= */ {HandleRange::newAll()},
+                                          /* filter= */ EMPTY_FILTER,
+                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                          /* expected_block_size= */ 1024);
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            ASSERT_EQ(block.rows(), 2UL);
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                if (iter.name == "pk")
+                {
+                    EXPECT_EQ(c->getInt(0), 0);
+                    EXPECT_EQ(c->getInt(1), 99);
+                }
+            }
+        }
+        in->readSuffix();
+    }
+}
+
+INSTANTIATE_TEST_CASE_P(WhetherReadOrMergeDeltaBeforeDeleteRange, SegmentDeletion_test, testing::Combine(testing::Bool(), testing::Bool()));
+
 TEST_F(Segment_test, Split)
 {
     const size_t num_rows_write = 100;
@@ -203,9 +487,9 @@ TEST_F(Segment_test, Split)
     {
         // read written data
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ tableColumns(),
                                           /* segment_snap= */ segment->getReadSnapshot(),
                                           /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ tableColumns(),
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -226,9 +510,7 @@ TEST_F(Segment_test, Split)
     SegmentPtr new_segment;
     // test split segment
     {
-        RemoveWriteBatches remove_wbs;
-        std::tie(segment, new_segment) = segment->split(dmContext(), remove_wbs);
-        remove_wbs.write(dmContext().storage_pool);
+        std::tie(segment, new_segment) = segment->split(dmContext());
     }
     // check segment range
     const auto s1_range = segment->getRange();
@@ -243,9 +525,9 @@ TEST_F(Segment_test, Split)
     {
         {
             auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
                                               /* segment_snap= */ segment->getReadSnapshot(),
                                               /* storage_snap= */ {dmContext().storage_pool},
-                                              /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
                                               /* filter */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -259,9 +541,9 @@ TEST_F(Segment_test, Split)
         }
         {
             auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
                                               /* segment_snap= */ segment->getReadSnapshot(),
                                               /* storage_snap= */ {dmContext().storage_pool},
-                                              /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
                                               /* filter */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -278,9 +560,7 @@ TEST_F(Segment_test, Split)
 
     // merge segments
     {
-        RemoveWriteBatches remove_wbs;
-        segment = Segment::merge(dmContext(), segment, new_segment, remove_wbs);
-        remove_wbs.write(dmContext().storage_pool);
+        segment = Segment::merge(dmContext(), segment, new_segment);
         {
             // check merged segment range
             const auto & merged_range = segment->getRange();
@@ -291,9 +571,9 @@ TEST_F(Segment_test, Split)
         {
             size_t num_rows_read = 0;
             auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
+                                              /* columns_to_read= */ tableColumns(),
                                               /* segment_snap= */ segment->getReadSnapshot(),
                                               /* storage_snap= */ {dmContext().storage_pool},
-                                              /* columns_to_read= */ tableColumns(),
                                               /* read_ranges= */ {HandleRange::newAll()},
                                               /* filter= */ {},
                                               /* max_version= */ std::numeric_limits<UInt64>::max(),
@@ -356,15 +636,27 @@ TEST_F(Segment_test, DDLAlterInt8ToInt32)
             column_i32_after_ddl,
         };
 
-        // read written data
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ columns_to_read,
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        BlockInputStreamPtr in;
+        try
+        {
+            // read written data
+            in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                         /* columns_to_read= */ columns_to_read,
+                                         /* segment_snap= */ segment->getReadSnapshot(),
+                                         /* storage_snap= */ {dmContext().storage_pool},
+                                         /* read_ranges= */ {HandleRange::newAll()},
+                                         /* filter */ {},
+                                         /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                         /* expected_block_size= */ 1024);
+        }
+        catch (const Exception & e)
+        {
+            const auto text = e.displayText();
+            std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString();
+
+            throw;
+        }
 
         // check that we can read correct values
         size_t num_rows_read = 0;
@@ -427,9 +719,9 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
 
         // read written data
         auto in = segment->getInputStream(/* dm_context= */ dmContext(),
+                                          /* columns_to_read= */ columns_to_read,
                                           /* segment_snap= */ segment->getReadSnapshot(),
                                           /* storage_snap= */ {dmContext().storage_pool},
-                                          /* columns_to_read= */ columns_to_read,
                                           /* read_ranges= */ {HandleRange::newAll()},
                                           /* filter */ {},
                                           /* max_version= */ std::numeric_limits<UInt64>::max(),

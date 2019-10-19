@@ -126,7 +126,7 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
         buf = ::realloc(buf, new_size);
 
         if (nullptr == buf)
-            DB::throwFromErrno("Allocator: Cannot realloc from " + formatReadableSizeWithBinarySuffix(old_size) + " to " + formatReadableSizeWithBinarySuffix(new_size) + ".", DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
+            DB::throwFromErrno("Allocator: Cannot realloc from " + formatReadableSizeWithBinarySuffix(old_size) + DB::toString(old_size) + " to " + formatReadableSizeWithBinarySuffix(new_size) + DB::toString(new_size) + ".", DB::ErrorCodes::CANNOT_ALLOCATE_MEMORY);
 
         if (clear_memory && new_size > old_size)
             memset(reinterpret_cast<char *>(buf) + old_size, 0, new_size - old_size);
