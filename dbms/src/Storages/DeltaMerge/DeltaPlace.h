@@ -216,7 +216,7 @@ void placeInsert(const BlockInputStreamPtr &  stable, //
             tuple_id = delta_value_space_offset + i;
 
         if (dup)
-            delta_tree.addDelete(rid, tuple_id);
+            delta_tree.addDelete(rid);
         delta_tree.addInsert(rid, tuple_id);
     }
 }
@@ -226,8 +226,7 @@ template <class DeltaTree>
 void placeDelete(const BlockInputStreamPtr & stable, //
                  const Block &               delta_block,
                  DeltaTree &                 delta_tree,
-                 const SortDescription &     sort,
-                 UInt64                      del_range_id)
+                 const SortDescription &     sort)
 {
     auto block_rows = delta_block.rows();
     if (!block_rows)
@@ -242,7 +241,7 @@ void placeDelete(const BlockInputStreamPtr & stable, //
     for (size_t i = 0; i < block_rows; ++i)
     {
         if (rids[i] >= 0)
-            delta_tree.addDelete(rids[i], del_range_id | DEL_RANGE_POS_MARK);
+            delta_tree.addDelete(rids[i]);
     }
 }
 

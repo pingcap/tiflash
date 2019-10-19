@@ -52,9 +52,9 @@ private:
 
 const static PageStorage::SnapshotPtr EMPTY_PS_SNAP_PTR = {};
 
-class StorageSnapshot
+struct StorageSnapshot
 {
-public:
+    StorageSnapshot() = default;
     StorageSnapshot(StoragePool & storage, bool snapshot_read = true)
         : log_reader(storage.log(), snapshot_read ? storage.log().getSnapshot() : EMPTY_PS_SNAP_PTR),
           data_reader(storage.data(), snapshot_read ? storage.data().getSnapshot() : EMPTY_PS_SNAP_PTR),

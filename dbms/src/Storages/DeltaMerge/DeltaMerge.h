@@ -140,14 +140,14 @@ private:
 
         if constexpr (!c_delta_done)
         {
-            auto tuple_id = entry_it.getValue();
+            auto value = entry_it.getValue();
             switch (entry_it.getType())
             {
             case DT_DEL:
-                writeDeleteFromDelta(1);
+                writeDeleteFromDelta(value);
                 break;
             case DT_INS:
-                writeInsertFromDelta(output_columns, tuple_id);
+                writeInsertFromDelta(output_columns, value);
                 --output_write_limit;
                 break;
             default:
@@ -242,15 +242,15 @@ private:
             if (!stable_input_stream_raw_ptr->hasNext())
                 throw Exception("Unexpected end of block, need more rows to skip");
 
-            size_t rows = stable_input_stream_raw_ptr->nextRows();
-            if (!stable_input_stream_raw_ptr->shouldSkipNext())
-            {
-                fillStableBlockIfNeeded();
-            }
-            else
+            ssize_t rows = stable_input_stream_raw_ptr->nextRows();
+            if (stable_skip > rows || stable_input_stream_raw_ptr->shouldSkipNext())
             {
                 stable_input_stream_raw_ptr->skipNext();
                 stable_skip -= rows;
+            }
+            else
+            {
+                fillStableBlockIfNeeded();
             }
         }
 
@@ -328,7 +328,7 @@ private:
     {
         auto prev_sid = entry_it.getSid();
         if (entry_it.getType() == DT_DEL)
-            prev_sid += 1;
+            prev_sid += entry_it.getValue();
 
         ++entry_it;
 
