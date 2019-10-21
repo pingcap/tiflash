@@ -48,11 +48,15 @@ struct DeltaValueSpace
 
     void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
     {
+        if ((unlikely(value_id >= rows)))
+            throw Exception("value_id is expected to < " + DB::toString(rows) + ", now " + DB::toString(value_id));
         des.insertFrom(*(columns_ptr[column_index]), value_id);
     }
 
     Handle getHandle(size_t value_id) //
     {
+        if ((unlikely(value_id >= rows)))
+            throw Exception("value_id is expected to < " + DB::toString(rows) + ", now " + DB::toString(value_id));
         return (*handle_column)[value_id];
     }
 
@@ -273,6 +277,7 @@ private:
                      const PageReader &         data_page_reader,
                      const DiskValueSpace &     stable_snap,
                      const DeltaValueSpacePtr & delta_value_space,
+                     size_t                     delta_value_space_offset,
                      Block &&                   block,
                      DeltaTree &                delta_tree) const;
     /// Reference the deletes by delta tree.

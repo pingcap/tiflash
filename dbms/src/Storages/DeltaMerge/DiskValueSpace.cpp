@@ -287,7 +287,23 @@ Chunk DiskValueSpace::writeDelete(const OpContext &, const HandleRange & delete_
     return Chunk(delete_range);
 }
 
-void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, WriteBatch & data_wb_remove)
+void DiskValueSpace::clearChunks(WriteBatch & removed_wb)
+{
+    for (const auto & c : chunks)
+    {
+        for (const auto & m : c.getMetas())
+            removed_wb.delPage(m.second.page_id);
+    }
+
+    Chunks tmp;
+    chunks.swap(tmp);
+
+    cache.clear();
+    cache_chunks = 0;
+}
+
+void DiskValueSpace::replaceChunks(
+    WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_)
 {
     MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
     serializeChunks(buf, new_chunks.begin(), new_chunks.end(), {});
@@ -295,13 +311,36 @@ void DiskValueSpace::setChunks(Chunks && new_chunks, WriteBatch & meta_wb, Write
     meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
 
     for (const auto & c : chunks)
+    {
         for (const auto & m : c.getMetas())
-            data_wb_remove.delPage(m.second.page_id);
+            removed_wb.delPage(m.second.page_id);
+    }
 
     chunks.swap(new_chunks);
 
-    cache.clear();
-    cache_chunks = 0;
+    cache        = std::move(cache_);
+    cache_chunks = cache_chunks_;
+}
+
+void DiskValueSpace::replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks)
+{
+    replaceChunks(meta_wb, removed_wb, std::move(new_chunks), {}, 0);
+}
+
+void DiskValueSpace::setChunks(WriteBatch & meta_wb, Chunks && new_chunks)
+{
+    setChunksAndCache(meta_wb, std::move(new_chunks), {}, 0);
+}
+
+void DiskValueSpace::setChunksAndCache(WriteBatch & meta_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_)
+{
+    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+    serializeChunks(buf, new_chunks.begin(), new_chunks.end(), {});
+    auto data_size = buf.count();
+    meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
+
+    cache        = std::move(cache_);
+    cache_chunks = cache_chunks_;
 }
 
 void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block)
