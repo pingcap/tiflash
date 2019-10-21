@@ -351,7 +351,7 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
 
     SegmentPair res;
 
-    auto merge_then_split = [&]() {
+    auto merge_delta_then_split = [&]() {
         auto new_segment = mergeDelta(dm_context, segment_snap, storage_snap, wbs);
 
         // Write done the generated pages, otherwise they cannot be read by #split.
@@ -363,17 +363,18 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
     };
 
     if (segment_snap.delta->num_rows() > segment_snap.stable->num_rows())
-        return merge_then_split();
-
-    Handle split_point = getSplitPointFast(dm_context, storage_snap.data_reader, *segment_snap.stable);
-
-    bool bad_split_point = split_point == range.start || split_point == range.end;
-    if (bad_split_point)
-        return merge_then_split();
-    else if (segment_snap.stable->num_chunks() <= 1)
-        res = doSplitPhysical(dm_context, segment_snap, storage_snap, split_point, wbs);
+        return merge_delta_then_split();
+    if (segment_snap.stable->num_chunks() <= 3)
+        res = doSplitPhysical(dm_context, segment_snap, storage_snap, wbs);
     else
-        res = doSplitLogical(dm_context, segment_snap, split_point, wbs);
+    {
+        Handle split_point     = getSplitPointFast(dm_context, storage_snap.data_reader, *segment_snap.stable);
+        bool   bad_split_point = !range.check(split_point) || split_point == range.start;
+        if (bad_split_point)
+            res = doSplitPhysical(dm_context, segment_snap, storage_snap, wbs);
+        else
+            res = doSplitLogical(dm_context, segment_snap, split_point, wbs);
+    }
 
     LOG_DEBUG(log, "Segment [" << segment_id << "] split into " << res.first->info() << " and " << res.second->info());
 
@@ -668,9 +669,66 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const PageReader & dat
     return block.getByPosition(0).column->getInt(0);
 }
 
+Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info) const
+{
+    EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
+
+    auto & handle     = dm_context.handle_column;
+    size_t exact_rows = 0;
+
+    {
+        auto stream = getPlacedStream(read_info.storage_snap.data_reader,
+                                      {dm_context.handle_column},
+                                      EMPTY_FILTER,
+                                      *read_info.segment_snap.stable,
+                                      read_info.delta_value_space,
+                                      read_info.index_begin,
+                                      read_info.index_end,
+                                      DEFAULT_BLOCK_SIZE);
+        stream->readPrefix();
+        Block block;
+        while ((block = stream->read()))
+            exact_rows += block.rows();
+        stream->readSuffix();
+    }
+
+    auto stream = getPlacedStream(read_info.storage_snap.data_reader,
+                                  {dm_context.handle_column},
+                                  EMPTY_FILTER,
+                                  *read_info.segment_snap.stable,
+                                  read_info.delta_value_space,
+                                  read_info.index_begin,
+                                  read_info.index_end,
+                                  DEFAULT_BLOCK_SIZE);
+
+    size_t split_row_index = exact_rows / 2;
+    Handle split_handle    = 0;
+    size_t count           = 0;
+
+    stream->readPrefix();
+    while (true)
+    {
+        Block block = stream->read();
+        if (!block)
+            break;
+        count += block.rows();
+        if (count > split_row_index)
+        {
+            size_t offset_in_block = block.rows() - (count - split_row_index);
+            split_handle           = block.getByName(handle.name).column->getInt(offset_in_block);
+            break;
+        }
+    }
+    stream->readSuffix();
+
+    return split_handle;
+}
+
 SegmentPair
 Segment::doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_snap, Handle split_point, WriteBatches & wbs) const
 {
+    LOG_TRACE(log, "Segment [" << segment_id << "] split logical");
+
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
     auto & storage_pool = dm_context.storage_pool;
@@ -735,9 +793,10 @@ Segment::doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_
 SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                      const SegmentSnapshot & segment_snap,
                                      const StorageSnapshot & storage_snap,
-                                     Handle                  split_point,
                                      WriteBatches &          wbs) const
 {
+    LOG_TRACE(log, "Segment [" << segment_id << "] split physical");
+
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
     auto & handle       = dm_context.handle_column;
@@ -746,6 +805,8 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
 
     auto & columns   = dm_context.store_columns;
     auto   read_info = getReadInfo<false>(dm_context, columns, segment_snap, storage_snap);
+
+    auto split_point = getSplitPointSlow(dm_context, read_info);
 
     HandleRange my_range    = {range.start, split_point};
     HandleRange other_range = {split_point, range.end};
