@@ -101,6 +101,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
         }
         catch (const pingcap::Exception & e)
         {
+            LOG_WARNING(log, "send request to " + addr + " failed");
             // only drop this store. and retry again!
             cache->dropStore(learner.store_id());
             continue;
@@ -116,6 +117,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
             return;
         }
     }
+    throw pingcap::Exception("all stores are failed, may be region info is out of date.", pingcap::ErrorCodes::StoreNotReady);
 }
 
 
