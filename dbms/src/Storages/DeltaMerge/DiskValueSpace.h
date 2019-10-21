@@ -154,8 +154,12 @@ public:
 
     static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
 
-    /// Replace current chunks.
-    void setChunks(Chunks && new_chunks, WriteBatch & meta_wb, WriteBatch & data_wb_remove);
+    /// Remove all chunks and clear cache.
+    void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_);
+    void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks);
+    void clearChunks(WriteBatch & removed_wb);
+    void setChunks(WriteBatch & meta_wb, Chunks && new_chunks);
+    void setChunksAndCache(WriteBatch & meta_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_);
 
     /// Append the chunk to this value space, and could cache the block in memory if it is too fragment.
     void appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block);
