@@ -83,7 +83,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
 {
     for (const auto & learner : learners)
     {
-        std::string addr = cache->getStoreAddr(bo, learner.store_id());
+        std::string addr = cache->getStorePeerAddr(bo, learner.store_id());
         if (addr.size() == 0)
         {
             bo.backoff(pingcap::kv::boRegionMiss,
