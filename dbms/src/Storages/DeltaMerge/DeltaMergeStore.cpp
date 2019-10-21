@@ -528,7 +528,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         if constexpr (DM_RUN_CHECK)
         {
             new_seg_left->check(dm_context, "After split left");
-            new_seg_left->check(dm_context, "After split right");
+            new_seg_right->check(dm_context, "After split right");
         }
     }
 
@@ -769,16 +769,15 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
 
         if (next_segment_id != segment_id)
         {
-            String msg = "Segments: ";
+            String msg = "Check failed. Segments: ";
             for (auto & [end, segment] : segments)
             {
                 (void)end;
-                msg += DB::toString(segment->info()) + ",";
+                msg += DB::toString(end) + "->" + segment->info() + ",";
             }
             msg.pop_back();
             msg += "}";
-            LOG_TRACE(log, msg);
-
+            LOG_ERROR(log, msg);
 
             throw Exception("Segment [" + DB::toString(segment_id) + "] is expected to have id [" + DB::toString(next_segment_id) + "]");
         }
