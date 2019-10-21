@@ -108,8 +108,8 @@ SegmentPtr Segment::newSegment(DMContext & context, const HandleRange & range, P
 
     // Write metadata.
     segment->serialize(meta_wb);
-    segment->delta->setChunks({}, meta_wb, log_wb);
-    segment->stable->setChunks({}, meta_wb, data_wb);
+    segment->delta->replaceChunks(meta_wb, log_wb, {});
+    segment->stable->replaceChunks(meta_wb, data_wb, {});
 
     context.storage_pool.meta().write(meta_wb);
 
@@ -463,7 +463,7 @@ DiskValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_context,
     Chunks    new_stable_chunks = DiskValueSpace::writeChunks(opc, data_stream, wbs.data);
 
     auto new_stable = std::make_shared<DiskValueSpace>(*segment_snap.stable);
-    new_stable->setChunks(std::move(new_stable_chunks), wbs.meta, wbs.removed_data);
+    new_stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(new_stable_chunks));
 
     LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] prepare merge delta done.");
 
@@ -476,13 +476,19 @@ SegmentPtr Segment::applyMergeDelta(const SegmentSnapshot & segment_snap, WriteB
 
     auto remove_delta_chunks = delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
     auto new_delta_chunks    = delta->getChunksAfter(segment_snap.delta_rows, segment_snap.delta_deletes);
+    bool use_cache           = new_delta_chunks.size() > delta->cacheChunks();
 
-    auto new_delta = std::make_shared<DiskValueSpace>(true, //
-                                                      delta->pageId(),
-                                                      std::move(remove_delta_chunks),
-                                                      delta->cloneCache(),
-                                                      delta->cacheChunks());
-    new_delta->setChunks(std::move(new_delta_chunks), wbs.meta, wbs.removed_log);
+    auto new_delta = std::make_shared<DiskValueSpace>(true, delta->pageId(), std::move(remove_delta_chunks));
+    if (use_cache)
+        new_delta->replaceChunks(wbs.meta, //
+                                 wbs.removed_log,
+                                 std::move(new_delta_chunks),
+                                 delta->cloneCache(),
+                                 delta->cacheChunks());
+    else
+        new_delta->replaceChunks(wbs.meta, //
+                                 wbs.removed_log,
+                                 std::move(new_delta_chunks));
 
     auto new_me = std::make_shared<Segment>(epoch + 1, //
                                             range,
@@ -709,12 +715,20 @@ Segment::doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_
     }
 
     new_me->serialize(wbs.meta);
-    new_me->delta->setChunks(std::move(my_delta_chunks), wbs.meta, wbs.removed_log);
-    new_me->stable->setChunks(std::move(my_stable_chunks), wbs.meta, wbs.removed_data);
+    new_me->delta->replaceChunks(wbs.meta, //
+                                 wbs.removed_log,
+                                 std::move(my_delta_chunks),
+                                 segment_snap.delta->cloneCache(),
+                                 segment_snap.delta->cacheChunks());
+    new_me->stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(my_stable_chunks));
 
     other->serialize(wbs.meta);
-    other->delta->setChunks(std::move(other_delta_chunks), wbs.meta, wbs.removed_log);
-    other->stable->setChunks(std::move(other_stable_chunks), wbs.meta, wbs.removed_data);
+    other->delta->replaceChunks(wbs.meta, //
+                                wbs.removed_log,
+                                std::move(other_delta_chunks),
+                                segment_snap.delta->cloneCache(),
+                                segment_snap.delta->cacheChunks());
+    other->stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(other_stable_chunks));
 
     return {new_me, other};
 }
@@ -791,12 +805,12 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                            other_stable_id);
 
     new_me->serialize(wbs.meta);
-    new_me->delta->setChunks({}, wbs.meta, wbs.removed_log);
-    new_me->stable->setChunks(std::move(my_new_stable_chunks), wbs.meta, wbs.removed_data);
+    new_me->delta->replaceChunks(wbs.meta, wbs.removed_log, {});
+    new_me->stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(my_new_stable_chunks));
 
     other->serialize(wbs.meta);
-    other->delta->setChunks({}, wbs.meta, wbs.removed_log);
-    other->stable->setChunks(std::move(other_new_stable_chunks), wbs.meta, wbs.removed_data);
+    other->delta->replaceChunks(wbs.meta, wbs.removed_log, {});
+    other->stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(other_new_stable_chunks));
 
     return {new_me, other};
 }
@@ -824,8 +838,8 @@ SegmentPtr Segment::doMergeLogical(DMContext & /*dm_context*/, const SegmentPtr 
                                             left->stable->pageId());
 
     merged->serialize(wbs.meta);
-    merged->delta->setChunks(std::move(merged_delta_chunks), wbs.meta, wbs.removed_log);
-    merged->stable->setChunks(std::move(merged_stable_chunks), wbs.meta, wbs.removed_data);
+    merged->delta->replaceChunks(wbs.meta, wbs.removed_log, std::move(merged_delta_chunks));
+    merged->stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(merged_stable_chunks));
 
     return merged;
 }
@@ -898,7 +912,13 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &          dm_context,
         else if (v.block)
         {
             auto rows = v.block.rows();
-            placeUpsert(dm_context, storage_snapshot.data_reader, stable_snap, delta_value_space, std::move(v.block), *update_delta_tree);
+            placeUpsert(dm_context,
+                        storage_snapshot.data_reader,
+                        stable_snap,
+                        delta_value_space,
+                        my_placed_delta_rows,
+                        std::move(v.block),
+                        *update_delta_tree);
             my_placed_delta_rows += rows;
         }
     }
@@ -919,6 +939,7 @@ void Segment::placeUpsert(const DMContext &          dm_context,
                           const PageReader &         data_page_reader,
                           const DiskValueSpace &     stable_snap,
                           const DeltaValueSpacePtr & delta_value_space,
+                          size_t                     delta_value_space_offset,
                           Block &&                   block,
                           DeltaTree &                update_delta_tree) const
 {
@@ -940,9 +961,9 @@ void Segment::placeUpsert(const DMContext &          dm_context,
 
     IColumn::Permutation perm;
     if (sortBlockByPk(handle, block, perm))
-        DM::placeInsert<true>(merged_stream, block, update_delta_tree, placed_delta_rows, perm, getPkSort(handle));
+        DM::placeInsert<true>(merged_stream, block, update_delta_tree, delta_value_space_offset, perm, getPkSort(handle));
     else
-        DM::placeInsert<false>(merged_stream, block, update_delta_tree, placed_delta_rows, perm, getPkSort(handle));
+        DM::placeInsert<false>(merged_stream, block, update_delta_tree, delta_value_space_offset, perm, getPkSort(handle));
 }
 
 void Segment::placeDelete(const DMContext &          dm_context,
