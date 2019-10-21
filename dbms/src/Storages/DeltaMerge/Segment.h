@@ -253,7 +253,6 @@ private:
     SegmentPair doSplitPhysical(DMContext &             dm_context,
                                 const SegmentSnapshot & segment_snap,
                                 const StorageSnapshot & storage_snap,
-                                Handle                  split_point,
                                 WriteBatches &          wbs) const;
 
     static SegmentPtr doMergeLogical(DMContext &        dm_context, //
