@@ -3,7 +3,7 @@
 #include <common/logger_useful.h>
 
 #include <Storages/Page/PageStorage.h>
-#include <Storages/Transaction/RegionClientCreate.h>
+#include <Storages/Transaction/IndexReaderCreate.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -26,7 +26,7 @@ public:
     void drop(RegionID region_id);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(RegionClientCreateFunc * func = nullptr);
+    RegionMap restore(IndexReaderCreateFunc * func = nullptr);
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;

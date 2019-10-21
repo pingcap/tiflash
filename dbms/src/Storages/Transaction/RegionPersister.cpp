@@ -73,7 +73,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
     page_storage.write(wb);
 }
 
-RegionMap RegionPersister::restore(RegionClientCreateFunc * func)
+RegionMap RegionPersister::restore(IndexReaderCreateFunc * func)
 {
     RegionMap regions;
     auto acceptor = [&](const Page & page) {

@@ -3,10 +3,10 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/applySnapshot.h>
 
 namespace DB
@@ -130,17 +130,17 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         throw Exception("Failed to read snapshot state", ErrorCodes::LOGICAL_ERROR);
 
     const auto & state = request.state();
-    pingcap::kv::RegionClientPtr region_client = nullptr;
+    IndexReaderPtr index_reader = nullptr;
     auto meta = RegionMeta(state.peer(), state.region(), state.apply_state());
-    RegionClientCreateFunc region_client_create = [&](pingcap::kv::RegionVerID id) -> pingcap::kv::RegionClientPtr {
+    IndexReaderCreateFunc index_reader_create = [&](pingcap::kv::RegionVerID id) -> IndexReaderPtr {
         if (context)
         {
             auto & tmt_ctx = context->getTMTContext();
-            return tmt_ctx.createRegionClient(id);
+            return tmt_ctx.createIndexReader(id);
         }
         return nullptr;
     };
-    auto new_region = std::make_shared<Region>(std::move(meta), region_client_create);
+    auto new_region = std::make_shared<Region>(std::move(meta), index_reader_create);
 
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
