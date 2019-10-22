@@ -906,7 +906,7 @@ try
 
     const time_t start_time = std::time(nullptr);
 
-    auto temp = new std::vector<Int64>();
+    auto temp = std::vector<Int64>();
     for (;;)
     {
         {
@@ -935,7 +935,7 @@ try
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)
         {
-            temp->push_back(Int64(i));
+            temp.push_back(Int64(i));
         }
 
         {
@@ -959,7 +959,7 @@ try
                     {
                         if (iter.name == "pk")
                         {
-                            auto expect = temp->at(i + num_rows_read);
+                            auto expect = temp.at(i + num_rows_read);
                             EXPECT_EQ(c->getInt(Int64(i)), expect);
                         }
                     }
@@ -976,7 +976,6 @@ try
             // if ((end_time - start_time) / 60 > 10)
             if ((end_time - start_time) > 10)
             {
-                delete temp;
                 return;
             }
         }
