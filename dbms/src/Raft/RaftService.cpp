@@ -122,16 +122,16 @@ RaftService::~RaftService()
 
 grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream)
 {
-    RaftContext raft_contex(&db_context, grpc_context, stream);
+    RaftContext raft_context(&db_context, grpc_context, stream);
 
     try
     {
-        kvstore->report(raft_contex);
+        kvstore->report(raft_context);
 
         enginepb::CommandRequestBatch cmds;
         while (stream->Read(&cmds))
         {
-            kvstore->onServiceCommand(std::move(cmds), raft_contex);
+            kvstore->onServiceCommand(std::move(cmds), raft_context);
         }
     }
     catch (...)
