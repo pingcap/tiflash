@@ -43,7 +43,7 @@ int64_t IndexReader::getReadIndex()
             // Try to iterate all learners in pd as no accurate IP specified in config thus I don't know who 'I' am, otherwise only try 'myself'
             for (const auto & learner : learners)
             {
-                std::string addr = cache->getStoreAddr(bo, learner.store_id());
+                std::string addr = cache->getStore(bo, learner.store_id()).addr;
                 if (addr.size() > 0 && getIP(addr) == suggested_ip)
                 {
                     candidate_learners.push_back(learner);
@@ -83,7 +83,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
 {
     for (const auto & learner : learners)
     {
-        std::string addr = cache->getStorePeerAddr(bo, learner.store_id());
+        std::string addr = cache->getStore(bo, learner.store_id()).peer_addr;
         if (addr.size() == 0)
         {
             bo.backoff(pingcap::kv::boRegionMiss,
@@ -110,6 +110,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
         auto resp = rpc->getResp();
         if (resp->has_region_error())
         {
+            LOG_WARNING(log, "send request to " + addr + " failed. because of MEET region error");
             onRegionError(bo, ctx, resp->region_error());
         }
         else
