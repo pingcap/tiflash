@@ -453,97 +453,96 @@ TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
 // DEPRECATED:
 //   This test case strongly depends on implementation of `shouldSplit()` and `shouldMerge()`.
 //   The machanism of them may be changed one day. So uncomment the test if need.
-//
-// TEST_F(DeltaMergeStore_test, WriteLargeBlock)
-// {
-//     DB::Settings settings = context->getSettings();
-//     // Mock dm_segment_rows for test
-//     // if rows > 8 will split
-//     // if left->rows < 2 && right->rows + left->rows < 4 will merge
-//     settings.dm_segment_rows = 4;
+TEST_F(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
+{
+    DB::Settings settings = context->getSettings();
+    // Mock dm_segment_rows for test
+    // if rows > 8 will split
+    // if left->rows < 2 && right->rows + left->rows < 4 will merge
+    settings.dm_segment_limit_rows = 4;
 
-//     {
-//         store->check(*context, settings);
-//     }
+    {
+        store->check(*context);
+    }
 
-//     {
-//         // Write 7 rows that would not trigger a split
-//         Block block = DMTestEnv::prepareSimpleWriteBlock(0, 8, false);
-//         store->write(*context, settings, block);
-//     }
+    {
+        // Write 7 rows that would not trigger a split
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 8, false);
+        store->write(*context, settings, block);
+    }
 
-//     {
-//         const auto &        columns       = store->getTableColumns();
-//         BlockInputStreamPtr in            = store->read(*context,
-//                                              settings,
-//                                              columns,
-//                                              {HandleRange::newAll()},
-//                                              /* num_streams= */ 1,
-//                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-//                                              /* expected_block_size= */ 1024)[0];
-//         size_t              num_rows_read = 0;
-//         while (Block block = in->read())
-//         {
-//             num_rows_read += block.rows();
-//             for (auto & iter : block)
-//             {
-//                 auto c = iter.column;
-//                 for (Int64 i = 0; i < Int64(c->size()); i++)
-//                 {
-//                     if (iter.name == "pk")
-//                     {
-//                         EXPECT_EQ(c->getInt(i), i);
-//                     }
-//                 }
-//             }
-//         }
-//         ASSERT_EQ(num_rows_read, 8UL);
-//     }
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             settings,
+                                             columns,
+                                             {HandleRange::newAll()},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); i++)
+                {
+                    if (iter.name == "pk")
+                    {
+                        EXPECT_EQ(c->getInt(i), i);
+                    }
+                }
+            }
+        }
+        ASSERT_EQ(num_rows_read, 8UL);
+    }
 
-//     {
-//         // Write rows that would trigger a split
-//         Block block = DMTestEnv::prepareSimpleWriteBlock(8, 9, false);
-//         store->write(*context, settings, block);
-//     }
+    {
+        // Write rows that would trigger a split
+        Block block = DMTestEnv::prepareSimpleWriteBlock(8, 9, false);
+        store->write(*context, settings, block);
+    }
 
-//     // Now there is 2 segments
-//     // segment1: 0, 1, 2, 3
-//     // segment2: 4, 5, 6, 7, 8
-//     {
-//         const auto &        columns       = store->getTableColumns();
-//         BlockInputStreamPtr in            = store->read(*context,
-//                                              settings,
-//                                              columns,
-//                                              {HandleRange::newAll()},
-//                                              /* num_streams= */ 1,
-//                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-//                                              /* expected_block_size= */ 1024)[0];
-//         size_t              num_rows_read = 0;
-//         // block_num represents index of current segment
-//         int block_num = 0;
-//         while (Block block = in->read())
-//         {
-//             num_rows_read += block.rows();
-//             for (auto & iter : block)
-//             {
-//                 auto c = iter.column;
-//                 for (Int64 i = 0; i < Int64(c->size()); i++)
-//                 {
-//                     if (iter.name == "pk" && block_num == 0)
-//                     {
-//                         EXPECT_EQ(c->getInt(i), i);
-//                     }
-//                     else if (iter.name == "pk" && block_num == 1)
-//                     {
-//                         EXPECT_EQ(c->getInt(i), i + 4);
-//                     }
-//                 }
-//             }
-//             block_num++;
-//         }
-//         ASSERT_EQ(num_rows_read, 9UL);
-//     }
-// }
+    // Now there is 2 segments
+    // segment1: 0, 1, 2, 3
+    // segment2: 4, 5, 6, 7, 8
+    {
+        const auto &        columns       = store->getTableColumns();
+        BlockInputStreamPtr in            = store->read(*context,
+                                             settings,
+                                             columns,
+                                             {HandleRange::newAll()},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             /* expected_block_size= */ 1024)[0];
+        size_t              num_rows_read = 0;
+        // block_num represents index of current segment
+        int block_num = 0;
+        while (Block block = in->read())
+        {
+            num_rows_read += block.rows();
+            for (auto & iter : block)
+            {
+                auto c = iter.column;
+                for (Int64 i = 0; i < Int64(c->size()); i++)
+                {
+                    if (iter.name == "pk" && block_num == 0)
+                    {
+                        EXPECT_EQ(c->getInt(i), i);
+                    }
+                    else if (iter.name == "pk" && block_num == 1)
+                    {
+                        EXPECT_EQ(c->getInt(i), i + 4);
+                    }
+                }
+            }
+            block_num++;
+        }
+        ASSERT_EQ(num_rows_read, 9UL);
+    }
+}
 
 TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
 {
