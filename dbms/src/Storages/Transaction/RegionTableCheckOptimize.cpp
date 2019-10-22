@@ -146,7 +146,16 @@ void RegionTable::checkTableOptimize()
 void RegionTable::checkTableOptimize(DB::TableID table_id, const double threshold)
 {
     auto & tmt = context->getTMTContext();
-    if (shouldOptimizeTable(table_id, tmt, log, threshold))
+    bool should_optimize = false;
+    try
+    {
+        should_optimize = shouldOptimizeTable(table_id, tmt, log, threshold);
+    }
+    catch (...)
+    {
+    }
+
+    if (should_optimize)
     {
         LOG_INFO(log, "table " << table_id << " need to be optimized");
         std::lock_guard<std::mutex> lock(mutex);
