@@ -183,6 +183,7 @@ struct ColumnInfo
     CodecFlag getCodecFlag() const;
     DB::Field getDecimalValue(const String &) const;
     Int64 getEnumIndex(const String &) const;
+    UInt64 getSetValue(const String & set_str) const;
 };
 
 enum PartitionType

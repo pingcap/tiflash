@@ -3,6 +3,10 @@
 #include <IO/ReadBufferFromString.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Poco/Format.h>
+#include <Poco/String.h>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
 
 namespace TiDB
 {
@@ -61,13 +65,43 @@ Field ColumnInfo::defaultValueToField() const
         case TypeYear:
             return Field();
         case TypeSet:
-            // blocked by TiDB https://github.com/pingcap/tidb/issues/12160
-            return Field();
+            return getSetValue(value.convert<String>());
         default:
             throw Exception("Have not processed type: " + std::to_string(tp));
     }
     return Field();
 }
+
+    UInt64 ColumnInfo::getSetValue(const String & set_str) const
+    {
+        // step 1: parse set name
+        std::vector<String> splits;
+        auto set_str_lowercase = Poco::toLower(set_str);
+        boost::split(splits, set_str_lowercase, boost::is_any_of(","));
+        std::set<String> marked;
+        for (const auto & split : splits)
+        {
+            marked.insert(split);
+        }
+
+        UInt64 value = 0;
+        for (size_t i = 0; i < elems.size(); i++)
+        {
+            String key_lowercase = Poco::toLower(elems.at(i).first);
+            auto it = marked.find(key_lowercase);
+            if (it != marked.end())
+            {
+                value |= 1ULL << i;
+                marked.erase(it);
+            }
+        }
+
+        if (marked.empty())
+            return value;
+
+        throw DB::Exception(
+                std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
+    }
 
 DB::Field ColumnInfo::getDecimalValue(const String & decimal_text) const
 {
@@ -434,27 +468,27 @@ CodecFlag ColumnInfo::getCodecFlag() const
     throw Exception("Unknown CodecFlag", DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-ColumnID TableInfo::getColumnID(const String & name) const
+ColumnID TableInfo::getColumnID(const String & col_name) const
 {
     for (auto & col : columns)
     {
-        if (name == col.name)
+        if (col_name == col.name)
         {
             return col.id;
         }
     }
 
-    if (name == DB::MutableSupport::tidb_pk_column_name)
+    if (col_name == DB::MutableSupport::tidb_pk_column_name)
         return DB::InvalidColumnID;
 
     throw DB::Exception(std::string(__PRETTY_FUNCTION__) + ": Unknown column name " + name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-String TableInfo::getColumnName(const ColumnID id) const
+String TableInfo::getColumnName(const ColumnID col_id) const
 {
     for (auto & col : columns)
     {
-        if (id == col.id)
+        if (col_id == col.id)
         {
             return col.name;
         }
