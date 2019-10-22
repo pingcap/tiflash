@@ -8,11 +8,28 @@
 #include <DataTypes/DataTypeMyDate.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Endian.h>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+extern const int UNKNOWN_EXCEPTION;
+} // namespace ErrorCodes
+
+const IColumn * getNestedCol(const IColumn * flash_col)
+{
+    if (flash_col->isColumnNullable())
+        return dynamic_cast<const ColumnNullable *>(flash_col)->getNestedColumnPtr().get();
+    else
+        return flash_col;
+}
 
 template <typename T>
 void decimalToVector(T dec, std::vector<Int32> & vec, UInt32 scale)
@@ -33,139 +50,164 @@ void decimalToVector(T dec, std::vector<Int32> & vec, UInt32 scale)
     }
 }
 
-template <typename T>
-bool flashDecimalColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
-    const tipb::FieldType & field_type, const IDataType * data_type, size_t start_index, size_t end_index)
+template <typename T, bool is_nullable>
+bool flashDecimalColToArrowColInternal(
+    TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index, const IDataType * data_type)
 {
-    if (checkColumn<ColumnDecimal<T>>(flash_col_untyped) && checkDataType<DataTypeDecimal<T>>(data_type)
-        && field_type.tp() == TiDB::TypeNewDecimal)
+    const IColumn * nested_col = getNestedCol(flash_col_untyped);
+    if (checkColumn<ColumnDecimal<T>>(nested_col) && checkDataType<DataTypeDecimal<T>>(data_type))
     {
-        const ColumnDecimal<T> * flash_col = checkAndGetColumn<ColumnDecimal<T>>(flash_col_untyped);
+        const ColumnDecimal<T> * flash_col = checkAndGetColumn<ColumnDecimal<T>>(nested_col);
         const DataTypeDecimal<T> * type = checkAndGetDataType<DataTypeDecimal<T>>(data_type);
         for (size_t i = start_index; i < end_index; i++)
         {
-            if (null_col != nullptr && null_col->isNullAt(i))
+            if constexpr (is_nullable)
             {
-                dag_column.appendNull();
-                continue;
+                if (flash_col_untyped->isNullAt(i))
+                {
+                    dag_column.appendNull();
+                    continue;
+                }
             }
             const T & dec = flash_col->getElement(i);
-            UInt32 scale = type->getScale();
             std::vector<Int32> digits;
+            UInt32 scale = type->getScale();
             decimalToVector<T>(dec, digits, scale);
             TiDBDecimal tiDecimal(scale, digits, dec.value < 0);
-            dag_column.appendDecimal(tiDecimal);
+            dag_column.append(tiDecimal);
         }
         return true;
     }
     return false;
 }
 
-template <typename T>
-bool flashNumColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
-    const tipb::FieldType & field_type, size_t start_index, size_t end_index)
+template <bool is_nullable>
+void flashDecimalColToArrowCol(
+    TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index, const IDataType * data_type)
 {
-    if (const ColumnVector<T> * flash_col = checkAndGetColumn<ColumnVector<T>>(flash_col_untyped))
+    if (!(flashDecimalColToArrowColInternal<Decimal32, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
+            || flashDecimalColToArrowColInternal<Decimal64, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
+            || flashDecimalColToArrowColInternal<Decimal128, is_nullable>(dag_column, flash_col_untyped, start_index, end_index, data_type)
+            || flashDecimalColToArrowColInternal<Decimal256, is_nullable>(
+                dag_column, flash_col_untyped, start_index, end_index, data_type)))
+        throw Exception("Error while trying to convert flash col to DAG col, "
+                        "column name "
+                + flash_col_untyped->getName(),
+            ErrorCodes::UNKNOWN_EXCEPTION);
+}
+
+template <typename T, bool is_nullable>
+bool flashIntegerColToArrowColInternal(TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index)
+{
+    const IColumn * nested_col = getNestedCol(flash_col_untyped);
+    if (const ColumnVector<T> * flash_col = checkAndGetColumn<ColumnVector<T>>(nested_col))
+    {
+        constexpr bool is_unsigned = std::is_unsigned_v<T>;
+        for (size_t i = start_index; i < end_index; i++)
+        {
+            if constexpr (is_nullable)
+            {
+                if (flash_col_untyped->isNullAt(i))
+                {
+                    dag_column.appendNull();
+                    continue;
+                }
+            }
+            if constexpr (is_unsigned)
+                dag_column.append((UInt64)flash_col->getElement(i));
+            else
+                dag_column.append((Int64)flash_col->getElement(i));
+        }
+        return true;
+    }
+    return false;
+}
+
+template <typename T, bool is_nullable>
+void flashDoubleColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index)
+{
+    const IColumn * nested_col = getNestedCol(flash_col_untyped);
+    if (const ColumnVector<T> * flash_col = checkAndGetColumn<ColumnVector<T>>(nested_col))
     {
         for (size_t i = start_index; i < end_index; i++)
         {
-            if (null_col != nullptr && null_col->isNullAt(i))
+            if constexpr (is_nullable)
+            {
+                if (flash_col_untyped->isNullAt(i))
+                {
+                    dag_column.appendNull();
+                    continue;
+                }
+            }
+            dag_column.append((T)flash_col->getElement(i));
+        }
+        return;
+    }
+    throw Exception("Error while trying to convert flash col to DAG col, "
+                    "column name "
+            + flash_col_untyped->getName(),
+        ErrorCodes::UNKNOWN_EXCEPTION);
+}
+
+template <bool is_nullable>
+void flashIntegerColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index)
+{
+    if (!(flashIntegerColToArrowColInternal<UInt8, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
+            || flashIntegerColToArrowColInternal<UInt16, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
+            || flashIntegerColToArrowColInternal<UInt32, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
+            || flashIntegerColToArrowColInternal<UInt64, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
+            || flashIntegerColToArrowColInternal<Int8, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
+            || flashIntegerColToArrowColInternal<Int16, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
+            || flashIntegerColToArrowColInternal<Int32, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)
+            || flashIntegerColToArrowColInternal<Int64, is_nullable>(dag_column, flash_col_untyped, start_index, end_index)))
+        throw Exception("Error while trying to convert flash col to DAG col, "
+                        "column name "
+                + flash_col_untyped->getName(),
+            ErrorCodes::UNKNOWN_EXCEPTION);
+}
+
+
+template <bool is_nullable>
+void flashDateOrDateTimeColToArrowCol(
+    TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index, const tipb::FieldType & field_type)
+{
+    const IColumn * nested_col = getNestedCol(flash_col_untyped);
+    using DateFieldType = DataTypeMyTimeBase::FieldType;
+    auto * flash_col = checkAndGetColumn<ColumnVector<DateFieldType>>(nested_col);
+    for (size_t i = start_index; i < end_index; i++)
+    {
+        if constexpr (is_nullable)
+        {
+            if (flash_col_untyped->isNullAt(i))
             {
                 dag_column.appendNull();
                 continue;
             }
-            switch (field_type.tp())
-            {
-                case TiDB::TypeTiny:
-                case TiDB::TypeShort:
-                case TiDB::TypeInt24:
-                case TiDB::TypeLong:
-                case TiDB::TypeLongLong:
-                case TiDB::TypeYear:
-                    if (field_type.flag() & TiDB::ColumnFlagUnsigned)
-                    {
-                        dag_column.appendUInt64(UInt64(flash_col->getElement(i)));
-                    }
-                    else
-                    {
-                        dag_column.appendInt64(Int64(flash_col->getElement(i)));
-                    }
-                    break;
-                case TiDB::TypeFloat:
-                    dag_column.appendFloat32(Float32(flash_col->getElement(i)));
-                    break;
-                case TiDB::TypeDouble:
-                    dag_column.appendFloat64(Float64(flash_col->getElement(i)));
-                    break;
-                default:
-                    throw Exception("Not supported yet: trying to convert flash col " + flash_col->getName()
-                        + " to DAG column of type: " + field_type.DebugString());
-            }
         }
-        return true;
+        TiDBTime time = TiDBTime(flash_col->getElement(i), field_type);
+        dag_column.append(time);
     }
-    // todo maybe the column is a const col??
-    return false;
 }
 
-bool flashDateOrDateTimeColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
-    const tipb::FieldType & field_type, const IDataType * data_type, size_t start_index, size_t end_index)
+template <bool is_nullable>
+void flashStringColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, size_t start_index, size_t end_index)
 {
-    if ((field_type.tp() == TiDB::TypeDate || field_type.tp() == TiDB::TypeDatetime || field_type.tp() == TiDB::TypeTimestamp)
-        && (checkDataType<DataTypeMyDate>(data_type) || checkDataType<DataTypeMyDateTime>(data_type)))
-    {
-        using DateFieldType = DataTypeMyTimeBase::FieldType;
-        auto * flash_col = checkAndGetColumn<ColumnVector<DateFieldType>>(flash_col_untyped);
-        for (size_t i = start_index; i < end_index; i++)
-        {
-            if (null_col != nullptr && null_col->isNullAt(i))
-            {
-                dag_column.appendNull();
-                continue;
-            }
-            TiDBTime time = TiDBTime(flash_col->getElement(i), field_type);
-            dag_column.appendTime(time);
-        }
-        return true;
-    }
-    return false;
-}
-
-bool flashStringColToArrowCol(TiDBColumn & dag_column, const IColumn * flash_col_untyped, const IColumn * null_col,
-    const tipb::FieldType & field_type, size_t start_index, size_t end_index)
-{
+    const IColumn * nested_col = getNestedCol(flash_col_untyped);
     // columnFixedString is not used so do not check it
-    auto * flash_col = checkAndGetColumn<ColumnString>(flash_col_untyped);
-    if (flash_col)
+    auto * flash_col = checkAndGetColumn<ColumnString>(nested_col);
+    for (size_t i = start_index; i < end_index; i++)
     {
-        for (size_t i = start_index; i < end_index; i++)
+        // todo check if we can convert flash_col to DAG col directly since the internal representation is almost the same
+        if constexpr (is_nullable)
         {
-            // todo check if we can convert flash_col to DAG col directly since the internal representation is almost the same
-            if (null_col != nullptr && null_col->isNullAt(i))
+            if (flash_col_untyped->isNullAt(i))
             {
                 dag_column.appendNull();
                 continue;
             }
-            switch (field_type.tp())
-            {
-                case TiDB::TypeVarchar:
-                case TiDB::TypeVarString:
-                case TiDB::TypeString:
-                case TiDB::TypeBlob:
-                case TiDB::TypeLongBlob:
-                case TiDB::TypeMediumBlob:
-                case TiDB::TypeTinyBlob:
-                    dag_column.appendBytes(flash_col->getDataAt(i));
-                    break;
-                default:
-                    throw Exception("Not supported yet: convert flash col " + flash_col->getName()
-                        + " to DAG column of type: " + field_type.DebugString());
-            }
         }
-        return true;
+        dag_column.append(flash_col->getDataAt(i));
     }
-
-    return false;
 }
 
 void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & flash_col, const tipb::FieldType & field_type,
@@ -173,40 +215,101 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
 {
     const IColumn * col = flash_col.column.get();
     const IDataType * type = flash_col.type.get();
-    const IColumn * null_col = nullptr;
+    const TiDB::ColumnInfo tidb_column_info = fieldTypeToColumnInfo(field_type);
 
+    if (type->isNullable() && tidb_column_info.hasNotNullFlag())
+    {
+        throw Exception("Flash column and TiDB column has different not null flag", ErrorCodes::LOGICAL_ERROR);
+    }
     if (type->isNullable())
-    {
-        null_col = col;
         type = dynamic_cast<const DataTypeNullable *>(type)->getNestedType().get();
-        col = dynamic_cast<const ColumnNullable *>(col)->getNestedColumnPtr().get();
-    }
-    const bool is_num = col->isNumeric();
-    if (is_num)
+
+    switch (tidb_column_info.tp)
     {
-        if (!(flashDateOrDateTimeColToArrowCol(dag_column, col, null_col, field_type, type, start_index, end_index)
-                || flashNumColToArrowCol<UInt8>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<UInt16>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<UInt32>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<UInt64>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<UInt128>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<Int8>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<Int16>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<Int32>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<Int64>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<Float32>(dag_column, col, null_col, field_type, start_index, end_index)
-                || flashNumColToArrowCol<Float64>(dag_column, col, null_col, field_type, start_index, end_index)))
-        {
-            throw Exception("Illegal column " + col->getName() + " when try to convert flash col to DAG col");
-        }
-    }
-    else if (!(flashDecimalColToArrowCol<Decimal32>(dag_column, col, null_col, field_type, type, start_index, end_index)
-                 || flashDecimalColToArrowCol<Decimal64>(dag_column, col, null_col, field_type, type, start_index, end_index)
-                 || flashDecimalColToArrowCol<Decimal128>(dag_column, col, null_col, field_type, type, start_index, end_index)
-                 || flashDecimalColToArrowCol<Decimal256>(dag_column, col, null_col, field_type, type, start_index, end_index)
-                 || flashStringColToArrowCol(dag_column, col, null_col, field_type, start_index, end_index)))
-    {
-        throw Exception("Illegal column " + col->getName() + " when try to convert flash col to DAG col");
+        case TiDB::TypeTiny:
+        case TiDB::TypeShort:
+        case TiDB::TypeInt24:
+        case TiDB::TypeLong:
+        case TiDB::TypeLongLong:
+        case TiDB::TypeYear:
+            if (!type->isInteger())
+                throw Exception("Type un-matched during arrow encode, target col type is integer and source column"
+                                " type is "
+                        + type->getName(),
+                    ErrorCodes::LOGICAL_ERROR);
+            if (type->isUnsignedInteger() ^ tidb_column_info.hasUnsignedFlag())
+                throw Exception("Flash column and TiDB column has different unsigned flag", ErrorCodes::LOGICAL_ERROR);
+            if (tidb_column_info.hasNotNullFlag())
+                flashIntegerColToArrowCol<false>(dag_column, col, start_index, end_index);
+            else
+                flashIntegerColToArrowCol<true>(dag_column, col, start_index, end_index);
+            break;
+        case TiDB::TypeFloat:
+            if (!checkDataType<DataTypeFloat32>(type))
+                throw Exception("Type un-matched during arrow encode, target col type is float32 and source column"
+                                " type is "
+                        + type->getName(),
+                    ErrorCodes::LOGICAL_ERROR);
+            if (tidb_column_info.hasNotNullFlag())
+                flashDoubleColToArrowCol<Float32, false>(dag_column, col, start_index, end_index);
+            else
+                flashDoubleColToArrowCol<Float32, true>(dag_column, col, start_index, end_index);
+            break;
+        case TiDB::TypeDouble:
+            if (!checkDataType<DataTypeFloat64>(type))
+                throw Exception("Type un-matched during arrow encode, target col type is float64 and source column"
+                                " type is "
+                        + type->getName(),
+                    ErrorCodes::LOGICAL_ERROR);
+            if (tidb_column_info.hasNotNullFlag())
+                flashDoubleColToArrowCol<Float64, false>(dag_column, col, start_index, end_index);
+            else
+                flashDoubleColToArrowCol<Float64, true>(dag_column, col, start_index, end_index);
+            break;
+        case TiDB::TypeDate:
+        case TiDB::TypeDatetime:
+        case TiDB::TypeTimestamp:
+            if (!type->isDateOrDateTime())
+                throw Exception("Type un-matched during arrow encode, target col type is datetime and source column"
+                                " type is "
+                        + type->getName(),
+                    ErrorCodes::LOGICAL_ERROR);
+            if (tidb_column_info.hasNotNullFlag())
+                flashDateOrDateTimeColToArrowCol<false>(dag_column, col, start_index, end_index, field_type);
+            else
+                flashDateOrDateTimeColToArrowCol<true>(dag_column, col, start_index, end_index, field_type);
+            break;
+        case TiDB::TypeNewDecimal:
+            if (!type->isDecimal())
+                throw Exception("Type un-matched during arrow encode, target col type is datetime and source column"
+                                " type is "
+                        + type->getName(),
+                    ErrorCodes::LOGICAL_ERROR);
+            if (tidb_column_info.hasNotNullFlag())
+                flashDecimalColToArrowCol<false>(dag_column, col, start_index, end_index, type);
+            else
+                flashDecimalColToArrowCol<true>(dag_column, col, start_index, end_index, type);
+            break;
+        case TiDB::TypeVarchar:
+        case TiDB::TypeVarString:
+        case TiDB::TypeString:
+        case TiDB::TypeBlob:
+        case TiDB::TypeLongBlob:
+        case TiDB::TypeMediumBlob:
+        case TiDB::TypeTinyBlob:
+            if (!checkDataType<DataTypeString>(type))
+                throw Exception("Type un-matched during arrow encode, target col type is string and source column"
+                                " type is "
+                        + type->getName(),
+                    ErrorCodes::LOGICAL_ERROR);
+            if (tidb_column_info.hasNotNullFlag())
+                flashStringColToArrowCol<false>(dag_column, col, start_index, end_index);
+            else
+                flashStringColToArrowCol<true>(dag_column, col, start_index, end_index);
+            break;
+        default:
+            throw Exception("Unsupported field type " + field_type.DebugString() + " when try to convert flash col to DAG col",
+                ErrorCodes::NOT_IMPLEMENTED);
     }
 }
 
@@ -299,25 +402,25 @@ const char * arrowDecimalColToFlashCol(const char * pos, UInt8 field_length, UIn
             word_buf[j] = toLittleEndian(*(reinterpret_cast<const Int32 *>(pos)));
             pos += 4;
         }
-        if (auto * type = checkDecimal<Decimal32>(*decimal_type))
+        if (auto * type32 = checkDecimal<Decimal32>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal32>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal32>(res, type->getScale()));
+            col.column->assumeMutable()->insert(DecimalField<Decimal32>(res, type32->getScale()));
         }
-        else if (auto * type = checkDecimal<Decimal64>(*decimal_type))
+        else if (auto * type64 = checkDecimal<Decimal64>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal64>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal64>(res, type->getScale()));
+            col.column->assumeMutable()->insert(DecimalField<Decimal64>(res, type64->getScale()));
         }
-        else if (auto * type = checkDecimal<Decimal128>(*decimal_type))
+        else if (auto * type128 = checkDecimal<Decimal128>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal128>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal128>(res, type->getScale()));
+            col.column->assumeMutable()->insert(DecimalField<Decimal128>(res, type128->getScale()));
         }
-        else if (auto * type = checkDecimal<Decimal256>(*decimal_type))
+        else if (auto * type256 = checkDecimal<Decimal256>(*decimal_type))
         {
             auto res = toCHDecimal<Decimal256>(digits_int, digits_frac, negative, word_buf);
-            col.column->assumeMutable()->insert(DecimalField<Decimal256>(res, type->getScale()));
+            col.column->assumeMutable()->insert(DecimalField<Decimal256>(res, type256->getScale()));
         }
     }
     return pos;

@@ -50,16 +50,15 @@ public:
     TiDBColumn(Int8 element_len);
 
     void appendNull();
-    void appendInt64(Int64 value);
-    void appendUInt64(UInt64 value);
-    void appendBytes(const String & value);
-    void appendBytes(const StringRef & value);
-    void appendFloat64(Float64 value);
-    void appendFloat32(Float32 value);
+    void append(Int64 value);
+    void append(UInt64 value);
+    void append(const StringRef & value);
+    void append(Float64 value);
+    void append(Float32 value);
     //void appendDuration();
-    void appendTime(const TiDBTime & time);
+    void append(const TiDBTime & time);
     //void appendJson();
-    void appendDecimal(const TiDBDecimal & decimal);
+    void append(const TiDBDecimal & decimal);
     void encodeColumn(std::stringstream & ss);
     void clear();
 

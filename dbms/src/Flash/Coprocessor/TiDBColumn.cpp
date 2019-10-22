@@ -66,6 +66,7 @@ void TiDBColumn::finishAppendVar(UInt32 size)
 
 void TiDBColumn::appendNull()
 {
+    // todo try to decoupling the logic of appendNullBitMap and appendData
     appendNullBitMap(false);
     if (isFixed())
     {
@@ -79,19 +80,19 @@ void TiDBColumn::appendNull()
     length++;
 }
 
-void TiDBColumn::appendInt64(Int64 value)
+void TiDBColumn::append(Int64 value)
 {
     encodeLittleEndian<Int64>(value, data);
     finishAppendFixed();
 }
 
-void TiDBColumn::appendUInt64(UInt64 value)
+void TiDBColumn::append(UInt64 value)
 {
     encodeLittleEndian<UInt64>(value, data);
     finishAppendFixed();
 }
 
-void TiDBColumn::appendTime(const TiDBTime & time)
+void TiDBColumn::append(const TiDBTime & time)
 {
     encodeLittleEndian<UInt32>(time.my_date_time.hour, data);
     encodeLittleEndian<UInt32>(time.my_date_time.micro_second, data);
@@ -109,7 +110,7 @@ void TiDBColumn::appendTime(const TiDBTime & time)
     finishAppendFixed();
 }
 
-void TiDBColumn::appendDecimal(const TiDBDecimal & decimal)
+void TiDBColumn::append(const TiDBDecimal & decimal)
 {
     encodeLittleEndian<UInt8>(decimal.digits_int, data);
     encodeLittleEndian<UInt8>(decimal.digits_frac, data);
@@ -122,19 +123,13 @@ void TiDBColumn::appendDecimal(const TiDBDecimal & decimal)
     finishAppendFixed();
 }
 
-void TiDBColumn::appendBytes(const StringRef & value)
+void TiDBColumn::append(const StringRef & value)
 {
     data.write(value.data, value.size);
     finishAppendVar(value.size);
 }
 
-void TiDBColumn::appendBytes(const DB::String & value)
-{
-    data << value;
-    finishAppendVar(value.size());
-}
-
-void TiDBColumn::appendFloat32(DB::Float32 value)
+void TiDBColumn::append(DB::Float32 value)
 {
     // use memcpy to avoid breaking strict-aliasing rules
     UInt32 u;
@@ -143,7 +138,7 @@ void TiDBColumn::appendFloat32(DB::Float32 value)
     finishAppendFixed();
 }
 
-void TiDBColumn::appendFloat64(DB::Float64 value)
+void TiDBColumn::append(DB::Float64 value)
 {
     // use memcpy to avoid breaking strict-aliasing rules
     UInt64 u;
