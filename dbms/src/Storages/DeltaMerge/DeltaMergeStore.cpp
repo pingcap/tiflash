@@ -820,8 +820,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
         if (auto default_literal = typeid_cast<const ASTLiteral *>(command.default_expression.get());
             default_literal && default_literal->value.getType() == Field::Types::String)
         {
-            const auto default_val = safeGet<String>(default_literal->value);
-            define.default_value   = default_val;
+            define.default_value = default_literal->value;
         }
         else if (auto default_cast_expr = typeid_cast<const ASTFunction *>(command.default_expression.get());
                  default_cast_expr && default_cast_expr->name == "CAST" /* ParserCastExpression::name */)
@@ -833,14 +832,13 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
             }
 
             auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
-            if (default_literal_in_cast && default_literal_in_cast->value.getType() == Field::Types::String)
+            if (default_literal_in_cast)
             {
-                const auto default_value = safeGet<String>(default_literal_in_cast->value);
-                define.default_value     = default_value;
+                define.default_value = default_literal_in_cast->value;
             }
             else
             {
-                throw Exception("First argument in CAST expression must be a string", ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception("Invalid CAST expression", ErrorCodes::BAD_ARGUMENTS);
             }
         }
         else

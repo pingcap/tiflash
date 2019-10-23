@@ -72,7 +72,7 @@ struct ColumnDefine
     ColId       id;
     String      name;
     DataTypePtr type;
-    String      default_value;
+    Field       default_value;
 
     explicit ColumnDefine(ColId id_ = 0, String name_ = "", DataTypePtr type_ = nullptr)
         : id(id_), name(std::move(name_)), type(std::move(type_))

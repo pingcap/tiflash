@@ -238,20 +238,19 @@ void readChunkData(MutableColumns &      columns,
             // New column after ddl is not exist in chunk's meta, fill with default value
             IColumn & col = *columns[index];
 
-            if (define.default_value.empty())
+            // Read default value from `define.default_value`
+            ColumnPtr tmp_col;
+            if (define.default_value.isNull()) 
             {
-                ColumnPtr tmp_col = define.type->createColumnConstWithDefaultValue(rows_limit)->convertToFullColumnIfConst();
-                col.insertRangeFrom(*tmp_col, 0, rows_limit);
+                tmp_col = define.type->createColumnConstWithDefaultValue(rows_limit);
             }
             else
             {
-                // Read default value from `define.default_value`
-                MutableColumnPtr     tmp_col = define.type->createColumn();
-                ReadBufferFromMemory buff(define.default_value.c_str(), define.default_value.size());
-                define.type->deserializeTextEscaped(*tmp_col, buff);
-                ColumnPtr tmp_full_col = tmp_col->replicate(IColumn::Offsets(1, rows_limit));
-                col.insertRangeFrom(*tmp_full_col, 0, rows_limit);
+                tmp_col = define.type->createColumnConst(rows_limit, define.default_value);
             }
+            tmp_col = tmp_col->convertToFullColumnIfConst();
+
+            col.insertRangeFrom(*tmp_col, 0, rows_limit);
         }
     }
 
@@ -643,11 +642,24 @@ void insertRangeFromWithNumericTypeCast(const ColumnPtr &    from_col, //
         /// We are applying cast from nullable to not null, scan to fill "NULL" with default value
 
         TypeTo default_value = 0; // if read_define.default_value is empty, fill with 0
-        if (!read_define.default_value.empty())
+        if (read_define.default_value.isNull())
         {
-            // parse from text
-            ReadBufferFromMemory buff(read_define.default_value.c_str(), read_define.default_value.size());
-            readIntTextUnsafe(default_value, buff);
+            // Do nothing
+        }
+        else if (read_define.default_value.getType() != Field::Types::Int64 || read_define.default_value.getType() != Field::Types::UInt64)
+        {
+            throw Exception("Invalid column value type", ErrorCodes::BAD_ARGUMENTS);
+        }
+        else
+        {
+            if (read_define.default_value.getType() == Field::Types::Int64)
+            {
+                default_value = read_define.default_value.safeGet<Int64>();
+            }
+            else if (read_define.default_value.getType() == Field::Types::UInt64)
+            {
+                default_value = read_define.default_value.safeGet<UInt64>();
+            }
         }
 
         const size_t to_offset_before_inserted = to_array_ptr->size() - rows_limit;
