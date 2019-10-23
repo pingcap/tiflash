@@ -404,29 +404,33 @@ BlockInputStreams StorageDeltaMerge::read( //
             /// Learner read.
             doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, tmt, log);
 
-            /// For learner read from TiDB/TiSpark, we set num_streams by `mvcc_query_info.concurrent`
-            num_streams = std::max(1U, static_cast<UInt32>(mvcc_query_info.concurrent));
+            if (likely(!mvcc_query_info.regions_query_info.empty()))
+            {
+                /// For learner read from TiDB/TiSpark, we set num_streams by `mvcc_query_info.concurrent`
+                num_streams = std::max(1U, static_cast<UInt32>(mvcc_query_info.concurrent));
+            } // else learner read from ch-client, keep num_streams
         }
 
         HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
 
-#ifndef NDEBUG
+        if (log->trace())
         {
-            std::stringstream ss;
-            for (const auto &region: mvcc_query_info.regions_query_info)
             {
-                const auto & range = region.range_in_table;
-                ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                std::stringstream ss;
+                for (const auto &region: mvcc_query_info.regions_query_info)
+                {
+                    const auto &range = region.range_in_table;
+                    ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                }
+                LOG_TRACE(log, "reading ranges: orig: " << ss.str());
             }
-            LOG_TRACE(log, "reading ranges: orig: " << ss.str());
+            {
+                std::stringstream ss;
+                for (const auto &range : ranges)
+                    ss << range.toString() << ",";
+                LOG_TRACE(log, "reading ranges: " << ss.str());
+            }
         }
-        {
-            std::stringstream ss;
-            for (const auto &range : ranges)
-                ss << range.toString() << ",";
-            LOG_TRACE(log, "reading ranges: " << ss.str());
-        }
-#endif
 
         return store->read(
             context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso, max_block_size);
