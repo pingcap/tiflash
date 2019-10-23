@@ -5,8 +5,13 @@
 => drop table if exists default.test_dm
 
 ## create table
-=> DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 Int64', 'dm')
+=> DBGInvoke __mock_tidb_table(default, test_dm, 'col_1 Int64', '', 'dm')
 => DBGInvoke __refresh_schemas()
+=> select database,name,engine from system.tables where database='default' and name='test_dm'
+┌─database─┬─name────┬─engine─────┐
+│ default  │ test_dm │ DeltaMerge │
+└──────────┴─────────┴────────────┘
+
 => DBGInvoke __region_snapshot(4, 0, 1000, default, test_dm)
 
 ## apply a snapshot with some rows

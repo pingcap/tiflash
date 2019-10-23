@@ -37,9 +37,9 @@ struct Case
         TableInfo table_info(table_info_json);
         if (table_info.is_partition_table)
             table_info = table_info.producePartitionTableInfo(table_or_partition_id);
-        auto json1 = table_info.serialize(false);
+        auto json1 = table_info.serialize();
         TableInfo table_info2(json1);
-        auto json2 = table_info2.serialize(false);
+        auto json2 = table_info2.serialize();
         ASSERT_EQ(json1, json2) << "Table info unescaped serde mismatch:\n" + json1 + "\n" + json2;
 
         // generate create statement with db_info and table_info
@@ -54,7 +54,7 @@ struct Case
 
             json1 = extractTableInfoFromCreateStatement(stmt, table_info.name);
             table_info.deserialize(json1);
-            json2 = table_info.serialize(false);
+            json2 = table_info.serialize();
             ASSERT_EQ(json1, json2) << "Table info escaped serde mismatch:\n" + json1 + "\n" + json2;
         };
 

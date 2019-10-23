@@ -47,8 +47,8 @@ void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, D
         = InterpreterCreateQuery::getColumnsDescription(typeid_cast<const ASTExpressionList &>(*columns_ast), context);
 
     String engine_type("tmt");
-    if (args.size() == 4)
-        engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    if (args.size() == 5)
+        engine_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
 
     auto tso = context.getTMTContext().getPDClient()->getTS();
 
