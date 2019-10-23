@@ -792,6 +792,66 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
         throw Exception("Last segment range end[" + DB::toString(last_end) + "] is not equal to P_INF_HANDLE");
 }
 
+DeltaMergeStoreStat DeltaMergeStore::getStat()
+{
+    std::shared_lock lock(read_write_mutex);
+
+    DeltaMergeStoreStat stat;
+
+    stat.segment_count = segments.size();
+
+    for (const auto & [handle, segment] : segments)
+    {
+        (void)handle;
+        auto delta  = segment->getDelta();
+        auto stable = segment->getStable();
+
+        stat.total_rows += delta.num_rows() + stable.num_rows();
+        stat.total_bytes += delta.num_bytes() + stable.num_bytes();
+        stat.total_delete_ranges += delta.num_deletes();
+
+        if (delta.num_chunks())
+        {
+            stat.segment_count_with_delta += 1;
+            stat.delta_count += 1;
+            stat.total_chunk_count_in_delta += delta.num_chunks();
+
+            stat.total_delta_rows += delta.num_rows();
+            stat.total_delta_bytes += delta.num_bytes();
+        }
+
+        if (stable.num_chunks())
+        {
+            stat.segment_count_with_stable += 1;
+            stat.stable_count += 1;
+            stat.total_chunk_count_in_stable += stable.num_chunks();
+
+            stat.total_stable_rows += stable.num_rows();
+            stat.total_stable_bytes += stable.num_bytes();
+        }
+    }
+
+    stat.avg_segment_rows  = stat.total_rows / stat.segment_count;
+    stat.avg_segment_bytes = stat.total_bytes / stat.segment_count;
+
+    stat.avg_delta_rows          = stat.total_delta_rows / stat.delta_count;
+    stat.avg_delta_bytes         = stat.total_delta_bytes / stat.delta_count;
+    stat.avg_delta_delete_ranges = stat.total_delete_ranges / stat.delta_count;
+
+    stat.avg_stable_rows  = stat.total_stable_rows / stat.stable_count;
+    stat.avg_stable_bytes = stat.total_stable_bytes / stat.stable_count;
+
+    stat.avg_chunk_count_in_delta = stat.total_chunk_count_in_delta / stat.delta_count;
+    stat.avg_chunk_rows_in_delta  = stat.total_delta_rows / stat.total_chunk_count_in_delta;
+    stat.avg_chunk_bytes_in_delta = stat.total_delta_bytes / stat.total_chunk_count_in_delta;
+
+    stat.avg_chunk_count_in_stable = stat.total_chunk_count_in_stable / stat.stable_count;
+    stat.avg_chunk_rows_in_stable  = stat.total_stable_rows / stat.total_chunk_count_in_stable;
+    stat.avg_chunk_bytes_in_stable = stat.total_stable_bytes / stat.total_chunk_count_in_stable;
+
+    return stat;
+}
+
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   const OptionTableInfoConstRef table_info,
                                   ColumnID &                    max_column_id_used,
