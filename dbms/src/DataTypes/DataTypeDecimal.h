@@ -147,6 +147,7 @@ public:
     size_t getSizeOfValueInMemory() const override { return sizeof(T); }
     bool isCategorial() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
+    bool isDecimal() const override { return true; };
 };
 
 using DataTypeDecimal32 = DataTypeDecimal<Decimal32>;

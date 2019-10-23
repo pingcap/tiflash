@@ -336,6 +336,8 @@ public:
       */
     virtual bool isNumber() const { return false; };
 
+    virtual bool isDecimal() const { return false; };
+
     /** Integers. Not Nullable. Not Enums. Not Date/DateTime.
       */
     virtual bool isInteger() const { return false; };
