@@ -38,7 +38,7 @@ void RegionPersister::persist(const Region & region, const RegionTaskLock & lock
     UInt64 applied_index = region.appliedIndex();
     {
         std::lock_guard<std::mutex> lock(mutex);
-        auto cache = page_storage.getCache(region.id());
+        auto cache = page_storage.getEntry(region.id());
         if (cache.isValid() && cache.tag == applied_index)
         {
             LOG_DEBUG(log, region.toString(false) << " ignore persist because of same applied index " << applied_index);
