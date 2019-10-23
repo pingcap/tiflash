@@ -107,7 +107,6 @@ public:
 
     String getDataPath() const override { return full_path; }
 
-    bool pkIsUInt64() const { return getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64; }
     SortDescription getPrimarySortDescription() const override { return data.getPrimarySortDescription(); }
 
 private:

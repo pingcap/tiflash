@@ -573,7 +573,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
     else if (table_info.engine_type == TiDB::StorageEngine::DEBUGGING_MEMORY)
     {
         writeString(") Engine = Debugging('", stmt_buf);
-        writeString(table_info.serialize(true), stmt_buf);
+        writeEscapedString(table_info.serialize(), stmt_buf);
         writeString("')", stmt_buf);
     }
     else
