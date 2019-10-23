@@ -647,7 +647,7 @@ void Region::tryPreDecodeTiKVValue()
 }
 
 const RegionRangeKeys & RegionRaftCommandDelegate::getRange() { return *meta.makeRaftCommandDelegate().regionState().getRange(); }
-UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().getApplyState().applied_index(); }
+UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().applyState().applied_index(); }
 metapb::Region Region::getMetaRegion() const { return meta.getMetaRegion(); }
 raft_serverpb::MergeState Region::getMergeState() const { return meta.getMergeState(); }
 

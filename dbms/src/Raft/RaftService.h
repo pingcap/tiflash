@@ -48,7 +48,7 @@ private:
     std::queue<RegionID> regions_to_flush;
     RegionMap regions_to_decode;
 
-    BackgroundProcessingPool::TaskHandle persist_handle;
+    BackgroundProcessingPool::TaskHandle single_thread_task_handle;
     BackgroundProcessingPool::TaskHandle table_flush_handle;
     BackgroundProcessingPool::TaskHandle region_flush_handle;
     BackgroundProcessingPool::TaskHandle region_decode_handle;
