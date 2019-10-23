@@ -18,8 +18,7 @@ namespace DB
 namespace DM
 {
 
-static constexpr size_t DELTA_MERGE_DEFAULT_SEGMENT_ROWS = DEFAULT_BLOCK_SIZE << 6;
-static const PageId     DELTA_MERGE_FIRST_SEGMENT_ID     = 1;
+static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct DeltaMergeStoreStat
 {
@@ -173,7 +172,7 @@ public:
                            const HandleRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
-                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
+                           size_t                expected_block_size = STABLE_CHUNK_ROWS);
 
     /// Force flush all data to disk.
     /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`

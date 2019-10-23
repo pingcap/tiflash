@@ -387,7 +387,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                             task.ranges,
                                             {},
                                             max_version,
-                                            std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
+                                            std::min(expected_block_size, STABLE_CHUNK_ROWS));
     };
     auto after_segment_read = [this, dm_context](const SegmentPtr & segment) { this->checkSegmentUpdate<false>(dm_context, segment); };
 
@@ -690,8 +690,6 @@ void DeltaMergeStore::segmentForegroundMerge(DMContext & dm_context, const Segme
     if (segment->isMergeDelta())
         return;
 
-    std::scoped_lock write_write_lock(write_write_mutex);
-
     SegmentPtr next_segment;
     {
         std::shared_lock read_write_lock(read_write_mutex);
@@ -831,23 +829,23 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
         }
     }
 
-    stat.avg_segment_rows  = stat.total_rows / stat.segment_count;
-    stat.avg_segment_bytes = stat.total_bytes / stat.segment_count;
+    stat.avg_segment_rows  = (Float64)stat.total_rows / stat.segment_count;
+    stat.avg_segment_bytes = (Float64)stat.total_bytes / stat.segment_count;
 
-    stat.avg_delta_rows          = stat.total_delta_rows / stat.delta_count;
-    stat.avg_delta_bytes         = stat.total_delta_bytes / stat.delta_count;
-    stat.avg_delta_delete_ranges = stat.total_delete_ranges / stat.delta_count;
+    stat.avg_delta_rows          = (Float64)stat.total_delta_rows / stat.delta_count;
+    stat.avg_delta_bytes         = (Float64)stat.total_delta_bytes / stat.delta_count;
+    stat.avg_delta_delete_ranges = (Float64)stat.total_delete_ranges / stat.delta_count;
 
-    stat.avg_stable_rows  = stat.total_stable_rows / stat.stable_count;
-    stat.avg_stable_bytes = stat.total_stable_bytes / stat.stable_count;
+    stat.avg_stable_rows  = (Float64)stat.total_stable_rows / stat.stable_count;
+    stat.avg_stable_bytes = (Float64)stat.total_stable_bytes / stat.stable_count;
 
-    stat.avg_chunk_count_in_delta = stat.total_chunk_count_in_delta / stat.delta_count;
-    stat.avg_chunk_rows_in_delta  = stat.total_delta_rows / stat.total_chunk_count_in_delta;
-    stat.avg_chunk_bytes_in_delta = stat.total_delta_bytes / stat.total_chunk_count_in_delta;
+    stat.avg_chunk_count_in_delta = (Float64)stat.total_chunk_count_in_delta / stat.delta_count;
+    stat.avg_chunk_rows_in_delta  = (Float64)stat.total_delta_rows / stat.total_chunk_count_in_delta;
+    stat.avg_chunk_bytes_in_delta = (Float64)stat.total_delta_bytes / stat.total_chunk_count_in_delta;
 
-    stat.avg_chunk_count_in_stable = stat.total_chunk_count_in_stable / stat.stable_count;
-    stat.avg_chunk_rows_in_stable  = stat.total_stable_rows / stat.total_chunk_count_in_stable;
-    stat.avg_chunk_bytes_in_stable = stat.total_stable_bytes / stat.total_chunk_count_in_stable;
+    stat.avg_chunk_count_in_stable = (Float64)stat.total_chunk_count_in_stable / stat.stable_count;
+    stat.avg_chunk_rows_in_stable  = (Float64)stat.total_stable_rows / stat.total_chunk_count_in_stable;
+    stat.avg_chunk_bytes_in_stable = (Float64)stat.total_stable_bytes / stat.total_chunk_count_in_stable;
 
     return stat;
 }

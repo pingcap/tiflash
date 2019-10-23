@@ -186,8 +186,8 @@ private:
                 if (unlikely(sid != entry_it.getSid()))
                     throw Exception("Algorithm broken!");
 
-                ignoreStableTuples(entry_it.getValue());
-                sid += entry_it.getValue();
+                ignoreStableTuples(entry_it.getCount());
+                sid += entry_it.getCount();
 
                 ++entry_it;
                 skip_rows = (entry_it != entry_end ? entry_it.getSid() : UNLIMITED) - sid;

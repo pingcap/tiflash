@@ -11,12 +11,13 @@ namespace DM
 
 namespace HandleFilter
 {
-/// return <offset, limit>
-inline std::pair<size_t, size_t>
-getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_column, const size_t offset, const size_t limit)
-{
-    const auto & handle_col_data = toColumnVectorData<Handle>(handle_column);
 
+/// return <offset, limit>
+inline std::pair<size_t, size_t> getPosRangeOfSorted(const HandleRange &            handle_range,
+                                                     const PaddedPODArray<Handle> & handle_col_data,
+                                                     const size_t                   offset,
+                                                     const size_t                   limit)
+{
     const auto begin_it    = handle_col_data.cbegin() + offset;
     const auto end_it      = begin_it + limit;
     const auto first_value = handle_col_data[offset];
@@ -29,6 +30,13 @@ getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_c
     ssize_t res_limit = high_it - low_it;
 
     return {low_pos, res_limit};
+}
+
+/// return <offset, limit>
+inline std::pair<size_t, size_t>
+getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_column, const size_t offset, const size_t limit)
+{
+    return getPosRangeOfSorted(handle_range, toColumnVectorData<Handle>(handle_column), offset, limit);
 }
 
 inline Block filterSorted(const HandleRange & handle_range, Block && block, size_t handle_pos)

@@ -58,7 +58,6 @@ namespace DM
 
 const Segment::Version Segment::CURRENT_VERSION = 1;
 const static size_t    SEGMENT_BUFFER_SIZE      = 128; // More than enough.
-const static size_t    STABLE_CHUNK_ROWS        = DEFAULT_BLOCK_SIZE;
 
 //==========================================================================================
 // Segment ser/deser
@@ -266,6 +265,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                               read_info.delta_value_space,
                               read_info.index_begin,
                               read_info.index_end,
+                              read_info.index->entryCount(),
                               expected_block_size);
         stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range, 0);
         return std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
@@ -350,6 +350,11 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
     LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] start to split, estimated rows[" << DB::toString(estimatedRows()) << "]");
 
     SegmentPair res;
+
+    if (true)
+    {
+        return doSplitPhysical(dm_context, segment_snap, storage_snap, wbs);
+    }
 
     auto merge_delta_then_split = [&]() {
         auto new_segment = mergeDelta(dm_context, segment_snap, storage_snap, wbs);
@@ -456,6 +461,7 @@ DiskValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_context,
                                        read_info.delta_value_space,
                                        read_info.index_begin,
                                        read_info.index_end,
+                                       read_info.index->entryCount(),
                                        STABLE_CHUNK_ROWS);
     data_stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
     data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(data_stream, handle, min_version);
@@ -607,6 +613,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
         .storage_snap      = storage_snap,
         .segment_snap      = segment_snap,
         .delta_value_space = delta_value_space,
+        .index             = delta_index,
         .index_begin       = index_begin,
         .index_end         = index_end,
         .read_columns      = new_read_columns,
@@ -646,6 +653,7 @@ BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_pag
                                              const DeltaValueSpacePtr & delta_value_space,
                                              const IndexIterator &      delta_index_begin,
                                              const IndexIterator &      delta_index_end,
+                                             size_t                     index_size,
                                              size_t                     expected_block_size,
                                              const HandleRange &        handle_range) const
 {
@@ -655,6 +663,7 @@ BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_pag
         delta_value_space,
         delta_index_begin,
         delta_index_end,
+        index_size,
         handle_range,
         expected_block_size);
 }
@@ -686,7 +695,11 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
                                       read_info.delta_value_space,
                                       read_info.index_begin,
                                       read_info.index_end,
-                                      DEFAULT_BLOCK_SIZE);
+                                      read_info.index->entryCount(),
+                                      STABLE_CHUNK_ROWS,
+                                      range);
+        stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
+
         stream->readPrefix();
         Block block;
         while ((block = stream->read()))
@@ -701,7 +714,10 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
                                   read_info.delta_value_space,
                                   read_info.index_begin,
                                   read_info.index_end,
-                                  DEFAULT_BLOCK_SIZE);
+                                  read_info.index->entryCount(),
+                                  STABLE_CHUNK_ROWS,
+                                  range);
+    stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, range, 0);
 
     size_t split_row_index = exact_rows / 2;
     Handle split_handle    = 0;
@@ -723,6 +739,10 @@ Handle Segment::getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_
     }
     stream->readSuffix();
 
+    if (!range.check(split_handle))
+        throw Exception("getSplitPointSlow unexpected split_handle: " + DB::toString(split_handle) + ", should be in range "
+                        + range.toString());
+
     return split_handle;
 }
 
@@ -737,6 +757,9 @@ Segment::doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_
 
     HandleRange my_range    = {range.start, split_point};
     HandleRange other_range = {split_point, range.end};
+
+    if (my_range.none() || other_range.none())
+        throw Exception("doSplitLogical: unexpected range! my_range: " + my_range.toString() + ", other_range: " + other_range.toString());
 
     auto other_segment_id = storage_pool.newMetaPageId();
     auto other_delta_id   = storage_pool.newMetaPageId();
@@ -813,6 +836,9 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
     HandleRange my_range    = {range.start, split_point};
     HandleRange other_range = {split_point, range.end};
 
+    if (my_range.none() || other_range.none())
+        throw Exception("doSplitPhysical: unexpected range! my_range: " + my_range.toString() + ", other_range: " + other_range.toString());
+
     Chunks my_new_stable_chunks;
     Chunks other_new_stable_chunks;
 
@@ -826,6 +852,7 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                       read_info.delta_value_space,
                                                       read_info.index_begin,
                                                       read_info.index_end,
+                                                      read_info.index->entryCount(),
                                                       STABLE_CHUNK_ROWS);
         my_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data  = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
@@ -842,6 +869,7 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                          read_info.delta_value_space,
                                                          read_info.index_begin,
                                                          read_info.index_end,
+                                                         read_info.index->entryCount(),
                                                          STABLE_CHUNK_ROWS);
         other_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
@@ -1020,7 +1048,8 @@ void Segment::placeUpsert(const DMContext &          dm_context,
         delta_value_space,
         delta_index_begin,
         delta_index_end,
-        DEFAULT_BLOCK_SIZE);
+        update_delta_tree.numEntries(),
+        STABLE_CHUNK_ROWS);
 
     IColumn::Permutation perm;
     if (sortBlockByPk(handle, block, perm))
@@ -1038,12 +1067,13 @@ void Segment::placeDelete(const DMContext &          dm_context,
 {
     EventRecorder recorder(ProfileEvents::DMPlaceDeleteRange, ProfileEvents::DMPlaceDeleteRangeNS);
 
-    auto & handle            = dm_context.handle_column;
-    auto   delta_index_begin = update_delta_tree.begin();
-    auto   delta_index_end   = update_delta_tree.end();
+    auto & handle = dm_context.handle_column;
 
     Blocks delete_data;
     {
+        auto delta_index_begin = update_delta_tree.begin();
+        auto delta_index_end   = update_delta_tree.end();
+
         BlockInputStreamPtr delete_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
             data_page_reader,
             {handle, getVersionColumnDefine()},
@@ -1052,7 +1082,8 @@ void Segment::placeDelete(const DMContext &          dm_context,
             delta_value_space,
             delta_index_begin,
             delta_index_end,
-            DEFAULT_BLOCK_SIZE);
+            update_delta_tree.numEntries(),
+            STABLE_CHUNK_ROWS);
 
         delete_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(delete_stream, delete_range, 0);
 
@@ -1071,6 +1102,9 @@ void Segment::placeDelete(const DMContext &          dm_context,
     // Note that we can not do read and place at the same time.
     for (const auto & block : delete_data)
     {
+        auto delta_index_begin = update_delta_tree.begin();
+        auto delta_index_end   = update_delta_tree.end();
+
         BlockInputStreamPtr merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator>( //
             data_page_reader,
             {handle, getVersionColumnDefine()},
@@ -1079,7 +1113,8 @@ void Segment::placeDelete(const DMContext &          dm_context,
             delta_value_space,
             delta_index_begin,
             delta_index_end,
-            DEFAULT_BLOCK_SIZE);
+            update_delta_tree.numEntries(),
+            STABLE_CHUNK_ROWS);
         DM::placeDelete(merged_stream, block, update_delta_tree, getPkSort(handle));
     }
 }
