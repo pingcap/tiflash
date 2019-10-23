@@ -213,7 +213,7 @@ private:
                                    .storage_pool  = storage_pool,
                                    .store_columns = std::move(store_columns),
                                    .handle_column = getExtraHandleColumnDefine(),
-                                   .min_version   = min_version,
+                                   .min_version   = min_version.load(std::memory_order_relaxed),
 
                                    .not_compress            = settings.not_compress_columns,
                                    .segment_limit_rows      = db_settings.dm_segment_limit_rows,
@@ -251,6 +251,8 @@ private:
 
     bool isSegmentValid(const SegmentPtr & segment);
 
+    void updateGcSafePoint(const DMContextPtr & dm_context);
+
 private:
     String      path;
     StoragePool storage_pool;
@@ -265,7 +267,7 @@ private:
 
     Settings settings;
 
-    UInt64 min_version = 0;
+    std::atomic<Timestamp> min_version = 0;
 
     /// end of range -> segment
     SegmentSortedMap segments;

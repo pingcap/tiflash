@@ -44,7 +44,7 @@ struct PDClientHelper
 
     static constexpr int get_safepoint_maxtime = 120000; // 120s. waiting pd recover.
 
-    static uint64_t getGCSafePointWithRetry(pingcap::pd::ClientPtr pd_client)
+    static uint64_t getGCSafePointWithRetry(const pingcap::pd::ClientPtr& pd_client)
     {
         pingcap::kv::Backoffer bo(get_safepoint_maxtime);
         for (;;)
