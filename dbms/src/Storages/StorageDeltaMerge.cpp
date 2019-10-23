@@ -245,13 +245,13 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
 namespace
 {
 
-void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info)
+void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, RegionTable::RegionReadStatus status)
 {
     std::vector<RegionID> region_ids;
     region_ids.reserve(regions_info.size());
     for (const auto & info : regions_info)
         region_ids.push_back(info.region_id);
-    throw RegionException(region_ids);
+    throw RegionException(std::move(region_ids), status);
 }
 
 inline void doLearnerRead(const TiDB::TableID table_id,         //
@@ -287,7 +287,7 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
         if (region == nullptr)
         {
             LOG_WARNING(log, "[region " << info.region_id << "] is not found in KVStore, try again");
-            throwRetryRegion(regions_info);
+            throwRetryRegion(regions_info, RegionTable::RegionReadStatus::NOT_FOUND);
         }
         kvstore_region.emplace(info.region_id, std::move(region));
     }
@@ -403,27 +403,34 @@ BlockInputStreams StorageDeltaMerge::read( //
         {
             /// Learner read.
             doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, tmt, log);
+
+            if (likely(!mvcc_query_info.regions_query_info.empty()))
+            {
+                /// For learner read from TiDB/TiSpark, we set num_streams by `mvcc_query_info.concurrent`
+                num_streams = std::max(1U, static_cast<UInt32>(mvcc_query_info.concurrent));
+            } // else learner read from ch-client, keep num_streams
         }
 
         HandleRanges ranges = getQueryRanges(mvcc_query_info.regions_query_info);
 
-#ifndef NDEBUG
+        if (log->trace())
         {
-            std::stringstream ss;
-            for (const auto &region: mvcc_query_info.regions_query_info)
             {
-                const auto & range = region.range_in_table;
-                ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                std::stringstream ss;
+                for (const auto &region: mvcc_query_info.regions_query_info)
+                {
+                    const auto &range = region.range_in_table;
+                    ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
+                }
+                LOG_TRACE(log, "reading ranges: orig: " << ss.str());
             }
-            LOG_TRACE(log, "reading ranges: orig: " << ss.str());
+            {
+                std::stringstream ss;
+                for (const auto &range : ranges)
+                    ss << range.toString() << ",";
+                LOG_TRACE(log, "reading ranges: " << ss.str());
+            }
         }
-        {
-            std::stringstream ss;
-            for (const auto &range : ranges)
-                ss << range.toString() << ",";
-            LOG_TRACE(log, "reading ranges: " << ss.str());
-        }
-#endif
 
         return store->read(
             context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso, max_block_size);
@@ -617,10 +624,9 @@ void updateDeltaMergeTableCreateStatement(                   //
         {
             if (hidden_columns.has(column_define.name))
                 continue;
-            TiDB::ColumnInfo column_info = getColumnInfoByDataType(column_define.type);
-            column_info.id = column_define.id;
-            column_info.name = column_define.name;
-            column_info.origin_default_value = column_define.default_value;
+            Field default_field;
+            TiDB::ColumnInfo column_info = reverseGetColumnInfo(NameAndTypePair{column_define.name, column_define.type}, column_define.id, default_field);
+            // TODO column_info.origin_default_value = column_define.default_value;
             table_info_from_store.columns.emplace_back(std::move(column_info));
         }
     }
@@ -630,9 +636,9 @@ void updateDeltaMergeTableCreateStatement(                   //
     IDatabase::ASTModifier storage_modifier = [&](IAST & ast) {
         std::shared_ptr<ASTLiteral> literal;
         if (table_info_from_tidb)
-            literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize(true)));
+            literal = std::make_shared<ASTLiteral>(Field(table_info_from_tidb->get().serialize()));
         else
-            literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize(true)));
+            literal = std::make_shared<ASTLiteral>(Field(table_info_from_store.serialize()));
         auto & storage_ast = typeid_cast<ASTStorage &>(ast);
         auto & args = typeid_cast<ASTExpressionList &>(*storage_ast.engine->arguments);
         if (args.children.size() == 1)

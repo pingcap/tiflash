@@ -269,7 +269,8 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         throw RegionException(std::move(region_ids),
             current_region ? RegionException::RegionReadStatus::NOT_FOUND : RegionException::RegionReadStatus::VERSION_ERROR);
     }
-    if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange()))
+    if (!checkKeyRanges(dag.getKeyRanges(), table_id, /* pk_is_uint64= */ storage->getPKType() == IManageableStorage::PKType::UINT64,
+            current_region->getRange()))
         throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
@@ -462,7 +463,7 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
     auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
-    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<TMTStoragePtr, TableStructureReadLockPtr, Int64, bool> {
+    auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<ManageableStoragePtr, TableStructureReadLockPtr, Int64, bool> {
         /// Get storage in case it's dropped then re-created.
         // If schema synced, call getTable without try, leading to exception on table not existing.
         auto storage_ = context.getTMTContext().getStorages().get(table_id);
@@ -474,10 +475,12 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
                 return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
         }
 
-        if (storage_->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
-            throw Exception("Specifying schema_version for non-TMT storage: " + storage_->getName() + ", table: " + std::to_string(table_id)
-                    + " is not allowed",
+        if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DM)
+        {
+            throw Exception("Specifying schema_version for non-managed storage: " + storage_->getName() + ", table: " + storage_->getTableName()
+                    + ",id: " + DB::toString(table_id) + " is not allowed",
                 ErrorCodes::LOGICAL_ERROR);
+        }
 
         /// Lock storage.
         auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
@@ -501,7 +504,7 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
     };
 
     /// Try get storage and lock once.
-    TMTStoragePtr storage_;
+    ManageableStoragePtr storage_;
     TableStructureReadLockPtr lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {

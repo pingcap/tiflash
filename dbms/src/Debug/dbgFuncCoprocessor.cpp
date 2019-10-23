@@ -69,10 +69,12 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
         context, query,
         [&](const String & database_name, const String & table_name) {
             auto storage = context.getTable(database_name, table_name);
-            auto mmt = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-            if (!mmt || mmt->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
-                throw Exception("Not TMT", ErrorCodes::BAD_ARGUMENTS);
-            return mmt->getTableInfo();
+            auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+            if (!managed_storage //
+                || !(managed_storage->engineType() == ::TiDB::StorageEngine::DM
+                     || managed_storage->engineType() == ::TiDB::StorageEngine::TMT))
+                throw Exception(database_name + "." + table_name + " is not ManageableStorage", ErrorCodes::BAD_ARGUMENTS);
+            return managed_storage->getTableInfo();
         },
         start_ts, tz_offset, tz_name, encode_type);
 

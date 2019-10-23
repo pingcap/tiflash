@@ -141,7 +141,7 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
 }
 
 TableID MockTiDB::newTable(const String & database_name, const String & table_name,
-        const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name, const String & engine_type)
+        const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name, String engine_type)
 {
     std::lock_guard lock(tables_mutex);
 
