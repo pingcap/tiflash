@@ -215,7 +215,9 @@ public:
             + ", range: " + range.toString() + "}";
     }
 
-    const HandleRange & getRange() const { return range; }
+    const HandleRange &    getRange() const { return range; }
+    const DiskValueSpace & getDelta() const { return *delta; }
+    const DiskValueSpace & getStable() const { return *stable; }
 
     size_t deltaRows(bool with_delta_cache = true) const;
     // Insert and delete operations' count in DeltaTree
@@ -242,7 +244,8 @@ private:
                                         const DeltaValueSpacePtr & delta_value_space,
                                         const IndexIterator &      delta_index_begin,
                                         const IndexIterator &      delta_index_end,
-                                        size_t                     expected_block_size) const;
+                                        size_t                     expected_block_size,
+                                        const HandleRange &        handle_range = HandleRange::newAll()) const;
 
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info) const;

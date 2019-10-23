@@ -646,7 +646,8 @@ BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_pag
                                              const DeltaValueSpacePtr & delta_value_space,
                                              const IndexIterator &      delta_index_begin,
                                              const IndexIterator &      delta_index_end,
-                                             size_t                     expected_block_size) const
+                                             size_t                     expected_block_size,
+                                             const HandleRange &        handle_range) const
 {
     auto stable_input_stream = std::make_shared<ChunkBlockInputStream>(stable_snap.getChunks(), read_columns, data_page_reader, filter);
     return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator>>( //
@@ -654,6 +655,7 @@ BlockInputStreamPtr Segment::getPlacedStream(const PageReader &         data_pag
         delta_value_space,
         delta_index_begin,
         delta_index_end,
+        handle_range,
         expected_block_size);
 }
 

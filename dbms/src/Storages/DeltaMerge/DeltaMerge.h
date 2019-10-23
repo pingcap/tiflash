@@ -19,6 +19,7 @@ namespace DM
 {
 
 // Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
+// The first column must be handle column.
 template <class DeltaValueSpace, class IndexIterator>
 class DeltaMergeBlockInputStream final : public IProfilingBlockInputStream
 {
@@ -41,6 +42,8 @@ private:
     IndexIterator      entry_it;
     IndexIterator      entry_end;
 
+    HandleRange handle_range;
+
     size_t max_block_size;
 
     Block  header;
@@ -60,12 +63,14 @@ public:
                                const DeltaValueSpacePtr &       delta_value_space_,
                                IndexIterator                    index_begin,
                                IndexIterator                    index_end,
+                               const HandleRange                handle_range_,
                                size_t                           max_block_size_)
         : stable_input_stream(stable_input_stream_),
           stable_input_stream_raw_ptr(stable_input_stream.get()),
           delta_value_space(delta_value_space_),
           entry_it(index_begin),
           entry_end(index_end),
+          handle_range(handle_range_),
           max_block_size(max_block_size_)
     {
         header      = stable_input_stream_raw_ptr->getHeader();
@@ -147,8 +152,7 @@ private:
                 writeDeleteFromDelta(value);
                 break;
             case DT_INS:
-                writeInsertFromDelta(output_columns, value);
-                --output_write_limit;
+                writeInsertFromDelta(output_columns, value, output_write_limit);
                 break;
             default:
                 throw Exception("Entry type " + DTTypeString(entry_it.getType()) + " is not supported, is end: "
@@ -180,33 +184,6 @@ private:
         size_t skipped   = std::min(n, remaining);
         cur_stable_block_pos += skipped;
         return skipped;
-    }
-
-    // Return number of rows written into output
-    inline void writeCurStableBlock(MutableColumns & output_columns, size_t & output_write_limit)
-    {
-        auto output_offset = output_columns.at(0)->size();
-
-        size_t copy_rows  = std::min(output_write_limit, use_stable_rows);
-        copy_rows         = std::min(copy_rows, cur_stable_block_rows - cur_stable_block_pos);
-        auto valid_offset = cur_stable_block_pos;
-        auto valid_limit  = copy_rows;
-
-        if (!output_offset && !valid_offset && valid_limit == cur_stable_block_rows)
-        {
-            // Simply return columns in current stable block.
-            for (size_t column_id = 0; column_id < output_columns.size(); ++column_id)
-                output_columns[column_id] = (*std::move(cur_stable_block_columns[column_id])).mutate();
-        }
-        else if (valid_limit)
-        {
-            for (size_t column_id = 0; column_id < num_columns; ++column_id)
-                output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], valid_offset, valid_limit);
-        }
-
-        cur_stable_block_pos += copy_rows;
-        use_stable_rows -= copy_rows;
-        output_write_limit -= copy_rows;
     }
 
     inline bool fillStableBlockIfNeeded()
@@ -316,10 +293,48 @@ private:
         }
     }
 
-    inline void writeInsertFromDelta(MutableColumns & output_columns, UInt64 tuple_id)
+    // Return number of rows written into output
+    inline void writeCurStableBlock(MutableColumns & output_columns, size_t & output_write_limit)
     {
-        for (size_t index = 0; index < num_columns; ++index)
-            delta_value_space->insertValue(*output_columns[index], index, tuple_id);
+        auto output_offset = output_columns.at(0)->size();
+
+        size_t copy_rows  = std::min(output_write_limit, use_stable_rows);
+        copy_rows         = std::min(copy_rows, cur_stable_block_rows - cur_stable_block_pos);
+        auto valid_offset = cur_stable_block_pos;
+        auto valid_limit  = copy_rows;
+
+        std::tie(valid_offset, valid_limit)
+            = HandleFilter::getPosRangeOfSorted(handle_range, cur_stable_block_columns[0], valid_offset, valid_limit);
+
+        if (!output_offset && !valid_offset && valid_limit == cur_stable_block_rows)
+        {
+            // Simply return columns in current stable block.
+            for (size_t column_id = 0; column_id < output_columns.size(); ++column_id)
+                output_columns[column_id] = (*std::move(cur_stable_block_columns[column_id])).mutate();
+
+            // Let's return current stable block directly. No more expending.
+            output_write_limit = 0;
+        }
+        else if (valid_limit)
+        {
+            for (size_t column_id = 0; column_id < num_columns; ++column_id)
+                output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], valid_offset, valid_limit);
+
+            output_write_limit -= valid_limit;
+        }
+
+        cur_stable_block_pos += copy_rows;
+        use_stable_rows -= copy_rows;
+    }
+
+    inline void writeInsertFromDelta(MutableColumns & output_columns, UInt64 tuple_id, size_t & output_write_limit)
+    {
+        if (handle_range.check(delta_value_space->getHandle(tuple_id)))
+        {
+            for (size_t index = 0; index < num_columns; ++index)
+                delta_value_space->insertValue(*output_columns[index], index, tuple_id);
+            --output_write_limit;
+        }
     }
 
     inline void writeDeleteFromDelta(size_t n) { stable_skip += n; }
