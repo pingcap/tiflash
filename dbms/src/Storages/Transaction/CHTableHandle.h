@@ -105,8 +105,8 @@ inline std::tuple<int, std::array<UInt64TableHandleRange, 2>> splitForUInt64Tabl
     throw Exception("splitForUInt64TableHandle should not happen", ErrorCodes::LOGICAL_ERROR);
 }
 
-template <typename HandleType>
-inline void merge_ranges(std::vector<DB::HandleRange<HandleType>> & ranges)
+template <typename Type>
+inline void merge_ranges(std::vector<std::pair<Type, Type>> & ranges)
 {
     if (ranges.empty())
         return;
