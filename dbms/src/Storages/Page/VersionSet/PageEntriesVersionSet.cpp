@@ -17,11 +17,12 @@ std::set<PageFileIdAndLevel> PageEntriesVersionSet::gcApply(PageEntriesEdit & ed
 
     this->appendVersion(v);
 
-    return listAllLiveFiles();
+    return listAllLiveFiles(lock);
 }
 
-std::set<PageFileIdAndLevel> PageEntriesVersionSet::listAllLiveFiles() const
+std::set<PageFileIdAndLevel> PageEntriesVersionSet::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
 {
+    (void)lock;
     std::set<PageFileIdAndLevel> liveFiles;
     for (PageEntries * v = placeholder_node.next; v != &placeholder_node; v = v->next)
     {
