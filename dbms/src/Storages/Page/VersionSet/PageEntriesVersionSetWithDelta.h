@@ -36,7 +36,7 @@ public:
     std::set<PageFileIdAndLevel> gcApply(PageEntriesEdit & edit);
 
     /// List all PageFile that are used by any version
-    std::set<PageFileIdAndLevel> listAllLiveFiles() const;
+    std::set<PageFileIdAndLevel> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &) const;
 
     VersionPtr compactDeltas(const VersionPtr & tail) const override;
 
