@@ -13,10 +13,9 @@ namespace DB
 
 std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit)
 {
+    std::unique_lock lock(read_mutex);
     if (!edit.empty())
     {
-        std::unique_lock lock(read_mutex);
-
         if (current.use_count() == 1 && current->isBase())
         {
             // If no readers, we could directly merge edits
@@ -27,19 +26,19 @@ std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::gcApply(PageEntries
             if (current.use_count() != 1)
             {
                 VersionPtr v = VersionType::createDelta();
-                appendVersion(std::move(v));
+                appendVersion(std::move(v), lock);
             }
-            auto view = std::make_shared<PageEntriesView>(current);
+            auto         view = std::make_shared<PageEntriesView>(current);
             EditAcceptor builder(view.get());
             builder.gcApply(edit);
         }
     }
-    return listAllLiveFiles();
+    return listAllLiveFiles(lock);
 }
 
-std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::listAllLiveFiles() const
+std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
 {
-    // Note read_mutex must be hold.
+    (void)lock; // Note read_mutex must be hold.
     std::set<PageFileIdAndLevel> liveFiles;
     std::set<VersionPtr>         visitedVersions; // avoid to access same version multiple time
     // Iterate all snapshot to collect all PageFile in used.

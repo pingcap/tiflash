@@ -98,7 +98,7 @@ public:
                 ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnNewDelta);
                 // There are reader(s) on current, generate new delta version and append to version-list
                 VersionPtr v = VersionType::createDelta();
-                appendVersion(std::move(v));
+                appendVersion(std::move(v), read_lock);
             }
             else
             {
@@ -165,8 +165,9 @@ public:
     }
 
 protected:
-    void appendVersion(VersionPtr && v)
+    void appendVersion(VersionPtr && v, const std::unique_lock<std::shared_mutex> & lock)
     {
+        (void)lock; // just for ensure lock is hold
         assert(v != current);
         // Append to linked list
         v->prev = current;
