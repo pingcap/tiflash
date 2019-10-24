@@ -30,6 +30,8 @@ struct DeltaMergeStoreStat
     UInt64 total_bytes         = 0;
     UInt64 total_delete_ranges = 0;
 
+    Float64 delta_placed_rate = 0;
+
     Float64 avg_segment_rows  = 0;
     Float64 avg_segment_bytes = 0;
 

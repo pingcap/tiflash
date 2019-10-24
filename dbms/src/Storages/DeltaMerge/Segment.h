@@ -223,6 +223,9 @@ public:
     const DiskValueSpace & getDelta() const { return *delta; }
     const DiskValueSpace & getStable() const { return *stable; }
 
+    size_t getPlacedDeltaRows() const { return placed_delta_rows; }
+    size_t getPlacedDeltaDeletes() const { return placed_delta_deletes; }
+
     size_t deltaRows(bool with_delta_cache = true) const;
     // Insert and delete operations' count in DeltaTree
     size_t updatesInDeltaTree() const;

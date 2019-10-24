@@ -23,8 +23,8 @@ namespace DM
 template <class DeltaValueSpace, class IndexIterator>
 class DeltaMergeBlockInputStream final : public IProfilingBlockInputStream, Allocator<false>
 {
-    static constexpr size_t UNLIMITED       = std::numeric_limits<UInt64>::max();
-    static constexpr size_t COPY_ROWS_LIMIT = 2048;
+    static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
+    //    static constexpr size_t COPY_ROWS_LIMIT = 2048;
 
 private:
     using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
@@ -99,21 +99,27 @@ public:
         size_t        pos = 0;
         while (it != index_end)
         {
-            if (pos > 0 && index[pos - 1].type == DT_INS && it.getType() == DT_INS && index[pos - 1].sid == it.getSid())
+            if (pos > 0 && it.getType() == DT_INS)
             {
-                // Merge current insert entry into previous one.
-                index[pos - 1].count += it.getCount();
+                auto & prev_index = index[pos - 1];
+                if (prev_index.type == DT_INS        //
+                    && prev_index.sid == it.getSid() //
+                    && prev_index.value + prev_index.count == it.getValue())
+                {
+                    // Merge current insert entry into previous one.
+                    index[pos - 1].count += it.getCount();
+                    ++it;
+                    continue;
+                }
             }
-            else
-            {
-                index[pos] = IndexEntry{
-                    .sid   = it.getSid(),
-                    .type  = it.getType(),
-                    .count = it.getCount(),
-                    .value = it.getValue(),
-                };
-                ++pos;
-            }
+
+            index[pos] = IndexEntry{
+                .sid   = it.getSid(),
+                .type  = it.getType(),
+                .count = it.getCount(),
+                .value = it.getValue(),
+            };
+            ++pos;
             ++it;
         }
         index_valid_size = pos;
@@ -199,8 +205,12 @@ private:
                 writeDeleteFromDelta(cur_index.count);
                 break;
             case DT_INS:
-                writeInsertFromDelta(output_columns, cur_index.value, cur_index.count, output_write_limit);
+            {
+                bool should_step_forward_index = writeInsertFromDelta(output_columns, cur_index.value, cur_index.count, output_write_limit);
+                if (!should_step_forward_index)
+                    return;
                 break;
+            }
             default:
                 throw Exception("Entry type " + DTTypeString(cur_index.type) + " is not supported, is end: "
                                 + DB::toString(index_pos == index_valid_size) + ", use_stable_rows: " + DB::toString(use_stable_rows)
@@ -354,14 +364,6 @@ private:
         std::tie(valid_offset, valid_limit)
             = HandleFilter::getPosRangeOfSorted(handle_range, cur_stable_block_columns[0], valid_offset, valid_limit);
 
-        // Too expensive to do copy. Let's come back next time.
-        bool copy_expensive = output_offset >= COPY_ROWS_LIMIT && valid_limit >= COPY_ROWS_LIMIT;
-        if (copy_expensive)
-        {
-            output_write_limit = 0;
-            return;
-        }
-
         if (!output_offset && !valid_offset && valid_limit == cur_stable_block_rows)
         {
             // Simply return columns in current stable block.
@@ -376,14 +378,15 @@ private:
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
                 output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], valid_offset, valid_limit);
 
-            output_write_limit -= valid_limit;
+            output_write_limit -= std::min(valid_limit, output_write_limit);
         }
 
         cur_stable_block_pos += copy_rows;
         use_stable_rows -= copy_rows;
     }
 
-    inline void writeInsertFromDelta(MutableColumns & output_columns, UInt64 tuple_id, size_t count, size_t & output_write_limit)
+    // Return index should step forward or not.
+    inline bool writeInsertFromDelta(MutableColumns & output_columns, UInt64 tuple_id, size_t count, size_t & output_write_limit)
     {
         if (count == 1 && handle_range.check(delta_value_space_handle_column_data[tuple_id]))
         {
@@ -391,17 +394,29 @@ private:
                 output_columns[col_idx]->insertFrom(*delta_value_space_columns[col_idx], tuple_id);
 
             --output_write_limit;
+            return true;
         }
         else
         {
             auto [offset, limit] = HandleFilter::getPosRangeOfSorted(handle_range, delta_value_space_handle_column_data, tuple_id, count);
-            if (limit)
+
+            ssize_t remaining_rows = ((ssize_t)limit) - output_write_limit;
+            auto    actual_limit   = std::min(output_write_limit, limit);
+            if (actual_limit)
             {
                 for (size_t col_idx = 0; col_idx < num_columns; ++col_idx)
-                    output_columns[col_idx]->insertRangeFrom(*delta_value_space_columns[col_idx], offset, limit);
+                    output_columns[col_idx]->insertRangeFrom(*delta_value_space_columns[col_idx], offset, actual_limit);
 
-                output_write_limit -= limit;
+                output_write_limit -= actual_limit;
             }
+
+            if (remaining_rows > 0)
+            {
+                index[index_pos].value = offset + actual_limit;
+                index[index_pos].count = (UInt32)remaining_rows;
+            }
+
+            return remaining_rows <= 0;
         }
     }
 

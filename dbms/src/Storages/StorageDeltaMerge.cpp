@@ -232,7 +232,25 @@ public:
 
     Block getHeader() const override { return header; }
 
-    void write(const Block & block) override { store->write(db_context, db_settings, decorator(block)); }
+    void write(const Block & block) override
+    {
+        Block new_block = decorator(block);
+        auto rows = new_block.rows();
+        size_t step = 1000;
+        for (size_t offset = 0; offset < rows; offset += step)
+        {
+            size_t limit = std::min(offset + step, rows) - offset;
+            Block write_block;
+            for (auto & column : new_block)
+            {
+                auto col = column.type->createColumn();
+                col->insertRangeFrom(*column.column, offset, limit);
+                write_block.insert(ColumnWithTypeAndName(std::move(col), column.type, column.name, column.column_id));
+            }
+
+            store->write(db_context, db_settings, write_block);
+        }
+    }
 
 private:
     DeltaMergeStorePtr store;
@@ -685,6 +703,8 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     UInt64 total_bytes         = 0;
     UInt64 total_delete_ranges = 0;
 
+    Float64 delta_placed_rate = 0;
+
     Float64 avg_segment_rows  = 0;
     Float64 avg_segment_bytes = 0;
 
@@ -729,6 +749,8 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(total_rows)
     INSERT_INT(total_bytes)
     INSERT_INT(total_delete_ranges)
+
+    INSERT_FLOAT(delta_placed_rate)
 
     INSERT_FLOAT(avg_segment_rows)
     INSERT_FLOAT(avg_segment_bytes)

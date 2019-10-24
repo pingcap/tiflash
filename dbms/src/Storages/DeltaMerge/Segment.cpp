@@ -353,7 +353,9 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
 
     if (true)
     {
-        return doSplitPhysical(dm_context, segment_snap, storage_snap, wbs);
+        res = doSplitPhysical(dm_context, segment_snap, storage_snap, wbs);
+        LOG_DEBUG(log, "Segment [" << segment_id << "] split into " << res.first->info() << " and " << res.second->info());
+        return res;
     }
 
     auto merge_delta_then_split = [&]() {

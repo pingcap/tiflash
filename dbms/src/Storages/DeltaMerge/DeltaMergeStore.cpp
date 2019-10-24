@@ -387,7 +387,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                             task.ranges,
                                             {},
                                             max_version,
-                                            std::min(expected_block_size, STABLE_CHUNK_ROWS));
+                                            std::max(expected_block_size, STABLE_CHUNK_ROWS));
     };
     auto after_segment_read = [this, dm_context](const SegmentPtr & segment) { this->checkSegmentUpdate<false>(dm_context, segment); };
 
@@ -798,6 +798,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
     stat.segment_count = segments.size();
 
+    long total_placed_rows = 0;
+
     for (const auto & [handle, segment] : segments)
     {
         (void)handle;
@@ -806,10 +808,13 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
         stat.total_rows += delta.num_rows() + stable.num_rows();
         stat.total_bytes += delta.num_bytes() + stable.num_bytes();
-        stat.total_delete_ranges += delta.num_deletes();
+
+        total_placed_rows += segment->getPlacedDeltaRows();
 
         if (delta.num_chunks())
         {
+            stat.total_delete_ranges += delta.num_deletes();
+
             stat.segment_count_with_delta += 1;
             stat.delta_count += 1;
             stat.total_chunk_count_in_delta += delta.num_chunks();
@@ -828,6 +833,8 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             stat.total_stable_bytes += stable.num_bytes();
         }
     }
+
+    stat.delta_placed_rate = (Float64)total_placed_rows / stat.total_delta_rows;
 
     stat.avg_segment_rows  = (Float64)stat.total_rows / stat.segment_count;
     stat.avg_segment_bytes = (Float64)stat.total_bytes / stat.segment_count;
