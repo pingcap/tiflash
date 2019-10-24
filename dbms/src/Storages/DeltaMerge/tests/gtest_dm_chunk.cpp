@@ -295,8 +295,7 @@ TEST(ChunkColumnCast_test, DISABLED_CastNullableToNotNullWithNonZeroDefaultValue
     {
         DataTypePtr  read_data_type = typeFromString(to_type);
         ColumnDefine read_define(0, "c", read_data_type);
-        read_define.default_value      = Field();
-        read_define.default_value.assignString("5", 1);
+        read_define.default_value      = Field(String("5"));
         MutableColumnPtr memory_column = read_data_type->createColumn();
         memory_column->reserve(3);
 
