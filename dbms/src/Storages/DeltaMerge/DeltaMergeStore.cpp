@@ -51,6 +51,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       settings(settings_),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
+    LOG_INFO(log, "Restore DeltaMerge Store start");
+
     table_columns.emplace_back(table_handle_define);
     table_columns.emplace_back(getVersionColumnDefine());
     table_columns.emplace_back(getTagColumnDefine());
@@ -84,6 +86,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+
+    LOG_INFO(log, "Restore DeltaMerge Store end");
 }
 
 DeltaMergeStore::~DeltaMergeStore()
