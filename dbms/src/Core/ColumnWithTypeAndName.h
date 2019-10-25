@@ -25,10 +25,11 @@ struct ColumnWithTypeAndName
 
     /// TODO Handle column_id properly after we support DDL.
     Int64 column_id;
+    Field default_value;
 
     ColumnWithTypeAndName(): ColumnWithTypeAndName(nullptr, nullptr, "") {}
-    ColumnWithTypeAndName(ColumnPtr column_, const DataTypePtr & type_, const String & name_, Int64 column_id_ = 0)
-        : column(std::move(column_)), type(type_), name(name_), column_id(column_id_) {}
+    ColumnWithTypeAndName(ColumnPtr column_, const DataTypePtr & type_, const String & name_, Int64 column_id_ = 0, const Field & default_value_ = Field())
+        : column(std::move(column_)), type(type_), name(name_), column_id(column_id_), default_value(default_value_) {}
 
     /// Uses type->createColumn() to create column
     ColumnWithTypeAndName(const DataTypePtr & type_, const String & name_)

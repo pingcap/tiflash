@@ -377,8 +377,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             col_define.name = column.name;
             col_define.id = column.column_id;
             col_define.type = column.type;
-            // FIXME set non-empty default value so that we can fill missing value with the right default value
-            // col_define.default_value = "";
+            col_define.default_value = column.default_value;
         }
         to_read.push_back(col_define);
     }
