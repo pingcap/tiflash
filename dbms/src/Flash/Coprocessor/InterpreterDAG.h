@@ -101,6 +101,8 @@ private:
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
+    const bool keep_session_timezone_info;
+
     Poco::Logger * log;
 };
 } // namespace DB

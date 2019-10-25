@@ -42,7 +42,8 @@ public:
     void appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names);
     void appendAggregation(ExpressionActionsChain & chain, const tipb::Aggregation & agg, Names & aggregate_keys,
         AggregateDescriptions & aggregate_descriptions);
-    void appendAggSelect(ExpressionActionsChain & chain, const tipb::Aggregation & agg, const tipb::DAGRequest & rqst);
+    void appendAggSelect(
+        ExpressionActionsChain & chain, const tipb::Aggregation & agg, const tipb::DAGRequest & rqst, bool keep_session_timezone_info);
     String appendCastIfNeeded(const tipb::Expr & expr, ExpressionActionsPtr & actions, const String & expr_name);
     void initChain(ExpressionActionsChain & chain, const std::vector<NameAndTypePair> & columns) const
     {

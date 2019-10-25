@@ -7,6 +7,7 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
@@ -66,8 +67,8 @@ try
 
     BlockOutputStreamPtr dag_output_stream = std::make_shared<DAGBlockOutputStream>(dag_response,
         context.getSettings().dag_records_per_chunk,
-        dag_request.encode_type(),
-        dag.getResultFieldTypes(),
+        dag.getEncodeType(),
+        dag.getResultFieldTypes(dag.getDAGContext().void_result_ft),
         streams.in->getHeader());
     copyData(*streams.in, *dag_output_stream);
 

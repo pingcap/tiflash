@@ -43,7 +43,10 @@ extern const int COP_BAD_DAG_REQUEST;
 } // namespace ErrorCodes
 
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
-    : context(context_), dag(dag_), log(&Logger::get("InterpreterDAG"))
+    : context(context_),
+      dag(dag_),
+      keep_session_timezone_info(dag.getEncodeType() == tipb::EncodeType::TypeArrow),
+      log(&Logger::get("InterpreterDAG"))
 {}
 
 template <typename HandleType>
@@ -309,6 +312,17 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
 
     addTimeZoneCastAfterTS(is_ts_column, pipeline);
+    // for arrow encode, the final select of timestamp column should be column with session timezone
+    if (keep_session_timezone_info && !dag.hasAggregation())
+    {
+        for (auto i : dag.getDAGRequest().output_offsets())
+        {
+            if (is_ts_column[i])
+            {
+                final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
+            }
+        }
+    }
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
@@ -347,7 +361,7 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         chain.clear();
 
         // add cast if type is not match
-        analyzer->appendAggSelect(chain, dag.getAggregation(), dag.getDAGRequest());
+        analyzer->appendAggSelect(chain, dag.getAggregation(), dag.getDAGRequest(), keep_session_timezone_info);
         //todo use output_offset to reconstruct the final project columns
         for (auto element : analyzer->getCurrentInputColumns())
         {

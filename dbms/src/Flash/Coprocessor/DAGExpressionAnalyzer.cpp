@@ -247,19 +247,15 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 
 // add timezone cast after table scan, this is used for session level timezone support
 // the basic idea of supporting session level timezone is that:
-// 1. for every timestamp column used in the dag request, after reading it from table scan, we add
-//    cast function to convert its timezone to the timezone specified in DAG request
-// 2. for every timestamp column that will be returned to TiDB, we add cast function to convert its
-//    timezone to UTC
-// for timestamp columns without any transformation or calculation(e.g. select ts_col from table),
-// this will introduce two useless casts, in order to avoid these redundant cast, when cast the ts
-// column to the columns with session-level timezone info, the original ts columns with UTC
-// timezone are still kept
-// for DAG request that does not contain agg, the final project will select the ts column with UTC
-// timezone, which is exactly what TiDB want
-// for DAG request that contains agg, any ts column after agg has session-level timezone info(since the ts
-// column with UTC timezone will never be used in during agg), all the column with ts datatype will
-// convert back to UTC timezone
+// 1. for every timestamp column used in the dag request, after reading it from table scan,
+//    we add cast function to convert its timezone to the timezone specified in DAG request
+// 2. based on the dag encode type, the return column will be with session level timezone(Arrow encode)
+//    or UTC timzezone(Default encode), if UTC timezone is needed, another cast function is used to
+//    convert the session level timezone to UTC timezone.
+// In the worst case(e.g select ts_col from table with Default encode), this will introduce two
+// useless casts to all the timestamp columns, in order to avoid redundant cast, when cast the ts
+// column to the columns with session-level timezone info, the original ts columns with UTC timezone
+// are still kept, and the InterperterDAG will choose the correct column based on encode type
 bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
     ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst)
 {
@@ -290,13 +286,13 @@ bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
 }
 
 void DAGExpressionAnalyzer::appendAggSelect(
-    ExpressionActionsChain & chain, const tipb::Aggregation & aggregation, const tipb::DAGRequest & rqst)
+    ExpressionActionsChain & chain, const tipb::Aggregation & aggregation, const tipb::DAGRequest & rqst, bool keep_session_timezone_info)
 {
     initChain(chain, getCurrentInputColumns());
     bool need_update_aggregated_columns = false;
     std::vector<NameAndTypePair> updated_aggregated_columns;
     ExpressionActionsChain::Step step = chain.steps.back();
-    bool need_append_timezone_cast = hasMeaningfulTZInfo(rqst);
+    bool need_append_timezone_cast = !keep_session_timezone_info && hasMeaningfulTZInfo(rqst);
     tipb::Expr tz_expr;
     if (need_append_timezone_cast)
         constructTZExpr(tz_expr, rqst, false);

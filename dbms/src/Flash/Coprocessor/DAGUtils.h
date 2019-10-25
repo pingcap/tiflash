@@ -29,8 +29,11 @@ bool isInOrGlobalInOperator(const String & name);
 bool exprHasValidFieldType(const tipb::Expr & expr);
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
 extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
+extern const Int8 VAR_SIZE;
 
 tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci);
 TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types);
+UInt8 getFieldLengthForArrowEncode(Int32 tp);
 
 } // namespace DB
