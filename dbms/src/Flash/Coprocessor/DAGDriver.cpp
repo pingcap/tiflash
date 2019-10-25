@@ -109,7 +109,7 @@ catch (const Exception & e)
 }
 catch (const std::exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.what());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
 }
 

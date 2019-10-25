@@ -3,9 +3,11 @@
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -37,29 +39,30 @@ using TiDB::TableInfo;
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher, Timestamp start_ts,
-    Int64 tz_offset, const String & tz_name);
-tipb::SelectResponse executeDAGRequest(
-    Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
+    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type);
+tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 1 || args.size() > 4)
-        throw Exception("Args not matched, should be: query[, region-id, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 1 || args.size() > 5)
+        throw Exception("Args not matched, should be: query[, region-id, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = InvalidRegionID;
     if (args.size() >= 2)
         region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    String encode_type = "";
+    if (args.size() >= 3)
+        encode_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     Int64 tz_offset = 0;
     String tz_name = "";
-    if (args.size() >= 3)
-        tz_offset = get<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (args.size() >= 4)
-        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+        tz_offset = get<Int64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    if (args.size() >= 5)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[4]).value);
     Timestamp start_ts = context.getTMTContext().getPDClient()->getTS();
 
     auto [table_id, schema, dag_request] = compileQuery(
@@ -71,7 +74,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
                 throw Exception("Not TMT", ErrorCodes::BAD_ARGUMENTS);
             return mmt->getTableInfo();
         },
-        start_ts, tz_offset, tz_name);
+        start_ts, tz_offset, tz_name, encode_type);
 
     RegionPtr region;
     if (region_id == InvalidRegionID)
@@ -93,16 +96,17 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
-    tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region->id(), region->version(),
-            region->confVer(), key_ranges);
+    tipb::SelectResponse dag_response
+        = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
 
 BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 {
-    if (args.size() < 2 || args.size() > 5)
-        throw Exception("Args not matched, should be: query, region-id[, start-ts, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
+    if (args.size() < 2 || args.size() > 6)
+        throw Exception(
+            "Args not matched, should be: query, region-id[, start-ts, encode_type, tz_offset, tz_name]", ErrorCodes::BAD_ARGUMENTS);
 
     String query = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID region_id = safeGet<RegionID>(typeid_cast<const ASTLiteral &>(*args[1]).value);
@@ -111,19 +115,22 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
         start_ts = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[2]).value);
     if (start_ts == 0)
         start_ts = context.getTMTContext().getPDClient()->getTS();
+    String encode_type = "";
+    if (args.size() >= 4)
+        encode_type = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     Int64 tz_offset = 0;
     String tz_name = "";
-    if (args.size() >= 3)
-        tz_offset = safeGet<Int64>(typeid_cast<const ASTLiteral &>(*args[2]).value);
-    if (args.size() >= 4)
-        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    if (args.size() >= 5)
+        tz_offset = safeGet<Int64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
+    if (args.size() >= 6)
+        tz_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[5]).value);
 
     auto [table_id, schema, dag_request] = compileQuery(
         context, query,
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
-        start_ts, tz_offset, tz_name);
+        start_ts, tz_offset, tz_name, encode_type);
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -132,8 +139,8 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     DecodedTiKVKey start_key = RecordKVFormat::genRawKey(table_id, handle_range.first.handle_id);
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
-    tipb::SelectResponse dag_response = executeDAGRequest(context, dag_request, region_id, region->version(),
-            region->confVer(), key_ranges);
+    tipb::SelectResponse dag_response
+        = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
@@ -206,7 +213,7 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
         else if (func_name_lowercase == "greaterorequals")
         {
             expr->set_sig(tipb::ScalarFuncSig::GEInt);
-            auto *ft = expr->mutable_field_type();
+            auto * ft = expr->mutable_field_type();
             ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
@@ -292,9 +299,8 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
     compileExpr(input, ast, cond, referred_columns, col_ref_map);
 }
 
-std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
-    Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Timestamp start_ts, Int64 tz_offset, const String & tz_name)
+std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
+    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
@@ -302,6 +308,10 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     dag_request.set_time_zone_offset(tz_offset);
 
     dag_request.set_start_ts(start_ts);
+    if (encode_type == "arrow")
+        dag_request.set_encode_type(tipb::EncodeType::TypeArrow);
+    else
+        dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
 
     ParserSelectQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "from DAG compiler", 0);
@@ -355,7 +365,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
                 ci.tp = TiDB::TypeTimestamp;
             ts_output.emplace_back(std::make_pair(column_info.name, std::move(ci)));
         }
-        executor_ctx_map.emplace(ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, std::vector<tipb::Expr *>>{}});
+        executor_ctx_map.emplace(
+            ts_exec, ExecutorCtx{nullptr, std::move(ts_output), std::unordered_map<String, std::vector<tipb::Expr *>>{}});
         last_executor = ts_exec;
     }
 
@@ -400,8 +411,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
         tipb::Limit * limit = limit_exec->mutable_limit();
         auto limit_length = safeGet<UInt64>(typeid_cast<ASTLiteral &>(*ast_query.limit_length).value);
         limit->set_limit(limit_length);
-        executor_ctx_map.emplace(
-            limit_exec, ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, std::vector<tipb::Expr *>>{}});
+        executor_ctx_map.emplace(limit_exec,
+            ExecutorCtx{last_executor, executor_ctx_map[last_executor].output, std::unordered_map<String, std::vector<tipb::Expr *>>{}});
         last_executor = limit_exec;
     }
 
@@ -593,8 +604,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(
     return std::make_tuple(table_info.id, std::move(schema), std::move(dag_request));
 }
 
-tipb::SelectResponse executeDAGRequest(
-    Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
+tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
     UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges)
 {
     static Logger * log = &Logger::get("MockDAG");
@@ -607,49 +617,38 @@ tipb::SelectResponse executeDAGRequest(
     return dag_response;
 }
 
+void arrowChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+{
+    ArrowChunkCodec codec;
+    for (const auto & chunk : dag_response.chunks())
+    {
+        blocks.emplace_back(codec.decode(chunk, schema));
+    }
+}
+
+void defaultChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+{
+    DefaultChunkCodec codec;
+    for (const auto & chunk : dag_response.chunks())
+    {
+        blocks.emplace_back(codec.decode(chunk, schema));
+    }
+}
+
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
 {
     if (dag_response.has_error())
         throw Exception(dag_response.error().msg(), dag_response.error().code());
 
     BlocksList blocks;
-    for (const auto & chunk : dag_response.chunks())
+    if (dag_response.encode_type() == tipb::EncodeType::TypeArrow)
     {
-        std::vector<std::vector<Field>> rows;
-        std::vector<Field> curr_row;
-        const std::string & data = chunk.rows_data();
-        size_t cursor = 0;
-        while (cursor < data.size())
-        {
-            curr_row.push_back(DecodeDatum(cursor, data));
-            if (curr_row.size() == schema.size())
-            {
-                rows.emplace_back(std::move(curr_row));
-                curr_row.clear();
-            }
-        }
-
-        ColumnsWithTypeAndName columns;
-        for (auto & field : schema)
-        {
-            const auto & name = field.first;
-            auto data_type = getDataTypeByColumnInfo(field.second);
-            ColumnWithTypeAndName col(data_type, name);
-            col.column->assumeMutable()->reserve(rows.size());
-            columns.emplace_back(std::move(col));
-        }
-        for (const auto & row : rows)
-        {
-            for (size_t i = 0; i < row.size(); i++)
-            {
-                const Field & field = row[i];
-                columns[i].column->assumeMutable()->insert(DatumFlat(field, schema[i].second.tp).field());
-            }
-        }
-
-        blocks.emplace_back(Block(columns));
+        arrowChunkToBlocks(schema, dag_response, blocks);
     }
-
+    else
+    {
+        defaultChunkToBlocks(schema, dag_response, blocks);
+    }
     return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 }
 
