@@ -57,9 +57,12 @@ int64_t IndexReader::getReadIndex()
         // 2. the learner lists is not empty and we specify a local service address. But we don't find it in learner list, then we
         // fail the request directly.
         if (candidate_learners.empty())
+        {
+            cache->dropRegion(region_id);
             throw Exception("Cannot find store ip " + suggested_ip + " in region peers, region_id is " + std::to_string(region_id.id)
-                    + ", maybe learner storage is down",
+                    + ", maybe learner storage is not ready",
                 ErrorCodes::LOGICAL_ERROR);
+        }
 
         try
         {
