@@ -237,7 +237,7 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
                                 " type is "
                         + type->getName(),
                     ErrorCodes::LOGICAL_ERROR);
-            if (type->isUnsignedInteger() ^ tidb_column_info.hasUnsignedFlag())
+            if (type->isUnsignedInteger() != tidb_column_info.hasUnsignedFlag())
                 throw Exception("Flash column and TiDB column has different unsigned flag", ErrorCodes::LOGICAL_ERROR);
             if (tidb_column_info.hasNotNullFlag())
                 flashIntegerColToArrowCol<false>(dag_column, col, start_index, end_index);
