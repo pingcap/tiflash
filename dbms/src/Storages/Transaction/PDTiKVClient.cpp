@@ -38,8 +38,9 @@ std::string convertAddr(const std::string & address)
     std::string addr;
     for (int i = 0; i < 4; i++)
     {
-        addr.append(std::to_string(result->h_addr[i]));
-        addr.push_back('.');
+        addr.append(std::to_string(static_cast<uint32_t>((uint8_t)result->h_addr[i])));
+        if (i != 3)
+            addr.push_back('.');
     }
     addr.push_back(':');
     addr.append(port);
@@ -52,9 +53,9 @@ IndexReader::IndexReader(pingcap::kv::RegionCachePtr cache_,
     const std::string & suggested_address_)
     : pingcap::kv::RegionClient(cache_, client_, id), log(&Logger::get("pingcap.index_read"))
 {
-    LOG_DEBUG(log, "suggtested_address before convertion" << suggested_address_);
+    LOG_TRACE(log, "suggtested_address before convertion" << suggested_address_);
     suggested_address = convertAddr(suggested_address_);
-    LOG_DEBUG(log, "suggtested_address after convertion" << suggested_address);
+    LOG_TRACE(log, "suggtested_address after convertion" << suggested_address);
 }
 
 int64_t IndexReader::getReadIndex()
