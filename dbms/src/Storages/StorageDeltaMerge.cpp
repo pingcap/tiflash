@@ -234,21 +234,29 @@ public:
 
     void write(const Block & block) override
     {
-        Block new_block = decorator(block);
-        auto rows = new_block.rows();
-        size_t step = 1000;
-        for (size_t offset = 0; offset < rows; offset += step)
+        if (db_settings.dm_insert_max_rows == 0)
         {
-            size_t limit = std::min(offset + step, rows) - offset;
-            Block write_block;
-            for (auto & column : new_block)
-            {
-                auto col = column.type->createColumn();
-                col->insertRangeFrom(*column.column, offset, limit);
-                write_block.insert(ColumnWithTypeAndName(std::move(col), column.type, column.name, column.column_id));
-            }
+            store->write(db_context, db_settings, block);
+        }
+        else
+        {
+            Block new_block = decorator(block);
+            auto rows = new_block.rows();
+            size_t step = db_settings.dm_insert_max_rows;
 
-            store->write(db_context, db_settings, write_block);
+            for (size_t offset = 0; offset < rows; offset += step)
+            {
+                size_t limit = std::min(offset + step, rows) - offset;
+                Block write_block;
+                for (auto & column : new_block)
+                {
+                    auto col = column.type->createColumn();
+                    col->insertRangeFrom(*column.column, offset, limit);
+                    write_block.insert(ColumnWithTypeAndName(std::move(col), column.type, column.name, column.column_id));
+                }
+
+                store->write(db_context, db_settings, write_block);
+            }
         }
     }
 
