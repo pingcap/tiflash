@@ -116,34 +116,6 @@ public:
         }
     };
 
-private:
-    TableMap tables;
-    RegionInfoMap regions;
-    std::unordered_set<RegionID> dirty_regions;
-    std::unordered_set<TableID> table_to_clean;
-
-    FlushThresholds flush_thresholds;
-
-    Context * const context;
-
-    mutable std::mutex mutex;
-    Logger * log;
-
-private:
-    Table & getOrCreateTable(const TableID table_id);
-
-    InternalRegion & insertRegion(Table & table, const Region & region);
-    InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
-    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
-
-    bool shouldFlush(const InternalRegion & region) const;
-
-    void flushRegion(TableID table_id, RegionID region_id, const bool try_persist = true) const;
-
-    void doShrinkRegionRange(const Region & region);
-    void doUpdateRegion(const Region & region, TableID table_id);
-
-public:
     RegionTable(Context & context_);
     void restore();
 
@@ -164,7 +136,7 @@ public:
 
     void removeRegion(const RegionID region_id);
 
-    TableID popOneTableToClean();
+    TableID popOneTableToOptimize();
 
     /// Try pick some regions and flush.
     /// Note that flush is organized by partition. i.e. if a regions is selected to be flushed, all regions belong to its partition will also flushed.
@@ -200,6 +172,48 @@ public:
 
     TableIDSet getAllMappedTables(const RegionID region_id) const;
     void dumpRegionsByTable(const TableID table_id, size_t & count, InternalRegions * regions) const;
+
+    void checkTableOptimize();
+    void checkTableOptimize(TableID, const double);
+    void setTableCheckerThreshold(double);
+
+private:
+    Table & getOrCreateTable(const TableID table_id);
+
+    InternalRegion & insertRegion(Table & table, const Region & region);
+    InternalRegion & getOrInsertRegion(TableID table_id, const Region & region);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
+
+    bool shouldFlush(const InternalRegion & region) const;
+
+    void flushRegion(TableID table_id, RegionID region_id, const bool try_persist = true) const;
+
+    void doShrinkRegionRange(const Region & region);
+    void doUpdateRegion(const Region & region, TableID table_id);
+
+    struct TableOptimizeChecker
+    {
+        std::mutex mutex;
+        bool is_checking = false;
+        double threshold = 1.0;
+        Timepoint last_check_time = Clock::now();
+    };
+
+private:
+    TableMap tables;
+    RegionInfoMap regions;
+    std::unordered_set<RegionID> dirty_regions;
+    std::unordered_set<TableID> table_to_optimize;
+
+    FlushThresholds flush_thresholds;
+
+    Context * const context;
+
+    mutable std::mutex mutex;
+
+    mutable TableOptimizeChecker table_checker;
+
+    Logger * log;
 };
 
 using RegionPartitionPtr = std::shared_ptr<RegionTable>;

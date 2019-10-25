@@ -343,6 +343,8 @@ public:
 
     virtual bool isDateOrDateTime() const { return false; };
 
+    virtual bool isDecimal() const { return false; };
+
     /** Numbers, Enums, Date, DateTime. Not nullable.
       */
     virtual bool isValueRepresentedByNumber() const { return false; };

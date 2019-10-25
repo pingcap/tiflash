@@ -71,16 +71,13 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         }
 
         // Traverse all table in ch and update handle_maps.
-        for (auto [table_id, storage] : tmt.getStorages().getAllStorage())
+        for (auto [table_id, merge_tree] : tmt.getStorages().getAllStorage())
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
             if (handle_range.first >= handle_range.second)
                 continue;
             {
-                auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
                 auto table_lock = merge_tree->lockStructure(false, __PRETTY_FUNCTION__);
-                if (merge_tree->is_dropped)
-                    continue;
 
                 const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
 

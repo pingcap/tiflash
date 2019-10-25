@@ -135,4 +135,15 @@ void ClusterManage::findRegionByRange(Context & context, const ASTs & args, Prin
     }
 }
 
+void ClusterManage::checkTableOptimize(DB::Context & context, const DB::ASTs & args, DB::Printer)
+{
+    if (args.size() < 3)
+        throw Exception("Args not matched, should be: table-id, threshold", ErrorCodes::BAD_ARGUMENTS);
+
+    auto & tmt = context.getTMTContext();
+    TableID table_id = (TableID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto a = typeid_cast<const ASTLiteral &>(*args[1]).value.safeGet<DecimalField<Decimal32>>();
+    tmt.getRegionTable().checkTableOptimize(table_id, a.getValue().toFloat<Float32>(a.getScale()));
+}
+
 } // namespace DB

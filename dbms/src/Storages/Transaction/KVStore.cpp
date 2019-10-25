@@ -294,7 +294,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         switch (result.type)
         {
             case RaftCommandResult::Type::IndexError:
-                report_sync_log();
+                persist_and_sync();
                 break;
             case RaftCommandResult::Type::BatchSplit:
                 handle_batch_split(result.split_regions);
