@@ -24,7 +24,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
 
     region_id = region.id();
     std::tie(region_size, applied_index) = region.serialize(buffer);
-    if (unlikely(region_size > std::numeric_limits<UInt32>::max()))
+    if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
         LOG_ERROR(&Logger::get("RegionPersister"),
             region.toString() << " with data info: " << region.dataInfo() << ", serialized size " << region_size
@@ -33,7 +33,20 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     }
 }
 
-void RegionPersister::persist(const Region & region, const RegionTaskLock & lock) { doPersist(region, &lock); }
+void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
+{
+    UInt64 applied_index = region.appliedIndex();
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto cache = page_storage.getCache(region.id());
+        if (cache.isValid() && cache.tag == applied_index)
+        {
+            LOG_DEBUG(log, region.toString(false) << " ignore persist because of same applied index " << applied_index);
+            return;
+        }
+    }
+    doPersist(region, &lock);
+}
 
 void RegionPersister::persist(const Region & region) { doPersist(region, nullptr); }
 
