@@ -16,16 +16,14 @@ namespace DB
 
 struct IndexReader : public pingcap::kv::RegionClient
 {
-    const std::string & suggested_address;
+    std::string suggested_address;
 
     Logger * log;
 
     IndexReader(pingcap::kv::RegionCachePtr cache_,
         pingcap::kv::RpcClientPtr client_,
         const pingcap::kv::RegionVerID & id,
-        const std::string & suggested_address_)
-        : pingcap::kv::RegionClient(cache_, client_, id), suggested_address(suggested_address_), log(&Logger::get("pingcap.index_read"))
-    {}
+        const std::string & suggested_address_);
 
     int64_t getReadIndex();
 

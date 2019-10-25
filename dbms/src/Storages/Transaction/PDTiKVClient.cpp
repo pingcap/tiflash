@@ -1,6 +1,7 @@
 #include <Storages/Transaction/PDTiKVClient.h>
 
 #include <Common/Exception.h>
+#include <netdb.h>
 
 namespace DB
 {
@@ -21,6 +22,40 @@ std::string getIP(const std::string & address)
     return ip;
 }
 
+// convertAddr converts host name to network address.
+// We assume the converted net type is AF_NET.
+std::string convertAddr(const std::string & address)
+{
+    if (address.size() == 0)
+        return "";
+    size_t idx = address.find(":");
+    if (idx == std::string::npos)
+        return "";
+    auto host = address.substr(0, idx);
+    auto port = address.substr(idx + 1);
+    struct hostent * result = gethostbyname(host.c_str());
+    // Suppose we always use IPv4 address.
+    std::string addr;
+    for (int i = 0; i < 4; i++)
+    {
+        addr.append(std::to_string(result->h_addr[i]));
+        addr.push_back('.');
+    }
+    addr.push_back(':');
+    addr.append(port);
+    return addr;
+}
+
+IndexReader::IndexReader(pingcap::kv::RegionCachePtr cache_,
+    pingcap::kv::RpcClientPtr client_,
+    const pingcap::kv::RegionVerID & id,
+    const std::string & suggested_address_)
+    : pingcap::kv::RegionClient(cache_, client_, id), log(&Logger::get("pingcap.index_read"))
+{
+    LOG_DEBUG(log, "suggtested_address before convertion" << suggested_address_);
+    suggested_address = convertAddr(suggested_address_);
+    LOG_DEBUG(log, "suggtested_address after convertion" << suggested_address);
+}
 
 int64_t IndexReader::getReadIndex()
 {
@@ -123,6 +158,5 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
     }
     throw pingcap::Exception("all stores are failed, may be region info is out of date.", pingcap::ErrorCodes::StoreNotReady);
 }
-
 
 } // namespace DB
