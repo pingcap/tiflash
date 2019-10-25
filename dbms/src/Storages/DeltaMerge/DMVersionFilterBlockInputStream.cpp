@@ -44,14 +44,16 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
             }
 
             {
-                UInt8 * filter_pos = filter.data();
-                auto *  handle_pos = const_cast<Handle *>(handle_col_data->data());
+                UInt8 * filter_pos      = filter.data();
+                auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
+                auto *  next_handle_pos = handle_pos + 1;
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*filter_pos) |= (*handle_pos) != (*(handle_pos + 1));
+                    (*filter_pos) |= (*handle_pos) != (*(next_handle_pos));
 
                     ++filter_pos;
                     ++handle_pos;
+                    ++next_handle_pos;
                 }
             }
 
@@ -78,7 +80,6 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
                     ++delete_pos;
                 }
             }
-
 
             //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
             //            {
@@ -107,14 +108,16 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
             {
-                UInt8 * filter_pos = filter.data();
-                auto *  handle_pos = const_cast<Handle *>(handle_col_data->data());
+                UInt8 * filter_pos      = filter.data();
+                auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
+                auto *  next_handle_pos = handle_pos + 1;
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*filter_pos) = (*handle_pos) != (*(handle_pos + 1));
+                    (*filter_pos) = (*handle_pos) != (*(next_handle_pos));
 
                     ++filter_pos;
                     ++handle_pos;
+                    ++next_handle_pos;
                 }
             }
 
@@ -220,12 +223,22 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
 
         const size_t passed_count = countBytesInFilter(filter);
 
+        ++total_blocks;
+        total_rows += rows;
+        passed_rows += passed_count;
+
         // This block is empty after filter, continue to process next block
         if (passed_count == 0)
+        {
+            ++complete_not_passed;
             continue;
+        }
 
         if (passed_count == rows)
+        {
+            ++complete_passed;
             return cur_raw_block;
+        }
 
         for (size_t col_index = 0; col_index < cur_raw_block.columns(); ++col_index)
         {

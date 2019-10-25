@@ -1,5 +1,7 @@
 #pragma once
 
+#include <common/logger_useful.h>
+
 #include <Columns/ColumnsCommon.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -27,16 +29,24 @@ public:
           handle_col_pos(header.getPositionByName(handle_define.name)),
           version_col_pos(header.getPositionByName(VERSION_COLUMN_NAME)),
           delete_col_pos(header.getPositionByName(TAG_COLUMN_NAME)),
-          filter(65536)
+          filter(65536),
+          log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
         children.push_back(input);
+    }
+
+    ~DMVersionFilterBlockInputStream()
+    {
+        LOG_INFO(log,
+                 "Pass: " + DB::toString((Float64)passed_rows * 100 / total_rows, 2) + "%"
+                     + ", complete pass: " + DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
+                     + ", complete not pass: " + DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2));
     }
 
     String getName() const override { return "DeltaMergeVersionFilter"; }
     Block  getHeader() const override { return header; }
 
 protected:
-
     Block readImpl() override;
 
     inline UInt8 checkWithNextIndex(size_t i)
@@ -113,6 +123,14 @@ private:
     PaddedPODArray<Handle> const * handle_col_data  = nullptr;
     PaddedPODArray<UInt64> const * version_col_data = nullptr;
     PaddedPODArray<UInt8> const *  delete_col_data  = nullptr;
+
+    size_t total_blocks        = 0;
+    size_t total_rows          = 0;
+    size_t passed_rows         = 0;
+    size_t complete_passed     = 0;
+    size_t complete_not_passed = 0;
+
+    Logger * log;
 };
 } // namespace DM
 } // namespace DB
