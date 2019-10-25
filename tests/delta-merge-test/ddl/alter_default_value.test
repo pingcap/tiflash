@@ -23,12 +23,12 @@
 
 ## These alter command will throw exception now
 ## See FLASH-453
-#>> alter table dm_test add column i1 Int32 default 999
-#>> alter table dm_test add column f32_1 Float32 default 1.234
-#>> alter table dm_test add column f64_1 Float64 default 1.23456
-#>> alter table dm_test add column dec1 Decimal(10,4) default 3.1415
-#>> alter table dm_test add column fs1 FixedString(4) default 'aaa'
-#>> alter table dm_test add column dt1 DateTime default '1999-09-09 12:34:56'
+>> alter table dm_test add column i1 Int32 default 999
+>> alter table dm_test add column f32_1 Float32 default 1.234
+>> alter table dm_test add column f64_1 Float64 default '1.23456'
+>> alter table dm_test add column dec1 Decimal(10,4) default 3.1415
+>> alter table dm_test add column fs1 FixedString(4) default 'aaa'
+>> alter table dm_test add column dt1 DateTime default '1999-09-09 12:34:56'
 
 >> select * from dm_test where pk = 1
 ┌─pk─┬─i0─┬─f32_0─┬─f64_0─┬─dec0───┬─s0─┬─fs0──────┬─────────────────dt0─┐
