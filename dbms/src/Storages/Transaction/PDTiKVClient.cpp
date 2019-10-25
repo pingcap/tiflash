@@ -42,8 +42,6 @@ std::string convertAddr(const std::string & address)
         if (i != 3)
             addr.push_back('.');
     }
-    addr.push_back(':');
-    addr.append(port);
     return addr;
 }
 
@@ -51,12 +49,8 @@ IndexReader::IndexReader(pingcap::kv::RegionCachePtr cache_,
     pingcap::kv::RpcClientPtr client_,
     const pingcap::kv::RegionVerID & id,
     const std::string & suggested_address_)
-    : pingcap::kv::RegionClient(cache_, client_, id), log(&Logger::get("pingcap.index_read"))
-{
-    LOG_TRACE(log, "suggtested_address before convertion" << suggested_address_);
-    suggested_address = convertAddr(suggested_address_);
-    LOG_TRACE(log, "suggtested_address after convertion" << suggested_address);
-}
+    : pingcap::kv::RegionClient(cache_, client_, id), suggested_address(suggested_address_), log(&Logger::get("pingcap.index_read"))
+{}
 
 int64_t IndexReader::getReadIndex()
 {
@@ -80,7 +74,7 @@ int64_t IndexReader::getReadIndex()
             for (const auto & learner : learners)
             {
                 std::string addr = cache->getStore(bo, learner.store_id()).addr;
-                if (addr.size() > 0 && getIP(addr) == suggested_ip)
+                if (addr.size() > 0 && convertAddr(addr) == suggested_ip)
                 {
                     candidate_learners.push_back(learner);
                     break;
