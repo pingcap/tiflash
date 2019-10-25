@@ -311,32 +311,39 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         });
     }
 
-    addTimeZoneCastAfterTS(is_ts_column, pipeline);
-    // for arrow encode, the final select of timestamp column should be column with session timezone
-    if (keep_session_timezone_info && !dag.hasAggregation())
+    if (addTimeZoneCastAfterTS(is_ts_column, pipeline))
     {
-        for (auto i : dag.getDAGRequest().output_offsets())
+        // for arrow encode, the final select of timestamp column should be column with session timezone
+        if (keep_session_timezone_info && !dag.hasAggregation())
         {
-            if (is_ts_column[i])
+            for (auto i : dag.getDAGRequest().output_offsets())
             {
-                final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
+                if (is_ts_column[i])
+                {
+                    final_project[i].first = analyzer->getCurrentInputColumns()[i].name;
+                }
             }
         }
     }
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-void InterpreterDAG::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline)
+bool InterpreterDAG::addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline)
 {
     bool hasTSColumn = false;
     for (auto b : is_ts_column)
         hasTSColumn |= b;
     if (!hasTSColumn)
-        return;
+        return false;
 
     ExpressionActionsChain chain;
     if (analyzer->appendTimeZoneCastsAfterTS(chain, is_ts_column, dag.getDAGRequest()))
+    {
         pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, chain.getLastActions()); });
+        return true;
+    }
+    else
+        return false;
 }
 
 InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()

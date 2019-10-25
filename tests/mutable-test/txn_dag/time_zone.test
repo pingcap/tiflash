@@ -79,6 +79,14 @@
 │ 2019-06-10 09:00:00 │ 2019-06-10 │
 └─────────────────────┴────────────┘
 
+# ts_col in agg clause for arrow encode
+=> DBGInvoke dag('select max(col_2) from default.test group by col_1',4,'arrow',28800) " --dag_planner="optree
+┌──────────max(col_2)─┬──────col_1─┐
+│ 2019-06-11 16:00:00 │ 2019-06-12 │
+│ 2019-06-11 16:00:00 │ 2019-06-11 │
+│ 2019-06-10 17:00:00 │ 2019-06-10 │
+└─────────────────────┴────────────┘
+
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
