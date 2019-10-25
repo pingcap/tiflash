@@ -175,14 +175,14 @@ String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & c
             return it->argument_names[0];
         }
     }
-    // do not found the original uint8 column, which means the top level expression of where
-    // condition is not a comparision expression. For example:
+    // couldn't not found the original uint8 column, which means the top level expression of where
+    // condition is not a comparision/logical expression. For example:
     // select * from table where c1 + c2
     // TiFlash does not support this, in order to make the dag request work, need to convert the
     // column type to UInt8
-    // for where condition of non-comparision expression, the basic rule is:
+    // for where condition of non-comparision/logical expression, the basic rule is:
     // 1. if the column is numeric, compare it with 0
-    // 2. if the column is string, convert the string column to numeric column, and compare it with 0
+    // 2. if the column is string, convert it to numeric column, and compare with 0
     // 3. if the column is date/datetime, compare it with zeroDate
     // 4. if the column is other type, throw exception
     auto & org_type = chain.steps.back().actions->getSampleBlock().getByName(column_name).type;
