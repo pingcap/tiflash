@@ -18,14 +18,24 @@ RaftService::RaftService(DB::Context & db_context_)
     if (!db_context.getTMTContext().isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-    persist_handle = background_pool.addTask([this] { return kvstore->tryPersist(); }, false);
+    single_thread_task_handle = background_pool.addTask(
+        [this] {
+            auto & tmt = db_context.getTMTContext();
+            {
+                RegionTable & region_table = tmt.getRegionTable();
+                region_table.checkTableOptimize();
+            }
+            kvstore->tryPersist();
+            return false;
+        },
+        false);
 
     table_flush_handle = background_pool.addTask([this] {
         auto & tmt = db_context.getTMTContext();
         RegionTable & region_table = tmt.getRegionTable();
 
         // if all regions of table is removed, try to optimize data.
-        if (auto table_id = region_table.popOneTableToClean(); table_id != InvalidTableID)
+        if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
         {
             LOG_INFO(log, "try to final optimize table " << table_id);
             tryOptimizeStorageFinal(db_context, table_id);
@@ -93,10 +103,10 @@ void RaftService::addRegionToDecode(const RegionPtr & region)
 
 RaftService::~RaftService()
 {
-    if (persist_handle)
+    if (single_thread_task_handle)
     {
-        background_pool.removeTask(persist_handle);
-        persist_handle = nullptr;
+        background_pool.removeTask(single_thread_task_handle);
+        single_thread_task_handle = nullptr;
     }
     if (table_flush_handle)
     {

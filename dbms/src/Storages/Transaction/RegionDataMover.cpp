@@ -100,11 +100,7 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
     if (!storage)
         return;
 
-    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-    auto table_lock = merge_tree->lockStructure(true, __PRETTY_FUNCTION__);
-
-    if (merge_tree->is_dropped)
-        return;
+    auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
 
     std::stringstream ss;
     ss << "OPTIMIZE TABLE `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` PARTITION ID '0' FINAL";

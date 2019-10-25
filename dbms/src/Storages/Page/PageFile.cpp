@@ -290,6 +290,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             PageCache pc{};
             pc.file_id  = page_file.getFileId();
             pc.level    = page_file.getLevel();
+            pc.tag      = write.tag;
             pc.size     = write.size;
             pc.offset   = page_data_file_off;
             pc.checksum = page_checksum;
