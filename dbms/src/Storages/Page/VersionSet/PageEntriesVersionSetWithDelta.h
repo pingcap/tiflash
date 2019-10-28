@@ -27,8 +27,8 @@ public:
     using VersionPtr   = BaseType::VersionPtr;
 
 public:
-    explicit PageEntriesVersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
-        : BaseType(config_)
+    explicit PageEntriesVersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
+        : BaseType(config_, log_)
     {
     }
 

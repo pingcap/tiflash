@@ -56,11 +56,11 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
-      versioned_page_entries(),
       page_file_log(&Poco::Logger::get("PageFile")),
-      log(&Poco::Logger::get("PageStorage"))
+      log(&Poco::Logger::get("PageStorage")),
+      versioned_page_entries(config.version_set_config, log)
 {
-    /// page_files are in ascending ordered by (file_id, level).
+/// page_files are in ascending ordered by (file_id, level).
     auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
     // recover current version from files
 

@@ -42,6 +42,8 @@ public:
         Float64 merge_hint_low_used_rate            = 0.35;
         size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
         size_t  merge_hint_low_used_file_num        = 10;
+
+        ::DB::MVCC::VersionSetConfig version_set_config;
     };
 
 #ifdef DELTA_VERSION_SET
@@ -100,8 +102,6 @@ private:
     String storage_path;
     Config config;
 
-    VersionedPageEntries versioned_page_entries;
-
     PageFile  write_file;
     WriterPtr write_file_writer;
 
@@ -110,6 +110,8 @@ private:
 
     Poco::Logger * page_file_log;
     Poco::Logger * log;
+
+    VersionedPageEntries versioned_page_entries;
 
     std::mutex write_mutex;
     std::mutex gc_mutex; // A mutex used to protect gc
