@@ -535,6 +535,74 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     ASSERT_EQ(s1->version()->find(1), std::nullopt);
 }
 
+TEST_F(PageStorage_test, GcMigrateRefPageToRefPage)
+try
+{
+    PageId page_id = 1;
+
+    const size_t buf_sz = 256;
+    char         c_buff[buf_sz];
+
+    {
+        // Page1 should be written to PageFile{1, 0}
+        WriteBatch batch;
+        memset(c_buff, 0xf, buf_sz);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(page_id, 0, buff, buf_sz);
+        // RefPage2 -> Page1, RefPage3 -> Page1, then del Page1
+        batch.putRefPage(2, page_id);
+        batch.putRefPage(3, page_id);
+        batch.delPage(page_id);
+        // RefPage4 -> 2 -> Page1, RefPage5 -> 3 -> Page 1, then del Page2, Page3
+        batch.putRefPage(4, 2);
+        batch.putRefPage(5, 3);
+        batch.delPage(2);
+        batch.delPage(3);
+
+        storage->write(batch);
+    }
+
+    PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
+
+    PageEntriesEdit edit;
+    {
+        // migrate PageFile{1, 0} -> PageFile{1, 1}
+        auto snapshot = storage->getSnapshot();
+
+        PageStorage::GcLivesPages livesPages{{id_and_lvl, {256, {page_id}}}};
+        PageStorage::GcCandidates candidates{id_and_lvl};
+        edit = storage->gcMigratePages(snapshot, livesPages, candidates, 0);
+    }
+
+    {
+        // check that now only PageFile{1, 1} is live and remove PageFile{1, 0}
+        std::set<PageFileIdAndLevel> live_files = storage->versioned_page_entries.gcApply(edit);
+        ASSERT_EQ(live_files.size(), 1UL);
+        ASSERT_EQ(*live_files.begin(), PageFileIdAndLevel(1, 1));
+
+        {
+            PageFile page_file
+                = PageFile::openPageFileForRead(id_and_lvl.first, id_and_lvl.second, storage->storage_path, storage->page_file_log);
+            page_file.destroy();
+        }
+    }
+
+    // reload to check if there is any exception
+    ASSERT_NO_THROW(storage = reopenWithConfig(config));
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
+
 /**
  * PageStorage tests with predefine Page1 && Page2
  */
