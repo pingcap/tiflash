@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <memory>
 #include "dm_basic_include.h"
 
 #include <Poco/ConsoleChannel.h>
@@ -6,6 +7,8 @@
 #include <Poco/FormattingChannel.h>
 #include <Poco/PatternFormatter.h>
 
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/DeltaMergeStore-internal.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 
@@ -1072,6 +1075,90 @@ try
         }
         in->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
+TEST_F(DeltaMergeStore_test, DDLAddColumnFloat32)
+try
+{
+    const String      col_name_to_add = "f32";
+    const ColId       col_id_to_add   = 2;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("Float32");
+
+    // write some rows before DDL
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 1, false);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    // DDL add column f32 with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type        = AlterCommand::ADD_COLUMN;
+            com.data_type   = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.23
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name      = "CAST";
+                ASTPtr arg      = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(123), 2)));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*context,
+                              context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {HandleRange::newAll()},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            for (auto & itr : block)
+            {
+                auto c = itr.column;
+                for (size_t i = 0; i < c->size(); i++)
+                {
+                    if (itr.name == "f32")
+                    {
+                        Field tmp;
+                        c->get(i, tmp);
+                        // There is some loss of precision during the convertion, so we just do a rough comparison
+                        Float64 epsilon = 0.00001;
+                        EXPECT_TRUE((tmp.get<Float64>() - 1.23) < epsilon);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
     }
 }
 catch (const Exception & e)
