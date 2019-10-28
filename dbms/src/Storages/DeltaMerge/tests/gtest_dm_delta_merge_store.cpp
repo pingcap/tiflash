@@ -1153,7 +1153,7 @@ try
                         c->get(i, tmp);
                         // There is some loss of precision during the convertion, so we just do a rough comparison
                         Float64 epsilon = 0.00001;
-                        EXPECT_TRUE((tmp.get<Float64>() - 1.23) < epsilon);
+                        EXPECT_TRUE(std::abs(tmp.get<Float64>() - 1.23) < epsilon);
                     }
                 }
             }
