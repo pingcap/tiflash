@@ -6,8 +6,8 @@
 
     <logger>
         <level>trace</level>
-        <log>/log/server.log</log>
-        <errorlog>/log/error.log</errorlog>
+        <log>/tmp/tiflash/log/server.log</log>
+        <errorlog>/tmp/tiflash/log/error.log</errorlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
@@ -16,14 +16,21 @@
     <display_name>the flash</display_name>
 
     <raft>
-        <kvstore_path>/data/kvstore</kvstore_path>
-        <!--pd_addr>127.0.0.1:2379</pd_addr-->
-        <!-- ignored dbs, extra spaces are trimed -->
-        <ignore_databases>system </ignore_databases>
+        <kvstore_path>/tmp/tiflash/data/kvstore</kvstore_path>
+        <!--pd_addr>pd0:2379</pd_addr-->
+        <ignore_databases>system</ignore_databases>
+        <learner_key>engine</learner_key>
+        <learner_value>tiflash</learner_value>
     </raft>
 
     <flash>
         <service_addr>0.0.0.0:3930</service_addr>
+        <flash_cluster>
+            <master_ttl>60</master_ttl>
+            <refresh_interval>20</refresh_interval>
+            <update_rule_interval>5</update_rule_interval>
+        </flash_cluster>
+        <tidb_status_addr>tidb0:10080</tidb_status_addr>
     </flash>
 
     <http_port>8123</http_port>
@@ -72,10 +79,10 @@
     <persisted_mapping_cache_size>0</persisted_mapping_cache_size>
 
     <!-- Path to data directory, with trailing slash. -->
-    <path>/data/db</path>
+    <path>/tmp/tiflash/data/db</path>
 
     <!-- Path to temporary data for processing hard queries. -->
-    <tmp_path>/data/tmp</tmp_path>
+    <tmp_path>/tmp/tiflash/data/tmp</tmp_path>
 
     <l0_optimize>false</l0_optimize>
 

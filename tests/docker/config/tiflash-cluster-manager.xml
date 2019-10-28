@@ -24,7 +24,7 @@
     </raft>
 
     <flash>
-        <service_addr>0.0.0.0:3930</service_addr>
+        <service_addr>tiflash-gateway0:3930</service_addr>
         <flash_cluster>
             <master_ttl>60</master_ttl>
             <refresh_interval>20</refresh_interval>
