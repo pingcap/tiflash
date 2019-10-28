@@ -8,7 +8,7 @@ rm -rf ./data ./log
 
 docker-compose up -d --scale tiflash-gateway0=0 --scale tics0=0 --scale tics-gtest=0 --scale tiflash0=0 --scale tikv-learner0=0 --scale tiflash-cluster-manager0=0
 
-sleep 20
+sleep 60
 
 docker-compose up -d --scale tics0=0 --scale tics-gtest=0 --build
 
