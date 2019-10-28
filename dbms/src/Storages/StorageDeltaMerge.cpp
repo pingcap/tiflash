@@ -631,9 +631,6 @@ void updateDeltaMergeTableCreateStatement(                   //
                 continue;
             TiDB::ColumnInfo column_info = reverseGetColumnInfo(
                 NameAndTypePair{column_define.name, column_define.type}, column_define.id, column_define.default_value);
-            column_info.id = column_define.id;
-            column_info.name = column_define.name;
-            column_info.origin_default_value = applyVisitor(FieldVisitorToString(), column_define.default_value);
             table_info_from_store.columns.emplace_back(std::move(column_info));
         }
     }

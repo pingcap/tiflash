@@ -254,9 +254,9 @@ void readChunkData(MutableColumns &      columns,
                 if (define.type->equals(*DataTypeFactory::instance().get("Float32"))
                     || define.type->equals(*DataTypeFactory::instance().get("Float64")))
                 {
-                    auto           dec  = safeGet<DecimalField<Decimal32>>(define.default_value);
-                    auto           real = static_cast<Float64>(dec);
-                    tmp_col = define.type->createColumnConst(rows_limit, Field(real));
+                    auto dec  = safeGet<DecimalField<Decimal32>>(define.default_value);
+                    auto real = static_cast<Float64>(dec);
+                    tmp_col   = define.type->createColumnConst(rows_limit, Field(real));
                 }
                 else
                 {
@@ -661,20 +661,17 @@ void insertRangeFromWithNumericTypeCast(const ColumnPtr &    from_col, //
         {
             // Do nothing
         }
-        else if (read_define.default_value.getType() != Field::Types::Int64 || read_define.default_value.getType() != Field::Types::UInt64)
+        else if (read_define.default_value.getType() == Field::Types::Int64)
         {
-            throw Exception("Invalid column value type", ErrorCodes::BAD_ARGUMENTS);
+            default_value = read_define.default_value.safeGet<Int64>();
+        }
+        else if (read_define.default_value.getType() == Field::Types::UInt64)
+        {
+            default_value = read_define.default_value.safeGet<UInt64>();
         }
         else
         {
-            if (read_define.default_value.getType() == Field::Types::Int64)
-            {
-                default_value = read_define.default_value.safeGet<Int64>();
-            }
-            else if (read_define.default_value.getType() == Field::Types::UInt64)
-            {
-                default_value = read_define.default_value.safeGet<UInt64>();
-            }
+            throw Exception("Invalid column value type", ErrorCodes::BAD_ARGUMENTS);
         }
 
         const size_t to_offset_before_inserted = to_array_ptr->size() - rows_limit;
