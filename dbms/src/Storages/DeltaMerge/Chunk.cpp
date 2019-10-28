@@ -4,6 +4,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/CompressedReadBuffer.h>
 #include <IO/CompressedWriteBuffer.h>
+#include <IO/ReadHelpers.h>
 
 namespace DB
 {
@@ -244,24 +245,29 @@ void readChunkData(MutableColumns &      columns,
             {
                 tmp_col = define.type->createColumnConstWithDefaultValue(rows_limit);
             }
+            // TODO: add convertion for Decimal type
+            // If `define.default_value` is Decimal, `createColumnConst` cannot work as expected.
+            // Cause `createColumnConst` actually called `ColumnVector::insert`,
+            // and `get<typename NearestFieldType<T>::Type>` doesn't work well with `T -> DecimalField<Decimal<Int>>`.
+            // Fix it if possible.
+            else if (define.type->equals(*DataTypeFactory::instance().get("Float32"))
+                     || define.type->equals(*DataTypeFactory::instance().get("Float64")))
+            {
+                auto dec  = safeGet<DecimalField<Decimal32>>(define.default_value);
+                auto real = static_cast<Float64>(dec);
+                tmp_col   = define.type->createColumnConst(rows_limit, Field(real));
+            }
+            else if (define.type->equals(*DataTypeFactory::instance().get("DateTime")))
+            {
+                auto                 date = safeGet<String>(define.default_value);
+                time_t               time;
+                ReadBufferFromMemory buf(date.data(), date.size());
+                readDateTimeText(time, buf);
+                tmp_col = define.type->createColumnConst(rows_limit, Field(UInt64(time)));
+            }
             else
             {
-                // TODO: add convertion for Decimal type
-                // If `define.default_value` is Decimal, `createColumnConst` cannot work as expected.
-                // Cause `createColumnConst` actually called `ColumnVector::insert`,
-                // and `get<typename NearestFieldType<T>::Type>` doesn't work well with `T -> DecimalField<Decimal<Int>>`.
-                // Fix it if possible.
-                if (define.type->equals(*DataTypeFactory::instance().get("Float32"))
-                    || define.type->equals(*DataTypeFactory::instance().get("Float64")))
-                {
-                    auto dec  = safeGet<DecimalField<Decimal32>>(define.default_value);
-                    auto real = static_cast<Float64>(dec);
-                    tmp_col   = define.type->createColumnConst(rows_limit, Field(real));
-                }
-                else
-                {
-                    tmp_col = define.type->createColumnConst(rows_limit, define.default_value);
-                }
+                tmp_col = define.type->createColumnConst(rows_limit, define.default_value);
             }
             tmp_col = tmp_col->convertToFullColumnIfConst();
 
