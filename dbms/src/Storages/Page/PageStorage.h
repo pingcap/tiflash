@@ -75,7 +75,7 @@ public:
     bool      gc();
 
     static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const String & storage_path, bool remove_tmp_file, Poco::Logger * page_file_log);
+    listAllPageFiles(const String & storage_path, bool remove_tmp_file, bool ignore_legacy, Poco::Logger * page_file_log);
 
 private:
     PageFile::Writer & getWriter();
@@ -93,9 +93,9 @@ private:
                                    const GcCandidates & merge_files,
                                    size_t               migrate_page_count) const;
 
-    static void gcRemoveObsoleteFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                      const PageFileIdAndLevel &                       writing_file_id_level,
-                                      const std::set<PageFileIdAndLevel> &             live_files);
+    static void gcRemoveObsoleteData(std::set<PageFile, PageFile::Comparator> & page_files,
+                                     const PageFileIdAndLevel &                 writing_file_id_level,
+                                     const std::set<PageFileIdAndLevel> &       live_files);
 
 private:
     String storage_name; // Identify between different Storage

@@ -378,10 +378,10 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
         id_and_lvl,
     };
     auto            s0         = storage->getSnapshot();
-    const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     auto            live_files = storage->versioned_page_entries.gcApply(edit);
-    storage->gcRemoveObsoleteFiles(page_files, {2, 0}, live_files);
+    storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
 
     // After migrate, RefPage 3 -> 1 is still valid
     bool exist = false;
@@ -508,7 +508,7 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     PageStorage::GcCandidates candidates{
         id_and_lvl,
     };
-    const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
     auto            s0         = storage->getSnapshot();
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
 
@@ -527,7 +527,7 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
 
     auto live_files = storage->versioned_page_entries.gcApply(edit);
     EXPECT_EQ(live_files.find(id_and_lvl), live_files.end());
-    storage->gcRemoveObsoleteFiles(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
+    storage->gcRemoveObsoleteData(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
 
     // reopen PageStorage, Page 1 should be deleted
     storage = reopenWithConfig(config);
