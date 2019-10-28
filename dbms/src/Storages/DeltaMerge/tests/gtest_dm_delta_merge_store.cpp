@@ -1173,6 +1173,87 @@ catch (const Exception & e)
     throw;
 }
 
+TEST_F(DeltaMergeStore_test, DDLAddColumnDateTime)
+try
+{
+    const String      col_name_to_add = "dt";
+    const ColId       col_id_to_add   = 2;
+    const DataTypePtr col_type_to_add = DataTypeFactory::instance().get("DateTime");
+
+    // write some rows before DDL
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 1, false);
+        store->write(*context, context->getSettingsRef(), block);
+    }
+
+    // DDL add column date with default value
+    {
+        AlterCommands commands;
+        {
+            AlterCommand com;
+            com.type        = AlterCommand::ADD_COLUMN;
+            com.data_type   = col_type_to_add;
+            com.column_name = col_name_to_add;
+
+            // mock default value
+            // actual ddl is like: ADD COLUMN `date` DateTime DEFAULT '1999-09-09 12:34:56'
+            auto cast = std::make_shared<ASTFunction>();
+            {
+                cast->name      = "CAST";
+                ASTPtr arg      = std::make_shared<ASTLiteral>(toField(String("1999-09-09 12:34:56")));
+                cast->arguments = std::make_shared<ASTExpressionList>();
+                cast->children.push_back(cast->arguments);
+                cast->arguments->children.push_back(arg);
+                cast->arguments->children.push_back(ASTPtr()); // dummy alias
+            }
+            com.default_expression = cast;
+            commands.emplace_back(std::move(com));
+        }
+        ColumnID _col_to_add = col_id_to_add;
+        store->applyAlters(commands, std::nullopt, _col_to_add, *context);
+    }
+
+    // try read
+    {
+        auto in = store->read(*context,
+                              context->getSettingsRef(),
+                              store->getTableColumns(),
+                              {HandleRange::newAll()},
+                              /* num_streams= */ 1,
+                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              /* expected_block_size= */ 1024)[0];
+
+        in->readPrefix();
+        while (Block block = in->read())
+        {
+            for (auto & itr : block)
+            {
+                auto c = itr.column;
+                for (size_t i = 0; i < c->size(); i++)
+                {
+                    if (itr.name == "dt")
+                    {
+                        // Timestamp for '1999-09-09 12:34:56'
+                        EXPECT_EQ(c->getUInt(i), 936851696UL);
+                    }
+                }
+            }
+        }
+        in->readSuffix();
+    }
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
 TEST_F(DeltaMergeStore_test, DDLRenameColumn)
 try
 {
