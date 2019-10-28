@@ -164,6 +164,9 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
         case WriteBatch::WriteType::REF:
             this->applyRef(rec);
             break;
+        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+            throw Exception("WriteType::MOVE_NORMAL_PAGE should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 }
@@ -279,6 +282,9 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
         case WriteBatch::WriteType::REF:
             // Shorten ref-path in case there is RefPage to RefPage
             current->ref<false>(rec.page_id, rec.ori_page_id);
+            break;
+        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+            current->move_normal_page(rec.page_id, rec.entry);
             break;
         }
     }

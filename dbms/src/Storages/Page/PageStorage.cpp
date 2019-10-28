@@ -563,19 +563,21 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                 // copy valid pages from `to_merge_file` to `gc_file`
                 PageMap    pages = to_merge_file_reader->read(page_id_and_entries);
                 WriteBatch wb;
-                for (const auto & [page_id, page_cache] : page_id_and_entries)
+                for (const auto & [page_id, page_entry] : page_id_and_entries)
                 {
                     auto & page = pages.find(page_id)->second;
-                    wb.putPage(page_id,
-                               page_cache.tag,
-                               std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
-                               page.data.size());
+                    wb.gcMovePage(page_id,
+                                  page_entry.tag,
+                                  std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
+                                  page.data.size());
                 }
 
                 gc_file_writer->write(wb, gc_file_edit);
             }
         }
 
+#if 0
+        /// Do NOT need to migrate RefPage and DelPage since we only remove PageFile's data but keep meta.
         {
             // Migrate valid RefPages and DelPage.
             WriteBatch batch;
@@ -601,6 +603,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
             }
             gc_file_writer->write(batch, gc_file_edit);
         }
+#endif
     } // free gc_file_writer and sync
 
     const auto id = gc_file.fileIdLevel();

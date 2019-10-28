@@ -61,6 +61,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
             data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
             break;
@@ -93,6 +94,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
         {
             write.read_buffer->readStrict(data_pos, write.size);
             Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
@@ -106,7 +108,10 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             pc.offset   = page_data_file_off;
             pc.checksum = page_checksum;
 
-            edit.put(write.page_id, pc);
+            if (write.type == WriteBatch::WriteType::PUT)
+                edit.put(write.page_id, pc);
+            else if (write.type == WriteBatch::WriteType::MOVE_NORMAL_PAGE)
+                edit.moveNormalPage(write.page_id, pc);
 
             PageUtil::put(meta_pos, (PageId)write.page_id);
             PageUtil::put(meta_pos, (PageTag)write.tag);
@@ -191,6 +196,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             switch (write_type)
             {
             case WriteBatch::WriteType::PUT:
+            case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
             {
                 auto      page_id = PageUtil::get<PageId>(pos);
                 PageEntry pc;
@@ -201,7 +207,11 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 pc.size     = PageUtil::get<PageSize>(pos);
                 pc.checksum = PageUtil::get<Checksum>(pos);
 
-                edit.put(page_id, pc);
+                if (write_type == WriteBatch::WriteType::PUT)
+                    edit.put(page_id, pc);
+                else if (write_type == WriteBatch::WriteType::MOVE_NORMAL_PAGE)
+                    edit.moveNormalPage(page_id, pc);
+
                 page_data_file_size += pc.size;
                 break;
             }
