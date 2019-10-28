@@ -240,13 +240,28 @@ void readChunkData(MutableColumns &      columns,
 
             // Read default value from `define.default_value`
             ColumnPtr tmp_col;
-            if (define.default_value.isNull()) 
+            if (define.default_value.isNull())
             {
                 tmp_col = define.type->createColumnConstWithDefaultValue(rows_limit);
             }
             else
             {
-                tmp_col = define.type->createColumnConst(rows_limit, define.default_value);
+                // TODO: add convertion for Decimal type
+                // If `define.default_value` is Decimal, `createColumnConst` cannot work as expected.
+                // Cause `createColumnConst` actually called `ColumnVector::insert`,
+                // and `get<typename NearestFieldType<T>::Type>` doesn't work well with `T -> DecimalField<Decimal<Int>>`.
+                // Fix it if possible.
+                if (define.type->equals(*DataTypeFactory::instance().get("Float32"))
+                    || define.type->equals(*DataTypeFactory::instance().get("Float64")))
+                {
+                    auto           dec  = safeGet<DecimalField<Decimal32>>(define.default_value);
+                    auto           real = static_cast<Float64>(dec);
+                    tmp_col = define.type->createColumnConst(rows_limit, Field(real));
+                }
+                else
+                {
+                    tmp_col = define.type->createColumnConst(rows_limit, define.default_value);
+                }
             }
             tmp_col = tmp_col->convertToFullColumnIfConst();
 
