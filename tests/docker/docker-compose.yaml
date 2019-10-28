@@ -12,8 +12,8 @@ services:
     volumes:
       - ./config/config.xml:/config.xml:ro
       - ./config/users.xml:/users.xml:ro
-      - ./data:/data
-      - ./log:/log
+      - ./data/tics0:/tmp/tiflash/data
+      - ./log/tics0:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     command:
@@ -25,12 +25,12 @@ services:
     volumes:
       - ./config/config.xml:/config.xml:ro
       - ./config/users.xml:/users.xml:ro
-      - ./log:/log
+      - ./log/tics-gtest:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     entrypoint: sleep infinity # just wait
   pd0:
-    image: hub.pingcap.net/tiflash/pd:190508
+    image: hub.pingcap.net/tiflash/pd:191023
     ports:
       - "2379:2379"
     volumes:
@@ -49,7 +49,7 @@ services:
       - --log-file=/log/pd.log
     restart: on-failure
   tikv0:
-    image: hub.pingcap.net/tiflash/tikv-leader:190508
+    image: pingcap/tikv:latest
     ports:
       - "20160:20160"
     volumes:
@@ -67,7 +67,7 @@ services:
       - "pd0"
     restart: on-failure
   tidb0:
-    image: pingcap/tidb:v3.0.3
+    image: hub.pingcap.net/tiflash/tidb:191023
     ports:
       - "4000:4000"
       - "10080:10080"
@@ -97,18 +97,37 @@ services:
     volumes:
       - ./config/tiflash.xml:/config.xml:ro
       - ./config/tiflash-users.xml:/users.xml:ro
-      - ./data/tiflash0:/data
-      - ./log/tiflash0:/log
+      - ./data/tiflash0:/tmp/tiflash/data
+      - ./log/tiflash0:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     command:
       - --config-file
       - /config.xml
+    restart: on-failure
+  tiflash-gateway0:
+    image: tecnativa/tcp-proxy
+    environment:
+      LISTEN:
+        :3930
+        :9000
+        :8123
+        :9009
+      TALK:
+        ${TIFLASH_ADDR:-tiflash0}:3930
+        ${TIFLASH_ADDR:-tiflash0}:9000
+        ${TIFLASH_ADDR:-tiflash0}:8123
+        ${TIFLASH_ADDR:-tiflash0}:9009
+      TIMEOUT_CLIENT: 3600s
+      TIMEOUT_CLIENT_FIN: 3600s
+      TIMEOUT_SERVER: 3600s
+      TIMEOUT_SERVER_FIN: 3600s
+      TIMEOUT_TUNNEL: 3600s
     depends_on:
-      - "tidb0"
+      - "tiflash0"
     restart: on-failure
   tikv-learner0:
-    image: hub.pingcap.net/tiflash/tikv-learner:190508
+    image: hub.pingcap.net/tiflash/tikv-learner:191025
     ports:
       - "20170:20170"
     volumes:
@@ -123,7 +142,16 @@ services:
       - --data-dir=/data
       - --log-file=/log/tikv.log
     depends_on:
-      - "tikv0"
-      - "tiflash0"
+      - "tiflash-gateway0"
     restart: on-failure
-
+  tiflash-cluster-manager0:
+    image: hub.pingcap.net/tiflash/cluster_manage:latest
+    volumes:
+      - ./config/tiflash-cluster-manager.xml:/config.xml:ro
+      - ./log/tiflash-cluster-manager0:/tmp/tiflash/data/tmp
+    command:
+      - /config.xml
+    depends_on:
+      - "tidb0"
+      - "tiflash-gateway0"
+    restart: on-failure

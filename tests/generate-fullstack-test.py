@@ -12,6 +12,7 @@ import errno
 
 drop_stmt = Template("mysql> drop table if exists $database.$table\n")
 create_stmt = Template("mysql> create table $database.$table($schema)\n")
+alter_stmt = Template("mysql> alter table $database.$table set tiflash replica 1 location labels 'rack', 'host', 'abc'\n")
 insert_stmt = Template("mysql> insert into $database.$table($columns) values($data)\n")
 update_stmt = Template("mysql> update $database.$table set $exprs $condition\n")
 delete_stmt = Template("mysql> delete from $database.$table $condition\n")
@@ -164,6 +165,7 @@ def generate_cases_inner(database, table, column_names, types, sample_data,
         with open(path, "w") as file:
             file.write(drop_stmt.substitute({"database": database, "table": table}))
             file.write(create_stmt.substitute({"database": database, "table": table, "schema": schema}))
+            file.write(alter_stmt.substitute({"database": database, "table": table}))
             file.write(sleep_string)
 
             for op in case:
