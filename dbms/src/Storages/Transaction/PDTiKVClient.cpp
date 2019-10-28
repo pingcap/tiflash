@@ -33,7 +33,7 @@ std::string convertAddr(const std::string & address)
         return "";
     auto host = address.substr(0, idx);
     auto port = address.substr(idx + 1);
-    struct hostent * result = gethostbyname(host.c_str());
+    struct hostent * result = gethostbyname(host.data());
     // Suppose we always use IPv4 address.
     std::string addr;
     for (int i = 0; i < 4; i++)
