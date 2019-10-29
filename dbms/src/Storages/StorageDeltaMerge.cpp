@@ -77,14 +77,21 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
         ColumnDefine column_define(0, col.name, col.type);
         if (table_info_)
         {
-            /// If TableInfo from TiDB is not empty, we get column id from TiDB
+            /// If TableInfo from TiDB is not empty, we get column id and default value from TiDB
+            auto & columns = table_info_->get().columns;
             column_define.id = table_info_->get().getColumnID(column_define.name);
+            auto column
+                = std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & v) -> bool { return v.id == column_define.id; });
+
+            if (column != columns.end())
+                column_define.default_value = column->defaultValueToField();
         }
         else
         {
             // in test cases, we allocate column_id here
             column_define.id = max_column_id_used++;
         }
+
 
         if (pks.count(col.name))
         {
@@ -371,8 +378,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             col_define.name = column.name;
             col_define.id = column.column_id;
             col_define.type = column.type;
-            // FIXME set non-empty default value so that we can fill missing value with the right default value
-            // col_define.default_value = "";
+            col_define.default_value = column.default_value;
         }
         to_read.push_back(col_define);
     }
@@ -417,16 +423,16 @@ BlockInputStreams StorageDeltaMerge::read( //
         {
             {
                 std::stringstream ss;
-                for (const auto &region: mvcc_query_info.regions_query_info)
+                for (const auto & region : mvcc_query_info.regions_query_info)
                 {
-                    const auto &range = region.range_in_table;
+                    const auto & range = region.range_in_table;
                     ss << region.region_id << "[" << range.first.toString() << "," << range.second.toString() << "),";
                 }
                 LOG_TRACE(log, "reading ranges: orig: " << ss.str());
             }
             {
                 std::stringstream ss;
-                for (const auto &range : ranges)
+                for (const auto & range : ranges)
                     ss << range.toString() << ",";
                 LOG_TRACE(log, "reading ranges: " << ss.str());
             }
@@ -624,9 +630,8 @@ void updateDeltaMergeTableCreateStatement(                   //
         {
             if (hidden_columns.has(column_define.name))
                 continue;
-            Field default_field;
-            TiDB::ColumnInfo column_info = reverseGetColumnInfo(NameAndTypePair{column_define.name, column_define.type}, column_define.id, default_field);
-            // TODO column_info.origin_default_value = column_define.default_value;
+            TiDB::ColumnInfo column_info = reverseGetColumnInfo(
+                NameAndTypePair{column_define.name, column_define.type}, column_define.id, column_define.default_value);
             table_info_from_store.columns.emplace_back(std::move(column_info));
         }
     }
