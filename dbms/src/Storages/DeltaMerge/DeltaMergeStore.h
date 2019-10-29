@@ -268,6 +268,7 @@ private:
     Settings settings;
 
     std::atomic<Timestamp> min_version = 0;
+    std::chrono::time_point<std::chrono::system_clock> min_version_last_update_time;
 
     /// end of range -> segment
     SegmentSortedMap segments;
