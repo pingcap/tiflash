@@ -21,7 +21,7 @@ TiDBChunk::TiDBChunk(const std::vector<tipb::FieldType> & field_types)
 {
     for (auto & type : field_types)
     {
-        columns.emplace_back(getFieldLength(type.tp()));
+        columns.emplace_back(getFieldLengthForArrowEncode(type.tp()));
     }
 }
 
