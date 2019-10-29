@@ -2,11 +2,11 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/TiDBBit.h>
 #include <Flash/Coprocessor/TiDBDecimal.h>
 #include <Flash/Coprocessor/TiDBEnum.h>
 #include <Flash/Coprocessor/TiDBTime.h>
 #include <Storages/Transaction/TiDB.h>
-#include "TiDBBit.h"
 
 namespace DB
 {

@@ -318,7 +318,6 @@ void hijackTiDBTypeForMockTest(ColumnInfo & ci)
             ci.flen = default_value;
         }
     }
-    // a hack to test timestamp type in mock test
     if (ci.tp == TiDB::TypeDatetime && ci.decimal == 5)
         ci.tp = TiDB::TypeTimestamp;
 }
