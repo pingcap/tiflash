@@ -175,7 +175,7 @@ String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & c
             return it->argument_names[0];
         }
     }
-    // couldn't found the original uint8 column, which means the top level expression of where
+    // couldn't find the original uint8 column, which means the top level expression of where
     // condition is not a comparision/logical expression. For example:
     // select * from table where c1 + c2
     // TiFlash does not support this, in order to make the dag request work, need to convert the
