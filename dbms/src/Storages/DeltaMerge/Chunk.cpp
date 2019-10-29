@@ -254,8 +254,8 @@ void readChunkData(MutableColumns &      columns,
                      || define.type->equals(*DataTypeFactory::instance().get("Float64")))
             {
                 Float64 real;
-                auto dec  = DecimalField(Decimal32(), 0);
-                auto dec64 = DecimalField(Decimal64(), 0);
+                auto    dec   = DecimalField(Decimal32(), 0);
+                auto    dec64 = DecimalField(Decimal64(), 0);
                 if (define.default_value.tryGet(dec64))
                 {
                     real = static_cast<Float64>(dec64);
@@ -268,7 +268,7 @@ void readChunkData(MutableColumns &      columns,
                 {
                     throw Exception("Unsupported literal for default value", ErrorCodes::NOT_IMPLEMENTED);
                 }
-                tmp_col   = define.type->createColumnConst(rows_limit, Field(real));
+                tmp_col = define.type->createColumnConst(rows_limit, Field(real));
             }
             else if (define.type->equals(*DataTypeFactory::instance().get("DateTime")))
             {
