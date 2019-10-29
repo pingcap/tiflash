@@ -427,9 +427,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_background_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->delta_limit_rows;
     bool should_foreground_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->segment_limit_rows * 5;
 
-    /// For foreground split/merge/delta-merge, we update GC safe-point for clean obsoleted data.
-    /// Background task will update GC safe-point before they actually run.
-
     if constexpr (by_write_thread)
     {
         // Only write thread will check split & merge.
@@ -442,7 +439,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
         if (force_split || (should_split && !segment->isBackgroundMergeDelta()))
         {
-            updateGcSafePoint(dm_context);
             auto [left, right] = segmentSplit(*dm_context, segment);
             if (left)
             {
@@ -454,7 +450,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
         if (should_foreground_merge_delta)
         {
-            updateGcSafePoint(dm_context);
             segmentForegroundMergeDelta(*dm_context, segment);
             return;
         }
@@ -478,7 +473,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             if (segment->isBackgroundMergeDelta() || segment->isMergeDelta())
                 return;
 
-            updateGcSafePoint(dm_context);
             segmentForegroundMerge(*dm_context, segment);
             return;
         }
