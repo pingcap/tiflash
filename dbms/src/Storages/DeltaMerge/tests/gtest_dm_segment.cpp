@@ -1091,7 +1091,7 @@ TEST_F(Segment_test, DDLAddColumnWithDefaultValue)
     const ColumnID new_column_id   = 4;
     ColumnDefine   new_column_define(new_column_id, new_column_name, DataTypeFactory::instance().get("Int8"));
     const Int8     new_column_default_value_int = 16;
-    new_column_define.default_value             = DB::toString(new_column_default_value_int);
+    new_column_define.default_value             = toField(new_column_default_value_int);
 
     {
         ColumnDefines columns_before_ddl = DMTestEnv::getDefaultColumns();

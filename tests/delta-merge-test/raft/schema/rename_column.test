@@ -154,8 +154,6 @@
 │ test  │     2 │          51 │
 └───────┴───────┴─────────────┘
 
-#TODO we skip this test for now, since we don't support add column with default value
-#RETURN
 # test drop and then rename and then create
 
 => DBGInvoke __drop_column_from_tidb_table(default, test, col_1)
