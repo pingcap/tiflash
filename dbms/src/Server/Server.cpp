@@ -810,6 +810,8 @@ int mainEntryClickHouseServer(int argc, char ** argv)
         bool daemon = false;
         for (int i = 1; i < argc;)
         {
+            // TODO: find better way to parse argvs.
+
             if (0 == strcmp(argv[i], "--flash-cluster-manager-path"))
             {
                 flash_cluster_manager_path = argv[i+1];
