@@ -834,14 +834,14 @@ int mainEntryClickHouseServer(int argc, char ** argv)
         {
             if (daemon)
             {
-                std::cerr << "Main process can't run in daemon mode if want to run flash cluster manager";
+                std::cerr << "Main process can't run in daemon mode if want to run flash cluster manager\n";
                 exit(1);
             }
 
             Poco::File bin(flash_cluster_manager_path);
             if (!bin.exists())
             {
-                std::cerr << "Binary of flash cluster manager does not exist";
+                std::cerr << "Binary of flash cluster manager does not exist\n";
                 exit(1);
             }
 
@@ -860,6 +860,7 @@ int mainEntryClickHouseServer(int argc, char ** argv)
             else if (pid < 0)
             {
                 std::cerr << "Cannot fork daemon process\n";
+                exit(1);
             }
         }
         else
