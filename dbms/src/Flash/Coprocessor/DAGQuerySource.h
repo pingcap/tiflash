@@ -94,7 +94,6 @@ protected:
             throw Exception("Access invalid executor: " + name);
         }
     }
-    void init();
 
 protected:
     Context & context;

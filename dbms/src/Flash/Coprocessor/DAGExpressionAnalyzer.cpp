@@ -271,12 +271,12 @@ String DAGExpressionAnalyzer::appendTimeZoneCast(
 // 1. for every timestamp column used in the dag request, after reading it from table scan,
 //    we add cast function to convert its timezone to the timezone specified in DAG request
 // 2. based on the dag encode type, the return column will be with session level timezone(Arrow encode)
-//    or UTC timzezone(Default encode), if UTC timezone is needed, another cast function is used to
+//    or UTC timezone(Default encode), if UTC timezone is needed, another cast function is used to
 //    convert the session level timezone to UTC timezone.
 // In the worst case(e.g select ts_col from table with Default encode), this will introduce two
 // useless casts to all the timestamp columns, in order to avoid redundant cast, when cast the ts
 // column to the columns with session-level timezone info, the original ts columns with UTC timezone
-// are still kept, and the InterperterDAG will choose the correct column based on encode type
+// are still kept, and the InterpreterDAG will choose the correct column based on encode type
 bool DAGExpressionAnalyzer::appendTimeZoneCastsAfterTS(
     ExpressionActionsChain & chain, std::vector<bool> is_ts_column, const tipb::DAGRequest & rqst)
 {

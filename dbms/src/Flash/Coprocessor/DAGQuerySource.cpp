@@ -39,11 +39,6 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
       key_ranges(key_ranges_),
       dag_request(dag_request_)
 {
-    init();
-}
-
-void DAGQuerySource::init()
-{
     for (int i = 0; i < dag_request.executors_size(); i++)
     {
         switch (dag_request.executors(i).tp())
@@ -67,7 +62,7 @@ void DAGQuerySource::init()
                 break;
             default:
                 throw Exception(
-                    "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
+                        "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
     encode_type = dag_request.encode_type();
