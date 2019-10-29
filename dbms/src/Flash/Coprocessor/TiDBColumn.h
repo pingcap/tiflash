@@ -3,8 +3,10 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/TiDBDecimal.h>
+#include <Flash/Coprocessor/TiDBEnum.h>
 #include <Flash/Coprocessor/TiDBTime.h>
 #include <Storages/Transaction/TiDB.h>
+#include "TiDBBit.h"
 
 namespace DB
 {
@@ -24,6 +26,8 @@ public:
     void append(const TiDBTime & time);
     //void appendJson();
     void append(const TiDBDecimal & decimal);
+    void append(const TiDBBit & bit);
+    void append(const TiDBEnum & ti_enum);
     void encodeColumn(std::stringstream & ss);
     void clear();
 

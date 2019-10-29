@@ -56,8 +56,10 @@ static Field GenDecodeRow(const ColumnInfo & col_info)
             return Field(UInt64(0));
         case TiDB::CodecFlagJson:
             return Field(String());
+        case TiDB::CodecFlagDuration:
+            return Field(Int64(0));
         default:
-            throw Exception("Not implemented codec flag: " + std::to_string(col_info.flag), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
     }
 }
 

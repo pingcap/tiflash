@@ -13,9 +13,9 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_, Int64 records_per_chunk_, tipb::EncodeType encodeType,
-    std::vector<tipb::FieldType> && result_field_types_, Block header_)
+    std::vector<tipb::FieldType> && result_field_types_, Block && header_)
     : dag_response(dag_response_),
-      result_field_types(result_field_types_),
+      result_field_types(std::move(result_field_types_)),
       header(std::move(header_)),
       records_per_chunk(records_per_chunk_),
       current_records_num(0)
