@@ -236,7 +236,7 @@ public:
     {
         if (db_settings.dm_insert_max_rows == 0)
         {
-            store->write(db_context, db_settings, block);
+            store->write(db_context, db_settings, decorator(block));
         }
         else
         {
