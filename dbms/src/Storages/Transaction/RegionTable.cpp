@@ -336,15 +336,14 @@ void RegionTable::removeRegion(const RegionID region_id)
             auto region_iter = table.regions.find(region_id);
             if (region_iter != table.regions.end())
             {
-                HandleRange<HandleID> handle_range = region_iter->second.range_in_table;
-
                 TMTContext & tmt = context->getTMTContext();
                 auto storage = tmt.getStorages().get(table_id);
-                if (storage->engineType() == TiDB::StorageEngine::DM)
+                if (storage && storage->engineType() == TiDB::StorageEngine::DM)
                 {
                     // acquire lock so that no other threads can change storage's structure
-                    storage->lockStructure(true, __PRETTY_FUNCTION__);
+                    auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
                     auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                    HandleRange<HandleID> handle_range = region_iter->second.range_in_table;
                     ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
                     dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
                 }
