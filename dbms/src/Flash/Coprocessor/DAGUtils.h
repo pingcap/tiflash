@@ -27,6 +27,9 @@ const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 bool isInOrGlobalInOperator(const String & name);
 bool exprHasValidFieldType(const tipb::Expr & expr);
+void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value);
+void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value);
+void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value);
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
 extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
 
