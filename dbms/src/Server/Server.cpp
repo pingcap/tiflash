@@ -808,7 +808,7 @@ int mainEntryClickHouseServer(int argc, char ** argv)
         std::string flash_cluster_manager_path;
         std::string config_file;
         bool daemon = false;
-        for (int i = 1; i< argc;)
+        for (int i = 1; i < argc;)
         {
             if (0 == strcmp(argv[i], "--flash-cluster-manager-path"))
             {
@@ -844,7 +844,7 @@ int mainEntryClickHouseServer(int argc, char ** argv)
             }
 
             auto fpid = getpid();
-            if (fork() == 0)
+            if (auto pid = fork(); pid == 0)
             {
                 std::string fpid_str = std::to_string(fpid);
 
@@ -855,10 +855,14 @@ int mainEntryClickHouseServer(int argc, char ** argv)
                 }
                 exit(0);
             }
+            else if (pid < 0)
+            {
+                std::cerr << "Cannot fork daemon process\n";
+            }
         }
         else
         {
-            std::cerr << "Process of flash cluster manager won't run\n  flash-cluster-manager-path: " << flash_cluster_manager_path << "\n  config-file: " << config_file << "\n";
+            std::cout << "Process of flash cluster manager won't run\n  flash-cluster-manager-path: " << flash_cluster_manager_path << "\n  config-file: " << config_file << "\n";
         }
     }
 
