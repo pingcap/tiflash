@@ -307,6 +307,37 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
     }
 }
 
+void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value)
+{
+    expr.set_tp(tipb::ExprType::String);
+    expr.set_val(value);
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeString);
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
+}
+
+void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value)
+{
+    expr.set_tp(tipb::ExprType::Int64);
+    std::stringstream ss;
+    encodeDAGInt64(value, ss);
+    expr.set_val(ss.str());
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeLongLong);
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
+}
+
+void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value)
+{
+    expr.set_tp(tipb::ExprType::MysqlTime);
+    std::stringstream ss;
+    encodeDAGUInt64(packed_value, ss);
+    expr.set_val(ss.str());
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeDatetime);
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
+}
+
 std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"}, {tipb::ExprType::Sum, "sum"}, {tipb::ExprType::Min, "min"}, {tipb::ExprType::Max, "max"},
     {tipb::ExprType::First, "any"},

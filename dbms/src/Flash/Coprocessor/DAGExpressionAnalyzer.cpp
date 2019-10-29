@@ -120,7 +120,7 @@ bool isUInt8Type(const DataTypePtr & type)
     return std::dynamic_pointer_cast<const DataTypeUInt8>(non_nullable_type) != nullptr;
 }
 
-String DAGExpressionAnalyzer::applyFunction(const String & func_name, Names & arg_names, ExpressionActionsPtr & actions)
+String DAGExpressionAnalyzer::applyFunction(const String & func_name, const Names & arg_names, ExpressionActionsPtr & actions)
 {
     String result_name = genFuncString(func_name, arg_names);
     if (actions->getSampleBlock().has(result_name))
@@ -158,20 +158,58 @@ void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const ti
     auto & filter_column_type = chain.steps.back().actions->getSampleBlock().getByName(filter_column_name).type;
     if (!isUInt8Type(filter_column_type))
     {
-        // find the original unit8 column
-        auto & last_actions = last_step.actions->getActions();
-        for (auto it = last_actions.rbegin(); it != last_actions.rend(); ++it)
-        {
-            if (it->type == ExpressionAction::Type::APPLY_FUNCTION && it->result_name == filter_column_name
-                && it->function->getName() == "CAST")
-            {
-                // for cast function, the casted column is the first argument
-                filter_column_name = it->argument_names[0];
-                break;
-            }
-        }
+        filter_column_name = convertToUInt8ForFilter(chain, filter_column_name);
     }
     chain.steps.back().required_output.push_back(filter_column_name);
+}
+
+String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & chain, const String & column_name)
+{
+    auto & last_actions = chain.steps.back().actions->getActions();
+    // find the original unit8 column if possible
+    for (auto it = last_actions.rbegin(); it != last_actions.rend(); ++it)
+    {
+        if (it->type == ExpressionAction::Type::APPLY_FUNCTION && it->result_name == column_name && it->function->getName() == "CAST")
+        {
+            // for cast function, the casted column is the first argument
+            return it->argument_names[0];
+        }
+    }
+    // couldn't find the original uint8 column, which means the top level expression of where
+    // condition is not a comparision/logical expression. For example:
+    // select * from table where c1 + c2
+    // TiFlash does not support this, in order to make the dag request work, need to convert the
+    // column type to UInt8
+    // for where condition of non-comparision/logical expression, the basic rule is:
+    // 1. if the column is numeric, compare it with 0
+    // 2. if the column is string, convert it to numeric column, and compare with 0
+    // 3. if the column is date/datetime, compare it with zeroDate
+    // 4. if the column is other type, throw exception
+    auto & org_type = chain.steps.back().actions->getSampleBlock().getByName(column_name).type;
+    auto & actions = chain.steps.back().actions;
+    if (org_type->isNumber() || org_type->isDecimal())
+    {
+        tipb::Expr const_expr;
+        constructInt64LiteralTiExpr(const_expr, 0);
+        auto const_expr_name = getActions(const_expr, actions);
+        return applyFunction("notEquals", {column_name, const_expr_name}, actions);
+    }
+    if (org_type->isStringOrFixedString())
+    {
+        String num_col_name = applyFunction("toInt64OrNull", {column_name}, actions);
+        tipb::Expr const_expr;
+        constructInt64LiteralTiExpr(const_expr, 0);
+        auto const_expr_name = getActions(const_expr, actions);
+        return applyFunction("notEquals", {num_col_name, const_expr_name}, actions);
+    }
+    if (org_type->isDateOrDateTime())
+    {
+        tipb::Expr const_expr;
+        constructDateTimeLiteralTiExpr(const_expr, 0);
+        auto const_expr_name = getActions(const_expr, actions);
+        return applyFunction("notEquals", {column_name, const_expr_name}, actions);
+    }
+    throw Exception("Filter on " + org_type->getName() + " is not supported.", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 void DAGExpressionAnalyzer::appendOrderBy(ExpressionActionsChain & chain, const tipb::TopN & topN, Strings & order_column_names)
@@ -207,23 +245,9 @@ void DAGExpressionAnalyzer::appendFinalProject(ExpressionActionsChain & chain, c
 void constructTZExpr(tipb::Expr & tz_expr, const tipb::DAGRequest & rqst, bool from_utc)
 {
     if (rqst.has_time_zone_name() && rqst.time_zone_name().length() > 0)
-    {
-        tz_expr.set_tp(tipb::ExprType::String);
-        tz_expr.set_val(rqst.time_zone_name());
-        auto * field_type = tz_expr.mutable_field_type();
-        field_type->set_tp(TiDB::TypeString);
-        field_type->set_flag(TiDB::ColumnFlagNotNull);
-    }
+        constructStringLiteralTiExpr(tz_expr, rqst.time_zone_name());
     else
-    {
-        tz_expr.set_tp(tipb::ExprType::Int64);
-        std::stringstream ss;
-        encodeDAGInt64(from_utc ? rqst.time_zone_offset() : -rqst.time_zone_offset(), ss);
-        tz_expr.set_val(ss.str());
-        auto * field_type = tz_expr.mutable_field_type();
-        field_type->set_tp(TiDB::TypeLongLong);
-        field_type->set_flag(TiDB::ColumnFlagNotNull);
-    }
+        constructInt64LiteralTiExpr(tz_expr, from_utc ? rqst.time_zone_offset() : -rqst.time_zone_offset());
 }
 
 bool hasMeaningfulTZInfo(const tipb::DAGRequest & rqst)
@@ -238,10 +262,7 @@ bool hasMeaningfulTZInfo(const tipb::DAGRequest & rqst)
 String DAGExpressionAnalyzer::appendTimeZoneCast(
     const String & tz_col, const String & ts_col, const String & func_name, ExpressionActionsPtr & actions)
 {
-    Names cast_argument_names;
-    cast_argument_names.push_back(ts_col);
-    cast_argument_names.push_back(tz_col);
-    String cast_expr_name = applyFunction(func_name, cast_argument_names, actions);
+    String cast_expr_name = applyFunction(func_name, {ts_col, tz_col}, actions);
     return cast_expr_name;
 }
 
@@ -376,17 +397,9 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
             // need to add cast function
             // first construct the second argument
             tipb::Expr type_expr;
-            type_expr.set_tp(tipb::ExprType::String);
-            type_expr.set_val(expected_type->getName());
-            auto * type_field_type = type_expr.mutable_field_type();
-            type_field_type->set_tp(TiDB::TypeString);
-            type_field_type->set_flag(TiDB::ColumnFlagNotNull);
+            constructStringLiteralTiExpr(type_expr, expected_type->getName());
             auto type_expr_name = getActions(type_expr, actions);
-
-            Names cast_argument_names;
-            cast_argument_names.push_back(expr_name);
-            cast_argument_names.push_back(type_expr_name);
-            String cast_expr_name = applyFunction("CAST", cast_argument_names, actions);
+            String cast_expr_name = applyFunction("CAST", {expr_name, type_expr_name}, actions);
             return cast_expr_name;
         }
         else
