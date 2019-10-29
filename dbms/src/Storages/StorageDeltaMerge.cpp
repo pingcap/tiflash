@@ -77,7 +77,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
         ColumnDefine column_define(0, col.name, col.type);
         if (table_info_)
         {
-            /// If TableInfo from TiDB is not empty, we get column id from TiDB
+            /// If TableInfo from TiDB is not empty, we get column id and default value from TiDB
             auto & columns = table_info_->get().columns;
             column_define.id = table_info_->get().getColumnID(column_define.name);
             auto column
