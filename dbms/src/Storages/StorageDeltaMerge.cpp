@@ -701,6 +701,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & float_col = columns[2];
 
     DeltaMergeStoreStat stat = store->getStat();
+
     /*
 
     UInt64 segment_count             = 0;
@@ -787,6 +788,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_FLOAT(avg_chunk_bytes_in_stable)
 
 #undef INSERT_INT
+#undef INSERT_FLOAT
 
     return std::make_shared<OneBlockInputStream>(block);
 }

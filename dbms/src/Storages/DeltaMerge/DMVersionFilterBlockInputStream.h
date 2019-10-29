@@ -38,9 +38,9 @@ public:
     ~DMVersionFilterBlockInputStream()
     {
         LOG_DEBUG(log,
-                  "Pass: " + DB::toString((Float64)passed_rows * 100 / total_rows, 2) + "%"
-                      + ", complete pass: " + DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
-                      + ", complete not pass: " + DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2));
+                  "Pass: " + DB::toString((Float64)passed_rows * 100 / total_rows, 2)
+                      + "%, complete pass: " + DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
+                      + "%, complete not pass: " + DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2) + "%");
     }
 
     String getName() const override { return "DeltaMergeVersionFilter"; }
