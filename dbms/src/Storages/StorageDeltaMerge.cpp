@@ -83,7 +83,8 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
             auto column
                 = std::find_if(columns.begin(), columns.end(), [&](const ColumnInfo & v) -> bool { return v.id == column_define.id; });
 
-            column_define.default_value = column->defaultValueToField();
+            if (column != columns.end())
+                column_define.default_value = column->defaultValueToField();
         }
         else
         {
