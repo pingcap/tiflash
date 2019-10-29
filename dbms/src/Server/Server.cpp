@@ -89,6 +89,17 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
+void Server::defineOptions(Poco::Util::OptionSet & _options)
+{
+    BaseDaemon::defineOptions(_options);
+
+    _options.addOption(
+        Poco::Util::Option("flash-cluster-manager-path", "", "path of the binary of flash-cluster-manager")
+            .required(false)
+            .repeatable(false)
+            .argument("<file>"));
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Logger * log = &logger();
@@ -793,6 +804,64 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
 int mainEntryClickHouseServer(int argc, char ** argv)
 {
+    {
+        std::string flash_cluster_manager_path;
+        std::string config_file;
+        bool daemon = false;
+        for (int i = 1; i< argc;)
+        {
+            if (0 == strcmp(argv[i], "--flash-cluster-manager-path"))
+            {
+                flash_cluster_manager_path = argv[i+1];
+                i += 2;
+            }
+            else if (0 == strcmp(argv[i], "--config-file"))
+            {
+                config_file = argv[i+1];
+                i += 2;
+            }
+            else
+            {
+                if (0 == strcmp(argv[i], "--daemon"))
+                    daemon = true;
+                ++i;
+            }
+        }
+
+        if (flash_cluster_manager_path.size() && config_file.size())
+        {
+            if (daemon)
+            {
+                std::cerr << "Main process can't run in daemon mode if want to run flash cluster manager";
+                exit(1);
+            }
+
+            Poco::File bin(flash_cluster_manager_path);
+            if (!bin.exists())
+            {
+                std::cerr << "Binary of flash cluster manager does not exist";
+                exit(1);
+            }
+
+            auto fpid = getpid();
+            if (fork() == 0)
+            {
+                std::string fpid_str = std::to_string(fpid);
+
+                if (execl(flash_cluster_manager_path.data(), flash_cluster_manager_path.data(), config_file.data(), fpid_str.data(), NULL))
+                {
+                    perror("execl process of cluster manager error!");
+                    exit(1);
+                }
+                exit(0);
+            }
+        }
+        else
+        {
+            std::cerr << "Process of flash cluster manager won't run\n  flash-cluster-manager-path: " << flash_cluster_manager_path << "\n  config-file: " << config_file << "\n";
+        }
+    }
+
     DB::Server app;
     try
     {
