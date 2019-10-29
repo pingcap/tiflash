@@ -83,7 +83,7 @@ private:
     SortDescription getSortDescription(Strings & order_column_names);
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(Pipeline & pipeline, Int32 index);
-    void addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
+    bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
 
 private:
     Context & context;
@@ -100,6 +100,8 @@ private:
     TableStructureReadLockPtr table_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+
+    const bool keep_session_timezone_info;
 
     Poco::Logger * log;
 };

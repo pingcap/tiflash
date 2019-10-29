@@ -61,8 +61,14 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
                 break;
             default:
-                throw Exception("Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
+                throw Exception(
+                        "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
+    }
+    encode_type = dag_request.encode_type();
+    if (encode_type == tipb::EncodeType::TypeArrow && hasUnsupportedTypeForArrowEncode(getResultFieldTypes({})))
+    {
+        encode_type = tipb::EncodeType::TypeDefault;
     }
 }
 
@@ -127,7 +133,7 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
     }
 }
 
-std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
+std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes(const tipb::FieldType & void_result_ft) const
 {
     std::vector<tipb::FieldType> executor_output;
     for (int i = dag_request.executors_size() - 1; i >= 0; i--)
@@ -135,7 +141,7 @@ std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
         if (fillExecutorOutputFieldTypes(dag_request.executors(i), executor_output))
         {
             if (executor_output.empty())
-                executor_output.push_back(dag_context.void_result_ft);
+                executor_output.push_back(void_result_ft);
             break;
         }
     }

@@ -32,8 +32,11 @@ void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value);
 void constructDateTimeLiteralTiExpr(tipb::Expr & expr, UInt64 packed_value);
 extern std::unordered_map<tipb::ExprType, String> agg_func_map;
 extern std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map;
+extern const Int8 VAR_SIZE;
 
 tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci);
 TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types);
+UInt8 getFieldLengthForArrowEncode(Int32 tp);
 
 } // namespace DB

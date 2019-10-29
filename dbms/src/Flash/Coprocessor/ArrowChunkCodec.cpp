@@ -57,7 +57,7 @@ Block ArrowChunkCodec::decode(const tipb::Chunk & chunk, const DAGSchema & schem
                 pos++;
             }
         }
-        Int8 field_length = getFieldLength(field.second.tp);
+        Int8 field_length = getFieldLengthForArrowEncode(field.second.tp);
         std::vector<UInt64> offsets;
         if (field_length == VAR_SIZE)
         {
