@@ -50,8 +50,6 @@ protected:
 
     std::string getDefaultCorePath() const override;
 
-    void defineOptions(Poco::Util::OptionSet & _options) override;
-
 private:
     std::unique_ptr<Context> global_context;
 };
