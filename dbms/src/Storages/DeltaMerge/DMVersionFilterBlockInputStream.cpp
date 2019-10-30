@@ -22,9 +22,8 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
         Block  cur_raw_block = raw_block;
         size_t rows          = cur_raw_block.rows();
         filter.resize(rows);
-        size_t i = 0;
 
-        i = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
+        const size_t batch_rows = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
 
         // The following is trying to unroll the filtering operations,
         // so that optimizer could use vectorized optimization.
@@ -32,54 +31,141 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
 
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
-            for (size_t n = 0; n < i; n += UNROLL_BATCH)
             {
-                for (size_t k = 0; k < UNROLL_BATCH; ++k)
-                    filter[n + k] = (*version_col_data)[n + k + 1] > version_limit;
+                UInt8 * filter_pos  = filter.data();
+                auto *  version_pos = const_cast<UInt64 *>(version_col_data->data()) + 1;
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*filter_pos) = (*version_pos) > version_limit;
+
+                    ++filter_pos;
+                    ++version_pos;
+                }
             }
 
-            for (size_t n = 0; n < i; n += UNROLL_BATCH)
             {
-                for (size_t k = 0; k < UNROLL_BATCH; ++k)
-                    filter[n + k] |= (*handle_col_data)[n + k] != (*handle_col_data)[n + k + 1];
+                UInt8 * filter_pos      = filter.data();
+                auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
+                auto *  next_handle_pos = handle_pos + 1;
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*filter_pos) |= (*handle_pos) != (*(next_handle_pos));
+
+                    ++filter_pos;
+                    ++handle_pos;
+                    ++next_handle_pos;
+                }
             }
 
-            for (size_t n = 0; n < i; n += UNROLL_BATCH)
             {
-                for (size_t k = 0; k < UNROLL_BATCH; ++k)
-                    filter[n + k] &= (*version_col_data)[n + k] <= version_limit;
+                UInt8 * filter_pos  = filter.data();
+                auto *  version_pos = const_cast<UInt64 *>(version_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*filter_pos) &= (*version_pos) <= version_limit;
+
+                    ++filter_pos;
+                    ++version_pos;
+                }
             }
 
-            for (size_t n = 0; n < i; n += UNROLL_BATCH)
             {
-                for (size_t k = 0; k < UNROLL_BATCH; ++k)
-                    filter[n + k] &= !(*delete_col_data)[n + k];
+                UInt8 * filter_pos = filter.data();
+                auto *  delete_pos = const_cast<UInt8 *>(delete_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*filter_pos) &= !(*delete_pos);
+
+                    ++filter_pos;
+                    ++delete_pos;
+                }
             }
+
+            //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
+            //            {
+            //                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+            //                    filter[n + k] = (*version_col_data)[n + k + 1] > version_limit;
+            //            }
+            //
+            //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
+            //            {
+            //                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+            //                    filter[n + k] |= (*handle_col_data)[n + k] != (*handle_col_data)[n + k + 1];
+            //            }
+            //
+            //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
+            //            {
+            //                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+            //                    filter[n + k] &= (*version_col_data)[n + k] <= version_limit;
+            //            }
+            //
+            //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
+            //            {
+            //                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+            //                    filter[n + k] &= !(*delete_col_data)[n + k];
+            //            }
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
+            {
+                UInt8 * filter_pos      = filter.data();
+                auto *  handle_pos      = const_cast<Handle *>(handle_col_data->data());
+                auto *  next_handle_pos = handle_pos + 1;
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    (*filter_pos) = (*handle_pos) != (*(next_handle_pos));
 
-            for (size_t n = 0; n < i; n += UNROLL_BATCH)
-            {
-                for (size_t k = 0; k < UNROLL_BATCH; ++k)
-                {
-                    filter[n + k] = (*handle_col_data)[n + k] != (*handle_col_data)[n + k + 1];
+                    ++filter_pos;
+                    ++handle_pos;
+                    ++next_handle_pos;
                 }
             }
-            for (size_t n = 0; n < i; n += UNROLL_BATCH)
+
             {
-                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+                UInt8 * filter_pos = filter.data();
+                auto *  delete_pos = const_cast<UInt8 *>(delete_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    filter[n + k] &= !(*delete_col_data)[n + k];
+                    (*filter_pos) &= !(*delete_pos);
+
+                    ++filter_pos;
+                    ++delete_pos;
                 }
             }
-            for (size_t n = 0; n < i; n += UNROLL_BATCH)
+
             {
-                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+                UInt8 * filter_pos  = filter.data();
+                auto *  version_pos = const_cast<UInt64 *>(version_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    filter[n + k] |= (*version_col_data)[n] >= version_limit;
+                    (*filter_pos) |= (*version_pos) >= version_limit;
+
+                    ++filter_pos;
+                    ++version_pos;
                 }
             }
+
+            //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
+            //            {
+            //                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+            //                {
+            //                    filter[n + k] = (*handle_col_data)[n + k] != (*handle_col_data)[n + k + 1];
+            //                }
+            //            }
+            //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
+            //            {
+            //                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+            //                {
+            //                    filter[n + k] &= !(*delete_col_data)[n + k];
+            //                }
+            //            }
+            //            for (size_t n = 0; n < batch_rows; n += UNROLL_BATCH)
+            //            {
+            //                for (size_t k = 0; k < UNROLL_BATCH; ++k)
+            //                {
+            //                    filter[n + k] |= (*version_col_data)[n] >= version_limit;
+            //                }
+            //            }
         }
         else
         {
@@ -87,7 +173,7 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
         }
 
 
-        for (; i < rows - 1; ++i)
+        for (size_t i = batch_rows; i < rows - 1; ++i)
             filter[i] = checkWithNextIndex(i);
 
         {
@@ -137,12 +223,22 @@ Block DMVersionFilterBlockInputStream<MODE>::readImpl()
 
         const size_t passed_count = countBytesInFilter(filter);
 
+        ++total_blocks;
+        total_rows += rows;
+        passed_rows += passed_count;
+
         // This block is empty after filter, continue to process next block
         if (passed_count == 0)
+        {
+            ++complete_not_passed;
             continue;
+        }
 
         if (passed_count == rows)
+        {
+            ++complete_passed;
             return cur_raw_block;
+        }
 
         for (size_t col_index = 0; col_index < cur_raw_block.columns(); ++col_index)
         {

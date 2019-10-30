@@ -281,7 +281,10 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
 // PageFile::Reader
 // =========================================================
 
-PageFile::Reader::Reader(PageFile & page_file) : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path)) {}
+PageFile::Reader::Reader(PageFile & page_file)
+    : data_file_path(page_file.dataPath()), data_file_fd(PageUtil::openFile<true>(data_file_path))
+{
+}
 
 PageFile::Reader::~Reader()
 {
@@ -383,13 +386,13 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
         ++it;
 
-#ifndef __APPLE__
-        if (it != to_read.end())
-        {
-            auto & next_page_cache = it->second;
-            ::posix_fadvise(data_file_fd, next_page_cache.offset, next_page_cache.size, POSIX_FADV_WILLNEED);
-        }
-#endif
+        //#ifndef __APPLE__
+        //        if (it != to_read.end())
+        //        {
+        //            auto & next_page_cache = it->second;
+        //            ::posix_fadvise(data_file_fd, next_page_cache.offset, next_page_cache.size, POSIX_FADV_WILLNEED);
+        //        }
+        //#endif
 
         handler(page_id, page);
     }

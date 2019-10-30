@@ -51,6 +51,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       settings(settings_),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
+    LOG_INFO(log, "Restore DeltaMerge Store start");
+
     table_columns.emplace_back(table_handle_define);
     table_columns.emplace_back(getVersionColumnDefine());
     table_columns.emplace_back(getTagColumnDefine());
@@ -84,6 +86,8 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
+
+    LOG_INFO(log, "Restore DeltaMerge Store end");
 }
 
 DeltaMergeStore::~DeltaMergeStore()
@@ -387,7 +391,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                             task.ranges,
                                             {},
                                             max_version,
-                                            std::min(expected_block_size, DEFAULT_BLOCK_SIZE));
+                                            std::max(expected_block_size, STABLE_CHUNK_ROWS));
     };
     auto after_segment_read = [this, dm_context](const SegmentPtr & segment) { this->checkSegmentUpdate<false>(dm_context, segment); };
 
@@ -690,8 +694,6 @@ void DeltaMergeStore::segmentForegroundMerge(DMContext & dm_context, const Segme
     if (segment->isMergeDelta())
         return;
 
-    std::scoped_lock write_write_lock(write_write_mutex);
-
     SegmentPtr next_segment;
     {
         std::shared_lock read_write_lock(read_write_mutex);
@@ -790,6 +792,73 @@ void DeltaMergeStore::check(const Context & /*db_context*/)
     }
     if (last_end != P_INF_HANDLE)
         throw Exception("Last segment range end[" + DB::toString(last_end) + "] is not equal to P_INF_HANDLE");
+}
+
+DeltaMergeStoreStat DeltaMergeStore::getStat()
+{
+    std::shared_lock lock(read_write_mutex);
+
+    DeltaMergeStoreStat stat;
+
+    stat.segment_count = segments.size();
+
+    long total_placed_rows = 0;
+
+    for (const auto & [handle, segment] : segments)
+    {
+        (void)handle;
+        auto delta  = segment->getDelta();
+        auto stable = segment->getStable();
+
+        stat.total_rows += delta.num_rows() + stable.num_rows();
+        stat.total_bytes += delta.num_bytes() + stable.num_bytes();
+
+        total_placed_rows += segment->getPlacedDeltaRows();
+
+        if (delta.num_chunks())
+        {
+            stat.total_delete_ranges += delta.num_deletes();
+
+            stat.segment_count_with_delta += 1;
+            stat.delta_count += 1;
+            stat.total_chunk_count_in_delta += delta.num_chunks();
+
+            stat.total_delta_rows += delta.num_rows();
+            stat.total_delta_bytes += delta.num_bytes();
+        }
+
+        if (stable.num_chunks())
+        {
+            stat.segment_count_with_stable += 1;
+            stat.stable_count += 1;
+            stat.total_chunk_count_in_stable += stable.num_chunks();
+
+            stat.total_stable_rows += stable.num_rows();
+            stat.total_stable_bytes += stable.num_bytes();
+        }
+    }
+
+    stat.delta_placed_rate = (Float64)total_placed_rows / stat.total_delta_rows;
+
+    stat.avg_segment_rows  = (Float64)stat.total_rows / stat.segment_count;
+    stat.avg_segment_bytes = (Float64)stat.total_bytes / stat.segment_count;
+
+    stat.avg_delta_rows          = (Float64)stat.total_delta_rows / stat.delta_count;
+    stat.avg_delta_bytes         = (Float64)stat.total_delta_bytes / stat.delta_count;
+    stat.avg_delta_delete_ranges = (Float64)stat.total_delete_ranges / stat.delta_count;
+
+    stat.avg_stable_rows  = (Float64)stat.total_stable_rows / stat.stable_count;
+    stat.avg_stable_bytes = (Float64)stat.total_stable_bytes / stat.stable_count;
+
+    stat.avg_chunk_count_in_delta = (Float64)stat.total_chunk_count_in_delta / stat.delta_count;
+    stat.avg_chunk_rows_in_delta  = (Float64)stat.total_delta_rows / stat.total_chunk_count_in_delta;
+    stat.avg_chunk_bytes_in_delta = (Float64)stat.total_delta_bytes / stat.total_chunk_count_in_delta;
+
+    stat.avg_chunk_count_in_stable = (Float64)stat.total_chunk_count_in_stable / stat.stable_count;
+    stat.avg_chunk_rows_in_stable  = (Float64)stat.total_stable_rows / stat.total_chunk_count_in_stable;
+    stat.avg_chunk_bytes_in_stable = (Float64)stat.total_stable_bytes / stat.total_chunk_count_in_stable;
+
+    return stat;
 }
 
 void DeltaMergeStore::applyAlters(const AlterCommands &         commands,

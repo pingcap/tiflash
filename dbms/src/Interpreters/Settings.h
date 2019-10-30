@@ -237,11 +237,12 @@ struct Settings
     M(SettingUInt64, mutable_deduper, 5, "The deduper used by MutableMergeTree storage. By default 5. 0: OriginStreams, 1: OriginUnity, 2: ReplacingUnity, 3: ReplacingPartitioning, 4: DedupPartitioning, 5: ReplacingPartitioningOpt.")\
     M(SettingUInt64, delta_merge_size, 10000000, "The delta rows limit in memory. After that delta rows will be flushed.")\
     \
-    M(SettingUInt64, dm_segment_limit_rows, 1048576, "")\
-    M(SettingUInt64, dm_segment_delta_limit_rows, 104857, "")\
-    M(SettingUInt64, dm_segment_delta_limit_bytes, 67108864, "")\
-    M(SettingUInt64, dm_segment_delta_cache_limit_rows, 26214, "")\
-    M(SettingUInt64, dm_segment_delta_cache_limit_bytes, 16777216, "")\
+    M(SettingUInt64, dm_segment_limit_rows, 65536, "Average rows of segments in DeltaMerge Engine")\
+    M(SettingUInt64, dm_segment_delta_limit_rows, 4096, "Max rows of segment's delta in DeltaMerge Engine ")\
+    M(SettingUInt64, dm_segment_delta_limit_bytes, 67108864, "Max bytes of segments' delta in DeltaMerge Engine")\
+    M(SettingUInt64, dm_segment_delta_cache_limit_rows, 1024, "Max rows of cache in segment's delta in DeltaMerge Engine")\
+    M(SettingUInt64, dm_segment_delta_cache_limit_bytes, 16777216, "Max bytes of cache in segment's delta in DeltaMerge Engine")\
+    M(SettingUInt64, dm_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaMerge Engine. By default '0' means no limit.")\
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.") \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.") \

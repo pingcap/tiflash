@@ -72,16 +72,17 @@ inline std::string DTTypeString(UInt16 type)
 struct DTMutation
 {
     DTMutation() = default;
-    DTMutation(UInt16 type_, UInt64 value_) : type(type_), value(value_) {}
+    DTMutation(UInt16 type_, UInt32 count_, UInt64 value_) : type(type_), count(count_), value(value_) {}
 
     /// DT_INS : Insert
     /// DT_DEL : Delete
     /// DT_MULTI_MOD : modify chain
-    /// otherwise, mutation is in DT_MOD mode, "type" is modify columnId.
+    /// Otherwise, mutation is in DT_MOD mode, "type" is modify columnId.
     UInt16 type = 0;
-    /// for DT_INS and DT_MOD, "value" is the value index in value space;
-    /// for DT_MULTI_MOD, "value" represents the chain pointer;
-    /// for DT_DEL, "value" is the consecutive deleting tuple count, e.g. 5 means 5 tuples got deleted starting from current position.
+    /// For DT_INS and DT_DEL, "count" is the number of values got inserted or delete from "value".
+    UInt32 count = 0;
+    /// For DT_INS and DT_MOD, "value" is the value index in value space;
+    /// For DT_MULTI_MOD, "value" represents the chain pointer;
     UInt64 value = 0;
 
     inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
@@ -130,6 +131,7 @@ struct DTLeaf
     inline UInt64 sid(size_t pos) const { return sids[pos]; }
     inline UInt64 rid(size_t pos, Int64 delta) const { return sids[pos] + delta; }
     inline UInt16 type(size_t pos) const { return mutations[pos].type; }
+    inline UInt32 mut_count(size_t pos) const { return mutations[pos].count; }
     inline UInt64 value(size_t pos) const { return mutations[pos].value; }
     inline bool   isModify(size_t pos) const { return mutations[pos].isModify(); }
 
@@ -167,7 +169,7 @@ struct DTLeaf
             if (m.type == DT_INS)
                 delta += 1;
             else if (m.type == DT_DEL)
-                delta -= m.value;
+                delta -= m.count;
         }
         return delta;
     }
@@ -193,7 +195,7 @@ struct DTLeaf
             if (type(i) == DT_INS)
                 delta += 1;
             else if (type(i) == DT_DEL)
-                delta -= value(i);
+                delta -= mut_count(i);
         }
         return {i, delta};
     }
@@ -481,7 +483,7 @@ public:
         if (leaf->type(pos) == DT_INS)
             delta += 1;
         else if (leaf->type(pos) == DT_DEL)
-            delta -= leaf->value(pos);
+            delta -= leaf->mut_count(pos);
 
         if (++pos >= leaf->count && leaf->next)
         {
@@ -507,7 +509,7 @@ public:
         if (leaf->type(pos) == DT_INS)
             delta -= 1;
         else if (leaf->type(pos) == DT_DEL)
-            delta += leaf->value(pos);
+            delta += leaf->mut_count(pos);
 
         return *this;
     }
@@ -517,6 +519,7 @@ public:
     size_t     getPos() const { return pos; }
     Int64      getDelta() const { return delta; }
     UInt16     getType() const { return leaf->mutations[pos].type; }
+    UInt32     getCount() const { return leaf->mutations[pos].count; }
     UInt64     getValue() const { return leaf->mutations[pos].value; }
     UInt64     getSid() const { return leaf->sids[pos]; }
     UInt64     getRid() const { return leaf->sids[pos] + delta; }
@@ -550,6 +553,8 @@ public:
         }
     }
 
+    size_t entryCount() { return entry_count; }
+
     ~DTEntriesCopy()
     {
         this->free(sids, sizeof(UInt64) * entry_count);
@@ -579,7 +584,7 @@ public:
             if (entries->mutations[index].type == DT_INS)
                 delta += 1;
             else if (entries->mutations[index].type == DT_DEL)
-                delta -= entries->mutations[index].value;
+                delta -= entries->mutations[index].count;
 
             ++index;
 
@@ -593,13 +598,14 @@ public:
             if (entries->mutations[index].type == DT_INS)
                 delta -= 1;
             else if (entries->mutations[index].type == DT_DEL)
-                delta += entries->mutations[index].value;
+                delta += entries->mutations[index].count;
 
             return *this;
         }
 
         Int64  getDelta() const { return delta; }
         UInt16 getType() const { return entries->mutations[index].type; }
+        UInt32 getCount() const { return entries->mutations[index].count; }
         UInt64 getValue() const { return entries->mutations[index].value; }
         UInt64 getSid() const { return entries->sids[index]; }
         UInt64 getRid() const { return entries->sids[index] + delta; }
@@ -1110,7 +1116,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
     if (merge)
     {
         /// Simply increase delete count at the last one of delete chain.
-        ++(leaf->mutations[merge_pos].value);
+        ++(leaf->mutations[merge_pos].count);
     }
     else
     {
@@ -1118,7 +1124,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
 
         leaf->shiftEntries(pos, 1);
         leaf->sids[pos]      = rid - delta;
-        leaf->mutations[pos] = DTMutation(DT_DEL, 1);
+        leaf->mutations[pos] = DTMutation(DT_DEL, /*count*/ 1, /*value*/ 0);
         ++(leaf->count);
     }
 
@@ -1160,9 +1166,8 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
     ++num_entries;
 
     leaf->shiftEntries(pos, 1);
-    leaf->sids[pos]            = rid - delta;
-    leaf->mutations[pos].type  = DT_INS;
-    leaf->mutations[pos].value = tuple_id;
+    leaf->sids[pos]      = rid - delta;
+    leaf->mutations[pos] = DTMutation(DT_INS, /*count*/ 1, tuple_id);
     ++(leaf->count);
 
     afterLeafUpdated(leaf);

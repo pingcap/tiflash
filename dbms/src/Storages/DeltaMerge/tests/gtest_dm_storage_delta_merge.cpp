@@ -188,9 +188,14 @@ try
         ASTPtr astptr(new ASTIdentifier("t", ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
+        String     table_name = "t";
+        Poco::File path(table_name);
+        if (path.exists())
+            path.remove(true);
+
         storage = StorageDeltaMerge::create(".",
                                             /* db_name= */ "default",
-                                            /* name= */ "t",
+                                            table_name,
                                             std::nullopt,
                                             ColumnsDescription{names_and_types_list},
                                             astptr,
@@ -281,25 +286,25 @@ TEST(StorageDeltaMerge_internal_test, MergedUnsortedQueryRanges)
 {
     MvccQueryInfo::RegionsQueryInfo regions;
     RegionQueryInfo                 region;
-    region.range_in_table = std::make_pair(2360148,2456148);
+    region.range_in_table = std::make_pair(2360148, 2456148);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(1961680,2057680);
+    region.range_in_table = std::make_pair(1961680, 2057680);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2264148,2360148);
+    region.range_in_table = std::make_pair(2264148, 2360148);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2057680,2153680);
+    region.range_in_table = std::make_pair(2057680, 2153680);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2153680,2264148);
+    region.range_in_table = std::make_pair(2153680, 2264148);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2552148,2662532);
+    region.range_in_table = std::make_pair(2552148, 2662532);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2758532,2854532);
+    region.range_in_table = std::make_pair(2758532, 2854532);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2854532,2950532);
+    region.range_in_table = std::make_pair(2854532, 2950532);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2456148,2552148);
+    region.range_in_table = std::make_pair(2456148, 2552148);
     regions.emplace_back(region);
-    region.range_in_table = std::make_pair(2662532,2758532);
+    region.range_in_table = std::make_pair(2662532, 2758532);
     regions.emplace_back(region);
 
     auto ranges = ::DB::getQueryRanges(regions);

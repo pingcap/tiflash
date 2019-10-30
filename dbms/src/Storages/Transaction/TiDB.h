@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>

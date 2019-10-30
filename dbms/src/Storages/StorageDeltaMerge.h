@@ -66,7 +66,7 @@ public:
 
     const OrderedNameSet & getHiddenColumnsImpl() const override { return hidden_columns; }
 
-    BlockInputStreamPtr status() override { throw Exception("Unimplemented"); }
+    BlockInputStreamPtr status() override;
 
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;

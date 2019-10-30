@@ -3,6 +3,7 @@
 #include <gperftools/malloc_extension.h>
 
 #include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/StorageDeltaMerge-internal.h>
@@ -231,7 +232,33 @@ public:
 
     Block getHeader() const override { return header; }
 
-    void write(const Block & block) override { store->write(db_context, db_settings, decorator(block)); }
+    void write(const Block & block) override
+    {
+        if (db_settings.dm_insert_max_rows == 0)
+        {
+            store->write(db_context, db_settings, decorator(block));
+        }
+        else
+        {
+            Block new_block = decorator(block);
+            auto rows = new_block.rows();
+            size_t step = db_settings.dm_insert_max_rows;
+
+            for (size_t offset = 0; offset < rows; offset += step)
+            {
+                size_t limit = std::min(offset + step, rows) - offset;
+                Block write_block;
+                for (auto & column : new_block)
+                {
+                    auto col = column.type->createColumn();
+                    col->insertRangeFrom(*column.column, offset, limit);
+                    write_block.insert(ColumnWithTypeAndName(std::move(col), column.type, column.name, column.column_id));
+                }
+
+                store->write(db_context, db_settings, write_block);
+            }
+        }
+    }
 
 private:
     DeltaMergeStorePtr store;
@@ -657,6 +684,113 @@ void updateDeltaMergeTableCreateStatement(                   //
     };
 
     context.getDatabase(database_name)->alterTable(context, table_name, columns_without_hidden, storage_modifier);
+}
+
+
+BlockInputStreamPtr StorageDeltaMerge::status()
+{
+    Block block;
+
+    block.insert({std::make_shared<DataTypeString>(), "Name"});
+    block.insert({std::make_shared<DataTypeUInt64>(), "Int"});
+    block.insert({std::make_shared<DataTypeFloat64>(), "Float"});
+
+    auto columns = block.mutateColumns();
+    auto & name_col = columns[0];
+    auto & int_col = columns[1];
+    auto & float_col = columns[2];
+
+    DeltaMergeStoreStat stat = store->getStat();
+
+    /*
+
+    UInt64 segment_count             = 0;
+    UInt64 segment_count_with_delta  = 0;
+    UInt64 segment_count_with_stable = 0;
+
+    UInt64 total_rows          = 0;
+    UInt64 total_bytes         = 0;
+    UInt64 total_delete_ranges = 0;
+
+    Float64 delta_placed_rate = 0;
+
+    Float64 avg_segment_rows  = 0;
+    Float64 avg_segment_bytes = 0;
+
+    UInt64  delta_count             = 0;
+    UInt64  total_delta_rows        = 0;
+    UInt64  total_delta_bytes       = 0;
+    Float64 avg_delta_rows          = 0;
+    Float64 avg_delta_bytes         = 0;
+    Float64 avg_delta_delete_ranges = 0;
+
+    UInt64  stable_count       = 0;
+    UInt64  total_stable_rows  = 0;
+    UInt64  total_stable_bytes = 0;
+    Float64 avg_stable_rows    = 0;
+    Float64 avg_stable_bytes   = 0;
+
+    UInt64  total_chunk_count_in_delta = 0;
+    Float64 avg_chunk_count_in_delta   = 0;
+    Float64 avg_chunk_rows_in_delta    = 0;
+    Float64 avg_chunk_bytes_in_delta   = 0;
+
+    UInt64  total_chunk_count_in_stable = 0;
+    Float64 avg_chunk_count_in_stable   = 0;
+    Float64 avg_chunk_rows_in_stable    = 0;
+    Float64 avg_chunk_bytes_in_stable   = 0;
+ */
+
+#define INSERT_INT(NAME)             \
+    name_col->insert(String(#NAME)); \
+    int_col->insert(stat.NAME);      \
+    float_col->insert((Float64)0);
+
+#define INSERT_FLOAT(NAME)           \
+    name_col->insert(String(#NAME)); \
+    int_col->insert((UInt64)0);      \
+    float_col->insert(stat.NAME);
+
+    INSERT_INT(segment_count)
+    INSERT_INT(segment_count_with_delta)
+    INSERT_INT(segment_count_with_stable)
+
+    INSERT_INT(total_rows)
+    INSERT_INT(total_bytes)
+    INSERT_INT(total_delete_ranges)
+
+    INSERT_FLOAT(delta_placed_rate)
+
+    INSERT_FLOAT(avg_segment_rows)
+    INSERT_FLOAT(avg_segment_bytes)
+
+    INSERT_INT(delta_count)
+    INSERT_INT(total_delta_rows)
+    INSERT_INT(total_delta_bytes)
+    INSERT_FLOAT(avg_delta_rows)
+    INSERT_FLOAT(avg_delta_bytes)
+    INSERT_FLOAT(avg_delta_delete_ranges)
+
+    INSERT_INT(stable_count)
+    INSERT_INT(total_stable_rows)
+    INSERT_INT(total_stable_bytes)
+    INSERT_FLOAT(avg_stable_rows)
+    INSERT_FLOAT(avg_stable_bytes)
+
+    INSERT_INT(total_chunk_count_in_delta)
+    INSERT_FLOAT(avg_chunk_count_in_delta)
+    INSERT_FLOAT(avg_chunk_rows_in_delta)
+    INSERT_FLOAT(avg_chunk_bytes_in_delta)
+
+    INSERT_INT(total_chunk_count_in_stable)
+    INSERT_FLOAT(avg_chunk_count_in_stable)
+    INSERT_FLOAT(avg_chunk_rows_in_stable)
+    INSERT_FLOAT(avg_chunk_bytes_in_stable)
+
+#undef INSERT_INT
+#undef INSERT_FLOAT
+
+    return std::make_shared<OneBlockInputStream>(block);
 }
 
 void StorageDeltaMerge::startup()
