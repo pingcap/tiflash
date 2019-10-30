@@ -832,7 +832,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     {
         TMTContext & tmt = context.getTMTContext();
 
-        auto safe_point = tmt.getPDClient()->getGCSafePoint();
+        auto safe_point = PDClientHelper::getGCSafePointWithCache(tmt.getPDClient(), settings.safe_point_update_interval_seconds);
         if (mvcc_query_info.read_tso < safe_point)
             throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
                     + " is smaller than tidb gc safe point: " + toString(safe_point),
