@@ -62,10 +62,11 @@ public:
     using VersionPtr   = std::shared_ptr<VersionType>;
 
 public:
-    explicit VersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
+    explicit VersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
         : current(std::move(VersionType::createBase())),                   //
           snapshots(std::move(std::make_shared<Snapshot>(this, nullptr))), //
-          config(config_)
+          config(config_),
+          log(log_)
     {
         // The placeholder snapshot should not be counted.
         CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
@@ -106,7 +107,7 @@ public:
             }
             // Make a view from head to new version, then apply edits on `current`.
             auto         view = std::make_shared<TVersionView>(current);
-            EditAcceptor builder(view.get());
+            EditAcceptor builder(view.get(), /* ignore_invalid_ref_= */ true, log);
             builder.apply(edit);
         }
     }
@@ -344,8 +345,7 @@ protected:
     VersionPtr                   current;
     SnapshotPtr                  snapshots;
     ::DB::MVCC::VersionSetConfig config;
-
-    friend class VersionSetWithDeltaCompactTest;
+    Poco::Logger *               log;
 };
 
 } // namespace MVCC

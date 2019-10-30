@@ -163,6 +163,9 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
         case WriteBatch::WriteType::REF:
             this->applyRef(rec);
             break;
+        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+            throw Exception("WriteType::MOVE_NORMAL_PAGE should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 }
@@ -254,9 +257,8 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         }
         else
         {
-            // accept dangling ref if we are writing to a tmp entry map.
-            // like entry map of WriteBatch or Gc or AnalyzeMeta
-            current_version->page_ref[rec.page_id] = normal_page_id;
+            throw Exception("Try to add RefPage" + DB::toString(rec.page_id) + " to non-exist Page" + DB::toString(rec.ori_page_id),
+                            ErrorCodes::LOGICAL_ERROR);
         }
     }
     current_version->max_page_id = std::max(current_version->max_page_id, rec.page_id);
@@ -278,7 +280,10 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
             break;
         case WriteBatch::WriteType::REF:
             // Shorten ref-path in case there is RefPage to RefPage
-            current->ref(rec.page_id, rec.ori_page_id);
+            current->ref<false>(rec.page_id, rec.ori_page_id);
+            break;
+        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+            current->move_normal_page(rec.page_id, rec.entry);
             break;
         }
     }
