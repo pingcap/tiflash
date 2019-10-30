@@ -285,17 +285,17 @@ void readChunkData(MutableColumns &      columns,
             else if (define.type->equals(*DataTypeFactory::instance().get("DateTime")))
             {
                 auto                 date = safeGet<String>(define.default_value);
-                time_t               time;
+                time_t               time = 0;
                 ReadBufferFromMemory buf(date.data(), date.size());
                 readDateTimeText(time, buf);
                 tmp_col = define.type->createColumnConst(rows_limit, Field(UInt64(time)));
             }
             else if (std::strcmp(define.type->getFamilyName(), "Decimal") == 0)
             {
-                Int64  value;
-                Int128 value128;
-                Int256 value256;
-                UInt32 scale;
+                Int64  value    = 0;
+                Int128 value128 = 0;
+                Int256 value256 = 0;
+                UInt32 scale    = 0;
                 {
                     auto dec32  = DecimalField(Decimal32(), 0);
                     auto dec64  = DecimalField(Decimal64(), 0);
