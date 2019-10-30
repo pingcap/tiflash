@@ -18,8 +18,47 @@ namespace DB
 namespace DM
 {
 
-static constexpr size_t DELTA_MERGE_DEFAULT_SEGMENT_ROWS = DEFAULT_BLOCK_SIZE << 6;
-static const PageId     DELTA_MERGE_FIRST_SEGMENT_ID     = 1;
+static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
+
+struct DeltaMergeStoreStat
+{
+    UInt64 segment_count             = 0;
+    UInt64 segment_count_with_delta  = 0;
+    UInt64 segment_count_with_stable = 0;
+
+    UInt64 total_rows          = 0;
+    UInt64 total_bytes         = 0;
+    UInt64 total_delete_ranges = 0;
+
+    Float64 delta_placed_rate = 0;
+
+    Float64 avg_segment_rows  = 0;
+    Float64 avg_segment_bytes = 0;
+
+    UInt64  delta_count             = 0;
+    UInt64  total_delta_rows        = 0;
+    UInt64  total_delta_bytes       = 0;
+    Float64 avg_delta_rows          = 0;
+    Float64 avg_delta_bytes         = 0;
+    Float64 avg_delta_delete_ranges = 0;
+
+    UInt64  stable_count       = 0;
+    UInt64  total_stable_rows  = 0;
+    UInt64  total_stable_bytes = 0;
+    Float64 avg_stable_rows    = 0;
+    Float64 avg_stable_bytes   = 0;
+
+    UInt64  total_chunk_count_in_delta = 0;
+    Float64 avg_chunk_count_in_delta   = 0;
+    Float64 avg_chunk_rows_in_delta    = 0;
+    Float64 avg_chunk_bytes_in_delta   = 0;
+
+    UInt64  total_chunk_count_in_stable = 0;
+    Float64 avg_chunk_count_in_stable   = 0;
+    Float64 avg_chunk_rows_in_stable    = 0;
+    Float64 avg_chunk_bytes_in_stable   = 0;
+};
+
 
 class DeltaMergeStore : private boost::noncopyable
 {
@@ -135,7 +174,7 @@ public:
                            const HandleRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
-                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
+                           size_t                expected_block_size = STABLE_CHUNK_ROWS);
 
     /// Force flush all data to disk.
     /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
@@ -157,7 +196,8 @@ public:
     DataTypePtr           getPKDataType() const { return table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
 
-    void check(const Context & db_context);
+    void                check(const Context & db_context);
+    DeltaMergeStoreStat getStat();
 
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings)

@@ -208,6 +208,8 @@ protected:
         current->next->prev = current;
     }
 
+    std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_mutex); }
+
 public:
     // No copying allowed
     VersionSet(const VersionSet &) = delete;

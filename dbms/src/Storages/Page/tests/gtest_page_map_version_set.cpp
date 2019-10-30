@@ -813,7 +813,7 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
     auto s3 = versions.getSnapshot();
     s3.reset(); // do compact on version-list, and
     //std::cerr << "s3 reseted." << std::endl;
-    auto livefiles = versions.listAllLiveFiles();
+    auto livefiles = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 4UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current, s1, s2
@@ -822,7 +822,7 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
 
     s2.reset();
     //std::cerr << "s2 reseted." << std::endl;
-    livefiles = versions.listAllLiveFiles();
+    livefiles = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 3UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current, s1
@@ -830,7 +830,7 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
 
     s1.reset();
     //std::cerr << "s1 reseted." << std::endl;
-    livefiles = versions.listAllLiveFiles();
+    livefiles = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 2UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current
     ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL); // hold by current

@@ -158,7 +158,7 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
                 for (const auto & [col_id, col_meta] : old_chunk.getMetas())
                 {
                     (void)col_id;
-                    wbs.removed_data.delPage(col_meta.page_id);
+                    wbs.removed_log.delPage(col_meta.page_id);
                 }
             }
 

@@ -11,21 +11,17 @@ namespace DM
 
 namespace HandleFilter
 {
-/// return <offset, limit>
-inline std::pair<size_t, size_t>
-getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_column, const size_t offset, const size_t limit)
-{
-    const auto & handle_col_data = toColumnVectorData<Handle>(handle_column);
 
+/// return <offset, limit>
+inline std::pair<size_t, size_t> getPosRangeOfSorted(const HandleRange &            handle_range,
+                                                     const PaddedPODArray<Handle> & handle_col_data,
+                                                     const size_t                   offset,
+                                                     const size_t                   limit)
+{
     const auto begin_it    = handle_col_data.cbegin() + offset;
     const auto end_it      = begin_it + limit;
     const auto first_value = handle_col_data[offset];
     const auto last_value  = handle_col_data[offset + limit - 1];
-
-    //    if (handle_range.include(first_value, last_value))
-    //        return {offset, limit};
-    //    if (!handle_range.intersect(first_value, last_value))
-    //        return {offset, 0};
 
     const auto low_it  = handle_range.check(first_value) ? begin_it : std::lower_bound(begin_it, end_it, handle_range.start);
     const auto high_it = handle_range.check(last_value) ? end_it : std::lower_bound(low_it, end_it, handle_range.end);
@@ -34,6 +30,13 @@ getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_c
     ssize_t res_limit = high_it - low_it;
 
     return {low_pos, res_limit};
+}
+
+/// return <offset, limit>
+inline std::pair<size_t, size_t>
+getPosRangeOfSorted(const HandleRange & handle_range, const ColumnPtr & handle_column, const size_t offset, const size_t limit)
+{
+    return getPosRangeOfSorted(handle_range, toColumnVectorData<Handle>(handle_column), offset, limit);
 }
 
 inline Block filterSorted(const HandleRange & handle_range, Block && block, size_t handle_pos)
@@ -45,12 +48,26 @@ inline Block filterSorted(const HandleRange & handle_range, Block && block, size
     if (offset == 0 && limit == rows)
         return std::move(block);
 
-    for (size_t i = 0; i < block.columns(); i++)
+    if (offset == 0)
     {
-        auto & column     = block.getByPosition(i);
-        auto   new_column = column.column->cloneEmpty();
-        new_column->insertRangeFrom(*column.column, offset, limit);
-        column.column = std::move(new_column);
+        size_t pop_size = rows - limit;
+        for (size_t i = 0; i < block.columns(); i++)
+        {
+            auto & column     = block.getByPosition(i);
+            auto   mutate_col = (*std::move(column.column)).mutate();
+            mutate_col->popBack(pop_size);
+            column.column = std::move(mutate_col);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < block.columns(); i++)
+        {
+            auto & column     = block.getByPosition(i);
+            auto   new_column = column.column->cloneEmpty();
+            new_column->insertRangeFrom(*column.column, offset, limit);
+            column.column = std::move(new_column);
+        }
     }
     return std::move(block);
 }
@@ -87,9 +104,7 @@ template <bool is_block_sorted>
 class DMHandleFilterBlockInputStream : public IProfilingBlockInputStream
 {
 public:
-    DMHandleFilterBlockInputStream(const BlockInputStreamPtr & input,
-                                   HandleRange                 handle_range_,
-                                   size_t                      handle_col_pos_)
+    DMHandleFilterBlockInputStream(const BlockInputStreamPtr & input, HandleRange handle_range_, size_t handle_col_pos_)
         : handle_range(handle_range_), handle_col_pos(handle_col_pos_)
     {
         children.push_back(input);

@@ -15,6 +15,8 @@ namespace DB
 namespace DM
 {
 
+const static size_t STABLE_CHUNK_ROWS = DEFAULT_MERGE_BLOCK_SIZE;
+
 class Segment;
 struct SegmentSnapshot;
 
@@ -60,7 +62,8 @@ struct DeltaValueSpace
         return (*handle_column)[value_id];
     }
 
-    size_t getRows() { return rows; }
+    size_t    getRows() { return rows; }
+    Columns & getColumns() { return columns; }
 
     Columns                        columns;
     ColumnRawPtrs                  columns_ptr;
@@ -102,6 +105,7 @@ public:
         SegmentSnapshot segment_snap;
 
         DeltaValueSpacePtr   delta_value_space;
+        DeltaIndexPtr        index;
         DeltaIndex::Iterator index_begin;
         DeltaIndex::Iterator index_end;
 
@@ -156,7 +160,7 @@ public:
                                        const HandleRanges &  read_ranges         = {HandleRange::newAll()},
                                        const RSOperatorPtr & filter              = {},
                                        UInt64                max_version         = MAX_UINT64,
-                                       size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
+                                       size_t                expected_block_size = STABLE_CHUNK_ROWS);
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext &       dm_context,
                                           const ColumnDefines &   columns_to_read,
@@ -215,7 +219,12 @@ public:
             + ", range: " + range.toString() + "}";
     }
 
-    const HandleRange & getRange() const { return range; }
+    const HandleRange &    getRange() const { return range; }
+    const DiskValueSpace & getDelta() const { return *delta; }
+    const DiskValueSpace & getStable() const { return *stable; }
+
+    size_t getPlacedDeltaRows() const { return placed_delta_rows; }
+    size_t getPlacedDeltaDeletes() const { return placed_delta_deletes; }
 
     size_t deltaRows(bool with_delta_cache = true) const;
     // Insert and delete operations' count in DeltaTree
@@ -242,7 +251,9 @@ private:
                                         const DeltaValueSpacePtr & delta_value_space,
                                         const IndexIterator &      delta_index_begin,
                                         const IndexIterator &      delta_index_end,
-                                        size_t                     expected_block_size) const;
+                                        size_t                     index_size,
+                                        size_t                     expected_block_size,
+                                        const HandleRange &        handle_range = HandleRange::newAll()) const;
 
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info) const;
