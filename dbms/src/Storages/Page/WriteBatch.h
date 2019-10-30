@@ -17,12 +17,12 @@ private:
         PageId        page_id;
         UInt64        tag;
         ReadBufferPtr read_buffer;
-        UInt32        size;
+        PageSize      size;
     };
     using Writes = std::vector<Write>;
 
 public:
-    void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, UInt32 size)
+    void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size)
     {
         Write w = {true, page_id, tag, read_buffer, size};
         writes.push_back(w);
