@@ -41,7 +41,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
     if (context)
     {
         auto & tmt = context->getTMTContext();
-        Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient());
+        Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient(), /* ignore_cache= */ true);
 
         std::unordered_map<TableID, HandleMap> handle_maps;
 

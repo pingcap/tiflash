@@ -187,8 +187,6 @@ public:
                      ColumnID &                    max_column_id_used,
                      const Context &               context);
 
-    void setMinDataVersion(UInt64 version) { min_version = version; }
-
     const ColumnDefines & getTableColumns() const { return table_columns; }
     const ColumnDefine &  getHandle() const { return table_handle_define; }
     Block                 getHeader() const { return toEmptyBlock(table_columns); }
@@ -213,7 +211,7 @@ private:
                                    .storage_pool  = storage_pool,
                                    .store_columns = std::move(store_columns),
                                    .handle_column = getExtraHandleColumnDefine(),
-                                   .min_version   = min_version.load(std::memory_order_relaxed),
+                                   .min_version   = 0,
 
                                    .not_compress            = settings.not_compress_columns,
                                    .segment_limit_rows      = db_settings.dm_segment_limit_rows,
@@ -251,8 +249,6 @@ private:
 
     bool isSegmentValid(const SegmentPtr & segment);
 
-    void updateGcSafePoint(const DMContextPtr & dm_context);
-
 private:
     String      path;
     StoragePool storage_pool;
@@ -266,9 +262,6 @@ private:
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     Settings settings;
-
-    std::atomic<Timestamp> min_version = 0;
-    std::chrono::time_point<std::chrono::system_clock> min_version_last_update_time;
 
     /// end of range -> segment
     SegmentSortedMap segments;

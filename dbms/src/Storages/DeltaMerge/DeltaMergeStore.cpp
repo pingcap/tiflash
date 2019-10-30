@@ -727,7 +727,11 @@ bool DeltaMergeStore::handleBackgroundTask()
         return false;
 
     // Update GC safe point before background task
-    updateGcSafePoint(task.dm_context);
+    const Context & db_context   = task.dm_context->db_context;
+    auto            safe_point   = PDClientHelper::getGCSafePointWithRetry(db_context.getTMTContext().getPDClient(),
+                                                              /* ignore_cache= */ false,
+                                                              db_context.getSettingsRef().safe_point_update_interval_seconds);
+    task.dm_context->min_version = safe_point;
 
     switch (task.type)
     {
@@ -749,23 +753,6 @@ bool DeltaMergeStore::isSegmentValid(const SegmentPtr & segment)
         return false;
     auto & cur_segment = it->second;
     return cur_segment.get() == segment.get();
-}
-
-void DeltaMergeStore::updateGcSafePoint(const DMContextPtr & dm_context)
-{
-    // In case we cost too much to update safe point from PD.
-    std::chrono::time_point<std::chrono::system_clock> now = std::chrono::system_clock::now();
-    const auto duration     = std::chrono::duration_cast<std::chrono::seconds>(now - min_version_last_update_time);
-    const auto min_interval = std::max(1, dm_context->db_context.getSettingsRef().dm_safe_point_update_interval_seconds); // at least one second
-    if (duration.count() < min_interval)
-        return;
-
-    auto &    tmt           = dm_context->db_context.getTMTContext();
-    Timestamp gc_safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient());
-    // Update min_version in dm_context so that later split/merge/delta-merge can remove obsoleted data.
-    dm_context->min_version = gc_safe_point;
-    this->setMinDataVersion(gc_safe_point);
-    min_version_last_update_time = std::chrono::system_clock::now();
 }
 
 void DeltaMergeStore::flushCache(const Context & db_context)
