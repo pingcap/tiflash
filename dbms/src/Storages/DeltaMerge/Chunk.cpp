@@ -314,12 +314,12 @@ void readChunkData(MutableColumns &      columns,
                     else if (define.default_value.tryGet(dec128))
                     {
                         value128 = dec128.getValue().value;
-                        scale = dec128.getScale();
+                        scale    = dec128.getScale();
                     }
                     else if (define.default_value.tryGet(dec256))
                     {
                         value256 = dec256.getValue().value;
-                        scale = dec256.getScale();
+                        scale    = dec256.getScale();
                     }
                 }
 
