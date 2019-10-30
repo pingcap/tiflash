@@ -42,9 +42,12 @@ public:
     {
         for (auto & rec : edit.getRecords())
         {
-            if (rec.type != WriteBatch::WriteType::PUT)
+            if (unlikely(rec.type == WriteBatch::WriteType::PUT))
+                throw Exception("Should use MOVE_NORMAL_PAGE for gc edits, please check your code!!", ErrorCodes::LOGICAL_ERROR);
+
+            if (rec.type != WriteBatch::WriteType::MOVE_NORMAL_PAGE)
                 continue;
-            // Gc only apply PUT for updating normal page entries
+            // Gc only apply MOVE_NORMAL_PAGE for updating normal page entries
             const auto old_page_entry = old_version->findNormalPageEntry(rec.page_id);
             // If the gc page have already been removed, or is a ref to non-exist page, just ignore it
             if (!old_page_entry)

@@ -62,10 +62,10 @@ try
     }
 
     // Do not remove any files.
-    auto page_files = DB::PageStorage::listAllPageFiles(path, /* remove_tmp_file= */ false, &Poco::Logger::get("root"));
+    auto page_files = DB::PageStorage::listAllPageFiles(path, /* remove_tmp_file= */ false, false, &Poco::Logger::get("root"));
 
     //DB::PageEntriesVersionSet versions;
-    DB::PageEntriesVersionSetWithDelta versions;
+    DB::PageEntriesVersionSetWithDelta versions(DB::MVCC::VersionSetConfig(), &Poco::Logger::get("GetValidPages"));
     for (auto & page_file : page_files)
     {
         DB::PageEntriesEdit  edit;
@@ -84,11 +84,23 @@ try
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
+                case DB::WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+                    printf("MOVE");
+                    printPageEntry(record.page_id, record.entry);
+                    id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
+                    break;
                 case DB::WriteBatch::WriteType::DEL:
-                    printf("DEL\t%lld\n", record.page_id);
+                    printf("DEL\t%lld\t\t@PageFile%llu_%u\n", //
+                           record.page_id,
+                           page_file.getFileId(),
+                           page_file.getLevel());
                     break;
                 case DB::WriteBatch::WriteType::REF:
-                    printf("REF\t%lld\t%lld\n", record.page_id, record.ori_page_id);
+                    printf("REF\t%lld\t%lld\t@PageFile%llu_%u\n", //
+                           record.page_id,
+                           record.ori_page_id,
+                           page_file.getFileId(),
+                           page_file.getLevel());
                     break;
                 }
             }

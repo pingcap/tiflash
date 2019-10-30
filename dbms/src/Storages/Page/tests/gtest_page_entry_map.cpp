@@ -10,7 +10,7 @@ namespace tests
 class PageEntryMap_test : public ::testing::Test
 {
 public:
-    PageEntryMap_test() : map(nullptr), versions() {}
+    PageEntryMap_test() : map(nullptr), log(&Poco::Logger::get("PageEntryMap_test")), versions(config_, log) {}
 
 protected:
     void SetUp() override
@@ -26,7 +26,9 @@ protected:
     PageEntries * map;
 
 private:
-    PageEntriesVersionSet versions;
+    ::DB::MVCC::VersionSetConfig config_;
+    Poco::Logger *               log;
+    PageEntriesVersionSet        versions;
 };
 
 TEST_F(PageEntryMap_test, Empty)

@@ -16,6 +16,7 @@ public:
         DEL = 0,
         PUT = 1,
         REF = 2,
+        MOVE_NORMAL_PAGE = 3, // Move an exist normal page to new PageFile. Now only used by GC.
     };
 
 private:
@@ -36,6 +37,12 @@ public:
     void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size)
     {
         Write w = {WriteType::PUT, page_id, tag, read_buffer, size, 0};
+        writes.emplace_back(w);
+    }
+
+    void gcMovePage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, UInt32 size)
+    {
+        Write w = {WriteType::MOVE_NORMAL_PAGE, page_id, tag, read_buffer, size, 0};
         writes.emplace_back(w);
     }
 

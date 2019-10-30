@@ -16,9 +16,10 @@ namespace DB
 class PageEntriesVersionSet : public ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>
 {
 public:
-    explicit PageEntriesVersionSet(const ::DB::MVCC::VersionSetConfig & config_ = ::DB::MVCC::VersionSetConfig())
+    explicit PageEntriesVersionSet(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log)
         : ::DB::MVCC::VersionSet<PageEntries, PageEntriesEdit, PageEntriesBuilder>(config_)
     {
+        (void)log;
     }
 
 public:

@@ -281,7 +281,7 @@ TEST_F(PageStorage_test, IdempotentDelAndRef)
     }
 }
 
-TEST_F(PageStorage_test, GcMigrateValidRefPages)
+TEST_F(PageStorage_test, DISABLED_GcMigrateValidRefPages)
 {
     const size_t buf_sz      = 1024;
     char         buf[buf_sz] = {0};
@@ -359,10 +359,11 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
         WriteBatch batch;
         memset(c_buff, 0xf, buf_sz);
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        // Page1, RefPage2 -> 1, RefPage3 -> 2
         batch.putPage(1, 0, buff, buf_sz);
         batch.putRefPage(2, 1);
         batch.putRefPage(3, 2);
-
+        // DelPage1
         batch.delPage(1);
 
         storage->write(batch);
@@ -378,23 +379,13 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
         id_and_lvl,
     };
     auto            s0         = storage->getSnapshot();
-    const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
-    auto            live_files = storage->versioned_page_entries.gcApply(edit);
-    storage->gcRemoveObsoleteFiles(page_files, {2, 0}, live_files);
-
-    // After migrate, RefPage 3 -> 1 is still valid
-    bool exist = false;
-    for (const auto & rec : edit.getRecords())
-    {
-        if (rec.type == WriteBatch::WriteType::REF && rec.page_id == 3 && rec.ori_page_id == 1)
-        {
-            exist = true;
-            break;
-        }
-    }
-    ASSERT_TRUE(exist);
     s0.reset();
+    auto            live_files = storage->versioned_page_entries.gcApply(edit);
+    ASSERT_EQ(live_files.size(), 1UL);
+    ASSERT_EQ(live_files.count(id_and_lvl), 0UL);
+    storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
 
     // reopen PageStorage, RefPage 3 -> 1 is still valid
     storage = reopenWithConfig(config);
@@ -454,18 +445,6 @@ TEST_F(PageStorage_test, GcMoveRefPage)
     };
     auto            s0   = storage->getSnapshot();
     PageEntriesEdit edit = storage->gcMigratePages(s0, livesPages, candidates, 2);
-
-    // After migrate, RefPage 3 -> 1 is still valid
-    bool exist = false;
-    for (const auto & rec : edit.getRecords())
-    {
-        if (rec.type == WriteBatch::WriteType::REF && rec.page_id == 3 && rec.ori_page_id == 1)
-        {
-            exist = true;
-            break;
-        }
-    }
-    ASSERT_TRUE(exist);
     s0.reset();
 
     // reopen PageStorage, RefPage 3 -> 1 is still valid
@@ -508,32 +487,86 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     PageStorage::GcCandidates candidates{
         id_and_lvl,
     };
-    const auto      page_files = PageStorage::listAllPageFiles(storage->storage_path, true, storage->page_file_log);
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
     auto            s0         = storage->getSnapshot();
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
-
-    // We should see migration of DelPage1
-    bool exist = false;
-    for (const auto & rec : edit.getRecords())
-    {
-        if (rec.type == WriteBatch::WriteType::DEL && rec.page_id == 1)
-        {
-            exist = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(exist);
     s0.reset();
 
     auto live_files = storage->versioned_page_entries.gcApply(edit);
     EXPECT_EQ(live_files.find(id_and_lvl), live_files.end());
-    storage->gcRemoveObsoleteFiles(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
+    storage->gcRemoveObsoleteData(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
 
     // reopen PageStorage, Page 1 should be deleted
     storage = reopenWithConfig(config);
     auto s1 = storage->getSnapshot();
     ASSERT_EQ(s1->version()->find(1), std::nullopt);
 }
+
+TEST_F(PageStorage_test, GcMigrateRefPageToRefPage)
+try
+{
+    PageId page_id = 1;
+
+    const size_t buf_sz = 256;
+    char         c_buff[buf_sz];
+
+    {
+        // Page1 should be written to PageFile{1, 0}
+        WriteBatch batch;
+        memset(c_buff, 0xf, buf_sz);
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        batch.putPage(page_id, 0, buff, buf_sz);
+        // RefPage2 -> Page1, RefPage3 -> Page1, then del Page1
+        batch.putRefPage(2, page_id);
+        batch.putRefPage(3, page_id);
+        batch.delPage(page_id);
+        // RefPage4 -> 2 -> Page1, RefPage5 -> 3 -> Page 1, then del Page2, Page3
+        batch.putRefPage(4, 2);
+        batch.putRefPage(5, 3);
+        batch.delPage(2);
+        batch.delPage(3);
+
+        storage->write(batch);
+    }
+
+    PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
+
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
+    PageEntriesEdit edit;
+    {
+        // migrate PageFile{1, 0} -> PageFile{1, 1}
+        auto snapshot = storage->getSnapshot();
+
+        PageStorage::GcLivesPages livesPages{{id_and_lvl, {256, {page_id}}}};
+        PageStorage::GcCandidates candidates{id_and_lvl};
+        edit = storage->gcMigratePages(snapshot, livesPages, candidates, 0);
+    }
+
+    {
+        // check that now only PageFile{1, 1} is live and remove PageFile{1, 0}
+        std::set<PageFileIdAndLevel> live_files = storage->versioned_page_entries.gcApply(edit);
+        ASSERT_EQ(live_files.size(), 1UL);
+        ASSERT_EQ(*live_files.begin(), PageFileIdAndLevel(1, 1));
+
+        storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
+    }
+
+    // reload to check if there is any exception
+    EXPECT_NO_THROW(storage = reopenWithConfig(config));
+    storage = reopenWithConfig(config);
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
 
 /**
  * PageStorage tests with predefine Page1 && Page2

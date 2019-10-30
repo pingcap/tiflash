@@ -17,7 +17,7 @@ extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 std::set<PageFile, PageFile::Comparator>
-PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file, Logger * page_file_log)
+PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file, bool ignore_legacy, Logger * page_file_log)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -36,16 +36,32 @@ PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file,
     std::set<PageFile, PageFile::Comparator> page_files;
     for (const auto & name : file_names)
     {
-        auto [page_file, ok] = PageFile::recover(storage_path, name, page_file_log);
-        if (ok)
+        auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
+        if (page_file_type == PageFile::Type::Formal)
         {
             page_files.insert(page_file);
         }
-        else if (remove_tmp_file)
+        else if (page_file_type == PageFile::Type::Legacy)
         {
-            // Remove temporary file.
-            Poco::File file(storage_path + "/" + name);
-            file.remove(true);
+            if (!ignore_legacy)
+            {
+                page_files.insert(page_file);
+
+                if (remove_tmp_file)
+                {
+                    page_file.removeDataIfExists();
+                }
+            }
+        }
+        else
+        {
+            // For temporary and invalid
+            if (remove_tmp_file)
+            {
+                // Remove temporary file.
+                Poco::File file(storage_path + "/" + name);
+                file.remove(true);
+            }
         }
     }
 
@@ -56,13 +72,13 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
-      versioned_page_entries(),
       page_file_log(&Poco::Logger::get("PageFile")),
-      log(&Poco::Logger::get("PageStorage"))
+      log(&Poco::Logger::get("PageStorage")),
+      versioned_page_entries(config.version_set_config, log)
 {
     /// page_files are in ascending ordered by (file_id, level).
-    auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, page_file_log);
-    // recover current version from files
+    auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, /* ignore_legacy */ false, page_file_log);
+    // recover current version from both formal and legacy page files
 
 #ifdef DELTA_VERSION_SET
     for (auto & page_file : page_files)
@@ -332,7 +348,7 @@ bool PageStorage::gc()
 {
     std::lock_guard<std::mutex> gc_lock(gc_mutex);
     // get all PageFiles
-    const auto page_files = PageStorage::listAllPageFiles(storage_path, true, page_file_log);
+    auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file */ true, /* ignore_legacy */ true, page_file_log);
     if (page_files.empty())
     {
         return false;
@@ -422,7 +438,7 @@ bool PageStorage::gc()
     }
 
     // Delete obsolete files that are not used by any version, without lock
-    gcRemoveObsoleteFiles(page_files, writing_file_id_level, live_files);
+    gcRemoveObsoleteData(page_files, writing_file_id_level, live_files);
     return true;
 }
 
@@ -547,19 +563,21 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                 // copy valid pages from `to_merge_file` to `gc_file`
                 PageMap    pages = to_merge_file_reader->read(page_id_and_entries);
                 WriteBatch wb;
-                for (const auto & [page_id, page_cache] : page_id_and_entries)
+                for (const auto & [page_id, page_entry] : page_id_and_entries)
                 {
                     auto & page = pages.find(page_id)->second;
-                    wb.putPage(page_id,
-                               page_cache.tag,
-                               std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
-                               page.data.size());
+                    wb.gcMovePage(page_id,
+                                  page_entry.tag,
+                                  std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
+                                  page.data.size());
                 }
 
                 gc_file_writer->write(wb, gc_file_edit);
             }
         }
 
+#if 0
+        /// Do NOT need to migrate RefPage and DelPage since we only remove PageFile's data but keep meta.
         {
             // Migrate valid RefPages and DelPage.
             WriteBatch batch;
@@ -585,6 +603,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
             }
             gc_file_writer->write(batch, gc_file_edit);
         }
+#endif
     } // free gc_file_writer and sync
 
     const auto id = gc_file.fileIdLevel();
@@ -611,11 +630,11 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
  * @param writing_file_id_level The PageFile id which is writing to
  * @param live_files            The live files after gc
  */
-void PageStorage::gcRemoveObsoleteFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                        const PageFileIdAndLevel &                       writing_file_id_level,
-                                        const std::set<PageFileIdAndLevel> &             live_files)
+void PageStorage::gcRemoveObsoleteData(std::set<PageFile, PageFile::Comparator> & page_files,
+                                       const PageFileIdAndLevel &                 writing_file_id_level,
+                                       const std::set<PageFileIdAndLevel> &       live_files)
 {
-    for (const auto & page_file : page_files)
+    for (auto & page_file : page_files)
     {
         const auto page_id_and_lvl = page_file.fileIdLevel();
         if (page_id_and_lvl >= writing_file_id_level)
@@ -625,8 +644,9 @@ void PageStorage::gcRemoveObsoleteFiles(const std::set<PageFile, PageFile::Compa
 
         if (live_files.count(page_id_and_lvl) == 0)
         {
-            // the page file is not used by any version, remove the page file in disk
-            page_file.destroy();
+            /// The page file is not used by any version, remove the page file's data in disk.
+            /// Page file's meta is left and will be compacted later.
+            const_cast<PageFile &>(page_file).setLegacy();
         }
     }
 }

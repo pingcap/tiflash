@@ -43,6 +43,8 @@ public:
      */
     void put(PageId page_id, const PageEntry & entry);
 
+    void move_normal_page(PageId page_id, PageEntry entry);
+
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
      *  template must_exist = true ensure that corresponding Page must exist.
@@ -228,6 +230,30 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
 
     // update max_page_id
     max_page_id = std::max(max_page_id, page_id);
+}
+
+template <typename T>
+void PageEntriesMixin<T>::move_normal_page(PageId normal_page_id, PageEntry entry)
+{
+    assert(is_base); // can only call by base
+
+    // update normal page's entry
+    auto ori_iter = normal_pages.find(normal_page_id);
+    if (likely(ori_iter != normal_pages.end()))
+    {
+        // replace ori Page{normal_page_id}'s entry but inherit ref-counting
+        const UInt32 page_ref_count  = ori_iter->second.ref;
+        entry.ref                    = page_ref_count;
+        normal_pages[normal_page_id] = entry;
+    }
+    else
+    {
+        // Page{normal_page_id} not exist
+        throw Exception("Try to move non-exist normal page: " + DB::toString(normal_page_id), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // update max_page_id
+    max_page_id = std::max(max_page_id, normal_page_id);
 }
 
 template <typename T>
