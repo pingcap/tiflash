@@ -166,14 +166,6 @@ void PageStorage::write(const WriteBatch & wb)
     std::lock_guard<std::mutex> lock(write_mutex);
     getWriter().write(wb, edit);
 
-    for(auto & w : wb.getWrites())
-    {
-        if(w.page_id == 25)
-        {
-            std::cout << "" ;
-        }
-    }
-
     // Apply changes into versioned_page_entries(generate a new version)
     // If there are RefPages to non-exist Pages, just put the ref pair to new version
     // instead of throwing exception. Or we can't open PageStorage since we have already
