@@ -233,10 +233,10 @@ namespace PageMetaFormat
 {
 using WBSize          = UInt32;
 using PageFileVersion = PageFile::Version;
+// TODO we should align these alias with type in PageCache
 using PageTag         = UInt64;
 using IsPut           = UInt8;
 using PageOffset      = UInt64;
-using PageSize        = UInt32;
 using Checksum        = UInt64;
 
 static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
