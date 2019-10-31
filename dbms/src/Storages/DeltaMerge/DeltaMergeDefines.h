@@ -79,6 +79,7 @@ struct ColumnDefine
     {
     }
 };
+
 using ColumnDefines   = std::vector<ColumnDefine>;
 using ColumnDefineMap = std::unordered_map<ColId, ColumnDefine>;
 
