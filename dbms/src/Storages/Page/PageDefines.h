@@ -29,6 +29,8 @@ using PageFileId          = UInt64;
 using PageFileIdAndLevel  = std::pair<PageFileId, UInt32>;
 using PageFileIdAndLevels = std::vector<PageFileIdAndLevel>;
 
+using PageSize = UInt64;
+
 struct ByteBuffer
 {
     using Pos = char *;

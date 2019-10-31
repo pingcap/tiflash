@@ -33,7 +33,7 @@ struct PageCache
     // if file_id == 0, means it is invalid
     PageFileId file_id  = 0;
     UInt32     level    = 0;
-    UInt32     size     = 0;
+    PageSize   size     = 0;
     UInt64     offset   = 0;
     UInt64     tag      = 0;
     UInt64     checksum = 0;
