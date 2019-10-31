@@ -5,6 +5,7 @@
 #include <Storages/DeltaMerge/Chunk.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -15,7 +16,7 @@ namespace DB
 namespace DM
 {
 
-const static size_t STABLE_CHUNK_ROWS = DEFAULT_MERGE_BLOCK_SIZE;
+//const static size_t STABLE_CHUNK_ROWS = 10;
 
 class Segment;
 struct SegmentSnapshot;
@@ -75,18 +76,21 @@ using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot
 {
-    DiskValueSpacePtr stable        = {};
+    DMFilePtr         stable        = {};
     DiskValueSpacePtr delta         = {};
     size_t            delta_rows    = 0;
     size_t            delta_deletes = 0;
     DeltaIndexPtr     delta_index   = {};
+
+    // Whether this snapshot contains the cache of delta or not.
+    bool delta_has_cache = false;
 
     SegmentSnapshot() = default;
 
     explicit operator bool() { return (bool)delta; }
 };
 
-/// A segment contains many rows of a table. A table is split into segments by succeeding ranges.
+/// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
 ///
 /// The data of stable value space is stored in "data" storage, while data of delta value space is stored in "log" storage.
 /// And all meta data is stored in "meta" storage.
@@ -122,17 +126,25 @@ public:
             const HandleRange & range_,
             PageId              segment_id_,
             PageId              next_segment_id_,
-            PageId              delta_id,
-            PageId              stable_id);
+            PageId              delta_id);
+    Segment(UInt64                    epoch_, //
+            const HandleRange &       range_,
+            PageId                    segment_id_,
+            PageId                    next_segment_id_,
+            const DiskValueSpacePtr & delta_,
+            const DMFilePtr &         stable_);
 
-    Segment(UInt64              epoch_, //
-            const HandleRange & range_,
-            PageId              segment_id_,
-            PageId              next_segment_id_,
-            DiskValueSpacePtr   delta_,
-            DiskValueSpacePtr   stable_);
+    static SegmentPtr newSegment(DMContext &         context, //
+                                 const HandleRange & range_,
+                                 PageId              segment_id,
+                                 PageId              next_segment_id,
+                                 PageId              delta_id,
+                                 PageId              stable_id);
+    static SegmentPtr newSegment(DMContext &         context, //
+                                 const HandleRange & range,
+                                 PageId              segment_id,
+                                 PageId              next_segment_id);
 
-    static SegmentPtr newSegment(DMContext & context, const HandleRange & range_, PageId segment_id_, PageId next_segment_id_);
     static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
 
     void serialize(WriteBatch & wb);
@@ -160,12 +172,13 @@ public:
                                        const HandleRanges &  read_ranges         = {HandleRange::newAll()},
                                        const RSOperatorPtr & filter              = {},
                                        UInt64                max_version         = MAX_UINT64,
-                                       size_t                expected_block_size = STABLE_CHUNK_ROWS);
+                                       size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext &       dm_context,
                                           const ColumnDefines &   columns_to_read,
                                           const SegmentSnapshot & segment_snap,
-                                          const StorageSnapshot & storage_snap);
+                                          const StorageSnapshot & storage_snap,
+                                          bool                    do_range_filter);
 
     BlockInputStreamPtr getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read);
 
@@ -184,11 +197,11 @@ public:
                             WriteBatches &          wbs);
     static SegmentPtr merge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
 
-    DiskValueSpacePtr prepareMergeDelta(DMContext &             dm_context,
-                                        const SegmentSnapshot & segment_snap,
-                                        const StorageSnapshot & storage_snap,
-                                        WriteBatches &          wbs) const;
-    SegmentPtr        applyMergeDelta(const SegmentSnapshot & segment_snap, WriteBatches & wbs, const DiskValueSpacePtr & new_stable) const;
+    DMFilePtr  prepareMergeDelta(DMContext &             dm_context,
+                                 const SegmentSnapshot & segment_snap,
+                                 const StorageSnapshot & storage_snap,
+                                 WriteBatches &          wbs) const;
+    SegmentPtr applyMergeDelta(const SegmentSnapshot & segment_snap, WriteBatches & wbs, const DMFilePtr & new_stable) const;
 
     /// Note that we should replace this object with return object, or we can not read latest data after `mergeDelta`.
     WARN_UNUSED_RESULT
@@ -211,27 +224,22 @@ public:
 
     void check(DMContext & dm_context, const String & when) const;
 
-    String simpleInfo() const { return "{" + DB::toString(segment_id) + ":" + range.toString() + "}"; }
-
-    String info() const
-    {
-        return "{id:" + DB::toString(segment_id) + ", next: " + DB::toString(next_segment_id) + ", epoch: " + DB::toString(epoch)
-            + ", range: " + range.toString() + "}";
-    }
-
     const HandleRange &    getRange() const { return range; }
     const DiskValueSpace & getDelta() const { return *delta; }
-    const DiskValueSpace & getStable() const { return *stable; }
+    const DMFilePtr &      getStable() const { return stable; }
 
     size_t getPlacedDeltaRows() const { return placed_delta_rows; }
     size_t getPlacedDeltaDeletes() const { return placed_delta_deletes; }
 
-    size_t deltaRows(bool with_delta_cache = true) const;
+    size_t getDeltaRawRows(bool with_delta_cache = true) const;
     // Insert and delete operations' count in DeltaTree
     size_t updatesInDeltaTree() const;
 
     std::atomic_bool & isMergeDelta() { return is_merge_delta; }
     std::atomic_bool & isBackgroundMergeDelta() { return is_background_merge_delta; }
+
+    String simpleInfo() const;
+    String info() const;
 
 private:
     template <bool add_tag_column>
@@ -244,10 +252,10 @@ private:
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
     template <class IndexIterator = DeltaIndex::Iterator>
-    BlockInputStreamPtr getPlacedStream(const PageReader &         data_page_reader,
+    BlockInputStreamPtr getPlacedStream(const DMContext &          dm_context,
                                         const ColumnDefines &      read_columns,
                                         const RSOperatorPtr &      filter,
-                                        const DiskValueSpace &     stable_snap,
+                                        const DMFilePtr &          stable_snap,
                                         const DeltaValueSpacePtr & delta_value_space,
                                         const IndexIterator &      delta_index_begin,
                                         const IndexIterator &      delta_index_end,
@@ -258,7 +266,7 @@ private:
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info) const;
     /// Only look up in the stable vs.
-    Handle getSplitPointFast(DMContext & dm_context, const PageReader & data_page_reader, const DiskValueSpace & stable_snap) const;
+    Handle getSplitPointFast(DMContext & dm_context, const PageReader & data_page_reader, const DMFilePtr & stable_snap) const;
 
     SegmentPair doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_snap, Handle split_point, WriteBatches & wbs) const;
     SegmentPair doSplitPhysical(DMContext &             dm_context,
@@ -276,7 +284,7 @@ private:
     /// Make sure that all delta chunks have been placed.
     DeltaIndexPtr ensurePlace(const DMContext &          dm_context,
                               const StorageSnapshot &    storage_snapshot,
-                              const DiskValueSpace &     stable_snap,
+                              const DMFilePtr &          stable_snap,
                               const DiskValueSpace &     to_place_delta,
                               size_t                     delta_rows_limit,
                               size_t                     delta_deletes_limit,
@@ -284,22 +292,20 @@ private:
 
     /// Reference the inserts/updates by delta tree.
     void placeUpsert(const DMContext &          dm_context,
-                     const PageReader &         data_page_reader,
-                     const DiskValueSpace &     stable_snap,
+                     const DMFilePtr &          stable_snap,
                      const DeltaValueSpacePtr & delta_value_space,
                      size_t                     delta_value_space_offset,
                      Block &&                   block,
                      DeltaTree &                delta_tree) const;
     /// Reference the deletes by delta tree.
     void placeDelete(const DMContext &          dm_context,
-                     const PageReader &         data_page_reader,
-                     const DiskValueSpace &     stable_snap,
+                     const DMFilePtr &          stable_snap,
                      const DeltaValueSpacePtr & delta_value_space,
                      const HandleRange &        delete_range,
                      DeltaTree &                delta_tree) const;
 
-    MinMaxIndexPtr getMinMax(const ColumnDefine & column_define) const;
-
+    size_t stableRows() const;
+    size_t deltaRows() const;
     size_t estimatedRows() const;
     size_t estimatedBytes() const;
 
@@ -310,7 +316,7 @@ private:
     const PageId      next_segment_id;
 
     DiskValueSpacePtr delta;
-    DiskValueSpacePtr stable;
+    DMFilePtr         stable;
 
     std::atomic_bool is_merge_delta            = false;
     std::atomic_bool is_background_merge_delta = false;
@@ -320,10 +326,10 @@ private:
     mutable size_t       placed_delta_deletes = 0;
 
     // Used to synchronize between read threads and write thread.
-    // Write thread holds a unique lock, and read thread holds shared lock.
+    // Write thread holds a unique lock, and read threads hold shared lock.
     mutable std::shared_mutex read_write_mutex;
     // Used to synchronize between read threads.
-    // Mainly to protect delta_tree's update between read threads.
+    // Mainly to protect delta_tree's update between them.
     mutable std::mutex read_read_mutex;
 
     Logger * log;

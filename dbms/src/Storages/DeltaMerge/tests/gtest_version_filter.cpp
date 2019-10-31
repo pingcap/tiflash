@@ -1,7 +1,7 @@
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
 
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
-
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 namespace DB
 {

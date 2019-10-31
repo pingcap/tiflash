@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <unordered_set>
 
@@ -10,7 +10,7 @@ namespace DB
 namespace DM
 {
 
-class DMColumnFilterBlockInputStream : public IProfilingBlockInputStream
+class DMColumnFilterBlockInputStream : public IBlockInputStream
 {
 public:
     DMColumnFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_)
@@ -23,8 +23,7 @@ public:
 
     Block getHeader() const override { return header; }
 
-protected:
-    Block readImpl() override
+    Block read() override
     {
         Block block = children.back()->read();
         if (!block)
@@ -42,7 +41,7 @@ private:
     Block         header;
 };
 
-class DMHandleConvertBlockInputStream : public IProfilingBlockInputStream
+class DMHandleConvertBlockInputStream : public IBlockInputStream
 {
 public:
     using ColumnNames = std::vector<std::string>;
@@ -60,8 +59,7 @@ public:
 
     Block getHeader() const override { return children.back()->getHeader(); }
 
-protected:
-    Block readImpl() override
+    Block read() override
     {
         Block block = children.back()->read();
         if (!block)

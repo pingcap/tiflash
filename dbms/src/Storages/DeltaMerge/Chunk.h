@@ -29,7 +29,7 @@ struct ColumnMeta
     UInt32         rows;
     UInt64         bytes;
     DataTypePtr    type;
-    MinMaxIndexPtr minmax;
+    MinMaxIndexPtr minmax{};
 };
 using ColumnMetas = std::vector<ColumnMeta>;
 

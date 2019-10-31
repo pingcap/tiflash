@@ -143,7 +143,7 @@ public:
         {
             LOG_DEBUG(log_,
                       "Segment [" << task.segment->segmentId() << "] task [" << getBackgroundTypeName(task.type)
-                                  << "] add to background task pool by" << whom);
+                                  << "] add to background task pool by [" << whom << "]");
 
             std::scoped_lock lock(mutex);
             tasks.push(task);
@@ -190,7 +190,7 @@ public:
                            size_t                num_streams,
                            UInt64                max_version,
                            const RSOperatorPtr & filter, 
-                           size_t                expected_block_size = STABLE_CHUNK_ROWS);
+                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Force flush all data to disk.
     /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
@@ -214,29 +214,8 @@ public:
     DeltaMergeStoreStat getStat();
 
 private:
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings)
-    {
-        ColumnDefines store_columns = table_columns;
-        if (pkIsHandle())
-        {
-            // Add an extra handle column.
-            store_columns.push_back(getExtraHandleColumnDefine());
-        }
 
-        auto * ctx = new DMContext{.db_context    = db_context,
-                                   .storage_pool  = storage_pool,
-                                   .store_columns = std::move(store_columns),
-                                   .handle_column = getExtraHandleColumnDefine(),
-                                   .min_version   = 0,
-
-                                   .not_compress            = settings.not_compress_columns,
-                                   .segment_limit_rows      = db_settings.dm_segment_limit_rows,
-                                   .delta_limit_rows        = db_settings.dm_segment_delta_limit_rows,
-                                   .delta_limit_bytes       = db_settings.dm_segment_delta_limit_bytes,
-                                   .delta_cache_limit_rows  = db_settings.dm_segment_delta_cache_limit_rows,
-                                   .delta_cache_limit_bytes = db_settings.dm_segment_delta_cache_limit_bytes};
-        return DMContextPtr(ctx);
-    }
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
     bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 

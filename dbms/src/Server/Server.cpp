@@ -331,6 +331,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    if (minmax_index_cache_size)
+        global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");

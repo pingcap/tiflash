@@ -303,6 +303,11 @@ try
     if (mark_cache_size)
         context->setMarkCache(mark_cache_size);
 
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    if (minmax_index_cache_size)
+        context->setMinMaxIndexCache(minmax_index_cache_size);
+
     bool use_L0_opt = config().getBool("l0_optimize", true);
     context->setUseL0Opt(use_L0_opt);
 

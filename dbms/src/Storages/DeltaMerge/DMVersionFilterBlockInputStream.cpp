@@ -9,7 +9,7 @@ namespace DM
 static constexpr size_t UNROLL_BATCH = 64;
 
 template <int MODE>
-Block DMVersionFilterBlockInputStream<MODE>::readImpl()
+Block DMVersionFilterBlockInputStream<MODE>::read()
 {
     while (true)
     {

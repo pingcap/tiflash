@@ -3,7 +3,7 @@
 #include <common/logger_useful.h>
 
 #include <Columns/ColumnsCommon.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
 namespace DB
@@ -18,7 +18,7 @@ static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
 static constexpr int DM_VERSION_FILTER_MODE_COMPACT = 1;
 
 template <int MODE>
-class DMVersionFilterBlockInputStream : public IProfilingBlockInputStream
+class DMVersionFilterBlockInputStream : public IBlockInputStream
 {
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
@@ -46,9 +46,9 @@ public:
     String getName() const override { return "DeltaMergeVersionFilter"; }
     Block  getHeader() const override { return header; }
 
-protected:
-    Block readImpl() override;
+    Block read() override;
 
+private:
     inline UInt8 checkWithNextIndex(size_t i)
     {
 #define cur_handle (*handle_col_data)[i]

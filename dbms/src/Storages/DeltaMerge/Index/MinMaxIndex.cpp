@@ -1,3 +1,4 @@
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 
 #include <DataTypes/DataTypeDate.h>
@@ -13,19 +14,23 @@ namespace DB
 {
 namespace DM
 {
-MinMaxIndex::MinMaxIndex(const IDataType & type, const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+
+void MinMaxIndex::addChunk(const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     const IColumn * column_ptr = &column;
+    auto            size       = column.size();
+    bool            has_null   = false;
     if (column.isColumnNullable())
     {
-        auto & del_mark_data   = del_mark.getData();
+        const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
+
         auto & nullable_column = static_cast<const ColumnNullable &>(column);
         auto & null_mark_data  = nullable_column.getNullMapColumn().getData();
         column_ptr             = &nullable_column.getNestedColumn();
 
-        for (size_t i = offset; i < offset + limit; ++i)
+        for (size_t i = 0; i < size; ++i)
         {
-            if (!del_mark_data[i] && null_mark_data[i])
+            if ((!del_mark_data || !(*del_mark_data)[i]) && null_mark_data[i])
             {
                 has_null = true;
                 break;
@@ -33,90 +38,126 @@ MinMaxIndex::MinMaxIndex(const IDataType & type, const IColumn & column, const C
         }
     }
 
-#define DISPATCH(TYPE)                                                                           \
-    if (typeid_cast<const DataType##TYPE *>(&type))                                              \
-        minmax = std::make_shared<MinMaxValueFixed<TYPE>>(*column_ptr, del_mark, offset, limit); \
+    auto [min_index, max_index] = minmax(*column_ptr, del_mark, 0, column_ptr->size());
+    if (min_index != NONE_EXIST)
+    {
+        has_null_marks->push_back(has_null);
+        has_value_marks->push_back(1);
+        minmaxes->insertFrom(*column_ptr, min_index);
+        minmaxes->insertFrom(*column_ptr, max_index);
+    }
     else
-
-    FOR_NUMERIC_TYPES(DISPATCH)
-#undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<typename DataTypeDate::FieldType>>(*column_ptr, del_mark, offset, limit);
-    else if (typeid_cast<const DataTypeDateTime *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<typename DataTypeDateTime::FieldType>>(*column_ptr, del_mark, offset, limit);
-    else if (typeid_cast<const DataTypeUUID *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<typename DataTypeUUID::FieldType>>(*column_ptr, del_mark, offset, limit);
-    else if (typeid_cast<const DataTypeEnum<Int8> *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<Int8>>(*column_ptr, del_mark, offset, limit);
-    else if (typeid_cast<const DataTypeEnum<Int16> *>(&type))
-        minmax = std::make_shared<MinMaxValueFixed<Int16>>(*column_ptr, del_mark, offset, limit);
-    else if (typeid_cast<const DataTypeString *>(&type))
-        minmax = std::make_shared<MinMaxValueString>(*column_ptr, del_mark, offset, limit);
-    else
-        minmax = std::make_shared<MinMaxValueDataGeneric>(*column_ptr, del_mark, offset, limit);
-}
-
-void MinMaxIndex::merge(const MinMaxIndex & other)
-{
-    has_null |= other.has_null;
-    minmax->merge(*(other.minmax));
+    {
+        has_null_marks->push_back(has_null);
+        has_value_marks->push_back(0);
+        minmaxes->insertDefault();
+        minmaxes->insertDefault();
+    }
 }
 
 void MinMaxIndex::write(const IDataType & type, WriteBuffer & buf)
 {
-    writePODBinary(has_null, buf);
-    minmax->write(type, buf);
+    UInt64 size = has_null_marks->size();
+    DB::writeIntBinary(size, buf);
+    buf.write((char *)has_null_marks->data(), sizeof(UInt8) * size);
+    buf.write((char *)has_value_marks->data(), sizeof(UInt8) * size);
+    type.serializeBinaryBulkWithMultipleStreams(*minmaxes, //
+                                                [&](const IDataType::SubstreamPath &) { return &buf; },
+                                                0,
+                                                size * 2,
+                                                true,
+                                                {});
 }
 
 MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf)
 {
-    auto v = std::make_shared<MinMaxIndex>();
-    readPODBinary(v->has_null, buf);
-#define DISPATCH(TYPE)                                       \
-    if (typeid_cast<const DataType##TYPE *>(&type))          \
-        v->minmax = MinMaxValueFixed<TYPE>::read(type, buf); \
-    else
-    FOR_NUMERIC_TYPES(DISPATCH)
-#undef DISPATCH
-    if (typeid_cast<const DataTypeDate *>(&type))
-        v->minmax = MinMaxValueFixed<typename DataTypeDate::FieldType>::read(type, buf);
-    else if (typeid_cast<const DataTypeDateTime *>(&type))
-        v->minmax = MinMaxValueFixed<typename DataTypeDateTime::FieldType>::read(type, buf);
-    else if (typeid_cast<const DataTypeUUID *>(&type))
-        v->minmax = MinMaxValueFixed<typename DataTypeUUID::FieldType>::read(type, buf);
-    else if (typeid_cast<const DataTypeEnum<Int8> *>(&type))
-        v->minmax = MinMaxValueFixed<Int8>::read(type, buf);
-    else if (typeid_cast<const DataTypeEnum<Int16> *>(&type))
-        v->minmax = MinMaxValueFixed<Int16>::read(type, buf);
-    else if (typeid_cast<const DataTypeString *>(&type))
-        v->minmax = MinMaxValueString::read(type, buf);
-    else
-        v->minmax = MinMaxValueDataGeneric::read(type, buf);
-    return v;
+    UInt64 size;
+    DB::readIntBinary(size, buf);
+    auto has_null_marks  = std::make_shared<PaddedPODArray<UInt8>>(size);
+    auto has_value_marks = std::make_shared<PaddedPODArray<UInt8>>(size);
+    auto minmaxes        = type.createColumn();
+    buf.read((char *)has_null_marks->data(), sizeof(UInt8) * size);
+    buf.read((char *)has_value_marks->data(), sizeof(UInt8) * size);
+    type.deserializeBinaryBulkWithMultipleStreams(*minmaxes, //
+                                                  [&](const IDataType::SubstreamPath &) { return &buf; },
+                                                  size * 2,
+                                                  0,
+                                                  true,
+                                                  {});
+    return MinMaxIndexPtr(new MinMaxIndex(has_null_marks, has_value_marks, std::move(minmaxes)));
 }
 
-RSResult MinMaxIndex::checkEqual(const Field & value, const DataTypePtr & type)
+RSResult MinMaxIndex::checkEqual(size_t chunk_id, const Field & value, const DataTypePtr & type)
 {
-    if (has_null || value.isNull())
+    if ((*has_null_marks)[chunk_id] || value.isNull())
         return Some;
-    return minmax->checkEqual(value, type);
+    if (!(*has_value_marks)[chunk_id])
+        return RSResult ::None;
+    if (type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
+    {
+        // Currently only support handle.
+        auto & minmaxes_data = toColumnVectorData<Handle>(minmaxes);
+        auto   min           = minmaxes_data[chunk_id * 2];
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];
+        Handle v             = value.get<Handle>();
+
+        if (min == max && v == min)
+            return RSResult::All;
+        else if (v >= min && v <= max)
+            return RSResult::Some;
+        else
+            return RSResult::None;
+    }
+    return RSResult::Some;
 }
-RSResult MinMaxIndex::checkGreater(const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
+RSResult MinMaxIndex::checkGreater(size_t chunk_id, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    if (has_null || value.isNull())
+    if ((*has_null_marks)[chunk_id] || value.isNull())
         return Some;
-    return minmax->checkGreater(value, type);
+    if (!(*has_value_marks)[chunk_id])
+        return RSResult ::None;
+    if (type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
+    {
+        // Currently only support handle.
+        auto & minmaxes_data = toColumnVectorData<Handle>(minmaxes);
+        auto   min           = minmaxes_data[chunk_id * 2];
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];
+        Handle v             = value.get<Handle>();
+
+        if (v >= max)
+            return RSResult::None;
+        else if (v < min)
+            return RSResult::All;
+        return RSResult::Some;
+    }
+    return RSResult::Some;
 }
-RSResult MinMaxIndex::checkGreaterEqual(const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
+RSResult MinMaxIndex::checkGreaterEqual(size_t chunk_id, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    if (has_null || value.isNull())
+    if ((*has_null_marks)[chunk_id] || value.isNull())
         return Some;
-    return minmax->checkGreaterEqual(value, type);
+    if (!(*has_value_marks)[chunk_id])
+        return RSResult ::None;
+    if (type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
+    {
+        // Currently only support handle.
+        auto & minmaxes_data = toColumnVectorData<Handle>(minmaxes);
+        auto   min           = minmaxes_data[chunk_id * 2];
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];
+        Handle v             = value.get<Handle>();
+
+        if (v > max)
+            return RSResult::None;
+        else if (v <= min)
+            return RSResult::All;
+        return RSResult::Some;
+    }
+    return RSResult::Some;
 }
 
 String MinMaxIndex::toString() const
 {
-    return this->minmax->toString();
+    return "";
 }
 
 } // namespace DM

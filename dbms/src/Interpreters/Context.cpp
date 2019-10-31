@@ -21,6 +21,7 @@
 #include <Storages/CompressionSettingsSelector.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
@@ -135,6 +136,7 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker;                         /// Execute inner functions, debug only.
     mutable TMTContextPtr tmt_context;
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
+    mutable DM::MinMaxIndexCachePtr minmax_index_cache;     /// Cache of minmax index in compressed files.
     ProcessList process_list;                               /// Executing queries at the moment.
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
     ViewDependencies view_dependencies;                     /// Current dependencies
@@ -1351,6 +1353,30 @@ void Context::dropMarkCache() const
     auto lock = getLock();
     if (shared->mark_cache)
         shared->mark_cache->reset();
+}
+
+
+void Context::setMinMaxIndexCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->minmax_index_cache)
+        throw Exception("Minmax index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->minmax_index_cache = std::make_shared<DM::MinMaxIndexCache>(cache_size_in_bytes, std::chrono::seconds(settings.mark_cache_min_lifetime));
+}
+
+DM::MinMaxIndexCachePtr Context::getMinMaxIndexCache() const
+{
+    auto lock = getLock();
+    return shared->minmax_index_cache;
+}
+
+void Context::dropMinMaxIndexCache() const
+{
+    auto lock = getLock();
+    if (shared->minmax_index_cache)
+        shared->minmax_index_cache->reset();
 }
 
 

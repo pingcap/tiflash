@@ -15,10 +15,10 @@ public:
 
     String name() override { return "equal"; }
 
-    RSResult roughCheck(const RSCheckParam & param) override
+    RSResult roughCheck(size_t chunk_id, const RSCheckParam & param) override
     {
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
-        return rsindex.minmax->checkEqual(value, rsindex.type);
+        return rsindex.minmax->checkEqual(chunk_id, value, rsindex.type);
     }
 
     RSOperatorPtr applyNot() override { return createNotEqual(attr, value); };

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Range.h>
 
@@ -101,7 +101,7 @@ inline Block filterUnsorted(const HandleRange & handle_range, Block && block, si
 } // namespace HandleFilter
 
 template <bool is_block_sorted>
-class DMHandleFilterBlockInputStream : public IProfilingBlockInputStream
+class DMHandleFilterBlockInputStream : public IBlockInputStream
 {
 public:
     DMHandleFilterBlockInputStream(const BlockInputStreamPtr & input, HandleRange handle_range_, size_t handle_col_pos_)
@@ -113,8 +113,7 @@ public:
     String getName() const override { return "DeltaMergeHandleFilter"; }
     Block  getHeader() const override { return children.back()->getHeader(); }
 
-protected:
-    Block readImpl() override
+    Block read() override
     {
         while (true)
         {
