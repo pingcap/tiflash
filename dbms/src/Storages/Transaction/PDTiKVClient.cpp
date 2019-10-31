@@ -1,6 +1,7 @@
 #include <Storages/Transaction/PDTiKVClient.h>
 
 #include <Common/Exception.h>
+
 #include <netdb.h>
 
 namespace DB
@@ -24,7 +25,7 @@ std::string getIP(const std::string & address)
 
 // convertAddr converts host name to network address.
 // We assume the converted net type is AF_NET.
-std::string convertAddr(const std::string & address)
+std::string IndexReader::convertAddr(const std::string & address)
 {
     if (address.size() == 0)
         return "";
@@ -33,8 +34,18 @@ std::string convertAddr(const std::string & address)
         return "";
     auto host = address.substr(0, idx);
     auto port = address.substr(idx + 1);
-    struct hostent * result = gethostbyname(host.data());
+
+    char buf[1024];
+    struct hostent buff_storage;
+    struct hostent * result;
+    int err = 0;
+    gethostbyname_r(host.data(), &buff_storage, buf, sizeof(buf), &result, &err);
     // Suppose we always use IPv4 address.
+    if (result == nullptr || result->h_addr == nullptr || err != 0)
+    {
+        LOG_ERROR(log, "Cannot resolve host name: " << address << " error message is :" << hstrerror(err));
+        return "";
+    }
     std::string addr;
     for (int i = 0; i < 4; i++)
     {
