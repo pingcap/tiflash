@@ -33,6 +33,8 @@ private:
         const std::vector<metapb::Peer> & learners,
         pingcap::kv::RpcCallPtr<kvrpcpb::ReadIndexRequest>
             rpc);
+
+    std::string convertAddr(const std::string & address);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;
