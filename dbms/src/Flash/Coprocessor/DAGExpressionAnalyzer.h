@@ -34,7 +34,6 @@ private:
     const Context & context;
     bool after_agg;
     Int32 implicit_cast_count;
-    Poco::Logger * log;
 
 public:
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_);
