@@ -291,7 +291,7 @@ Field DecodeDatum(size_t & cursor, const String & raw_value)
         case TiDB::CodecFlagVarInt:
             return DecodeVarInt(cursor, raw_value);
         case TiDB::CodecFlagDuration:
-            throw Exception("Not implemented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+            return DecodeInt64(cursor, raw_value);
         case TiDB::CodecFlagDecimal:
             return DecodeDecimal(cursor, raw_value);
         case TiDB::CodecFlagJson:
@@ -329,7 +329,8 @@ void SkipDatum(size_t & cursor, const String & raw_value)
             SkipVarInt(cursor, raw_value);
             return;
         case TiDB::CodecFlagDuration:
-            throw Exception("Not implemented yet. DecodeDatum: CodecFlagDuration", ErrorCodes::LOGICAL_ERROR);
+            cursor += sizeof(Int64);
+            return;
         case TiDB::CodecFlagDecimal:
             SkipDecimal(cursor, raw_value);
             return;
@@ -537,6 +538,8 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
             return EncodeVarInt(field.safeGet<Int64>(), ss);
         case TiDB::CodecFlagVarUInt:
             return EncodeVarUInt(field.safeGet<UInt64>(), ss);
+        case TiDB::CodecFlagDuration:
+            return EncodeInt64(field.safeGet<Int64>(), ss);
         default:
             throw Exception("Not implemented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
     }

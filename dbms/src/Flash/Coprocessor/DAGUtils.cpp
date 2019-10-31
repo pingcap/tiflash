@@ -18,6 +18,8 @@ extern const int UNSUPPORTED_METHOD;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
+const Int8 VAR_SIZE = 0;
+
 bool isFunctionExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ScalarFunc || isAggFunctionExpr(expr); }
 
 const String & getAggFunctionName(const tipb::Expr & expr)
@@ -260,6 +262,52 @@ bool isInOrGlobalInOperator(const String & name) { return name == "in" || name =
 bool exprHasValidFieldType(const tipb::Expr & expr)
 {
     return expr.has_field_type() && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1);
+}
+
+bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types)
+{
+    for (const auto & type : types)
+        if (type.tp() == TiDB::TypeSet)
+            return true;
+    return false;
+}
+
+UInt8 getFieldLengthForArrowEncode(Int32 tp)
+{
+    switch (tp)
+    {
+        case TiDB::TypeTiny:
+        case TiDB::TypeShort:
+        case TiDB::TypeInt24:
+        case TiDB::TypeLong:
+        case TiDB::TypeLongLong:
+        case TiDB::TypeYear:
+        case TiDB::TypeDouble:
+        case TiDB::TypeTime:
+            return 8;
+        case TiDB::TypeFloat:
+            return 4;
+        case TiDB::TypeDecimal:
+        case TiDB::TypeNewDecimal:
+            return 40;
+        case TiDB::TypeDate:
+        case TiDB::TypeDatetime:
+        case TiDB::TypeNewDate:
+        case TiDB::TypeTimestamp:
+            return 20;
+        case TiDB::TypeVarchar:
+        case TiDB::TypeVarString:
+        case TiDB::TypeString:
+        case TiDB::TypeBlob:
+        case TiDB::TypeTinyBlob:
+        case TiDB::TypeMediumBlob:
+        case TiDB::TypeLongBlob:
+        case TiDB::TypeBit:
+        case TiDB::TypeEnum:
+            return VAR_SIZE;
+        default:
+            throw Exception("not supported field type in arrow encode: " + std::to_string(tp));
+    }
 }
 
 void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value)

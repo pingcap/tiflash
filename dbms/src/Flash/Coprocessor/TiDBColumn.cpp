@@ -6,6 +6,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 template <typename T>
 void encodeLittleEndian(const T & value, std::stringstream & ss)
 {
@@ -84,6 +89,21 @@ void TiDBColumn::append(Int64 value)
 {
     encodeLittleEndian<Int64>(value, data);
     finishAppendFixed();
+}
+
+void TiDBColumn::append(const TiDBEnum & ti_enum)
+{
+    encodeLittleEndian<UInt64>(ti_enum.value, data);
+    UInt64 size = 8;
+    data.write(ti_enum.name.data, ti_enum.name.size);
+    size += ti_enum.name.size;
+    finishAppendVar(size);
+}
+
+void TiDBColumn::append(const TiDBBit & bit)
+{
+    data.write(bit.val.data, bit.val.size);
+    finishAppendVar(bit.val.size);
 }
 
 void TiDBColumn::append(UInt64 value)
