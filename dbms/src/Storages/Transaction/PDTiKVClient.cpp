@@ -56,6 +56,8 @@ std::string IndexReader::convertAddr(const std::string & address)
     return addr;
 }
 
+constexpr int readIndexMaxBackoff = 5000;
+
 IndexReader::IndexReader(pingcap::kv::RegionCachePtr cache_,
     pingcap::kv::RpcClientPtr client_,
     const pingcap::kv::RegionVerID & id,
@@ -66,7 +68,7 @@ IndexReader::IndexReader(pingcap::kv::RegionCachePtr cache_,
 int64_t IndexReader::getReadIndex()
 {
     auto request = new kvrpcpb::ReadIndexRequest();
-    pingcap::kv::Backoffer bo(pingcap::kv::readIndexMaxBackoff);
+    pingcap::kv::Backoffer bo(readIndexMaxBackoff);
     auto rpc_call = std::make_shared<pingcap::kv::RpcCall<kvrpcpb::ReadIndexRequest>>(request);
 
     for (;;)
@@ -154,7 +156,7 @@ void IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
         auto resp = rpc->getResp();
         if (resp->has_region_error())
         {
-            LOG_WARNING(log, "send request to " + addr + " failed. because of MEET region error");
+            LOG_WARNING(log, "send request to " << addr << " failed. because of meet region error: " << resp->region_error().message());
             onRegionError(bo, ctx, resp->region_error());
         }
         else
