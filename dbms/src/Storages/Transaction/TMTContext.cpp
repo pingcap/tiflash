@@ -1,3 +1,4 @@
+#include <Common/DNSCache.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RaftCommandResult.h>
@@ -64,8 +65,22 @@ pingcap::pd::ClientPtr TMTContext::getPDClient() const { return pd_client; }
 IndexReaderPtr TMTContext::createIndexReader(pingcap::kv::RegionVerID region_version_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return pd_client->isMock() ? nullptr
-                               : std::make_shared<IndexReader>(region_cache, rpc_client, region_version_id, raft_service_address);
+    if (pd_client->isMock())
+    {
+        return nullptr;
+    }
+    else
+    {
+        // Assume net type of raft_service_address is AF_NET.
+        auto socket_addr = DNSCache::instance().resolveHostAndPort(raft_service_address);
+        std::string raft_service_ip = socket_addr.host().toString();
+        UInt16 raft_service_port = socket_addr.port();
+        if (raft_service_ip.empty())
+        {
+            throw Exception("Cannot resolve raft service address " + raft_service_address, ErrorCodes::LOGICAL_ERROR);
+        }
+        return std::make_shared<IndexReader>(region_cache, rpc_client, region_version_id, raft_service_ip, raft_service_port);
+    }
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }

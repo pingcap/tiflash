@@ -2,7 +2,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-
+#include <Core/Types.h>
 #include <pingcap/kv/RegionClient.h>
 #include <pingcap/pd/IClient.h>
 
@@ -16,14 +16,16 @@ namespace DB
 
 struct IndexReader : public pingcap::kv::RegionClient
 {
-    std::string suggested_address;
+    std::string suggested_ip;
+    UInt16 suggested_port;
 
     Logger * log;
 
     IndexReader(pingcap::kv::RegionCachePtr cache_,
         pingcap::kv::RpcClientPtr client_,
         const pingcap::kv::RegionVerID & id,
-        const std::string & suggested_address_);
+        const std::string & suggested_ip,
+        UInt16 suggested_port);
 
     int64_t getReadIndex();
 
@@ -33,8 +35,6 @@ private:
         const std::vector<metapb::Peer> & learners,
         pingcap::kv::RpcCallPtr<kvrpcpb::ReadIndexRequest>
             rpc);
-
-    std::string convertAddr(const std::string & address);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;
