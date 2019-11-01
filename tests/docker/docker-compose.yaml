@@ -67,7 +67,7 @@ services:
       - "pd0"
     restart: on-failure
   tidb0:
-    image: hub.pingcap.net/tiflash/tidb:191030
+    image: pingcap/tidb:latest
     ports:
       - "4000:4000"
       - "10080:10080"
