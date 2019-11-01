@@ -26,10 +26,10 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     std::tie(region_size, applied_index) = region.serialize(buffer);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
-        LOG_ERROR(&Logger::get("RegionPersister"),
-            region.toString() << " with data info: " << region.dataInfo() << ", serialized size " << region_size
-                              << " is too big to persist");
-        throw Exception("Region is too big to persist", ErrorCodes::LOGICAL_ERROR);
+        LOG_WARNING(&Logger::get("RegionPersister"),
+            "Persisting big region: " << region.toString() << " with data info: " << region.dataInfo() << ", serialized size "
+                                      << region_size);
+        //throw Exception("Region is too big to persist", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
