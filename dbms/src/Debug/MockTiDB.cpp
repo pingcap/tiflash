@@ -10,6 +10,8 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
@@ -159,7 +161,16 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     int i = 1;
     for (auto & column : columns.getAllPhysical())
     {
-        table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, Field()));
+        Field default_value;
+        auto it = columns.defaults.find(column.name);
+        if (it != columns.defaults.end())
+        {
+            const auto * func = typeid_cast<const ASTFunction *>(it->second.expression.get());
+            const auto * value_ptr
+                    = typeid_cast<const ASTLiteral *>(typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
+            default_value = value_ptr->value;
+        }
+        table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value));
         if (handle_pk_name == column.name)
         {
             if (!column.type->isInteger() && !column.type->isUnsignedInteger())
