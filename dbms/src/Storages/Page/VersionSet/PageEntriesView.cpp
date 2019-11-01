@@ -153,4 +153,32 @@ PageId PageEntriesView::maxId() const
     return max_id;
 }
 
+size_t PageEntriesView::numPages() const
+{
+    std::unordered_set<PageId>                        page_ids;
+    std::vector<std::shared_ptr<PageEntriesForDelta>> nodes;
+    for (auto node = tail; node != nullptr; node = node->prev)
+        nodes.emplace_back(node);
+
+    for (auto node = nodes.rbegin(); node != nodes.rend(); ++node)
+    {
+        for (const auto & pair : (*node)->page_ref)
+        {
+            page_ids.insert(pair.first);
+        }
+        for (const auto & page_id_to_del : (*node)->ref_deletions)
+        {
+            page_ids.erase(page_id_to_del);
+        }
+    }
+
+    return page_ids.size();
+}
+
+size_t PageEntriesView::numNormalPages() const
+{
+    auto normal_ids = validNormalPageIds();
+    return normal_ids.size();
+}
+
 } // namespace DB

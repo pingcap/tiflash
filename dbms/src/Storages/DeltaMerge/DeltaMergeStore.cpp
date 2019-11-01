@@ -858,6 +858,28 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
     stat.avg_chunk_rows_in_stable  = (Float64)stat.total_stable_rows / stat.total_chunk_count_in_stable;
     stat.avg_chunk_bytes_in_stable = (Float64)stat.total_stable_bytes / stat.total_chunk_count_in_stable;
 
+    {
+        stat.storage_stable_num_snapshots        = storage_pool.data().getNumSnapshots();
+        PageStorage::SnapshotPtr stable_snapshot = storage_pool.data().getSnapshot();
+        stat.storage_stable_num_pages            = stable_snapshot->version()->numPages();
+        stat.storage_stable_num_normal_pages     = stable_snapshot->version()->numNormalPages();
+        stat.storage_stable_max_page_id          = stable_snapshot->version()->maxId();
+    }
+    {
+        stat.storage_delta_num_snapshots      = storage_pool.log().getNumSnapshots();
+        PageStorage::SnapshotPtr log_snapshot = storage_pool.log().getSnapshot();
+        stat.storage_delta_num_pages          = log_snapshot->version()->numPages();
+        stat.storage_delta_num_normal_pages   = log_snapshot->version()->numNormalPages();
+        stat.storage_delta_max_page_id        = log_snapshot->version()->maxId();
+    }
+    {
+        stat.storage_meta_num_snapshots        = storage_pool.meta().getNumSnapshots();
+        PageStorage::SnapshotPtr meta_snapshot = storage_pool.meta().getSnapshot();
+        stat.storage_meta_num_pages            = meta_snapshot->version()->numPages();
+        stat.storage_meta_num_normal_pages     = meta_snapshot->version()->numNormalPages();
+        stat.storage_meta_max_page_id          = meta_snapshot->version()->maxId();
+    }
+
     return stat;
 }
 

@@ -816,6 +816,21 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_FLOAT(avg_chunk_rows_in_stable)
     INSERT_FLOAT(avg_chunk_bytes_in_stable)
 
+    INSERT_INT(storage_stable_num_snapshots);
+    INSERT_INT(storage_stable_num_pages);
+    INSERT_INT(storage_stable_num_normal_pages)
+    INSERT_INT(storage_stable_max_page_id);
+
+    INSERT_INT(storage_delta_num_snapshots);
+    INSERT_INT(storage_delta_num_pages);
+    INSERT_INT(storage_delta_num_normal_pages)
+    INSERT_INT(storage_delta_max_page_id);
+
+    INSERT_INT(storage_meta_num_snapshots);
+    INSERT_INT(storage_meta_num_pages);
+    INSERT_INT(storage_meta_num_normal_pages)
+    INSERT_INT(storage_meta_max_page_id);
+
 #undef INSERT_INT
 #undef INSERT_FLOAT
 

@@ -65,6 +65,7 @@ public:
     void write(const WriteBatch & write_batch);
 
     SnapshotPtr getSnapshot();
+    size_t      getNumSnapshots() const;
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {});
     Page      read(PageId page_id, SnapshotPtr snapshot = {});
