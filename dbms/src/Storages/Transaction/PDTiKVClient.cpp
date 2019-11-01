@@ -22,6 +22,17 @@ std::string getIP(const std::string & address)
     return ip;
 }
 
+std::string getPort(const std::string & address)
+{
+    if (address.size() == 0)
+        return "";
+    size_t idx = address.find(":");
+    if (idx == std::string::npos)
+        return "";
+    auto port = address.substr(idx);
+    return port;
+}
+
 // convertAddr converts host name to network address.
 // We assume the converted net type is AF_NET.
 std::string IndexReader::convertAddr(const std::string & address)
@@ -64,7 +75,7 @@ int64_t IndexReader::getReadIndex()
             for (const auto & learner : learners)
             {
                 std::string addr = cache->getStore(bo, learner.store_id()).addr;
-                if (addr.size() > 0 && convertAddr(addr) == convertAddr(suggested_address))
+                if (addr.size() > 0 && convertAddr(addr) == convertAddr(suggested_address) && getPort(addr) == getPort(suggested_address))
                 {
                     candidate_learners.push_back(learner);
                     break;
