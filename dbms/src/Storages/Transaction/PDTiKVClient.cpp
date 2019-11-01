@@ -54,7 +54,7 @@ int64_t IndexReader::getReadIndex()
                 UInt16 port = socket_addr.port();
                 if (ip.empty())
                 {
-                    LOG_ERROR(log, "cannot resolve address: " << addr);
+                    LOG_WARNING(log, "cannot resolve address: " << addr);
                     continue;
                 }
                 if (ip == suggested_ip && port == suggested_port)
