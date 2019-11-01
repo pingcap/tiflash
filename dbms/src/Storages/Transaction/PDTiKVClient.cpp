@@ -1,8 +1,7 @@
 #include <Storages/Transaction/PDTiKVClient.h>
 
+#include <Common/DNSCache.h>
 #include <Common/Exception.h>
-
-#include <netdb.h>
 
 namespace DB
 {
@@ -29,31 +28,11 @@ std::string IndexReader::convertAddr(const std::string & address)
 {
     if (address.size() == 0)
         return "";
-    size_t idx = address.find(":");
-    if (idx == std::string::npos)
-        return "";
-    auto host = address.substr(0, idx);
-    auto port = address.substr(idx + 1);
-
-    char buf[1024];
-    struct hostent buff_storage;
-    struct hostent * result;
-    int err = 0;
-    gethostbyname_r(host.data(), &buff_storage, buf, sizeof(buf), &result, &err);
-    // Suppose we always use IPv4 address.
-    if (result == nullptr || result->h_addr == nullptr || err != 0)
-    {
-        LOG_ERROR(log, "Cannot resolve host name: " << address << " error message is :" << hstrerror(err));
-        return "";
-    }
-    std::string addr;
-    for (int i = 0; i < 4; i++)
-    {
-        addr.append(std::to_string(static_cast<uint32_t>((uint8_t)result->h_addr[i])));
-        if (i != 3)
-            addr.push_back('.');
-    }
-    return addr;
+    auto socket_addr = DNSCache::instance().resolveHostAndPort(address);
+    std::string ip = socket_addr.host().toString();
+    if (ip.size() == 0)
+        LOG_ERROR(log, "cannot resolve address: " << address);
+    return ip;
 }
 
 constexpr int readIndexMaxBackoff = 5000;
