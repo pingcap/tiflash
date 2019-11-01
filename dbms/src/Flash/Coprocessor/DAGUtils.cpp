@@ -267,7 +267,7 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
 bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types)
 {
     for (const auto & type : types)
-        if (type.tp() == TiDB::TypeSet || type.tp() == TiDB::TypeTime || type.tp() == TiDB::TypeEnum || type.tp() == TiDB::TypeBit)
+        if (type.tp() == TiDB::TypeSet)
             return true;
     return false;
 }
@@ -283,6 +283,7 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
         case TiDB::TypeLongLong:
         case TiDB::TypeYear:
         case TiDB::TypeDouble:
+        case TiDB::TypeTime:
             return 8;
         case TiDB::TypeFloat:
             return 4;
@@ -301,6 +302,8 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
         case TiDB::TypeTinyBlob:
         case TiDB::TypeMediumBlob:
         case TiDB::TypeLongBlob:
+        case TiDB::TypeBit:
+        case TiDB::TypeEnum:
             return VAR_SIZE;
         default:
             throw Exception("not supported field type in arrow encode: " + std::to_string(tp));
