@@ -13,19 +13,20 @@ namespace DB
 {
 namespace DM
 {
-MinMaxIndex::MinMaxIndex(const IDataType & type, const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+MinMaxIndex::MinMaxIndex(const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
 {
     const IColumn * column_ptr = &column;
     if (column.isColumnNullable())
     {
-        auto & del_mark_data   = del_mark.getData();
+        const auto * del_mark_data = (!del_mark) ? &(del_mark->getData()) : nullptr;
+
         auto & nullable_column = static_cast<const ColumnNullable &>(column);
         auto & null_mark_data  = nullable_column.getNullMapColumn().getData();
         column_ptr             = &nullable_column.getNestedColumn();
 
         for (size_t i = offset; i < offset + limit; ++i)
         {
-            if (!del_mark_data[i] && null_mark_data[i])
+            if ((!del_mark_data || !(*del_mark_data)[i]) && null_mark_data[i])
             {
                 has_null = true;
                 break;

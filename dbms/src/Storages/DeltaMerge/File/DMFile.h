@@ -15,7 +15,10 @@ using DMFilePtr = std::shared_ptr<DMFile>;
 class DMFile
 {
 public:
-    enum Status : UInt8
+    using ChunkSize = UInt64;
+    using Sizes     = std::vector<ChunkSize>;
+
+    enum Status
     {
         WRITABLE,
         WRITTING,
@@ -29,21 +32,14 @@ public:
     void readMeta();
 
     String path() { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
+    String metaPath() { return path() + "/meta.txt"; }
+    String splitPath() { return path() + "/split.dat"; }
+    String colDataPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".col"; }
+    String colMarkPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".mark"; }
 
-    size_t numChunks() { return (rows + granularity - 1) / granularity; }
-    size_t numRowsInChunk(size_t chunk_id)
-    {
-        auto chunks = numChunks();
-        if (chunk_id < chunks - 1)
-        {
-            return granularity;
-        }
-        else
-        {
-            auto n = rows % granularity;
-            return n == 0 ? granularity : n;
-        }
-    }
+    const auto & chunkSizes() { return chunk_sizes; }
+    const auto & colIdAndTypes() { return colid_and_types; }
+    auto         getStatus() { return status; }
 
 private:
     DMFile(UInt64 file_id_, const String & parent_path_, Status status_, Logger * log_)
@@ -54,15 +50,19 @@ private:
     {
     }
 
+    void setChunkSizes(const Sizes & chunk_sizes_) { chunk_sizes = chunk_sizes_; }
+    void setColIdAndTypes(const ColIdAndTypeSet & colid_and_types_) { colid_and_types = colid_and_types_; }
+    void setStatus(Status status_) { status = status_; }
+
 private:
     UInt64 file_id;
     String parent_path;
 
     UInt64          rows;
-    UInt64          granularity;
+    Sizes           chunk_sizes;
     ColIdAndTypeSet colid_and_types;
 
-    std::atomic<Status> status;
+    Status status;
 
     Logger * log;
 

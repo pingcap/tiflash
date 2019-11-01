@@ -59,26 +59,40 @@ DMFilePtr DMFile::recover(const String & parent_path, const String & file_name)
 
 void DMFile::writeMeta()
 {
-    WriteBufferFromFile buf(parent_path + "/meta.txt", 4096);
-    writeString("DeltaMergeFile format: 0", buf);
-    writeString("\nRows", buf);
-    DB::writeText(rows, buf);
-    writeString("\nGranularity", buf);
-    DB::writeText(granularity, buf);
-    writeString("\n", buf);
-    writeText(colid_and_types, buf);
+    {
+        WriteBufferFromFile buf(metaPath(), 4096);
+        writeString("DeltaMergeFile format: 0", buf);
+        writeString("\nRows", buf);
+        DB::writeText(rows, buf);
+        writeString("\nChunks", buf);
+        DB::writeText(chunk_sizes.size(), buf);
+        writeString("\n", buf);
+        writeText(colid_and_types, buf);
+    }
+    {
+        WriteBufferFromFile buf(splitPath(), 4096);
+        buf.write((char *)chunk_sizes.data(), chunk_sizes.size() * sizeof(ChunkSize));
+    }
 }
 
 void DMFile::readMeta()
 {
-    auto buf = openForRead(parent_path + "/meta.txt");
-    assertString("DeltaMergeFile format: 0", buf);
-    assertString("\nRows", buf);
-    DB::readText(rows, buf);
-    assertString("\nGranularity", buf);
-    DB::readText(granularity, buf);
-    assertString("\n", buf);
-    readText(colid_and_types, buf);
+    size_t chunks;
+    {
+        auto buf = openForRead(metaPath());
+        assertString("DeltaMergeFile format: 0", buf);
+        assertString("\nRows", buf);
+        DB::readText(rows, buf);
+        assertString("\nChunks", buf);
+        DB::readText(chunks, buf);
+        assertString("\n", buf);
+        readText(colid_and_types, buf);
+    }
+    {
+        chunk_sizes.resize(chunks);
+        auto buf = openForRead(splitPath());
+        buf.read((char *)chunk_sizes.data(), chunk_sizes.size() * sizeof(ChunkSize));
+    }
 }
 
 } // namespace DM

@@ -29,7 +29,7 @@ struct ColumnMeta
     UInt32         rows;
     UInt64         bytes;
     DataTypePtr    type;
-    MinMaxIndexPtr minmax;
+    MinMaxIndexPtr minmax{};
 };
 using ColumnMetas = std::vector<ColumnMeta>;
 
@@ -123,15 +123,15 @@ using GenPageId = std::function<PageId()>;
 Chunk  createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, WriteBatch & wb);
 Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id, WriteBatch & wb);
 
-void serializeChunks(WriteBuffer &           buf,
-                     Chunks::const_iterator  begin,
+void serializeChunks(WriteBuffer &          buf,
+                     Chunks::const_iterator begin,
                      Chunks::const_iterator end,
-                     const Chunk *           extra1 = nullptr,
-                     const Chunk *           extra2 = nullptr);
-void serializeChunks(WriteBuffer &           buf, //
-                     Chunks::const_iterator  begin,
+                     const Chunk *          extra1 = nullptr,
+                     const Chunk *          extra2 = nullptr);
+void serializeChunks(WriteBuffer &          buf, //
+                     Chunks::const_iterator begin,
                      Chunks::const_iterator end,
-                     const Chunks &          extr_chunks);
+                     const Chunks &         extr_chunks);
 
 Chunks deserializeChunks(ReadBuffer & buf);
 

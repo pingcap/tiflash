@@ -352,7 +352,7 @@ protected:
     }
 };
 
-using ColumnPtr = IColumn::Ptr;
+using IColumnPtr = IColumn::Ptr;
 using MutableColumnPtr  = IColumn::MutablePtr;
 using Columns = std::vector<ColumnPtr>;
 using MutableColumns = std::vector<MutableColumnPtr>;

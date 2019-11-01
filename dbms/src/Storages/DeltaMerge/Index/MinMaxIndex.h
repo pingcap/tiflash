@@ -29,7 +29,7 @@ public:
     MinMaxIndex() = default;
     MinMaxIndex(bool has_null_, const MinMaxValuePtr & minmax_) : has_null(has_null_), minmax(minmax_) {}
     MinMaxIndex(const MinMaxIndex & other) : has_null(other.has_null), minmax(other.minmax->clone()) {}
-    MinMaxIndex(const IDataType & type, const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit);
+    MinMaxIndex(const IDataType & type, const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit);
 
     void merge(const MinMaxIndex & other);
 

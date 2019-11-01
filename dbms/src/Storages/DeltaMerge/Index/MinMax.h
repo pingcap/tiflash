@@ -27,9 +27,9 @@ struct MAX
 static constexpr size_t NONE_EXIST = std::numeric_limits<size_t>::max();
 
 template <typename T>
-std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
 {
-    const auto & del_mark_data = del_mark.getData();
+    const auto * del_mark_data =  (!del_mark) ? &(del_mark->getData()) : nullptr;
 
     size_t batch_min_idx = NONE_EXIST;
     size_t batch_max_idx = NONE_EXIST;
@@ -37,7 +37,7 @@ std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt
     auto & cast_column = static_cast<const T &>(column);
     for (size_t i = offset; i < offset + limit; ++i)
     {
-        if (!del_mark_data[i])
+        if (!del_mark_data || !(*del_mark_data)[i])
         {
             if (batch_min_idx == NONE_EXIST || cast_column.compareAt(i, batch_min_idx, cast_column, -1) < 0)
                 batch_min_idx = i;
@@ -50,9 +50,9 @@ std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt
 }
 
 template <typename T>
-std::pair<size_t, size_t> minmaxVec(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+std::pair<size_t, size_t> minmaxVec(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
 {
-    const auto & del_mark_data = del_mark.getData();
+    const auto * del_mark_data =  (!del_mark) ? &(del_mark->getData()) : nullptr;
 
     size_t batch_min_idx = NONE_EXIST;
     size_t batch_max_idx = NONE_EXIST;
@@ -60,7 +60,7 @@ std::pair<size_t, size_t> minmaxVec(const IColumn & column, const ColumnVector<U
     auto & col_data = static_cast<const ColumnVector<T> &>(column).getData();
     for (size_t i = offset; i < offset + limit; ++i)
     {
-        if (!del_mark_data[i])
+        if (!del_mark_data || !(*del_mark_data)[i])
         {
             if (batch_min_idx == NONE_EXIST || col_data[i] < col_data[batch_min_idx])
                 batch_min_idx = i;
@@ -104,12 +104,12 @@ struct MinMaxValueFixed : public MinMaxValue
 
     MinMaxValueFixed() = default;
     MinMaxValueFixed(bool has_value_, T min_, T max_) : MinMaxValue(has_value_), min(min_), max(max_) {}
-    MinMaxValueFixed(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+    MinMaxValueFixed(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         set(column, del_mark, offset, limit);
     }
 
-    void set(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+    void set(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         auto [min_idx, max_idx] = minmaxVec<T>(column, del_mark, offset, limit);
         if (min_idx != NONE_EXIST)
@@ -180,12 +180,12 @@ struct MinMaxValueString : public MinMaxValue
     MinMaxValueString(bool has_value_, const std::string & min_, const std::string & max_) : MinMaxValue(has_value_), min(min_), max(max_)
     {
     }
-    MinMaxValueString(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+    MinMaxValueString(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         set(column, del_mark, offset, limit);
     }
 
-    void set(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+    void set(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         auto [min_idx, max_idx] = minmax<ColumnString>(column, del_mark, offset, limit);
         if (min_idx != NONE_EXIST)
@@ -254,12 +254,12 @@ struct MinMaxValueDataGeneric : public MinMaxValue
 
     MinMaxValueDataGeneric() = default;
     MinMaxValueDataGeneric(bool has_value_, const Field & min_, const Field & max_) : MinMaxValue(has_value_), min(min_), max(max_) {}
-    MinMaxValueDataGeneric(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+    MinMaxValueDataGeneric(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         set(column, del_mark, offset, limit);
     }
 
-    void set(const IColumn & column, const ColumnVector<UInt8> & del_mark, size_t offset, size_t limit)
+    void set(const IColumn & column, const ColumnVector<UInt8> * del_mark, size_t offset, size_t limit)
     {
         auto [min_idx, max_idx] = minmax<IColumn>(column, del_mark, offset, limit);
         if (min_idx != NONE_EXIST)
