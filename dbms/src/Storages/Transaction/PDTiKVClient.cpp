@@ -2,7 +2,6 @@
 
 #include <Common/DNSCache.h>
 #include <Common/Exception.h>
-#include <tuple>
 
 namespace DB
 {
@@ -36,7 +35,7 @@ int64_t IndexReader::getReadIndex()
         std::vector<metapb::Peer> candidate_learners;
         // By default, we should config true ip in our config file.
         // And we make sure that old config can also work.
-        if (suggested_ip.empty() || suggested_ip == "0.0.0.0")
+        if (suggested_ip == "0.0.0.0")
             candidate_learners = learners;
         else
         {
