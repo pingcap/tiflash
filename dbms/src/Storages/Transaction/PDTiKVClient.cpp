@@ -64,7 +64,7 @@ int64_t IndexReader::getReadIndex()
             for (const auto & learner : learners)
             {
                 std::string addr = cache->getStore(bo, learner.store_id()).addr;
-                if (addr.size() > 0 && convertAddr(addr) == suggested_ip)
+                if (addr.size() > 0 && convertAddr(addr) == convertAddr(suggested_ip))
                 {
                     candidate_learners.push_back(learner);
                     break;
