@@ -17,8 +17,10 @@ IndexReader::IndexReader(pingcap::kv::RegionCachePtr cache_,
     const pingcap::kv::RegionVerID & id,
     const std::string & suggested_ip_,
     UInt16 suggested_port_)
-    : pingcap::kv::RegionClient(cache_, client_, id), suggested_ip(suggested_ip_),
-    suggested_port(suggested_port_), log(&Logger::get("pingcap.index_read"))
+    : pingcap::kv::RegionClient(cache_, client_, id),
+      suggested_ip(suggested_ip_),
+      suggested_port(suggested_port_),
+      log(&Logger::get("pingcap.index_read"))
 {}
 
 int64_t IndexReader::getReadIndex()
