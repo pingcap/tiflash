@@ -1,3 +1,4 @@
+#include <Common/DNSCache.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RaftCommandResult.h>
@@ -12,7 +13,7 @@ namespace DB
 
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
     const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
-    const std::string & raft_service_address_)
+    const std::string & flash_service_address_)
     : kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
@@ -23,7 +24,7 @@ TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs
       schema_syncer(addrs.size() == 0
               ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(pd_client, region_cache, rpc_client))
               : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client))),
-      raft_service_address(raft_service_address_)
+      flash_service_address(flash_service_address_)
 {}
 
 void TMTContext::restore()
@@ -64,8 +65,19 @@ pingcap::pd::ClientPtr TMTContext::getPDClient() const { return pd_client; }
 IndexReaderPtr TMTContext::createIndexReader(pingcap::kv::RegionVerID region_version_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    return pd_client->isMock() ? nullptr
-                               : std::make_shared<IndexReader>(region_cache, rpc_client, region_version_id, raft_service_address);
+    if (pd_client->isMock())
+    {
+        return nullptr;
+    }
+    // Assume net type of flash_service_address is AF_NET.
+    auto socket_addr = DNSCache::instance().resolveHostAndPort(flash_service_address);
+    std::string flash_service_ip = socket_addr.host().toString();
+    UInt16 flash_service_port = socket_addr.port();
+    if (flash_service_ip.empty())
+    {
+        throw Exception("Cannot resolve flash service address " + flash_service_address, ErrorCodes::LOGICAL_ERROR);
+    }
+    return std::make_shared<IndexReader>(region_cache, rpc_client, region_version_id, flash_service_ip, flash_service_port);
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }

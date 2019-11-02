@@ -34,7 +34,7 @@ public:
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
         const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path,
-        const std::string & regine_addr);
+        const std::string & flash_service_address_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -63,7 +63,7 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
 
-    String raft_service_address;
+    String flash_service_address;
 };
 
 } // namespace DB

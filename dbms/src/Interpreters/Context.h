@@ -365,7 +365,7 @@ public:
                           const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
-                          const std::string & raft_service_address);
+                          const std::string & flash_service_address);
     RaftService & getRaftService();
 
     void initializeSchemaSyncService();
