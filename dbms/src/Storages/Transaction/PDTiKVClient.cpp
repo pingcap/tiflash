@@ -11,37 +11,17 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-std::string getIP(const std::string & address)
-{
-    if (address.size() == 0)
-        return "";
-    size_t idx = address.find(":");
-    if (idx == std::string::npos)
-        return "";
-    auto ip = address.substr(0, idx);
-    return ip;
-}
-
-// convertAddr converts host name to network address.
-// We assume the converted net type is AF_NET.
-std::string IndexReader::convertAddr(const std::string & address)
-{
-    if (address.size() == 0)
-        return "";
-    auto socket_addr = DNSCache::instance().resolveHostAndPort(address);
-    std::string ip = socket_addr.host().toString();
-    if (ip.size() == 0)
-        LOG_ERROR(log, "cannot resolve address: " << address);
-    return ip;
-}
-
 constexpr int readIndexMaxBackoff = 5000;
 
 IndexReader::IndexReader(pingcap::kv::RegionCachePtr cache_,
     pingcap::kv::RpcClientPtr client_,
     const pingcap::kv::RegionVerID & id,
-    const std::string & suggested_address_)
-    : pingcap::kv::RegionClient(cache_, client_, id), suggested_address(suggested_address_), log(&Logger::get("pingcap.index_read"))
+    const std::string & suggested_ip_,
+    UInt16 suggested_port_)
+    : pingcap::kv::RegionClient(cache_, client_, id),
+      suggested_ip(suggested_ip_),
+      suggested_port(suggested_port_),
+      log(&Logger::get("pingcap.index_read"))
 {}
 
 int64_t IndexReader::getReadIndex()
@@ -54,11 +34,10 @@ int64_t IndexReader::getReadIndex()
     {
         auto region = cache->getRegionByID(bo, region_id);
         const auto & learners = region->learners;
-        const std::string suggested_ip = getIP(suggested_address);
         std::vector<metapb::Peer> candidate_learners;
         // By default, we should config true ip in our config file.
         // And we make sure that old config can also work.
-        if (suggested_ip.size() == 0 || suggested_ip == "0.0.0.0")
+        if (suggested_ip == "0.0.0.0")
             candidate_learners = learners;
         else
         {
@@ -66,7 +45,21 @@ int64_t IndexReader::getReadIndex()
             for (const auto & learner : learners)
             {
                 std::string addr = cache->getStore(bo, learner.store_id()).addr;
-                if (addr.size() > 0 && convertAddr(addr) == suggested_ip)
+                if (addr.empty())
+                {
+                    LOG_DEBUG(log, "learner address empty.");
+                    continue;
+                }
+                // Assume net type of addr is AF_NET.
+                auto socket_addr = DNSCache::instance().resolveHostAndPort(addr);
+                std::string ip = socket_addr.host().toString();
+                UInt16 port = socket_addr.port();
+                if (ip.empty())
+                {
+                    LOG_WARNING(log, "cannot resolve address: " << addr);
+                    continue;
+                }
+                if (ip == suggested_ip && port == suggested_port)
                 {
                     candidate_learners.push_back(learner);
                     break;

@@ -48,11 +48,7 @@ static String genFuncString(const String & func_name, const Names & argument_nam
 }
 
 DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_)
-    : source_columns(std::move(source_columns_)),
-      context(context_),
-      after_agg(false),
-      implicit_cast_count(0),
-      log(&Logger::get("DAGExpressionAnalyzer"))
+    : source_columns(std::move(source_columns_)), context(context_), after_agg(false), implicit_cast_count(0)
 {
     settings = context.getSettings();
 }
@@ -391,8 +387,6 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(const tipb::Expr & expr, Expres
         // todo ignore nullable info??
         if (expected_type->getName() != actual_type->getName())
         {
-            LOG_DEBUG(
-                log, __PRETTY_FUNCTION__ << " Add implicit cast: from " << actual_type->getName() << " to " << expected_type->getName());
             implicit_cast_count++;
             // need to add cast function
             // first construct the second argument
