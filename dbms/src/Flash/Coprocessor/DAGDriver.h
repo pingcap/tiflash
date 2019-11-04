@@ -22,6 +22,9 @@ public:
     void execute();
 
 private:
+    void recordError(Int32 err_code, const String & err_msg);
+
+private:
     Context & context;
 
     const tipb::DAGRequest & dag_request;
@@ -36,7 +39,5 @@ private:
     bool internal;
 
     Poco::Logger * log;
-
-    void recordError(Int32 err_code, const String & err_msg);
 };
 } // namespace DB

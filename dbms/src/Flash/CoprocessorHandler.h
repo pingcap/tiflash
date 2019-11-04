@@ -38,6 +38,9 @@ public:
     grpc::Status execute();
 
 protected:
+    grpc::Status recordError(grpc::StatusCode err_code, const String & err_msg);
+
+protected:
     enum
     {
         COP_REQ_TYPE_DAG = 103,
