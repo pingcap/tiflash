@@ -120,10 +120,13 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
         }
     }
 
-    if (isDefiniteDeleted())
-        ++deleted_by_range;
-    else if (!(final && hasDeleteFlag() && behindGcTso()))
-        insertRow(merged_columns, merged_rows);
+    if (!selected_row.empty())
+    {
+        if (isDefiniteDeleted())
+            ++deleted_by_range;
+        else if (!(final && hasDeleteFlag() && behindGcTso()))
+            insertRow(merged_columns, merged_rows);
+    }
 
     finished = true;
 }
