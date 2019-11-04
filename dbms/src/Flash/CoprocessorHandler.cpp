@@ -60,7 +60,9 @@ try
 }
 catch (const LockException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": LockException: " << e.getStackTrace().toString());
+    LOG_ERROR(log,
+        __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << "\n"
+                            << e.getStackTrace().toString());
     cop_response->Clear();
     kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
     lock_info->set_key(e.lock_infos[0]->key);
@@ -72,7 +74,9 @@ catch (const LockException & e)
 }
 catch (const RegionException & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": RegionException: " << e.getStackTrace().toString());
+    LOG_ERROR(log,
+        __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << "\n"
+                            << e.getStackTrace().toString());
     cop_response->Clear();
     errorpb::Error * region_err;
     switch (e.status)
@@ -95,30 +99,31 @@ catch (const RegionException & e)
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.getStackTrace().toString());
-    cop_response->Clear();
-    cop_response->set_other_error(e.message());
-
-    if (e.code() == ErrorCodes::NOT_IMPLEMENTED)
-        return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, e.message());
-
-    // TODO: Map other DB error codes to grpc codes.
-
-    return grpc::Status(grpc::StatusCode::INTERNAL, e.message());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
+    return recordError(e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+}
+catch (const pingcap::Exception & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
+    return recordError(e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
 }
 catch (const std::exception & e)
 {
     LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
-    cop_response->Clear();
-    cop_response->set_other_error(e.what());
-    return grpc::Status(grpc::StatusCode::INTERNAL, e.what());
+    return recordError(grpc::StatusCode::INTERNAL, e.what());
 }
 catch (...)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": catch other exception.");
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
+    return recordError(grpc::StatusCode::INTERNAL, "other exception");
+}
+
+grpc::Status CoprocessorHandler::recordError(grpc::StatusCode err_code, const String & err_msg)
+{
     cop_response->Clear();
-    cop_response->set_other_error("other exception");
-    return grpc::Status(grpc::StatusCode::INTERNAL, "other exception");
+    cop_response->set_other_error(err_msg);
+
+    return grpc::Status(err_code, err_msg);
 }
 
 } // namespace DB

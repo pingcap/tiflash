@@ -12,6 +12,7 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
+#include <pingcap/Exception.h>
 
 namespace DB
 {
@@ -105,13 +106,23 @@ catch (const LockException & e)
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": Exception: " << e.getStackTrace().toString());
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
+    recordError(e.code(), e.message());
+}
+catch (const pingcap::Exception & e)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)
 {
     LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
+}
+catch (...)
+{
+    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
+    recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 
 void DAGDriver::recordError(Int32 err_code, const String & err_msg)
