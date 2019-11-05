@@ -1,5 +1,6 @@
 #include <random>
 
+#include <common/ThreadPool.h>
 #include <gperftools/malloc_extension.h>
 
 #include <DataStreams/IBlockOutputStream.h>
@@ -290,6 +291,7 @@ void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, Regi
 
 inline void doLearnerRead(const TiDB::TableID table_id,         //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
+    size_t concurrent_num,                                      //
     TMTContext & tmt, Poco::Logger * log)
 {
     assert(log != nullptr);
@@ -312,6 +314,9 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
         }
     }
 
+    // adjust concurrency by num of regions
+    concurrent_num = std::max(1, std::min(concurrent_num, regions_info.size()));
+
     KVStorePtr & kvstore = tmt.getKVStore();
     RegionMap kvstore_region;
     // check region is not null and store region map.
@@ -329,13 +334,32 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
     if (unlikely(kvstore_region.size() != regions_info.size()))
         throw Exception("Duplicate region id", ErrorCodes::LOGICAL_ERROR);
 
+    const size_t num_regions = regions_info.size();
+    const size_t batch_size = num_regions / concurrent_num;
+    const auto batch_wait_index = [&](const size_t region_begin_idx) {
+        const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
+        for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
+        {
+            const RegionID region_id = regions_info[region_idx].region_id;
+            auto region = kvstore_region[region_id];
+            /// Blocking learner read. Note that learner read must be performed ahead of data read,
+            /// otherwise the desired index will be blocked by the lock of data read.
+            region->waitIndex(region->learnerRead());
+        }
+    };
     auto start_time = Clock::now();
-    /// Blocking learner read. Note that learner read must be performed ahead of data read,
-    /// otherwise the desired index will be blocked by the lock of data read.
-    for (auto && [region_id, region] : kvstore_region)
+    if (concurrent_num <= 1)
     {
-        (void)region_id;
-        region->waitIndex(region->learnerRead());
+        batch_wait_index(0);
+    }
+    else
+    {
+        ::ThreadPool pool(concurrent_num);
+        for (size_t region_begin_idx = 0; region_begin_idx < num_regions; region_begin_idx += batch_size)
+        {
+            pool.schedule([&batch_wait_index, region_begin_idx] { batch_wait_index(region_begin_idx); });
+        }
+        pool.wait();
     }
     auto end_time = Clock::now();
     LOG_DEBUG(log,
@@ -431,11 +455,16 @@ BlockInputStreams StorageDeltaMerge::read( //
                     + " is smaller than tidb gc safe point: " + toString(safe_point),
                 ErrorCodes::LOGICAL_ERROR);
 
+        /// If request comes from TiDB/TiSpark, mvcc_query_info.concurrent is 0,
+        /// and `concurrent_num` should be 1. Concurrency handled by TiDB/TiSpark.b
+        /// Else a request comes from CH-client, we set `concurrent_num` by num_streams.
+        size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
+
         // With `no_kvstore` is true, we do not do learner read
         if (likely(!select_query.no_kvstore))
         {
             /// Learner read.
-            doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, tmt, log);
+            doLearnerRead(tidb_table_info.id, mvcc_query_info.regions_query_info, concurrent_num, tmt, log);
 
             if (likely(!mvcc_query_info.regions_query_info.empty()))
             {
