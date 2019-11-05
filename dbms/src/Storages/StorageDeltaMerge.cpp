@@ -341,40 +341,44 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
     LOG_DEBUG(log,
         "[Learner Read] wait index cost " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
 
-    // After raft index is satisfied, we flush region to StorageDeltaMerge so that we can read all data
-    start_time = Clock::now();
-    std::set<RegionID> regions_flushing_in_bg_threads;
-    auto & region_table = tmt.getRegionTable();
-    for (auto && [region_id, region] : kvstore_region)
+    /// If `disable_bg_flush` is true, we don't need to do both flushing KVStore or waiting for background tasks.
+    if (!tmt.disableBgFlush())
     {
-        (void)region;
-        bool is_flushed = region_table.tryFlushRegion(region_id, table_id, false);
-        // If region is flushing by other bg threads, we should mark those regions to wait.
-        if (!is_flushed)
-        {
-            regions_flushing_in_bg_threads.insert(region_id);
-            LOG_DEBUG(log, "[Learner Read] region " << region_id << " is flushing by other thread.");
-        }
-    }
-    end_time = Clock::now();
-    LOG_DEBUG(log,
-        "[Learner Read] flush " << kvstore_region.size() - regions_flushing_in_bg_threads.size() << " regions of " << kvstore_region.size()
-                                << " to StorageDeltaMerge cost "
-                                << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
-
-    // Maybe there is some data not flush to store yet, we should wait till all regions is flushed.
-    if (!regions_flushing_in_bg_threads.empty())
-    {
+        // After raft index is satisfied, we flush region to StorageDeltaMerge so that we can read all data
         start_time = Clock::now();
-        for (const auto & region_id : regions_flushing_in_bg_threads)
+        std::set<RegionID> regions_flushing_in_bg_threads;
+        auto & region_table = tmt.getRegionTable();
+        for (auto && [region_id, region] : kvstore_region)
         {
-            region_table.waitTillRegionFlushed(region_id);
+            (void)region;
+            bool is_flushed = region_table.tryFlushRegion(region_id, table_id, false);
+            // If region is flushing by other bg threads, we should mark those regions to wait.
+            if (!is_flushed)
+            {
+                regions_flushing_in_bg_threads.insert(region_id);
+                LOG_DEBUG(log, "[Learner Read] region " << region_id << " is flushing by other thread.");
+            }
         }
         end_time = Clock::now();
         LOG_DEBUG(log,
-            "[Learner Read] wait bg flush " << regions_flushing_in_bg_threads.size() << " regions to StorageDeltaMerge cost "
-                                            << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
-                                            << " ms");
+            "[Learner Read] flush " << kvstore_region.size() - regions_flushing_in_bg_threads.size() << " regions of "
+                                    << kvstore_region.size() << " to StorageDeltaMerge cost "
+                                    << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
+
+        // Maybe there is some data not flush to store yet, we should wait till all regions is flushed.
+        if (!regions_flushing_in_bg_threads.empty())
+        {
+            start_time = Clock::now();
+            for (const auto & region_id : regions_flushing_in_bg_threads)
+            {
+                region_table.waitTillRegionFlushed(region_id);
+            }
+            end_time = Clock::now();
+            LOG_DEBUG(log,
+                "[Learner Read] wait bg flush " << regions_flushing_in_bg_threads.size() << " regions to StorageDeltaMerge cost "
+                                                << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count()
+                                                << " ms");
+        }
     }
 }
 

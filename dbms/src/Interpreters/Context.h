@@ -366,8 +366,9 @@ public:
                           const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
-                          const std::string & flash_service_address,
-                          ::TiDB::StorageEngine engine);
+                          const std::string & raft_service_address,
+                          ::TiDB::StorageEngine engine,
+                          bool disable_bg_tasks);
     RaftService & getRaftService();
 
     void initializeSchemaSyncService();

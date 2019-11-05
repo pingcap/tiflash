@@ -18,44 +18,47 @@ RaftService::RaftService(DB::Context & db_context_)
     if (!db_context.getTMTContext().isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-    single_thread_task_handle = background_pool.addTask(
-        [this] {
-            auto & tmt = db_context.getTMTContext();
-            {
-                RegionTable & region_table = tmt.getRegionTable();
-                region_table.checkTableOptimize();
-            }
-            kvstore->tryPersist();
-            return false;
-        },
-        false);
-
-    table_flush_handle = background_pool.addTask([this] {
-        auto & tmt = db_context.getTMTContext();
-        RegionTable & region_table = tmt.getRegionTable();
-
-        // if all regions of table is removed, try to optimize data.
-        if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
-        {
-            LOG_INFO(log, "try to final optimize table " << table_id);
-            tryOptimizeStorageFinal(db_context, table_id);
-        }
-        return region_table.tryFlushRegions();
-    });
-
-    region_flush_handle = background_pool.addTask([this] {
-        RegionID region_id;
-        {
-            std::lock_guard<std::mutex> lock(region_mutex);
-            if (regions_to_flush.empty())
+    if (!db_context.getTMTContext().disableBgFlush())
+    {
+        single_thread_task_handle = background_pool.addTask(
+            [this] {
+                auto & tmt = db_context.getTMTContext();
+                {
+                    RegionTable & region_table = tmt.getRegionTable();
+                    region_table.checkTableOptimize();
+                }
+                kvstore->tryPersist();
                 return false;
-            region_id = regions_to_flush.front();
-            regions_to_flush.pop();
-        }
-        RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-        region_table.tryFlushRegion(region_id);
-        return true;
-    });
+            },
+            false);
+
+        table_flush_handle = background_pool.addTask([this] {
+            auto & tmt = db_context.getTMTContext();
+            RegionTable & region_table = tmt.getRegionTable();
+
+            // if all regions of table is removed, try to optimize data.
+            if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
+            {
+                LOG_INFO(log, "try to final optimize table " << table_id);
+                tryOptimizeStorageFinal(db_context, table_id);
+            }
+            return region_table.tryFlushRegions();
+        });
+
+        region_flush_handle = background_pool.addTask([this] {
+            RegionID region_id;
+            {
+                std::lock_guard<std::mutex> lock(region_mutex);
+                if (regions_to_flush.empty())
+                    return false;
+                region_id = regions_to_flush.front();
+                regions_to_flush.pop();
+            }
+            RegionTable & region_table = db_context.getTMTContext().getRegionTable();
+            region_table.tryFlushRegion(region_id);
+            return true;
+        });
+    }
 
     region_decode_handle = background_pool.addTask([this] {
         RegionPtr region;
@@ -85,11 +88,19 @@ RaftService::RaftService(DB::Context & db_context_)
 
 void RaftService::addRegionToFlush(const Region & region)
 {
+    if (!db_context.getTMTContext().disableBgFlush())
     {
-        std::lock_guard<std::mutex> lock(region_mutex);
-        regions_to_flush.push(region.id());
+        {
+            std::lock_guard<std::mutex> lock(region_mutex);
+            regions_to_flush.push(region.id());
+        }
+        region_flush_handle->wake();
     }
-    region_flush_handle->wake();
+    else
+    {
+        auto & region_table =  db_context.getTMTContext().getRegionTable();
+        region_table.tryFlushRegion(region.id());
+    }
 }
 
 void RaftService::addRegionToDecode(const RegionPtr & region)
