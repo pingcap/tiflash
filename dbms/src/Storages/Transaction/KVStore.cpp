@@ -154,6 +154,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
         if (context->getTMTContext().disableBgFlush())
         {
             context->getTMTContext().getRegionTable().tryFlushRegion(new_region->id());
+            LOG_DEBUG(log, "[syncFlush] Apply snapshot for region " << new_region->id());
         }
     }
 
@@ -212,6 +213,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
         if (tmt_context != nullptr && tmt_context->disableBgFlush())
         {
+            // Since background threads which may acquire `dirtyFlag` are disabled, it's safe to check it directly.
             if (curr_region.dirtyFlag())
             {
                 dirty_regions.emplace(curr_region_id);
@@ -355,7 +357,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             }
             auto e_time = Clock::now();
             LOG_DEBUG(log,
-                "[flushRegionsDM]"
+                "[syncFlush]"
                     << " table_id " << table_id << ", cost "
                     << std::chrono::duration_cast<std::chrono::milliseconds>(e_time - s_time).count() << "ms");
         }
