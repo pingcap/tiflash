@@ -59,6 +59,10 @@ RaftService::RaftService(DB::Context & db_context_)
             return true;
         });
     }
+    else
+    {
+        LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
+    }
 
     region_decode_handle = background_pool.addTask([this] {
         RegionPtr region;
