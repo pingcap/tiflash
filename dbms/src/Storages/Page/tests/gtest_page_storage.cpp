@@ -205,6 +205,80 @@ TEST_F(PageStorage_test, WriteReadAfterGc)
     }
 }
 
+TEST_F(PageStorage_test, WriteReadGcEmptyPage)
+try
+{
+    PageStorage::Config tmp_config(config);
+    tmp_config.merge_hint_low_used_file_num = 0; // each time will run gc
+    storage                                 = reopenWithConfig(tmp_config);
+
+    {
+        WriteBatch batch;
+        batch.putPage(0, 0, {}, 0);
+        batch.putRefPage(1, 0);
+        batch.putPage(1024, 0, {}, 0);
+        storage->write(batch);
+    }
+
+    PageStorage::GcCallback cb = [](const std::set<PageId> & normal_page_ids) -> void {
+        ASSERT_EQ(normal_page_ids.size(), 2UL);
+        EXPECT_GT(normal_page_ids.count(0), 0UL);
+        EXPECT_GT(normal_page_ids.count(1024), 0UL);
+    };
+    storage->registerGCCallback(cb);
+    {
+        SCOPED_TRACE("fist gc");
+        storage->gc();
+    }
+
+    auto snapshot = storage->getSnapshot();
+
+    {
+        WriteBatch batch;
+        batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
+        batch.delPage(1);       // free ref 1 -> 0
+        batch.delPage(1024);    // free normal page 1024
+        storage->write(batch);
+    }
+
+    {
+        SCOPED_TRACE("gc with snapshot");
+        storage->gc();
+    }
+
+    {
+        Page page0 = storage->read(0);
+        ASSERT_EQ(page0.data.size(), 0UL);
+        ASSERT_EQ(page0.page_id, 0UL);
+
+        Page page2 = storage->read(2);
+        ASSERT_EQ(page2.data.size(), 0UL);
+        ASSERT_EQ(page2.page_id, 2UL);
+    }
+
+    snapshot.reset();
+    cb = [](const std::set<PageId> & normal_page_ids) -> void {
+        ASSERT_EQ(normal_page_ids.size(), 1UL);
+        EXPECT_GT(normal_page_ids.count(0), 0UL);
+    };
+    storage->registerGCCallback(cb);
+    {
+        SCOPED_TRACE("gc with snapshot released");
+        storage->gc();
+    }
+}
+catch (const Exception & e)
+{
+    std::string text = e.displayText();
+
+    auto embedded_stack_trace_pos = text.find("Stack trace");
+    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
+    if (std::string::npos == embedded_stack_trace_pos)
+        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
+
+    throw;
+}
+
 TEST_F(PageStorage_test, IdempotentDelAndRef)
 {
     const size_t buf_sz = 1024;
@@ -382,7 +456,7 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     s0.reset();
-    auto            live_files = storage->versioned_page_entries.gcApply(edit);
+    auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
     ASSERT_EQ(live_files.size(), 1UL);
     ASSERT_EQ(live_files.count(id_and_lvl), 0UL);
     storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
@@ -492,7 +566,7 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
     s0.reset();
 
-    auto live_files = storage->versioned_page_entries.gcApply(edit);
+    auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
     EXPECT_EQ(live_files.find(id_and_lvl), live_files.end());
     storage->gcRemoveObsoleteData(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
 
@@ -544,7 +618,7 @@ try
 
     {
         // check that now only PageFile{1, 1} is live and remove PageFile{1, 0}
-        std::set<PageFileIdAndLevel> live_files = storage->versioned_page_entries.gcApply(edit);
+        auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
         ASSERT_EQ(live_files.size(), 1UL);
         ASSERT_EQ(*live_files.begin(), PageFileIdAndLevel(1, 1));
 

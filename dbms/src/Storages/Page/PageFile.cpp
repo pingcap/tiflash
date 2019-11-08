@@ -37,10 +37,10 @@ namespace PageMetaFormat
 using WBSize          = UInt32;
 using PageFileVersion = PageFile::Version;
 // TODO we should align these alias with type in PageCache
-using PageTag         = UInt64;
-using IsPut           = std::underlying_type<WriteBatch::WriteType>::type;
-using PageOffset      = UInt64;
-using Checksum        = UInt64;
+using PageTag    = UInt64;
+using IsPut      = std::underlying_type<WriteBatch::WriteType>::type;
+using PageOffset = UInt64;
+using Checksum   = UInt64;
 
 static const size_t PAGE_META_SIZE = sizeof(PageId) + sizeof(PageTag) + sizeof(PageOffset) + sizeof(PageSize) + sizeof(Checksum);
 
@@ -96,7 +96,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
         {
-            write.read_buffer->readStrict(data_pos, write.size);
+            if (write.read_buffer) // In case read_buffer is nullptr
+                write.read_buffer->readStrict(data_pos, write.size);
             Checksum page_checksum = CityHash_v1_0_2::CityHash64(data_pos, write.size);
             data_pos += write.size;
 
