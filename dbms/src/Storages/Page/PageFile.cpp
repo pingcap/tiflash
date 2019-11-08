@@ -173,7 +173,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         // this field is always true now
         const auto version = PageUtil::get<PageFileVersion>(pos);
         if (version != PageFile::CURRENT_VERSION)
-            throw Exception("Version not match", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Version not match, version: " + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
 
         // check the checksum of WriteBatch
         const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
@@ -217,6 +217,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                 const auto ref_id  = PageUtil::get<PageId>(pos);
                 const auto page_id = PageUtil::get<PageId>(pos);
                 edit.ref(ref_id, page_id);
+                break;
             }
             }
         }
@@ -526,6 +527,8 @@ bool PageFile::isExist() const
 
 UInt64 PageFile::getDataFileSize() const
 {
+    if (type == Type::Legacy)
+        return 0;
     Poco::File file(dataPath());
     return file.getSize();
 }
