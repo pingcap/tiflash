@@ -352,7 +352,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 {
                     // Check dirty again
                     if (region.second->dirtyFlag())
-                        region_table.tryFlushRegion(region.first, table_id, true);
+                        region_table.tryFlushRegion(region.first, table_id, false);
                 }
             }
             auto e_time = Clock::now();

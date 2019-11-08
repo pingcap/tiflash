@@ -18,19 +18,20 @@ RaftService::RaftService(DB::Context & db_context_)
     if (!db_context.getTMTContext().isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
+    single_thread_task_handle = background_pool.addTask(
+        [this] {
+            auto & tmt = db_context.getTMTContext();
+            {
+                RegionTable & region_table = tmt.getRegionTable();
+                region_table.checkTableOptimize();
+            }
+            kvstore->tryPersist();
+            return false;
+        },
+        false);
+
     if (!db_context.getTMTContext().disableBgFlush())
     {
-        single_thread_task_handle = background_pool.addTask(
-            [this] {
-                auto & tmt = db_context.getTMTContext();
-                {
-                    RegionTable & region_table = tmt.getRegionTable();
-                    region_table.checkTableOptimize();
-                }
-                kvstore->tryPersist();
-                return false;
-            },
-            false);
 
         table_flush_handle = background_pool.addTask([this] {
             auto & tmt = db_context.getTMTContext();
@@ -102,7 +103,7 @@ void RaftService::addRegionToFlush(const Region & region)
     }
     else
     {
-        auto & region_table =  db_context.getTMTContext().getRegionTable();
+        auto & region_table = db_context.getTMTContext().getRegionTable();
         region_table.tryFlushRegion(region.id());
     }
 }
