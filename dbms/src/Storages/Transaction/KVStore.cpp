@@ -153,8 +153,13 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
         context->getTMTContext().getRegionTable().applySnapshotRegion(*new_region);
         if (context->getTMTContext().disableBgFlush())
         {
+            auto s_time = Clock::now();
             context->getTMTContext().getRegionTable().tryFlushRegion(new_region->id());
-            LOG_DEBUG(log, "[syncFlush] Apply snapshot for region " << new_region->id());
+            auto e_time = Clock::now();
+            LOG_DEBUG(log,
+                "[syncFlush] Apply snapshot for region " << new_region->id() << ", cost "
+                                                         << std::chrono::duration_cast<std::chrono::milliseconds>(e_time - s_time).count()
+                                                         << "ms");
         }
     }
 
@@ -218,7 +223,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 tables_to_flush.emplace(id);
             }
 
-            if (!tables_to_flush.empty())
+            if (!result.table_ids.empty())
                 dirty_regions.emplace(curr_region_id);
         }
 
