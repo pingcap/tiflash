@@ -11,7 +11,7 @@ namespace DB
 // PageEntriesVersionSetWithDelta
 //==========================================================================================
 
-std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit)
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit)
 {
     std::unique_lock lock(read_mutex);
     if (!edit.empty())
@@ -36,40 +36,38 @@ std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::gcApply(PageEntries
     return listAllLiveFiles(lock);
 }
 
-std::set<PageFileIdAndLevel> PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
+PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
 {
     (void)lock; // Note read_mutex must be hold.
-    std::set<PageFileIdAndLevel> liveFiles;
-    std::set<VersionPtr>         visitedVersions; // avoid to access same version multiple time
+
+    /// TODO: this is costly, maybe we should find a better way not to block generating other snapshot.
+    std::set<PageFileIdAndLevel> live_files;
+    std::set<PageId>             live_normal_pages;
     // Iterate all snapshot to collect all PageFile in used.
     for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
     {
-        collectLiveFilesFromVersionList(s->version()->getSharedTailVersion(), visitedVersions, liveFiles);
+        collectLiveFilesFromVersionList(*(s->version()), live_files, live_normal_pages);
     }
     // Iterate over `current`
-    collectLiveFilesFromVersionList(current, visitedVersions, liveFiles);
-    return liveFiles;
+    PageEntriesView latest_view(current);
+    collectLiveFilesFromVersionList(latest_view, live_files, live_normal_pages);
+    return {live_files, live_normal_pages};
 }
 
 void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
-    VersionPtr                     v,
-    std::set<VersionPtr> &         visited,
-    std::set<PageFileIdAndLevel> & liveFiles) const
+    const PageEntriesView &        view,
+    std::set<PageFileIdAndLevel> & live_files,
+    std::set<PageId> &             live_normal_pages) const
 {
-    for (; v != nullptr; v = v->prev)
+    std::set<PageId> normal_pages_this_snapshot = view.validNormalPageIds();
+    for (auto normal_page_id : normal_pages_this_snapshot)
     {
-        // If this version has been visited, all previous version has been collected.
-        if (visited.count(v) > 0)
-            break;
-        for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
+        live_normal_pages.insert(normal_page_id);
+        if (auto entry = view.findNormalPageEntry(normal_page_id); entry && !entry->isTombstone())
         {
-            // ignore if it is a tombstone entry
-            if (it->second.ref != 0)
-            {
-                liveFiles.insert(it->second.fileIdLevel());
-            }
+            live_files.insert(entry->fileIdLevel());
         }
-        visited.insert(v);
     }
 }
 

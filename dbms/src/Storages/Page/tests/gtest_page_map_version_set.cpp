@@ -774,6 +774,19 @@ String                   liveFilesToString(const std::set<PageFileIdAndLevel> & 
     }
     return ss.str();
 }
+String livePagesToString(const std::set<PageId> & ids)
+{
+    std::stringstream ss;
+    bool              is_first = true;
+    for (const auto & page_id : ids)
+    {
+        if (!is_first)
+            ss << ",";
+        ss << page_id;
+        is_first = false;
+    }
+    return ss.str();
+}
 #pragma clang diagnostic pop
 
 } // namespace
@@ -813,27 +826,39 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
     auto s3 = versions.getSnapshot();
     s3.reset(); // do compact on version-list, and
     //std::cerr << "s3 reseted." << std::endl;
-    auto livefiles = versions.listAllLiveFiles(versions.acquireForLock());
+    auto [livefiles, live_normal_pages] = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 4UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current, s1, s2
     ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL); // hold by current, s1, s2
     ASSERT_EQ(livefiles.count(std::make_pair(3, 1)), 1UL); // hold by s2
+    ASSERT_EQ(live_normal_pages.size(), 4UL) << livePagesToString(live_normal_pages);
+    EXPECT_GT(live_normal_pages.count(0), 0UL);
+    EXPECT_GT(live_normal_pages.count(1), 0UL);
+    EXPECT_GT(live_normal_pages.count(2), 0UL);
+    EXPECT_GT(live_normal_pages.count(3), 0UL);
 
     s2.reset();
     //std::cerr << "s2 reseted." << std::endl;
-    livefiles = versions.listAllLiveFiles(versions.acquireForLock());
+    std::tie(livefiles, live_normal_pages) = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 3UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(1, 0)), 1UL); // hold by s1
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current, s1
     ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL); // hold by current, s1
+    ASSERT_EQ(live_normal_pages.size(), 3UL) << livePagesToString(live_normal_pages);
+    EXPECT_GT(live_normal_pages.count(0), 0UL);
+    EXPECT_GT(live_normal_pages.count(1), 0UL);
+    EXPECT_GT(live_normal_pages.count(2), 0UL);
 
     s1.reset();
     //std::cerr << "s1 reseted." << std::endl;
-    livefiles = versions.listAllLiveFiles(versions.acquireForLock());
+    std::tie(livefiles, live_normal_pages) = versions.listAllLiveFiles(versions.acquireForLock());
     ASSERT_EQ(livefiles.size(), 2UL) << liveFilesToString(livefiles);
     ASSERT_EQ(livefiles.count(std::make_pair(2, 0)), 1UL); // hold by current
     ASSERT_EQ(livefiles.count(std::make_pair(3, 0)), 1UL); // hold by current
+    ASSERT_EQ(live_normal_pages.size(), 2UL) << livePagesToString(live_normal_pages);
+    EXPECT_GT(live_normal_pages.count(1), 0UL);
+    EXPECT_GT(live_normal_pages.count(2), 0UL);
 }
 
 REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
