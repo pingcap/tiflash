@@ -213,16 +213,13 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
         if (tmt_context != nullptr && tmt_context->disableBgFlush())
         {
-            // Since background threads which may acquire `dirtyFlag` are disabled, it's safe to check it directly.
-            if (curr_region.dirtyFlag())
-            {
-                dirty_regions.emplace(curr_region_id);
-            }
-
             for (auto id : result.table_ids)
             {
                 tables_to_flush.emplace(id);
             }
+
+            if (!tables_to_flush.empty())
+                dirty_regions.emplace(curr_region_id);
         }
 
         const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region.toCommandResponse(); };
@@ -350,9 +347,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             {
                 if (auto && itr = dirty_regions.find(region.first); itr != dirty_regions.end())
                 {
-                    // Check dirty again
-                    if (region.second->dirtyFlag())
-                        region_table.tryFlushRegion(region.first, table_id, false);
+                    region_table.tryFlushRegion(region.first, table_id, false);
                 }
             }
             auto e_time = Clock::now();
