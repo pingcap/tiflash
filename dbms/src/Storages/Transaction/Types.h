@@ -14,10 +14,7 @@ using TableIDSet = std::unordered_set<TableID>;
 enum : TableID
 {
     InvalidTableID = 0,
-    MaxSystemTableID = 29
 };
-
-inline bool isTiDBSystemTable(TableID table_id) { return table_id <= MaxSystemTableID; }
 
 using DatabaseID = Int64;
 

@@ -44,7 +44,7 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check = {});
+    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check = {}, bool try_flush_region = false);
 
     // TODO: remove RaftContext and use Context + CommandServerReaderWriter
     void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);

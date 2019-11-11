@@ -223,7 +223,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     // the index of column is constant after MergeTreeBlockInputStream is constructed. exception will be thrown if not found.
     const size_t handle_column_index = 0, version_column_index = 1, delmark_column_index = 2;
 
-    const auto func_throw_retry_region = [&](RegionTable::RegionReadStatus status) {
+    const auto func_throw_retry_region = [&](RegionException::RegionReadStatus status) {
         std::vector<RegionID> region_ids;
         region_ids.reserve(regions_executor_data.size());
         for (const auto & query_info : regions_executor_data)
@@ -315,7 +315,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             if (region == nullptr)
             {
                 LOG_WARNING(log, "[region " << query_info.info.region_id << "] is not found in KVStore, try again");
-                func_throw_retry_region(RegionTable::RegionReadStatus::NOT_FOUND);
+                func_throw_retry_region(RegionException::RegionReadStatus::NOT_FOUND);
             }
             kvstore_region.emplace(query_info.info.region_id, std::move(region));
         }
@@ -332,13 +332,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             auto start_time = Clock::now();
             const size_t mem_region_num = regions_executor_data.size();
             const size_t batch_size = mem_region_num / concurrent_num;
-            std::atomic_uint8_t region_status = RegionTable::RegionReadStatus::OK;
+            std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
 
             const auto func_run_learner_read = [&](const size_t region_begin) {
                 const size_t region_end = std::min(region_begin + batch_size, mem_region_num);
                 for (size_t region_index = region_begin; region_index < region_end; ++region_index)
                 {
-                    if (region_status != RegionTable::RegionReadStatus::OK)
+                    if (region_status != RegionException::RegionReadStatus::OK)
                         return;
 
                     RegionQueryInfo & region_query_info = regions_executor_data[region_index].info;
@@ -353,13 +353,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
                         mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.range_in_table);
 
-                    if (status != RegionTable::OK)
+                    if (status != RegionException::RegionReadStatus::OK)
                     {
                         LOG_WARNING(log,
                             "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
                                                           << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
                                                           << region_query_info.range_in_table.second.toString() << ") , status "
-                                                          << RegionTable::RegionReadStatusString(status));
+                                                          << RegionException::RegionReadStatusString(status));
                         region_status = status;
                     }
                     else if (block)
@@ -380,8 +380,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                 func_run_learner_read(0);
             }
 
-            if (region_status != RegionTable::RegionReadStatus::OK)
-                func_throw_retry_region(static_cast<RegionTable::RegionReadStatus>(region_status.load()));
+            if (region_status != RegionException::RegionReadStatus::OK)
+                func_throw_retry_region(static_cast<RegionException::RegionReadStatus>(region_status.load()));
 
             auto end_time = Clock::now();
             LOG_DEBUG(log,
@@ -846,13 +846,13 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             // check all data, include special region.
             {
                 auto region = tmt.getKVStore()->getRegion(region_query_info.region_id);
-                RegionTable::RegionReadStatus status = RegionTable::OK;
+                RegionException::RegionReadStatus status = RegionException::RegionReadStatus::OK;
                 if (region != kvstore_region[region_query_info.region_id])
-                    status = RegionTable::NOT_FOUND;
+                    status = RegionException::RegionReadStatus::NOT_FOUND;
                 else if (region->version() != region_query_info.version)
-                    status = RegionTable::VERSION_ERROR;
+                    status = RegionException::RegionReadStatus::VERSION_ERROR;
 
-                if (status != RegionTable::OK)
+                if (status != RegionException::RegionReadStatus::OK)
                 {
                     // ABA problem may cause because one region is removed and inserted back.
                     // if the version of region is changed, the part may has less data because of compaction.
@@ -861,7 +861,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                                                   << region_query_info.version << ", handle range ["
                                                                   << region_query_info.range_in_table.first.toString() << ", "
                                                                   << region_query_info.range_in_table.second.toString() << ") , status "
-                                                                  << RegionTable::RegionReadStatusString(status));
+                                                                  << RegionException::RegionReadStatusString(status));
                     // throw exception and exit.
                     func_throw_retry_region(status);
                 }

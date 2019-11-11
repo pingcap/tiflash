@@ -20,16 +20,15 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void RegionTable::writeBlockByRegion(
-    Context & context, TableID table_id, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
+void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
 {
     const auto & tmt = context.getTMTContext();
-
+    TableID table_id = region->getFlashTableID();
     UInt64 region_read_cost = -1, region_decode_cost = -1, write_part_cost = -1;
 
     RegionDataReadInfoList data_list_read;
     {
-        auto scanner = region->createCommittedScanner(table_id);
+        auto scanner = region->createCommittedScanner();
 
         /// Some sanity checks for region meta.
         {
@@ -117,7 +116,7 @@ void RegionTable::writeBlockByRegion(
                             << ", region decode " << region_decode_cost << ", write part " << write_part_cost << "] ms");
 }
 
-std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
+std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
     const ColumnsDescription & columns,
     const Names & column_names_to_read,
     const RegionPtr & region,
@@ -128,20 +127,23 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
     DB::HandleRange<HandleID> & handle_range)
 {
     if (!region)
-        throw Exception("[RegionTable::readBlockByRegion] region is null", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region is null", ErrorCodes::LOGICAL_ERROR);
+
+    if (region->getFlashTableID() != table_info.id)
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match", ErrorCodes::LOGICAL_ERROR);
 
     RegionDataReadInfoList data_list_read;
     {
-        auto scanner = region->createCommittedScanner(table_info.id);
+        auto scanner = region->createCommittedScanner();
 
         /// Some sanity checks for region meta.
         {
             if (region->isPendingRemove())
-                return {Block(), PENDING_REMOVE};
+                return {Block(), RegionException::PENDING_REMOVE};
 
             const auto & [version, conf_ver, key_range] = region->dumpVersionRange();
             if (version != region_version || conf_ver != conf_version)
-                return {Block(), VERSION_ERROR};
+                return {Block(), RegionException::VERSION_ERROR};
 
             handle_range = key_range->getHandleRangeByTable(table_info.id);
         }
@@ -164,7 +166,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
         {
             // Shortcut for empty region.
             if (!scanner.hasNext())
-                return {Block(), OK};
+                return {Block(), RegionException::OK};
 
             data_list_read.reserve(scanner.writeMapSize());
 
@@ -188,7 +190,7 @@ std::tuple<Block, RegionTable::RegionReadStatus> RegionTable::readBlockByRegion(
                 ErrorCodes::LOGICAL_ERROR);
     }
 
-    return {std::move(block), OK};
+    return {std::move(block), RegionException::OK};
 }
 
 } // namespace DB

@@ -154,7 +154,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
         MockTiKV::instance().getRaftIndex(region_id);
     }
 
-    applySnapshot(tmt.getKVStore(), region, &context);
+    applySnapshot(tmt.getKVStore(), region, &context, false);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"

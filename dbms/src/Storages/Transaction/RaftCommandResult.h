@@ -20,7 +20,7 @@ struct RaftCommandResult : private boost::noncopyable
         Default,
         IndexError,
         BatchSplit,
-        UpdateTableID,
+        UpdateTable,
         ChangePeer
     };
 
@@ -28,7 +28,6 @@ struct RaftCommandResult : private boost::noncopyable
 
     Type type = Type::Default;
     std::vector<RegionPtr> split_regions{};
-    TableIDSet table_ids{};
     ImutRegionRangePtr range_before_split;
 };
 

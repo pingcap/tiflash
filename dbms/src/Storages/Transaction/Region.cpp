@@ -22,73 +22,75 @@ const std::string Region::default_cf_name = "default";
 const std::string Region::write_cf_name = "write";
 const std::string Region::log_name = "Region";
 
-RegionData::WriteCFIter Region::removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it)
+RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it) { return data.removeDataByWriteIt(write_it); }
+
+RegionDataReadInfo Region::readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value) const
 {
-    return data.removeDataByWriteIt(table_id, write_it);
+    return data.readDataByWriteIt(write_it, need_value);
 }
 
-RegionDataReadInfo Region::readDataByWriteIt(const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value) const
-{
-    return data.readDataByWriteIt(table_id, write_it, need_value);
-}
+LockInfoPtr Region::getLockInfo(UInt64 start_ts) const { return data.getLockInfo(start_ts); }
 
-LockInfoPtr Region::getLockInfo(TableID expected_table_id, UInt64 start_ts) const { return data.getLockInfo(expected_table_id, start_ts); }
-
-TableID Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
+void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     return doInsert(cf, std::move(key), std::move(value));
 }
 
-TableID Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
+void Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value)
 {
     auto raw_key = RecordKVFormat::decodeTiKVKey(key);
-    auto table_id = checkRecordAndValidTable(raw_key);
-    if (table_id == InvalidTableID)
-        return InvalidTableID;
+    doCheckTable(raw_key);
 
     auto type = getCf(cf);
-    return data.insert(type, std::move(key), raw_key, std::move(value));
+    data.insert(type, std::move(key), raw_key, std::move(value));
 }
 
-TableID Region::remove(const std::string & cf, const TiKVKey & key)
+void Region::doCheckTable(const DB::DecodedTiKVKey & raw_key) const
+{
+    auto table_id = RecordKVFormat::getTableId(raw_key);
+    if (table_id != getFlashTableID())
+    {
+        LOG_ERROR(log, __FUNCTION__ << ": table id not match, except " << getFlashTableID() << ", got " << table_id);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match");
+    }
+}
+
+void Region::remove(const std::string & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
-    return doRemove(cf, key);
+    doRemove(cf, key);
 }
 
-TableID Region::doRemove(const std::string & cf, const TiKVKey & key)
+void Region::doRemove(const std::string & cf, const TiKVKey & key)
 {
     auto raw_key = RecordKVFormat::decodeTiKVKey(key);
-    auto table_id = checkRecordAndValidTable(raw_key);
-    if (table_id == InvalidTableID)
-        return InvalidTableID;
+    doCheckTable(raw_key);
 
     auto type = getCf(cf);
     switch (type)
     {
         case Lock:
-            data.removeLockCF(table_id, raw_key);
+            data.removeLockCF(raw_key);
             break;
         case Default:
         {
             // there may be some prewrite data, may not exist, don't throw exception.
-            data.removeDefaultCF(table_id, key, raw_key);
+            data.removeDefaultCF(key, raw_key);
             break;
         }
         case Write:
         {
             // removed by gc, may not exist.
-            data.removeWriteCF(table_id, key, raw_key);
+            data.removeWriteCF(key, raw_key);
             break;
         }
     }
-    return table_id;
 }
 
 UInt64 Region::appliedIndex() const { return meta.appliedIndex(); }
 
-RegionPtr Region::splitInto(RegionMeta meta)
+RegionPtr Region::splitInto(RegionMeta && meta)
 {
     RegionPtr new_region;
     if (index_reader != nullptr)
@@ -257,9 +259,6 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
     }
     else
     {
-        TableIDSet table_ids;
-        TableID table_id = InvalidTableID;
-
         std::unique_lock<std::shared_mutex> lock(mutex);
 
         for (auto && req : *cmd.mutable_requests())
@@ -280,7 +279,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
 
                     try
                     {
-                        table_id = doInsert(put.cf(), std::move(tikv_key), std::move(tikv_value));
+                        doInsert(put.cf(), std::move(tikv_key), std::move(tikv_value));
                     }
                     catch (Exception & e)
                     {
@@ -290,11 +289,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
                         e.rethrow();
                     }
 
-                    if (table_id != InvalidTableID)
-                    {
-                        table_ids.emplace(table_id);
-                        is_dirty = true;
-                    }
+                    is_dirty = true;
                     break;
                 }
                 case raft_cmdpb::CmdType::Delete:
@@ -306,7 +301,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
 
                     try
                     {
-                        table_id = doRemove(del.cf(), tikv_key);
+                        doRemove(del.cf(), tikv_key);
                     }
                     catch (Exception & e)
                     {
@@ -316,11 +311,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
                         e.rethrow();
                     }
 
-                    if (table_id != InvalidTableID)
-                    {
-                        table_ids.emplace(table_id);
-                        is_dirty = true;
-                    }
+                    is_dirty = true;
                     break;
                 }
                 case raft_cmdpb::CmdType::Snap:
@@ -350,8 +341,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
             }
         }
         meta.setApplied(index, term);
-        result.type = RaftCommandResult::Type::UpdateTableID;
-        result.table_ids = std::move(table_ids);
+        result.type = RaftCommandResult::Type::UpdateTable;
     }
 
     meta.notifyAll();
@@ -388,8 +378,9 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * in
             "[Region::deserialize] unexpected version: " + DB::toString(version) + ", expected: " + DB::toString(CURRENT_VERSION),
             ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
-    auto region = index_reader_create == nullptr ? std::make_shared<Region>(RegionMeta::deserialize(buf))
-                                                 : std::make_shared<Region>(RegionMeta::deserialize(buf), *index_reader_create);
+    auto meta = RegionMeta::deserialize(buf);
+    auto region = index_reader_create == nullptr ? std::make_shared<Region>(std::move(meta))
+                                                 : std::make_shared<Region>(std::move(meta), *index_reader_create);
 
     RegionData::deserialize(buf, region->data);
 
@@ -457,15 +448,9 @@ void Region::decDirtyFlag(size_t x) const { dirty_flag -= x; }
 
 void Region::incDirtyFlag() { dirty_flag++; }
 
-Region::CommittedScanner Region::createCommittedScanner(TableID expected_table_id)
-{
-    return Region::CommittedScanner(this->shared_from_this(), expected_table_id);
-}
+Region::CommittedScanner Region::createCommittedScanner() { return Region::CommittedScanner(this->shared_from_this()); }
 
-Region::CommittedRemover Region::createCommittedRemover(TableID expected_table_id)
-{
-    return Region::CommittedRemover(this->shared_from_this(), expected_table_id);
-}
+Region::CommittedRemover Region::createCommittedRemover() { return Region::CommittedRemover(this->shared_from_this()); }
 
 std::string Region::toString(bool dump_status) const { return meta.toString(dump_status); }
 
@@ -513,21 +498,15 @@ void Region::assignRegion(Region && new_region)
 
 bool Region::isPeerRemoved() const { return meta.isPeerRemoved(); }
 
-TableIDSet Region::getAllWriteCFTables() const
-{
-    std::shared_lock<std::shared_mutex> lock(mutex);
-    return data.getAllWriteCFTables();
-}
-
-void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point)
+void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
 
     if (handle_map.empty())
         return;
 
-    auto & region_data = data.writeCF().getDataMut();
-    auto & write_map = region_data[table_id];
+    auto table_id = getFlashTableID();
+    auto & write_map = data.writeCF().getDataMut();
 
     size_t deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
 
@@ -548,9 +527,9 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
                 if (is_deleted != ori_del)
                 {
                     LOG_ERROR(log,
-                        "[compareAndCompleteSnapshot] WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: "
-                                                                                        << ori_del << " , current: " << is_deleted);
-                    throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+                        __FUNCTION__ << ": WriteType is not equal, handle: " << handle << ", tso: " << ts << ", original: " << ori_del
+                                     << " , current: " << is_deleted);
+                    throw Exception(std::string(__PRETTY_FUNCTION__) + ": original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
                 }
                 handle_map.erase(it);
             }
@@ -567,7 +546,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
         std::ignore = ori_del;
 
         if (ori_ts >= safe_point)
-            throw Exception("[Region::compareAndCompleteSnapshot] original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": original ts >= gc safe point", ErrorCodes::LOGICAL_ERROR);
 
         auto raw_key = RecordKVFormat::genRawKey(table_id, handle);
         TiKVKey key = RecordKVFormat::encodeAsTiKVKey(raw_key);
@@ -579,10 +558,10 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const TableID ta
     }
 
     LOG_DEBUG(log,
-        "[compareAndCompleteSnapshot] table " << table_id << ", gc safe point " << safe_point << ", original write map size "
-                                              << ori_write_map_size << ", remain size " << write_map.size());
+        __FUNCTION__ << ": table " << table_id << ", gc safe point " << safe_point << ", original write map size " << ori_write_map_size
+                     << ", remain size " << write_map.size());
     if (deleted_gc_cnt)
-        LOG_INFO(log, "[compareAndCompleteSnapshot] add deleted gc: " << deleted_gc_cnt);
+        LOG_INFO(log, __FUNCTION__ << ": add deleted gc: " << deleted_gc_cnt);
 }
 
 RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLock & lock)
@@ -593,43 +572,37 @@ RegionRaftCommandDelegate & Region::makeRaftCommandDelegate(const KVStoreTaskLoc
     return static_cast<RegionRaftCommandDelegate &>(*this);
 }
 
-void Region::compareAndUpdateHandleMaps(const Region & source_region, std::unordered_map<TableID, HandleMap> & handle_maps)
+void Region::compareAndUpdateHandleMaps(const Region & source_region, HandleMap & handle_map)
 {
     const auto range = getRange();
     const auto & [start_key, end_key] = range->comparableKeys();
     {
         std::shared_lock<std::shared_mutex> source_lock(source_region.mutex);
 
-        const auto & region_data = source_region.data.writeCF().getData();
-        for (auto & [table_id, write_map] : region_data)
+        const auto & write_map = source_region.data.writeCF().getData();
+        if (write_map.empty())
+            return;
+
+        for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
         {
-            if (write_map.empty())
+            const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
+
+            if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
+                ;
+            else
                 continue;
 
-            auto & handle_map = handle_maps[table_id];
-            for (auto write_map_it = write_map.begin(); write_map_it != write_map.end(); ++write_map_it)
+            const auto & [handle, ts] = write_map_it->first;
+            const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
+            auto [it, ok] = handle_map.emplace(handle, cur_ele);
+            if (!ok)
             {
-                const auto & key = RegionWriteCFData::getTiKVKey(write_map_it->second);
-
-                if (start_key.compare(key) <= 0 && end_key.compare(key) > 0)
-                    ;
-                else
-                    continue;
-
-                const auto & [handle, ts] = write_map_it->first;
-                const HandleMap::mapped_type cur_ele = {ts, RegionData::getWriteType(write_map_it) == DelFlag};
-                auto [it, ok] = handle_map.emplace(handle, cur_ele);
-                if (!ok)
-                {
-                    auto & ele = it->second;
-                    ele = std::max(ele, cur_ele);
-                }
+                auto & ele = it->second;
+                ele = std::max(ele, cur_ele);
             }
-
-            LOG_DEBUG(log,
-                "[compareAndUpdateHandleMaps] memory cache: source " << source_region.toString(false) << ", table " << table_id
-                                                                     << ", record size " << write_map.size());
         }
+
+        LOG_DEBUG(log, __FUNCTION__ << ": memory cache: source " << source_region.toString(false) << ", record size " << write_map.size());
     }
 }
 
@@ -646,6 +619,17 @@ void Region::tryPreDecodeTiKVValue()
     DB::tryPreDecodeTiKVValue(data.defaultCF().getExtra().popAll());
     DB::tryPreDecodeTiKVValue(data.writeCF().getExtra().popAll());
 }
+
+Region::Region(RegionMeta && meta_) : Region(std::move(meta_), [](pingcap::kv::RegionVerID) { return nullptr; }) {}
+
+Region::Region(DB::RegionMeta && meta_, const DB::IndexReaderCreateFunc & index_reader_create)
+    : meta(std::move(meta_)),
+      index_reader(index_reader_create(meta.getRegionVerID())),
+      log(&Logger::get(log_name)),
+      flash_table_id(meta.getRange()->getFlashTableID())
+{}
+
+TableID Region::getFlashTableID() const { return flash_table_id; }
 
 const RegionRangeKeys & RegionRaftCommandDelegate::getRange() { return *meta.makeRaftCommandDelegate().regionState().getRange(); }
 UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().applyState().applied_index(); }

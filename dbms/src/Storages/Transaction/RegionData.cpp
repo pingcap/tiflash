@@ -5,56 +5,57 @@
 namespace DB
 {
 
-TableID RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
+void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value)
 {
     switch (cf)
     {
         case Write:
         {
             size_t size = key.dataSize() + value.dataSize();
-            auto table_id = write_cf.insert(std::move(key), std::move(value), raw_key);
-            if (table_id != InvalidTableID)
+            auto res = write_cf.insert(std::move(key), std::move(value), raw_key);
+            if (res)
                 cf_data_size += size;
-            return table_id;
+            return;
         }
         case Default:
         {
             size_t size = key.dataSize() + value.dataSize();
-            auto table_id = default_cf.insert(std::move(key), std::move(value), raw_key);
+            default_cf.insert(std::move(key), std::move(value), raw_key);
             cf_data_size += size;
-            return table_id;
+            return;
         }
         case Lock:
         {
-            return lock_cf.insert(std::move(key), std::move(value), raw_key);
+            lock_cf.insert(std::move(key), std::move(value), raw_key);
+            return;
         }
         default:
-            throw Exception("RegionData::insert with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(std::string(__PRETTY_FUNCTION__) + " with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-void RegionData::removeLockCF(const TableID & table_id, const DecodedTiKVKey & raw_key)
+void RegionData::removeLockCF(const DecodedTiKVKey & raw_key)
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-    lock_cf.remove(table_id, handle_id);
+    lock_cf.remove(handle_id);
 }
 
-void RegionData::removeDefaultCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key)
-{
-    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-    Timestamp ts = RecordKVFormat::getTs(key);
-    cf_data_size -= default_cf.remove(table_id, RegionDefaultCFData::Key{handle_id, ts}, true);
-}
-
-void RegionData::removeWriteCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key)
+void RegionData::removeDefaultCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
     Timestamp ts = RecordKVFormat::getTs(key);
-
-    cf_data_size -= write_cf.remove(table_id, RegionWriteCFData::Key{handle_id, ts}, true);
+    cf_data_size -= default_cf.remove(RegionDefaultCFData::Key{handle_id, ts}, true);
 }
 
-RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it)
+void RegionData::removeWriteCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
+{
+    HandleID handle_id = RecordKVFormat::getHandle(raw_key);
+    Timestamp ts = RecordKVFormat::getTs(key);
+
+    cf_data_size -= write_cf.remove(RegionWriteCFData::Key{handle_id, ts}, true);
+}
+
+RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [handle, ts] = write_it->first;
@@ -65,7 +66,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id
 
     if (write_type == PutFlag && !short_str)
     {
-        auto & map = default_cf.getDataMut()[table_id];
+        auto & map = default_cf.getDataMut();
 
         if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
         {
@@ -78,10 +79,10 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const TableID & table_id
 
     cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
 
-    return write_cf.getDataMut()[table_id].erase(write_it);
+    return write_cf.getDataMut().erase(write_it);
 }
 
-RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it, bool need_value) const
+RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value) const
 {
     const auto & [key, value, decoded_val] = write_it->second;
     const auto & [handle, ts] = write_it->first;
@@ -99,41 +100,32 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const TableID & table_id, const
     if (short_value)
         return std::make_tuple(handle, write_type, ts, short_value);
 
-    if (auto map_it = default_cf.getData().find(table_id); map_it != default_cf.getData().end())
-    {
-        const auto & map = map_it->second;
-        if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
-            return std::make_tuple(handle, write_type, ts, std::get<1>(data_it->second));
-        else
-            throw Exception(" key [" + key->toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
-    }
+
+    const auto & map = default_cf.getData();
+    if (auto data_it = map.find({handle, prewrite_ts}); data_it != map.end())
+        return std::make_tuple(handle, write_type, ts, std::get<1>(data_it->second));
     else
-        throw Exception(" table [" + toString(table_id) + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(" key [" + key->toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
 }
 
-LockInfoPtr RegionData::getLockInfo(TableID expected_table_id, Timestamp start_ts) const
+LockInfoPtr RegionData::getLockInfo(Timestamp start_ts) const
 {
-    if (auto it = lock_cf.getData().find(expected_table_id); it != lock_cf.getData().end())
+    for (const auto & [handle, value] : lock_cf.getData())
     {
-        for (const auto & [handle, value] : it->second)
-        {
-            std::ignore = handle;
+        std::ignore = handle;
 
-            const auto & [tikv_key, tikv_val, decoded_val] = value;
-            const auto & [lock_type, primary, ts, ttl, data] = decoded_val;
-            std::ignore = tikv_val;
-            std::ignore = data;
+        const auto & [tikv_key, tikv_val, decoded_val] = value;
+        const auto & [lock_type, primary, ts, ttl, data] = decoded_val;
+        std::ignore = tikv_val;
+        std::ignore = data;
 
-            if (lock_type == DelFlag || ts > start_ts)
-                continue;
+        if (lock_type == DelFlag || ts > start_ts)
+            continue;
 
-            return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(*tikv_key), ttl});
-        }
-
-        return nullptr;
+        return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(*tikv_key), ttl});
     }
-    else
-        return nullptr;
+
+    return nullptr;
 }
 
 void RegionData::splitInto(const RegionRange & range, RegionData & new_region_data)
@@ -184,8 +176,6 @@ RegionDefaultCFData & RegionData::defaultCF() { return default_cf; }
 const RegionWriteCFData & RegionData::writeCF() const { return write_cf; }
 const RegionDefaultCFData & RegionData::defaultCF() const { return default_cf; }
 const RegionLockCFData & RegionData::lockCF() const { return lock_cf; }
-
-TableIDSet RegionData::getAllWriteCFTables() const { return writeCF().getAllTables(); }
 
 bool RegionData::isEqual(const RegionData & r2) const
 {

@@ -28,26 +28,26 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 }
 
 template <typename Trait>
-TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
+RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value)
 {
     const auto & raw_key = RecordKVFormat::decodeTiKVKey(key);
     return insert(std::move(key), std::move(value), raw_key);
 }
 
 template <typename Trait>
-TableID RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key)
+RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, const DecodedTiKVKey & raw_key)
 {
     Pair kv_pair = Trait::genKVPair(std::move(key), raw_key, std::move(value));
     if (shouldIgnoreInsert(kv_pair.second))
-        return InvalidTableID;
+        return false;
 
-    return insert(RecordKVFormat::getTableId(raw_key), std::move(kv_pair));
+    return insert(std::move(kv_pair));
 }
 
 template <typename Trait>
-TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, Value> && kv_pair)
+RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
 {
-    auto & map = data[table_id];
+    auto & map = data;
     auto [it, ok] = map.emplace(std::move(kv_pair));
     if (!ok)
         throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
@@ -56,7 +56,7 @@ TableID RegionCFDataBase<Trait>::insert(const TableID table_id, std::pair<Key, V
         extra.add(Trait::getRowRawValuePtr(it->second));
     else
         extra.add(getTiKVValuePtr(it->second));
-    return table_id;
+    return true;
 }
 
 template <typename Trait>
@@ -102,9 +102,9 @@ bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreInsert(const RegionCF
 }
 
 template <typename Trait>
-size_t RegionCFDataBase<Trait>::remove(TableID table_id, const Key & key, bool quiet)
+size_t RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
 {
-    auto & map = data[table_id];
+    auto & map = data;
 
     if (auto it = map.find(key); it != map.end())
     {
@@ -144,33 +144,13 @@ bool RegionCFDataBase<Trait>::cmp(const Map & a, const Map & b)
 template <typename Trait>
 bool RegionCFDataBase<Trait>::operator==(const RegionCFDataBase & cf) const
 {
-    if (getSize() != cf.getSize())
-        return false;
-
-    const auto & cf_data = cf.data;
-    for (const auto & [table_id, map] : data)
-    {
-        if (map.empty())
-            continue;
-
-        if (auto it = cf_data.find(table_id); it != cf_data.end())
-        {
-            if (!cmp(map, it->second))
-                return false;
-        }
-        else
-            return false;
-    }
-    return true;
+    return cmp(cf.data, data);
 }
 
 template <typename Trait>
 size_t RegionCFDataBase<Trait>::getSize() const
 {
-    size_t size = 0;
-    for (auto data_it = data.begin(); data_it != data.end(); ++data_it)
-        size += data_it->second.size();
-    return size;
+    return data.size();
 }
 
 template <typename Trait>
@@ -191,17 +171,9 @@ size_t RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDat
     const auto & [start_key, end_key] = range;
     size_t size_changed = 0;
 
-    for (auto data_it = data.begin(); data_it != data.end();)
     {
-        const auto & table_id = data_it->first;
-        auto & ori_map = data_it->second;
-        if (ori_map.empty())
-        {
-            data_it = data.erase(data_it);
-            continue;
-        }
-
-        auto & tar_map = new_region_data.data[table_id];
+        auto & ori_map = data;
+        auto & tar_map = new_region_data.data;
 
         for (auto it = ori_map.begin(); it != ori_map.end();)
         {
@@ -216,8 +188,6 @@ size_t RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDat
             else
                 ++it;
         }
-
-        ++data_it;
     }
     return size_changed;
 }
@@ -231,16 +201,12 @@ size_t RegionCFDataBase<Trait>::serialize(WriteBuffer & buf) const
 
     total_size += writeBinary2(size, buf);
 
-    for (const auto & [table_id, map] : data)
+    for (const auto & ele : data)
     {
-        std::ignore = table_id;
-        for (const auto & ele : map)
-        {
-            const auto & key = getTiKVKey(ele.second);
-            const auto & value = getTiKVValue(ele.second);
-            total_size += key.serialize(buf);
-            total_size += value.serialize(buf);
-        }
+        const auto & key = getTiKVKey(ele.second);
+        const auto & value = getTiKVValue(ele.second);
+        total_size += key.serialize(buf);
+        total_size += value.serialize(buf);
     }
 
     return total_size;
@@ -263,19 +229,6 @@ size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase &
 }
 
 template <typename Trait>
-TableIDSet RegionCFDataBase<Trait>::getAllTables() const
-{
-    TableIDSet tables;
-    for (const auto & [table_id, map] : data)
-    {
-        if (map.empty())
-            continue;
-        tables.insert(table_id);
-    }
-    return tables;
-}
-
-template <typename Trait>
 const typename RegionCFDataBase<Trait>::Data & RegionCFDataBase<Trait>::getData() const
 {
     return data;
@@ -294,9 +247,8 @@ size_t RegionCFDataBase<Trait>::deleteRange(const RegionRange & range)
 
     const auto & [start_key, end_key] = range;
 
-    for (auto data_it = data.begin(); data_it != data.end();)
     {
-        auto & ori_map = data_it->second;
+        auto & ori_map = data;
 
         for (auto it = ori_map.begin(); it != ori_map.end();)
         {
@@ -310,11 +262,6 @@ size_t RegionCFDataBase<Trait>::deleteRange(const RegionRange & range)
             else
                 ++it;
         }
-
-        if (ori_map.empty())
-            data_it = data.erase(data_it);
-        else
-            ++data_it;
     }
 
     return size_changed;
