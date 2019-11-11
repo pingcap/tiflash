@@ -40,6 +40,19 @@ public:
         writes.emplace_back(w);
     }
 
+    void putExternal(PageId page_id, UInt64 tag)
+    {
+        // External page's data is not managed by PageStorage, which means data is empty.
+        Write w = {WriteType::PUT, page_id, tag, nullptr, 0, 0};
+        writes.emplace_back(w);
+    }
+
+    void gcMovePage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, UInt32 size)
+    {
+        Write w = {WriteType::MOVE_NORMAL_PAGE, page_id, tag, read_buffer, size, 0};
+        writes.emplace_back(w);
+    }
+
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(PageId ref_id, PageId page_id)
     {

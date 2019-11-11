@@ -338,10 +338,12 @@ void PageStorage::traversePageEntries( //
 #endif
 }
 
-void PageStorage::registerGCCallback(PageStorage::GcCallback callback)
+void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
 {
-    assert(callback != nullptr);
-    gc_callback = callback;
+    assert(scanner != nullptr);
+    assert(remover != nullptr);
+    external_pages_scanner = scanner;
+    external_pages_remover = remover;
 }
 
 bool PageStorage::gc()
@@ -356,11 +358,16 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    // get all PageFiles
+    /// Get all pending external pages and PageFiles.
     const auto page_files = PageStorage::listAllPageFiles(storage_path, true, page_file_log);
     if (page_files.empty())
     {
         return false;
+    }
+    std::set<PageId> external_pages;
+    if (external_pages_scanner)
+    {
+        external_pages = external_pages_scanner();
     }
 
     PageFileIdAndLevel writing_file_id_level;
@@ -449,9 +456,9 @@ bool PageStorage::gc()
     gcRemoveObsoleteFiles(page_files, writing_file_id_level, live_files);
 
     // Invoke callback with valid normal page id after gc.
-    if (gc_callback)
+    if (external_pages_remover)
     {
-        gc_callback(live_normal_pages);
+        external_pages_remover(external_pages, live_normal_pages);
     }
     return true;
 }

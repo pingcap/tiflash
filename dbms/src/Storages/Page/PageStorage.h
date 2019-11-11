@@ -55,7 +55,9 @@ public:
     using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
-    using GcCallback = std::function<void(const std::set<PageId> & valid_normal_page_ids)>;
+    using ExternalPagesScanner = std::function<std::set<PageId>()>;
+    using ExternalPagesRemover
+        = std::function<void(const std::set<PageId> & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
 public:
     PageStorage(String name, const String & storage_path, const Config & config_);
@@ -76,8 +78,10 @@ public:
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 
-    // Register a callback, which will be called with living normal page ids after gc run a round.
-    void registerGCCallback(GcCallback callback);
+    // Register two callback:
+    // `scanner` for scanning avaliable external page ids.
+    // `remover` will be called with living normal page ids after gc run a round.
+    void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
     static std::set<PageFile, PageFile::Comparator>
     listAllPageFiles(const String & storage_path, bool remove_tmp_file, Poco::Logger * page_file_log);
@@ -121,7 +125,9 @@ private:
     std::mutex write_mutex;
 
     std::atomic<bool> gc_is_running = false;
-    GcCallback        gc_callback   = nullptr;
+
+    ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPagesRemover external_pages_remover = nullptr;
 };
 
 class PageReader
