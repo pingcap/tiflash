@@ -1,6 +1,5 @@
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/RegionMeta.h>
-#include <Storages/Transaction/TiKVRecordFormat.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

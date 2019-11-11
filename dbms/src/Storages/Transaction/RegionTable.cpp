@@ -37,7 +37,7 @@ RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Reg
 {
     auto & table_regions = table.regions;
     // Insert table mapping.
-    auto [it, ok] = table_regions.insert({region_id, InternalRegion(region_id, region_range_keys.getHandleRangeByTable(table.table_id))});
+    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.getHandleRangeByTable(table.table_id)));
     if (!ok)
         throw Exception(
             std::string(__PRETTY_FUNCTION__) + ": insert duplicate internal region " + DB::toString(region_id), ErrorCodes::LOGICAL_ERROR);
@@ -235,9 +235,9 @@ void RegionTable::tryFlushRegion(const RegionPtr & region, bool try_persist)
 
     const auto func_update_region = [&](std::function<bool(InternalRegion &)> && callback) -> bool {
         std::lock_guard<std::mutex> lock(mutex);
-        if (regions.find(region_id) != regions.end())
+        if (auto it = regions.find(region_id); it != regions.end())
         {
-            auto & internal_region = doGetInternalRegion(region->getFlashTableID(), region_id);
+            auto & internal_region = doGetInternalRegion(it->second, region_id);
             return callback(internal_region);
         }
         else
@@ -332,7 +332,10 @@ bool RegionTable::tryFlushRegions()
         });
 
         if (to_flush.useless_region != InvalidRegionID)
+        {
+            std::lock_guard<std::mutex> lock(mutex);
             dirty_regions.erase(to_flush.useless_region);
+        }
 
         if (!to_flush.got)
             return false;

@@ -52,7 +52,7 @@ void Region::doCheckTable(const DB::DecodedTiKVKey & raw_key) const
     if (table_id != getFlashTableID())
     {
         LOG_ERROR(log, __FUNCTION__ << ": table id not match, except " << getFlashTableID() << ", got " << table_id);
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match");
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match", ErrorCodes::LOGICAL_ERROR);
     }
 }
 

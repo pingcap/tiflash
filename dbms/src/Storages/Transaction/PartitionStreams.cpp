@@ -112,8 +112,8 @@ void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, Region
     }
 
     LOG_TRACE(log,
-        __PRETTY_FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region read " << region_read_cost
-                            << ", region decode " << region_decode_cost << ", write part " << write_part_cost << "] ms");
+        __FUNCTION__ << ": table " << table_id << ", region " << region->id() << ", cost [region read " << region_read_cost
+                     << ", region decode " << region_decode_cost << ", write part " << write_part_cost << "] ms");
 }
 
 std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByRegion(const TiDB::TableInfo & table_info,
