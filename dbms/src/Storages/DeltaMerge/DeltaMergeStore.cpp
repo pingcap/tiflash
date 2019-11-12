@@ -384,6 +384,32 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
     }
 
+#if 0
+    if (log->trace())
+    {
+        auto ranges_to_string = [](const HandleRanges & ranges) -> String {
+            std::stringstream ss;
+            bool              is_first = true;
+            ss << "[";
+            for (const auto & range : ranges)
+            {
+                if (!is_first)
+                    ss << ",";
+                is_first = false;
+                ss << range.toString();
+            }
+            ss << "]";
+            return ss.str();
+        };
+        for (const auto & task : tasks)
+        {
+            LOG_TRACE(log,
+                      "Read range: " << ranges_to_string(sorted_ranges) << " -> segment: " << task->segment->info()
+                                     << " range: " << ranges_to_string(task->ranges));
+        }
+    }
+#endif
+
     auto stream_creator = [=](const SegmentReadTask & task) {
         return task.segment->getInputStream(*dm_context,
                                             columns_to_read,
