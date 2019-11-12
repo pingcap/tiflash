@@ -3,7 +3,7 @@
 namespace DB
 {
 
-std::set<PageFileIdAndLevel> PageEntriesVersionSet::gcApply(PageEntriesEdit & edit)
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet::gcApply(PageEntriesEdit & edit)
 {
     std::unique_lock lock(read_mutex);
 
@@ -20,18 +20,21 @@ std::set<PageFileIdAndLevel> PageEntriesVersionSet::gcApply(PageEntriesEdit & ed
     return listAllLiveFiles(lock);
 }
 
-std::set<PageFileIdAndLevel> PageEntriesVersionSet::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
+PageEntriesVersionSet::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
 {
     (void)lock;
-    std::set<PageFileIdAndLevel> liveFiles;
+    std::set<PageFileIdAndLevel> live_files;
+    std::set<PageId>             live_normal_pages;
     for (PageEntries * v = placeholder_node.next; v != &placeholder_node; v = v->next)
     {
         for (auto it = v->pages_cbegin(); it != v->pages_cend(); ++it)
         {
-            liveFiles.insert(it->second.fileIdLevel());
+            live_normal_pages.insert(it->first);
+            live_files.insert(it->second.fileIdLevel());
         }
     }
-    return liveFiles;
+    return {live_files, live_normal_pages};
 }
 
 

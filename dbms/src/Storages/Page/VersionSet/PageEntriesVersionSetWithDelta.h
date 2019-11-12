@@ -27,23 +27,22 @@ public:
     using VersionPtr   = BaseType::VersionPtr;
 
 public:
-    explicit PageEntriesVersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_)
-        : BaseType(config_, log_)
-    {
-    }
+    explicit PageEntriesVersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_) : BaseType(config_, log_) {}
 
 public:
-    std::set<PageFileIdAndLevel> gcApply(PageEntriesEdit & edit);
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit);
 
     /// List all PageFile that are used by any version
-    std::set<PageFileIdAndLevel> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &) const;
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &) const;
 
     VersionPtr compactDeltas(const VersionPtr & tail) const override;
 
     VersionPtr compactDeltaAndBase(const VersionPtr & old_base, const VersionPtr & delta) const override;
 
 private:
-    void collectLiveFilesFromVersionList(VersionPtr tail, std::set<VersionPtr> & visited, std::set<PageFileIdAndLevel> & liveFiles) const;
+    void collectLiveFilesFromVersionList(const PageEntriesView &        view,
+                                         std::set<PageFileIdAndLevel> & live_files,
+                                         std::set<PageId> &             live_normal_pages) const;
 };
 
 /// Read old entries state from `view_` and apply new edit to `view_->tail`

@@ -53,6 +53,9 @@ void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const 
 
 void readFile(int fd, const off_t offset, const char * buf, size_t expected_bytes, const std::string & path)
 {
+    if (unlikely(expected_bytes == 0))
+        return;
+
     ProfileEvents::increment(ProfileEvents::PSMReadCalls);
 
     size_t bytes_read = 0;

@@ -121,6 +121,17 @@ PageId PageStorage::getMaxId()
     return versioned_page_entries.getSnapshot()->version()->maxId();
 }
 
+PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    auto [is_ref_id, normal_page_id] = snapshot->version()->isRefId(page_id);
+    return is_ref_id ? normal_page_id : page_id;
+}
+
 PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)
@@ -348,11 +359,32 @@ void PageStorage::traversePageEntries( //
 #endif
 }
 
+void PageStorage::registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover)
+{
+    assert(scanner != nullptr);
+    assert(remover != nullptr);
+    external_pages_scanner = scanner;
+    external_pages_remover = remover;
+}
 
 bool PageStorage::gc()
 {
-    std::lock_guard<std::mutex> gc_lock(gc_mutex);
-    // get all PageFiles
+    // If another thread is running gc, just return;
+    bool v = false;
+    if (!gc_is_running.compare_exchange_strong(v, true))
+        return false;
+
+    SCOPE_EXIT({
+        bool is_running = true;
+        gc_is_running.compare_exchange_strong(is_running, false);
+    });
+
+    /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
+    std::set<PageId> external_pages;
+    if (external_pages_scanner)
+    {
+        external_pages = external_pages_scanner();
+    }
     auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file */ true, /* ignore_legacy */ true, page_file_log);
     if (page_files.empty())
     {
@@ -420,9 +452,8 @@ bool PageStorage::gc()
         gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files, migrate_page_count);
     }
 
-    std::set<PageFileIdAndLevel> live_files;
     /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
-    live_files = versioned_page_entries.gcApply(gc_file_entries_edit);
+    auto [live_files, live_normal_pages] = versioned_page_entries.gcApply(gc_file_entries_edit);
 
     {
         // Remove obsolete files' reader cache that are not used by any version
@@ -444,6 +475,12 @@ bool PageStorage::gc()
 
     // Delete obsolete files that are not used by any version, without lock
     gcRemoveObsoleteData(page_files, writing_file_id_level, live_files);
+
+    // Invoke callback with valid normal page id after gc.
+    if (external_pages_remover)
+    {
+        external_pages_remover(external_pages, live_normal_pages);
+    }
     return true;
 }
 
@@ -495,6 +532,8 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                                             const size_t         migrate_page_count) const
 {
     PageEntriesEdit gc_file_edit;
+    if (merge_files.empty())
+        return gc_file_edit;
 
     // merge `merge_files` to PageFile which PageId = max of all `merge_files` and level = level + 1
     auto [largest_file_id, level] = *(merge_files.rbegin());
