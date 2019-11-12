@@ -5,6 +5,8 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
+#include <Storages/IManageableStorage.h>
+#include <Storages/StorageDeltaMerge.h>
 
 namespace DB
 {
@@ -328,7 +330,27 @@ void RegionTable::removeRegion(const RegionID region_id)
         for (const auto table_id : tables)
         {
             auto & table = getOrCreateTable(table_id);
-            table.regions.erase(region_id);
+
+            /// Now we assume that StorageDeltaMerge::deleteRange do not block for long time and do it in sync mode.
+            /// If this block for long time, consider to do this in background threads.
+            auto region_iter = table.regions.find(region_id);
+            if (region_iter != table.regions.end())
+            {
+                TMTContext & tmt = context->getTMTContext();
+                auto storage = tmt.getStorages().get(table_id);
+                if (storage && storage->engineType() == TiDB::StorageEngine::DM)
+                {
+                    // acquire lock so that no other threads can change storage's structure
+                    auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+                    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                    HandleRange<HandleID> handle_range = region_iter->second.range_in_table;
+                    ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
+                    dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
+                }
+
+                table.regions.erase(region_iter);
+            }
+
             if (table.regions.empty())
                 table_to_optimize.emplace(table_id);
         }
