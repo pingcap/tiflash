@@ -57,6 +57,10 @@ public:
     using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
+    using ExternalPagesScanner = std::function<std::set<PageId>()>;
+    using ExternalPagesRemover
+        = std::function<void(const std::set<PageId> & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
+
 public:
     PageStorage(String name, const String & storage_path, const Config & config_);
 
@@ -74,6 +78,13 @@ public:
     void      traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot = {});
     void      traversePageEntries(const std::function<void(PageId page_id, const PageEntry & page)> & acceptor, SnapshotPtr snapshot);
     bool      gc();
+
+    PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
+
+    // Register two callback:
+    // `scanner` for scanning avaliable external page ids.
+    // `remover` will be called with living normal page ids after gc run a round.
+    void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
     static std::set<PageFile, PageFile::Comparator>
     listAllPageFiles(const String & storage_path, bool remove_tmp_file, bool ignore_legacy, Poco::Logger * page_file_log);
@@ -115,7 +126,11 @@ private:
     VersionedPageEntries versioned_page_entries;
 
     std::mutex write_mutex;
-    std::mutex gc_mutex; // A mutex used to protect gc
+
+    std::atomic<bool> gc_is_running = false;
+
+    ExternalPagesScanner external_pages_scanner = nullptr;
+    ExternalPagesRemover external_pages_remover = nullptr;
 };
 
 class PageReader
@@ -131,6 +146,7 @@ public:
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
     void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
 
+    PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
     UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
 
 private:
