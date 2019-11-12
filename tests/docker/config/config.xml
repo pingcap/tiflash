@@ -21,6 +21,7 @@
         <ignore_databases>system</ignore_databases>
         <learner_key>engine</learner_key>
         <learner_value>tiflash</learner_value>
+        <disable_bg_flush>false</disable_bg_flush>
     </raft>
 
     <flash>

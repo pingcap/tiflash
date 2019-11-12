@@ -1,6 +1,9 @@
+#include <chrono>
+
 #include <Interpreters/Context.h>
 #include <Raft/RaftContext.h>
 #include <Raft/RaftService.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/Region.h>
@@ -175,6 +178,9 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
     auto task_lock = genTaskLock();
 
+    TableIDSet tables_to_flush;
+    std::unordered_set<RegionID> dirty_regions;
+
     for (auto && cmd : *cmds.mutable_requests())
     {
         const auto & header = cmd.header();
@@ -204,6 +210,17 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
         curr_region.makeRaftCommandDelegate(task_lock).onCommand(std::move(cmd), *this, region_table, *raft_cmd_res);
         RaftCommandResult & result = *raft_cmd_res;
+
+        if (tmt_context != nullptr && tmt_context->disableBgFlush())
+        {
+            for (auto id : result.table_ids)
+            {
+                tables_to_flush.emplace(id);
+            }
+
+            if (!result.table_ids.empty())
+                dirty_regions.emplace(curr_region_id);
+        }
 
         const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region.toCommandResponse(); };
 
@@ -331,6 +348,28 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 break;
             default:
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    if (tmt_context != nullptr && tmt_context->disableBgFlush())
+    {
+        auto & region_table = tmt_context->getRegionTable();
+        for (auto table_id : tables_to_flush)
+        {
+            auto s_time = Clock::now();
+            auto regions_to_flush = region_table.getRegionsByTable(table_id);
+            for (auto region : regions_to_flush)
+            {
+                if (auto && itr = dirty_regions.find(region.first); itr != dirty_regions.end())
+                {
+                    region_table.tryFlushRegion(region.first, table_id, false);
+                }
+            }
+            auto e_time = Clock::now();
+            LOG_DEBUG(log,
+                "[syncFlush]"
+                    << " table_id " << table_id << ", cost "
+                    << std::chrono::duration_cast<std::chrono::milliseconds>(e_time - s_time).count() << "ms");
         }
     }
 

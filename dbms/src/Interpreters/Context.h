@@ -367,7 +367,8 @@ public:
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
                           const std::string & flash_service_address,
-                          ::TiDB::StorageEngine engine);
+                          ::TiDB::StorageEngine engine,
+                          bool disable_bg_tasks);
     RaftService & getRaftService();
 
     void initializeSchemaSyncService();

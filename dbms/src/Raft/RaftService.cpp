@@ -30,19 +30,26 @@ RaftService::RaftService(DB::Context & db_context_)
         },
         false);
 
-    table_flush_handle = background_pool.addTask([this] {
-        auto & tmt = db_context.getTMTContext();
-        RegionTable & region_table = tmt.getRegionTable();
+    if (!db_context.getTMTContext().disableBgFlush())
+    {
+        table_flush_handle = background_pool.addTask([this] {
+            auto & tmt = db_context.getTMTContext();
+            RegionTable & region_table = tmt.getRegionTable();
 
-        // if all regions of table is removed, try to optimize data.
-        if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
-        {
-            LOG_INFO(log, "try to final optimize table " << table_id);
-            tryOptimizeStorageFinal(db_context, table_id);
-            LOG_INFO(log, "finish final optimize table " << table_id);
-        }
-        return region_table.tryFlushRegions();
-    });
+            // if all regions of table is removed, try to optimize data.
+            if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
+            {
+                LOG_INFO(log, "try to final optimize table " << table_id);
+                tryOptimizeStorageFinal(db_context, table_id);
+                LOG_INFO(log, "finish final optimize table " << table_id);
+            }
+            return region_table.tryFlushRegions();
+        });
+    }
+    else
+    {
+        LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
+    }
 
     data_reclaim_handle = background_pool.addTask([this] {
         std::list<RegionDataReadInfoList> tmp;

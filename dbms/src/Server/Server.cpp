@@ -351,6 +351,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::string kvstore_path = path + "kvstore/";
     String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
 
+    bool disable_bg_flush = false;
+
     ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::TMT;
     ::TiDB::StorageEngine engine = engine_if_empty;
 
@@ -422,12 +424,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
             else
                 engine = engine_if_empty;
         }
+
+        if (config().has("raft.disable_bg_flush"))
+        {
+            bool disable = config().getBool("raft.disable_bg_flush");
+            if (disable)
+                disable_bg_flush = true;
+        }
     }
 
     {
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr, engine);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr, engine, disable_bg_flush);
         global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.9));
     }
 

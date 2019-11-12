@@ -22,7 +22,7 @@ public:
         }
         catch (Exception & e)
         {
-            context.createTMTContext({}, "", "", {"default"}, "./__tmp_data/kvstore", "", TiDB::StorageEngine::TMT);
+            context.createTMTContext({}, "", "", {"default"}, "./__tmp_data/kvstore", "", TiDB::StorageEngine::TMT, false);
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;

@@ -316,6 +316,7 @@
         <kvstore_path>/var/lib/clickhouse/kvstore</kvstore_path>
         <regmap>/var/lib/clickhouse/regmap</regmap>
         <pd_addr>http://127.0.0.1:13579</pd_addr>
+        <disable_bg_flush>false</disable_bg_flush>
     </raft>
 
     <flash>

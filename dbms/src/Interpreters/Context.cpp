@@ -1411,12 +1411,13 @@ void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::unordered_set<std::string> & ignore_databases,
                                const std::string & kvstore_path,
                                const std::string & flash_service_address,
-                               ::TiDB::StorageEngine engine)
+                               ::TiDB::StorageEngine engine,
+                               bool disable_bg_flush)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_service_address, engine);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_service_address, engine, disable_bg_flush);
 }
 
 void Context::initializePartPathSelector(std::vector<std::string> && all_normal_path, std::vector<std::string> && all_fast_path)
