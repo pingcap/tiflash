@@ -154,14 +154,13 @@ size_t RegionCFDataBase<Trait>::getSize() const
 }
 
 template <typename Trait>
-RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data)), extra(std::move(region.extra))
+RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) : data(std::move(region.data))
 {}
 
 template <typename Trait>
 RegionCFDataBase<Trait> & RegionCFDataBase<Trait>::operator=(RegionCFDataBase && region)
 {
     data = std::move(region.data);
-    extra = std::move(region.extra);
     return *this;
 }
 

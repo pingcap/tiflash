@@ -86,11 +86,11 @@ bool RegionTable::shouldFlush(const InternalRegion & region) const
     return false;
 }
 
-void RegionTable::flushRegion(const RegionPtr & region, bool try_persist) const
+RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool try_persist) const
 {
     const auto & tmt = context->getTMTContext();
 
-    LOG_DEBUG(log,
+    LOG_INFO(log,
         __FUNCTION__ << ": table " << region->getFlashTableID() << ", " << region->toString(false) << " original " << region->dataSize()
                      << " bytes");
 
@@ -123,10 +123,12 @@ void RegionTable::flushRegion(const RegionPtr & region, bool try_persist) const
                 region->incDirtyFlag();
         }
 
-        LOG_DEBUG(log,
+        LOG_INFO(log,
             __FUNCTION__ << ": table " << region->getFlashTableID() << ", " << region->toString(false) << " after flush " << cache_size
                          << " bytes");
     }
+
+    return data_list_to_remove;
 }
 
 static const Int64 FTH_BYTES_1 = 1;                // 1 B
@@ -217,19 +219,19 @@ void RegionTable::removeRegion(const RegionID region_id)
     }
 }
 
-void RegionTable::tryFlushRegion(RegionID region_id, bool try_persist)
+RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_persist)
 {
     auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
     if (!region)
     {
         LOG_WARNING(log, __FUNCTION__ << ": region " << region_id << " not found");
-        return;
+        return {};
     }
 
-    tryFlushRegion(region, try_persist);
+    return tryFlushRegion(region, try_persist);
 }
 
-void RegionTable::tryFlushRegion(const RegionPtr & region, bool try_persist)
+RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, bool try_persist)
 {
     RegionID region_id = region->id();
 
@@ -242,7 +244,7 @@ void RegionTable::tryFlushRegion(const RegionPtr & region, bool try_persist)
         }
         else
         {
-            LOG_DEBUG(log, __FUNCTION__ << ": internal region " << region_id << " might be removed");
+            LOG_WARNING(log, __FUNCTION__ << ": internal region " << region_id << " might be removed");
             return false;
         }
     };
@@ -258,13 +260,13 @@ void RegionTable::tryFlushRegion(const RegionPtr & region, bool try_persist)
     });
 
     if (!status)
-        return;
+        return {};
 
     std::exception_ptr first_exception;
-
+    RegionDataReadInfoList data_list_to_remove;
     try
     {
-        flushRegion(region, try_persist);
+        data_list_to_remove = flushRegion(region, try_persist);
     }
     catch (...)
     {
@@ -285,6 +287,8 @@ void RegionTable::tryFlushRegion(const RegionPtr & region, bool try_persist)
 
     if (first_exception)
         std::rethrow_exception(first_exception);
+
+    return data_list_to_remove;
 }
 
 bool RegionTable::tryFlushRegions()

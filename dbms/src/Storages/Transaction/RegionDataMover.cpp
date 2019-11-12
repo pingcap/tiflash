@@ -112,7 +112,7 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
 
     std::string query = ss.str();
 
-    LOG_WARNING(log, __FUNCTION__ << ": sql " << query);
+    LOG_WARNING(log, __FUNCTION__ << ": execute sql " << query);
 
     executeQuery(query, context, true, QueryProcessingStage::Complete);
 }

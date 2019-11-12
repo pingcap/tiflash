@@ -5,6 +5,7 @@
 
 #include <Raft/RaftContext.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
+#include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
 #include <boost/noncopyable.hpp>
@@ -27,7 +28,7 @@ public:
 
     ~RaftService() final;
 
-    void addRegionToFlush(const Region & region);
+    void dataMemReclaim(RegionDataReadInfoList &&);
     void addRegionToDecode(const RegionPtr & region);
 
 private:
@@ -45,12 +46,17 @@ private:
     Logger * log;
 
     std::mutex region_mutex;
-    std::queue<RegionID> regions_to_flush;
     RegionMap regions_to_decode;
+
+    std::mutex reclaim_mutex;
+    std::list<RegionDataReadInfoList> data_to_reclaim;
 
     BackgroundProcessingPool::TaskHandle single_thread_task_handle;
     BackgroundProcessingPool::TaskHandle table_flush_handle;
-    BackgroundProcessingPool::TaskHandle region_flush_handle;
+
+    // kvstore will try to flush data into ch when handling raft cmd CompactLog in order to reduce the size of region.
+    // use this task to reclaim data in another thread.
+    BackgroundProcessingPool::TaskHandle data_reclaim_handle;
     BackgroundProcessingPool::TaskHandle region_decode_handle;
 };
 

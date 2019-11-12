@@ -178,6 +178,7 @@ private:
 private:
     RegionData data;
     mutable std::shared_mutex mutex;
+    mutable std::mutex predecode_mutex;
 
     RegionMeta meta;
 

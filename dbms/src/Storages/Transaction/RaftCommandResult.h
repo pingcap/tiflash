@@ -21,7 +21,8 @@ struct RaftCommandResult : private boost::noncopyable
         IndexError,
         BatchSplit,
         UpdateTable,
-        ChangePeer
+        ChangePeer,
+        CompactLog,
     };
 
     bool sync_log;

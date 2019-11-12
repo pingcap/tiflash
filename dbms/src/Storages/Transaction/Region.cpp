@@ -242,6 +242,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
             }
             case raft_cmdpb::AdminCmdType::CompactLog:
                 execCompactLog(request, response, index, term);
+                result.type = RaftCommandResult::Type::CompactLog;
                 break;
             case raft_cmdpb::AdminCmdType::ComputeHash:
             case raft_cmdpb::AdminCmdType::VerifyHash:
@@ -260,6 +261,7 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
     else
     {
         std::unique_lock<std::shared_mutex> lock(mutex);
+        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
 
         for (auto && req : *cmd.mutable_requests())
         {
@@ -616,8 +618,14 @@ std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersion
 
 void Region::tryPreDecodeTiKVValue()
 {
-    DB::tryPreDecodeTiKVValue(data.defaultCF().getExtra().popAll());
-    DB::tryPreDecodeTiKVValue(data.writeCF().getExtra().popAll());
+    std::optional<ExtraCFDataQueue> default_val, write_val;
+    {
+        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
+        default_val = data.defaultCF().getExtra().popAll();
+        write_val = data.writeCF().getExtra().popAll();
+    }
+    DB::tryPreDecodeTiKVValue(std::move(default_val));
+    DB::tryPreDecodeTiKVValue(std::move(write_val));
 }
 
 Region::Region(RegionMeta && meta_) : Region(std::move(meta_), [](pingcap::kv::RegionVerID) { return nullptr; }) {}

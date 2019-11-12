@@ -112,8 +112,8 @@ public:
     TableID popOneTableToOptimize();
 
     bool tryFlushRegions();
-    void tryFlushRegion(RegionID region_id, bool try_persist = false);
-    void tryFlushRegion(const RegionPtr & region, bool try_persist);
+    RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
+    RegionDataReadInfoList tryFlushRegion(const RegionPtr & region, bool try_persist);
 
     void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
@@ -156,7 +156,7 @@ private:
 
     bool shouldFlush(const InternalRegion & region) const;
 
-    void flushRegion(const RegionPtr & region, bool try_persist) const;
+    RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
 
 private:
     TableMap tables;

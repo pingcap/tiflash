@@ -152,10 +152,7 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
         region_range_index.add(new_region);
 
         if (context)
-        {
-            context->getRaftService().addRegionToDecode(new_region);
             context->getTMTContext().getRegionTable().shrinkRegionRange(*new_region);
-        }
     }
 
     return true;
@@ -230,6 +227,21 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             report_sync_log();
         };
 
+        const auto handle_compact_log = [&]() {
+            if (curr_region.writeCFCount() && curr_region.dataSize())
+            {
+                try
+                {
+                    auto tmp = region_table->tryFlushRegion(curr_region_ptr, false);
+                    raft_service->dataMemReclaim(std::move(tmp));
+                }
+                catch (...)
+                {
+                }
+            }
+            persist_and_sync();
+        };
+
         const auto handle_batch_split = [&](Regions & split_regions) {
             {
                 auto manage_lock = genRegionManageLock();
@@ -260,12 +272,8 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 // update region_table first is safe, because the core rule is established: the range in RegionTable
                 // is always >= range in KVStore.
                 for (const auto & new_region : split_regions)
-                {
                     region_table->updateRegion(*new_region);
-                    raft_service->addRegionToFlush(*new_region);
-                }
                 region_table->shrinkRegionRange(curr_region);
-                raft_service->addRegionToFlush(curr_region);
             }
 
             {
@@ -316,6 +324,9 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 break;
             case RaftCommandResult::Type::ChangePeer:
                 handle_change_peer();
+                break;
+            case RaftCommandResult::Type::CompactLog:
+                handle_compact_log();
                 break;
             default:
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);
