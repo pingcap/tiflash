@@ -14,7 +14,8 @@ namespace DB
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
     const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
     const std::string & flash_service_address_,
-    ::TiDB::StorageEngine engine_)
+    ::TiDB::StorageEngine engine_,
+    bool disable_bg_flush_)
     : kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
@@ -26,7 +27,8 @@ TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs
               ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(pd_client, region_cache, rpc_client))
               : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client))),
       flash_service_address(flash_service_address_),
-      engine(engine_)
+      engine(engine_),
+      disable_bg_flush(disable_bg_flush_)
 {}
 
 void TMTContext::restore()

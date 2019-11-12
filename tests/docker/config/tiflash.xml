@@ -23,6 +23,7 @@
         <learner_value>tiflash</learner_value>
         <!--specify what engine we use. tmt or dm -->
         <storage_engine>tmt</storage_engine>
+        <disable_bg_flush>false</disable_bg_flush>
     </raft>
 
     <flash>
