@@ -324,4 +324,21 @@ void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::
     dbgFuncDumpAllRegion(context, table_id, false, false, output);
 }
 
+void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    if (args.size() < 1)
+        throw Exception("Args not matched, should be: region_id", ErrorCodes::BAD_ARGUMENTS);
+
+    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+
+    TMTContext & tmt = context.getTMTContext();
+    KVStorePtr & kvstore = tmt.getKVStore();
+    RegionTable & region_table = tmt.getRegionTable();
+    kvstore->removeRegion(region_id, &region_table, kvstore->genTaskLock());
+
+    std::stringstream ss;
+    ss << "remove region #" << region_id;
+    output(ss.str());
+}
+
 } // namespace DB

@@ -202,8 +202,6 @@ public:
                      ColumnID &                    max_column_id_used,
                      const Context &               context);
 
-    void setMinDataVersion(UInt64 version) { min_version = version; }
-
     const ColumnDefines & getTableColumns() const { return table_columns; }
     const ColumnDefine &  getHandle() const { return table_handle_define; }
     Block                 getHeader() const { return toEmptyBlock(table_columns); }
@@ -228,7 +226,7 @@ private:
                                    .storage_pool  = storage_pool,
                                    .store_columns = std::move(store_columns),
                                    .handle_column = getExtraHandleColumnDefine(),
-                                   .min_version   = min_version,
+                                   .min_version   = 0,
 
                                    .not_compress            = settings.not_compress_columns,
                                    .segment_limit_rows      = db_settings.dm_segment_limit_rows,
@@ -279,8 +277,6 @@ private:
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
     Settings settings;
-
-    UInt64 min_version = 0;
 
     /// end of range -> segment
     SegmentSortedMap segments;

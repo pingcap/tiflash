@@ -26,7 +26,8 @@ struct DMContext
     const ColumnDefines store_columns;
     const ColumnDefine  handle_column;
 
-    const UInt64 min_version;
+    // gc safe-point, maybe update.
+    DB::Timestamp min_version;
 
     const NotCompress & not_compress;
 

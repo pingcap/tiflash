@@ -12,6 +12,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore-internal.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace ProfileEvents
 {
@@ -426,7 +427,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     bool should_background_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->delta_limit_rows;
     bool should_foreground_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->segment_limit_rows * 5;
 
-    if (by_write_thread)
+    if constexpr (by_write_thread)
     {
         // Only write thread will check split & merge.
         size_t segment_rows = segment->getEstimatedRows();
@@ -459,7 +460,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             if (!segment->isBackgroundMergeDelta().compare_exchange_strong(v, true))
                 return;
 
-            merge_delta_tasks.addTask({dm_context, segment, BackgroundType::MergeDelta}, "write thread", log);
+            merge_delta_tasks.addTask(BackgroundTask{dm_context, segment, BackgroundType::MergeDelta}, "write thread", log);
             background_task_handle->wake();
             return;
         }
@@ -471,6 +472,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 return;
             if (segment->isBackgroundMergeDelta() || segment->isMergeDelta())
                 return;
+
             segmentForegroundMerge(*dm_context, segment);
             return;
         }
@@ -484,7 +486,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             if (!segment->isBackgroundMergeDelta().compare_exchange_strong(v, true))
                 return;
 
-            merge_delta_tasks.addTask({dm_context, segment, BackgroundType::MergeDelta}, "other thread", log);
+            merge_delta_tasks.addTask(BackgroundTask{dm_context, segment, BackgroundType::MergeDelta}, "other thread", log);
             background_task_handle->wake();
         }
         return;
@@ -723,6 +725,13 @@ bool DeltaMergeStore::handleBackgroundTask()
     auto task = merge_delta_tasks.nextTask(log);
     if (!task)
         return false;
+
+    // Update GC safe point before background task
+    const Context & db_context   = task.dm_context->db_context;
+    auto            safe_point   = PDClientHelper::getGCSafePointWithRetry(db_context.getTMTContext().getPDClient(),
+                                                              /* ignore_cache= */ false,
+                                                              db_context.getSettingsRef().safe_point_update_interval_seconds);
+    task.dm_context->min_version = safe_point;
 
     switch (task.type)
     {

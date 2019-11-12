@@ -13,6 +13,9 @@ static const Seconds REGION_PERSIST_PERIOD(300);      // 5 minutes
 static const Seconds KVSTORE_TRY_PERSIST_PERIOD(180); // 3 minutes
 
 class Context;
+class IAST;
+using ASTPtr = std::shared_ptr<IAST>;
+using ASTs = std::vector<ASTPtr>;
 
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
@@ -64,6 +67,7 @@ public:
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
+    friend void dbgFuncRemoveRegion(Context &, const ASTs &, std::function<void(const std::string &)>);
     void removeRegion(const RegionID region_id, RegionTable * region_table, const KVStoreTaskLock & task_lock);
     KVStoreTaskLock genTaskLock() const;
 
