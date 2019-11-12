@@ -194,6 +194,11 @@ PageStorage::SnapshotPtr PageStorage::getSnapshot()
     return versioned_page_entries.getSnapshot();
 }
 
+size_t PageStorage::getNumSnapshots() const
+{
+    return versioned_page_entries.size();
+}
+
 Page PageStorage::read(PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)

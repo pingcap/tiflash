@@ -301,7 +301,7 @@ public:
 
     size_t size() const
     {
-        std::unique_lock read_lock(read_mutex);
+        std::shared_lock read_lock(read_mutex);
         return sizeUnlocked();
     }
 
