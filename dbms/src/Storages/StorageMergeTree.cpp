@@ -115,6 +115,7 @@ void StorageMergeTree::shutdown()
     {
         TMTContext & tmt_context = context.getTMTContext();
         tmt_context.getStorages().remove(data.table_info->id);
+        tmt_context.getRegionTable().removeTable(data.table_info->id);
     }
 }
 

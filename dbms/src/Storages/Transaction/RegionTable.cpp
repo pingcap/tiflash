@@ -215,7 +215,10 @@ void RegionTable::removeRegion(const RegionID region_id)
         auto & table = tables.find(table_id)->second;
         table.regions.erase(region_id);
         if (table.regions.empty())
+        {
             table_to_optimize.insert(table_id);
+            tables.erase(table_id);
+        }
     }
 }
 

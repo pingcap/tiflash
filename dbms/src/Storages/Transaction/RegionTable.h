@@ -146,6 +146,7 @@ public:
 
 private:
     friend class MockTiDB;
+    friend class StorageMergeTree;
 
     Table & getOrCreateTable(const TableID table_id);
     void removeTable(TableID table_id);
