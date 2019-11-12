@@ -458,6 +458,8 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     s0.reset();
     auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
+    ASSERT_EQ(live_normal_pages.size(), 1UL);
+    ASSERT_GT(live_normal_pages.count(1), 0UL);
     ASSERT_EQ(live_files.size(), 1UL);
     ASSERT_EQ(live_files.count(id_and_lvl), 0UL);
     storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
@@ -569,6 +571,9 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
 
     auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
     EXPECT_EQ(live_files.find(id_and_lvl), live_files.end());
+    EXPECT_EQ(live_normal_pages.size(), 2UL);
+    EXPECT_GT(live_normal_pages.count(2), 0UL);
+    EXPECT_GT(live_normal_pages.count(3), 0UL);
     storage->gcRemoveObsoleteData(/* page_files= */ page_files, /* writing_file_id_level= */ {3, 0}, live_files);
 
     // reopen PageStorage, Page 1 should be deleted
@@ -622,6 +627,8 @@ try
         auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
         ASSERT_EQ(live_files.size(), 1UL);
         ASSERT_EQ(*live_files.begin(), PageFileIdAndLevel(1, 1));
+        EXPECT_EQ(live_normal_pages.size(), 1UL);
+        EXPECT_GT(live_normal_pages.count(1), 0UL);
 
         storage->gcRemoveObsoleteData(page_files, {2, 0}, live_files);
     }
