@@ -39,6 +39,9 @@ public:
         return owned_ptr;
     }
 
+    size_t numPages() const;
+    size_t numNormalPages() const;
+
 private:
     PageId resolveRefId(PageId page_id) const;
 
