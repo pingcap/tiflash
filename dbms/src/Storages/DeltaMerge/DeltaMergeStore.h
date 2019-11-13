@@ -276,7 +276,8 @@ private:
     BackgroundProcessingPool::TaskHandle gc_handle;
     BackgroundProcessingPool::TaskHandle background_task_handle;
 
-    Settings settings;
+    Context & global_context;
+    Settings  settings;
 
     /// end of range -> segment
     SegmentSortedMap segments;

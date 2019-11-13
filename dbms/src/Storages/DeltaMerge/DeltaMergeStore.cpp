@@ -49,6 +49,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       table_name(table_name_),
       table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
+      global_context(db_context),
       settings(settings_),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
@@ -753,10 +754,10 @@ bool DeltaMergeStore::handleBackgroundTask()
         return false;
 
     // Update GC safe point before background task
-    const Context & db_context   = task.dm_context->db_context;
-    auto            safe_point   = PDClientHelper::getGCSafePointWithRetry(db_context.getTMTContext().getPDClient(),
+    /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
+    auto safe_point              = PDClientHelper::getGCSafePointWithRetry(global_context.getTMTContext().getPDClient(),
                                                               /* ignore_cache= */ false,
-                                                              db_context.getSettingsRef().safe_point_update_interval_seconds);
+                                                              global_context.getSettingsRef().safe_point_update_interval_seconds);
     task.dm_context->min_version = safe_point;
 
     switch (task.type)
