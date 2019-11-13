@@ -247,7 +247,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
         }
         else
         {
-            LOG_WARNING(log, __FUNCTION__ << ": internal region " << region_id << " might be removed");
+            LOG_WARNING(log, "Internal region " << region_id << " might be removed");
             return false;
         }
     };
@@ -255,7 +255,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
     bool status = func_update_region([&](InternalRegion & internal_region) -> bool {
         if (internal_region.pause_flush)
         {
-            LOG_INFO(log, __FUNCTION__ << ": internal region " << region_id << " pause flush, may be being flushed");
+            LOG_INFO(log, "Internal region " << region_id << " pause flush, may be being flushed");
             return false;
         }
         internal_region.pause_flush = true;
