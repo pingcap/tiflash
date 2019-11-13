@@ -156,7 +156,7 @@ private:
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
     bool shouldFlush(const InternalRegion & region) const;
-
+    RegionID pickRegionToFlush();
     RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
 
 private:

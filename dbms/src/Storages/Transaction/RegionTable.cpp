@@ -294,58 +294,40 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtr & region, boo
     return data_list_to_remove;
 }
 
+RegionID RegionTable::pickRegionToFlush()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+
+    for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
+    {
+        auto region_id = *dirty_it;
+        if (auto it = regions.find(region_id); it != regions.end())
+        {
+            auto table_id = it->second;
+
+            if (shouldFlush(doGetInternalRegion(table_id, region_id)))
+            {
+                dirty_regions.erase(dirty_it);
+                return region_id;
+            }
+
+            dirty_it++;
+        }
+        else
+            dirty_it = dirty_regions.erase(dirty_it);
+    }
+    return InvalidRegionID;
+}
+
 bool RegionTable::tryFlushRegions()
 {
+    if (RegionID region_to_flush = pickRegionToFlush(); region_to_flush != InvalidRegionID)
     {
-        std::lock_guard<std::mutex> lock(mutex);
-        if (dirty_regions.empty())
-            return false;
+        tryFlushRegion(region_to_flush, true);
+        return true;
     }
 
-    struct DataToFlush
-    {
-        RegionID region_id;
-        bool got = false;
-    };
-
-    DataToFlush to_flush;
-    {
-        // judge choose region to flush
-        const auto traverse_dirty_regions = [&](std::function<bool(InternalRegion &)> && callback) {
-            std::lock_guard<std::mutex> lock(mutex);
-
-            for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
-            {
-                auto region_id = *dirty_it;
-                if (auto it = regions.find(region_id); it != regions.end())
-                {
-                    auto table_id = it->second;
-                    if (callback(doGetInternalRegion(table_id, region_id)))
-                        return;
-                    dirty_it++;
-                }
-                else
-                    dirty_it = dirty_regions.erase(dirty_it);
-            }
-        };
-
-        traverse_dirty_regions([&](InternalRegion & region) {
-            if (shouldFlush(region))
-            {
-                to_flush = DataToFlush{region.region_id, true};
-                dirty_regions.erase(region.region_id);
-                return true;
-            }
-            return false;
-        });
-
-        if (!to_flush.got)
-            return false;
-    }
-
-    tryFlushRegion(to_flush.region_id, true);
-
-    return true;
+    return false;
 }
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const
