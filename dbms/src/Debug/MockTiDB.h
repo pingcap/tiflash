@@ -55,8 +55,8 @@ public:
     using TablePtr = std::shared_ptr<Table>;
 
 public:
-    TableID newTable(const String & database_name, const String & table_name,
-            const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name);
+    TableID newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso,
+        const String & handle_pk_name);
 
     DatabaseID newDataBase(const String & database_name);
 
@@ -109,7 +109,7 @@ private:
 
     std::unordered_map<Int64, SchemaDiff> version_diff;
 
-    std::atomic<TableID> table_id_allocator = MaxSystemTableID + 1;
+    std::atomic<TableID> table_id_allocator = 30;
 
     Int64 version = 0;
 };

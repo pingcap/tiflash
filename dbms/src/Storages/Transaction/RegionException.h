@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Common/Exception.h>
-#include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -10,12 +9,37 @@ namespace DB
 class RegionException : public Exception
 {
 public:
-    RegionException(std::vector<RegionID> && region_ids_, RegionTable::RegionReadStatus status_)
-        : Exception(RegionTable::RegionReadStatusString(status_)), region_ids(region_ids_), status(status_)
+    enum RegionReadStatus : UInt8
+    {
+        OK,
+        NOT_FOUND,
+        VERSION_ERROR,
+        PENDING_REMOVE,
+    };
+
+    static const char * RegionReadStatusString(RegionReadStatus s)
+    {
+        switch (s)
+        {
+            case OK:
+                return "OK";
+            case NOT_FOUND:
+                return "NOT_FOUND";
+            case VERSION_ERROR:
+                return "VERSION_ERROR";
+            case PENDING_REMOVE:
+                return "PENDING_REMOVE";
+        }
+        return "Unknown";
+    };
+
+public:
+    RegionException(std::vector<RegionID> && region_ids_, RegionReadStatus status_)
+        : Exception(RegionReadStatusString(status_)), region_ids(region_ids_), status(status_)
     {}
 
     std::vector<RegionID> region_ids;
-    RegionTable::RegionReadStatus status;
+    RegionReadStatus status;
 };
 
 } // namespace DB

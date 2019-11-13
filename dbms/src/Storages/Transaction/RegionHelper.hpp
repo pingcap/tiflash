@@ -3,21 +3,7 @@
 namespace DB
 {
 
-/// Ignoring all keys other than records.
-inline TableID checkRecordAndValidTable(const DecodedTiKVKey & raw_key)
-{
-    // Ignoring all keys other than records.
-    if (!RecordKVFormat::isRecord(raw_key))
-        return InvalidTableID;
-
-    auto table_id = RecordKVFormat::getTableId(raw_key);
-    if (isTiDBSystemTable(table_id))
-        return InvalidTableID;
-
-    return table_id;
-}
-
-void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
+inline void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
 {
     if (!values)
         return;
@@ -32,7 +18,7 @@ void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
     }
 }
 
-const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
+inline const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
 {
     for (const auto & peer : region.peers())
     {

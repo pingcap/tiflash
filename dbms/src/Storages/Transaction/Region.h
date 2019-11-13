@@ -39,23 +39,20 @@ public:
     class CommittedScanner : private boost::noncopyable
     {
     public:
-        CommittedScanner(const RegionPtr & store_, TableID expected_table_id_)
-            : store(store_), lock(store_->mutex), expected_table_id(expected_table_id_)
+        CommittedScanner(const RegionPtr & store_) : store(store_), lock(store_->mutex)
         {
             const auto & data = store->data.writeCF().getData();
-            if (auto it = data.find(expected_table_id); it != data.end())
-            {
-                write_map_size = it->second.size();
-                write_map_it = it->second.begin();
-                write_map_it_end = it->second.end();
-            }
+
+            write_map_size = data.size();
+            write_map_it = data.begin();
+            write_map_it_end = data.end();
         }
 
         bool hasNext() const { return write_map_size && write_map_it != write_map_it_end; }
 
-        auto next(bool need_value = true) { return store->readDataByWriteIt(expected_table_id, write_map_it++, need_value); }
+        auto next(bool need_value = true) { return store->readDataByWriteIt(write_map_it++, need_value); }
 
-        LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(expected_table_id, start_ts); }
+        LockInfoPtr getLockInfo(UInt64 start_ts) { return store->getLockInfo(start_ts); }
 
         size_t writeMapSize() const { return write_map_size; }
 
@@ -64,7 +61,6 @@ public:
         std::shared_lock<std::shared_mutex> lock;
 
         size_t write_map_size = 0;
-        TableID expected_table_id;
         RegionData::ConstWriteCFIter write_map_it;
         RegionData::ConstWriteCFIter write_map_it_end;
     };
@@ -72,41 +68,29 @@ public:
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_, TableID expected_table_id_) : store(store_), lock(store_->mutex)
-        {
-            auto & data = store->data.writeCF().getDataMut();
-            write_cf_data_it = data.find(expected_table_id_);
-            found = write_cf_data_it != data.end();
-        }
+        CommittedRemover(const RegionPtr & store_) : store(store_), lock(store_->mutex) {}
 
         void remove(const RegionWriteCFData::Key & key)
         {
-            if (!found)
-                return;
-            if (auto it = write_cf_data_it->second.find(key); it != write_cf_data_it->second.end())
-                store->removeDataByWriteIt(write_cf_data_it->first, it);
+            auto & write_cf_data = store->data.writeCF().getDataMut();
+            if (auto it = write_cf_data.find(key); it != write_cf_data.end())
+                store->removeDataByWriteIt(it);
         }
 
     private:
         RegionPtr store;
         std::unique_lock<std::shared_mutex> lock;
-
-        bool found;
-        RegionWriteCFData::Data::iterator write_cf_data_it;
     };
 
 public:
-    explicit Region(RegionMeta meta_) : meta(std::move(meta_)), index_reader(nullptr), log(&Logger::get(log_name)) {}
+    explicit Region(RegionMeta && meta_);
+    explicit Region(RegionMeta && meta_, const IndexReaderCreateFunc & index_reader_create);
 
-    explicit Region(RegionMeta meta_, const IndexReaderCreateFunc & index_reader_create)
-        : meta(std::move(meta_)), index_reader(index_reader_create(meta.getRegionVerID())), log(&Logger::get(log_name))
-    {}
+    void insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
+    void remove(const std::string & cf, const TiKVKey & key);
 
-    TableID insert(const std::string & cf, TiKVKey && key, TiKVValue && value);
-    TableID remove(const std::string & cf, const TiKVKey & key);
-
-    CommittedScanner createCommittedScanner(TableID expected_table_id);
-    CommittedRemover createCommittedRemover(TableID expected_table_id);
+    CommittedScanner createCommittedScanner();
+    CommittedRemover createCommittedRemover();
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
     static RegionPtr deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * index_reader_create = nullptr);
@@ -156,15 +140,13 @@ public:
 
     void assignRegion(Region && new_region);
 
-    TableIDSet getAllWriteCFTables() const;
-
     using HandleMap = std::unordered_map<HandleID, std::tuple<Timestamp, UInt8>>;
 
     /// Only can be used for applying snapshot. only can be called by single thread.
     /// Try to fill record with delmark if it exists in ch but has been remove by GC in leader.
-    void compareAndCompleteSnapshot(HandleMap & handle_map, const TableID table_id, const Timestamp safe_point);
+    void compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp safe_point);
     /// Traverse all data in source_region and get handle with largest version.
-    void compareAndUpdateHandleMaps(const Region & source_region, std::unordered_map<TableID, HandleMap> & handle_maps);
+    void compareAndUpdateHandleMaps(const Region & source_region, HandleMap & handle_map);
 
     static ColumnFamilyType getCf(const std::string & cf);
     RegionRaftCommandDelegate & makeRaftCommandDelegate(const KVStoreTaskLock &);
@@ -173,27 +155,30 @@ public:
 
     void tryPreDecodeTiKVValue();
 
+    TableID getMappedTableID() const;
+
 private:
     Region() = delete;
     friend class RegionRaftCommandDelegate;
 
     // Private methods no need to lock mutex, normally
 
-    TableID doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value);
-    TableID doRemove(const std::string & cf, const TiKVKey & key);
+    void doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value);
+    void doCheckTable(const DecodedTiKVKey & key) const;
+    void doRemove(const std::string & cf, const TiKVKey & key);
     void doDeleteRange(const std::string & cf, const RegionRange & range);
 
-    RegionDataReadInfo readDataByWriteIt(
-        const TableID & table_id, const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
-    RegionData::WriteCFIter removeDataByWriteIt(const TableID & table_id, const RegionData::WriteCFIter & write_it);
+    RegionDataReadInfo readDataByWriteIt(const RegionData::ConstWriteCFIter & write_it, bool need_value = true) const;
+    RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
-    LockInfoPtr getLockInfo(TableID expected_table_id, UInt64 start_ts) const;
+    LockInfoPtr getLockInfo(UInt64 start_ts) const;
 
-    RegionPtr splitInto(RegionMeta meta);
+    RegionPtr splitInto(RegionMeta && meta);
 
 private:
     RegionData data;
     mutable std::shared_mutex mutex;
+    mutable std::mutex predecode_mutex;
 
     RegionMeta meta;
 
@@ -205,6 +190,8 @@ private:
     mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
+
+    const TableID mapped_table_id;
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable

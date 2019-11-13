@@ -266,7 +266,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         std::vector<RegionID> region_ids;
         region_ids.push_back(info.region_id);
-        throw RegionException(std::move(region_ids), RegionTable::RegionReadStatus::NOT_FOUND);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
     }
     if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange()))
         throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);

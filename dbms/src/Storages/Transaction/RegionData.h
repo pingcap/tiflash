@@ -25,17 +25,17 @@ public:
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
 
-    TableID insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value);
+    void insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKey & raw_key, TiKVValue && value);
 
-    void removeLockCF(const TableID & table_id, const DecodedTiKVKey & raw_key);
-    void removeDefaultCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key);
-    void removeWriteCF(const TableID & table_id, const TiKVKey & key, const DecodedTiKVKey & raw_key);
+    void removeLockCF(const DecodedTiKVKey & raw_key);
+    void removeDefaultCF(const TiKVKey & key, const DecodedTiKVKey & raw_key);
+    void removeWriteCF(const TiKVKey & key, const DecodedTiKVKey & raw_key);
 
-    WriteCFIter removeDataByWriteIt(const TableID & table_id, const WriteCFIter & write_it);
+    WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);
 
-    RegionDataReadInfo readDataByWriteIt(const TableID & table_id, const ConstWriteCFIter & write_it, bool need_value = true) const;
+    RegionDataReadInfo readDataByWriteIt(const ConstWriteCFIter & write_it, bool need_value = true) const;
 
-    LockInfoPtr getLockInfo(TableID expected_table_id, Timestamp start_ts) const;
+    LockInfoPtr getLockInfo(Timestamp start_ts) const;
 
     void splitInto(const RegionRange & range, RegionData & new_region_data);
 
@@ -57,8 +57,6 @@ public:
     const RegionWriteCFData & writeCF() const;
     const RegionDefaultCFData & defaultCF() const;
     const RegionLockCFData & lockCF() const;
-
-    TableIDSet getAllWriteCFTables() const;
 
     RegionData() {}
 

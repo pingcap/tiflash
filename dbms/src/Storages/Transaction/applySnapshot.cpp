@@ -19,7 +19,7 @@ extern const int LOGICAL_ERROR;
 
 static const std::string RegionSnapshotName = "RegionSnapshot";
 
-bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * context)
+bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * context, bool try_flush_region)
 {
     Logger * log = &Logger::get(RegionSnapshotName);
 
@@ -42,7 +42,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         auto & tmt = context->getTMTContext();
         Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient());
 
-        std::unordered_map<TableID, HandleMap> handle_maps;
+        HandleMap handle_map;
 
         {
             std::stringstream ss;
@@ -67,34 +67,32 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
 
             // Get all handle with largest version in those regions.
             for (const auto & region_info : regions_to_check)
-                new_region->compareAndUpdateHandleMaps(*region_info.second.first, handle_maps);
+                new_region->compareAndUpdateHandleMaps(*region_info.second.first, handle_map);
         }
 
         // Traverse all table in ch and update handle_maps.
-        for (auto [table_id, merge_tree] : tmt.getStorages().getAllStorage())
+        auto table_id = new_region->getMappedTableID();
+        if (auto storage = tmt.getStorages().get(table_id); storage)
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);
-            if (handle_range.first >= handle_range.second)
-                continue;
             {
-                auto table_lock = merge_tree->lockStructure(false, __PRETTY_FUNCTION__);
+                auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
-                const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
+                const bool pk_is_uint64 = getTMTPKType(*storage->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
 
                 if (pk_is_uint64)
                 {
                     const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[0], handle_maps[table_id]);
+                    getHandleMapByRange<UInt64>(*context, *storage, new_range[0], handle_map);
                     if (n > 1)
-                        getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[1], handle_maps[table_id]);
+                        getHandleMapByRange<UInt64>(*context, *storage, new_range[1], handle_map);
                 }
                 else
-                    getHandleMapByRange<Int64>(*context, *merge_tree, handle_range, handle_maps[table_id]);
+                    getHandleMapByRange<Int64>(*context, *storage, handle_range, handle_map);
             }
         }
 
-        for (auto & [table_id, handle_map] : handle_maps)
-            new_region->compareAndCompleteSnapshot(handle_map, table_id, safe_point);
+        new_region->compareAndCompleteSnapshot(handle_map, safe_point);
     }
 
     if (old_region)
@@ -111,7 +109,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         }
     }
 
-    return kvstore->onSnapshot(new_region, context, regions_to_check);
+    return kvstore->onSnapshot(new_region, context, regions_to_check, try_flush_region);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)
@@ -160,7 +158,7 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
     if (new_region->isPeerRemoved())
         throw Exception("[applySnapshot] region is removed, should not happen", ErrorCodes::LOGICAL_ERROR);
 
-    bool status = applySnapshot(kvstore, new_region, context);
+    bool status = applySnapshot(kvstore, new_region, context, true);
 
     LOG_INFO(log, new_region->toString(false) << " apply snapshot " << (status ? "success" : "fail"));
 }

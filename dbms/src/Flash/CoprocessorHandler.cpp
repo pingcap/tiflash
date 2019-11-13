@@ -22,8 +22,7 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-grpc::Status CoprocessorHandler::execute()
-try
+grpc::Status CoprocessorHandler::execute() try
 {
     switch (cop_request->tp())
     {
@@ -81,12 +80,12 @@ catch (const RegionException & e)
     errorpb::Error * region_err;
     switch (e.status)
     {
-        case RegionTable::RegionReadStatus::NOT_FOUND:
-        case RegionTable::RegionReadStatus::PENDING_REMOVE:
+        case RegionException::RegionReadStatus::NOT_FOUND:
+        case RegionException::RegionReadStatus::PENDING_REMOVE:
             region_err = cop_response->mutable_region_error();
             region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
             break;
-        case RegionTable::RegionReadStatus::VERSION_ERROR:
+        case RegionException::RegionReadStatus::VERSION_ERROR:
             region_err = cop_response->mutable_region_error();
             region_err->mutable_epoch_not_match();
             break;

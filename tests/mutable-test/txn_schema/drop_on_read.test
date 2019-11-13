@@ -1,3 +1,4 @@
+=> DBGInvoke __clean_up_region()
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)
@@ -13,6 +14,7 @@
 => select * from default.test " --schema_version "10000000
 Received exception from server (version {#WORD}):
 Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.test doesn't exist..
+=> DBGInvoke __clean_up_region()
 
 => DBGInvoke __mock_tidb_table(default, test, 'col_1 String, col_2 Nullable(Int8)')
 => select * from default.test

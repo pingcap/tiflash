@@ -39,22 +39,18 @@ RaftService::RaftService(DB::Context & db_context_)
         {
             LOG_INFO(log, "try to final optimize table " << table_id);
             tryOptimizeStorageFinal(db_context, table_id);
+            LOG_INFO(log, "finish final optimize table " << table_id);
         }
         return region_table.tryFlushRegions();
     });
 
-    region_flush_handle = background_pool.addTask([this] {
-        RegionID region_id;
+    data_reclaim_handle = background_pool.addTask([this] {
+        std::list<RegionDataReadInfoList> tmp;
         {
             std::lock_guard<std::mutex> lock(region_mutex);
-            if (regions_to_flush.empty())
-                return false;
-            region_id = regions_to_flush.front();
-            regions_to_flush.pop();
+            tmp = std::move(data_to_reclaim);
         }
-        RegionTable & region_table = db_context.getTMTContext().getRegionTable();
-        region_table.tryFlushRegion(region_id);
-        return true;
+        return false;
     });
 
     region_decode_handle = background_pool.addTask([this] {
@@ -83,13 +79,10 @@ RaftService::RaftService(DB::Context & db_context_)
     }
 }
 
-void RaftService::addRegionToFlush(const Region & region)
+void RaftService::dataMemReclaim(DB::RegionDataReadInfoList && data)
 {
-    {
-        std::lock_guard<std::mutex> lock(region_mutex);
-        regions_to_flush.push(region.id());
-    }
-    region_flush_handle->wake();
+    std::lock_guard<std::mutex> lock(reclaim_mutex);
+    data_to_reclaim.emplace_back(std::move(data));
 }
 
 void RaftService::addRegionToDecode(const RegionPtr & region)
@@ -114,10 +107,10 @@ RaftService::~RaftService()
         table_flush_handle = nullptr;
     }
 
-    if (region_flush_handle)
+    if (data_reclaim_handle)
     {
-        background_pool.removeTask(region_flush_handle);
-        region_flush_handle = nullptr;
+        background_pool.removeTask(data_reclaim_handle);
+        data_reclaim_handle = nullptr;
     }
 
     if (region_decode_handle)
