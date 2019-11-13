@@ -344,7 +344,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     auto region = kvstore_region[region_query_info.region_id];
 
                     if (region->getMappedTableID() != data.table_info->id)
-                        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match, except "
+                        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match, expect "
                                 + std::to_string(region->getMappedTableID()) + ", got " + std::to_string(data.table_info->id),
                             ErrorCodes::LOGICAL_ERROR);
 

@@ -51,7 +51,7 @@ void Region::doCheckTable(const DB::DecodedTiKVKey & raw_key) const
     auto table_id = RecordKVFormat::getTableId(raw_key);
     if (table_id != getMappedTableID())
     {
-        LOG_ERROR(log, __FUNCTION__ << ": table id not match, except " << getMappedTableID() << ", got " << table_id);
+        LOG_ERROR(log, __FUNCTION__ << ": table id not match, expect " << getMappedTableID() << ", got " << table_id);
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match", ErrorCodes::LOGICAL_ERROR);
     }
 }
