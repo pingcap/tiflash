@@ -55,7 +55,7 @@ RegionTable::InternalRegion & RegionTable::doGetInternalRegion(DB::TableID table
 
 RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & region)
 {
-    auto table_id = region.getFlashTableID();
+    auto table_id = region.getMappedTableID();
     auto & table = getOrCreateTable(table_id);
     auto & table_regions = table.regions;
     if (auto it = table_regions.find(region.id()); it != table_regions.end())
@@ -68,7 +68,7 @@ void RegionTable::shrinkRegionRange(const Region & region)
 {
     std::lock_guard<std::mutex> lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
-    internal_region.range_in_table = region.getHandleRangeByTable(region.getFlashTableID());
+    internal_region.range_in_table = region.getHandleRangeByTable(region.getMappedTableID());
 }
 
 bool RegionTable::shouldFlush(const InternalRegion & region) const
@@ -91,7 +91,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
     const auto & tmt = context->getTMTContext();
 
     LOG_INFO(log,
-        __FUNCTION__ << ": table " << region->getFlashTableID() << ", " << region->toString(false) << " original " << region->dataSize()
+        __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " original " << region->dataSize()
                      << " bytes");
 
     /// Write region data into corresponding storage.
@@ -124,7 +124,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         }
 
         LOG_INFO(log,
-            __FUNCTION__ << ": table " << region->getFlashTableID() << ", " << region->toString(false) << " after flush " << cache_size
+            __FUNCTION__ << ": table " << region->getMappedTableID() << ", " << region->toString(false) << " after flush " << cache_size
                          << " bytes");
     }
 
@@ -306,7 +306,6 @@ bool RegionTable::tryFlushRegions()
     {
         RegionID region_id;
         bool got = false;
-        RegionID useless_region = InvalidRegionID;
     };
 
     DataToFlush to_flush;
@@ -315,16 +314,18 @@ bool RegionTable::tryFlushRegions()
         const auto traverse_dirty_regions = [&](std::function<bool(InternalRegion &)> && callback) {
             std::lock_guard<std::mutex> lock(mutex);
 
-            for (const auto & region_id : dirty_regions)
+            for (auto dirty_it = dirty_regions.begin(); dirty_it != dirty_regions.end();)
             {
+                auto region_id = *dirty_it;
                 if (auto it = regions.find(region_id); it != regions.end())
                 {
                     auto table_id = it->second;
                     if (callback(doGetInternalRegion(table_id, region_id)))
                         return;
+                    dirty_it++;
                 }
                 else
-                    to_flush.useless_region = region_id;
+                    dirty_it = dirty_regions.erase(dirty_it);
             }
         };
 
@@ -337,12 +338,6 @@ bool RegionTable::tryFlushRegions()
             }
             return false;
         });
-
-        if (to_flush.useless_region != InvalidRegionID)
-        {
-            std::lock_guard<std::mutex> lock(mutex);
-            dirty_regions.erase(to_flush.useless_region);
-        }
 
         if (!to_flush.got)
             return false;
@@ -385,7 +380,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
 {
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto table_id = region_range_keys.getFlashTableID();
+    auto table_id = region_range_keys.getMappedTableID();
     auto new_handle_range = region_range_keys.getHandleRangeByTable(table_id);
 
     if (auto it = regions.find(region_id); it != regions.end())

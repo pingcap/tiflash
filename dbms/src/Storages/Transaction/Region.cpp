@@ -49,9 +49,9 @@ void Region::doInsert(const std::string & cf, TiKVKey && key, TiKVValue && value
 void Region::doCheckTable(const DB::DecodedTiKVKey & raw_key) const
 {
     auto table_id = RecordKVFormat::getTableId(raw_key);
-    if (table_id != getFlashTableID())
+    if (table_id != getMappedTableID())
     {
-        LOG_ERROR(log, __FUNCTION__ << ": table id not match, except " << getFlashTableID() << ", got " << table_id);
+        LOG_ERROR(log, __FUNCTION__ << ": table id not match, except " << getMappedTableID() << ", got " << table_id);
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match", ErrorCodes::LOGICAL_ERROR);
     }
 }
@@ -507,7 +507,7 @@ void Region::compareAndCompleteSnapshot(HandleMap & handle_map, const Timestamp 
     if (handle_map.empty())
         return;
 
-    auto table_id = getFlashTableID();
+    auto table_id = getMappedTableID();
     auto & write_map = data.writeCF().getDataMut();
 
     size_t deleted_gc_cnt = 0, ori_write_map_size = write_map.size();
@@ -634,10 +634,10 @@ Region::Region(DB::RegionMeta && meta_, const DB::IndexReaderCreateFunc & index_
     : meta(std::move(meta_)),
       index_reader(index_reader_create(meta.getRegionVerID())),
       log(&Logger::get(log_name)),
-      flash_table_id(meta.getRange()->getFlashTableID())
+      mapped_table_id(meta.getRange()->getMappedTableID())
 {}
 
-TableID Region::getFlashTableID() const { return flash_table_id; }
+TableID Region::getMappedTableID() const { return mapped_table_id; }
 
 const RegionRangeKeys & RegionRaftCommandDelegate::getRange() { return *meta.makeRaftCommandDelegate().regionState().getRange(); }
 UInt64 RegionRaftCommandDelegate::appliedIndex() { return meta.makeRaftCommandDelegate().applyState().applied_index(); }

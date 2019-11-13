@@ -23,7 +23,7 @@ extern const int LOGICAL_ERROR;
 void RegionTable::writeBlockByRegion(Context & context, RegionPtr region, RegionDataReadInfoList & data_list_to_remove, Logger * log)
 {
     const auto & tmt = context.getTMTContext();
-    TableID table_id = region->getFlashTableID();
+    TableID table_id = region->getMappedTableID();
     UInt64 region_read_cost = -1, region_decode_cost = -1, write_part_cost = -1;
 
     RegionDataReadInfoList data_list_read;
@@ -129,7 +129,7 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     if (!region)
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": region is null", ErrorCodes::LOGICAL_ERROR);
 
-    if (region->getFlashTableID() != table_info.id)
+    if (region->getMappedTableID() != table_info.id)
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match", ErrorCodes::LOGICAL_ERROR);
 
     RegionDataReadInfoList data_list_read;

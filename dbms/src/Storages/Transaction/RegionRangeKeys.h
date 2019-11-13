@@ -41,13 +41,13 @@ public:
     const std::pair<DecodedTiKVKey, DecodedTiKVKey> & rawKeys() const;
     HandleRange<HandleID> getHandleRangeByTable(const TableID table_id) const;
     explicit RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key);
-    TableID getFlashTableID() const;
+    TableID getMappedTableID() const;
 
 private:
     RegionRange ori;
     std::pair<DecodedTiKVKey, DecodedTiKVKey> raw;
-    TableID flash_table_id;
-    HandleRange<HandleID> flash_handle_range;
+    TableID mapped_table_id;
+    HandleRange<HandleID> mapped_handle_range;
 };
 
 } // namespace DB

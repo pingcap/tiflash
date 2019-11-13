@@ -71,7 +71,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         }
 
         // Traverse all table in ch and update handle_maps.
-        auto table_id = new_region->getFlashTableID();
+        auto table_id = new_region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
         {
             const auto handle_range = new_region->getHandleRangeByTable(table_id);

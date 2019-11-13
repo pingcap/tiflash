@@ -155,7 +155,7 @@ public:
 
     void tryPreDecodeTiKVValue();
 
-    TableID getFlashTableID() const;
+    TableID getMappedTableID() const;
 
 private:
     Region() = delete;
@@ -191,7 +191,7 @@ private:
 
     Logger * log;
 
-    const TableID flash_table_id;
+    const TableID mapped_table_id;
 };
 
 class RegionRaftCommandDelegate : public Region, private boost::noncopyable
