@@ -343,6 +343,11 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     // wait learner read index
                     auto region = kvstore_region[region_query_info.region_id];
 
+                    if (region->getMappedTableID() != data.table_info->id)
+                        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match, except "
+                                + std::to_string(region->getMappedTableID()) + ", got " + std::to_string(data.table_info->id),
+                            ErrorCodes::LOGICAL_ERROR);
+
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
                     region->waitIndex(region->learnerRead());

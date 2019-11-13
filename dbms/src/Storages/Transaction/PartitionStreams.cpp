@@ -129,9 +129,6 @@ std::tuple<Block, RegionException::RegionReadStatus> RegionTable::readBlockByReg
     if (!region)
         throw Exception(std::string(__PRETTY_FUNCTION__) + ": region is null", ErrorCodes::LOGICAL_ERROR);
 
-    if (region->getMappedTableID() != table_info.id)
-        throw Exception(std::string(__PRETTY_FUNCTION__) + ": table id not match", ErrorCodes::LOGICAL_ERROR);
-
     RegionDataReadInfoList data_list_read;
     {
         auto scanner = region->createCommittedScanner();
