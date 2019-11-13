@@ -1,3 +1,5 @@
+#RETURN
+
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)
