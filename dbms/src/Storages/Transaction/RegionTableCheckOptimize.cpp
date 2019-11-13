@@ -126,7 +126,7 @@ void RegionTable::checkTableOptimize()
     std::vector<TableID> table_to_check;
     {
         std::lock_guard<std::mutex> lock(mutex);
-        for (const auto table : tables)
+        for (const auto & table : tables)
         {
             if (!table.second.regions.empty())
                 table_to_check.emplace_back(table.first);
@@ -159,7 +159,7 @@ void RegionTable::checkTableOptimize(DB::TableID table_id, const double threshol
     {
         LOG_INFO(log, "table " << table_id << " need to be optimized");
         std::lock_guard<std::mutex> lock(mutex);
-        table_to_optimize.emplace(table_id);
+        table_to_optimize.insert(table_id);
     }
 }
 

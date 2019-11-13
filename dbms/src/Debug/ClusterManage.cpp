@@ -137,7 +137,7 @@ void ClusterManage::findRegionByRange(Context & context, const ASTs & args, Prin
 
 void ClusterManage::checkTableOptimize(DB::Context & context, const DB::ASTs & args, DB::Printer)
 {
-    if (args.size() < 3)
+    if (args.size() < 2)
         throw Exception("Args not matched, should be: table-id, threshold", ErrorCodes::BAD_ARGUMENTS);
 
     auto & tmt = context.getTMTContext();

@@ -77,6 +77,11 @@ struct MockTiDBTable
     //   ./storages-client.sh "DBGInvoke reset_syncer()"
     static void dbgFuncResetSyncer(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
+    // Remove All Region.
+    // Usage:
+    //   ./storages-client.sh "DBGInvoke clean_up_region()"
+    static void dbgFuncCleanUpRegions(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 private:
     static void dbgFuncDropTiDBTableImpl(
         Context & context, String database_name, String table_name, bool drop_regions, bool is_drop_db, DBGInvoker::Printer output);

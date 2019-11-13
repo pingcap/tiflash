@@ -30,7 +30,7 @@ BlockInputStreamPtr createBlockInputStreamFromRange(
 
     std::string query = ss.str();
 
-    LOG_DEBUG(&Logger::get(RegionDataMoverName), "[createBlockInputStreamFromRange] sql: " << query);
+    LOG_DEBUG(&Logger::get(RegionDataMoverName), __FUNCTION__ << ": sql " << query);
 
     return executeQuery(query, context, true, QueryProcessingStage::Complete).in;
 }
@@ -41,7 +41,7 @@ void getHandleMapByRange(
 {
     SortDescription pk_columns = storage.getData().getPrimarySortDescription();
     if (pk_columns.size() != 1)
-        throw Exception("RegionDataMover: primary key should be one column", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": primary key should be one column", ErrorCodes::LOGICAL_ERROR);
 
     std::string pk_name = pk_columns[0].column_name;
     auto start_time = Clock::now();
@@ -86,8 +86,9 @@ void getHandleMapByRange(
 
     auto end_time = Clock::now();
     LOG_DEBUG(&Logger::get(RegionDataMoverName),
-        "[getHandleMapByRange] execute sql and handle data, cost "
-            << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows << " rows");
+        __FUNCTION__ << ": execute sql and handle data, cost "
+                     << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms, read " << tol_rows
+                     << " rows");
 }
 
 template void getHandleMapByRange<Int64>(Context &, StorageMergeTree &, const HandleRange<Int64> &, HandleMap &);
@@ -95,16 +96,25 @@ template void getHandleMapByRange<UInt64>(Context &, StorageMergeTree &, const H
 
 void tryOptimizeStorageFinal(Context & context, TableID table_id)
 {
+    auto log = &Logger::get(RegionDataMoverName);
     auto & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
     if (!storage)
+    {
+        LOG_INFO(log, __FUNCTION__ << ": storage " << table_id << " is none");
         return;
+    }
 
     auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
 
     std::stringstream ss;
     ss << "OPTIMIZE TABLE `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` PARTITION ID '0' FINAL";
-    executeQuery(ss.str(), context, true, QueryProcessingStage::Complete);
+
+    std::string query = ss.str();
+
+    LOG_WARNING(log, __FUNCTION__ << ": execute sql " << query);
+
+    executeQuery(query, context, true, QueryProcessingStage::Complete);
 }
 
 } // namespace DB

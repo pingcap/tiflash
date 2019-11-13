@@ -35,6 +35,7 @@ DBGInvoker::DBGInvoker()
     // TODO: remove this, use sleep in bash script
     regSchemalessFunc("sleep", dbgFuncSleep);
 
+    regSchemalessFunc("clean_up_region", MockTiDBTable::dbgFuncCleanUpRegions);
     regSchemalessFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);
     regSchemalessFunc("mock_tidb_db", MockTiDBTable::dbgFuncMockTiDBDB);
     regSchemalessFunc("mock_tidb_partition", MockTiDBTable::dbgFuncMockTiDBPartition);

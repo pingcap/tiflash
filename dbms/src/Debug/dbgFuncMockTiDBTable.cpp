@@ -26,7 +26,8 @@ extern const int LOGICAL_ERROR;
 void MockTiDBTable::dbgFuncMockTiDBTable(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 3 && args.size() != 4)
-        throw Exception("Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name]", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Args not matched, should be: database-name, table-name, schema-string [, handle_pk_name]", ErrorCodes::BAD_ARGUMENTS);
 
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
@@ -285,6 +286,23 @@ void MockTiDBTable::dbgFuncTruncateTiDBTable(Context & /*context*/, const ASTs &
     std::stringstream ss;
     ss << "truncated table " << database_name << "." << table_name;
     output(ss.str());
+}
+
+void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs &, DB::DBGInvoker::Printer output)
+{
+    std::vector<RegionID> regions;
+    auto & kvstore = context.getTMTContext().getKVStore();
+    auto & region_table = context.getTMTContext().getRegionTable();
+    {
+        auto lock = kvstore->genTaskLock();
+
+        for (const auto & e : kvstore->regions())
+            regions.emplace_back(e.first);
+
+        for (const auto & region_id : regions)
+            kvstore->removeRegion(region_id, &region_table, lock);
+    }
+    output("all regions have been cleaned");
 }
 
 } // namespace DB

@@ -365,7 +365,7 @@ void StorageMergeTree::alterInternal(
         else if (param.type == AlterCommand::RENAME_COLUMN)
         {
             rename_column = true;
-            if (params.size() != 1) 
+            if (params.size() != 1)
             {
                 throw Exception("There is an internal error for rename columns", ErrorCodes::LOGICAL_ERROR);
             }
@@ -717,7 +717,7 @@ void StorageMergeTree::dropPartition(const ASTPtr & /*query*/, const ASTPtr & pa
 void StorageMergeTree::truncate(const ASTPtr & /*query*/, const Context & /*context*/)
 {
     auto lock = lockForAlter(__PRETTY_FUNCTION__);
-    
+
     MergeTreeData::DataParts parts = data.getDataParts();
 
     for (const auto & part : parts)
