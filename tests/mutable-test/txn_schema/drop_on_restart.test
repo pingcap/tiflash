@@ -1,5 +1,4 @@
-#RETURN
-
+=> DBGInvoke __clean_up_region()
 => DBGInvoke __enable_schema_sync_service('false')
 
 => DBGInvoke __drop_tidb_table(default, test)

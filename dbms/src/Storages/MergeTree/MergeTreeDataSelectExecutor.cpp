@@ -302,8 +302,6 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
             regions_executor_data.reserve(regions.size());
             for (const auto & [id, region] : regions)
             {
-                if (region == nullptr)
-                    continue;
                 regions_executor_data.emplace_back(RegionQueryInfo{id, region->version(), region->confVer(), {0, 0}});
             }
         }

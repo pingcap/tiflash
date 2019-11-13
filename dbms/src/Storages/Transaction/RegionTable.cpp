@@ -369,7 +369,8 @@ std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const
         for (const auto & region_info : internal_regions)
         {
             auto region = kvstore->getRegion(region_info.first);
-            regions.emplace_back(region_info.first, std::move(region));
+            if (region)
+                regions.emplace_back(region_info.first, std::move(region));
         }
     });
     return regions;
