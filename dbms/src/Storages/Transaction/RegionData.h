@@ -38,6 +38,7 @@ public:
     LockInfoPtr getLockInfo(Timestamp start_ts) const;
 
     void splitInto(const RegionRange & range, RegionData & new_region_data);
+    void mergeFrom(const RegionData & ori_region_data);
 
     size_t dataSize() const;
 

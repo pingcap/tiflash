@@ -59,6 +59,7 @@ struct RegionCFDataBase
     RegionCFDataBase & operator=(RegionCFDataBase && region);
 
     size_t splitInto(const RegionRange & range, RegionCFDataBase & new_region_data);
+    size_t mergeFrom(const RegionCFDataBase & ori_region_data);
 
     size_t serialize(WriteBuffer & buf) const;
 

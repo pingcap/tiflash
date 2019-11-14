@@ -262,7 +262,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
             }
 
             {
-                region_range_index.remove(result.range_before_split->comparableKeys(), curr_region_id);
+                region_range_index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
                 region_range_index.add(curr_region_ptr);
 
                 for (auto & new_region : split_regions)
@@ -308,6 +308,19 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 persist_and_sync();
         };
 
+        const auto handle_commit_merge = [&](const RegionID source_region_id) {
+            region_table->shrinkRegionRange(curr_region);
+            persist_region(curr_region);
+            {
+                auto source_region = getRegion(source_region_id);
+                source_region->setPendingRemove();
+                removeRegion(source_region_id, region_table, task_lock);
+            }
+            region_range_index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
+            region_range_index.add(curr_region_ptr);
+            report_sync_log();
+        };
+
         switch (result.type)
         {
             case RaftCommandResult::Type::IndexError:
@@ -328,6 +341,9 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 break;
             case RaftCommandResult::Type::CompactLog:
                 handle_compact_log();
+                break;
+            case RaftCommandResult::Type::CommitMerge:
+                handle_commit_merge(result.source_region_id);
                 break;
             default:
                 throw Exception("Unsupported RaftCommandResult", ErrorCodes::LOGICAL_ERROR);

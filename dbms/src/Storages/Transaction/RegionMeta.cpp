@@ -247,6 +247,113 @@ void MetaRaftCommandDelegate::execCompactLog(
     doSetApplied(index, term);
 }
 
+RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
+    const raft_cmdpb::AdminRequest & request, const MetaRaftCommandDelegate & source_meta) const
+{
+    auto & commit_merge_request = request.commit_merge();
+    auto & source_region = commit_merge_request.source();
+
+    switch (auto state = source_meta.region_state.getState())
+    {
+        case raft_serverpb::PeerState::Merging:
+        case raft_serverpb::PeerState::Normal:
+            break;
+        default:
+        {
+            throw Exception("[RegionMeta::execCommitMerge] " + toString(false)
+                    + " unexpected state of source region: " + raft_serverpb::PeerState_Name(state),
+                ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    if (source_meta.apply_state.applied_index() < commit_merge_request.commit())
+        throw Exception("[RegionMeta::execCommitMerge] applied index of source region < commit index", ErrorCodes::LOGICAL_ERROR);
+
+    if (!(source_region == source_meta.region_state.getRegion()))
+        throw Exception("[RegionMeta::execCommitMerge] source_region not match exist region", ErrorCodes::LOGICAL_ERROR);
+
+    RegionMergeResult res;
+
+    res.version = std::max(source_region.region_epoch().version(), region_state.getVersion()) + 1;
+
+    if (source_region.start_key().empty())
+    {
+        res.source_at_left = true;
+    }
+    else
+    {
+        res.source_at_left = source_region.end_key() == region_state.getRegion().start_key();
+    }
+
+    return res;
+}
+
+void MetaRaftCommandDelegate::execRollbackMerge(
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &, const UInt64 index, const UInt64 term)
+{
+    auto & rollback_request = request.rollback_merge();
+
+    if (region_state.getState() != raft_serverpb::PeerState::Merging)
+        throw Exception("[RegionMeta::execRollbackMerge] region state is " + raft_serverpb::PeerState_Name(region_state.getState()),
+            ErrorCodes::LOGICAL_ERROR);
+    if (region_state.getMergeState().commit() != rollback_request.commit())
+        throw Exception("[RegionMeta::execRollbackMerge] merge commit index " + DB::toString(region_state.getMergeState().commit())
+                + " != " + DB::toString(rollback_request.commit()),
+            ErrorCodes::LOGICAL_ERROR);
+
+    std::lock_guard<std::mutex> lock(mutex);
+    const auto version = region_state.getVersion() + 1;
+    region_state.setVersion(version);
+    region_state.setState(raft_serverpb::PeerState::Normal);
+    region_state.clearMergeState();
+    doSetApplied(index, term);
+}
+
+void MetaRaftCommandDelegate::execCommitMerge(
+    const RegionMergeResult & res, UInt64 index, UInt64 term, const MetaRaftCommandDelegate & source_meta)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    region_state.setVersion(res.version);
+    if (res.source_at_left)
+        region_state.setStartKey(source_meta.region_state.getRegion().start_key());
+    else
+        region_state.setEndKey(source_meta.region_state.getRegion().end_key());
+
+    region_state.setState(raft_serverpb::PeerState::Normal);
+    region_state.clearMergeState();
+    doSetApplied(index, term);
+}
+
+void MetaRaftCommandDelegate::execPrepareMerge(
+    const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse &, UInt64 index, UInt64 term)
+{
+    auto & prepare_merge_request = request.prepare_merge();
+    auto & target = prepare_merge_request.target();
+
+    std::lock_guard<std::mutex> lock(mutex);
+    auto first_index = apply_state.truncated_state().index() + 1;
+    auto min_index = prepare_merge_request.min_index();
+    if (min_index < first_index)
+        throw Exception("[RegionMeta::execPrepareMerge] [region " + DB::toString(regionId()) + "] first_index " + DB::toString(first_index)
+                + " > min_index " + DB::toString(min_index),
+            ErrorCodes::LOGICAL_ERROR);
+
+    auto & region = region_state.getRegion();
+    auto region_version = region.region_epoch().version() + 1;
+    region_state.setVersion(region_version);
+
+    auto conf_version = region.region_epoch().conf_ver() + 1;
+    region_state.setConfVersion(conf_version);
+
+    auto & merge_state = region_state.getMutMergeState();
+    merge_state.set_min_index(min_index);
+    *merge_state.mutable_target() = target;
+    merge_state.set_commit(index);
+
+    region_state.setState(raft_serverpb::PeerState::Merging);
+    doSetApplied(index, term);
+}
+
 bool RegionMeta::isPeerRemoved() const
 {
     std::lock_guard<std::mutex> lock(mutex);
