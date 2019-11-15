@@ -45,6 +45,8 @@ private:
 
     Logger * log;
 
+    std::mutex apply_raft_cmd_mutex;
+
     std::mutex region_mutex;
     RegionMap regions_to_decode;
 

@@ -289,10 +289,9 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
         is_del = del;
     }
 
-    RaftContext raft_ctx(&context, nullptr, nullptr);
     enginepb::CommandRequestBatch cmds;
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, is_del);
-    tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
+    tmt.getKVStore()->onServiceCommand(std::move(cmds));
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)
@@ -308,12 +307,11 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();
 
-    RaftContext raft_ctx(&context, nullptr, nullptr);
     enginepb::CommandRequestBatch cmds;
 
     addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, true);
 
-    tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
+    tmt.getKVStore()->onServiceCommand(std::move(cmds));
 }
 
 struct BatchCtrl
@@ -412,7 +410,6 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         UInt64 prewrite_ts = pd_client->getTS();
         UInt64 commit_ts = pd_client->getTS();
 
-        RaftContext raft_ctx(batch_ctrl->context, nullptr, nullptr);
         enginepb::CommandRequestBatch cmds;
         enginepb::CommandRequest * cmd = cmds.add_requests();
 
@@ -423,7 +420,7 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
             addRequestsToRaftCmd(cmd, region->id(), key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
-        tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
+        tmt.getKVStore()->onServiceCommand(std::move(cmds));
     }
 }
 
@@ -445,7 +442,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStore()->onSnapshot(region, &context);
+        tmt.getKVStore()->onSnapshot(region);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)

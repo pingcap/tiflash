@@ -14,7 +14,7 @@ namespace DB
 TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
     const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
     const std::string & flash_service_address_)
-    : kvstore(std::make_shared<KVStore>(kvstore_path)),
+    : kvstore(std::make_shared<KVStore>(context, kvstore_path)),
       region_table(context),
       pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
                                   : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),

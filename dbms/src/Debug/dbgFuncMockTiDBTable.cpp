@@ -292,7 +292,6 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
 {
     std::vector<RegionID> regions;
     auto & kvstore = context.getTMTContext().getKVStore();
-    auto & region_table = context.getTMTContext().getRegionTable();
     {
         auto lock = kvstore->genTaskLock();
 
@@ -300,7 +299,7 @@ void MockTiDBTable::dbgFuncCleanUpRegions(DB::Context & context, const DB::ASTs 
             regions.emplace_back(e.first);
 
         for (const auto & region_id : regions)
-            kvstore->removeRegion(region_id, &region_table, lock);
+            kvstore->removeRegion(region_id, lock);
     }
     output("all regions have been cleaned");
 }

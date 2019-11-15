@@ -15,8 +15,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-KVStore::KVStore(const std::string & data_dir)
-    : region_persister(data_dir, region_manager), raft_cmd_res(std::make_unique<RaftCommandResult>()), log(&Logger::get("KVStore"))
+KVStore::KVStore(Context & context_, const std::string & data_dir)
+    : context(context_),
+      region_persister(data_dir, region_manager),
+      raft_cmd_res(std::make_unique<RaftCommandResult>()),
+      log(&Logger::get("KVStore"))
 {}
 
 void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
@@ -43,7 +46,7 @@ void KVStore::restore(const IndexReaderCreateFunc & index_reader_create)
                 regions_to_remove.push_back(region->id());
         }
         for (const auto region_id : regions_to_remove)
-            removeRegion(region_id, nullptr, task_lock);
+            removeRegion(region_id, task_lock);
     }
 }
 
@@ -90,14 +93,13 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(it->first, it->second);
 }
 
-bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check, bool try_flush_region)
+bool KVStore::onSnapshot(RegionPtr new_region, const RegionsAppliedindexMap & regions_to_check, bool try_flush_region)
 {
     RegionID region_id = new_region->id();
 
-    if (context)
     {
         const auto range = new_region->getRange();
-        auto & region_table = context->getTMTContext().getRegionTable();
+        auto & region_table = context.getTMTContext().getRegionTable();
         // extend region to make sure data won't be removed.
         region_table.extendRegionRange(region_id, *range);
         // try to flush data into ch first.
@@ -151,23 +153,22 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
         region_persister.persist(*new_region, region_lock);
         region_range_index.add(new_region);
 
-        if (context)
-            context->getTMTContext().getRegionTable().shrinkRegionRange(*new_region);
+        context.getTMTContext().getRegionTable().shrinkRegionRange(*new_region);
     }
 
     return true;
 }
 
-void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & raft_ctx)
+void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds)
 {
-    TMTContext * tmt_context = raft_ctx.context ? &(raft_ctx.context->getTMTContext()) : nullptr;
-    RegionTable * region_table = tmt_context ? &(tmt_context->getRegionTable()) : nullptr;
-    RaftService * raft_service = raft_ctx.context ? &(raft_ctx.context->getRaftService()) : nullptr;
+    TMTContext & tmt_context = context.getTMTContext();
+    RegionTable & region_table = tmt_context.getRegionTable();
+    RaftService & raft_service = context.getRaftService();
 
-    enginepb::CommandResponseBatch responseBatch;
+    enginepb::CommandResponseBatch response_batch;
 
     const auto report_region_destroy = [&](const RegionID region_id) {
-        auto & resp = *(responseBatch.add_responses());
+        auto & resp = *(response_batch.add_responses());
         resp.mutable_header()->set_region_id(region_id);
         resp.mutable_header()->set_destroyed(true);
         LOG_INFO(log, "Report [region " << region_id << "] destroyed");
@@ -195,7 +196,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         {
             LOG_INFO(log, "Try to remove " << curr_region.toString() << " because of tombstone.");
             curr_region.setPendingRemove();
-            removeRegion(curr_region_id, region_table, task_lock);
+            removeRegion(curr_region_id, task_lock);
 
             report_region_destroy(curr_region_id);
 
@@ -205,7 +206,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         curr_region.makeRaftCommandDelegate(task_lock).onCommand(std::move(cmd), *this, region_table, *raft_cmd_res);
         RaftCommandResult & result = *raft_cmd_res;
 
-        const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region.toCommandResponse(); };
+        const auto region_report = [&]() { *(response_batch.add_responses()) = curr_region.toCommandResponse(); };
 
         const auto report_sync_log = [&]() {
             if (result.sync_log)
@@ -228,12 +229,12 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         };
 
         const auto handle_compact_log = [&]() {
-            if (curr_region.writeCFCount() && curr_region.dataSize())
+            if (curr_region.writeCFCount())
             {
                 try
                 {
-                    auto tmp = region_table->tryFlushRegion(curr_region_ptr, false);
-                    raft_service->dataMemReclaim(std::move(tmp));
+                    auto tmp = region_table.tryFlushRegion(curr_region_ptr, false);
+                    raft_service.dataMemReclaim(std::move(tmp));
                 }
                 catch (...)
                 {
@@ -272,8 +273,8 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 // update region_table first is safe, because the core rule is established: the range in RegionTable
                 // is always >= range in KVStore.
                 for (const auto & new_region : split_regions)
-                    region_table->updateRegion(*new_region);
-                region_table->shrinkRegionRange(curr_region);
+                    region_table.updateRegion(*new_region);
+                region_table.shrinkRegionRange(curr_region);
             }
 
             {
@@ -291,16 +292,14 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         };
 
         const auto handle_update_table = [&]() {
-            if (region_table)
-                region_table->updateRegion(curr_region);
-
+            region_table.updateRegion(curr_region);
             persist_and_sync();
         };
 
         const auto handle_change_peer = [&]() {
             if (curr_region.isPendingRemove())
             {
-                removeRegion(curr_region_id, region_table, task_lock);
+                removeRegion(curr_region_id, task_lock);
                 report_sync_log();
             }
             else
@@ -317,7 +316,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
                 break;
             case RaftCommandResult::Type::UpdateTable:
                 handle_update_table();
-                raft_service->addRegionToDecode(curr_region_ptr);
+                raft_service.addRegionToDecode(curr_region_ptr);
                 break;
             case RaftCommandResult::Type::Default:
                 persist_and_sync();
@@ -333,15 +332,18 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         }
     }
 
-    if (responseBatch.responses_size())
-        raft_ctx.send(responseBatch);
+    if (raft_context)
+    {
+        if (response_batch.responses_size())
+            raft_context->send(response_batch);
+    }
 }
 
-void KVStore::report(RaftContext & raft_ctx)
+void KVStore::reportStatusToProxy()
 {
     auto lock = genTaskLock();
 
-    enginepb::CommandResponseBatch responseBatch;
+    enginepb::CommandResponseBatch response_batch;
     {
         auto manage_lock = genRegionManageLock();
 
@@ -349,12 +351,13 @@ void KVStore::report(RaftContext & raft_ctx)
             return;
 
         for (const auto & p : regions())
-            *(responseBatch.add_responses()) = p.second->toCommandResponse();
+            *(response_batch.add_responses()) = p.second->toCommandResponse();
     }
 
-    raft_ctx.send(responseBatch);
+    if (raft_context)
+        raft_context->send(response_batch);
 
-    LOG_INFO(log, "Report status of " << responseBatch.responses_size() << " regions to proxy");
+    LOG_INFO(log, "Report status of " << response_batch.responses_size() << " regions to proxy");
 }
 
 void KVStore::tryPersist(const RegionID region_id)
@@ -406,7 +409,7 @@ bool KVStore::tryPersist(const Seconds kvstore_try_persist_period, const Seconds
     return persist_job || gc_job;
 }
 
-void KVStore::removeRegion(const RegionID region_id, RegionTable * region_table, const KVStoreTaskLock & task_lock)
+void KVStore::removeRegion(const RegionID region_id, const KVStoreTaskLock & task_lock)
 {
     LOG_INFO(log, "Start to remove [region " << region_id << "]");
 
@@ -424,10 +427,16 @@ void KVStore::removeRegion(const RegionID region_id, RegionTable * region_table,
 
     region_persister.drop(region_id);
 
-    if (region_table)
-        region_table->removeRegion(region_id);
+    context.getTMTContext().getRegionTable().removeRegion(region_id);
 
     LOG_INFO(log, "Remove [region " << region_id << "] done");
+}
+
+void KVStore::setRaftContext(DB::RaftContext * raft_context)
+{
+    auto lock = genTaskLock();
+
+    this->raft_context = raft_context;
 }
 
 KVStoreTaskLock KVStore::genTaskLock() const { return KVStoreTaskLock(task_mutex); }

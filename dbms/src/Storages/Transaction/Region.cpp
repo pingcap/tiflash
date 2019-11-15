@@ -184,7 +184,7 @@ void RegionRaftCommandDelegate::execCompactLog(
     meta.makeRaftCommandDelegate().execCompactLog(request, response, index, term);
 }
 
-void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const KVStore &, RegionTable *, RaftCommandResult & result)
+void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const KVStore &, RegionTable &, RaftCommandResult & result)
 {
     const auto & header = cmd.header();
     UInt64 term = header.term();

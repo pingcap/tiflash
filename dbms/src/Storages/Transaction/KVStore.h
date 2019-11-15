@@ -32,7 +32,7 @@ struct TiKVRangeKey;
 class KVStore final : private boost::noncopyable
 {
 public:
-    KVStore(const std::string & data_dir);
+    KVStore(Context &, const std::string &);
     void restore(const IndexReaderCreateFunc & index_reader_create);
 
     RegionPtr getRegion(const RegionID region_id) const;
@@ -44,13 +44,12 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check = {}, bool try_flush_region = false);
+    bool onSnapshot(RegionPtr new_region, const RegionsAppliedindexMap & regions_to_check = {}, bool try_flush_region = false);
 
-    // TODO: remove RaftContext and use Context + CommandServerReaderWriter
-    void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
+    void onServiceCommand(enginepb::CommandRequestBatch && cmds);
 
     // Send all regions status to remote TiKV.
-    void report(RaftContext & context);
+    void reportStatusToProxy();
 
     // Persist chosen regions.
     // Currently we also trigger region files GC in it.
@@ -61,10 +60,12 @@ public:
 
     size_t regionSize() const;
 
+    void setRaftContext(RaftContext *);
+
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
-    void removeRegion(const RegionID region_id, RegionTable * region_table, const KVStoreTaskLock & task_lock);
+    void removeRegion(const RegionID region_id, const KVStoreTaskLock & task_lock);
     KVStoreTaskLock genTaskLock() const;
 
     using RegionManageLock = std::lock_guard<std::mutex>;
@@ -74,6 +75,8 @@ private:
     const RegionMap & regions() const;
 
 private:
+    Context & context;
+
     RegionManager region_manager;
 
     RegionPersister region_persister;
@@ -90,6 +93,8 @@ private:
     std::unique_ptr<RaftCommandResult> raft_cmd_res;
 
     Logger * log;
+
+    RaftContext * raft_context = nullptr;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

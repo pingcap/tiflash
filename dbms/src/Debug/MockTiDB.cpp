@@ -51,7 +51,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
             if (drop_regions)
             {
                 for (auto & e : region_table.getRegionsByTable(partition.id))
-                    kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
+                    kvstore->removeRegion(e.first, kvstore->genTaskLock());
                 region_table.removeTable(partition.id);
             }
         }
@@ -63,7 +63,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
     if (drop_regions)
     {
         for (auto & e : region_table.getRegionsByTable(table->id()))
-            kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
+            kvstore->removeRegion(e.first, kvstore->genTaskLock());
         region_table.removeTable(table->id());
     }
 
@@ -135,8 +135,8 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
     return schema_id;
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name,
-        const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso,
+    const String & handle_pk_name)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -167,7 +167,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         {
             const auto * func = typeid_cast<const ASTFunction *>(it->second.expression.get());
             const auto * value_ptr
-                    = typeid_cast<const ASTLiteral *>(typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
+                = typeid_cast<const ASTLiteral *>(typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
             default_value = value_ptr->value;
         }
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value));

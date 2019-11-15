@@ -198,7 +198,7 @@ class RegionRaftCommandDelegate : public Region, private boost::noncopyable
 {
 public:
     /// Only after the task mutex of KVStore is locked, region can apply raft command.
-    void onCommand(enginepb::CommandRequest &&, const KVStore &, RegionTable *, RaftCommandResult &);
+    void onCommand(enginepb::CommandRequest &&, const KVStore &, RegionTable &, RaftCommandResult &);
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 

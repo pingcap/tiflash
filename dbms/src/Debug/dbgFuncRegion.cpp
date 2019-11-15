@@ -66,7 +66,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.getKVStore()->onSnapshot(region, &context);
+    tmt.getKVStore()->onSnapshot(region);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"

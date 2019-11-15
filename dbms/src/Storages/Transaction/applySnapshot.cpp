@@ -109,7 +109,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         }
     }
 
-    return kvstore->onSnapshot(new_region, context, regions_to_check, try_flush_region);
+    return kvstore->onSnapshot(new_region, regions_to_check, try_flush_region);
 }
 
 void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)
