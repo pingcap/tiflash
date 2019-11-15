@@ -110,12 +110,6 @@ public:
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
-    void markPersisted() const;
-    Timepoint lastPersistTime() const;
-    size_t dirtyFlag() const;
-    void decDirtyFlag(size_t x) const;
-    void incDirtyFlag();
-
     friend bool operator==(const Region & region1, const Region & region2)
     {
         std::shared_lock<std::shared_mutex> lock1(region1.mutex);
@@ -183,11 +177,6 @@ private:
     RegionMeta meta;
 
     IndexReaderPtr index_reader;
-
-    mutable std::atomic<Timepoint> last_persist_time = Clock::now();
-
-    // dirty_flag is used to present whether this region need to be persisted.
-    mutable std::atomic<size_t> dirty_flag = 1;
 
     Logger * log;
 

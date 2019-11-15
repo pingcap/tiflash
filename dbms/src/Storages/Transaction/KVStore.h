@@ -8,9 +8,7 @@
 namespace DB
 {
 
-// TODO move to Settings.h
-static const Seconds REGION_PERSIST_PERIOD(300);      // 5 minutes
-static const Seconds KVSTORE_TRY_PERSIST_PERIOD(180); // 3 minutes
+static const Seconds REGION_PERSIST_PERIOD(300); // 5 minutes
 
 class Context;
 
@@ -51,10 +49,7 @@ public:
     // Send all regions status to remote TiKV.
     void reportStatusToProxy();
 
-    // Persist chosen regions.
-    // Currently we also trigger region files GC in it.
-    bool tryPersist(
-        const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD, const Seconds region_persist_period = REGION_PERSIST_PERIOD);
+    bool gcRegionCache(Seconds gc_persist_period = REGION_PERSIST_PERIOD);
 
     void tryPersist(const RegionID region_id);
 
@@ -81,7 +76,7 @@ private:
 
     RegionPersister region_persister;
 
-    std::atomic<Timepoint> last_try_persist_time = Clock::now();
+    std::atomic<Timepoint> last_gc_time = Clock::now();
 
     // onServiceCommand and onSnapshot should not be called concurrently
     mutable std::mutex task_mutex;

@@ -371,42 +371,16 @@ void KVStore::tryPersist(const RegionID region_id)
     }
 }
 
-bool KVStore::tryPersist(const Seconds kvstore_try_persist_period, const Seconds region_persist_period)
+bool KVStore::gcRegionCache(Seconds gc_persist_period)
 {
     Timepoint now = Clock::now();
-    if (now < (last_try_persist_time.load() + kvstore_try_persist_period))
+    if (now < (last_gc_time.load() + gc_persist_period))
         return false;
-    last_try_persist_time = now;
+    last_gc_time = now;
 
-    RegionMap all_region_copy;
-    traverseRegions([&](const RegionID region_id, const RegionPtr & region) {
-        if (now < (region->lastPersistTime() + region_persist_period))
-            return;
-        if (region->dirtyFlag() == 0)
-            return;
-        all_region_copy[region_id] = region;
-    });
+    region_persister.gc();
 
-    std::stringstream ss;
-    bool persist_job = false;
-
-    for (auto && [region_id, region] : all_region_copy)
-    {
-        persist_job = true;
-
-        region_persister.persist(*region);
-
-        ss << region_id << ",";
-    }
-
-    if (persist_job)
-    {
-        LOG_DEBUG(log, "Regions ( " << ss.str() << ") are persisted");
-    }
-
-    bool gc_job = region_persister.gc();
-
-    return persist_job || gc_job;
+    return false;
 }
 
 void KVStore::removeRegion(const RegionID region_id, const KVStoreTaskLock & task_lock)

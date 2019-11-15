@@ -25,7 +25,7 @@ RaftService::RaftService(DB::Context & db_context_)
                 RegionTable & region_table = tmt.getRegionTable();
                 region_table.checkTableOptimize();
             }
-            kvstore->tryPersist();
+            kvstore->gcRegionCache();
             return false;
         },
         false);

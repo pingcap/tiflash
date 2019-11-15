@@ -119,8 +119,6 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         {
             if (try_persist)
                 tmt.getKVStore()->tryPersist(region->id());
-            else
-                region->incDirtyFlag();
         }
 
         LOG_INFO(log,

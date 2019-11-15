@@ -208,8 +208,6 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
         }
     }
 
-    bool is_dirty = false;
-
     if (cmd.has_admin_request())
     {
         const auto & request = cmd.admin_request();
@@ -233,9 +231,6 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
             {
                 result.range_before_split = meta.makeRaftCommandDelegate().regionState().getRange();
                 Regions split_regions = execBatchSplit(request, response, index, term);
-                for (auto & region : split_regions)
-                    region->last_persist_time.store(last_persist_time);
-
                 result.type = RaftCommandResult::Type::BatchSplit;
                 result.split_regions = std::move(split_regions);
                 break;
@@ -291,7 +286,6 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
                         e.rethrow();
                     }
 
-                    is_dirty = true;
                     break;
                 }
                 case raft_cmdpb::CmdType::Delete:
@@ -313,7 +307,6 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
                         e.rethrow();
                     }
 
-                    is_dirty = true;
                     break;
                 }
                 case raft_cmdpb::CmdType::Snap:
@@ -347,9 +340,6 @@ void RegionRaftCommandDelegate::onCommand(enginepb::CommandRequest && cmd, const
     }
 
     meta.notifyAll();
-
-    if (is_dirty)
-        incDirtyFlag();
 }
 
 std::tuple<size_t, UInt64> Region::serialize(WriteBuffer & buf) const
@@ -385,8 +375,6 @@ RegionPtr Region::deserialize(ReadBuffer & buf, const IndexReaderCreateFunc * in
                                                  : std::make_shared<Region>(std::move(meta), *index_reader_create);
 
     RegionData::deserialize(buf, region->data);
-
-    region->dirty_flag = 0;
 
     return region;
 }
@@ -440,16 +428,6 @@ std::string Region::dataInfo() const
     return ss.str();
 }
 
-void Region::markPersisted() const { last_persist_time = Clock::now(); }
-
-Timepoint Region::lastPersistTime() const { return last_persist_time; }
-
-size_t Region::dirtyFlag() const { return dirty_flag; }
-
-void Region::decDirtyFlag(size_t x) const { dirty_flag -= x; }
-
-void Region::incDirtyFlag() { dirty_flag++; }
-
 Region::CommittedScanner Region::createCommittedScanner() { return Region::CommittedScanner(this->shared_from_this()); }
 
 Region::CommittedRemover Region::createCommittedRemover() { return Region::CommittedRemover(this->shared_from_this()); }
@@ -491,8 +469,6 @@ void Region::assignRegion(Region && new_region)
     std::unique_lock<std::shared_mutex> lock(mutex);
 
     data.assignRegionData(std::move(new_region.data));
-
-    incDirtyFlag();
 
     meta.assignRegionMeta(std::move(new_region.meta));
     meta.notifyAll();

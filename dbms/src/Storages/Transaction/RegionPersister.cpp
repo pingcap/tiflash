@@ -52,9 +52,6 @@ void RegionPersister::persist(const Region & region) { doPersist(region, nullptr
 
 void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock)
 {
-    // Support only on thread persist.
-    size_t dirty_flag = region.dirtyFlag();
-
     RegionCacheWriteElement region_buffer;
     computeRegionWriteBuffer(region, region_buffer);
 
@@ -62,9 +59,6 @@ void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lo
         doPersist(region_buffer, *lock);
     else
         doPersist(region_buffer, region_manager.genRegionTaskLock(region.id()));
-
-    region.markPersisted();
-    region.decDirtyFlag(dirty_flag);
 }
 
 void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock &)
