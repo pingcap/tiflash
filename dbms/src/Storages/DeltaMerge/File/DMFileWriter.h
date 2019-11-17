@@ -22,29 +22,31 @@ public:
 
     struct Stream
     {
-        Stream(const String &      path,
+        Stream(const DMFilePtr &   dmfile,
+               ColId               col_id,
                const DataTypePtr & type,
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(path, 0, 0, max_compress_block_size)),
+            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(col_id), 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              marks(std::make_shared<MarksInCompressedFile>())
+              mark_file(dmfile->colMarkPath(col_id))
         {
         }
 
-        void finalize()
+        void flush()
         {
             original_hashing.next();
             compressed_buf.next();
             plain_hashing.next();
             plain_file->next();
-        }
 
-        void sync() { plain_file->sync(); }
+            plain_file->sync();
+            mark_file.sync();
+        }
 
         /// original_hashing -> compressed_buf -> plain_hashing -> plain_file
         WriteBufferFromFileBasePtr plain_file;
@@ -52,8 +54,8 @@ public:
         CompressedWriteBuffer      compressed_buf;
         HashingWriteBuffer         original_hashing;
 
-        MinMaxIndexPtr           minmaxes;
-        MarksInCompressedFilePtr marks;
+        MinMaxIndexPtr      minmaxes;
+        WriteBufferFromFile mark_file;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<ColId, StreamPtr>;
@@ -63,7 +65,8 @@ public:
                  const ColumnDefines &       write_columns_,
                  size_t                      min_compress_block_size_,
                  size_t                      max_compress_block_size_,
-                 const CompressionSettings & compression_settings_);
+                 const CompressionSettings & compression_settings_,
+                 bool                        wal_mode_ = false);
 
     void write(const Block & block);
     void finalize();
@@ -78,8 +81,10 @@ private:
     size_t              min_compress_block_size;
     size_t              max_compress_block_size;
     CompressionSettings compression_settings;
+    bool                wal_mode;
 
-    ColumnStreams column_streams;
+    ColumnStreams       column_streams;
+    WriteBufferFromFile split_file;
 };
 
 } // namespace DM

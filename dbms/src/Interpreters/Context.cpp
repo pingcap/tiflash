@@ -28,6 +28,7 @@
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/PartPathSelector.h>
+#include <Storages/PathPool.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/RuntimeComponentsFactory.h>
@@ -120,6 +121,7 @@ struct ContextShared
     String tmp_path;                                        /// The path to the temporary files that occur when processing the request.
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
     String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
+    PathPool extra_paths;                                   /// The extra data directories. Some Storage Engine like DeltaMerge will store the main data in them if specified.
     ConfigurationPtr config;                                /// Global configuration settings.
 
     Databases databases;                                    /// List of databases and tables in them.
@@ -507,6 +509,12 @@ String Context::getUserFilesPath() const
     return shared->user_files_path;
 }
 
+const PathPool & Context::getExtraPaths() const
+{
+    auto lock = getLock();
+    return shared->extra_paths;
+}
+
 void Context::setPath(const String & path)
 {
     auto lock = getLock();
@@ -521,6 +529,9 @@ void Context::setPath(const String & path)
 
     if (shared->user_files_path.empty())
         shared->user_files_path = shared->path + "user_files/";
+
+    if (shared->extra_paths.listPaths().empty())
+        shared->extra_paths = PathPool({PathPool::IdAndPath(0, shared->path + "data/")});
 }
 
 void Context::setTemporaryPath(const String & path)
@@ -539,6 +550,12 @@ void Context::setUserFilesPath(const String & path)
 {
     auto lock = getLock();
     shared->user_files_path = path;
+}
+
+void Context::setExtraPaths(const std::vector<std::pair<UInt32, String>> & extra_paths_)
+{
+    auto lock = getLock();
+    shared->extra_paths = PathPool(extra_paths_);
 }
 
 void Context::setConfig(const ConfigurationPtr & config)

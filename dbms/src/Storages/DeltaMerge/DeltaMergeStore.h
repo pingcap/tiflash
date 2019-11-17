@@ -6,6 +6,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/PathPool.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
@@ -22,9 +23,9 @@ static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct DeltaMergeStoreStat
 {
-    UInt64 segment_count             = 0;
-    UInt64 segment_count_with_delta  = 0;
-    UInt64 segment_count_with_stable = 0;
+    UInt64  segment_count    = 0;
+    Float64 delta_rate_rows  = 0;
+    Float64 delta_rate_count = 0;
 
     UInt64 total_rows          = 0;
     UInt64 total_bytes         = 0;
@@ -74,6 +75,8 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_max_page_id      = 0;
 };
 
+// It is used to prevent hash conflict of file caches.
+static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
 class DeltaMergeStore : private boost::noncopyable
 {
@@ -214,23 +217,22 @@ public:
     DeltaMergeStoreStat getStat();
 
 private:
-
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
     bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     template <bool by_write_thread>
-    void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment);
+    void checkSegmentUpdate(const DMContextPtr & context, SegmentPtr segment);
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-    void        segmentMergeDelta(DMContext &             dm_context,
+    SegmentPtr        segmentMergeDelta(DMContext &             dm_context,
                                   const SegmentPtr &      segment,
                                   const SegmentSnapshot & segment_snap,
                                   const StorageSnapshot & storage_snap,
                                   bool                    is_foreground);
 
-    void segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    SegmentPtr segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
     void segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
     void segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
 
@@ -246,6 +248,7 @@ private:
 
 private:
     String      path;
+    PathPool    extra_paths;
     StoragePool storage_pool;
 
     String        table_name;
@@ -270,6 +273,7 @@ private:
     // Used to guarantee only one thread can do write.
     std::mutex write_write_mutex;
 
+    UInt64   hash_salt;
     Logger * log;
 }; // namespace DM
 

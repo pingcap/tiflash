@@ -16,7 +16,7 @@ inline RSOperatorPtr toFilter(HandleRange handle_range)
     return createAnd({left, right});
 }
 
-inline RSOperatorPtr withHanleRange(const RSOperatorPtr & filter, HandleRange handle_range)
+inline RSOperatorPtr withHandleRange(const RSOperatorPtr & filter, HandleRange handle_range)
 {
     return !filter ? toFilter(handle_range) : createAnd({toFilter(handle_range), filter});
 }

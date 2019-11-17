@@ -49,14 +49,15 @@ public:
     String getName() const override { return "Chunk"; }
     Block  getHeader() const override { return toEmptyBlock(read_columns); }
 
-    size_t getSkippedRows() override
+    bool getSkippedRows(size_t & skip_rows) override
     {
-        size_t skip_rows = 0;
+        skip_rows = 0;
         for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id)
         {
             skip_rows += chunks[next_chunk_id].getRows();
         }
-        return skip_rows;
+
+        return next_chunk_id < use_chunks.size();
     }
 
     Block read() override

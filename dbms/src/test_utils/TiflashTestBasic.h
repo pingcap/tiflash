@@ -16,6 +16,8 @@ public:
     static Context & getContext(const DB::Settings & settings = DB::Settings())
     {
         static Context context = DB::Context::createGlobal();
+        context.setPath(".");
+        context.setGlobalContext(context);
         try
         {
             context.getTMTContext();

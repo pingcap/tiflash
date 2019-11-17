@@ -247,7 +247,7 @@ private:
         {
             columns[i] = header.safeGetByPosition(i).column->cloneEmpty();
             // TODO: Should we do reserve?
-            // columns[i]->reserve(STABLE_CHUNK_ROWS);
+            // columns[i]->reserve(max_block_size);
         }
     }
 
@@ -290,7 +290,11 @@ private:
                 stable_skip -= skipRowsInCurStableBlock(stable_skip);
                 continue;
             }
-            auto stable_skipped_rows = stable_input_stream->getSkippedRows();
+
+            size_t stable_skipped_rows;
+            if (!stable_input_stream->getSkippedRows(stable_skipped_rows))
+                throw Exception("Unexpected end of stable stream, need more rows to skip");
+
             if (stable_skipped_rows > 0)
             {
                 stable_skip -= stable_skipped_rows;
@@ -345,7 +349,9 @@ private:
                 continue;
             }
 
-            auto stable_skipped_rows = stable_input_stream->getSkippedRows();
+            size_t stable_skipped_rows;
+            stable_input_stream->getSkippedRows(stable_skipped_rows);
+
             if (stable_skipped_rows > 0)
             {
                 if (stable_skipped_rows <= use_stable_rows)
@@ -369,7 +375,7 @@ private:
                         break;
                     }
                     else
-                        throw Exception("Unexpected end of block, need more rows to write");
+                        throw Exception("Unexpected end of stable stream, need more rows to write");
                 }
             }
 
@@ -433,6 +439,12 @@ private:
         }
         else if (valid_limit)
         {
+            // Prevent frequently reallocation.
+            if (output_columns[0]->empty())
+            {
+                for (size_t column_id = 0; column_id < num_columns; ++column_id)
+                    output_columns[column_id]->reserve(max_block_size);
+            }
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
                 output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], valid_offset, valid_limit);
 
@@ -446,6 +458,13 @@ private:
     inline void writeInsertFromDelta(MutableColumns & output_columns, size_t & output_write_limit)
     {
         auto write_rows = std::min(output_write_limit, use_delta_rows);
+
+        // Prevent frequently reallocation.
+        if (output_columns[0]->empty())
+        {
+            for (size_t column_id = 0; column_id < num_columns; ++column_id)
+                output_columns[column_id]->reserve(max_block_size);
+        }
 
         if (write_rows == 1)
         {

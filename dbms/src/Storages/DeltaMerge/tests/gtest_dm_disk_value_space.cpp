@@ -47,7 +47,9 @@ protected:
 
         dm_context = std::make_unique<DMContext>(context,
                                                  ".",
+                                                 context.getExtraPaths(),
                                                  *storage_pool,
+                                                 0,
                                                  table_columns,
                                                  table_handle_define,
                                                  0,

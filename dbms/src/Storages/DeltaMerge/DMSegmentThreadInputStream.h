@@ -33,7 +33,7 @@ public:
           max_version(max_version_),
           expected_block_size(expected_block_size_),
           is_raw(is_raw_),
-          do_range_filter(do_range_filter_for_raw_),
+          do_range_filter_for_raw(do_range_filter_for_raw_),
           log(&Logger::get("DMSegmentThreadInputStream"))
     {
     }
@@ -43,6 +43,12 @@ public:
 
 protected:
     Block readImpl() override
+    {
+        FilterPtr filter;
+        return readImpl(filter, false);
+    }
+
+    Block readImpl(FilterPtr & res_filter, bool return_filter) override
     {
         if (done)
             return {};
@@ -60,8 +66,8 @@ protected:
                 cur_segment = task->segment;
                 if (is_raw)
                 {
-                    cur_stream
-                        = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, *storage_snap, do_range_filter);
+                    cur_stream = cur_segment->getInputStreamRaw(
+                        *dm_context, columns_to_read, task->read_snapshot, *storage_snap, do_range_filter_for_raw);
                 }
                 else
                 {
@@ -78,7 +84,8 @@ protected:
                 LOG_TRACE(log, "Start to read segment [" + DB::toString(cur_segment->segmentId()) + "]");
             }
 
-            Block res = cur_stream->read();
+            Block res = cur_stream->read(res_filter, return_filter);
+
             if (res)
             {
                 if (!res.rows())
@@ -112,15 +119,16 @@ private:
     ColumnDefines          columns_to_read;
     RSOperatorPtr          filter;
     Block                  header;
+    UInt64                 max_version;
+    size_t                 expected_block_size;
+    bool                   is_raw;
+    bool                   do_range_filter_for_raw;
 
-    UInt64 max_version;
-    size_t expected_block_size;
-    bool   is_raw;
-    bool   do_range_filter;
+    bool done = false;
 
-    bool                done = false;
     BlockInputStreamPtr cur_stream;
-    SegmentPtr          cur_segment;
+
+    SegmentPtr cur_segment;
 
     Logger * log;
 };

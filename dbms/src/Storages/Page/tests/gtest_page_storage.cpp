@@ -216,8 +216,8 @@ try
         storage->write(batch);
     }
 
-    PageStorage::ExternalPagesScanner scanner = []() -> std::set<PageId> { return {}; };
-    PageStorage::ExternalPagesRemover remover = [](const std::set<PageId> &, const std::set<PageId> & normal_page_ids) -> void {
+    PageStorage::ExternalPagesScanner scanner = []() -> PageStorage::PathAndIdsVec { return {}; };
+    PageStorage::ExternalPagesRemover remover = [](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         ASSERT_EQ(normal_page_ids.size(), 2UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
         EXPECT_GT(normal_page_ids.count(1024), 0UL);

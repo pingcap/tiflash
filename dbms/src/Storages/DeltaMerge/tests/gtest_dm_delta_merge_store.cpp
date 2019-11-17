@@ -749,16 +749,16 @@ try
                             auto value    = c->getInt(i);
                             if (value != expected)
                             {
+                                // Convenient for debug.
                                 EXPECT_EQ(expected, value);
-                                std::cerr << "pk:" << c->getInt(i) << std::endl;
+                                // std::cerr << "pk:" << c->getInt(i) << std::endl;
                             }
                         }
                     }
                 }
             }
             in->readSuffix();
-            if (num_rows_read != num_rows_write_in_total)
-                ASSERT_EQ(num_rows_read, num_rows_write_in_total);
+            ASSERT_EQ(num_rows_read, num_rows_write_in_total);
 
             LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1," << num_rows_write_in_total << "]");
         }
@@ -1379,10 +1379,12 @@ DeltaMergeStore::SegmentSortedMap prepareSegments(const HandleRanges & ranges)
     PageId       stable_id  = 2048;
 
     auto segment_generator = [&](HandleRange range) -> SegmentPtr {
-        auto       delta = std::make_shared<DiskValueSpace>(true, delta_id);
-        DMFilePtr  stable{}; // We don't need stable for this test.
+        auto delta  = std::make_shared<DiskValueSpace>(true, delta_id);
+        auto stable = std::make_shared<StableValueSpace>(stable_id);
+
         SegmentPtr s = std::make_shared<Segment>(
             epoch, /* range= */ range, /* segment_id= */ segment_id, /*next_segment_id=*/segment_id + 1, delta, stable);
+
         segment_id++;
         delta_id++;
         stable_id++;

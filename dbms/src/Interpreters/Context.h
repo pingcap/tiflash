@@ -84,6 +84,7 @@ class TiDBService;
 using TiDBServicePtr = std::shared_ptr<TiDBService>;
 class SchemaSyncService;
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
+class PathPool;
 
 namespace DM
 {
@@ -154,11 +155,13 @@ public:
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
+    const PathPool & getExtraPaths() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
+    void setExtraPaths(const std::vector<std::pair<UInt32, String>> & extra_paths);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 

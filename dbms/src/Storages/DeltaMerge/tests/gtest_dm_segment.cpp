@@ -71,7 +71,9 @@ protected:
 
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   path,
+                                                  db_context->getExtraPaths(),
                                                   *storage_pool,
+                                                  0,
                                                   table_columns_,
                                                   table_columns_.at(0),
                                                   /*min_version_*/ 0,
@@ -133,14 +135,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snap= */ {dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter= */ EMPTY_FILTER,
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto   in            = segment->getInputStream(dmContext(), tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -158,14 +153,7 @@ try
 
         {
             // read written data (only in stable)
-            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter= */ EMPTY_FILTER,
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto   in            = segment->getInputStream(dmContext(), tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -188,14 +176,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter= */ EMPTY_FILTER,
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto   in            = segment->getInputStream(dmContext(), tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -213,14 +194,7 @@ try
 
         {
             // read written data (only in stable)
-            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter= */ EMPTY_FILTER,
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto   in            = segment->getInputStream(dmContext(), tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -253,14 +227,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ EMPTY_FILTER,
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto   in            = segment->getInputStream(dmContext(), tableColumns());
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -287,14 +254,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter= */ EMPTY_FILTER,
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -328,14 +288,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ EMPTY_FILTER,
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto   in            = segment->getInputStream(dmContext(), tableColumns());
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -370,14 +323,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter= */ EMPTY_FILTER,
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -420,14 +366,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ EMPTY_FILTER,
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto   in            = segment->getInputStream(dmContext(), tableColumns());
         size_t num_rows_read = 0;
         in->readPrefix();
         while (Block block = in->read())
@@ -454,14 +393,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ StorageSnapshot{dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter= */ EMPTY_FILTER,
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -507,14 +439,7 @@ try
     {
         // Read after deletion
         // The deleted range has no overlap with current data, so there should be no change
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snaps= */ {dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -545,14 +470,7 @@ try
     {
         // Read after deletion
         // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snaps= */ {dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -581,14 +499,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snaps= */ {dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -617,14 +528,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snaps= */ {dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -653,14 +557,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snaps= */ {dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
         in->readPrefix();
         while (Block block = in->read())
         {
@@ -691,14 +588,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ tableColumns(),
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ {dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -729,14 +619,7 @@ try
     size_t num_rows_seg2 = 0;
     {
         {
-            auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snap= */ {dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter */ {},
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto in = segment->getInputStream(dmContext(), tableColumns());
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -745,14 +628,7 @@ try
             in->readSuffix();
         }
         {
-            auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snap= */ {dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter */ {},
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto in = segment->getInputStream(dmContext(), tableColumns());
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -777,14 +653,7 @@ try
         }
         {
             size_t num_rows_read = 0;
-            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snap= */ {dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter= */ {},
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto   in            = segment->getInputStream(dmContext(), tableColumns());
             in->readPrefix();
             while (Block block = in->read())
             {
@@ -804,23 +673,8 @@ try
     // If they are equal, result will be true, otherwise it will be false.
     auto compare = [&](const SegmentPtr & seg1, const SegmentPtr & seg2, bool & result) {
         result   = false;
-        auto in1 = seg1->getInputStream(/* dm_context= */ dmContext(),
-                                        /* columns_to_read= */ tableColumns(),
-                                        /* segment_snap= */ seg1->getReadSnapshot(),
-                                        /* storage_snaps= */ {dmContext().storage_pool},
-                                        /* read_ranges= */ {HandleRange::newAll()},
-                                        /* filter */ {},
-                                        /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                        /* expected_block_size= */ 1024);
-
-        auto in2 = seg2->getInputStream(/* dm_context= */ dmContext(),
-                                        /* columns_to_read= */ tableColumns(),
-                                        /* segment_snap= */ seg2->getReadSnapshot(),
-                                        /* storage_snaps= */ {dmContext().storage_pool},
-                                        /* read_ranges= */ {HandleRange::newAll()},
-                                        /* filter */ {},
-                                        /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                        /* expected_block_size= */ 1024);
+        auto in1 = seg1->getInputStream(dmContext(), tableColumns());
+        auto in2 = seg2->getInputStream(dmContext(), tableColumns());
         in1->readPrefix();
         in2->readPrefix();
         for (;;)
@@ -952,14 +806,7 @@ try
 
         {
             // Read after writing
-            auto   in            = segment->getInputStream(/* dm_context= */ dmContext(),
-                                              /* columns_to_read= */ tableColumns(),
-                                              /* segment_snap= */ segment->getReadSnapshot(),
-                                              /* storage_snaps= */ {dmContext().storage_pool},
-                                              /* read_ranges= */ {HandleRange::newAll()},
-                                              /* filter */ {},
-                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                              /* expected_block_size= */ 1024);
+            auto   in            = segment->getInputStream(dmContext(), tableColumns());
             size_t num_rows_read = 0;
             in->readPrefix();
             while (Block block = in->read())
@@ -1047,14 +894,7 @@ try
         try
         {
             // read written data
-            in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                         /* columns_to_read= */ columns_to_read,
-                                         /* segment_snap= */ segment->getReadSnapshot(),
-                                         /* storage_snap= */ {dmContext().storage_pool},
-                                         /* read_ranges= */ {HandleRange::newAll()},
-                                         /* filter */ {},
-                                         /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                         /* expected_block_size= */ 1024);
+            in = segment->getInputStream(dmContext(), tableColumns());
         }
         catch (const Exception & e)
         {
@@ -1127,14 +967,7 @@ try
         };
 
         // read written data
-        auto in = segment->getInputStream(/* dm_context= */ dmContext(),
-                                          /* columns_to_read= */ columns_to_read,
-                                          /* segment_snap= */ segment->getReadSnapshot(),
-                                          /* storage_snap= */ {dmContext().storage_pool},
-                                          /* read_ranges= */ {HandleRange::newAll()},
-                                          /* filter */ {},
-                                          /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                          /* expected_block_size= */ 1024);
+        auto in = segment->getInputStream(dmContext(), tableColumns());
 
         // check that we can read correct values
         size_t num_rows_read = 0;

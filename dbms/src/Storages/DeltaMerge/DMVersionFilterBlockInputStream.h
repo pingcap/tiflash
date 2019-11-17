@@ -25,14 +25,23 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
 public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefine & handle_define, UInt64 version_limit_)
         : version_limit(version_limit_),
-          header(input->getHeader()),
-          handle_col_pos(header.getPositionByName(handle_define.name)),
-          version_col_pos(header.getPositionByName(VERSION_COLUMN_NAME)),
-          delete_col_pos(header.getPositionByName(TAG_COLUMN_NAME)),
-          filter(65536),
+          header(),
           log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
         children.push_back(input);
+
+        auto input_header = input->getHeader();
+
+        handle_col_pos  = input_header.getPositionByName(handle_define.name);
+        version_col_pos = input_header.getPositionByName(VERSION_COLUMN_NAME);
+        delete_col_pos  = input_header.getPositionByName(TAG_COLUMN_NAME);
+
+        for (size_t i = 0; i < input_header.columns(); ++i)
+        {
+            if (i == handle_col_pos || i == version_col_pos || i == delete_col_pos)
+                continue;
+            header.insert(std::move(input_header.getByPosition(i)));
+        }
     }
 
     ~DMVersionFilterBlockInputStream()
@@ -46,7 +55,13 @@ public:
     String getName() const override { return "DeltaMergeVersionFilter"; }
     Block  getHeader() const override { return header; }
 
-    Block read() override;
+    Block read() override
+    {
+        FilterPtr f;
+        return read(f, false);
+    }
+
+    Block read(FilterPtr & res_filter, bool return_filter) override;
 
 private:
     inline UInt8 checkWithNextIndex(size_t i)
@@ -102,7 +117,7 @@ private:
     size_t version_col_pos;
     size_t delete_col_pos;
 
-    IColumn::Filter filter;
+    IColumn::Filter filter{};
 
     Block raw_block;
 

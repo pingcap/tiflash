@@ -1,0 +1,132 @@
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/FilterHelper.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+
+namespace DB
+{
+namespace DM
+{
+
+const UInt64 StableValueSpace::CURRENT_VERSION = 1;
+
+void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, HandleRange range)
+{
+    UInt64 rows = 0;
+
+    if (range.all())
+    {
+        for (auto & file : files_)
+            rows += file->getRows();
+    }
+    else
+    {
+        auto filter      = toFilter(range);
+        auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache().get();
+        auto hash_salt   = dm_context->hash_salt;
+        for (auto & file : files_)
+        {
+            DMFileChunkFilter chunk_filter(file, index_cache, hash_salt, filter, {});
+            rows += chunk_filter.validRows();
+        }
+    }
+
+    this->valid_rows = rows;
+    this->files      = files_;
+}
+
+void StableValueSpace::saveMeta(WriteBatch & meta_wb)
+{
+    MemoryWriteBuffer buf(0, sizeof(CURRENT_VERSION) + sizeof(valid_rows) + sizeof(UInt64) + sizeof(PageId) * files.size());
+    writeIntBinary(CURRENT_VERSION, buf);
+    writeIntBinary(valid_rows, buf);
+    writeIntBinary((UInt64)files.size(), buf);
+    for (auto & f : files)
+        writeIntBinary(f->refId(), buf);
+
+    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
+    meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
+}
+
+StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
+{
+    auto stable = std::make_shared<StableValueSpace>(id);
+
+    Page                 page = context.storage_pool.meta().read(id);
+    ReadBufferFromMemory buf(page.data.begin(), page.data.size());
+    UInt64               version, valid_rows, size;
+    readIntBinary(version, buf);
+    if (version != CURRENT_VERSION)
+        throw Exception("Unexpected version: " + DB::toString(version));
+
+    readIntBinary(valid_rows, buf);
+    readIntBinary(size, buf);
+    UInt64 ref_id;
+    for (size_t i = 0; i < size; ++i)
+    {
+        readIntBinary(ref_id, buf);
+
+        auto file_id    = context.storage_pool.data().getNormalPageId(ref_id);
+        auto page_entry = context.storage_pool.data().getEntry(ref_id);
+        if (!page_entry.isValid())
+            throw Exception("Page entry of " + DB::toString(ref_id) + " not found!");
+        auto path_id          = page_entry.tag;
+        auto file_parent_path = context.extra_paths.getPath(path_id) + "/" + STABLE_FOLDER_NAME;
+
+        auto dmfile = DMFile::restore(file_id, ref_id, file_parent_path);
+        stable->files.push_back(dmfile);
+    }
+
+    stable->valid_rows = valid_rows;
+
+    return stable;
+}
+
+SkippableBlockInputStreamPtr StableValueSpace::getInputStream(const DMContext &     context, //
+                                                              const ColumnDefines & read_columns,
+                                                              const RSOperatorPtr & filter,
+                                                              size_t                expected_size)
+{
+    SkippableBlockInputStreams streams;
+    for (auto & file : files)
+        streams.push_back(std::make_shared<DMFileBlockInputStream>(
+            context.db_context, context.hash_salt, file, read_columns, filter, IdSetPtr{}, expected_size));
+    return std::make_shared<ConcatSkippableBlockInputStream>(streams);
+}
+
+size_t StableValueSpace::getRows()
+{
+    return valid_rows;
+}
+
+size_t StableValueSpace::getBytes()
+{
+    return 0;
+}
+
+size_t StableValueSpace::getChunks()
+{
+    size_t chunks = 0;
+    for (auto & file : files)
+        chunks += file->getChunks();
+    return chunks;
+}
+
+String StableValueSpace::getDMFilesString()
+{
+    String s;
+    for (auto & file : files)
+        s += "dmf_" + DB::toString(file->fileId()) + ",";
+    if (!s.empty())
+        s.erase(s.length() - 1);
+    return s;
+}
+
+void StableValueSpace::enableDMFilesGC()
+{
+    for (auto & file : files)
+        file->enableGC();
+}
+
+} // namespace DM
+} // namespace DB

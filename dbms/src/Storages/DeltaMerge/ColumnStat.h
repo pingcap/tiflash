@@ -16,7 +16,7 @@ struct ColumnStat
     double      avg_size;
 };
 
-using ColumnStats = std::map<ColId, ColumnStat>;
+using ColumnStats = std::unordered_map<ColId, ColumnStat>;
 
 inline void readText(ColumnStats & column_sats, ReadBuffer & buf)
 {

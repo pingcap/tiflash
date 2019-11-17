@@ -78,13 +78,16 @@ private:
 public:
     MinMaxIndexCache(size_t max_size_in_bytes, const Delay & expiration_delay) : Base(max_size_in_bytes, expiration_delay) {}
 
-    static UInt128 hash(const String & path_to_file)
+    static UInt128 hash(const String & path_to_file, UInt64 salt = 0)
     {
         UInt128 key;
 
         SipHash hash;
         hash.update(path_to_file.data(), path_to_file.size() + 1);
         hash.get128(key.low, key.high);
+
+        key.low ^= salt;
+        key.high ^= salt;
 
         return key;
     }

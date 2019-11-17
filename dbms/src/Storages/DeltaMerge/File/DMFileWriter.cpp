@@ -11,23 +11,29 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
                            const ColumnDefines &       write_columns_,
                            size_t                      min_compress_block_size_,
                            size_t                      max_compress_block_size_,
-                           const CompressionSettings & compression_settings_)
+                           const CompressionSettings & compression_settings_,
+                           bool                        wal_mode_)
     : dmfile(dmfile_),
       write_columns(write_columns_),
       min_compress_block_size(min_compress_block_size_),
       max_compress_block_size(max_compress_block_size_),
-      compression_settings(compression_settings_)
+      compression_settings(compression_settings_),
+      wal_mode(wal_mode_),
+      split_file(dmfile->splitPath())
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
     {
-        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID;
-        column_streams.emplace(cd.id,
-                               std::make_unique<Stream>(dmfile->colDataPath(cd.id), //
-                                                        cd.type,
-                                                        compression_settings,
-                                                        max_compress_block_size,
-                                                        do_index));
+        // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
+
+        bool do_index = !wal_mode && (cd.type->isInteger() || cd.type->isDateOrDateTime());
+        auto stream   = std::make_unique<Stream>(dmfile, //
+                                               cd.id,
+                                               cd.type,
+                                               compression_settings,
+                                               max_compress_block_size,
+                                               do_index);
+        column_streams.emplace(cd.id, std::move(stream));
         dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
 }
@@ -39,9 +45,11 @@ void DMFileWriter::write(const Block & block)
     {
         auto & col = getByColumnId(block, cd.id).column;
         writeColumn(cd.id, *cd.type, *col);
-        auto & avg_size = dmfile->column_stats.at(cd.id).avg_size;
-        IDataType::updateAvgValueSizeHint(*col, avg_size);
     }
+    writeIntBinary(rows, split_file);
+    if (wal_mode)
+        split_file.sync();
+
     dmfile->addChunk(rows);
 }
 
@@ -66,7 +74,12 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     if (stream->original_hashing.offset() >= min_compress_block_size)
         stream->original_hashing.next();
 
-    stream->marks->push_back(MarkInCompressedFile{stream->plain_hashing.count(), stream->original_hashing.offset()});
+    auto offset_in_compressed_block = stream->original_hashing.offset();
+    if (unlikely(wal_mode && offset_in_compressed_block != 0))
+        throw Exception("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block));
+
+    writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
+    writeIntBinary(offset_in_compressed_block, stream->mark_file);
 
     type.serializeBinaryBulkWithMultipleStreams(column, //
                                                 [&](const IDataType::SubstreamPath &) { return &(stream->original_hashing); },
@@ -75,28 +88,24 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                                                 true,
                                                 {});
 
-    stream->original_hashing.nextIfAtEnd();
+    if (wal_mode)
+        stream->flush();
+    else
+        stream->original_hashing.nextIfAtEnd();
+
+    auto & avg_size = dmfile->column_stats.at(col_id).avg_size;
+    IDataType::updateAvgValueSizeHint(column, avg_size);
 }
 
 void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 {
-    auto   chunks = dmfile->getChunks();
     auto & stream = column_streams.at(col_id);
-    stream->finalize();
+    stream->flush();
 
     if (stream->minmaxes)
     {
         WriteBufferFromFile buf(dmfile->colIndexPath(col_id));
         stream->minmaxes->write(type, buf);
-    }
-
-    {
-        if (unlikely(stream->marks->size() != chunks))
-            throw Exception("Size of marks is expected to be " + DB::toString(chunks) + ", but " + DB::toString(stream->marks->size()));
-
-        // TODO: don't need buffer here.
-        WriteBufferFromFile buf(dmfile->colMarkPath(col_id));
-        buf.write((char *)stream->marks->data(), sizeof(MarkInCompressedFile) * chunks);
     }
 }
 

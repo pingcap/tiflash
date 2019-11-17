@@ -9,7 +9,7 @@ namespace DM
 static constexpr size_t UNROLL_BATCH = 64;
 
 template <int MODE>
-Block DMVersionFilterBlockInputStream<MODE>::read()
+Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
 {
     while (true)
     {
@@ -240,12 +240,26 @@ Block DMVersionFilterBlockInputStream<MODE>::read()
             return cur_raw_block;
         }
 
-        for (size_t col_index = 0; col_index < cur_raw_block.columns(); ++col_index)
+        if (return_filter)
         {
-            auto & column = cur_raw_block.getByPosition(col_index);
-            column.column = column.column->filter(filter, passed_count);
+            // The caller of this method should do the filter, we just need to return the original block.
+            res_filter = &filter;
+            return cur_raw_block;
         }
-        return cur_raw_block;
+        else
+        {
+            Block res;
+            for (size_t col_index = 0; col_index < cur_raw_block.columns(); ++col_index)
+            {
+                if (col_index == handle_col_pos && col_index == version_col_pos && col_index == delete_col_pos)
+                    continue;
+
+                auto & column = cur_raw_block.getByPosition(col_index);
+                column.column = column.column->filter(filter, passed_count);
+                res.insert(std::move(column));
+            }
+            return res;
+        }
     }
 }
 

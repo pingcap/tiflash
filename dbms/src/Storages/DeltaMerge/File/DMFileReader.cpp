@@ -10,8 +10,6 @@ namespace DB
 namespace DM
 {
 
-static const size_t READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
-
 DMFileReader::Stream::Stream(DMFileReader & reader, ColId col_id, size_t aio_threshold, size_t max_read_buffer_size, Logger * log)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
@@ -31,7 +29,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, ColId col_id, size_t aio_thr
     };
 
     if (reader.mark_cache)
-        marks = reader.mark_cache->getOrSet(MarkCache::hash(mark_path), mark_load);
+        marks = reader.mark_cache->getOrSet(MarkCache::hash(mark_path, reader.hash_salt), mark_load);
     else
         marks = mark_load();
 
@@ -93,56 +91,31 @@ DMFileReader::Stream::Stream(DMFileReader & reader, ColId col_id, size_t aio_thr
 
 DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
                            const ColumnDefines & read_columns_,
-                           const RSOperatorPtr & filter,
+                           const RSOperatorPtr & filter_,
+                           const IdSetPtr        read_chunks_,
                            MarkCache *           mark_cache_,
                            MinMaxIndexCache *    index_cache_,
+                           UInt64                hash_salt_,
                            size_t                aio_threshold,
-                           size_t                max_read_buffer_size)
+                           size_t                max_read_buffer_size,
+                           size_t                rows_threshold_per_read_)
     : dmfile(dmfile_),
       read_columns(read_columns_),
       mark_cache(mark_cache_),
-      index_cache(index_cache_),
-      use_chunks(dmfile->getChunks(), 1),
+      hash_salt(hash_salt_),
+      rows_threshold_per_read(rows_threshold_per_read_),
       log(&Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())
                         + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
-    if (filter)
-    {
-        // Currently we only load handle's index.
-        RSCheckParam param;
-        loadIndex(param, EXTRA_HANDLE_COLUMN_ID);
 
-        for (size_t i = 0; i < dmfile->getChunks(); ++i)
-            use_chunks[i] = filter->roughCheck(i, param) != None;
-    }
+    use_chunks = DMFileChunkFilter(dmfile_, index_cache_, hash_salt_, filter_, read_chunks_).getUseChunks();
 
     for (auto & cd : read_columns)
     {
         column_streams.emplace(cd.id, std::make_unique<Stream>(*this, cd.id, aio_threshold, max_read_buffer_size, log));
     }
-}
-
-void DMFileReader::loadIndex(RSCheckParam & param, const ColId col_id)
-{
-    auto & type = dmfile->getColumnStat(col_id).type;
-    auto   load = [&]() {
-        auto index_buf = openForRead(dmfile->colIndexPath(col_id));
-        return MinMaxIndex::read(*type, index_buf);
-    };
-    MinMaxIndexPtr minmax_index;
-    if (index_cache)
-    {
-        auto key     = MinMaxIndexCache::hash(dmfile->colIndexPath(col_id));
-        minmax_index = index_cache->getOrSet(key, load);
-    }
-    else
-    {
-        minmax_index = load();
-    }
-
-    param.indexes.emplace(col_id, RSIndex(type, minmax_index));
 }
 
 bool DMFileReader::shouldSeek(size_t chunk_id)
@@ -151,26 +124,26 @@ bool DMFileReader::shouldSeek(size_t chunk_id)
     return chunk_id != 0 && !use_chunks[chunk_id - 1];
 }
 
-size_t DMFileReader::getSkippedRows()
+bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
-    size_t skip_rows = 0;
+    skip_rows = 0;
     for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id)
     {
         skip_rows += dmfile->getSplit()[next_chunk_id];
     }
-    return skip_rows;
+    return next_chunk_id < use_chunks.size();
 }
 
 Block DMFileReader::read()
 {
-    // Go to next avaliable chunk.
+    // Go to next available chunk.
     for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id) {}
 
     size_t start_chunk_id = next_chunk_id;
 
     // Find max continuing rows we can read.
     size_t read_rows = 0;
-    for (; next_chunk_id < use_chunks.size() && use_chunks[next_chunk_id] && read_rows < READ_ROWS_THRESHOLD; ++next_chunk_id)
+    for (; next_chunk_id < use_chunks.size() && use_chunks[next_chunk_id] && read_rows < rows_threshold_per_read; ++next_chunk_id)
         read_rows += dmfile->getSplit()[next_chunk_id];
 
     if (!read_rows)

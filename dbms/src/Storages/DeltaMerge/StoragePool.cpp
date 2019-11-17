@@ -6,7 +6,7 @@ namespace DM
 {
 
 // TODO: Load configs from settings.
-StoragePool::StoragePool(const String &name, const String & path)
+StoragePool::StoragePool(const String & name, const String & path)
     : log_storage(name + ".log", path + "/log", {}),
       data_storage(name + ".data", path + "/data", {}),
       meta_storage(name + ".meta", path + "/meta", {}),

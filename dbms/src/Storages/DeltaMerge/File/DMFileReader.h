@@ -4,6 +4,7 @@
 #include <IO/CompressedReadBufferFromFile.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileChunkFilter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/MarkCache.h>
 
@@ -11,6 +12,8 @@ namespace DB
 {
 namespace DM
 {
+
+static const size_t DMFILE_READ_ROWS_THRESHOLD = DEFAULT_MERGE_BLOCK_SIZE * 3;
 
 class DMFileReader
 {
@@ -30,27 +33,30 @@ public:
     DMFileReader(const DMFilePtr &     dmfile_,
                  const ColumnDefines & read_columns_,
                  const RSOperatorPtr & filter,
+                 const IdSetPtr        read_chunks,
                  MarkCache *           mark_cache_,
                  MinMaxIndexCache *    index_cache_,
+                 UInt64                hash_salt_,
                  size_t                aio_threshold,
-                 size_t                max_read_buffer_size);
+                 size_t                max_read_buffer_size,
+                 size_t                rows_threshold_per_read_ = DMFILE_READ_ROWS_THRESHOLD);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
     /// Skipped rows before next call of #read().
-    size_t getSkippedRows();
-    Block  read();
+    bool  getSkippedRows(size_t & skip_rows);
+    Block read();
 
 private:
-    void loadIndex(RSCheckParam & param, ColId col_id);
     bool shouldSeek(size_t chunk_id);
 
 private:
     DMFilePtr     dmfile;
     ColumnDefines read_columns;
 
-    MarkCache *        mark_cache;
-    MinMaxIndexCache * index_cache;
+    MarkCache * mark_cache;
+    UInt64      hash_salt;
+    size_t rows_threshold_per_read;
 
     std::vector<UInt8> use_chunks;
     size_t             next_chunk_id = 0;
