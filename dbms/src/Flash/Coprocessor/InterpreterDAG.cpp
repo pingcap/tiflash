@@ -262,11 +262,12 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
     auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
-    if (!current_region)
+    if (!current_region || current_region->version() != dag.getRegionVersion() || current_region->confVer() != dag.getRegionConfVersion())
     {
         std::vector<RegionID> region_ids;
         region_ids.push_back(info.region_id);
-        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+        throw RegionException(std::move(region_ids),
+            current_region ? RegionException::RegionReadStatus::NOT_FOUND : RegionException::RegionReadStatus::VERSION_ERROR);
     }
     if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange()))
         throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
