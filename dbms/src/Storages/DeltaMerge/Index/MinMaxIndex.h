@@ -41,6 +41,9 @@ public:
     RSResult checkEqual(const Field & value, const DataTypePtr & type);
     RSResult checkGreater(const Field & value, const DataTypePtr & type, int nan_direction);
     RSResult checkGreaterEqual(const Field & value, const DataTypePtr & type, int nan_direction);
+
+    String toString() const;
+
 };
 
 

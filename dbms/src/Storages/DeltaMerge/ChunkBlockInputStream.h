@@ -32,6 +32,15 @@ public:
         }
     }
 
+    ~ChunkBlockInputStream()
+    {
+        size_t num_skipped = 0;
+        for (const auto & is_skip : skip_chunks)
+            num_skipped += is_skip;
+
+        LOG_DEBUG(&Logger::get("ChunkBlockInputStream"), String("Skip: ") << num_skipped << " / " << chunks.size() << " chunks");
+    }
+
     String getName() const override { return "Chunk"; }
     Block  getHeader() const override { return toEmptyBlock(read_columns); }
 
