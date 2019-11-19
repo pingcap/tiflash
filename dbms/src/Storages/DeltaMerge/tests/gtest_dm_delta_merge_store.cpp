@@ -191,6 +191,7 @@ TEST_F(DeltaMergeStore_test, SimpleWriteRead)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -279,6 +280,7 @@ TEST_F(DeltaMergeStore_test, DeleteRead)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
         size_t              num_rows_read = 0;
         while (Block block = in->read())
@@ -314,6 +316,7 @@ TEST_F(DeltaMergeStore_test, DeleteRead)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
         size_t              num_rows_read = 0;
         while (Block block = in->read())
@@ -359,6 +362,7 @@ TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
         size_t              num_rows_read = 0;
         while (Block block = in->read())
@@ -402,6 +406,7 @@ TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
         size_t              num_rows_read = 0;
         while (Block block = in->read())
@@ -431,6 +436,7 @@ TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ UInt64(1),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
         size_t              num_rows_read = 0;
         while (Block block = in->read())
@@ -482,6 +488,7 @@ TEST_F(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
         size_t              num_rows_read = 0;
         while (Block block = in->read())
@@ -519,6 +526,7 @@ TEST_F(DeltaMergeStore_test, DISABLED_WriteLargeBlock)
                                              {HandleRange::newAll()},
                                              /* num_streams= */ 1,
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
                                              /* expected_block_size= */ 1024)[0];
         size_t              num_rows_read = 0;
         // block_num represents index of current segment
@@ -574,6 +582,7 @@ TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -595,6 +604,7 @@ TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso2,
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -616,6 +626,7 @@ TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1,
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -637,6 +648,7 @@ TEST_F(DeltaMergeStore_test, ReadWithSpecifyTso)
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ tso1 - 1,
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -683,6 +695,7 @@ try
                                                 {HandleRange::newAll()},
                                                 /* num_streams= */ 1,
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                                EMPTY_FILTER,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -802,6 +815,7 @@ try
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -924,6 +938,7 @@ try
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1027,6 +1042,7 @@ try
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1137,6 +1153,7 @@ try
                               {HandleRange::newAll()},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -1222,6 +1239,7 @@ try
                               {HandleRange::newAll()},
                               /* num_streams= */ 1,
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
+                              EMPTY_FILTER,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -1326,6 +1344,7 @@ try
                                             {HandleRange::newAll()},
                                             /* num_streams= */ 1,
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                            EMPTY_FILTER,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];

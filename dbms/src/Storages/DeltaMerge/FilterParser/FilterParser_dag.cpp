@@ -208,11 +208,22 @@ RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info, FilterP
     }
 
     const auto & selection = dag_info.dag.getSelection();
-    if (likely(selection.conditions_size() == 1))
+    if (selection.conditions_size() == 1)
         op = cop::parseTiExpr(selection.conditions(0), column_ids, creator, log);
     else
-        // This should not happen
-        op = createUnsupported(selection.DebugString(), "tipb::Selection with multiple conditions", false);
+    {
+        /// By default, multiple conditions with operator "and"
+        RSOperators children;
+        for (Int32 i = 0; i < selection.conditions_size(); ++i)
+        {
+            const auto & child = selection.conditions(i);
+            if (isFunctionExpr(child))
+                children.emplace_back(cop::parseTiExpr(child, column_ids, creator, log));
+            else
+                children.emplace_back(createUnsupported(child.DebugString(), "child of logical and is not function", false));
+        }
+        op = createAnd(children);
+    }
     return op;
 }
 
