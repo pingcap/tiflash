@@ -323,6 +323,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                         const HandleRanges &  sorted_ranges,
                                         size_t                num_streams,
                                         UInt64                max_version,
+                                        const RSOperatorPtr & filter,
                                         size_t                expected_block_size)
 {
     SegmentReadTasks   tasks;
@@ -417,7 +418,7 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
                                             task.read_snapshot,
                                             *storage_snapshot,
                                             task.ranges,
-                                            {},
+                                            filter,
                                             max_version,
                                             std::max(expected_block_size, STABLE_CHUNK_ROWS));
     };

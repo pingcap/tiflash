@@ -90,20 +90,25 @@ public:
         return Some;
 
 
+// logical
+RSOperatorPtr createNot(const RSOperatorPtr & op);
+RSOperatorPtr createOr(const RSOperators & children);
 RSOperatorPtr createAnd(const RSOperators & children);
+// compare
 RSOperatorPtr createEqual(const Attr & attr, const Field & value);
+RSOperatorPtr createNotEqual(const Attr & attr, const Field & value);
 RSOperatorPtr createGreater(const Attr & attr, const Field & value, int null_direction);
 RSOperatorPtr createGreaterEqual(const Attr & attr, const Field & value, int null_direction);
-RSOperatorPtr createIn(const Attr & attr, const Fields & values);
 RSOperatorPtr createLess(const Attr & attr, const Field & value, int null_direction);
 RSOperatorPtr createLessEqual(const Attr & attr, const Field & value, int null_direction);
-RSOperatorPtr createLike(const Attr & attr, const Field & value);
-RSOperatorPtr createNot(const RSOperatorPtr & op);
-RSOperatorPtr createNotEqual(const Attr & attr, const Field & value);
+// set
+RSOperatorPtr createIn(const Attr & attr, const Fields & values);
 RSOperatorPtr createNotIn(const Attr & attr, const Fields & values);
+// 
+RSOperatorPtr createLike(const Attr & attr, const Field & value);
 RSOperatorPtr createNotLike(const Attr & attr, const Field & values);
-RSOperatorPtr createOr(const RSOperators & children);
-RSOperatorPtr createUnsupported(const String & content, bool is_not);
+//
+RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not);
 
 
 } // namespace DM
