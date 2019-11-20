@@ -208,10 +208,6 @@ TEST_F(PageStorage_test, WriteReadAfterGc)
 TEST_F(PageStorage_test, WriteReadGcExternalPage)
 try
 {
-    PageStorage::Config tmp_config(config);
-    tmp_config.merge_hint_low_used_file_num = 0; // each time will run gc
-    storage                                 = reopenWithConfig(tmp_config);
-
     {
         WriteBatch batch;
         batch.putExternal(0, 0);
