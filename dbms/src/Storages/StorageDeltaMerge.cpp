@@ -50,7 +50,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
       db_name(db_name_),
       table_name(table_name_),
       max_column_id_used(0),
-      global_context(global_context_),
+      global_context(global_context_.getGlobalContext()),
       log(&Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())

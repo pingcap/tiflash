@@ -49,7 +49,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       table_name(table_name_),
       table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
-      global_context(db_context),
+      global_context(db_context.getGlobalContext()),
       settings(settings_),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
