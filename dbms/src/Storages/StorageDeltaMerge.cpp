@@ -50,7 +50,7 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
       db_name(db_name_),
       table_name(table_name_),
       max_column_id_used(0),
-      global_context(global_context_),
+      global_context(global_context_.getGlobalContext()),
       log(&Logger::get("StorageDeltaMerge"))
 {
     if (primary_expr_ast_->children.empty())
@@ -289,6 +289,20 @@ void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, Regi
     throw RegionException(std::move(region_ids), status);
 }
 
+/// Check if region is invalid.
+RegionTable::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
+{
+    if (region_in_mem->isPendingRemove())
+        return RegionTable::RegionReadStatus::PENDING_REMOVE;
+
+    const auto & [version, conf_ver, key_range] = region_in_mem->dumpVersionRange();
+    (void)key_range;
+    if (version != region_to_query.version || conf_ver != region_to_query.conf_version)
+        return RegionTable::RegionReadStatus::VERSION_ERROR;
+
+    return RegionTable::RegionReadStatus::OK;
+}
+
 inline void doLearnerRead(const TiDB::TableID table_id,         //
     const MvccQueryInfo::RegionsQueryInfo & regions_query_info, //
     size_t concurrent_num,                                      //
@@ -336,12 +350,31 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
 
     const size_t num_regions = regions_info.size();
     const size_t batch_size = num_regions / concurrent_num;
-    const auto batch_wait_index = [&](const size_t region_begin_idx) {
+    std::atomic_uint8_t region_status = RegionTable::RegionReadStatus::OK;
+    const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
         {
-            const RegionID region_id = regions_info[region_idx].region_id;
+            // If any threads meets an error, just return.
+            if (region_status != RegionTable::RegionReadStatus::OK)
+                return;
+
+            const RegionQueryInfo & region_to_query = regions_info[region_idx];
+            const RegionID region_id = region_to_query.region_id;
             auto region = kvstore_region[region_id];
+
+            auto status = isValidRegion(region_to_query, region);
+            if (status != RegionTable::RegionReadStatus::OK)
+            {
+                region_status = status;
+                LOG_WARNING(log,
+                    "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
+                                                  << region_to_query.range_in_table.first.toString() << ", "
+                                                  << region_to_query.range_in_table.second.toString() << ") , status "
+                                                  << RegionTable::RegionReadStatusString(status));
+                return;
+            }
+
             /// Blocking learner read. Note that learner read must be performed ahead of data read,
             /// otherwise the desired index will be blocked by the lock of data read.
             region->waitIndex(region->learnerRead());
@@ -361,6 +394,11 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
         }
         pool.wait();
     }
+
+    // Check if any region is invalid, TiDB / TiSpark should refresh region cache and retry.
+    if (region_status != RegionTable::RegionReadStatus::OK)
+        throwRetryRegion(regions_info, static_cast<RegionTable::RegionReadStatus>(region_status.load()));
+
     auto end_time = Clock::now();
     LOG_DEBUG(log,
         "[Learner Read] wait index cost " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
@@ -460,7 +498,7 @@ BlockInputStreams StorageDeltaMerge::read( //
                 ErrorCodes::LOGICAL_ERROR);
 
         /// If request comes from TiDB/TiSpark, mvcc_query_info.concurrent is 0,
-        /// and `concurrent_num` should be 1. Concurrency handled by TiDB/TiSpark.b
+        /// and `concurrent_num` should be 1. Concurrency handled by TiDB/TiSpark.
         /// Else a request comes from CH-client, we set `concurrent_num` by num_streams.
         size_t concurrent_num = std::max<size_t>(num_streams * mvcc_query_info.concurrent, 1);
 

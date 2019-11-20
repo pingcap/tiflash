@@ -49,6 +49,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
       table_name(table_name_),
       table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
+      global_context(db_context.getGlobalContext()),
       settings(settings_),
       log(&Logger::get("DeltaMergeStore[" + db_name + "." + table_name + "]"))
 {
@@ -383,6 +384,32 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
         // The creation of storage snapshot must be put after creation of segment snapshot.
         storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
     }
+
+#if 0
+    if (log->trace())
+    {
+        auto ranges_to_string = [](const HandleRanges & ranges) -> String {
+            std::stringstream ss;
+            bool              is_first = true;
+            ss << "[";
+            for (const auto & range : ranges)
+            {
+                if (!is_first)
+                    ss << ",";
+                is_first = false;
+                ss << range.toString();
+            }
+            ss << "]";
+            return ss.str();
+        };
+        for (const auto & task : tasks)
+        {
+            LOG_TRACE(log,
+                      "Read range: " << ranges_to_string(sorted_ranges) << " -> segment: " << task->segment->info()
+                                     << " range: " << ranges_to_string(task->ranges));
+        }
+    }
+#endif
 
     auto stream_creator = [=](const SegmentReadTask & task) {
         return task.segment->getInputStream(*dm_context,
@@ -727,10 +754,10 @@ bool DeltaMergeStore::handleBackgroundTask()
         return false;
 
     // Update GC safe point before background task
-    const Context & db_context   = task.dm_context->db_context;
-    auto            safe_point   = PDClientHelper::getGCSafePointWithRetry(db_context.getTMTContext().getPDClient(),
+    /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
+    auto safe_point              = PDClientHelper::getGCSafePointWithRetry(global_context.getTMTContext().getPDClient(),
                                                               /* ignore_cache= */ false,
-                                                              db_context.getSettingsRef().safe_point_update_interval_seconds);
+                                                              global_context.getSettingsRef().safe_point_update_interval_seconds);
     task.dm_context->min_version = safe_point;
 
     switch (task.type)
