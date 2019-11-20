@@ -397,6 +397,9 @@ bool PageStorage::gc()
         writing_file_id_level = write_file.fileIdLevel();
     }
 
+    bool   should_merge         = false;
+    UInt64 candidate_total_size = 0;
+
     std::set<PageFileIdAndLevel> merge_files;
     PageEntriesEdit              gc_file_entries_edit;
 
@@ -434,26 +437,16 @@ bool PageStorage::gc()
         }
 
         // Select gc candidate files into `merge_files`
-        UInt64 candidate_total_size = 0;
-        size_t migrate_page_count   = 0;
+        size_t migrate_page_count = 0;
         merge_files = gcSelectCandidateFiles(page_files, file_valid_pages, writing_file_id_level, candidate_total_size, migrate_page_count);
-
-        bool should_merge = merge_files.size() >= config.merge_hint_low_used_file_num
+        should_merge = merge_files.size() >= config.merge_hint_low_used_file_num
             || (merge_files.size() >= 2 && candidate_total_size >= config.merge_hint_low_used_file_total_size);
-        if (!should_merge)
-        {
-            LOG_TRACE(log,
-                      storage_name << " GC exit without merging. merge file size: " << merge_files.size()
-                                   << ", candidate size: " << candidate_total_size);
-            return false;
-        }
-
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
         gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files, migrate_page_count);
     }
 
     /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
-    auto [live_files, live_normal_pages] = versioned_page_entries.gcApply(gc_file_entries_edit);
+    auto [live_files, live_normal_pages] = versioned_page_entries.gcApply(gc_file_entries_edit, external_pages_scanner != nullptr);
 
     {
         // Remove obsolete files' reader cache that are not used by any version
@@ -481,7 +474,12 @@ bool PageStorage::gc()
     {
         external_pages_remover(external_pages, live_normal_pages);
     }
-    return true;
+
+    if (!should_merge)
+        LOG_TRACE(log,
+                  storage_name << " GC exit without merging. merge file size: " << merge_files.size()
+                               << ", candidate size: " << candidate_total_size);
+    return should_merge;
 }
 
 PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable indent

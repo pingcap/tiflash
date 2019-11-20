@@ -11,7 +11,8 @@ namespace DB
 // PageEntriesVersionSetWithDelta
 //==========================================================================================
 
-std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit)
+std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit,
+                                                                                                  bool              need_scan_page_ids)
 {
     std::unique_lock lock(read_mutex);
     if (!edit.empty())
@@ -33,11 +34,11 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetW
             builder.gcApply(edit);
         }
     }
-    return listAllLiveFiles(lock);
+    return listAllLiveFiles(lock, need_scan_page_ids);
 }
 
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
-PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock) const
+PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock, bool need_scan_page_ids) const
 {
     (void)lock; // Note read_mutex must be hold.
 
@@ -47,25 +48,27 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::sha
     // Iterate all snapshot to collect all PageFile in used.
     for (auto s = snapshots->next; s != snapshots.get(); s = s->next)
     {
-        collectLiveFilesFromVersionList(*(s->version()), live_files, live_normal_pages);
+        collectLiveFilesFromVersionList(*(s->version()), live_files, live_normal_pages, need_scan_page_ids);
     }
     // Iterate over `current`
     PageEntriesView latest_view(current);
-    collectLiveFilesFromVersionList(latest_view, live_files, live_normal_pages);
+    collectLiveFilesFromVersionList(latest_view, live_files, live_normal_pages, need_scan_page_ids);
     return {live_files, live_normal_pages};
 }
 
 void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
     const PageEntriesView &        view,
     std::set<PageFileIdAndLevel> & live_files,
-    std::set<PageId> &             live_normal_pages) const
+    std::set<PageId> &             live_normal_pages,
+    bool                           need_scan_page_ids) const
 {
     std::set<PageId> normal_pages_this_snapshot = view.validNormalPageIds();
     for (auto normal_page_id : normal_pages_this_snapshot)
     {
-        live_normal_pages.insert(normal_page_id);
         if (auto entry = view.findNormalPageEntry(normal_page_id); entry && !entry->isTombstone())
         {
+            if (need_scan_page_ids)
+                live_normal_pages.insert(normal_page_id);
             live_files.insert(entry->fileIdLevel());
         }
     }

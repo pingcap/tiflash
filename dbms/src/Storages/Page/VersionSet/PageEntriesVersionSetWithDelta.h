@@ -30,10 +30,11 @@ public:
     explicit PageEntriesVersionSetWithDelta(const ::DB::MVCC::VersionSetConfig & config_, Poco::Logger * log_) : BaseType(config_, log_) {}
 
 public:
-    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit);
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> gcApply(PageEntriesEdit & edit, bool need_scan_page_ids = true);
 
     /// List all PageFile that are used by any version
-    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &) const;
+    std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &,
+                                                                               bool need_scan_page_ids = true) const;
 
     VersionPtr compactDeltas(const VersionPtr & tail) const override;
 
@@ -42,7 +43,8 @@ public:
 private:
     void collectLiveFilesFromVersionList(const PageEntriesView &        view,
                                          std::set<PageFileIdAndLevel> & live_files,
-                                         std::set<PageId> &             live_normal_pages) const;
+                                         std::set<PageId> &             live_normal_pages,
+                                         bool                           need_scan_page_ids) const;
 };
 
 /// Read old entries state from `view_` and apply new edit to `view_->tail`
