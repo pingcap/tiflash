@@ -1,5 +1,6 @@
 #include <common/config_common.h>
 #include <Common/config.h>
+#include <Common/ClickHouseRevision.h>
 #include <config_tools.h>
 #include <iostream>
 #include <vector>
@@ -48,6 +49,16 @@ int mainEntryClickHouseClusterCopier(int argc, char ** argv);
     int mainEntryClickHouseLLD(int argc, char ** argv);
 #endif
 
+int mainEntryVersion(int , char **)
+{
+    std::cerr << "TiFlash" << std::endl
+              << "Release Version:   " << TiFlashBuildInfo::getVersionString() << std::endl
+              << "Git Commit Hash:   " << TiFlashBuildInfo::getGitHash() << std::endl
+              << "Git Commit Branch: " << TiFlashBuildInfo::getGitBranch() << std::endl
+              << "UTC Build Time:    " << TiFlashBuildInfo::getUTCBuildTime() << std::endl;
+    return 0;
+}
+
 namespace
 {
 
@@ -85,6 +96,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"clang++", mainEntryClickHouseClang},
     {"lld", mainEntryClickHouseLLD},
 #endif
+    {"version", mainEntryVersion},
 };
 
 
