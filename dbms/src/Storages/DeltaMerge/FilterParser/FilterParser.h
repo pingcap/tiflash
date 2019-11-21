@@ -21,7 +21,7 @@ class FilterParser
 public:
     /// From ast.
     using AttrCreatorByColumnName = std::function<Attr(const String &)>;
-    static RSOperatorPtr parseSelectQuery(const ASTSelectQuery & query, Poco::Logger * log);
+    static RSOperatorPtr parseSelectQuery(const ASTSelectQuery & query, AttrCreatorByColumnName && creator, Poco::Logger * log);
 
 public:
     /// From dag.

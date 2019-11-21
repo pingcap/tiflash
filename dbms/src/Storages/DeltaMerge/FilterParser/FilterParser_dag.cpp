@@ -78,6 +78,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
             expr.DebugString(), tipb::ScalarFuncSig_Name(expr.sig()) + " with state " + DB::toString(state) + " is not supported", false);
     else
     {
+        // TODO: null_direction
         RSOperatorPtr op;
         switch (filter_type)
         {

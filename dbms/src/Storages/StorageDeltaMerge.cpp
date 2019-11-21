@@ -559,7 +559,17 @@ BlockInputStreams StorageDeltaMerge::read( //
             else
             {
                 // Query from ch client
-                rs_operator = FilterParser::parseSelectQuery(select_query, log);
+                auto create_attr_by_column_id = [this](const String &col_name) -> Attr {
+                    const ColumnDefines & defines = this->store->getTableColumns();
+                    auto iter = std::find_if(
+                        defines.begin(), defines.end(), [&col_name](const ColumnDefine & d) -> bool { return d.name == col_name; });
+                    if (iter != defines.end())
+                        return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+                    else
+                        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+                        return Attr{.col_name = col_name, .col_id = 0, .type = DataTypePtr{}};
+                };
+                rs_operator = FilterParser::parseSelectQuery(select_query, std::move(create_attr_by_column_id), log);
             }
             if (likely(rs_operator != DM::EMPTY_FILTER))
                 LOG_DEBUG(log, "Rough set filter: " << rs_operator->toString());
