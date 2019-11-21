@@ -99,7 +99,6 @@ struct WriteBatches
 struct AppendTask
 {
     bool   append_cache; // If not append cache, then clear cache.
-    size_t remove_chunks_back;
     Chunks append_chunks;
 };
 using AppendTaskPtr = std::shared_ptr<AppendTask>;
@@ -139,7 +138,7 @@ public:
         GenPageId     gen_data_page_id;
     };
 
-    DiskValueSpace(bool should_cache_, PageId page_id_, Chunks && chunks_ = {}, MutableColumnMap && cache_ = {}, size_t cache_chunks_ = 0);
+    DiskValueSpace(bool should_cache_, PageId page_id_, Chunks && chunks_ = {}, MutableColumnMap && cache_ = {});
     DiskValueSpace(const DiskValueSpace & other);
 
     /// Called after the instance is created from existing metadata.
@@ -155,14 +154,14 @@ public:
     static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
 
     /// Remove all chunks and clear cache.
-    void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_);
+    void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks, MutableColumnMap && cache_);
     void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks);
     void clearChunks(WriteBatch & removed_wb);
     void setChunks(WriteBatch & meta_wb, Chunks && new_chunks);
-    void setChunksAndCache(WriteBatch & meta_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_);
+    void setChunksAndCache(WriteBatch & meta_wb, Chunks && new_chunks, MutableColumnMap && cache_);
 
     /// Append the chunk to this value space, and could cache the block in memory if it is too fragment.
-    void appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block);
+    // void appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block);
 
     /// Read the requested chunks' data and compact into a block.
     /// The columns of the returned block are guaranteed to be in order of read_columns.
@@ -174,7 +173,7 @@ public:
 
     /// Read the chunk data.
     /// The columns of the returned block are guaranteed to be in order of read_columns.
-    Block read(const ColumnDefines & read_columns, const PageReader & page_reader, size_t chunk_index) const;
+    // Block read(const ColumnDefines & read_columns, const PageReader & page_reader, size_t chunk_index) const;
 
     /// The data of returned block is in insert order.
     BlockOrDeletes getMergeBlocks(const ColumnDefine & handle,
@@ -189,7 +188,6 @@ public:
     ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
     MutableColumnMap cloneCache();
-    size_t           cacheChunks() { return cache_chunks; }
 
     size_t num_rows() const;
     size_t num_rows(size_t chunks_offset, size_t chunk_length) const;
@@ -225,7 +223,6 @@ private:
 
     // The cache is mainly used to merge fragment chunks.
     MutableColumnMap cache;
-    size_t           cache_chunks = 0;
 
     Logger * log;
 };

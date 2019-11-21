@@ -320,11 +320,27 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
             new_columns_to_read.push_back(c);
     }
 
-    auto                delta_chunks = segment_snap.delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
+    BlockInputStreamPtr cache_stream;
+    {
+        Block cache_block;
+        auto  cache = segment_snap.delta->cloneCache();
+        for (auto & col : new_columns_to_read)
+        {
+            MutableColumnPtr c = col.type->createColumn();
+            c->insertRangeFrom(
+                *cache.at(col.id), 0, segment_snap.delta_rows - (segment_snap.delta->num_rows() - segment_snap.delta->cacheRows()));
+            cache_block.insert(ColumnWithTypeAndName(std::move(c), col.type, col.name, col.id));
+        }
+        cache_stream = std::make_shared<OneBlockInputStream>(cache_block);
+    }
+
+    auto delta_chunks = segment_snap.delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
+
     BlockInputStreamPtr delta_stream = std::make_shared<ChunkBlockInputStream>(delta_chunks, //
                                                                                new_columns_to_read,
                                                                                storage_snap.log_reader,
                                                                                EMPTY_FILTER);
+    delta_stream                     = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{delta_stream, cache_stream});
     delta_stream                     = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
 
     BlockInputStreamPtr stable_stream = std::make_shared<ChunkBlockInputStream>(segment_snap.stable->getChunks(), //
@@ -478,15 +494,14 @@ SegmentPtr Segment::applyMergeDelta(const SegmentSnapshot & segment_snap, WriteB
 
     auto remove_delta_chunks = delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
     auto new_delta_chunks    = delta->getChunksAfter(segment_snap.delta_rows, segment_snap.delta_deletes);
-    bool use_cache           = new_delta_chunks.size() > delta->cacheChunks();
+    bool use_cache           = true;
 
     auto new_delta = std::make_shared<DiskValueSpace>(true, delta->pageId(), std::move(remove_delta_chunks));
     if (use_cache)
         new_delta->replaceChunks(wbs.meta, //
                                  wbs.removed_log,
                                  std::move(new_delta_chunks),
-                                 delta->cloneCache(),
-                                 delta->cacheChunks());
+                                 delta->cloneCache());
     else
         new_delta->replaceChunks(wbs.meta, //
                                  wbs.removed_log,
@@ -796,16 +811,14 @@ Segment::doSplitLogical(DMContext & dm_context, const SegmentSnapshot & segment_
     new_me->delta->replaceChunks(wbs.meta, //
                                  wbs.removed_log,
                                  std::move(my_delta_chunks),
-                                 segment_snap.delta->cloneCache(),
-                                 segment_snap.delta->cacheChunks());
+                                 segment_snap.delta->cloneCache());
     new_me->stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(my_stable_chunks));
 
     other->serialize(wbs.meta);
     other->delta->replaceChunks(wbs.meta, //
                                 wbs.removed_log,
                                 std::move(other_delta_chunks),
-                                segment_snap.delta->cloneCache(),
-                                segment_snap.delta->cacheChunks());
+                                segment_snap.delta->cloneCache());
     other->stable->replaceChunks(wbs.meta, wbs.removed_data, std::move(other_stable_chunks));
 
     return {new_me, other};

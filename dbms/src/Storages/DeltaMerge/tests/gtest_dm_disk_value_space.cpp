@@ -82,34 +82,34 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
     const size_t value_beg      = 20;
     const size_t num_rows_write = 80;
     auto         delta          = std::make_shared<DiskValueSpace>(true, 0);
-    {
-        // write to DiskValueSpace
-        Block      block1 = DMTestEnv::prepareSimpleWriteBlock(value_beg, value_beg + num_rows_write / 2, false);
-        Block      block2 = DMTestEnv::prepareSimpleWriteBlock(value_beg + num_rows_write / 2, value_beg + num_rows_write, false);
-        auto       opc    = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
-        WriteBatch wb;
-        Chunks     chunks1 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
-        Chunks     chunks2 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
-        dm_context->storage_pool.log().write(wb);
+    // {
+    //     // write to DiskValueSpace
+    //     Block      block1 = DMTestEnv::prepareSimpleWriteBlock(value_beg, value_beg + num_rows_write / 2, false);
+    //     Block      block2 = DMTestEnv::prepareSimpleWriteBlock(value_beg + num_rows_write / 2, value_beg + num_rows_write, false);
+    //     auto       opc    = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
+    //     WriteBatch wb;
+    //     Chunks     chunks1 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
+    //     Chunks     chunks2 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
+    //     dm_context->storage_pool.log().write(wb);
 
-        for (auto & chunk : chunks1)
-        {
-            delta->appendChunkWithCache(opc, std::move(chunk), block1);
-        }
+    //     for (auto & chunk : chunks1)
+    //     {
+    //         delta->appendChunkWithCache(opc, std::move(chunk), block1);
+    //     }
 
-        for (auto & chunk : chunks2)
+    //     for (auto & chunk : chunks2)
 
-        {
-            delta->appendChunkWithCache(opc, std::move(chunk), block2);
-        }
+    //     {
+    //         delta->appendChunkWithCache(opc, std::move(chunk), block2);
+    //     }
 
-        EXPECT_EQ(num_rows_write, delta->num_rows(0, 2));
-        WriteBatch remove_wb;
-        delta = delta->tryFlushCache(opc, remove_wb, true);
-        opc.data_storage.write(remove_wb);
-        EXPECT_FALSE(!delta);
-        EXPECT_EQ(num_rows_write, delta->num_rows(0, 1));
-    }
+    //     EXPECT_EQ(num_rows_write, delta->num_rows(0, 2));
+    //     WriteBatch remove_wb;
+    //     delta = delta->tryFlushCache(opc, remove_wb, true);
+    //     opc.data_storage.write(remove_wb);
+    //     EXPECT_FALSE(!delta);
+    //     EXPECT_EQ(num_rows_write, delta->num_rows(0, 1));
+    // }
 
     {
         // read using `getInputStream`
@@ -158,34 +158,34 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
         }
     }
 
-    {
-        // read using `read` of chunk_index
-        const size_t chunk_index = 0;
-        PageReader   page_reader(dm_context->storage_pool.log());
-        Block        block = delta->read(table_columns, page_reader, chunk_index);
+    // {
+    //     // read using `read` of chunk_index
+    //     const size_t chunk_index = 0;
+    //     PageReader   page_reader(dm_context->storage_pool.log());
+    //     Block        block = delta->read(table_columns, page_reader, chunk_index);
 
-        // check the order of cols is the same as read_columns
-        const Names col_names = block.getNames();
-        ASSERT_EQ(col_names.size(), table_columns.size());
-        for (size_t i = 0; i < col_names.size(); ++i)
-        {
-            EXPECT_EQ(col_names[i], table_columns[i].name);
-        }
+    //     // check the order of cols is the same as read_columns
+    //     const Names col_names = block.getNames();
+    //     ASSERT_EQ(col_names.size(), table_columns.size());
+    //     for (size_t i = 0; i < col_names.size(); ++i)
+    //     {
+    //         EXPECT_EQ(col_names[i], table_columns[i].name);
+    //     }
 
-        // check the value
-        ASSERT_EQ(block.rows(), num_rows_write);
-        for (const auto & iter : block)
-        {
-            auto c = iter.column;
-            for (size_t i = 0; i < c->size(); ++i)
-            {
-                if (iter.name == "pk")
-                {
-                    EXPECT_EQ(c->getInt(i), static_cast<int64_t>(value_beg + i));
-                }
-            }
-        }
-    }
+    //     // check the value
+    //     ASSERT_EQ(block.rows(), num_rows_write);
+    //     for (const auto & iter : block)
+    //     {
+    //         auto c = iter.column;
+    //         for (size_t i = 0; i < c->size(); ++i)
+    //         {
+    //             if (iter.name == "pk")
+    //             {
+    //                 EXPECT_EQ(c->getInt(i), static_cast<int64_t>(value_beg + i));
+    //             }
+    //         }
+    //     }
+    // }
 }
 
 } // namespace tests

@@ -379,9 +379,11 @@ TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
 
         ASSERT_EQ(num_rows_read, 3 * num_write_rows);
     }
+}
 
-    store = reload();
-
+TEST_F(DeltaMergeStore_test, WriteMultipleBlock1)
+{
+    const size_t num_write_rows = 32;
     // Test write multi blocks with overlap
     {
         UInt64 tso1   = 1;
@@ -420,7 +422,7 @@ TEST_F(DeltaMergeStore_test, WriteMultipleBlock)
             }
         }
 
-        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+        ASSERT_EQ(num_rows_read, 2 * num_write_rows);
     }
     // Read with version
     {
