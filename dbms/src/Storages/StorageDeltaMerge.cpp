@@ -538,28 +538,35 @@ BlockInputStreams StorageDeltaMerge::read( //
         }
 
         DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
-        if (likely(query_info.dag_query))
+        const bool enable_rs_filter = context.getSettingsRef().dm_enable_rough_set_filter;
+        if (enable_rs_filter)
         {
-            /// Query from TiDB / TiSpark
-            auto create_attr_by_column_id = [this](ColumnID column_id) -> Attr {
-                const ColumnDefines & defines = this->store->getTableColumns();
-                auto iter = std::find_if(
-                    defines.begin(), defines.end(), [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
-                if (iter != defines.end())
-                    return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-                else
-                    // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
-                    return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-            };
-            rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, std::move(create_attr_by_column_id), log);
+            if (likely(query_info.dag_query))
+            {
+                /// Query from TiDB / TiSpark
+                auto create_attr_by_column_id = [this](ColumnID column_id) -> Attr {
+                    const ColumnDefines & defines = this->store->getTableColumns();
+                    auto iter = std::find_if(
+                        defines.begin(), defines.end(), [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
+                    if (iter != defines.end())
+                        return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+                    else
+                        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+                        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+                };
+                rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, std::move(create_attr_by_column_id), log);
+            }
+            else
+            {
+                // Query from ch client
+                rs_operator = FilterParser::parseSelectQuery(select_query, log);
+            }
+            if (likely(rs_operator != DM::EMPTY_FILTER))
+                LOG_DEBUG(log, "Rough set filter: " << rs_operator->toString());
         }
         else
-        {
-            // Query from ch client
-            rs_operator = FilterParser::parseSelectQuery(select_query, log);
-        }
-        if (likely(rs_operator != DM::EMPTY_FILTER))
-            LOG_TRACE(log, "RS operator: " << rs_operator->toString());
+            LOG_DEBUG(log, "Rough set filter is disabled.");
+
 
         return store->read(context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso,
             rs_operator, max_block_size);
