@@ -148,9 +148,9 @@ public:
     AppendTaskPtr     createAppendTask(const OpContext & context, WriteBatches & wbs, const BlockOrDelete & update) const;
     DiskValueSpacePtr applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
-    /// Write the blocks from input_stream into underlying storage, the returned chunks can be added to
+    /// Write the blocks from sorted_input_stream into underlying storage, the returned chunks can be added to
     /// specified value space instance by #setChunks or #appendChunkWithCache later.
-    static Chunks writeChunks(const OpContext & context, const BlockInputStreamPtr & input_stream, WriteBatch & wb);
+    static Chunks writeChunks(const OpContext & context, const BlockInputStreamPtr & sorted_input_stream, WriteBatch & wb);
 
     static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
 
