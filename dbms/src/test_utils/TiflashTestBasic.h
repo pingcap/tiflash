@@ -22,6 +22,10 @@ public:
         }
         catch (Exception & e)
         {
+            // set itself as global context
+            context.setGlobalContext(context);
+            context.setApplicationType(DB::Context::ApplicationType::SERVER);
+
             context.createTMTContext({}, "", "", {"default"}, "./__tmp_data/kvstore", "", TiDB::StorageEngine::TMT, false);
             context.getTMTContext().restore();
         }
