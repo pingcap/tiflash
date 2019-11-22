@@ -24,12 +24,21 @@ namespace DM
 {
 namespace ast
 {
+
+String astToDebugString(const IAST * const ast)
+{
+    std::stringstream ss;
+    ast->dumpTree(ss);
+    return ss.str();
+}
+
 RSOperatorPtr
 parseASTCompareFunction(const ASTFunction * const func, const FilterParser::AttrCreatorByColumnName & creator, Poco::Logger * /*log*/)
 {
     if (unlikely(func->arguments->children.size() != 2))
-        return createUnsupported(
-            "", func->name + " with " + DB::toString(func->arguments->children.size()) + " children is not supported", false);
+        return createUnsupported(astToDebugString(func),
+                                 func->name + " with " + DB::toString(func->arguments->children.size()) + " children is not supported",
+                                 false);
 
     /// Only support `column` `op` `constant` now.
 
@@ -56,7 +65,7 @@ parseASTCompareFunction(const ASTFunction * const func, const FilterParser::Attr
 
     // TODO: null_direction
     if (unlikely(state != state_finish))
-        return createUnsupported("", "", false);
+        return createUnsupported(astToDebugString(func), func->name + " with state " + DB::toString(state) + " is not supported", false);
     else if (func->name == "equals")
         return createEqual(attr, value);
     else if (func->name == "notEquals")
@@ -69,7 +78,7 @@ parseASTCompareFunction(const ASTFunction * const func, const FilterParser::Attr
         return createLess(attr, value, -1);
     else if (func->name == "lessOrEquals")
         return createLessEqual(attr, value, -1);
-    return createUnsupported("", "Unknown compare func" + func->name, false);
+    return createUnsupported(astToDebugString(func), "Unknown compare func: " + func->name, false);
 }
 
 RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParser::AttrCreatorByColumnName & creator, Poco::Logger * log)
@@ -95,7 +104,7 @@ RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParse
             }
             else
             {
-                children.emplace_back(createUnsupported("", "child of logical operator is not function", false));
+                children.emplace_back(createUnsupported(astToDebugString(func), "child of logical operator is not function", false));
             }
         }
         if (func->name == "or")
@@ -106,13 +115,14 @@ RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParse
     else if (func->name == "not")
     {
         if (unlikely(func->arguments->children.size() != 1))
-            op = createUnsupported("", "logical not with " + DB::toString(func->arguments->children.size()) + " children", false);
+            op = createUnsupported(
+                astToDebugString(func), "logical not with " + DB::toString(func->arguments->children.size()) + " children", false);
         else
         {
             if (ASTFunction * sub_func = static_cast<ASTFunction *>(func->arguments->children[0].get()); sub_func != nullptr)
                 op = createNot(parseASTFunction(sub_func, creator, log));
             else
-                op = createUnsupported("", "child of logical not is not function", false);
+                op = createUnsupported(astToDebugString(func), "child of logical not is not function", false);
         }
     }
 #if 0
@@ -131,9 +141,7 @@ RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParse
 #endif
     else
     {
-        std::stringstream ss;
-        func->dumpTree(ss);
-        op = createUnsupported(ss.str(), "Function " + func->name + " is not supported", false);
+        op = createUnsupported(astToDebugString(func), "Function " + func->name + " is not supported", false);
     }
 
     return op;
@@ -150,16 +158,16 @@ RSOperatorPtr FilterParser::parseSelectQuery(const ASTSelectQuery & query, AttrC
     const ASTFunction * where = static_cast<ASTFunction *>(query.where_expression.get());
     if (!where)
     {
-        std::stringstream ss;
-        query.where_expression->dumpTree(ss);
-        LOG_WARNING(log, String("Where expression is not ASTFunction, can not parse to rough set index. Expr: ") + ss.str());
+        const String debug_string = ast::astToDebugString(query.where_expression.get());
+        LOG_WARNING(log, "Where expression is not ASTFunction, can not parse to rough set index. Expr: " << debug_string);
         return op;
     }
 
-    std::stringstream ss;
-    where->dumpTree(ss);
-    std::string expr_tree = ss.str();
-    LOG_TRACE(log, " where expr: " << expr_tree);
+    if (log->trace())
+    {
+        std::string expr_tree = ast::astToDebugString(where);
+        LOG_TRACE(log, " where expr: " << expr_tree);
+    }
 
     op = ast::parseASTFunction(where, creator, log);
 
