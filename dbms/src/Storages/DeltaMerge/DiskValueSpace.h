@@ -186,6 +186,7 @@ public:
 
     DiskValueSpacePtr tryFlushCache(const OpContext & context, WriteBatch & remove_data_wb, bool force = false);
 
+    // TODO: getInputStream can be removed
     ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
     MutableColumnMap cloneCache();

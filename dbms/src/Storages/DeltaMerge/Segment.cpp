@@ -608,7 +608,6 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
     auto new_read_columns = arrangeReadColumns<add_tag_column>(dm_context.handle_column, read_columns);
 
     DeltaValueSpacePtr       delta_value_space;
-    ChunkBlockInputStreamPtr stable_input_stream;
     DeltaIndexPtr            delta_index;
 
     auto delta_block  = segment_snap.delta->read(new_read_columns, storage_snap.log_reader, 0, segment_snap.delta_rows);

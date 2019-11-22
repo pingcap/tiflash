@@ -268,27 +268,27 @@ private:
 
         if (is_date)
         {
-            if constexpr (std::is_same_v<UInt32, Right>)
+            if constexpr (std::is_same_v<DataTypeDate::FieldType, Right>)
             {
                 DayNum_t             date;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateText(date, in);
                 if (!in.eof())
                     throw Exception("String is too long for Date: " + left);
-                res = Op<UInt32, Right>::apply(date, right);
+                res = Op<DataTypeDate::FieldType, Right>::apply(date, right);
                 return true;
             }
         }
         else if (is_date_time)
         {
-            if constexpr (std::is_same_v<Int64, Right>)
+            if constexpr (std::is_same_v<DataTypeDateTime::FieldType, Right>)
             {
                 time_t               date_time;
                 ReadBufferFromMemory in(left.data(), left.size());
                 readDateTimeText(date_time, in);
                 if (!in.eof())
                     throw Exception("String is too long for DateTime: " + left);
-                res = Op<Int64, Right>::apply(date_time, right);
+                res = Op<DataTypeDateTime::FieldType, Right>::apply(date_time, right);
                 return true;
             }
         }
@@ -307,7 +307,7 @@ private:
         }
         else if (is_enum8)
         {
-            if constexpr (std::is_same_v<Int8, Right>)
+            if constexpr (std::is_same_v<DataTypeEnum8::FieldType, Right>)
             {
                 auto type            = static_cast<const DataTypeEnum8 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
@@ -317,7 +317,7 @@ private:
         }
         else if (is_enum16)
         {
-            if constexpr (std::is_same_v<Int16, Right>)
+            if constexpr (std::is_same_v<DataTypeEnum16::FieldType, Right>)
             {
                 auto type            = static_cast<const DataTypeEnum16 *>(right_type.get());
                 auto left_enum_value = type->getValue(left);
