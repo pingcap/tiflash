@@ -734,7 +734,7 @@ catch (const Exception & e)
     throw;
 }
 
-TEST_F(DeltaMergeStore_test, DDLChanegInt8ToInt32)
+TEST_F(DeltaMergeStore_test, DDLChangeInt8ToInt32)
 try
 {
     const String      col_name_ddl        = "i8";

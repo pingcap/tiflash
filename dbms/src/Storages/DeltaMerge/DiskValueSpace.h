@@ -157,8 +157,6 @@ public:
     void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks, MutableColumnMap && cache_);
     void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks);
     void clearChunks(WriteBatch & removed_wb);
-    void setChunks(WriteBatch & meta_wb, Chunks && new_chunks);
-    void setChunksAndCache(WriteBatch & meta_wb, Chunks && new_chunks, MutableColumnMap && cache_);
 
     /// Append the chunk to this value space, and could cache the block in memory if it is too fragment.
     // void appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block);
@@ -185,7 +183,7 @@ public:
 
     DiskValueSpacePtr tryFlushCache(const OpContext & context, WriteBatch & remove_data_wb, bool force = false);
 
-    ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
+    // ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
     MutableColumnMap cloneCache();
 
@@ -200,8 +198,6 @@ public:
 
     PageId         pageId() const { return page_id; }
     const Chunks & getChunks() const { return chunks; }
-    Chunks         getChunksBefore(size_t rows, size_t deletes) const;
-    Chunks         getChunksAfter(size_t rows, size_t deletes) const;
 
     void check(const PageReader & meta_page_reader, const String & when);
 

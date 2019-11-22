@@ -144,7 +144,7 @@ public:
     AppendTaskPtr createAppendTask(const OpContext & context, WriteBatches & wbs, const BlockOrDelete & update);
     void          applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
-    SegmentSnapshot getReadSnapshot(bool use_delta_cache = true) const;
+    SegmentSnapshot getReadSnapshot() const;
 
     BlockInputStreamPtr getInputStream(const DMContext &       dm_context,
                                        const ColumnDefines &   columns_to_read,

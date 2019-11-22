@@ -215,7 +215,7 @@ void Segment::applyAppendTask(const OpContext & opc, const AppendTaskPtr & task,
     }
 }
 
-SegmentSnapshot Segment::getReadSnapshot(bool use_delta_cache) const
+SegmentSnapshot Segment::getReadSnapshot() const
 {
     SegmentSnapshot segment_snap;
     {
@@ -223,8 +223,6 @@ SegmentSnapshot Segment::getReadSnapshot(bool use_delta_cache) const
         std::shared_lock lock(read_write_mutex);
 
         size_t delta_rows = delta->num_rows();
-        if (!use_delta_cache)
-            delta_rows -= delta->cacheRows();
 
         // Stable is constant.
         segment_snap = SegmentSnapshot{
@@ -334,7 +332,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
         cache_stream = std::make_shared<OneBlockInputStream>(cache_block);
     }
 
-    auto delta_chunks = segment_snap.delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
+    auto delta_chunks = segment_snap.delta->getChunks();
 
     BlockInputStreamPtr delta_stream = std::make_shared<ChunkBlockInputStream>(delta_chunks, //
                                                                                new_columns_to_read,
@@ -490,10 +488,11 @@ DiskValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_context,
 
 SegmentPtr Segment::applyMergeDelta(const SegmentSnapshot & segment_snap, WriteBatches & wbs, const DiskValueSpacePtr & new_stable) const
 {
+    (void)segment_snap;
     LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] apply merge delta start.");
 
-    auto remove_delta_chunks = delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
-    auto new_delta_chunks    = delta->getChunksAfter(segment_snap.delta_rows, segment_snap.delta_deletes);
+    auto remove_delta_chunks = delta->getChunks();
+    auto new_delta_chunks    = Chunks();
     bool use_cache           = true;
 
     auto new_delta = std::make_shared<DiskValueSpace>(true, delta->pageId(), std::move(remove_delta_chunks));

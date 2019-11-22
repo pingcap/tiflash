@@ -530,7 +530,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     {
         std::shared_lock lock(read_write_mutex);
 
-        segment_snap = segment->getReadSnapshot(/* use_delta_cache */ true);
+        segment_snap = segment->getReadSnapshot();
         storage_snap = std::make_shared<StorageSnapshot>(storage_pool);
     }
 
@@ -584,8 +584,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     {
         std::shared_lock lock(read_write_mutex);
 
-        left_snap    = left->getReadSnapshot(/* use_delta_cache */ true);
-        right_snap   = right->getReadSnapshot(/* use_delta_cache */ true);
+        left_snap    = left->getReadSnapshot();
+        right_snap   = right->getReadSnapshot();
         storage_snap = std::make_shared<StorageSnapshot>(storage_pool);
     }
 
@@ -691,7 +691,7 @@ void DeltaMergeStore::segmentForegroundMergeDelta(DMContext & dm_context, const 
     {
         std::shared_lock lock(read_write_mutex);
 
-        segment_snap = segment->getReadSnapshot(/* use_delta_cache */ true);
+        segment_snap = segment->getReadSnapshot();
         storage_snap = std::make_shared<StorageSnapshot>(storage_pool);
     }
 
@@ -709,7 +709,7 @@ void DeltaMergeStore::segmentBackgroundMergeDelta(DMContext & dm_context, const 
         if (!isSegmentValid(segment))
             return;
 
-        segment_snap = segment->getReadSnapshot(/* use_delta_cache */ false);
+        segment_snap = segment->getReadSnapshot();
         storage_snap = std::make_shared<StorageSnapshot>(storage_pool);
     }
 
