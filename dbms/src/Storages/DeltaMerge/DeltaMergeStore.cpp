@@ -939,6 +939,81 @@ namespace
 // TODO maybe move to -internal.h ?
 inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
+    auto castDefaultValue = [](Field value, DataTypePtr type) -> Field {
+        if (type->equals(*DataTypeFactory::instance().get("Float32")) || type->equals(*DataTypeFactory::instance().get("Float64")))
+        {
+            if (value.getType() == Field::Types::Float64)
+            {
+                Float64 res = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                return toField(res);
+            }
+            else if (value.getType() == Field::Types::Decimal32)
+            {
+                DecimalField<Decimal32> dec = safeGet<DecimalField<Decimal32>>(value);
+                Float64                 res = dec.getValue().toFloat<Float64>(dec.getScale());
+                return toField(res);
+            }
+            else if (value.getType() == Field::Types::Decimal64)
+            {
+                DecimalField<Decimal64> dec = safeGet<DecimalField<Decimal64>>(value);
+                Float64                 res = dec.getValue().toFloat<Float64>(dec.getScale());
+                return toField(res);
+            }
+        }
+        else if (type->equals(*DataTypeFactory::instance().get("Int8")) || type->equals(*DataTypeFactory::instance().get("Int16"))
+                 || type->equals(*DataTypeFactory::instance().get("Int32")) || type->equals(*DataTypeFactory::instance().get("Int64")))
+        {
+            Int64 res = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            return toField(res);
+        }
+        else if (type->equals(*DataTypeFactory::instance().get("UInt8")) || type->equals(*DataTypeFactory::instance().get("UInt16"))
+                 || type->equals(*DataTypeFactory::instance().get("UInt32")) || type->equals(*DataTypeFactory::instance().get("UInt64")))
+        {
+            UInt64 res = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), value);
+            return toField(res);
+        }
+        else if (type->equals(*DataTypeFactory::instance().get("DateTime")))
+        {
+            auto                 date = safeGet<String>(value);
+            time_t               time = 0;
+            ReadBufferFromMemory buf(date.data(), date.size());
+            readDateTimeText(time, buf);
+            return toField(time);
+        }
+        else if (std::strcmp(type->getFamilyName(), "Decimal") == 0)
+        {
+            if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal32>(type); dec)
+            {
+                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                ScaleType scale = dec->getScale();
+                auto      res   = ToDecimal<double, Decimal32>(real, scale);
+                return toField(res, scale);
+            }
+            else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal64>(type); dec)
+            {
+                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                ScaleType scale = dec->getScale();
+                auto      res   = ToDecimal<double, Decimal64>(real, scale);
+                return toField(res, scale);
+            }
+            else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal128>(type); dec)
+            {
+                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                ScaleType scale = dec->getScale();
+                auto      res   = ToDecimal<double, Decimal128>(real, scale);
+                return toField(res, scale);
+            }
+            else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal256>(type); dec)
+            {
+                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                ScaleType scale = dec->getScale();
+                auto      res   = ToDecimal<double, Decimal256>(real, scale);
+                return toField(res, scale);
+            }
+        }
+        throw Exception("Unsupported data type: " + type->getName());
+    };
+
     if (command.default_expression)
     {
         // a cast function
@@ -961,7 +1036,8 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
             auto default_literal_in_cast = typeid_cast<const ASTLiteral *>(default_cast_expr->arguments->children[0].get());
             if (default_literal_in_cast)
             {
-                define.default_value = default_literal_in_cast->value;
+                Field default_value  = castDefaultValue(default_literal_in_cast->value, define.type);
+                define.default_value = default_value;
             }
             else
             {
