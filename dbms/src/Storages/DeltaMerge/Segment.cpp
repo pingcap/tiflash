@@ -139,6 +139,8 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     segment->delta->restore(OpContext::createForLogStorage(context));
     segment->stable->restore(OpContext::createForDataStorage(context));
+#if 0
+    /// Dump the min-max index info
     if (unlikely(segment->log->trace()))
     {
         for (const auto & chunk : segment->delta->getChunks())
@@ -168,6 +170,7 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
             }
         }
     }
+#endif
 
     return segment;
 }
