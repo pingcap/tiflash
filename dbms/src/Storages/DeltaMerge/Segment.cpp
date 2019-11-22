@@ -493,7 +493,6 @@ DiskValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_context,
     data_stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
     data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(data_stream, handle, min_version);
 
-    //TODO: stable chunks should split pk
     OpContext opc               = OpContext::createForDataStorage(dm_context);
     Chunks    new_stable_chunks = DiskValueSpace::writeChunks(opc, data_stream, wbs.data);
 
@@ -883,7 +882,6 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                       STABLE_CHUNK_ROWS);
         my_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data  = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
-        //TODO: stable chunks should split pk
         auto tmp = DiskValueSpace::writeChunks(opc, my_data, wbs.data);
         my_new_stable_chunks.swap(tmp);
     }
@@ -901,7 +899,6 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                          STABLE_CHUNK_ROWS);
         other_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
-        //TODO: stable chunks should split pk
         auto tmp   = DiskValueSpace::writeChunks(opc, other_data, wbs.data);
         other_new_stable_chunks.swap(tmp);
     }

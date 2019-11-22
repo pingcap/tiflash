@@ -14,6 +14,8 @@ namespace ProfileEvents
 {
 extern const Event DMFlushDeltaCache;
 extern const Event DMFlushDeltaCacheNS;
+extern const Event DMWriteChunksWriteRows;
+extern const Event DMWriteChunksCopyRows;
 } // namespace ProfileEvents
 
 namespace DB
@@ -333,10 +335,13 @@ Chunks DiskValueSpace::writeChunks(const OpContext & context, const BlockInputSt
                 cur_col_raw->insertRangeFrom(*next_col_with_name.column, 0, cut_offset);
                 if (cut_offset != next_block_nrows)
                 {
+                    // TODO: we can track the valid range instead of copying data.
+                    size_t nrows_to_copy = next_block_nrows - cut_offset;
+                    ProfileEvents::increment(ProfileEvents::DMWriteChunksCopyRows, nrows_to_copy);
                     // Pop front `cut_offset` elems from `next_col_with_name`
                     assert(next_block_nrows == next_col_with_name.column->size());
                     MutableColumnPtr cutted_next_column = next_col_with_name.column->cloneEmpty();
-                    cutted_next_column->insertRangeFrom(*next_col_with_name.column, cut_offset, next_block_nrows - cut_offset);
+                    cutted_next_column->insertRangeFrom(*next_col_with_name.column, cut_offset, nrows_to_copy);
                     next_col_with_name.column = cutted_next_column->getPtr();
                 }
             }
@@ -344,6 +349,7 @@ Chunks DiskValueSpace::writeChunks(const OpContext & context, const BlockInputSt
             {
                 // We merge some rows to `cur_block`, make it as a chunk.
                 Chunk chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wb, cur_block);
+                ProfileEvents::increment(ProfileEvents::DMWriteChunksWriteRows, chunk.getRows());
                 chunks.emplace_back(std::move(chunk));
                 cur_block = next_block;
             }
@@ -353,6 +359,7 @@ Chunks DiskValueSpace::writeChunks(const OpContext & context, const BlockInputSt
         {
             // There is no pk overlap between `cur_block` and `next_block`, just write `cur_block`.
             Chunk chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wb, cur_block);
+            ProfileEvents::increment(ProfileEvents::DMWriteChunksWriteRows, chunk.getRows());
             chunks.emplace_back(std::move(chunk));
             cur_block = next_block;
         }
