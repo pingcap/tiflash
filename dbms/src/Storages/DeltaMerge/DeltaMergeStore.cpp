@@ -1011,7 +1011,8 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
                 return toField(res, scale);
             }
         }
-        throw Exception("Unsupported data type: " + type->getName());
+
+        return type->getDefault();
     };
 
     if (command.default_expression)
