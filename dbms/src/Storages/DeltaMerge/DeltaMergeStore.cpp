@@ -996,7 +996,7 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
             time_t               time = 0;
             ReadBufferFromMemory buf(date.data(), date.size());
             readDateTimeText(time, buf);
-            return toField(time);
+            return toField((Int64)time);
         }
         case TypeIndex::Decimal32:
         {
