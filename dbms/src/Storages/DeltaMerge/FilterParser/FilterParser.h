@@ -32,8 +32,10 @@ public:
 
     enum RSFilterType
     {
+        Unsupported = 0,
+
         // logical
-        Not = 0,
+        Not = 1,
         Or,
         And,
         // compare
@@ -49,8 +51,6 @@ public:
 
         Like,
         NotLike,
-
-        Unsupported = 254,
     };
 
     static std::unordered_map<tipb::ScalarFuncSig, RSFilterType> scalar_func_rs_filter_map;

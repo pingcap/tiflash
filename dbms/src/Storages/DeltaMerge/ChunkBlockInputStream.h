@@ -38,7 +38,7 @@ public:
         for (const auto & is_skip : skip_chunks)
             num_skipped += is_skip;
 
-        LOG_DEBUG(&Logger::get("ChunkBlockInputStream"), String("Skip: ") << num_skipped << " / " << chunks.size() << " chunks");
+        LOG_TRACE(&Logger::get("ChunkBlockInputStream"), String("Skip: ") << num_skipped << " / " << chunks.size() << " chunks");
     }
 
     String getName() const override { return "Chunk"; }
