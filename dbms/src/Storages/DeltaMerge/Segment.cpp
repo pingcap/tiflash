@@ -322,14 +322,21 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
     {
         Block cache_block;
         auto  cache = segment_snap.delta->cloneCache();
-        for (auto & col : new_columns_to_read)
+        if (!cache.empty())
         {
-            MutableColumnPtr c = col.type->createColumn();
-            c->insertRangeFrom(
-                *cache.at(col.id), 0, segment_snap.delta_rows - (segment_snap.delta->num_rows() - segment_snap.delta->cacheRows()));
-            cache_block.insert(ColumnWithTypeAndName(std::move(c), col.type, col.name, col.id));
+            for (auto & col : new_columns_to_read)
+            {
+                MutableColumnPtr c = col.type->createColumn();
+                c->insertRangeFrom(
+                    *cache.at(col.id), 0, segment_snap.delta_rows - (segment_snap.delta->num_rows() - segment_snap.delta->cacheRows()));
+                cache_block.insert(ColumnWithTypeAndName(std::move(c), col.type, col.name, col.id));
+            }
+            cache_stream = std::make_shared<OneBlockInputStream>(cache_block);
         }
-        cache_stream = std::make_shared<OneBlockInputStream>(cache_block);
+        else
+        {
+            cache_stream = {};
+        }
     }
 
     auto delta_chunks = segment_snap.delta->getChunks();
@@ -338,8 +345,11 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
                                                                                new_columns_to_read,
                                                                                storage_snap.log_reader,
                                                                                EMPTY_FILTER);
-    delta_stream                     = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{delta_stream, cache_stream});
-    delta_stream                     = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
+    if (cache_stream)
+    {
+        delta_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{delta_stream, cache_stream});
+    }
+    delta_stream = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
 
     BlockInputStreamPtr stable_stream = std::make_shared<ChunkBlockInputStream>(segment_snap.stable->getChunks(), //
                                                                                 new_columns_to_read,

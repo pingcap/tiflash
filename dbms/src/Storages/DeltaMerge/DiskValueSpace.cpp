@@ -152,7 +152,17 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
         {
             auto new_col = col_define.type->createColumn();
             new_col->reserve(compacted_rows);
-            new_col->insertRangeFrom(*cache.at(col_define.id), 0, cache_rows);
+            auto c = cache.find(col_define.id);
+            if (c == cache.end())
+            {
+                // New column
+                auto new_col = col_define.type->createColumnConst(cache_rows, col_define.default_value);
+                new_col->convertToFullColumnIfConst();
+            }
+            else
+            {
+                new_col->insertRangeFrom(*cache.at(col_define.id), 0, cache_rows);
+            }
             if (!is_delete)
                 new_col->insertRangeFrom(*append_block.getByName(col_define.name).column, 0, append_rows);
 
@@ -432,6 +442,12 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
     const size_t total_rows      = num_rows();
     const size_t in_storage_rows = total_rows - cache_rows;
 
+    if (cache.empty())
+    {
+        // No need to flush empty cache
+        return {};
+    }
+
     // Create an new instance.
     Chunks tmp_chunks(chunks.begin(), chunks.end());
     auto   new_instance = std::make_shared<DiskValueSpace>(is_delta_vs, page_id, std::move(tmp_chunks));
@@ -455,11 +471,19 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
         // Use the cache.
         for (const auto & col_define : context.dm_context.store_columns)
         {
-            ColumnWithTypeAndName col(cache.at(col_define.id)->cloneResized(cache_rows), col_define.type, col_define.name, col_define.id);
-            compacted.insert(col);
-
-            if (unlikely(col.column->size() != cache_rows))
-                throw Exception("The cache rows mismatch");
+            auto itr = cache.find(col_define.id);
+            if (itr == cache.end())
+            {
+                auto c = col_define.type->createColumnConst(cache_rows, col_define.default_value);
+                c->convertToFullColumnIfConst();
+                ColumnWithTypeAndName col(std::move(c), col_define.type, col_define.name, col_define.id);
+                compacted.insert(col);
+            }
+            else
+            {
+                ColumnWithTypeAndName col(itr->second->cloneResized(cache_rows), col_define.type, col_define.name, col_define.id);
+                compacted.insert(col);
+            }
         }
     }
 
