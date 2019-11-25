@@ -941,7 +941,10 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
 {
     std::function<Field(Field, DataTypePtr)> castDefaultValue; // for lazy bind
     castDefaultValue = [&](Field value, DataTypePtr type) -> Field {
-        if (type->equals(*DataTypeFactory::instance().get("Float32")) || type->equals(*DataTypeFactory::instance().get("Float64")))
+        switch (type->getTypeId())
+        {
+        case TypeIndex::Float32:
+        case TypeIndex::Float64:
         {
             if (value.getType() == Field::Types::Float64)
             {
@@ -960,25 +963,33 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
                 Float64                 res = dec.getValue().toFloat<Float64>(dec.getScale());
                 return toField(res);
             }
+            else
+            {
+                throw Exception("Unknown float number literal");
+            }
         }
-        else if (std::strcmp(type->getFamilyName(), "FixedString") == 0)
+        case TypeIndex::FixedString:
         {
             String res = get<String>(value);
             return toField(res);
         }
-        else if (type->equals(*DataTypeFactory::instance().get("Int8")) || type->equals(*DataTypeFactory::instance().get("Int16"))
-                 || type->equals(*DataTypeFactory::instance().get("Int32")) || type->equals(*DataTypeFactory::instance().get("Int64")))
+        case TypeIndex::Int8:
+        case TypeIndex::Int16:
+        case TypeIndex::Int32:
+        case TypeIndex::Int64:
         {
             Int64 res = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
             return toField(res);
         }
-        else if (type->equals(*DataTypeFactory::instance().get("UInt8")) || type->equals(*DataTypeFactory::instance().get("UInt16"))
-                 || type->equals(*DataTypeFactory::instance().get("UInt32")) || type->equals(*DataTypeFactory::instance().get("UInt64")))
+        case TypeIndex::UInt8:
+        case TypeIndex::UInt16:
+        case TypeIndex::UInt32:
+        case TypeIndex::UInt64:
         {
             UInt64 res = applyVisitor(FieldVisitorConvertToNumber<UInt64>(), value);
             return toField(res);
         }
-        else if (type->equals(*DataTypeFactory::instance().get("DateTime")))
+        case TypeIndex::DateTime:
         {
             auto                 date = safeGet<String>(value);
             time_t               time = 0;
@@ -986,41 +997,45 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
             readDateTimeText(time, buf);
             return toField(time);
         }
-        else if (std::strcmp(type->getFamilyName(), "Decimal") == 0)
+        case TypeIndex::Decimal32:
         {
-            if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal32>(type); dec)
-            {
-                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-                ScaleType scale = dec->getScale();
-                return DecimalField(Decimal32(v), scale);
-            }
-            else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal64>(type); dec)
-            {
-                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-                ScaleType scale = dec->getScale();
-                return DecimalField(Decimal64(v), scale);
-            }
-            else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal128>(type); dec)
-            {
-                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-                ScaleType scale = dec->getScale();
-                return DecimalField(Decimal128(v), scale);
-            }
-            else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal256>(type); dec)
-            {
-                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
-                ScaleType scale = dec->getScale();
-                return DecimalField(Decimal256(v), scale);
-            }
+            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal32>(type);
+            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            ScaleType scale = dec->getScale();
+            return DecimalField(Decimal32(v), scale);
         }
-        else if (std::strcmp(type->getFamilyName(), "Nullable") == 0)
+        case TypeIndex::Decimal64:
         {
+            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal64>(type);
+            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            ScaleType scale = dec->getScale();
+            return DecimalField(Decimal64(v), scale);
+        }
+        case TypeIndex::Decimal128:
+        {
+            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal128>(type);
+            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            ScaleType scale = dec->getScale();
+            return DecimalField(Decimal128(v), scale);
+        }
+        case TypeIndex::Decimal256:
+        {
+            auto      dec   = std::dynamic_pointer_cast<const DataTypeDecimal256>(type);
+            Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
+            ScaleType scale = dec->getScale();
+            return DecimalField(Decimal256(v), scale);
+        }
+        case TypeIndex::Nullable:
+        {
+            if (value.isNull())
+                return value;
             auto        nullable    = std::dynamic_pointer_cast<const DataTypeNullable>(type);
             DataTypePtr nested_type = nullable->getNestedType();
             return castDefaultValue(value, nested_type);
         }
-
-        return type->getDefault();
+        default:
+            throw Exception("Unsupported data type: " + type->getName());
+        }
     };
 
     if (command.default_expression)
