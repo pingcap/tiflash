@@ -50,13 +50,13 @@ parseASTCompareFunction(const ASTFunction * const func, const FilterParser::Attr
     constexpr UInt32 state_finish      = state_has_column | state_has_literal;
     for (auto & child : func->arguments->children)
     {
-        if (auto * id = static_cast<ASTIdentifier *>(child.get()); id != nullptr && id->kind == ASTIdentifier::Column)
+        if (auto * id = dynamic_cast<ASTIdentifier *>(child.get()); id != nullptr && id->kind == ASTIdentifier::Column)
         {
             state |= state_has_column;
             const String & col_name = id->name;
             attr                    = creator(col_name);
         }
-        else if (auto * liter = static_cast<ASTLiteral *>(child.get()); liter != nullptr)
+        else if (auto * liter = dynamic_cast<ASTLiteral *>(child.get()); liter != nullptr)
         {
             state |= state_has_literal;
             value = liter->value;
@@ -97,7 +97,7 @@ RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParse
         RSOperators children;
         for (const auto & child : func->arguments->children)
         {
-            ASTFunction * sub_func = static_cast<ASTFunction *>(child.get());
+            ASTFunction * sub_func = dynamic_cast<ASTFunction *>(child.get());
             if (sub_func != nullptr)
             {
                 children.emplace_back(parseASTFunction(sub_func, creator, log));
@@ -119,7 +119,7 @@ RSOperatorPtr parseASTFunction(const ASTFunction * const func, const FilterParse
                 astToDebugString(func), "logical not with " + DB::toString(func->arguments->children.size()) + " children", false);
         else
         {
-            if (ASTFunction * sub_func = static_cast<ASTFunction *>(func->arguments->children[0].get()); sub_func != nullptr)
+            if (ASTFunction * sub_func = dynamic_cast<ASTFunction *>(func->arguments->children[0].get()); sub_func != nullptr)
                 op = createNot(parseASTFunction(sub_func, creator, log));
             else
                 op = createUnsupported(astToDebugString(func), "child of logical not is not function", false);
@@ -155,7 +155,7 @@ RSOperatorPtr FilterParser::parseSelectQuery(const ASTSelectQuery & query, AttrC
     if (!query.where_expression)
         return op;
 
-    const ASTFunction * where = static_cast<ASTFunction *>(query.where_expression.get());
+    const ASTFunction * where = dynamic_cast<ASTFunction *>(query.where_expression.get());
     if (!where)
     {
         const String debug_string = ast::astToDebugString(query.where_expression.get());
