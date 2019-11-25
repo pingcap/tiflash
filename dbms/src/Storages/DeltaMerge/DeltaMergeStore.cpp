@@ -939,7 +939,8 @@ namespace
 // TODO maybe move to -internal.h ?
 inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & define)
 {
-    auto castDefaultValue = [](Field value, DataTypePtr type) -> Field {
+    std::function<Field(Field, DataTypePtr)> castDefaultValue; // for lazy bind
+    castDefaultValue = [&](Field value, DataTypePtr type) -> Field {
         if (type->equals(*DataTypeFactory::instance().get("Float32")) || type->equals(*DataTypeFactory::instance().get("Float64")))
         {
             if (value.getType() == Field::Types::Float64)
@@ -959,6 +960,11 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
                 Float64                 res = dec.getValue().toFloat<Float64>(dec.getScale());
                 return toField(res);
             }
+        }
+        else if (std::strcmp(type->getFamilyName(), "FixedString") == 0)
+        {
+            String res = get<String>(value);
+            return toField(res);
         }
         else if (type->equals(*DataTypeFactory::instance().get("Int8")) || type->equals(*DataTypeFactory::instance().get("Int16"))
                  || type->equals(*DataTypeFactory::instance().get("Int32")) || type->equals(*DataTypeFactory::instance().get("Int64")))
@@ -984,32 +990,34 @@ inline void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefi
         {
             if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal32>(type); dec)
             {
-                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
                 ScaleType scale = dec->getScale();
-                auto      res   = ToDecimal<double, Decimal32>(real, scale);
-                return toField(res, scale);
+                return DecimalField(Decimal32(v), scale);
             }
             else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal64>(type); dec)
             {
-                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
                 ScaleType scale = dec->getScale();
-                auto      res   = ToDecimal<double, Decimal64>(real, scale);
-                return toField(res, scale);
+                return DecimalField(Decimal64(v), scale);
             }
             else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal128>(type); dec)
             {
-                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
                 ScaleType scale = dec->getScale();
-                auto      res   = ToDecimal<double, Decimal128>(real, scale);
-                return toField(res, scale);
+                return DecimalField(Decimal128(v), scale);
             }
             else if (auto dec = std::dynamic_pointer_cast<const DataTypeDecimal256>(type); dec)
             {
-                Float64   real  = applyVisitor(FieldVisitorConvertToNumber<Float64>(), value);
+                Int64     v     = applyVisitor(FieldVisitorConvertToNumber<Int64>(), value);
                 ScaleType scale = dec->getScale();
-                auto      res   = ToDecimal<double, Decimal256>(real, scale);
-                return toField(res, scale);
+                return DecimalField(Decimal256(v), scale);
             }
+        }
+        else if (std::strcmp(type->getFamilyName(), "Nullable") == 0)
+        {
+            auto        nullable    = std::dynamic_pointer_cast<const DataTypeNullable>(type);
+            DataTypePtr nested_type = nullable->getNestedType();
+            return castDefaultValue(value, nested_type);
         }
 
         return type->getDefault();
