@@ -1112,11 +1112,11 @@ try
             com.column_name = col_name_to_add;
 
             // mock default value
-            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.23
+            // actual ddl is like: ADD COLUMN `f32` Float32 DEFAULT 1.125
             auto cast = std::make_shared<ASTFunction>();
             {
                 cast->name      = "CAST";
-                ASTPtr arg      = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(123), 2)));
+                ASTPtr arg      = std::make_shared<ASTLiteral>(toField(DecimalField(Decimal32(1125), 3)));
                 cast->arguments = std::make_shared<ASTExpressionList>();
                 cast->children.push_back(cast->arguments);
                 cast->arguments->children.push_back(arg);
@@ -1153,7 +1153,8 @@ try
                         c->get(i, tmp);
                         // There is some loss of precision during the convertion, so we just do a rough comparison
                         Float64 epsilon = 0.00001;
-                        EXPECT_TRUE(std::abs(tmp.get<Float64>() - 1.23) < epsilon);
+                        Float64 v       = std::abs(tmp.get<Float64>());
+                        EXPECT_TRUE(v - 1.125 < epsilon);
                     }
                 }
             }
