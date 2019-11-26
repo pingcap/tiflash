@@ -197,8 +197,6 @@
     M(DMSegmentMergeNS) \
     M(DMFlushDeltaCache) \
     M(DMFlushDeltaCacheNS) \
-    M(DMWriteChunksWriteRows) \
-    M(DMWriteChunksCopyRows) \
 
 
 namespace ProfileEvents
