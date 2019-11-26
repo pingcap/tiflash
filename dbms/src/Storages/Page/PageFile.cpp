@@ -183,9 +183,13 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         // check the checksum of WriteBatch
         const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
         const auto wb_checksum               = PageUtil::get<Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
-        if (wb_checksum != CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum))
+        const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
+        if (wb_checksum != checksum_calc)
         {
-            throw Exception("Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data),
+            std::stringstream ss;
+            ss << "expected: " << std::hex << wb_checksum << ", but: " << checksum_calc;
+            throw Exception("Write batch checksum not match, path: " + path + ", offset: " + DB::toString(wb_start_pos - meta_data)
+                                + ", bytes: " + DB::toString(wb_bytes) + ", " + ss.str(),
                             ErrorCodes::CHECKSUM_DOESNT_MATCH);
         }
 

@@ -33,7 +33,7 @@ RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)            
 RSOperatorPtr createNotIn(const Attr & attr, const Fields & values)                             { return std::make_shared<NotIn>(attr, values); }
 RSOperatorPtr createNotLike(const Attr & attr, const Field & value)                             { return std::make_shared<NotLike>(attr, value); }
 RSOperatorPtr createOr(const RSOperators & children)                                            { return std::make_shared<Or>(children); }
-RSOperatorPtr createUnsupported(const String & content, bool is_not)                            { return std::make_shared<Unsupported>(content, is_not); }
+RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not)     { return std::make_shared<Unsupported>(content, reason, is_not); }
 // clang-format on
 } // namespace DM
 } // namespace DB

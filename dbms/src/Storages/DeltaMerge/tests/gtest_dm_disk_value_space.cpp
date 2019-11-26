@@ -36,7 +36,7 @@ protected:
 
         storage_pool        = std::make_unique<StoragePool>("test.t1", path);
         Context & context   = DMTestEnv::getContext();
-        table_handle_define = ColumnDefine(1, "pk", std::make_shared<DataTypeInt64>());
+        table_handle_define = ColumnDefine(1, DMTestEnv::pk_name, std::make_shared<DataTypeInt64>());
         table_columns.clear();
         table_columns.emplace_back(table_handle_define);
         table_columns.emplace_back(getVersionColumnDefine());
@@ -52,9 +52,9 @@ protected:
                       .handle_column = table_handle_define,
                       .min_version   = 0,
 
-                      .not_compress            = settings.not_compress_columns,
+                      .not_compress = settings.not_compress_columns,
 
-                      .segment_limit_rows      = context.getSettingsRef().dm_segment_limit_rows,
+                      .segment_limit_rows = context.getSettingsRef().dm_segment_limit_rows,
 
                       .delta_limit_rows        = context.getSettingsRef().dm_segment_delta_limit_rows,
                       .delta_limit_bytes       = context.getSettingsRef().dm_segment_delta_limit_bytes,
@@ -187,6 +187,214 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
         }
     }
 }
+
+TEST_F(DiskValueSpace_test, writeChunks_OneBlock)
+{
+    const Int64 pk_min = 20, pk_max = 40;
+    Block       block = DMTestEnv::prepareSimpleWriteBlock(pk_min, pk_max, false);
+    auto        in    = std::make_shared<OneBlockInputStream>(block);
+
+    WriteBatch wb;
+    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
+    ASSERT_EQ(chunks.size(), 1UL);
+
+    const Chunk & chunk = chunks[0];
+    ASSERT_EQ(chunk.getRows(), size_t(pk_max - pk_min));
+    ASSERT_EQ(chunk.getHandleFirstLast(), HandlePair(pk_min, pk_max - 1));
+}
+
+TEST_F(DiskValueSpace_test, writeChunks_NonOverlapBlocks)
+{
+    const Int64         pk_min = 20, pk_max = 40;
+    const Int64         pk_span = pk_max - pk_min;
+    BlockInputStreamPtr in      = {};
+    {
+        BlocksList blocks;
+        // First block [20, 30)
+        Block block = DMTestEnv::prepareSimpleWriteBlock(pk_min, pk_min + pk_span / 2, false);
+        {
+            auto col = block.getByName(DMTestEnv::pk_name);
+            EXPECT_EQ(col.column->getInt(0), pk_min);
+            EXPECT_EQ(col.column->getInt(col.column->size() - 1), pk_min + pk_span / 2 - 1);
+            EXPECT_EQ(block.rows(), size_t(10));
+        }
+        blocks.emplace_back(block);
+        // First block [30, 40)
+        block = DMTestEnv::prepareSimpleWriteBlock(pk_min + pk_span / 2, pk_max, false);
+        {
+            auto col = block.getByName(DMTestEnv::pk_name);
+            EXPECT_EQ(col.column->getInt(0), pk_min + pk_span / 2);
+            EXPECT_EQ(col.column->getInt(col.column->size() - 1), pk_max - 1);
+            EXPECT_EQ(block.rows(), size_t(10));
+        }
+        blocks.emplace_back(block);
+        in = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
+    }
+
+    WriteBatch wb;
+    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
+    ASSERT_EQ(chunks.size(), 2UL);
+
+    {
+        const Chunk & chunk = chunks[0];
+        ASSERT_EQ(chunk.getRows(), size_t(pk_span / 2));
+        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(pk_min, pk_min + pk_span / 2 - 1));
+    }
+    {
+        const Chunk & chunk = chunks[1];
+        ASSERT_EQ(chunk.getRows(), size_t(pk_span / 2));
+        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(pk_min + pk_span / 2, pk_max - 1));
+    }
+}
+
+TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocks)
+{
+    BlockInputStreamPtr in = {};
+    {
+        BlocksList blocks;
+        // First block [20, 30]
+        Block block = DMTestEnv::prepareSimpleWriteBlock(20, 31, false);
+        {
+            auto col = block.getByName(DMTestEnv::pk_name);
+            EXPECT_EQ(col.column->getInt(0), 20);
+            EXPECT_EQ(col.column->getInt(col.column->size() - 1), 30);
+            EXPECT_EQ(block.rows(), size_t(11));
+        }
+        blocks.emplace_back(block);
+
+        // Second block [30, 40), and pk=30 have multiple version
+        {
+            // version [100, 110) for pk=30
+            Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(30, 100, 110);
+            // pk [31,40]
+            Block block_2                 = DMTestEnv::prepareSimpleWriteBlock(31, 41, false);
+            DM::concat(block_of_multi_versions, block_2);
+            block = block_of_multi_versions;
+            {
+                auto col = block.getByName(DMTestEnv::pk_name);
+                EXPECT_EQ(col.column->getInt(0), 30);
+                EXPECT_EQ(col.column->getInt(col.column->size() - 1), 40);
+                EXPECT_EQ(block.rows(), size_t(10 + 10));
+            }
+        }
+        blocks.emplace_back(block);
+
+        // Third block [40, 50), and pk=40 have multiple version
+        {
+            // version [300, 305) for pk=40
+            Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(40, 300, 305);
+            // pk [41,50)
+            Block block_2                 = DMTestEnv::prepareSimpleWriteBlock(41, 50, false);
+            DM::concat(block_of_multi_versions, block_2);
+            block = block_of_multi_versions;
+            {
+                auto col = block.getByName(DMTestEnv::pk_name);
+                EXPECT_EQ(col.column->getInt(0), 40);
+                EXPECT_EQ(col.column->getInt(col.column->size() - 1), 49);
+                EXPECT_EQ(block.rows(), size_t(5 + 9));
+            }
+        }
+        blocks.emplace_back(block);
+
+        in = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
+    }
+
+    WriteBatch wb;
+    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
+    ASSERT_EQ(chunks.size(), 3UL);
+
+    {
+        const Chunk & chunk = chunks[0];
+        // should be [20, 30], and pk=30 with 11 versions
+        ASSERT_EQ(chunk.getRows(), size_t(11 + 10));
+        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(20, 30));
+    }
+    {
+        const Chunk & chunk = chunks[1];
+        // should be [31, 40], and pk=40 with 6 versions
+        ASSERT_EQ(chunk.getRows(), size_t(9 + 6));
+        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(31, 40));
+    }
+    {
+        const Chunk & chunk = chunks[2];
+        // should be [41, 50)
+        ASSERT_EQ(chunk.getRows(), size_t(9));
+        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(41, 49));
+    }
+}
+
+TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocksMerged)
+{
+    BlockInputStreamPtr in = {};
+    {
+        BlocksList blocks;
+        // First block [20, 30]
+        Block block = DMTestEnv::prepareSimpleWriteBlock(20, 31, false);
+        {
+            auto col = block.getByName(DMTestEnv::pk_name);
+            EXPECT_EQ(col.column->getInt(0), 20);
+            EXPECT_EQ(col.column->getInt(col.column->size() - 1), 30);
+            EXPECT_EQ(block.rows(), size_t(11));
+        }
+        blocks.emplace_back(block);
+
+        // Second block [30, 31), and pk=30 have multiple version
+        {
+            // version [100, 110) for pk=30
+            Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(30, 100, 110);
+            block = block_of_multi_versions;
+            {
+                auto col = block.getByName(DMTestEnv::pk_name);
+                EXPECT_EQ(col.column->getInt(0), 30);
+                EXPECT_EQ(col.column->getInt(col.column->size() - 1), 30);
+                EXPECT_EQ(block.rows(), size_t(10));
+            }
+        }
+        blocks.emplace_back(block);
+
+        // Third block [30, 50), and pk=30 have multiple version
+        {
+            // version [300, 305) for pk=30
+            Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(30, 300, 305);
+            // pk [41,50)
+            Block block_2                 = DMTestEnv::prepareSimpleWriteBlock(31, 50, false);
+            DM::concat(block_of_multi_versions, block_2);
+            block = block_of_multi_versions;
+            {
+                auto col = block.getByName(DMTestEnv::pk_name);
+                EXPECT_EQ(col.column->getInt(0), 30);
+                EXPECT_EQ(col.column->getInt(col.column->size() - 1), 49);
+                EXPECT_EQ(block.rows(), size_t(5 + 19));
+            }
+        }
+        blocks.emplace_back(block);
+
+        in = std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
+    }
+
+    WriteBatch wb;
+    auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
+    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
+    // Second block is merge to the first
+    ASSERT_EQ(chunks.size(), 2UL);
+
+    {
+        const Chunk & chunk = chunks[0];
+        // should be [20, 30], and pk=30 with 1 + 10 + 5 versions
+        ASSERT_EQ(chunk.getRows(), size_t(11 + 10 + 5));
+        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(20, 30));
+    }
+    {
+        const Chunk & chunk = chunks[1];
+        // should be [31, 50)
+        ASSERT_EQ(chunk.getRows(), size_t(19));
+        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(31, 49));
+    }
+}
+
 
 } // namespace tests
 } // namespace DM

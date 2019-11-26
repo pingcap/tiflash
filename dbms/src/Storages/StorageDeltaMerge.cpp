@@ -7,6 +7,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageFactory.h>
@@ -536,8 +537,49 @@ BlockInputStreams StorageDeltaMerge::read( //
             }
         }
 
-        return store->read(
-            context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso, max_block_size);
+        DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
+        const bool enable_rs_filter = context.getSettingsRef().dm_enable_rough_set_filter;
+        if (enable_rs_filter)
+        {
+            if (likely(query_info.dag_query))
+            {
+                /// Query from TiDB / TiSpark
+                auto create_attr_by_column_id = [this](ColumnID column_id) -> Attr {
+                    const ColumnDefines & defines = this->store->getTableColumns();
+                    auto iter = std::find_if(
+                        defines.begin(), defines.end(), [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
+                    if (iter != defines.end())
+                        return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+                    else
+                        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+                        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+                };
+                rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, std::move(create_attr_by_column_id), log);
+            }
+            else
+            {
+                // Query from ch client
+                auto create_attr_by_column_id = [this](const String &col_name) -> Attr {
+                    const ColumnDefines & defines = this->store->getTableColumns();
+                    auto iter = std::find_if(
+                        defines.begin(), defines.end(), [&col_name](const ColumnDefine & d) -> bool { return d.name == col_name; });
+                    if (iter != defines.end())
+                        return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+                    else
+                        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+                        return Attr{.col_name = col_name, .col_id = 0, .type = DataTypePtr{}};
+                };
+                rs_operator = FilterParser::parseSelectQuery(select_query, std::move(create_attr_by_column_id), log);
+            }
+            if (likely(rs_operator != DM::EMPTY_FILTER))
+                LOG_DEBUG(log, "Rough set filter: " << rs_operator->toString());
+        }
+        else
+            LOG_DEBUG(log, "Rough set filter is disabled.");
+
+
+        return store->read(context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso,
+            rs_operator, max_block_size);
     }
 }
 
@@ -549,7 +591,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t rows)
 
     {
         ColumnDefines to_read{getExtraHandleColumnDefine()};
-        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64)[0];
+        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64, EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
         while ((block = stream->read()))
@@ -563,7 +605,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t rows)
     DM::HandleRange range = DM::HandleRange::newAll();
     {
         ColumnDefines to_read{getExtraHandleColumnDefine()};
-        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64)[0];
+        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64, EMPTY_FILTER)[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;

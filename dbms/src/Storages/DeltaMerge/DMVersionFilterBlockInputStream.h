@@ -77,7 +77,7 @@ protected:
 
     bool initNextBlock()
     {
-        raw_block = readNextBlock();
+        raw_block = ::DB::DM::readNextBlock(children.back());
         if (!raw_block)
         {
             handle_col_data  = nullptr;
@@ -91,20 +91,6 @@ protected:
             version_col_data = getColumnVectorDataPtr<UInt64>(raw_block, version_col_pos);
             delete_col_data  = getColumnVectorDataPtr<UInt8>(raw_block, delete_col_pos);
             return true;
-        }
-    }
-
-    /// This method guarantees that the returned valid block is not empty.
-    Block readNextBlock()
-    {
-        while (true)
-        {
-            Block res = children.back()->read();
-            if (!res)
-                return {};
-            if (!res.rows())
-                continue;
-            return res;
         }
     }
 

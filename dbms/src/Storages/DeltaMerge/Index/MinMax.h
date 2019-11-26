@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Common/FieldVisitors.h>
+
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
@@ -93,6 +95,8 @@ struct MinMaxValue
     virtual RSResult checkEqual(const Field & value, const DataTypePtr & type)        = 0;
     virtual RSResult checkGreater(const Field & value, const DataTypePtr & type)      = 0;
     virtual RSResult checkGreaterEqual(const Field & value, const DataTypePtr & type) = 0;
+
+    virtual String toString() const = 0;
 };
 
 /// Number types.
@@ -168,6 +172,13 @@ struct MinMaxValueFixed : public MinMaxValue
     RSResult checkGreater(const Field & value, const DataTypePtr & type) override { return RoughCheck::checkGreater(value, type, min, max); }
     RSResult checkGreaterEqual(const Field & value, const DataTypePtr & type) override { return RoughCheck::checkGreaterEqual(value, type, min, max); }
     // clang-format on
+
+    String toString() const override
+    {
+        std::stringstream ss;
+        ss << "{\"type\":\"fixed\",\"min\":\"" << DB::toString(min) << "\",\"max\":\"" << DB::toString(max) << "\"}";
+        return ss.str();
+    }
 };
 
 /// String type only.
@@ -244,6 +255,13 @@ struct MinMaxValueString : public MinMaxValue
     RSResult checkGreater(const Field & value, const DataTypePtr & type) override { return RoughCheck::checkGreater(value, type, min, max); }
     RSResult checkGreaterEqual(const Field & value, const DataTypePtr & type) override { return RoughCheck::checkGreaterEqual(value, type, min, max); }
     // clang-format on
+
+    String toString() const override
+    {
+        std::stringstream ss;
+        ss << "{\"type\":\"string\",\"min\":\"" << min << "\",\"max\":\"" << max << "\"}";
+        return ss.str();
+    }
 };
 
 /// Other types.
@@ -314,6 +332,14 @@ struct MinMaxValueDataGeneric : public MinMaxValue
     RSResult checkGreater(const Field & value, const DataTypePtr & type) override { return RoughCheck::checkGreater(value, type, min, max); }
     RSResult checkGreaterEqual(const Field & value, const DataTypePtr & type) override { return RoughCheck::checkGreaterEqual(value, type, min, max); }
     // clang-format on
+
+    String toString() const override
+    {
+        std::stringstream ss;
+        ss << "{\"type\":\"generic\",\"min\":\"" << applyVisitor(FieldVisitorToString(), min) << "\",\"max\":\""
+           << applyVisitor(FieldVisitorToString(), max) << "\"}";
+        return ss.str();
+    }
 };
 
 
