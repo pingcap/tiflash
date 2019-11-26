@@ -54,8 +54,8 @@ public:
         CompressedWriteBuffer      compressed_buf;
         HashingWriteBuffer         original_hashing;
 
-        MinMaxIndexPtr      minmaxes;
-        WriteBufferFromFile mark_file;
+        MinMaxIndexPtr         minmaxes;
+        WriteBufferFromFile    mark_file;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<ColId, StreamPtr>;
@@ -84,8 +84,7 @@ private:
     bool                wal_mode;
 
     ColumnStreams       column_streams;
-    WriteBufferFromFile split_file;
-    WriteBufferFromFile not_clean_file;
+    WriteBufferFromFile chunk_stat_file;
 };
 
 } // namespace DM

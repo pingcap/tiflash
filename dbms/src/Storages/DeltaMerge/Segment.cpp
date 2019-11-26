@@ -780,13 +780,13 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
         if (cur_rows > split_row_index)
         {
             cur_rows -= rows_in_file;
-            auto & chunk_splits = file->getSplit();
-            for (size_t chunk_id = 0; chunk_id < file->getChunks(); ++chunk_id)
+            auto & chunk_stats = file->getChunkStats();
+            for (size_t chunk_id = 0; chunk_id < chunk_stats.size(); ++chunk_id)
             {
-                cur_rows += chunk_splits[chunk_id];
+                cur_rows += chunk_stats[chunk_id].rows;
                 if (cur_rows > split_row_index)
                 {
-                    cur_rows -= chunk_splits[chunk_id];
+                    cur_rows -= chunk_stats[chunk_id].rows;
 
                     read_file = file;
                     read_chunk->insert(chunk_id);

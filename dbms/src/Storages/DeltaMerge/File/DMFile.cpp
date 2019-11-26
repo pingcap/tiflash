@@ -47,32 +47,26 @@ void DMFile::writeMeta()
 {
     WriteBufferFromFile buf(metaPath(), 4096);
     writeString("DeltaMergeFile format: 0", buf);
-    writeString("\nChunks: ", buf);
-    DB::writeText(getChunks(), buf);
     writeString("\n", buf);
     writeText(column_stats, buf);
 }
 
 void DMFile::readMeta()
 {
-    size_t chunks = 0;
     {
         auto buf = openForRead(metaPath());
         assertString("DeltaMergeFile format: 0", buf);
-        assertString("\nChunks: ", buf);
-        DB::readText(chunks, buf);
         assertString("\n", buf);
         readText(column_stats, buf);
     }
+
     {
-        split.resize(chunks);
-        auto buf = openForRead(splitPath());
-        buf.read((char *)split.data(), sizeof(UInt64) * chunks);
-    }
-    {
-        not_clean.resize(chunks);
-        auto buf = openForRead(notCleanPath());
-        buf.read((char *)not_clean.data(), sizeof(UInt64) * chunks);
+        auto       chunk_stat_path = chunkStatPath();
+        Poco::File chunk_stat_file(chunk_stat_path);
+        size_t     chunks = chunk_stat_file.getSize() / sizeof(ChunkStat);
+        chunk_stats.resize(chunks);
+        auto buf = openForRead(chunk_stat_path);
+        buf.read((char *)chunk_stats.data(), sizeof(ChunkStat) * chunks);
     }
 }
 

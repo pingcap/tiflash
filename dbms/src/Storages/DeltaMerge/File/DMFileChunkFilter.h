@@ -115,9 +115,9 @@ public:
     size_t validRows()
     {
         size_t rows        = 0;
-        auto & chunk_split = dmfile->getSplit();
-        for (size_t i = 0; i < chunk_split.size(); ++i)
-            rows += use_chunks[i] ? chunk_split[i] : 0;
+        auto & chunk_stats = dmfile->getChunkStats();
+        for (size_t i = 0; i < chunk_stats.size(); ++i)
+            rows += use_chunks[i] ? chunk_stats[i].rows : 0;
         return rows;
     }
 

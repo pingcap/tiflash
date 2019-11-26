@@ -19,8 +19,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
       wal_mode(wal_mode_),
-      split_file(dmfile->splitPath()),
-      not_clean_file(dmfile->notCleanPath())
+      chunk_stat_file(dmfile->chunkStatPath())
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -41,22 +40,26 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
 
 void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 {
-    size_t rows = block.rows();
+    DMFile::ChunkStat stat;
+    stat.rows      = block.rows();
+    stat.not_clean = not_clean_rows;
+
     for (auto & cd : write_columns)
     {
         auto & col = getByColumnId(block, cd.id).column;
         writeColumn(cd.id, *cd.type, *col);
-    }
-    writeIntBinary(rows, split_file);
-    writeIntBinary(not_clean_rows, not_clean_file);
 
+        if (cd.id == VERSION_COLUMN_ID)
+            stat.first_version = col->get64(0);
+        else if (cd.id == TAG_COLUMN_ID)
+            stat.first_tag = (UInt8)(col->get64(0));
+    }
+
+    writePODBinary(stat, chunk_stat_file);
     if (wal_mode)
-    {
-        split_file.sync();
-        not_clean_file.sync();
-    }
+        chunk_stat_file.sync();
 
-    dmfile->addChunk(rows);
+    dmfile->addChunk(stat);
 }
 
 void DMFileWriter::finalize()

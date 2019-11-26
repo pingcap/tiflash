@@ -21,8 +21,6 @@ static const String NGC_FILE_NAME = "NGC";
 class DMFile : private boost::noncopyable
 {
 public:
-    using Sizes = PaddedPODArray<UInt64>;
-
     enum Status : int
     {
         WRITABLE,
@@ -45,6 +43,16 @@ public:
         }
     }
 
+    struct ChunkStat
+    {
+        UInt32 rows;
+        UInt32 not_clean;
+        UInt64 first_version;
+        UInt8  first_tag;
+    };
+
+    using ChunkStats = PaddedPODArray<ChunkStat>;
+
     static DMFilePtr create(UInt64 file_id, const String & parent_path);
     static DMFilePtr restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
 
@@ -61,12 +69,12 @@ public:
     UInt64 refId() { return ref_id; }
     String path() { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
     String metaPath() { return path() + "/meta.txt"; }
-    String splitPath() { return path() + "/split"; }
-    String notCleanPath() { return path() + "/notclean"; }
+    String chunkStatPath() { return path() + "/chunk"; }
     // Do not gc me.
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
     String colDataPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".dat"; }
     String colIndexPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".idx"; }
+    String colEdgePath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".edge"; }
     String colMarkPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".mrk"; }
 
     const auto & getColumnStat(ColId col_id)
@@ -80,8 +88,8 @@ public:
     size_t getRows()
     {
         size_t rows = 0;
-        for (auto r : split)
-            rows += r;
+        for (auto & s : chunk_stats)
+            rows += s.rows;
         return rows;
     }
 
@@ -91,9 +99,9 @@ public:
         return 0;
     }
 
-    size_t              getChunks() { return split.size(); }
-    const Sizes &       getSplit() { return split; }
-    const Sizes &       getNotClean() { return not_clean; }
+    size_t              getChunks() { return chunk_stats.size(); }
+    const ChunkStats &  getChunkStats() { return chunk_stats; }
+    const ChunkStat &   getChunkStat(size_t chunk_index) { return chunk_stats[chunk_index]; }
     const ColumnStats & getColumnStats() { return column_stats; }
     Status              getStatus() { return status; }
 
@@ -103,7 +111,7 @@ private:
     {
     }
 
-    void addChunk(size_t chunk_rows) { split.push_back(chunk_rows); }
+    void addChunk(const ChunkStat & chunk_stat) { chunk_stats.push_back(chunk_stat); }
     void setStatus(Status status_) { status = status_; }
 
     void finalize();
@@ -113,8 +121,7 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    Sizes       split;
-    Sizes       not_clean;
+    ChunkStats  chunk_stats;
     ColumnStats column_stats;
 
     Status status;

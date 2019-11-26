@@ -135,7 +135,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     skip_rows = 0;
     for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id)
     {
-        skip_rows += dmfile->getSplit()[next_chunk_id];
+        skip_rows += dmfile->getChunkStat(next_chunk_id).rows;
     }
     return next_chunk_id < use_chunks.size();
 }
@@ -156,8 +156,7 @@ Block DMFileReader::read()
     // Find max continuing rows we can read.
     size_t start_chunk_id = next_chunk_id;
 
-    auto & split          = dmfile->getSplit();
-    auto & not_clean      = dmfile->getNotClean();
+    auto & chunk_stats    = dmfile->getChunkStats();
     size_t read_rows      = 0;
     size_t not_clean_rows = 0;
 
@@ -167,8 +166,8 @@ Block DMFileReader::read()
         if (enable_clean_read && handle_res[next_chunk_id] != expected_handle_res)
             break;
 
-        read_rows += split[next_chunk_id];
-        not_clean_rows += not_clean[next_chunk_id];
+        read_rows += chunk_stats[next_chunk_id].rows;
+        not_clean_rows += chunk_stats[next_chunk_id].not_clean;
     }
 
     if (!read_rows)
@@ -190,9 +189,13 @@ Block DMFileReader::read()
                 Handle min_handle = chunk_filter.getMinHandle(start_chunk_id);
                 column            = cd.type->createColumnConst(read_rows, Field(min_handle));
             }
-            else
+            else if (cd.id == VERSION_COLUMN_ID)
             {
-                column = cd.type->createColumnConstWithDefaultValue(read_rows);
+                column = cd.type->createColumnConst(read_rows, Field(chunk_stats[start_chunk_id].first_version));
+            }
+            else if (cd.id == TAG_COLUMN_ID)
+            {
+                column = cd.type->createColumnConst(read_rows, Field((UInt64)(chunk_stats[start_chunk_id].first_tag)));
             }
 
             res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
