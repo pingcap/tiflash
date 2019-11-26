@@ -83,16 +83,26 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
 #ifdef DELTA_VERSION_SET
     for (auto & page_file : page_files)
     {
-        PageEntriesEdit edit;
-        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
-
-        // Only level 0 is writable.
-        if (page_file.getLevel() == 0)
+        try
         {
-            write_file = page_file;
+            PageEntriesEdit edit;
+            const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
+
+            // Only level 0 is writable.
+            if (page_file.getLevel() == 0)
+            {
+                write_file = page_file;
+            }
+
+            // apply edit to new version
+            versioned_page_entries.apply(edit);
         }
-        // apply edit to new version
-        versioned_page_entries.apply(edit);
+        catch (Exception & e)
+        {
+            /// Better diagnostics.
+            e.addMessage("(while applying edit from " + page_file.folderPath() + " to PageStorage: " + storage_name + ")");
+            throw;
+        }
     }
 #else
     auto snapshot = versioned_page_entries.getSnapshot();

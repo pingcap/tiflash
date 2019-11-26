@@ -124,11 +124,11 @@ public:
     bool               isExist() const;
     void               removeDataIfExists() const;
 
+    String folderPath() const;
 private:
     /// Create a new page file.
     PageFile(PageFileId file_id_, UInt32 level_, const String & parent_path, bool is_tmp_, bool is_create, Poco::Logger * log);
 
-    String folderPath() const;
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }
 

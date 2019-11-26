@@ -189,6 +189,7 @@ public:
                            const HandleRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
+                           const RSOperatorPtr & filter, 
                            size_t                expected_block_size = STABLE_CHUNK_ROWS);
 
     /// Force flush all data to disk.

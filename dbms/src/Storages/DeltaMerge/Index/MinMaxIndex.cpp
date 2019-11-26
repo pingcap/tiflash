@@ -114,5 +114,10 @@ RSResult MinMaxIndex::checkGreaterEqual(const Field & value, const DataTypePtr &
     return minmax->checkGreaterEqual(value, type);
 }
 
+String MinMaxIndex::toString() const
+{
+    return this->minmax->toString();
+}
+
 } // namespace DM
 } // namespace DB

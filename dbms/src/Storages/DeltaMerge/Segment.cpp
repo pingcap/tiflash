@@ -139,6 +139,38 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     segment->delta->restore(OpContext::createForLogStorage(context));
     segment->stable->restore(OpContext::createForDataStorage(context));
+#if 0
+    /// Dump the min-max index info
+    if (unlikely(segment->log->trace()))
+    {
+        for (const auto & chunk : segment->delta->getChunks())
+        {
+            for (auto && [col_id, meta] : chunk.getMetas())
+            {
+                (void)col_id;
+                if (meta.minmax)
+                {
+                    LOG_TRACE(segment->log,
+                              "Segment[" << segment->segmentId() << "] VS[delta] " << chunk.info() << " Col[" << meta.col_id << "] MinMax["
+                                         << meta.minmax->toString() << "]");
+                }
+            }
+        }
+        for (const auto & chunk : segment->stable->getChunks())
+        {
+            for (auto && [col_id, meta] : chunk.getMetas())
+            {
+                (void)col_id;
+                if (meta.minmax)
+                {
+                    LOG_TRACE(segment->log,
+                              "Segment[" << segment->segmentId() << "] VS[stable] " << chunk.info() << " Col[" << meta.col_id << "] MinMax["
+                                         << meta.minmax->toString() << "]");
+                }
+            }
+        }
+    }
+#endif
 
     return segment;
 }
@@ -578,7 +610,6 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
     auto new_read_columns = arrangeReadColumns<add_tag_column>(dm_context.handle_column, read_columns);
 
     DeltaValueSpacePtr       delta_value_space;
-    ChunkBlockInputStreamPtr stable_input_stream;
     DeltaIndexPtr            delta_index;
 
     auto delta_block  = segment_snap.delta->read(new_read_columns, storage_snap.log_reader, 0, segment_snap.delta_rows);
