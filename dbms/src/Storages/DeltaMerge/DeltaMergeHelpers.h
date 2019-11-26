@@ -94,8 +94,18 @@ inline bool sortBlockByPk(const ColumnDefine & handle, Block & block, IColumn::P
 template <typename T>
 inline PaddedPODArray<T> const * toColumnVectorDataPtr(const ColumnPtr & column)
 {
-    const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
-    return &c.getData();
+    if (column->isColumnConst())
+    {
+        auto * const_col = static_cast<const ColumnConst *>(column.get());
+
+        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(const_col->getDataColumn());
+        return &c.getData();
+    }
+    else
+    {
+        const ColumnVector<T> & c = typeid_cast<const ColumnVector<T> &>(*(column));
+        return &c.getData();
+    }
 }
 
 template <typename T>

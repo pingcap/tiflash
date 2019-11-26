@@ -54,6 +54,8 @@ public:
     void                  write(const IDataType & type, WriteBuffer & buf);
     static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf);
 
+    std::pair<Int64, Int64> getIntMinMax(size_t chunk_index);
+
     // TODO: Use has_null and value.isNull to check.
 
     RSResult checkEqual(size_t chunk_index, const Field & value, const DataTypePtr & type);

@@ -21,7 +21,7 @@ public:
     {
     }
 
-    void write(const Block & block) { writer.write(block); }
+    void write(const Block & block, size_t not_clean_rows) { writer.write(block, not_clean_rows); }
 
     void writePrefix() {}
 

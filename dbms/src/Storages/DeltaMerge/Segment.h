@@ -249,14 +249,14 @@ private:
     template <class IndexIterator = DeltaIndex::Iterator>
     BlockInputStreamPtr getPlacedStream(const DMContext &           dm_context,
                                         const ColumnDefines &       read_columns,
+                                        const HandleRange &         handle_range,
                                         const RSOperatorPtr &       filter,
                                         const StableValueSpacePtr & stable_snap,
                                         const DeltaValueSpacePtr &  delta_value_space,
                                         const IndexIterator &       delta_index_begin,
                                         const IndexIterator &       delta_index_end,
                                         size_t                      index_size,
-                                        size_t                      expected_block_size,
-                                        const HandleRange &         handle_range = HandleRange::newAll()) const;
+                                        size_t                      expected_block_size) const;
 
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info) const;

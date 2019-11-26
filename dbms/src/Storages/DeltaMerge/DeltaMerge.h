@@ -221,9 +221,6 @@ private:
                     if (use_delta_rows)
                         writeInsertFromDelta(output_columns, output_write_limit);
 
-                    //                bool should_step_forward_index = writeInsertFromDelta(output_columns, cur_index.value, cur_index.count, output_write_limit);
-                    //                if (!should_step_forward_index)
-                    //                    return;
                     break;
                 }
                 default:

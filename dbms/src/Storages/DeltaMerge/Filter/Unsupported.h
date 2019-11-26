@@ -19,6 +19,9 @@ public:
     Unsupported(const String & content_, const String & reason_, bool is_not_) : content(content_), reason(reason_), is_not(is_not_) {}
 
     String name() override { return "unsupported"; }
+
+    Attrs getAttrs() override { return {}; }
+
     String toString() override
     {
         return R"({"op":")" + name() +     //

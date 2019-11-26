@@ -21,12 +21,11 @@ void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, 
     }
     else
     {
-        auto filter      = toFilter(range);
         auto index_cache = dm_context->db_context.getGlobalContext().getMinMaxIndexCache().get();
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
-            DMFileChunkFilter chunk_filter(file, index_cache, hash_salt, filter, {});
+            DMFileChunkFilter chunk_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {});
             rows += chunk_filter.validRows();
         }
     }
@@ -84,13 +83,22 @@ StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 
 SkippableBlockInputStreamPtr StableValueSpace::getInputStream(const DMContext &     context, //
                                                               const ColumnDefines & read_columns,
+                                                              const HandleRange &   handle_range,
                                                               const RSOperatorPtr & filter,
-                                                              size_t                expected_size)
+                                                              bool                  enable_clean_read)
 {
     SkippableBlockInputStreams streams;
     for (auto & file : files)
-        streams.push_back(std::make_shared<DMFileBlockInputStream>(
-            context.db_context, context.hash_salt, file, read_columns, filter, IdSetPtr{}, expected_size));
+    {
+        streams.push_back(std::make_shared<DMFileBlockInputStream>(context.db_context, //
+                                                                   enable_clean_read,
+                                                                   context.hash_salt,
+                                                                   file,
+                                                                   read_columns,
+                                                                   handle_range,
+                                                                   filter,
+                                                                   IdSetPtr{}));
+    }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }
 

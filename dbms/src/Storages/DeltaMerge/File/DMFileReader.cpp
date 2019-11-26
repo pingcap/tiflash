@@ -89,28 +89,34 @@ DMFileReader::Stream::Stream(DMFileReader & reader, ColId col_id, size_t aio_thr
     buf = std::make_unique<CompressedReadBufferFromFile>(data_path, estimated_size, aio_threshold, buffer_size);
 }
 
-DMFileReader::DMFileReader(const DMFilePtr &     dmfile_,
+DMFileReader::DMFileReader(bool                  enable_clean_read_,
+                           const DMFilePtr &     dmfile_,
                            const ColumnDefines & read_columns_,
+                           const HandleRange &   handle_range_,
                            const RSOperatorPtr & filter_,
-                           const IdSetPtr        read_chunks_,
+                           const IdSetPtr &      read_chunks_,
                            MarkCache *           mark_cache_,
                            MinMaxIndexCache *    index_cache_,
                            UInt64                hash_salt_,
                            size_t                aio_threshold,
                            size_t                max_read_buffer_size,
                            size_t                rows_threshold_per_read_)
-    : dmfile(dmfile_),
+    : enable_clean_read(enable_clean_read_),
+      dmfile(dmfile_),
       read_columns(read_columns_),
+      handle_range(handle_range_),
       mark_cache(mark_cache_),
       hash_salt(hash_salt_),
       rows_threshold_per_read(rows_threshold_per_read_),
+      chunk_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_chunks_),
+      handle_res(chunk_filter.getHandleRes()),
+      use_chunks(chunk_filter.getUseChunks()),
+      skip_chunks_by_column(read_columns.size(), 0),
       log(&Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)
         throw Exception("DMFile [" + DB::toString(dmfile->fileId())
                         + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
-
-    use_chunks = DMFileChunkFilter(dmfile_, index_cache_, hash_salt_, filter_, read_chunks_).getUseChunks();
 
     for (auto & cd : read_columns)
     {
@@ -134,41 +140,87 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     return next_chunk_id < use_chunks.size();
 }
 
+bool isExtraColumn(const ColumnDefine & cd)
+{
+    return cd.id == EXTRA_HANDLE_COLUMN_ID || cd.id == VERSION_COLUMN_ID || cd.id == TAG_COLUMN_ID;
+}
+
 Block DMFileReader::read()
 {
     // Go to next available chunk.
     for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id) {}
 
-    size_t start_chunk_id = next_chunk_id;
+    if (next_chunk_id >= use_chunks.size())
+        return {};
 
     // Find max continuing rows we can read.
-    size_t read_rows = 0;
+    size_t start_chunk_id = next_chunk_id;
+
+    auto & split          = dmfile->getSplit();
+    auto & not_clean      = dmfile->getNotClean();
+    size_t read_rows      = 0;
+    size_t not_clean_rows = 0;
+
+    RSResult expected_handle_res = handle_res[next_chunk_id];
     for (; next_chunk_id < use_chunks.size() && use_chunks[next_chunk_id] && read_rows < rows_threshold_per_read; ++next_chunk_id)
-        read_rows += dmfile->getSplit()[next_chunk_id];
+    {
+        if (enable_clean_read && handle_res[next_chunk_id] != expected_handle_res)
+            break;
+
+        read_rows += split[next_chunk_id];
+        not_clean_rows += not_clean[next_chunk_id];
+    }
 
     if (!read_rows)
         return {};
 
     Block res;
-    for (auto & cd : read_columns)
+
+    size_t read_chunks   = next_chunk_id - start_chunk_id;
+    bool   do_clean_read = enable_clean_read && expected_handle_res == All && !not_clean_rows;
+    for (size_t i = 0; i < read_columns.size(); ++i)
     {
-        auto & stream = column_streams.at(cd.id);
-        if (shouldSeek(start_chunk_id))
+        auto & cd = read_columns[i];
+        if (do_clean_read && isExtraColumn(cd))
         {
-            auto & mark = (*stream->marks)[start_chunk_id];
-            stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+            ColumnPtr column;
+            if (cd.id == EXTRA_HANDLE_COLUMN_ID)
+            {
+                // Return the first row's handle
+                Handle min_handle = chunk_filter.getMinHandle(start_chunk_id);
+                column            = cd.type->createColumnConst(read_rows, Field(min_handle));
+            }
+            else
+            {
+                column = cd.type->createColumnConstWithDefaultValue(read_rows);
+            }
+
+            res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+
+            skip_chunks_by_column[i] = read_chunks;
         }
+        else
+        {
+            auto & stream = column_streams.at(cd.id);
+            if (shouldSeek(start_chunk_id) || skip_chunks_by_column[i] > 0)
+            {
+                auto & mark = (*stream->marks)[start_chunk_id];
+                stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+            }
 
-        auto column = cd.type->createColumn();
-        cd.type->deserializeBinaryBulkWithMultipleStreams(*column, //
-                                                          [&](const IDataType::SubstreamPath &) { return stream->buf.get(); },
-                                                          read_rows,
-                                                          stream->avg_size_hint,
-                                                          true,
-                                                          {});
-        IDataType::updateAvgValueSizeHint(*column, stream->avg_size_hint);
+            auto column = cd.type->createColumn();
+            cd.type->deserializeBinaryBulkWithMultipleStreams(*column, //
+                                                              [&](const IDataType::SubstreamPath &) { return stream->buf.get(); },
+                                                              read_rows,
+                                                              stream->avg_size_hint,
+                                                              true,
+                                                              {});
+            IDataType::updateAvgValueSizeHint(*column, stream->avg_size_hint);
 
-        res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+            res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
+
+            skip_chunks_by_column[i] = 0;
+        }
     }
 
     return res;

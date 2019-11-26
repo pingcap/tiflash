@@ -13,14 +13,18 @@ class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
     DMFileBlockInputStream(const Context &       context,
+                           bool                  enable_clean_read,
                            UInt64                hash_salt,
                            const DMFilePtr &     dmfile,
                            const ColumnDefines & read_columns,
+                           const HandleRange &   handle_range,
                            const RSOperatorPtr & filter,
                            const IdSetPtr &      read_chunks,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
-        : reader(dmfile,
+        : reader(enable_clean_read,
+                 dmfile,
                  read_columns,
+                 handle_range,
                  filter,
                  read_chunks,
                  context.getGlobalContext().getMarkCache().get(),

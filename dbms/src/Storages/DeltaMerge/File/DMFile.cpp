@@ -18,7 +18,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
 {
     Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
-    auto new_dmfile = std::make_shared<DMFile>(file_id, file_id, parent_path, Status::WRITABLE, log);
+    DMFilePtr new_dmfile(new DMFile(file_id, file_id, parent_path, Status::WRITABLE, log));
 
     auto       path = new_dmfile->path();
     Poco::File file(path);
@@ -37,7 +37,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
 
 DMFilePtr DMFile::restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
 {
-    auto dmfile = std::make_shared<DMFile>(file_id, ref_id, parent_path, Status::READABLE, &Logger::get("DMFile"));
+    DMFilePtr dmfile(new DMFile(file_id, ref_id, parent_path, Status::READABLE, &Logger::get("DMFile")));
     if (read_meta)
         dmfile->readMeta();
     return dmfile;
@@ -67,7 +67,12 @@ void DMFile::readMeta()
     {
         split.resize(chunks);
         auto buf = openForRead(splitPath());
-        buf.read((char *)split.data(), sizeof(ChunkSize) * chunks);
+        buf.read((char *)split.data(), sizeof(UInt64) * chunks);
+    }
+    {
+        not_clean.resize(chunks);
+        auto buf = openForRead(notCleanPath());
+        buf.read((char *)not_clean.data(), sizeof(UInt64) * chunks);
     }
 }
 

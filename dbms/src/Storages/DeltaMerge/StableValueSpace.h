@@ -35,8 +35,9 @@ public:
 
     SkippableBlockInputStreamPtr getInputStream(const DMContext &     context,
                                                 const ColumnDefines & read_columns,
+                                                const HandleRange &   handle_range,
                                                 const RSOperatorPtr & filter,
-                                                size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD);
+                                                bool enable_clean_read);
 
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 

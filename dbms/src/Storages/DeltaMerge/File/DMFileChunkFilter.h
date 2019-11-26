@@ -2,6 +2,7 @@
 
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/FilterHelper.h>
 
 namespace DB
 {
@@ -17,51 +18,79 @@ public:
     DMFileChunkFilter(const DMFilePtr &     dmfile_,
                       MinMaxIndexCache *    index_cache_,
                       UInt64                hash_salt_,
+                      const HandleRange &   handle_range_,
                       const RSOperatorPtr & filter_,
                       const IdSetPtr &      read_chunks_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
           hash_salt(hash_salt_),
+          handle_range(handle_range_),
           filter(filter_),
           read_chunks(read_chunks_),
-          use_chunks(dmfile_->getChunks(), 1)
+          handle_res(dmfile->getChunks(), RSResult::All),
+          use_chunks(dmfile->getChunks())
     {
+
+        if (!handle_range.all())
+        {
+            loadIndex(EXTRA_HANDLE_COLUMN_ID);
+            auto handle_filter = toFilter(handle_range);
+            for (size_t i = 0; i < dmfile->getChunks(); ++i)
+            {
+                handle_res[i] = handle_filter->roughCheck(i, param);
+            }
+        }
+
         if (filter || read_chunks)
         {
-            RSCheckParam param;
-
             if (filter)
             {
                 // Load index based on filter.
-
-                loadIndex(param, EXTRA_HANDLE_COLUMN_ID);
+                Attrs attrs = filter->getAttrs();
+                for (auto & attr : attrs)
+                {
+                    loadIndex(attr.col_id);
+                }
             }
 
             for (size_t i = 0; i < dmfile->getChunks(); ++i)
             {
-                bool use = true;
-                if (filter)
+                bool use = handle_res[i] != None;
+                if (filter && use)
                     use &= filter->roughCheck(i, param) != None;
-                if (read_chunks)
+                if (read_chunks && use)
                     use &= read_chunks->count(i);
-
-                if (!use)
-                    use_chunks[i] = 0;
+                use_chunks[i] = use;
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < dmfile->getChunks(); ++i)
+            {
+                use_chunks[i] = handle_res[i] != None;
             }
         }
     }
 
-    void loadIndex(RSCheckParam & param, const ColId col_id)
+    void loadIndex(const ColId col_id)
     {
+        if (param.indexes.count(col_id))
+            return;
+
+        auto       index_path = dmfile->colIndexPath(col_id);
+        Poco::File index_file(index_path);
+        if (!index_file.exists())
+            return;
+
         auto & type = dmfile->getColumnStat(col_id).type;
         auto   load = [&]() {
-            auto index_buf = openForRead(dmfile->colIndexPath(col_id));
+            auto index_buf = openForRead(index_path);
             return MinMaxIndex::read(*type, index_buf);
         };
         MinMaxIndexPtr minmax_index;
         if (index_cache)
         {
-            auto key     = MinMaxIndexCache::hash(dmfile->colIndexPath(col_id), hash_salt);
+            auto key     = MinMaxIndexCache::hash(index_path, hash_salt);
             minmax_index = index_cache->getOrSet(key, load);
         }
         else
@@ -72,7 +101,16 @@ public:
         param.indexes.emplace(col_id, RSIndex(type, minmax_index));
     }
 
-    const std::vector<UInt8> & getUseChunks() { return use_chunks; }
+    const std::vector<RSResult> & getHandleRes() { return handle_res; }
+    const std::vector<UInt8> &    getUseChunks() { return use_chunks; }
+
+    Handle getMinHandle(size_t chunk_id)
+    {
+        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
+            loadIndex(EXTRA_HANDLE_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
+        return minmax_index->getIntMinMax(chunk_id).first;
+    }
 
     size_t validRows()
     {
@@ -87,10 +125,14 @@ private:
     DMFilePtr          dmfile;
     MinMaxIndexCache * index_cache;
     UInt64             hash_salt;
+    HandleRange        handle_range;
     RSOperatorPtr      filter;
     IdSetPtr           read_chunks;
 
-    std::vector<UInt8> use_chunks;
+    RSCheckParam param;
+
+    std::vector<RSResult> handle_res;
+    std::vector<UInt8>    use_chunks;
 };
 
 } // namespace DM

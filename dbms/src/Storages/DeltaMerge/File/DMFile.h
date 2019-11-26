@@ -21,8 +21,7 @@ static const String NGC_FILE_NAME = "NGC";
 class DMFile : private boost::noncopyable
 {
 public:
-    using ChunkSize = UInt64;
-    using Sizes     = PaddedPODArray<ChunkSize>;
+    using Sizes = PaddedPODArray<UInt64>;
 
     enum Status : int
     {
@@ -63,6 +62,7 @@ public:
     String path() { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
     String metaPath() { return path() + "/meta.txt"; }
     String splitPath() { return path() + "/split"; }
+    String notCleanPath() { return path() + "/notclean"; }
     // Do not gc me.
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
     String colDataPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".dat"; }
@@ -93,6 +93,7 @@ public:
 
     size_t              getChunks() { return split.size(); }
     const Sizes &       getSplit() { return split; }
+    const Sizes &       getNotClean() { return not_clean; }
     const ColumnStats & getColumnStats() { return column_stats; }
     Status              getStatus() { return status; }
 
@@ -113,6 +114,7 @@ private:
     String parent_path;
 
     Sizes       split;
+    Sizes       not_clean;
     ColumnStats column_stats;
 
     Status status;

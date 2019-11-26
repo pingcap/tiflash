@@ -30,10 +30,12 @@ public:
     using StreamPtr     = std::unique_ptr<Stream>;
     using ColumnStreams = std::map<ColId, StreamPtr>;
 
-    DMFileReader(const DMFilePtr &     dmfile_,
+    DMFileReader(bool                  enable_clean_read_,
+                 const DMFilePtr &     dmfile_,
                  const ColumnDefines & read_columns_,
+                 const HandleRange &   handle_range_,
                  const RSOperatorPtr & filter,
-                 const IdSetPtr        read_chunks,
+                 const IdSetPtr &      read_chunks,
                  MarkCache *           mark_cache_,
                  MinMaxIndexCache *    index_cache_,
                  UInt64                hash_salt_,
@@ -51,15 +53,23 @@ private:
     bool shouldSeek(size_t chunk_id);
 
 private:
+    bool          enable_clean_read;
     DMFilePtr     dmfile;
     ColumnDefines read_columns;
+    HandleRange   handle_range;
 
     MarkCache * mark_cache;
     UInt64      hash_salt;
-    size_t rows_threshold_per_read;
+    size_t      rows_threshold_per_read;
 
-    std::vector<UInt8> use_chunks;
-    size_t             next_chunk_id = 0;
+    DMFileChunkFilter chunk_filter;
+
+    const std::vector<RSResult> & handle_res;
+    const std::vector<UInt8> &    use_chunks;
+
+    std::vector<size_t> skip_chunks_by_column;
+
+    size_t next_chunk_id = 0;
 
     ColumnStreams column_streams;
 

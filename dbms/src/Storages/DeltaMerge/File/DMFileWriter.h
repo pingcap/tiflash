@@ -68,7 +68,7 @@ public:
                  const CompressionSettings & compression_settings_,
                  bool                        wal_mode_ = false);
 
-    void write(const Block & block);
+    void write(const Block & block, size_t not_clean_rows);
     void finalize();
 
 private:
@@ -85,6 +85,7 @@ private:
 
     ColumnStreams       column_streams;
     WriteBufferFromFile split_file;
+    WriteBufferFromFile not_clean_file;
 };
 
 } // namespace DM

@@ -87,6 +87,11 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf)
     return MinMaxIndexPtr(new MinMaxIndex(has_null_marks, has_value_marks, std::move(minmaxes)));
 }
 
+std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t chunk_index)
+{
+    return {minmaxes->getInt(chunk_index * 2), minmaxes->getInt(chunk_index * 2 + 1)};
+}
+
 RSResult MinMaxIndex::checkEqual(size_t chunk_id, const Field & value, const DataTypePtr & type)
 {
     if ((*has_null_marks)[chunk_id] || value.isNull())

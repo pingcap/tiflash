@@ -47,9 +47,10 @@ public:
     ~DMVersionFilterBlockInputStream()
     {
         LOG_DEBUG(log,
-                  "Pass: " + DB::toString((Float64)passed_rows * 100 / total_rows, 2)
-                      + "%, complete pass: " + DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
-                      + "%, complete not pass: " + DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2) + "%");
+                  "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
+                                 << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
+                                 << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
+                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2) << "%");
     }
 
     String getName() const override { return "DeltaMergeVersionFilter"; }
@@ -63,8 +64,10 @@ public:
 
     Block read(FilterPtr & res_filter, bool return_filter) override;
 
+    size_t getNotCleanRows() const { return not_clean_rows; }
+
 private:
-    inline UInt8 checkWithNextIndex(size_t i)
+    inline void checkWithNextIndex(size_t i)
     {
 #define cur_handle (*handle_col_data)[i]
 #define next_handle (*handle_col_data)[i + 1]
@@ -73,11 +76,12 @@ private:
 #define deleted (*delete_col_data)[i]
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
-            return !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
+            filter[i] = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
-            return cur_version >= version_limit || (cur_handle != next_handle && !deleted);
+            filter[i]    = cur_version >= version_limit || (cur_handle != next_handle && !deleted);
+            not_clean[i] = filter[i] && (cur_handle == next_handle || deleted);
         }
         else
         {
@@ -118,6 +122,8 @@ private:
     size_t delete_col_pos;
 
     IColumn::Filter filter{};
+    // not_clean = selected & (handle equals with next || deleted)
+    IColumn::Filter not_clean{};
 
     Block raw_block;
 
@@ -130,6 +136,7 @@ private:
     size_t passed_rows         = 0;
     size_t complete_passed     = 0;
     size_t complete_not_passed = 0;
+    size_t not_clean_rows      = 0;
 
     Logger * log;
 };
