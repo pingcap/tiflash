@@ -56,6 +56,8 @@ public:
 
     std::pair<Int64, Int64> getIntMinMax(size_t chunk_index);
 
+    std::pair<UInt64, UInt64> getUInt64MinMax(size_t chunk_index);
+
     // TODO: Use has_null and value.isNull to check.
 
     RSResult checkEqual(size_t chunk_index, const Field & value, const DataTypePtr & type);

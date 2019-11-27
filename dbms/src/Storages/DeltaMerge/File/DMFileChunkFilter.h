@@ -112,6 +112,14 @@ public:
         return minmax_index->getIntMinMax(chunk_id).first;
     }
 
+    UInt64 getMaxVersion(size_t chunk_id)
+    {
+        if (!param.indexes.count(VERSION_COLUMN_ID))
+            loadIndex(VERSION_COLUMN_ID);
+        auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
+        return minmax_index->getUInt64MinMax(chunk_id).second;
+    }
+
     size_t validRows()
     {
         size_t rows        = 0;

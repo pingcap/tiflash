@@ -90,6 +90,7 @@ DMFileReader::Stream::Stream(DMFileReader & reader, ColId col_id, size_t aio_thr
 }
 
 DMFileReader::DMFileReader(bool                  enable_clean_read_,
+                           UInt64                max_data_version_,
                            const DMFilePtr &     dmfile_,
                            const ColumnDefines & read_columns_,
                            const HandleRange &   handle_range_,
@@ -102,6 +103,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
                            size_t                max_read_buffer_size,
                            size_t                rows_threshold_per_read_)
     : enable_clean_read(enable_clean_read_),
+      max_data_version(max_data_version_),
       dmfile(dmfile_),
       read_columns(read_columns_),
       handle_range(handle_range_),
@@ -175,8 +177,18 @@ Block DMFileReader::read()
 
     Block res;
 
-    size_t read_chunks   = next_chunk_id - start_chunk_id;
-    bool   do_clean_read = enable_clean_read && expected_handle_res == All && !not_clean_rows;
+    size_t read_chunks = next_chunk_id - start_chunk_id;
+
+    // TODO: this will need better algorithm: we should separate those chunks which can and can not do clean read.
+    bool do_clean_read = enable_clean_read && expected_handle_res == All && !not_clean_rows;
+    if (do_clean_read)
+    {
+        UInt64 max_version = 0;
+        for (size_t chunk_id = start_chunk_id; chunk_id < next_chunk_id; ++chunk_id)
+            max_version = std::max(chunk_filter.getMaxVersion(chunk_id), max_version);
+        do_clean_read = max_version <= max_data_version;
+    }
+
     for (size_t i = 0; i < read_columns.size(); ++i)
     {
         auto & cd = read_columns[i];

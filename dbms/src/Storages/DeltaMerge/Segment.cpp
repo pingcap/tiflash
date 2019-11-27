@@ -309,7 +309,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
         if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0)
         {
             // No delta, let's try some optimizations.
-            stream = read_info.segment_snap.stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, true);
+            stream
+                = read_info.segment_snap.stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, true);
         }
         else
         {
@@ -394,7 +395,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
                                                                                storage_snap.log_reader,
                                                                                EMPTY_FILTER);
 
-    BlockInputStreamPtr stable_stream = segment_snap.stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, false);
+    BlockInputStreamPtr stable_stream
+        = segment_snap.stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, false);
 
     if (do_range_filter)
     {
@@ -746,7 +748,8 @@ BlockInputStreamPtr Segment::getPlacedStream(const DMContext &           dm_cont
                                              size_t                      index_size,
                                              size_t                      expected_block_size) const
 {
-    SkippableBlockInputStreamPtr stable_input_stream = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, false);
+    SkippableBlockInputStreamPtr stable_input_stream
+        = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
     return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator>>( //
         stable_input_stream,
         delta_value_space,
@@ -804,6 +807,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
         throw Exception("Logical error: failed to find split point");
 
     DMFileBlockInputStream stream(dm_context.db_context,
+                                  MAX_UINT64,
                                   false,
                                   dm_context.hash_salt,
                                   read_file,

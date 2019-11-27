@@ -92,6 +92,11 @@ std::pair<Int64, Int64> MinMaxIndex::getIntMinMax(size_t chunk_index)
     return {minmaxes->getInt(chunk_index * 2), minmaxes->getInt(chunk_index * 2 + 1)};
 }
 
+std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t chunk_index)
+{
+    return {minmaxes->get64(chunk_index * 2), minmaxes->get64(chunk_index * 2 + 1)};
+}
+
 RSResult MinMaxIndex::checkEqual(size_t chunk_id, const Field & value, const DataTypePtr & type)
 {
     if ((*has_null_marks)[chunk_id] || value.isNull())

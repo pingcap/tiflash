@@ -37,7 +37,8 @@ public:
                                                 const ColumnDefines & read_columns,
                                                 const HandleRange &   handle_range,
                                                 const RSOperatorPtr & filter,
-                                                bool enable_clean_read);
+                                                UInt64                max_data_version,
+                                                bool                  enable_clean_read);
 
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 

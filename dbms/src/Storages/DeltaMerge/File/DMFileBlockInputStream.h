@@ -13,6 +13,7 @@ class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
     DMFileBlockInputStream(const Context &       context,
+                           UInt64                max_data_version,
                            bool                  enable_clean_read,
                            UInt64                hash_salt,
                            const DMFilePtr &     dmfile,
@@ -22,6 +23,7 @@ public:
                            const IdSetPtr &      read_chunks,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(enable_clean_read,
+                 max_data_version,
                  dmfile,
                  read_columns,
                  handle_range,

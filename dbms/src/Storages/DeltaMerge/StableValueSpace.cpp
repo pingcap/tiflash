@@ -85,12 +85,14 @@ SkippableBlockInputStreamPtr StableValueSpace::getInputStream(const DMContext & 
                                                               const ColumnDefines & read_columns,
                                                               const HandleRange &   handle_range,
                                                               const RSOperatorPtr & filter,
+                                                              UInt64                max_data_version,
                                                               bool                  enable_clean_read)
 {
     SkippableBlockInputStreams streams;
     for (auto & file : files)
     {
         streams.push_back(std::make_shared<DMFileBlockInputStream>(context.db_context, //
+                                                                   max_data_version,
                                                                    enable_clean_read,
                                                                    context.hash_salt,
                                                                    file,

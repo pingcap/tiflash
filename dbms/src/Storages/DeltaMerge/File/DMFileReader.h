@@ -31,6 +31,7 @@ public:
     using ColumnStreams = std::map<ColId, StreamPtr>;
 
     DMFileReader(bool                  enable_clean_read_,
+                 UInt64                max_data_version_,
                  const DMFilePtr &     dmfile_,
                  const ColumnDefines & read_columns_,
                  const HandleRange &   handle_range_,
@@ -54,6 +55,7 @@ private:
 
 private:
     bool          enable_clean_read;
+    UInt64        max_data_version;
     DMFilePtr     dmfile;
     ColumnDefines read_columns;
     HandleRange   handle_range;
