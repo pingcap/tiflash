@@ -23,25 +23,18 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
 public:
-    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefine & handle_define, UInt64 version_limit_)
+    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & read_columns, UInt64 version_limit_)
         : version_limit(version_limit_),
-          header(),
+          header(toEmptyBlock(read_columns)),
           log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
         children.push_back(input);
 
         auto input_header = input->getHeader();
 
-        handle_col_pos  = input_header.getPositionByName(handle_define.name);
+        handle_col_pos  = input_header.getPositionByName(EXTRA_HANDLE_COLUMN_NAME);
         version_col_pos = input_header.getPositionByName(VERSION_COLUMN_NAME);
         delete_col_pos  = input_header.getPositionByName(TAG_COLUMN_NAME);
-
-        for (size_t i = 0; i < input_header.columns(); ++i)
-        {
-            if (i == handle_col_pos || i == version_col_pos || i == delete_col_pos)
-                continue;
-            header.insert(std::move(input_header.getByPosition(i)));
-        }
     }
 
     ~DMVersionFilterBlockInputStream()

@@ -44,8 +44,8 @@ public:
 protected:
     Block readImpl() override
     {
-        FilterPtr filter;
-        return readImpl(filter, false);
+        FilterPtr filter_;
+        return readImpl(filter_, false);
     }
 
     Block readImpl(FilterPtr & res_filter, bool return_filter) override
@@ -91,7 +91,7 @@ protected:
                 if (!res.rows())
                     continue;
                 else
-                    return handleBlock(std::move(res));
+                    return res;
             }
             else
             {
@@ -101,14 +101,6 @@ protected:
                 cur_stream  = {};
             }
         }
-    }
-
-    Block handleBlock(Block && original_block)
-    {
-        Block res;
-        for (auto & cd : columns_to_read)
-            res.insert(original_block.getByName(cd.name));
-        return res;
     }
 
 private:

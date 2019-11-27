@@ -741,9 +741,9 @@ try
                 for (auto && iter : block)
                 {
                     auto c = iter.column;
-                    for (size_t i = 0; i < c->size(); ++i)
+                    if (iter.name == DMTestEnv::pk_name)
                     {
-                        if (iter.name == "pk")
+                        for (size_t i = 0; i < c->size(); ++i)
                         {
                             auto expected = expected_row_pk++;
                             auto value    = c->getInt(i);

@@ -34,7 +34,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
 
             initNextBlock();
 
-            return cur_raw_block;
+            return getNewBlockByHeader(header, cur_raw_block);
         }
 
         filter.resize(rows);
@@ -250,24 +250,21 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         if (passed_count == rows)
         {
             ++complete_passed;
-            return cur_raw_block;
+            return getNewBlockByHeader(header, cur_raw_block);
         }
 
         if (return_filter)
         {
             // The caller of this method should do the filtering, we just need to return the original block.
             res_filter = &filter;
-            return cur_raw_block;
+            return getNewBlockByHeader(header, cur_raw_block);
         }
         else
         {
             Block res;
-            for (size_t col_index = 0; col_index < cur_raw_block.columns(); ++col_index)
+            for (auto & c : header)
             {
-                if (col_index == handle_col_pos && col_index == version_col_pos && col_index == delete_col_pos)
-                    continue;
-
-                auto & column = cur_raw_block.getByPosition(col_index);
+                auto & column = cur_raw_block.getByName(c.name);
                 column.column = column.column->filter(filter, passed_count);
                 res.insert(std::move(column));
             }

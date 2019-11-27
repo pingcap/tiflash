@@ -1,7 +1,7 @@
 #include <Storages/DeltaMerge/tests/dm_basic_include.h>
 
-#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 
 namespace DB
 {
@@ -26,6 +26,7 @@ public:
         cds.push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
         return toEmptyBlock(cds);
     }
+
 protected:
     Block readImpl() override
     {
@@ -34,6 +35,7 @@ protected:
         else
             return *(it++);
     }
+
 private:
     BlocksList::const_iterator begin;
     BlocksList::const_iterator end;
@@ -41,11 +43,10 @@ private:
 };
 
 template <int MODE>
-BlockInputStreamPtr genInputStream(const BlocksList & blocks, UInt64 max_version)
+BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefines & columns, UInt64 max_version)
 {
     ColumnDefine handle_define(TiDBPkColumnID, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_TYPE);
-    return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(
-        std::make_shared<DebugBlockInputStream>(blocks), handle_define, max_version);
+    return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(std::make_shared<DebugBlockInputStream>(blocks), columns, max_version);
 }
 
 } // namespace
@@ -62,8 +63,10 @@ TEST(VersionFilter_test, MVCC)
         blocks.push_back(DMTestEnv::prepareOneRowBlock(pk_value, 40, 0, str_col_name, "Flash"));
     }
 
+    ColumnDefines columns = getColumnDefinesFromBlock(blocks.back());
+
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, 40);
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 40);
         in->readPrefix();
         Block block = in->read();
         auto  col   = block.getByName(str_col_name);
@@ -72,14 +75,14 @@ TEST(VersionFilter_test, MVCC)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, 30);
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 30);
         in->readPrefix();
         Block block = in->read();
         ASSERT_EQ(block.rows(), 0UL);
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, 20);
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 20);
         in->readPrefix();
         Block block = in->read();
         auto  col   = block.getByName(str_col_name);
@@ -88,7 +91,7 @@ TEST(VersionFilter_test, MVCC)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, 10);
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 10);
         in->readPrefix();
         Block block = in->read();
         auto  col   = block.getByName(str_col_name);
@@ -97,7 +100,7 @@ TEST(VersionFilter_test, MVCC)
         in->readSuffix();
     }
     {
-        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, 9);
+        auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 9);
         in->readPrefix();
         Block block = in->read();
         ASSERT_EQ(block.rows(), 0UL);

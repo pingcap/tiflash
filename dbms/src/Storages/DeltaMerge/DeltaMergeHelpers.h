@@ -160,6 +160,32 @@ inline Block toEmptyBlock(const ColumnDefines & columns)
     return block;
 }
 
+inline Block getNewBlockByHeader(const Block & header, const Block & block)
+{
+    Block new_block;
+    for (auto & c : header)
+        new_block.insert(block.getByName(c.name));
+    return new_block;
+}
+
+inline ColumnDefines getColumnDefinesFromBlock(const Block & block)
+{
+    ColumnDefines columns;
+    for (auto & c : block)
+        columns.push_back(ColumnDefine(c.column_id, c.name, c.type));
+    return columns;
+}
+
+inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
+{
+    for (auto & c : columns)
+    {
+        if (c.id == col_id)
+            return true;
+    }
+    return false;
+}
+
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)
 {

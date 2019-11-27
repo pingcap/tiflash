@@ -306,7 +306,10 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
 
     auto create_stream = [&](const HandleRange & read_range) -> BlockInputStreamPtr {
         BlockInputStreamPtr stream;
-        if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0)
+        if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0 //
+            && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)          //
+            && !hasColumn(columns_to_read, VERSION_COLUMN_ID)               //
+            && !hasColumn(columns_to_read, TAG_COLUMN_ID))
         {
             // No delta, let's try some optimizations.
             stream
@@ -327,8 +330,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
         }
 
         stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range, 0);
-        stream
-            = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, dm_context.handle_column, max_version);
+        stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, columns_to_read, max_version);
 
         return stream;
     };
@@ -510,11 +512,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_contex
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto & handle      = dm_context.handle_column;
-    auto & columns     = dm_context.store_columns;
-    auto   min_version = dm_context.min_version;
-
-    auto read_info   = getReadInfo<false>(dm_context, columns, segment_snap, storage_snap);
+    auto read_info   = getReadInfo<false>(dm_context, dm_context.store_columns, segment_snap, storage_snap);
     auto data_stream = getPlacedStream(dm_context,
                                        read_info.read_columns,
                                        range,
@@ -527,7 +525,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_contex
                                        dm_context.stable_chunk_rows);
     data_stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
     data_stream      = std::make_shared<ReorganizeBlockInputStream>(data_stream, dm_context.handle_column.name);
-    data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(data_stream, handle, min_version);
+    data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+        data_stream, read_info.read_columns, dm_context.min_version);
 
     auto new_stable = createNewStable(dm_context, data_stream, segment_snap.stable->getId(), wbs);
 
@@ -998,12 +997,8 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
-    auto & handle       = dm_context.handle_column;
     auto & storage_pool = dm_context.storage_pool;
-    auto   min_version  = dm_context.min_version;
-
-    auto & columns   = dm_context.store_columns;
-    auto   read_info = getReadInfo<false>(dm_context, columns, segment_snap, storage_snap);
+    auto   read_info    = getReadInfo<false>(dm_context, dm_context.store_columns, segment_snap, storage_snap);
 
     auto split_point = getSplitPointSlow(dm_context, read_info);
 
@@ -1030,7 +1025,8 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                       dm_context.stable_chunk_rows);
         my_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
         my_data                     = std::make_shared<ReorganizeBlockInputStream>(my_data, dm_context.handle_column.name);
-        my_data           = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
+        my_data                     = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+            my_data, read_info.read_columns, dm_context.min_version);
         auto my_stable_id = segment_snap.stable->getId();
         my_new_stable     = createNewStable(dm_context, my_data, my_stable_id, wbs);
     }
@@ -1049,7 +1045,8 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                          dm_context.stable_chunk_rows);
         other_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
         other_data                     = std::make_shared<ReorganizeBlockInputStream>(other_data, dm_context.handle_column.name);
-        other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
+        other_data                     = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+            other_data, read_info.read_columns, dm_context.min_version);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
         other_stable         = createNewStable(dm_context, other_data, other_stable_id, wbs);
     }
