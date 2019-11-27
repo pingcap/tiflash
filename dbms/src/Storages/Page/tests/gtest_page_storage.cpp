@@ -254,7 +254,7 @@ try
     }
 
     snapshot.reset();
-    remover = [](const std::set<PageId> &, const std::set<PageId> & normal_page_ids) -> void {
+    remover = [](const PageStorage::PathAndIdsVec &, const std::set<PageId> & normal_page_ids) -> void {
         ASSERT_EQ(normal_page_ids.size(), 1UL);
         EXPECT_GT(normal_page_ids.count(0), 0UL);
     };
