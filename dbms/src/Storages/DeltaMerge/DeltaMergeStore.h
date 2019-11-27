@@ -6,11 +6,11 @@
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/PathPool.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -192,7 +192,7 @@ public:
                            const HandleRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
-                           const RSOperatorPtr & filter, 
+                           const RSOperatorPtr & filter,
                            size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Force flush all data to disk.
@@ -226,15 +226,15 @@ private:
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-    SegmentPtr        segmentMergeDelta(DMContext &             dm_context,
+    SegmentPtr  segmentMergeDelta(DMContext &             dm_context,
                                   const SegmentPtr &      segment,
                                   const SegmentSnapshot & segment_snap,
                                   const StorageSnapshot & storage_snap,
                                   bool                    is_foreground);
 
     SegmentPtr segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
+    void       segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    void       segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
 
     bool handleBackgroundTask();
 

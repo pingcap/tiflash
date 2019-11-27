@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/FilterHelper.h>
+#include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 
 namespace ProfileEvents
@@ -523,6 +524,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_contex
                                        read_info.index->entryCount(),
                                        dm_context.stable_chunk_rows);
     data_stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
+    data_stream      = std::make_shared<ReorganizeBlockInputStream>(data_stream, dm_context.handle_column.name);
     data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(data_stream, handle, min_version);
 
     auto new_stable = createNewStable(dm_context, data_stream, segment_snap.stable->getId(), wbs);
@@ -1023,6 +1025,7 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                       read_info.index->entryCount(),
                                                       dm_context.stable_chunk_rows);
         my_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(my_data, my_range, 0);
+        my_data                     = std::make_shared<ReorganizeBlockInputStream>(my_data, dm_context.handle_column.name);
         my_data           = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(my_data, handle, min_version);
         auto my_stable_id = segment_snap.stable->getId();
         my_new_stable     = createNewStable(dm_context, my_data, my_stable_id, wbs);
@@ -1041,6 +1044,7 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
                                                          read_info.index->entryCount(),
                                                          dm_context.stable_chunk_rows);
         other_data                     = std::make_shared<DMHandleFilterBlockInputStream<true>>(other_data, other_range, 0);
+        other_data                     = std::make_shared<ReorganizeBlockInputStream>(other_data, dm_context.handle_column.name);
         other_data = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(other_data, handle, min_version);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
         other_stable         = createNewStable(dm_context, other_data, other_stable_id, wbs);
