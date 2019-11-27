@@ -57,9 +57,10 @@ public:
     using ReaderPtr     = std::shared_ptr<PageFile::Reader>;
     using OpenReadFiles = std::map<PageFileIdAndLevel, ReaderPtr>;
 
-    using ExternalPagesScanner = std::function<std::set<PageId>()>;
+    using PathAndIdsVec        = std::vector<std::pair<String, std::set<PageId>>>;
+    using ExternalPagesScanner = std::function<PathAndIdsVec()>;
     using ExternalPagesRemover
-        = std::function<void(const std::set<PageId> & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
+        = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
 
 public:
     PageStorage(String name, const String & storage_path, const Config & config_);
@@ -131,12 +132,16 @@ private:
 
     ExternalPagesScanner external_pages_scanner = nullptr;
     ExternalPagesRemover external_pages_remover = nullptr;
+
+    size_t deletes = 0;
+    size_t puts    = 0;
+    size_t refs    = 0;
+    size_t moves   = 0;
 };
 
 class PageReader
 {
 public:
-    //    PageReader() = default;
     /// Not snapshot read.
     explicit PageReader(PageStorage & storage_) : storage(storage_), snap() {}
     /// Snapshot read.
@@ -146,8 +151,9 @@ public:
     PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
     void    read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
 
-    PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
-    UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
+    PageId    getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
+    UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
+    PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
 
 private:
     PageStorage &            storage;

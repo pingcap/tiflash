@@ -104,6 +104,7 @@
       -->
     <mark_cache_size>5368709120</mark_cache_size>
 
+    <minmax_index_cache_size>5368709120</minmax_index_cache_size>
 
     <!-- Path to data directory, with trailing slash. -->
     <path>/var/lib/clickhouse/</path>

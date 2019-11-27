@@ -1,23 +1,24 @@
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 
 #include <Storages/DeltaMerge/Chunk.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB
 {
 namespace DM
 {
-class ChunkBlockInputStream final : public IBlockInputStream
+class ChunkBlockInputStream final : public SkippableBlockInputStream
 {
 public:
     ChunkBlockInputStream(const Chunks &        chunks_,
                           const ColumnDefines & read_columns_,
                           const PageReader &    page_reader_,
                           const RSOperatorPtr & filter)
-        : chunks(std::move(chunks_)), skip_chunks(chunks.size(), 0), read_columns(read_columns_), page_reader(page_reader_)
+        : chunks(std::move(chunks_)), use_chunks(chunks.size(), 1), read_columns(read_columns_), page_reader(page_reader_)
     {
         if (filter)
         {
@@ -26,45 +27,56 @@ public:
                 auto &       chunk = chunks[i];
                 RSCheckParam param;
                 for (auto & [col_id, meta] : chunk.getMetas())
-                    param.indexes.emplace(col_id, RSIndex(meta.type, meta.minmax));
-                skip_chunks[i] = filter->roughCheck(param) == None;
+                {
+                    if (col_id == EXTRA_HANDLE_COLUMN_ID)
+                        param.indexes.emplace(col_id, RSIndex(meta.type, meta.minmax));
+                }
+                use_chunks[i] = filter->roughCheck(0, param) != None;
             }
         }
     }
 
     ~ChunkBlockInputStream()
     {
-        size_t num_skipped = 0;
-        for (const auto & is_skip : skip_chunks)
-            num_skipped += is_skip;
+        size_t num_use = 0;
+        for (const auto & use : use_chunks)
+            num_use += use;
 
-        LOG_TRACE(&Logger::get("ChunkBlockInputStream"), String("Skip: ") << num_skipped << " / " << chunks.size() << " chunks");
+        LOG_TRACE(&Logger::get("ChunkBlockInputStream"),
+                  String("Skip: ") << (chunks.size() - num_use) << " / " << chunks.size() << " chunks");
     }
 
     String getName() const override { return "Chunk"; }
     Block  getHeader() const override { return toEmptyBlock(read_columns); }
 
-    Block read() override
+    bool getSkippedRows(size_t & skip_rows) override
     {
-        if (!hasNext())
-            return {};
-        return readChunk(chunks[cur_chunk_index++], read_columns, page_reader);
+        skip_rows = 0;
+        for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id)
+        {
+            skip_rows += chunks[next_chunk_id].getRows();
+        }
+
+        return next_chunk_id < use_chunks.size();
     }
 
-    bool   hasNext() { return cur_chunk_index < chunks.size(); }
-    size_t nextRows() { return chunks[cur_chunk_index].getRows(); }
+    Block read() override
+    {
+        for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id) {}
 
-    bool shouldSkipNext() { return skip_chunks[cur_chunk_index]; }
-    void skipNext() { ++cur_chunk_index; }
+        if (next_chunk_id >= use_chunks.size())
+            return {};
+        return readChunk(chunks[next_chunk_id++], read_columns, page_reader);
+    }
 
 private:
     Chunks             chunks;
-    std::vector<UInt8> skip_chunks;
+    std::vector<UInt8> use_chunks;
 
     ColumnDefines read_columns;
     PageReader    page_reader;
 
-    size_t cur_chunk_index = 0;
+    size_t next_chunk_id = 0;
 };
 
 using ChunkBlockInputStreamPtr = std::shared_ptr<ChunkBlockInputStream>;

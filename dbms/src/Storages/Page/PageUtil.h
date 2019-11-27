@@ -98,6 +98,15 @@ int openFile(const std::string & path)
     return fd;
 }
 
+inline void touchFile(const std::string & path)
+{
+    auto fd = openFile<false>(path);
+    if (fd > 0)
+        ::close(fd);
+    else
+        throw Exception("Touch file failed: " + path);
+}
+
 void syncFile(int fd, const std::string & path);
 
 void writeFile(int fd, UInt64 offset, const char * data, size_t to_write, const std::string & path);

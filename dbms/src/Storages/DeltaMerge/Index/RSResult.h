@@ -14,9 +14,9 @@ struct Attr
     ColId       col_id;
     DataTypePtr type;
 };
-using Atttrs = std::vector<Attr>;
+using Attrs = std::vector<Attr>;
 
-enum class RSResult
+enum class RSResult : UInt8
 {
     Unknown = 0, // Not checked yet
     Some    = 1, // Suspected (but may be empty or full)

@@ -19,6 +19,9 @@ public:
     Unsupported(const String & content_, const String & reason_, bool is_not_) : content(content_), reason(reason_), is_not(is_not_) {}
 
     String name() override { return "unsupported"; }
+
+    Attrs getAttrs() override { return {}; }
+
     String toString() override
     {
         return R"({"op":")" + name() +     //
@@ -27,7 +30,7 @@ public:
             R"(","is_not":")" + DB::toString(is_not) + "\"}";
     }
 
-    RSResult roughCheck(const RSCheckParam & /*param*/) override { return Some; }
+    RSResult roughCheck(size_t /*chunk_id*/, const RSCheckParam & /*param*/) override { return Some; }
 
     RSOperatorPtr applyNot() override { return createUnsupported(content, reason, !is_not); };
 };

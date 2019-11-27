@@ -1,6 +1,7 @@
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <Columns/ColumnConst.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/Range.h>
 
@@ -101,7 +102,7 @@ inline Block filterUnsorted(const HandleRange & handle_range, Block && block, si
 } // namespace HandleFilter
 
 template <bool is_block_sorted>
-class DMHandleFilterBlockInputStream : public IProfilingBlockInputStream
+class DMHandleFilterBlockInputStream : public IBlockInputStream
 {
 public:
     DMHandleFilterBlockInputStream(const BlockInputStreamPtr & input, HandleRange handle_range_, size_t handle_col_pos_)
@@ -113,8 +114,7 @@ public:
     String getName() const override { return "DeltaMergeHandleFilter"; }
     Block  getHeader() const override { return children.back()->getHeader(); }
 
-protected:
-    Block readImpl() override
+    Block read() override
     {
         while (true)
         {
@@ -123,6 +123,16 @@ protected:
                 return {};
             if (!block.rows())
                 continue;
+
+            auto handle_column = block.getByPosition(handle_col_pos).column;
+            if (handle_column->isColumnConst())
+            {
+                if (handle_range.check(handle_column->getInt(0)))
+                    return block;
+                else
+                    return {};
+            }
+
             Block res = is_block_sorted ? HandleFilter::filterSorted(handle_range, std::move(block), handle_col_pos)
                                         : HandleFilter::filterUnsorted(handle_range, std::move(block), handle_col_pos);
             if (!res || !res.rows())

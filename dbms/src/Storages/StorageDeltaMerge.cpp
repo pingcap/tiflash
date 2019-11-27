@@ -140,6 +140,13 @@ void StorageDeltaMerge::drop()
     shutdown();
     // Reclaim memory.
     MallocExtension::instance()->ReleaseFreeMemory();
+    // Remove data in extra paths;
+    for (auto & p : global_context.getExtraPaths().listPaths())
+    {
+        Poco::File file(p.second + "/" + db_name + "/" + table_name);
+        if (file.exists())
+            file.remove(true);
+    }
 }
 
 Block StorageDeltaMerge::buildInsertBlock(bool is_import, const Block & old_block)
@@ -805,90 +812,42 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     Block block;
 
     block.insert({std::make_shared<DataTypeString>(), "Name"});
-    block.insert({std::make_shared<DataTypeUInt64>(), "Int"});
-    block.insert({std::make_shared<DataTypeFloat64>(), "Float"});
+    block.insert({std::make_shared<DataTypeString>(), "Value"});
 
     auto columns = block.mutateColumns();
     auto & name_col = columns[0];
-    auto & int_col = columns[1];
-    auto & float_col = columns[2];
+    auto & value_col = columns[1];
 
     DeltaMergeStoreStat stat = store->getStat();
 
-    /*
-
-    UInt64 segment_count             = 0;
-    UInt64 segment_count_with_delta  = 0;
-    UInt64 segment_count_with_stable = 0;
-
-    UInt64 total_rows          = 0;
-    UInt64 total_bytes         = 0;
-    UInt64 total_delete_ranges = 0;
-
-    Float64 delta_placed_rate = 0;
-
-    Float64 avg_segment_rows  = 0;
-    Float64 avg_segment_bytes = 0;
-
-    UInt64  delta_count             = 0;
-    UInt64  total_delta_rows        = 0;
-    UInt64  total_delta_bytes       = 0;
-    Float64 avg_delta_rows          = 0;
-    Float64 avg_delta_bytes         = 0;
-    Float64 avg_delta_delete_ranges = 0;
-
-    UInt64  stable_count       = 0;
-    UInt64  total_stable_rows  = 0;
-    UInt64  total_stable_bytes = 0;
-    Float64 avg_stable_rows    = 0;
-    Float64 avg_stable_bytes   = 0;
-
-    UInt64  total_chunk_count_in_delta = 0;
-    Float64 avg_chunk_count_in_delta   = 0;
-    Float64 avg_chunk_rows_in_delta    = 0;
-    Float64 avg_chunk_bytes_in_delta   = 0;
-
-    UInt64  total_chunk_count_in_stable = 0;
-    Float64 avg_chunk_count_in_stable   = 0;
-    Float64 avg_chunk_rows_in_stable    = 0;
-    Float64 avg_chunk_bytes_in_stable   = 0;
- */
-
 #define INSERT_INT(NAME)             \
     name_col->insert(String(#NAME)); \
-    int_col->insert(stat.NAME);      \
-    float_col->insert((Float64)0);
+    value_col->insert(DB::toString(stat.NAME));
+
+#define INSERT_RATE(NAME)            \
+    name_col->insert(String(#NAME)); \
+    value_col->insert(DB::toString(stat.NAME * 100, 2) + "%");
 
 #define INSERT_FLOAT(NAME)           \
     name_col->insert(String(#NAME)); \
-    int_col->insert((UInt64)0);      \
-    float_col->insert(stat.NAME);
+    value_col->insert(DB::toString(stat.NAME, 2));
 
     INSERT_INT(segment_count)
-    INSERT_INT(segment_count_with_delta)
-    INSERT_INT(segment_count_with_stable)
-
     INSERT_INT(total_rows)
-    INSERT_INT(total_bytes)
+    INSERT_RATE(delta_rate_rows)
+    INSERT_RATE(delta_rate_count)
+    INSERT_RATE(delta_placed_rate)
     INSERT_INT(total_delete_ranges)
-
-    INSERT_FLOAT(delta_placed_rate)
-
     INSERT_FLOAT(avg_segment_rows)
-    INSERT_FLOAT(avg_segment_bytes)
 
     INSERT_INT(delta_count)
     INSERT_INT(total_delta_rows)
-    INSERT_INT(total_delta_bytes)
     INSERT_FLOAT(avg_delta_rows)
-    INSERT_FLOAT(avg_delta_bytes)
     INSERT_FLOAT(avg_delta_delete_ranges)
 
     INSERT_INT(stable_count)
     INSERT_INT(total_stable_rows)
-    INSERT_INT(total_stable_bytes)
     INSERT_FLOAT(avg_stable_rows)
-    INSERT_FLOAT(avg_stable_bytes)
 
     INSERT_INT(total_chunk_count_in_delta)
     INSERT_FLOAT(avg_chunk_count_in_delta)
@@ -916,6 +875,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(storage_meta_max_page_id);
 
 #undef INSERT_INT
+#undef INSERT_RATE
 #undef INSERT_FLOAT
 
     return std::make_shared<OneBlockInputStream>(block);

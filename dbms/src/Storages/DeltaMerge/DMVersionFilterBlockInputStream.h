@@ -3,7 +3,7 @@
 #include <common/logger_useful.h>
 
 #include <Columns/ColumnsCommon.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
 namespace DB
@@ -18,38 +18,49 @@ static constexpr int DM_VERSION_FILTER_MODE_MVCC = 0;
 static constexpr int DM_VERSION_FILTER_MODE_COMPACT = 1;
 
 template <int MODE>
-class DMVersionFilterBlockInputStream : public IProfilingBlockInputStream
+class DMVersionFilterBlockInputStream : public IBlockInputStream
 {
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
 public:
-    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefine & handle_define, UInt64 version_limit_)
+    DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & read_columns, UInt64 version_limit_)
         : version_limit(version_limit_),
-          header(input->getHeader()),
-          handle_col_pos(header.getPositionByName(handle_define.name)),
-          version_col_pos(header.getPositionByName(VERSION_COLUMN_NAME)),
-          delete_col_pos(header.getPositionByName(TAG_COLUMN_NAME)),
-          filter(65536),
+          header(toEmptyBlock(read_columns)),
           log(&Logger::get("DMVersionFilterBlockInputStream<" + String(MODE == DM_VERSION_FILTER_MODE_MVCC ? "MVCC" : "COMPACT") + ">"))
     {
         children.push_back(input);
+
+        auto input_header = input->getHeader();
+
+        handle_col_pos  = input_header.getPositionByName(EXTRA_HANDLE_COLUMN_NAME);
+        version_col_pos = input_header.getPositionByName(VERSION_COLUMN_NAME);
+        delete_col_pos  = input_header.getPositionByName(TAG_COLUMN_NAME);
     }
 
     ~DMVersionFilterBlockInputStream()
     {
         LOG_DEBUG(log,
-                  "Pass: " + DB::toString((Float64)passed_rows * 100 / total_rows, 2)
-                      + "%, complete pass: " + DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
-                      + "%, complete not pass: " + DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2) + "%");
+                  "Total rows: " << total_rows << ", pass: " << DB::toString((Float64)passed_rows * 100 / total_rows, 2)
+                                 << "%, complete pass: " << DB::toString((Float64)complete_passed * 100 / total_blocks, 2)
+                                 << "%, complete not pass: " << DB::toString((Float64)complete_not_passed * 100 / total_blocks, 2)
+                                 << "%, not clean: " << DB::toString((Float64)not_clean_rows * 100 / passed_rows, 2) << "%");
     }
 
     String getName() const override { return "DeltaMergeVersionFilter"; }
     Block  getHeader() const override { return header; }
 
-protected:
-    Block readImpl() override;
+    Block read() override
+    {
+        FilterPtr f;
+        return read(f, false);
+    }
 
-    inline UInt8 checkWithNextIndex(size_t i)
+    Block read(FilterPtr & res_filter, bool return_filter) override;
+
+    size_t getNotCleanRows() const { return not_clean_rows; }
+
+private:
+    inline void checkWithNextIndex(size_t i)
     {
 #define cur_handle (*handle_col_data)[i]
 #define next_handle (*handle_col_data)[i + 1]
@@ -58,11 +69,12 @@ protected:
 #define deleted (*delete_col_data)[i]
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
-            return !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
+            filter[i] = !deleted && cur_version <= version_limit && (cur_handle != next_handle || next_version > version_limit);
         }
         else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
-            return cur_version >= version_limit || (cur_handle != next_handle && !deleted);
+            filter[i]    = cur_version >= version_limit || (cur_handle != next_handle && !deleted);
+            not_clean[i] = filter[i] && (cur_handle == next_handle || deleted);
         }
         else
         {
@@ -102,7 +114,9 @@ private:
     size_t version_col_pos;
     size_t delete_col_pos;
 
-    IColumn::Filter filter;
+    IColumn::Filter filter{};
+    // not_clean = selected & (handle equals with next || deleted)
+    IColumn::Filter not_clean{};
 
     Block raw_block;
 
@@ -115,6 +129,7 @@ private:
     size_t passed_rows         = 0;
     size_t complete_passed     = 0;
     size_t complete_not_passed = 0;
+    size_t not_clean_rows      = 0;
 
     Logger * log;
 };
