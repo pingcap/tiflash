@@ -15,7 +15,7 @@ public:
 
     String name() override { return "not_like"; }
 
-    RSResult roughCheck(const RSCheckParam & /*param*/) override { return Some; }
+    RSResult roughCheck(size_t /*chunk_id*/, const RSCheckParam & /*param*/) override { return Some; }
 
     RSOperatorPtr applyNot() override { return createLike(attr, value); };
 };

@@ -192,8 +192,12 @@ Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_
         d.rows    = column.size();
         d.bytes   = size;
         d.type    = col_define.type;
-        d.minmax  = std::make_shared<MinMaxIndex>(
-            *col_define.type, column, static_cast<const ColumnVector<UInt8> &>(*block.getByName(TAG_COLUMN_NAME).column), 0, column.size());
+        if (col_define.id == EXTRA_HANDLE_COLUMN_ID)
+        {
+            // Only index the handle column for now.
+            d.minmax = std::make_shared<MinMaxIndex>(*col_define.type);
+            d.minmax->addChunk(column, /*del_mark*/ nullptr);
+        }
 
         wb.putPage(d.page_id, 0, buf, size);
         chunk.insert(d);

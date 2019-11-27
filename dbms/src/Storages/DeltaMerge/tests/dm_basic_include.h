@@ -17,6 +17,19 @@ namespace DM
 namespace tests
 {
 
+#define CATCH                                                                                      \
+    catch (const Exception & e)                                                                    \
+    {                                                                                              \
+        std::string text = e.displayText();                                                        \
+                                                                                                   \
+        auto embedded_stack_trace_pos = text.find("Stack trace");                                  \
+        std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;               \
+        if (std::string::npos == embedded_stack_trace_pos)                                         \
+            std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl; \
+                                                                                                   \
+        throw;                                                                                     \
+    }
+
 /// helper functions for comparing HandleRange
 
 inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_expr,
@@ -31,7 +44,9 @@ inline ::testing::AssertionResult HandleRangeCompare(const char *        lhs_exp
 }
 #define ASSERT_RANGE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
 #define EXPECT_RANGE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::DM::tests::HandleRangeCompare, val1, val2)
-#define GET_GTEST_FULL_NAME (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." + ::testing::UnitTest::GetInstance()->current_test_info()->name())
+#define GET_GTEST_FULL_NAME                                                                     \
+    (String() + ::testing::UnitTest::GetInstance()->current_test_info()->test_case_name() + "." \
+     + ::testing::UnitTest::GetInstance()->current_test_info()->name())
 
 class DMTestEnv
 {
@@ -41,12 +56,12 @@ public:
         return ::DB::tests::TiFlashTestEnv::getContext(settings);
     }
 
-    static constexpr const char * pk_name = "pk";
+    static constexpr const char * pk_name = "_tidb_rowid";
 
     static ColumnDefines getDefaultColumns()
     {
         ColumnDefines columns;
-        columns.emplace_back(ColumnDefine(1, pk_name, std::make_shared<DataTypeInt64>()));
+        columns.emplace_back(ColumnDefine(EXTRA_HANDLE_COLUMN_ID, pk_name, std::make_shared<DataTypeInt64>()));
         columns.emplace_back(getVersionColumnDefine());
         columns.emplace_back(getTagColumnDefine());
         return columns;

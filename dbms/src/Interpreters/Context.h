@@ -84,6 +84,12 @@ class TiDBService;
 using TiDBServicePtr = std::shared_ptr<TiDBService>;
 class SchemaSyncService;
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
+class PathPool;
+
+namespace DM
+{
+class MinMaxIndexCache;
+}
 
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
@@ -149,11 +155,13 @@ public:
     String getTemporaryPath() const;
     String getFlagsPath() const;
     String getUserFilesPath() const;
+    const PathPool & getExtraPaths() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
+    void setExtraPaths(const std::vector<std::pair<UInt32, String>> & extra_paths);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -342,6 +350,10 @@ public:
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
+
+    void setMinMaxIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
+    void dropMinMaxIndexCache() const;
 
     /** Clear the caches of the uncompressed blocks and marks.
       * This is usually done when renaming tables, changing the type of columns, deleting a table.

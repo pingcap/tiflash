@@ -15,7 +15,7 @@ public:
 
     String name() override { return "not"; }
 
-    RSResult roughCheck(const RSCheckParam & param) override { return !children[0]->roughCheck(param); }
+    RSResult roughCheck(size_t chunk_id, const RSCheckParam & param) override { return !children[0]->roughCheck(chunk_id, param); }
 
     RSOperatorPtr applyNot() override { return children[0]; };
 };

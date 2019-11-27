@@ -10,6 +10,7 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Page/PageStorage.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -22,9 +23,9 @@ static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct DeltaMergeStoreStat
 {
-    UInt64 segment_count             = 0;
-    UInt64 segment_count_with_delta  = 0;
-    UInt64 segment_count_with_stable = 0;
+    UInt64  segment_count    = 0;
+    Float64 delta_rate_rows  = 0;
+    Float64 delta_rate_count = 0;
 
     UInt64 total_rows          = 0;
     UInt64 total_bytes         = 0;
@@ -74,6 +75,8 @@ struct DeltaMergeStoreStat
     UInt64 storage_meta_max_page_id      = 0;
 };
 
+// It is used to prevent hash conflict of file caches.
+static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
 class DeltaMergeStore : private boost::noncopyable
 {
@@ -143,7 +146,7 @@ public:
         {
             LOG_DEBUG(log_,
                       "Segment [" << task.segment->segmentId() << "] task [" << getBackgroundTypeName(task.type)
-                                  << "] add to background task pool by" << whom);
+                                  << "] add to background task pool by [" << whom << "]");
 
             std::scoped_lock lock(mutex);
             tasks.push(task);
@@ -189,8 +192,8 @@ public:
                            const HandleRanges &  sorted_ranges,
                            size_t                num_streams,
                            UInt64                max_version,
-                           const RSOperatorPtr & filter, 
-                           size_t                expected_block_size = STABLE_CHUNK_ROWS);
+                           const RSOperatorPtr & filter,
+                           size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Force flush all data to disk.
     /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
@@ -214,46 +217,24 @@ public:
     DeltaMergeStoreStat getStat();
 
 private:
-    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings)
-    {
-        ColumnDefines store_columns = table_columns;
-        if (pkIsHandle())
-        {
-            // Add an extra handle column.
-            store_columns.push_back(getExtraHandleColumnDefine());
-        }
-
-        auto * ctx = new DMContext{.db_context    = db_context,
-                                   .storage_pool  = storage_pool,
-                                   .store_columns = std::move(store_columns),
-                                   .handle_column = getExtraHandleColumnDefine(),
-                                   .min_version   = 0,
-
-                                   .not_compress            = settings.not_compress_columns,
-                                   .segment_limit_rows      = db_settings.dm_segment_limit_rows,
-                                   .delta_limit_rows        = db_settings.dm_segment_delta_limit_rows,
-                                   .delta_limit_bytes       = db_settings.dm_segment_delta_limit_bytes,
-                                   .delta_cache_limit_rows  = db_settings.dm_segment_delta_cache_limit_rows,
-                                   .delta_cache_limit_bytes = db_settings.dm_segment_delta_cache_limit_bytes};
-        return DMContextPtr(ctx);
-    }
+    DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
     bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
     template <bool by_write_thread>
-    void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment);
+    void checkSegmentUpdate(const DMContextPtr & context, SegmentPtr segment);
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-    void        segmentMergeDelta(DMContext &             dm_context,
+    SegmentPtr  segmentMergeDelta(DMContext &             dm_context,
                                   const SegmentPtr &      segment,
                                   const SegmentSnapshot & segment_snap,
                                   const StorageSnapshot & storage_snap,
                                   bool                    is_foreground);
 
-    void segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
-    void segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
+    SegmentPtr segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    void       segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
+    void       segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
 
     bool handleBackgroundTask();
 
@@ -267,6 +248,7 @@ private:
 
 private:
     String      path;
+    PathPool    extra_paths;
     StoragePool storage_pool;
 
     String        table_name;
@@ -291,6 +273,7 @@ private:
     // Used to guarantee only one thread can do write.
     std::mutex write_write_mutex;
 
+    UInt64   hash_salt;
     Logger * log;
 }; // namespace DM
 

@@ -1,5 +1,8 @@
 #include "Server.h"
 
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
+
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
@@ -63,14 +66,14 @@ namespace ErrorCodes
 }
 
 
-static std::string getCanonicalPath(std::string && path)
+static std::string getCanonicalPath(std::string path)
 {
     Poco::trimInPlace(path);
     if (path.empty())
         throw Exception("path configuration parameter is empty");
     if (path.back() != '/')
         path += '/';
-    return std::move(path);
+    return path;
 }
 
 void Server::uninitialize()
@@ -137,22 +140,49 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
     }
-    String paths = config().getString("path");
     std::vector<String> all_normal_path;
-    Poco::trimInPlace(paths);
-    if (paths.empty())
-        throw Exception("path configuration parameter is empty");
-    Poco::StringTokenizer string_tokens(paths, ";");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
     {
-        all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-        LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+        String paths = config().getString("path");
+        Poco::trimInPlace(paths);
+        if (paths.empty())
+            throw Exception("path configuration parameter is empty");
+        Poco::StringTokenizer string_tokens(paths, ";");
+        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
+            all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
+            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+        }
+    }
+
+    std::vector<std::pair<UInt32, String>> extra_paths;
+    if (config().has("extra_path"))
+    {
+        String s = config().getString("extra_path");
+        Poco::trimInPlace(s);
+        if (s.empty())
+            throw Exception("Extra path configuration parameter is empty");
+
+        std::vector<std::string> id_path_list;
+        boost::split(id_path_list, s, boost::is_any_of(";"));
+        for (auto & id_path_s : id_path_list)
+        {
+            std::vector<String> id_path;
+            boost::split(id_path, id_path_s, boost::is_any_of(":"));
+            if (id_path.size() != 2)
+                throw Exception("Illegal id_path format: " + id_path_s);
+            UInt32 id = std::stoul(id_path[0]);
+            String path = id_path[1];
+            extra_paths.emplace_back(id, getCanonicalPath(path));
+            LOG_DEBUG(log, "Extra path add " + DB::toString(id) + ":" + path);
+        }
+
     }
 
     std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+    if (!extra_paths.empty())
+        global_context->setExtraPaths(extra_paths);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -330,6 +360,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t mark_cache_size = config().getUInt64("mark_cache_size");
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
+
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    if (minmax_index_cache_size)
+        global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));

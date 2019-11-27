@@ -2,7 +2,7 @@
 #include <IO/CompressedWriteBuffer.h>
 #include <IO/MemoryReadWriteBuffer.h>
 
-#include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 #include <Storages/DeltaMerge/ReorganizeBlockInputStream.h>
@@ -63,8 +63,7 @@ void DiskValueSpace::restore(const OpContext & context)
             // We can not cache a chunk which is a delete range and not the latest one.
             if (chunk.isDeleteRange() && i != (ssize_t)chunks.size() - 1)
                 break;
-            if (chunk.getRows() >= context.dm_context.delta_cache_limit_rows
-                || chunk.getBytes() >= context.dm_context.delta_cache_limit_bytes)
+            if (chunk.getRows() >= context.dm_context.delta_cache_limit_rows)
                 break;
             ++chunks_to_cache;
         }
@@ -109,10 +108,8 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
     auto & delete_range = update.delete_range;
 
     const bool   is_delete       = !append_block;
-    const size_t block_bytes     = is_delete ? 0 : blockBytes(append_block);
     const size_t append_rows     = is_delete ? 0 : append_block.rows();
     const size_t cache_rows      = cacheRows();
-    const size_t cache_bytes     = cacheBytes();
     const size_t total_rows      = num_rows();
     const size_t in_storage_rows = total_rows - cache_rows;
 
@@ -121,8 +118,7 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
     // If the newly appended object is a delete_range, then we must clear the cache and flush them.
 
     if (is_delta_vs && !is_delete //
-        && (cache_rows + append_rows) < context.dm_context.delta_cache_limit_rows
-        && (cache_bytes + block_bytes) < context.dm_context.delta_cache_limit_bytes)
+        && (cache_rows + append_rows) < context.dm_context.delta_cache_limit_rows)
     {
         // Simply put the newly appended block into cache.
         Chunk chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wbs.log, append_block);
@@ -387,7 +383,6 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
     chunks.push_back(std::move(chunk));
 
     auto write_rows  = block.rows();
-    auto write_bytes = block.bytes();
     if (!write_rows)
     {
         // If it is an empty chunk, then nothing to append.
@@ -396,8 +391,7 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
     }
 
     // If former cache is empty, and this chunk is big enough, then no need to cache.
-    if (cache_chunks == 0
-        && (write_rows >= context.dm_context.delta_cache_limit_rows || write_bytes >= context.dm_context.delta_cache_limit_bytes))
+    if (cache_chunks == 0 && write_rows >= context.dm_context.delta_cache_limit_rows)
         return;
 
     for (const auto & col_define : context.dm_context.store_columns)
@@ -594,7 +588,7 @@ DiskValueSpacePtr DiskValueSpace::tryFlushCache(const OpContext & context, Write
         force = true;
 
     const size_t cache_rows = cacheRows();
-    if (!force && cache_rows < context.dm_context.delta_cache_limit_rows && cacheBytes() < context.dm_context.delta_cache_limit_bytes)
+    if (!force && cache_rows < context.dm_context.delta_cache_limit_rows)
         return {};
 
     return doFlushCache(context, remove_data_wb);

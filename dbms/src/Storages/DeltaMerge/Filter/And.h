@@ -19,14 +19,14 @@ public:
 
     String name() override { return "and"; }
 
-    RSResult roughCheck(const RSCheckParam & param) override
+    RSResult roughCheck(size_t chunk_id, const RSCheckParam & param) override
     {
-        auto res = children[0]->roughCheck(param);
+        auto res = children[0]->roughCheck(chunk_id, param);
         if (res == None)
             return res;
         for (size_t i = 1; i < children.size(); ++i)
         {
-            res = res && children[i]->roughCheck(param);
+            res = res && children[i]->roughCheck(chunk_id, param);
             if (res == None)
                 return res;
         }

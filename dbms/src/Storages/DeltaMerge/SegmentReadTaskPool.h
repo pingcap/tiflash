@@ -2,7 +2,6 @@
 
 #include <vector>
 
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 
 namespace DB
@@ -31,10 +30,9 @@ struct SegmentReadTask
     void addRange(const HandleRange & range) { ranges.push_back(range); }
 };
 
-using SegmentReadTaskPtr   = std::shared_ptr<SegmentReadTask>;
-using SegmentReadTasks     = std::vector<SegmentReadTaskPtr>;
-using SegmentStreamCreator = std::function<BlockInputStreamPtr(const SegmentReadTask &)>;
-using AfterSegmentRead     = std::function<void(const SegmentPtr &)>;
+using SegmentReadTaskPtr = std::shared_ptr<SegmentReadTask>;
+using SegmentReadTasks   = std::vector<SegmentReadTaskPtr>;
+using AfterSegmentRead   = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 class SegmentReadTaskPool : private boost::noncopyable
 {

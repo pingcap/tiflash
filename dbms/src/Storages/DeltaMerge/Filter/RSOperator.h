@@ -38,7 +38,11 @@ public:
     virtual String name()     = 0;
     virtual String toString() = 0;
 
-    virtual RSResult roughCheck(const RSCheckParam & param) = 0;
+    // TODO: implement a batch check version
+
+    virtual RSResult roughCheck(size_t chunk_id, const RSCheckParam & param) = 0;
+
+    virtual Attrs getAttrs() = 0;
 
     virtual RSOperatorPtr optimize() { return shared_from_this(); };
     virtual RSOperatorPtr switchDirection() { return shared_from_this(); };
@@ -57,6 +61,8 @@ public:
     {
     }
 
+    Attrs getAttrs() override { return {attr}; }
+
     String toString() override
     {
         return R"({"op":")" + name() +       //
@@ -70,6 +76,17 @@ class LogicalOp : public RSOperator
 {
 public:
     explicit LogicalOp(const RSOperators & children_) : RSOperator(children_) {}
+
+    Attrs getAttrs() override
+    {
+        Attrs attrs;
+        for (auto & child : children)
+        {
+            auto child_attrs = child->getAttrs();
+            attrs.insert(attrs.end(), child_attrs.begin(), child_attrs.end());
+        }
+        return attrs;
+    }
 
     String toString() override
     {
@@ -104,7 +121,7 @@ RSOperatorPtr createLessEqual(const Attr & attr, const Field & value, int null_d
 // set
 RSOperatorPtr createIn(const Attr & attr, const Fields & values);
 RSOperatorPtr createNotIn(const Attr & attr, const Fields & values);
-// 
+//
 RSOperatorPtr createLike(const Attr & attr, const Field & value);
 RSOperatorPtr createNotLike(const Attr & attr, const Field & values);
 //

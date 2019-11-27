@@ -208,6 +208,27 @@ void PageStorage::write(const WriteBatch & wb)
     // instead of throwing exception. Or we can't open PageStorage since we have already
     // persist the invalid ref pair into PageFile.
     versioned_page_entries.apply(edit);
+
+    for (auto & w : wb.getWrites())
+    {
+        switch (w.type)
+        {
+        case WriteBatch::WriteType::DEL:
+            deletes++;
+            break;
+        case WriteBatch::WriteType::PUT:
+            puts++;
+            break;
+        case WriteBatch::WriteType::REF:
+            refs++;
+            break;
+        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+            moves++;
+            break;
+        default:
+            throw Exception("Unexpected type " + DB::toString((UInt64)w.type));
+        }
+    }
 }
 
 PageStorage::SnapshotPtr PageStorage::getSnapshot()
@@ -389,8 +410,11 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
+    LOG_DEBUG(log,
+              storage_name << " Before gc, deletes[" << deletes << "], puts[" << puts << "], refs[" << refs << "], moves[" << moves << "]");
+
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
-    std::set<PageId> external_pages;
+    PathAndIdsVec external_pages;
     if (external_pages_scanner)
     {
         external_pages = external_pages_scanner();

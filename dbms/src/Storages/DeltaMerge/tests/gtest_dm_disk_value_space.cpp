@@ -36,7 +36,7 @@ protected:
 
         storage_pool        = std::make_unique<StoragePool>("test.t1", path);
         Context & context   = DMTestEnv::getContext();
-        table_handle_define = ColumnDefine(1, DMTestEnv::pk_name, std::make_shared<DataTypeInt64>());
+        table_handle_define = ColumnDefine(EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME, EXTRA_HANDLE_COLUMN_TYPE);
         table_columns.clear();
         table_columns.emplace_back(table_handle_define);
         table_columns.emplace_back(getVersionColumnDefine());
@@ -45,21 +45,19 @@ protected:
         // TODO fill columns
         // table_info.columns.emplace_back();
 
-        dm_context = std::make_unique<DMContext>(
-            DMContext{.db_context    = context,
-                      .storage_pool  = *storage_pool,
-                      .store_columns = table_columns,
-                      .handle_column = table_handle_define,
-                      .min_version   = 0,
-
-                      .not_compress = settings.not_compress_columns,
-
-                      .segment_limit_rows = context.getSettingsRef().dm_segment_limit_rows,
-
-                      .delta_limit_rows        = context.getSettingsRef().dm_segment_delta_limit_rows,
-                      .delta_limit_bytes       = context.getSettingsRef().dm_segment_delta_limit_bytes,
-                      .delta_cache_limit_rows  = context.getSettingsRef().dm_segment_delta_cache_limit_rows,
-                      .delta_cache_limit_bytes = context.getSettingsRef().dm_segment_delta_cache_limit_bytes});
+        dm_context = std::make_unique<DMContext>(context,
+                                                 ".",
+                                                 context.getExtraPaths(),
+                                                 *storage_pool,
+                                                 0,
+                                                 table_columns,
+                                                 table_handle_define,
+                                                 0,
+                                                 settings.not_compress_columns,
+                                                 context.getSettingsRef().dm_segment_limit_rows,
+                                                 context.getSettingsRef().dm_segment_delta_limit_rows,
+                                                 context.getSettingsRef().dm_segment_delta_cache_limit_rows,
+                                                 context.getSettingsRef().dm_segment_stable_chunk_rows);
     }
 
 protected:
@@ -78,6 +76,7 @@ protected:
 };
 
 TEST_F(DiskValueSpace_test, LogStorageWriteRead)
+try
 {
     const size_t value_beg      = 20;
     const size_t num_rows_write = 80;
@@ -149,7 +148,7 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
             auto c = iter.column;
             for (size_t i = 0; i < c->size(); ++i)
             {
-                if (iter.name == "pk")
+                if (iter.name == EXTRA_HANDLE_COLUMN_NAME)
                 {
                     EXPECT_EQ(c->getInt(i), static_cast<int64_t>(value_beg + read_offset + i));
                     //printf("%lld\n", c->getInt(i));
@@ -179,7 +178,7 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
             auto c = iter.column;
             for (size_t i = 0; i < c->size(); ++i)
             {
-                if (iter.name == "pk")
+                if (iter.name == EXTRA_HANDLE_COLUMN_NAME)
                 {
                     EXPECT_EQ(c->getInt(i), static_cast<int64_t>(value_beg + i));
                 }
@@ -187,6 +186,7 @@ TEST_F(DiskValueSpace_test, LogStorageWriteRead)
         }
     }
 }
+CATCH
 
 TEST_F(DiskValueSpace_test, writeChunks_OneBlock)
 {
