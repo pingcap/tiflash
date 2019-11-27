@@ -9,11 +9,15 @@ RUN apt update -y \
         liblld-5.0-dev libclang-5.0-dev liblld-5.0 \
         build-essential autoconf libtool pkg-config \
         libgflags-dev libgtest-dev \
-        golang \
+        golang curl \
         # For tests: # bash expect python python-lxml python-termcolor curl perl sudo tzdata
+ && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly \
  && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/grpc/grpc.git && cd grpc && git checkout v1.14.2 && git submodule update --init \
  && cd /grpc && mkdir .build && cd .build && cmake .. -DgRPC_BUILD_TESTS=OFF -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo) \
  && rm -rf /grpc/.build \
- && cd /grpc && mkdir .build && cd .build && cmake .. -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DgRPC_PROTOBUF_PROVIDER=package -DgRPC_ZLIB_PROVIDER=package -DgRPC_CARES_PROVIDER=package -DgRPC_SSL_PROVIDER=package -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo)
+ && cd /grpc && mkdir .build && cd .build && cmake .. -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DgRPC_PROTOBUF_PROVIDER=package -DgRPC_ZLIB_PROVIDER=package -DgRPC_CARES_PROVIDER=package -DgRPC_SSL_PROVIDER=package -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo) \
+ && source /root/.profile && ldconfig \
+ && cd / && mkdir libtiflash-proxy && git clone -b tiflash-proxy-lib https://github.com/solotzg/tikv.git tiflash-proxy && cd /tiflash-proxy \
+ && make release && cp target/release/libtiflash_proxy.so /libtiflash-proxy && cd / && rm -rf /tiflash-proxy

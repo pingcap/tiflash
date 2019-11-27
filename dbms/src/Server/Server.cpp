@@ -86,6 +86,49 @@ void Server::initialize(Poco::Util::Application & self)
 
 std::string Server::getDefaultCorePath() const { return getCanonicalPath(config().getString("path")) + "cores"; }
 
+extern "C" void run_tiflash_proxy(int, const char **);
+extern "C" void print_tiflash_proxy_version();
+
+struct TiFlashProxy
+{
+    static const std::string config_prefix;
+    std::vector<const char *> args;
+    std::unordered_map<std::string, std::string> val_map;
+    bool inited = false;
+
+    TiFlashProxy(Poco::Util::LayeredConfiguration & config)
+    {
+        if (!config.has(config_prefix))
+            return;
+
+        Poco::Util::AbstractConfiguration::Keys keys;
+        config.keys(config_prefix, keys);
+        for (const auto & key : keys)
+        {
+            const auto k = config_prefix + "." + key;
+            val_map["--" + key] = config.getString(k);
+        }
+        {
+            auto pd_addrs = config.getString("raft.pd_addr");
+            for (auto && c : pd_addrs)
+            {
+                if (c == ';')
+                    c = ',';
+            }
+            val_map["--pd-endpoints"] = pd_addrs;
+        }
+        args.push_back("TiFlash Proxy");
+        for (const auto & v : val_map)
+        {
+            args.push_back(v.first.data());
+            args.push_back(v.second.data());
+        }
+        inited = true;
+    }
+};
+
+const std::string TiFlashProxy::config_prefix = "flash.proxy";
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Logger * log = &logger();
@@ -479,6 +522,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->shutdownRaftService();
             LOG_INFO(log, "Shut down raft service");
         }
+    });
+
+    TiFlashProxy proxy(config());
+
+    auto proxy_runner = std::thread([&proxy, &log]() {
+        if (!proxy.inited)
+            return;
+
+        LOG_INFO(log, "Start tiflash proxy");
+        run_tiflash_proxy((int)proxy.args.size(), proxy.args.data());
+        LOG_INFO(log, "End tiflash proxy");
+    });
+
+    SCOPE_EXIT({
+        LOG_INFO(log, "Wait for tiflash proxy to join");
+        proxy_runner.join();
+        LOG_INFO(log, "TiFlash proxy finish");
     });
 
     if (has_zookeeper && config().has("distributed_ddl"))

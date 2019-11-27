@@ -28,6 +28,9 @@ if [ -d "$SRCPATH/contrib/tipb" ]; then
   cd -
 fi
 
+rm -rf ${SRCPATH}/libs/libtiflash-proxy
+ln -s /libtiflash-proxy ${SRCPATH}/libs/libtiflash-proxy
+
 build_dir="$SRCPATH/build_docker"
 mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" \
