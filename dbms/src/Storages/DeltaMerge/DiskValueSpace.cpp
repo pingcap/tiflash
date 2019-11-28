@@ -382,7 +382,7 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
 
     chunks.push_back(std::move(chunk));
 
-    auto write_rows  = block.rows();
+    auto write_rows = block.rows();
     if (!write_rows)
     {
         // If it is an empty chunk, then nothing to append.
@@ -698,6 +698,24 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
 ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const
 {
     return std::make_shared<ChunkBlockInputStream>(chunks, read_columns, page_reader, RSOperatorPtr());
+}
+
+DeltaValueSpacePtr
+DiskValueSpace::getValueSpace(const PageReader & page_reader, const ColumnDefines & read_columns, const HandleRange & range) const
+{
+    auto mvs = std::make_shared<DeltaValueSpace>();
+    for (size_t chunk_index = 0; chunk_index < chunks.size(); ++chunk_index)
+    {
+        auto & chunk = chunks[chunk_index];
+        if (chunk.isDeleteRange())
+            continue;
+        auto [first_handle, end_handle] = chunk.getHandleFirstLast();
+        if (range.intersect(first_handle, end_handle))
+            mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
+        else
+            mvs->addBlock({}, chunk.getRows());
+    }
+    return mvs;
 }
 
 Chunks DiskValueSpace::getChunksBefore(size_t rows, size_t deletes) const
