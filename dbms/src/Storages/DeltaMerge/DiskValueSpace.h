@@ -12,6 +12,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/WriteBatch.h>
 
@@ -155,7 +156,11 @@ public:
     static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
 
     /// Remove all chunks and clear cache.
-    void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_);
+    void replaceChunks(WriteBatch &        meta_wb, //
+                       WriteBatch &        removed_wb,
+                       Chunks &&           new_chunks,
+                       MutableColumnMap && cache_,
+                       size_t              cache_chunks_);
     void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks);
     void clearChunks(WriteBatch & removed_wb);
     void setChunks(WriteBatch & meta_wb, Chunks && new_chunks);
@@ -188,6 +193,10 @@ public:
 
     // TODO: getInputStream can be removed
     ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
+
+    DeltaValueSpacePtr getValueSpace(const PageReader &    page_reader, //
+                                     const ColumnDefines & read_columns,
+                                     const HandleRange &   range) const;
 
     MutableColumnMap cloneCache();
     size_t           cacheChunks() { return cache_chunks; }

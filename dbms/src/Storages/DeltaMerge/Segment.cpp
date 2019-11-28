@@ -303,7 +303,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                                             UInt64                  max_version,
                                             size_t                  expected_block_size)
 {
-    auto read_info = getReadInfo<true>(dm_context, columns_to_read, segment_snap, storage_snap);
+    auto read_info = getReadInfo<true>(dm_context, columns_to_read, segment_snap, storage_snap, mergeRanges(read_ranges));
 
     auto create_stream = [&](const HandleRange & read_range) -> BlockInputStreamPtr {
         BlockInputStreamPtr stream;
@@ -516,7 +516,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_contex
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
-    auto read_info   = getReadInfo<false>(dm_context, dm_context.store_columns, segment_snap, storage_snap);
+    auto read_info   = getReadInfo<false>(dm_context, dm_context.store_columns, segment_snap, storage_snap, range);
     auto data_stream = getPlacedStream(dm_context,
                                        read_info.read_columns,
                                        range,
@@ -671,18 +671,20 @@ template <bool add_tag_column>
 Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
                                        const ColumnDefines &   read_columns,
                                        const SegmentSnapshot & segment_snap,
-                                       const StorageSnapshot & storage_snap) const
+                                       const StorageSnapshot & storage_snap,
+                                       const HandleRange &     read_range) const
 {
     LOG_TRACE(log, "getReadInfo start");
 
     auto new_read_columns = arrangeReadColumns<add_tag_column>(dm_context.handle_column, read_columns);
 
-    DeltaValueSpacePtr delta_value_space;
-    DeltaIndexPtr      delta_index;
+    //    DeltaValueSpacePtr delta_value_space;
+    //    auto delta_block  = segment_snap.delta->read(new_read_columns, storage_snap.log_reader, 0, segment_snap.delta_rows);
+    //    delta_value_space = std::make_shared<DeltaValueSpace>(dm_context.handle_column, new_read_columns, delta_block);
 
-    auto delta_block  = segment_snap.delta->read(new_read_columns, storage_snap.log_reader, 0, segment_snap.delta_rows);
-    delta_value_space = std::make_shared<DeltaValueSpace>(dm_context.handle_column, new_read_columns, delta_block);
+    auto delta_value_space = segment_snap.delta->getValueSpace(storage_snap.log_reader, new_read_columns, read_range);
 
+    DeltaIndexPtr delta_index;
     if (segment_snap.delta_index)
     {
         delta_index = segment_snap.delta_index;
@@ -1002,7 +1004,7 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
     auto & storage_pool = dm_context.storage_pool;
-    auto   read_info    = getReadInfo<false>(dm_context, dm_context.store_columns, segment_snap, storage_snap);
+    auto   read_info    = getReadInfo<false>(dm_context, dm_context.store_columns, segment_snap, storage_snap, range);
 
     auto split_point = getSplitPointSlow(dm_context, read_info);
 

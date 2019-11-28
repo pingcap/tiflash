@@ -28,51 +28,6 @@ using Segments    = std::vector<SegmentPtr>;
 using SegmentAndStorageSnap = std::pair<SegmentSnapshot, StorageSnapshot>;
 using SegmentSnapAndChunks  = std::pair<SegmentSnapshot, Chunks>;
 
-struct DeltaValueSpace
-{
-    DeltaValueSpace(const ColumnDefine & handle_define, const ColumnDefines & column_defines, const Block & block)
-    {
-        columns.reserve(column_defines.size());
-        columns_ptr.reserve(column_defines.size());
-        for (const auto & c : column_defines)
-        {
-
-            auto & col = block.getByName(c.name).column;
-            columns.emplace_back(col);
-            columns_ptr.emplace_back(col.get());
-
-            if (c.name == handle_define.name)
-            {
-                handle_column = toColumnVectorDataPtr<Handle>(col);
-            }
-        }
-        rows = block.rows();
-    }
-
-    void insertValue(IColumn & des, size_t column_index, UInt64 value_id) //
-    {
-        if ((unlikely(value_id >= rows)))
-            throw Exception("value_id is expected to < " + DB::toString(rows) + ", now " + DB::toString(value_id));
-        des.insertFrom(*(columns_ptr[column_index]), value_id);
-    }
-
-    Handle getHandle(size_t value_id) //
-    {
-        if ((unlikely(value_id >= rows)))
-            throw Exception("value_id is expected to < " + DB::toString(rows) + ", now " + DB::toString(value_id));
-        return (*handle_column)[value_id];
-    }
-
-    size_t    getRows() { return rows; }
-    Columns & getColumns() { return columns; }
-
-    Columns                        columns;
-    ColumnRawPtrs                  columns_ptr;
-    PaddedPODArray<Handle> const * handle_column;
-    size_t                         rows;
-};
-using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
-
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot
 {
@@ -241,7 +196,8 @@ private:
     ReadInfo getReadInfo(const DMContext &       dm_context,
                          const ColumnDefines &   read_columns,
                          const SegmentSnapshot & segment_snap,
-                         const StorageSnapshot & storage_snap) const;
+                         const StorageSnapshot & storage_snap,
+                         const HandleRange &     read_range) const;
 
     template <bool add_tag_column>
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);

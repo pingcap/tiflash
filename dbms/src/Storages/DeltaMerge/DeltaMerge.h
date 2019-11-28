@@ -48,9 +48,7 @@ private:
     // < 0 : some rows are filtered out by index, should not write into output.
     ssize_t stable_skip = 0;
 
-    DeltaValueSpacePtr             delta_value_space;
-    Columns &                      delta_value_space_columns;
-    const PaddedPODArray<Handle> & delta_value_space_handle_column_data;
+    DeltaValueSpacePtr delta_value_space;
 
     IndexEntry * index;
     size_t       index_capacity;
@@ -86,8 +84,6 @@ public:
                                size_t                               max_block_size_)
         : stable_input_stream(stable_input_stream_),
           delta_value_space(delta_value_space_),
-          delta_value_space_columns(delta_value_space->getColumns()),
-          delta_value_space_handle_column_data(toColumnVectorData<Handle>(delta_value_space_columns[0])),
           index((IndexEntry *)(alloc(sizeof(IndexEntry) * index_size_))),
           index_capacity(index_size_),
           index_pos(0),
@@ -214,13 +210,9 @@ private:
                     break;
                 case DT_INS:
                 {
-                    std::tie(use_delta_offset, use_delta_rows) = HandleFilter::getPosRangeOfSorted(handle_range, //
-                                                                                                   delta_value_space_handle_column_data,
-                                                                                                   cur_index.value,
-                                                                                                   cur_index.count);
-                    if (use_delta_rows)
-                        writeInsertFromDelta(output_columns, output_write_limit);
-
+                    use_delta_offset = cur_index.value;
+                    use_delta_rows   = cur_index.count;
+                    writeInsertFromDelta(output_columns, output_write_limit);
                     break;
                 }
                 default:
@@ -463,16 +455,7 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        if (write_rows == 1)
-        {
-            for (size_t col_idx = 0; col_idx < num_columns; ++col_idx)
-                output_columns[col_idx]->insertFrom(*delta_value_space_columns[col_idx], use_delta_offset);
-        }
-        else
-        {
-            for (size_t col_idx = 0; col_idx < num_columns; ++col_idx)
-                output_columns[col_idx]->insertRangeFrom(*delta_value_space_columns[col_idx], use_delta_offset, write_rows);
-        }
+        delta_value_space->read(output_columns, use_delta_offset, write_rows);
 
         output_write_limit -= write_rows;
         use_delta_offset += write_rows;
