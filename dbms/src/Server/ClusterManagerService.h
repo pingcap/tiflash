@@ -1,8 +1,8 @@
 #pragma once
 
+#include <Poco/Util/Timer.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <common/logger_useful.h>
-#include <Poco/Util/Timer.h>
 
 namespace DB
 {
@@ -22,7 +22,6 @@ private:
     Poco::Util::Timer timer;
     Logger * log;
 };
-
 
 
 } // namespace DB
