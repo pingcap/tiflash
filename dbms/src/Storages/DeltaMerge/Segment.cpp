@@ -8,6 +8,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 
+#include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMerge.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -402,8 +403,11 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
 
     if (do_range_filter)
     {
-        delta_stream  = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
+        delta_stream = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
+        delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
+
         stable_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stable_stream, range, 0);
+        stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
     }
 
     BlockInputStreams streams;
