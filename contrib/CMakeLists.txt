@@ -1,5 +1,11 @@
 add_subdirectory (kvproto/cpp)
+# -----
+set (_save ${ENABLE_TESTS})
+set (ENABLE_TESTS 0)
+# disable ENABLE_TESTS for client-c
 add_subdirectory (client-c)
+set (ENABLE_TESTS ${_save})
+# -------
 add_subdirectory (tipb/cpp)
 
 if (NOT MSVC)

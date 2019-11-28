@@ -21,20 +21,16 @@ struct IndexReader : public pingcap::kv::RegionClient
 
     Logger * log;
 
-    IndexReader(pingcap::kv::RegionCachePtr cache_,
-        pingcap::kv::RpcClientPtr client_,
-        const pingcap::kv::RegionVerID & id,
-        const std::string & suggested_ip,
-        UInt16 suggested_port);
+    IndexReader(
+        pingcap::kv::Cluster * cluster_, const pingcap::kv::RegionVerID & id, const std::string & suggested_ip, UInt16 suggested_port);
 
     int64_t getReadIndex();
 
 private:
-    void getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
+    std::unique_ptr<::kvrpcpb::ReadIndexResponse> getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
         const metapb::Region & meta,
         const std::vector<metapb::Peer> & learners,
-        pingcap::kv::RpcCallPtr<kvrpcpb::ReadIndexRequest>
-            rpc);
+        std::unique_ptr<::kvrpcpb::ReadIndexRequest> && request);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;

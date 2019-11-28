@@ -3,6 +3,7 @@
 #include <Debug/MockSchemaGetter.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 
 namespace DB
@@ -14,9 +15,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
-    pingcap::pd::ClientPtr pd_client;
-    pingcap::kv::RegionCachePtr region_cache;
-    pingcap::kv::RpcClientPtr rpc_client;
+
+    pingcap::kv::Cluster * cluster;
 
     const Int64 maxNumberOfDiffs = 100;
 
@@ -28,11 +28,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Logger * log;
 
-    TiDBSchemaSyncer(pingcap::pd::ClientPtr pd_client_, pingcap::kv::RegionCachePtr region_cache_, pingcap::kv::RpcClientPtr rpc_client_)
-        : pd_client(pd_client_), region_cache(region_cache_), rpc_client(rpc_client_), cur_version(0), log(&Logger::get("SchemaSyncer"))
-    {}
+    TiDBSchemaSyncer(pingcap::kv::Cluster * cluster_) : cluster(cluster_), cur_version(0), log(&Logger::get("SchemaSyncer")) {}
 
-    bool isTooOldSchema(Int64 cur_version, Int64 new_version) { return cur_version == 0 || new_version - cur_version > maxNumberOfDiffs; }
+    bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 
     Getter createSchemaGetter(UInt64 tso [[maybe_unused]])
     {
@@ -42,7 +40,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         else
         {
-            return Getter(region_cache, rpc_client, tso);
+            return Getter(cluster, tso);
         }
     }
 
@@ -65,7 +63,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     {
         std::lock_guard<std::mutex> lock(schema_mutex);
 
-        auto tso = pd_client->getTS();
+        auto tso = cluster->pd_client->getTS();
         auto getter = createSchemaGetter(tso);
         Int64 version = getter.getVersion();
         if (version <= cur_version)
