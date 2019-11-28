@@ -410,7 +410,7 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_DEBUG(log,
+    LOG_TRACE(log,
               storage_name << " Before gc, deletes[" << deletes << "], puts[" << puts << "], refs[" << refs << "], moves[" << moves << "]");
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.

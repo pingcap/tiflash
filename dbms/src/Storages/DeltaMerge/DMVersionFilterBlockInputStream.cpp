@@ -1,5 +1,10 @@
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 
+namespace ProfileEvents
+{
+extern const Event DMCleanReadRows;
+} // namespace ProfileEvents
+
 namespace DB
 {
 
@@ -33,6 +38,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             passed_rows += rows;
 
             initNextBlock();
+
+            ProfileEvents::increment(ProfileEvents::DMCleanReadRows, rows);
 
             return getNewBlockByHeader(header, cur_raw_block);
         }

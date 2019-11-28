@@ -197,6 +197,7 @@
     M(DMSegmentMergeNS) \
     M(DMFlushDeltaCache) \
     M(DMFlushDeltaCacheNS) \
+    M(DMCleanReadRows) \
 
 
 namespace ProfileEvents
