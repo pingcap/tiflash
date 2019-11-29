@@ -640,12 +640,12 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
 void BaseDaemon::reloadConfiguration()
 {
     /** If the program is not run in daemon mode and 'config-file' is not specified,
-      *  then we use config from 'config.xml' file in current directory,
+      *  then we use config from 'config.toml' file in current directory,
       *  but will log to console (or use parameters --log-file, --errorlog-file from command line)
       *  instead of using files specified in config.xml.
       * (It's convenient to log in console when you start server without any command line parameters.)
       */
-    config_path = config().getString("config-file", "config.xml");
+    config_path = config().getString("config-file", "config.toml");
     loaded_config = ConfigProcessor(config_path, true).loadConfig();
     if (last_configuration != nullptr)
         config().removeConfiguration(last_configuration);

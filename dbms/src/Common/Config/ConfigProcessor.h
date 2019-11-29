@@ -31,21 +31,6 @@ public:
 
     ~ConfigProcessor();
 
-    /// Perform config includes and substitutions and return the resulting XML-document.
-    ///
-    /// Suppose path is "/path/file.xml"
-    /// 1) Merge XML trees of /path/file.xml with XML trees of all files from /path/{conf,file}.d/*.{conf,xml}
-    ///    * If an element has a "replace" attribute, replace the matching element with it.
-    ///    * If an element has a "remove" attribute, remove the matching element.
-    ///    * Else, recursively merge child elements.
-    /// 2) Determine the includes file from the config: <include_from>/path2/metrika.xml</include_from>
-    ///    If this path is not configured, use /etc/metrika.xml
-    /// 3) Replace elements matching the "<foo incl="bar"/>" pattern with
-    ///    "<foo>contents of the yandex/bar element in metrika.xml</foo>"
-    /// 4) If zk_node_cache is non-NULL, replace elements matching the "<foo from_zk="/bar">" pattern with
-    ///    "<foo>contents of the /bar ZooKeeper node</foo>".
-    ///    If has_zk_includes is non-NULL and there are such elements, set has_zk_includes to true.
-    /// 5) (Yandex.Metrika-specific) Substitute "<layer/>" with "<layer>layer number from the hostname</layer>".
     TOMLTablePtr processConfig();
 
 

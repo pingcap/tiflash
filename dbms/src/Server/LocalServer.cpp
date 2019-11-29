@@ -69,7 +69,7 @@ void LocalServer::defineOptions(Poco::Util::OptionSet& _options)
         Poco::Util::Option("config-file", "", "Load configuration from a given file")
             .required(false)
             .repeatable(false)
-            .argument("[config.xml]")
+            .argument("[config.toml]")
             .binding("config-file"));
 
     /// Arguments that define first query creating initial table:
