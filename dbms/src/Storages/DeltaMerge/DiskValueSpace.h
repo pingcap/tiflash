@@ -196,7 +196,8 @@ public:
 
     DeltaValueSpacePtr getValueSpace(const PageReader &    page_reader, //
                                      const ColumnDefines & read_columns,
-                                     const HandleRange &   range) const;
+                                     const HandleRange &   range,
+                                     size_t                rows_limit) const;
 
     MutableColumnMap cloneCache();
     size_t           cacheChunks() { return cache_chunks; }

@@ -700,21 +700,49 @@ ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & re
     return std::make_shared<ChunkBlockInputStream>(chunks, read_columns, page_reader, RSOperatorPtr());
 }
 
-DeltaValueSpacePtr
-DiskValueSpace::getValueSpace(const PageReader & page_reader, const ColumnDefines & read_columns, const HandleRange & range) const
+DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_reader,
+                                                 const ColumnDefines & read_columns,
+                                                 const HandleRange &   range,
+                                                 size_t                rows_limit) const
 {
     auto mvs = std::make_shared<DeltaValueSpace>();
-    for (size_t chunk_index = 0; chunk_index < chunks.size(); ++chunk_index)
+
+    size_t chunk_cache_start = chunks.size() - cache_chunks;
+    size_t already_read_rows = 0;
+    size_t chunk_index       = 0;
+    for (; chunk_index < chunk_cache_start && chunk_index < chunks.size(); ++chunk_index)
     {
         auto & chunk = chunks[chunk_index];
-        if (chunk.isDeleteRange())
+        if (chunk.isDeleteRange() || !chunk.getRows())
             continue;
-        auto [first_handle, end_handle] = chunk.getHandleFirstLast();
-        if (range.intersect(first_handle, end_handle))
+        auto & handle_meta            = chunk.getColumn(EXTRA_HANDLE_COLUMN_ID);
+        auto [min_handle, max_handle] = handle_meta.minmax->getIntMinMax(0);
+        if (range.intersect(min_handle, max_handle))
             mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
         else
             mvs->addBlock({}, chunk.getRows());
+
+        already_read_rows += chunk.getRows();
+        if (already_read_rows >= rows_limit)
+            break;
     }
+
+    /// The reset of data is in cache, simply append them into result.
+
+    if (already_read_rows < rows_limit)
+    {
+        Block block;
+        auto  cache_limit = rows_limit - already_read_rows;
+        for (size_t index = 0; index < read_columns.size(); ++index)
+        {
+            const ColumnDefine & define    = read_columns[index];
+            auto &               cache_col = cache.at(define.id); // TODO new inserted col'id don't exist in cache.
+            auto                 clone     = cache_col->cloneResized(cache_limit);
+            block.insert(ColumnWithTypeAndName(std::move(clone), define.type, define.name, define.id));
+        }
+        mvs->addBlock(block, cache_limit);
+    }
+
     return mvs;
 }
 

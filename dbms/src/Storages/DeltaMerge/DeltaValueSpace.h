@@ -19,13 +19,14 @@ public:
         sizes.push_back(rows);
     }
 
-    void read(MutableColumns & output_columns, size_t offset, size_t limit)
+    size_t write(MutableColumns & output_columns, size_t offset, size_t limit)
     {
         auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(offset);
         auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(offset + limit);
 
-        size_t chunk_index = start_chunk_index;
-        for (; chunk_index <= end_chunk_index; ++chunk_index)
+        size_t actually_read = 0;
+        size_t chunk_index   = start_chunk_index;
+        for (; chunk_index <= end_chunk_index && chunk_index < sizes.size(); ++chunk_index)
         {
             size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
             size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : sizes[chunk_index];
@@ -44,8 +45,11 @@ public:
                                                                    rows_start_in_chunk,
                                                                    rows_in_chunk_limit);
                 }
+
+                actually_read += rows_in_chunk_limit;
             }
         }
+        return actually_read;
     }
 
 private:
