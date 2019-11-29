@@ -27,10 +27,8 @@ struct IndexReader : public pingcap::kv::RegionClient
     int64_t getReadIndex();
 
 private:
-    std::unique_ptr<::kvrpcpb::ReadIndexResponse> getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
-        const metapb::Region & meta,
-        const std::vector<metapb::Peer> & learners,
-        std::unique_ptr<::kvrpcpb::ReadIndexRequest> && request);
+    std::unique_ptr<::kvrpcpb::ReadIndexResponse> getReadIndexFromLearners(
+        pingcap::kv::Backoffer & bo, const metapb::Region & meta, const std::vector<metapb::Peer> & learners);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;

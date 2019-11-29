@@ -27,7 +27,6 @@ int64_t IndexReader::getReadIndex()
 
     for (;;)
     {
-        auto request = std::unique_ptr<kvrpcpb::ReadIndexRequest>();
         auto region = cluster->region_cache->getRegionByID(bo, region_id);
         const auto & learners = region->learners;
         std::vector<metapb::Peer> candidate_learners;
@@ -77,7 +76,7 @@ int64_t IndexReader::getReadIndex()
 
         try
         {
-            return getReadIndexFromLearners(bo, region->meta, candidate_learners, std::move(request))->read_index();
+            return getReadIndexFromLearners(bo, region->meta, candidate_learners)->read_index();
         }
         catch (const pingcap::Exception & e)
         {
@@ -88,11 +87,10 @@ int64_t IndexReader::getReadIndex()
     }
 }
 
-std::unique_ptr<::kvrpcpb::ReadIndexResponse> IndexReader::getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
-    const metapb::Region & meta,
-    const std::vector<metapb::Peer> & learners,
-    std::unique_ptr<::kvrpcpb::ReadIndexRequest> && request)
+std::unique_ptr<::kvrpcpb::ReadIndexResponse> IndexReader::getReadIndexFromLearners(
+    pingcap::kv::Backoffer & bo, const metapb::Region & meta, const std::vector<metapb::Peer> & learners)
 {
+    auto request = std::unique_ptr<kvrpcpb::ReadIndexRequest>();
     pingcap::kv::RpcCall<::kvrpcpb::ReadIndexRequest> rpc(std::move(request));
     for (const auto & learner : learners)
     {
