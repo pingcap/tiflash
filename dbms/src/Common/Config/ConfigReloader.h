@@ -9,6 +9,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <list>
+#include <set>
 
 
 namespace Poco { class Logger; }

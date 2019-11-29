@@ -247,7 +247,7 @@ try
     /// Load config files if exists
     if (config().has("config-file") || Poco::File("config.xml").exists())
     {
-        ConfigProcessor config_processor(config().getString("config-file", "config.xml"), false, true);
+        ConfigProcessor config_processor(config().getString("config-file", "config.xml"), true);
         auto loaded_config = config_processor.loadConfig();
         config_processor.savePreprocessedConfig(loaded_config);
         config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);

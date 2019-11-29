@@ -27,7 +27,6 @@ bool ConfigProcessor::isPreprocessedFile(const std::string & path)
 
 ConfigProcessor::ConfigProcessor(
     const std::string & path_,
-    bool throw_on_bad_incl_,
     bool log_to_console,
     const Substitutions & substitutions_)
     : path(path_)
@@ -67,4 +66,8 @@ ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig()
 
 void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config)
 {
+    std::ofstream out(preprocessed_path);
+    cpptoml::toml_writer writer(out);
+    loaded_config.preprocessed_conf->accept(writer);
+    out.close();
 }

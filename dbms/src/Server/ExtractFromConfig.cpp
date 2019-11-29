@@ -25,7 +25,7 @@ static void setupLogging(const std::string & log_level)
 static std::string extractFromConfig(
         const std::string & config_path, const std::string & key, bool try_get = false)
 {
-    ConfigProcessor processor(config_path, /* throw_on_bad_incl = */ false, /* log_to_console = */ false);
+    ConfigProcessor processor(config_path, /* log_to_console = */ false);
     auto config_conf = processor.processConfig();
     ConfigurationPtr configuration(new DB::TOMLConfiguration(config_conf));
     // do not throw exception if not found
