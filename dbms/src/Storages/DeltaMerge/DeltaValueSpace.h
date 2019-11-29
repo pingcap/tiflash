@@ -26,7 +26,7 @@ public:
 
         size_t actually_read = 0;
         size_t chunk_index   = start_chunk_index;
-        for (; chunk_index <= end_chunk_index; ++chunk_index)
+        for (; chunk_index <= end_chunk_index && chunk_index < sizes.size(); ++chunk_index)
         {
             size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
             size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : sizes[chunk_index];

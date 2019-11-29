@@ -715,8 +715,9 @@ DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_read
         auto & chunk = chunks[chunk_index];
         if (chunk.isDeleteRange() || !chunk.getRows())
             continue;
-        auto [first_handle, end_handle] = chunk.getHandleFirstLast();
-        if (range.intersect(first_handle, end_handle))
+        auto & handle_meta            = chunk.getColumn(EXTRA_HANDLE_COLUMN_ID);
+        auto [min_handle, max_handle] = handle_meta.minmax->getIntMinMax(0);
+        if (range.intersect(min_handle, max_handle))
             mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
         else
             mvs->addBlock({}, chunk.getRows());
