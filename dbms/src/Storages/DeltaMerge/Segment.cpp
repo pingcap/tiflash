@@ -676,8 +676,9 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
 {
     LOG_TRACE(log, "getReadInfo start");
 
-    auto new_read_columns  = arrangeReadColumns<add_tag_column>(dm_context.handle_column, read_columns);
-    auto delta_value_space = segment_snap.delta->getValueSpace(storage_snap.log_reader, new_read_columns, read_range);
+    auto new_read_columns = arrangeReadColumns<add_tag_column>(dm_context.handle_column, read_columns);
+    auto delta_value_space
+        = segment_snap.delta->getValueSpace(storage_snap.log_reader, new_read_columns, read_range, segment_snap.delta_rows);
 
     DeltaIndexPtr delta_index;
     if (segment_snap.delta_index)
