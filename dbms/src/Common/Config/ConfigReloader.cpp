@@ -14,16 +14,12 @@ constexpr decltype(ConfigReloader::reload_interval) ConfigReloader::reload_inter
 
 ConfigReloader::ConfigReloader(
         const std::string & path_,
-        const std::string & include_from_path_,
-        zkutil::ZooKeeperNodeCache && zk_node_cache_,
         Updater && updater_,
         bool already_loaded)
-    : path(path_), include_from_path(include_from_path_)
-    , zk_node_cache(std::move(zk_node_cache_))
-    , updater(std::move(updater_))
+    : path(path_), updater(std::move(updater_))
 {
     if (!already_loaded)
-        reloadIfNewer(/* force = */ true, /* throw_on_error = */ true, /* fallback_to_preprocessed = */ true);
+        reloadIfNewer(/* force = */ true, /* throw_on_error = */ true);
 }
 
 
@@ -38,7 +34,6 @@ ConfigReloader::~ConfigReloader()
     try
     {
         quit = true;
-        zk_node_cache.getChangedEvent().set();
 
         if (thread.joinable())
             thread.join();
@@ -58,11 +53,10 @@ void ConfigReloader::run()
     {
         try
         {
-            bool zk_changed = zk_node_cache.getChangedEvent().tryWait(std::chrono::milliseconds(reload_interval).count());
             if (quit)
                 return;
 
-            reloadIfNewer(zk_changed, /* throw_on_error = */ false, /* fallback_to_preprocessed = */ false);
+            reloadIfNewer(false, /* throw_on_error = */ false);
         }
         catch (...)
         {
@@ -72,7 +66,7 @@ void ConfigReloader::run()
     }
 }
 
-void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool fallback_to_preprocessed)
+void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
 {
     std::lock_guard<std::mutex> lock(reload_mutex);
 
@@ -85,10 +79,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error, bool fallbac
         {
             LOG_DEBUG(log, "Loading config `" << path << "'");
 
-            loaded_config = config_processor.loadConfig(/* allow_zk_includes = */ true);
-            if (loaded_config.has_zk_includes)
-                loaded_config = config_processor.loadConfigWithZooKeeperIncludes(
-                        zk_node_cache, fallback_to_preprocessed);
+            loaded_config = config_processor.loadConfig();
         }
         catch (...)
         {
@@ -141,11 +132,11 @@ struct ConfigReloader::FileWithTimestamp
 };
 
 
-void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & path)
+void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & _path)
 {
-    if (!path.empty() && Poco::File(path).exists())
+    if (!_path.empty() && Poco::File(_path).exists())
     {
-        files.emplace(path, Poco::File(path).getLastModified().epochTime());
+        files.emplace(_path, Poco::File(_path).getLastModified().epochTime());
     }
 }
 
@@ -160,10 +151,6 @@ ConfigReloader::FilesChangesTracker ConfigReloader::getNewFileList() const
     FilesChangesTracker file_list;
 
     file_list.addIfExists(path);
-    file_list.addIfExists(include_from_path);
-
-    for (const auto & merge_path : ConfigProcessor::getConfigMergeFiles(path))
-        file_list.addIfExists(merge_path);
 
     return file_list;
 }

@@ -646,7 +646,7 @@ void BaseDaemon::reloadConfiguration()
       * (It's convenient to log in console when you start server without any command line parameters.)
       */
     config_path = config().getString("config-file", "config.xml");
-    loaded_config = ConfigProcessor(config_path, false, true).loadConfig(/* allow_zk_includes = */ true);
+    loaded_config = ConfigProcessor(config_path, false, true).loadConfig();
     if (last_configuration != nullptr)
         config().removeConfiguration(last_configuration);
     last_configuration = loaded_config.configuration.duplicate();

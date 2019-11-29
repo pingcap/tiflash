@@ -1,3 +1,6 @@
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "ConfigProcessor.h"
 
 #include <sys/utsname.h>
@@ -14,6 +17,7 @@
 #include <Common/ZooKeeper/KeeperException.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Config/cpptoml.h>
+#include <Common/Config/TOMLConfiguration.h>
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
 
@@ -60,7 +64,6 @@ ConfigProcessor::ConfigProcessor(
     const Substitutions & substitutions_)
     : path(path_)
     , preprocessed_path(preprocessedConfigPath(path))
-    , throw_on_bad_incl(throw_on_bad_incl_)
     , substitutions(substitutions_)
 {
     if (log_to_console && Logger::has("ConfigProcessor") == nullptr)
@@ -78,11 +81,6 @@ ConfigProcessor::~ConfigProcessor()
 {
     if (channel_ptr) /// This means we have created a new console logger in the constructor.
         Logger::destroy("ConfigProcessor");
-}
-
-static bool allWhitespace(const std::string & s)
-{
-    return s.find_first_not_of(" \t\n\r") == std::string::npos;
 }
 
 std::string ConfigProcessor::layerFromHost()
@@ -105,13 +103,16 @@ TOMLTablePtr ConfigProcessor::processConfig()
 
 ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig()
 {
-    TOMLTablePtr config_xml = processConfig();
+    TOMLTablePtr config_doc = processConfig();
 
-    ConfigurationPtr configuration(new Poco::Util::XMLConfiguration(config_xml));
+    ConfigurationPtr configuration(new DB::TOMLConfiguration(config_doc));
 
-    return LoadedConfig{configuration, /* loaded_from_preprocessed = */ false, config_xml};
+    return LoadedConfig{configuration, false, config_doc};
 }
 
 void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config)
 {
 }
+
+
+#pragma GCC diagnostic pop

@@ -109,18 +109,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     bool has_zookeeper = config().has("zookeeper");
 
-    zkutil::ZooKeeperNodeCache main_config_zk_node_cache([&] { return global_context->getZooKeeper(); });
-    if (loaded_config.has_zk_includes)
-    {
-        auto old_configuration = loaded_config.configuration;
-        ConfigProcessor config_processor(config_path);
-        loaded_config = config_processor.loadConfigWithZooKeeperIncludes(
-            main_config_zk_node_cache, /* fallback_to_preprocessed = */ true);
-        config_processor.savePreprocessedConfig(loaded_config);
-        config().removeConfiguration(old_configuration.get());
-        config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
-    }
-
     std::vector<String> all_fast_path;
     if (config().has("fast_path"))
     {
@@ -265,10 +253,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
     /// Initialize main config reloader.
-    std::string include_from_path = config().getString("include_from", "/etc/metrika.xml");
     auto main_config_reloader = std::make_unique<ConfigReloader>(config_path,
-        include_from_path,
-        std::move(main_config_zk_node_cache),
         [&](ConfigurationPtr config)
         {
             buildLoggers(*config);
@@ -288,8 +273,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             users_config_path = config_dir + users_config_path;
     }
     auto users_config_reloader = std::make_unique<ConfigReloader>(users_config_path,
-        include_from_path,
-        zkutil::ZooKeeperNodeCache([&] { return global_context->getZooKeeper(); }),
         [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
         /* already_loaded = */ false);
 

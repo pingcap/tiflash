@@ -1,4 +1,5 @@
 #include "TOMLConfiguration.h"
+#include "Poco/Exception.h"
 
 namespace DB
 {
@@ -22,103 +23,67 @@ bool TOMLConfiguration::getRaw(const std::string& key, std::string& value) const
     return false;
 }
 
+bool TOMLConfiguration::find_parent(const std::string key, TOMLTablePtr & parent, std::string & child_key)
+{
+    auto pos = key.find_last_of('.');
+
+    if (pos == 0 || pos >= key.size() - 1)
+        return false;
+
+    if (pos != std::string::npos)
+    {
+        // parent should be a table
+        auto parent_key = key.substr(0, pos);
+        auto res = root->get_table_qualified(key);
+        if (!res)
+            return false;
+
+        parent = res;
+        child_key = key.substr(pos + 1);
+        return true;
+    }
+    else
+    {
+        // root table
+        if (!root->contains(key))
+            return false;
+
+        parent = root;
+        child_key = key;
+        return true;
+    }
+}
+
 void TOMLConfiguration::setRaw(const std::string& key, const std::string& value)
 {
-    try
-    {
-        TOMLBasePtr elem = root->get_qualified(key);
-        if (!elem->is_value())
-        {
-            throw NotFoundException("Key does not point to a value", key);
-        }
-        elem->
-    }
-    catch (std::out_of_range e)
-    {
-        throw NotFoundException("Node not found in TOMLConfiguration", key);
-    }
+    TOMLTablePtr parent;
+    std::string child_key;
+    if (!find_parent(key, parent, child_key))
+        throw Poco::NotFoundException("Key not found in TOML configuration", key);
 
-
-
-    std::string::const_iterator it = key.begin();
-    Poco::XML::Node* pNode = findNode(it, key.end(), _pRoot, true);
-    if (pNode)
-    {
-        unsigned short nodeType = pNode->nodeType();
-        if (Poco::XML::Node::ATTRIBUTE_NODE == nodeType)
-        {
-            pNode->setNodeValue(value);
-        }
-        else if (Poco::XML::Node::ELEMENT_NODE == nodeType)
-        {
-            Poco::XML::Node* pChildNode = pNode->firstChild();
-            if (pChildNode)
-            {
-                if (Poco::XML::Node::TEXT_NODE == pChildNode->nodeType())
-                {
-                    pChildNode->setNodeValue(value);
-                }
-            }
-            else
-            {
-                Poco::AutoPtr<Poco::XML::Node> pText = _pDocument->createTextNode(value);
-                pNode->appendChild(pText);
-            }
-        }
-    }
-    else throw NotFoundException("Node not found in XMLConfiguration", key);
+    parent->erase(child_key);
+    parent->insert(child_key, value);
 }
 
 void TOMLConfiguration::enumerate(const std::string& key, Keys& range) const
 {
-    using Poco::NumberFormatter;
+    range.clear();
 
-    std::multiset<std::string> keySet;
-    const Poco::XML::Node* pNode = findNode(key);
-    if (pNode)
-    {
-        const Poco::XML::Node* pChild = pNode->firstChild();
-        while (pChild)
-        {
-            if (pChild->nodeType() == Poco::XML::Node::ELEMENT_NODE)
-            {
-                const std::string& nodeName = pChild->nodeName();
-                int n = (int) keySet.count(nodeName);
-                if (n)
-                    range.push_back(nodeName + "[" + NumberFormatter::format(n) + "]");
-                else
-                    range.push_back(nodeName);
-                keySet.insert(nodeName);
-            }
-            pChild = pChild->nextSibling();
-        }
-    }
+    auto table = key.empty() ? root : root->get_table_qualified(key);
+    if (!table)
+        return;
+
+    for (auto it = table->begin(); it != table->end(); it++)
+        range.push_back(it->first);
 }
 
 void TOMLConfiguration::removeRaw(const std::string& key)
 {
-    Poco::XML::Node* pNode = findNode(key);
+    TOMLTablePtr parent;
+    std::string child_key;
 
-    if (pNode)
-    {
-        if (pNode->nodeType() == Poco::XML::Node::ELEMENT_NODE)
-        {
-            Poco::XML::Node* pParent = pNode->parentNode();
-            if (pParent)
-            {
-                pParent->removeChild(pNode);
-            }
-        }
-        else if (pNode->nodeType() == Poco::XML::Node::ATTRIBUTE_NODE)
-        {
-            Poco::XML::Attr* pAttr = dynamic_cast<Poco::XML::Attr*>(pNode);
-            Poco::XML::Element* pOwner = pAttr->ownerElement();
-            if (pOwner)
-            {
-                pOwner->removeAttributeNode(pAttr);
-            }
-        }
-    }
+    if (find_parent(key, parent, child_key))
+        parent->erase(child_key);
 }
 
 }

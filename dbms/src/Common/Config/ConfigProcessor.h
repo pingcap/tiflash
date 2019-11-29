@@ -20,11 +20,6 @@
 #include <common/logger_useful.h>
 
 
-namespace zkutil
-{
-    class ZooKeeperNodeCache;
-}
-
 using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 using TOMLTablePtr = std::shared_ptr<cpptoml::table>;
 
@@ -69,7 +64,7 @@ public:
     {
         ConfigurationPtr configuration;
         bool loaded_from_preprocessed;
-        TOMLTablePtr preprocessed_xml;
+        TOMLTablePtr preprocessed_conf;
     };
 
     LoadedConfig loadConfig();
@@ -85,8 +80,6 @@ private:
     const std::string path;
     const std::string preprocessed_path;
 
-    bool throw_on_bad_incl;
-
     Logger * log;
     Poco::AutoPtr<Poco::Channel> channel_ptr;
 
@@ -94,11 +87,4 @@ private:
 
 private:
     std::string layerFromHost();
-
-    void doIncludesRecursive(
-            TOMLTablePtr config,
-            TOMLTablePtr include_from,
-            Poco::XML::Node * node,
-            zkutil::ZooKeeperNodeCache * zk_node_cache,
-            std::unordered_set<std::string> & contributing_zk_paths);
 };
