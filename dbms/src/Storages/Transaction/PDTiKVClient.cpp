@@ -90,7 +90,7 @@ int64_t IndexReader::getReadIndex()
 std::unique_ptr<::kvrpcpb::ReadIndexResponse> IndexReader::getReadIndexFromLearners(
     pingcap::kv::Backoffer & bo, const metapb::Region & meta, const std::vector<metapb::Peer> & learners)
 {
-    auto request = std::unique_ptr<kvrpcpb::ReadIndexRequest>();
+    auto request = std::make_unique<kvrpcpb::ReadIndexRequest>();
     pingcap::kv::RpcCall<::kvrpcpb::ReadIndexRequest> rpc(std::move(request));
     for (const auto & learner : learners)
     {
