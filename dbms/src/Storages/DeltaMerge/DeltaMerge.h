@@ -281,8 +281,7 @@ private:
             }
 
             size_t stable_skipped_rows;
-            if (!stable_input_stream->getSkippedRows(stable_skipped_rows))
-                throw Exception("Unexpected end of stable stream, need more rows to skip");
+            stable_input_stream->getSkippedRows(stable_skipped_rows);
 
             if (stable_skipped_rows > 0)
             {
