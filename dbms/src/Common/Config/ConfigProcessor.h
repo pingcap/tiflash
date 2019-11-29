@@ -15,6 +15,7 @@
 #include <Poco/DirectoryIterator.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Common/Config/cpptoml.h>
 
 #include <common/logger_useful.h>
 
@@ -25,7 +26,7 @@ namespace zkutil
 }
 
 using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
-using XMLDocumentPtr = Poco::AutoPtr<Poco::XML::Document>;
+using TOMLTablePtr = std::shared_ptr<cpptoml::table>;
 
 class ConfigProcessor
 {
@@ -56,9 +57,7 @@ public:
     ///    "<foo>contents of the /bar ZooKeeper node</foo>".
     ///    If has_zk_includes is non-NULL and there are such elements, set has_zk_includes to true.
     /// 5) (Yandex.Metrika-specific) Substitute "<layer/>" with "<layer>layer number from the hostname</layer>".
-    XMLDocumentPtr processConfig(
-        bool * has_zk_includes = nullptr,
-        zkutil::ZooKeeperNodeCache * zk_node_cache = nullptr);
+    TOMLTablePtr processConfig();
 
 
     /// loadConfig* functions apply processConfig and create Poco::Util::XMLConfiguration.
@@ -69,28 +68,15 @@ public:
     struct LoadedConfig
     {
         ConfigurationPtr configuration;
-        bool has_zk_includes;
         bool loaded_from_preprocessed;
-        XMLDocumentPtr preprocessed_xml;
+        TOMLTablePtr preprocessed_xml;
     };
 
-    /// If allow_zk_includes is true, expect that the configuration XML can contain from_zk nodes.
-    /// If it is the case, set has_zk_includes to true and don't write config-preprocessed.xml,
-    /// expecting that config would be reloaded with zookeeper later.
-    LoadedConfig loadConfig(bool allow_zk_includes = false);
-
-    /// If fallback_to_preprocessed is true, then if KeeperException is thrown during config
-    /// processing, load the configuration from the preprocessed file.
-    LoadedConfig loadConfigWithZooKeeperIncludes(
-        zkutil::ZooKeeperNodeCache & zk_node_cache,
-        bool fallback_to_preprocessed = false);
+    LoadedConfig loadConfig();
 
     void savePreprocessedConfig(const LoadedConfig & loaded_config);
 
 public:
-    using Files = std::vector<std::string>;
-
-    static Files getConfigMergeFiles(const std::string & config_path);
 
     /// Is the file named as result of config preprocessing, not as original files.
     static bool isPreprocessedFile(const std::string & config_path);
@@ -106,21 +92,12 @@ private:
 
     Substitutions substitutions;
 
-    Poco::AutoPtr<Poco::XML::NamePool> name_pool;
-    Poco::XML::DOMParser dom_parser;
-
 private:
-    using NodePtr = Poco::AutoPtr<Poco::XML::Node>;
-
-    void mergeRecursive(XMLDocumentPtr config, Poco::XML::Node * config_node, const Poco::XML::Node * with_node);
-
-    void merge(XMLDocumentPtr config, XMLDocumentPtr with);
-
     std::string layerFromHost();
 
     void doIncludesRecursive(
-            XMLDocumentPtr config,
-            XMLDocumentPtr include_from,
+            TOMLTablePtr config,
+            TOMLTablePtr include_from,
             Poco::XML::Node * node,
             zkutil::ZooKeeperNodeCache * zk_node_cache,
             std::unordered_set<std::string> & contributing_zk_paths);
