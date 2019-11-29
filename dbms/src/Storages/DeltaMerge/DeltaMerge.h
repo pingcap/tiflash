@@ -294,22 +294,6 @@ private:
                 if (!fillStableBlockIfNeeded())
                     throw Exception("Unexpected end of stable stream, need more rows to skip");
             }
-
-
-            // Check whether we can skip next block entirely or not.
-            //            if (!stable_input_stream_raw_ptr->hasNext())
-            //                throw Exception("Unexpected end of block, need more rows to skip");
-            //
-            //            ssize_t rows = stable_input_stream_raw_ptr->nextRows();
-            //            if (stable_skip > rows || stable_input_stream_raw_ptr->shouldSkipNext())
-            //            {
-            //                stable_input_stream_raw_ptr->skipNext();
-            //                stable_skip -= rows;
-            //            }
-            //            else
-            //            {
-            //                fillStableBlockIfNeeded();
-            //            }
         }
 
         if (stable_skip < 0)
@@ -367,40 +351,6 @@ private:
                         throw Exception("Unexpected end of stable stream, need more rows to write");
                 }
             }
-
-            //            if (!stable_input_stream_raw_ptr->hasNext())
-            //            {
-            //                if constexpr (c_delta_done)
-            //                {
-            //                    stable_done     = true;
-            //                    use_stable_rows = 0;
-            //                    break;
-            //                }
-            //                else
-            //                    throw Exception("Unexpected end of block, need more rows to write");
-            //            }
-            //
-            //            size_t next_block_rows = stable_input_stream_raw_ptr->nextRows();
-            //
-            //            if (!stable_input_stream_raw_ptr->shouldSkipNext())
-            //            {
-            //                fillStableBlockIfNeeded();
-            //            }
-            //            else
-            //            {
-            //                // Entirely skip block.
-            //                stable_input_stream_raw_ptr->skipNext();
-            //                // We skipped some rows, some of them are consumed by writing to output, the rest are recorded by stable_skip.
-            //                if (next_block_rows <= use_stable_rows)
-            //                {
-            //                    use_stable_rows -= next_block_rows;
-            //                }
-            //                else
-            //                {
-            //                    stable_skip -= next_block_rows - use_stable_rows;
-            //                    use_stable_rows = 0;
-            //                }
-            //            }
         }
     }
 
@@ -455,9 +405,9 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        delta_value_space->read(output_columns, use_delta_offset, write_rows);
+        auto actually_write_rows = delta_value_space->write(output_columns, use_delta_offset, write_rows);
 
-        output_write_limit -= write_rows;
+        output_write_limit -= actually_write_rows;
         use_delta_offset += write_rows;
         use_delta_rows -= write_rows;
     }
