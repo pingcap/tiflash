@@ -4,11 +4,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <Poco/DOM/Document.h>
-#include <Poco/DOM/DOMParser.h>
-#include <Poco/DOM/DOMWriter.h>
-#include <Poco/DOM/NodeList.h>
-#include <Poco/DOM/NamedNodeMap.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
@@ -84,7 +79,4 @@ private:
     Poco::AutoPtr<Poco::Channel> channel_ptr;
 
     Substitutions substitutions;
-
-private:
-    std::string layerFromHost();
 };

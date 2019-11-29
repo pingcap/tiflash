@@ -1,6 +1,3 @@
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
 #include "ConfigProcessor.h"
 
 #include <sys/utsname.h>
@@ -9,40 +6,11 @@
 #include <algorithm>
 #include <iostream>
 #include <functional>
-#include <Poco/DOM/Text.h>
-#include <Poco/DOM/Attr.h>
-#include <Poco/DOM/Comment.h>
-#include <Poco/Util/XMLConfiguration.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
-#include <Common/ZooKeeper/KeeperException.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Config/cpptoml.h>
 #include <Common/Config/TOMLConfiguration.h>
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
-
-
-using namespace Poco::XML;
-
-
-/// Extracts from a string the first encountered number consisting of at least two digits.
-static std::string numberFromHost(const std::string & s)
-{
-    for (size_t i = 0; i < s.size(); ++i)
-    {
-        std::string res;
-        size_t j = i;
-        while (j < s.size() && isNumericASCII(s[j]))
-            res += s[j++];
-        if (res.size() >= 2)
-        {
-            while (res[0] == '0')
-                res.erase(res.begin());
-            return res;
-        }
-    }
-    return "";
-}
 
 static std::string preprocessedConfigPath(const std::string & path)
 {
@@ -83,19 +51,6 @@ ConfigProcessor::~ConfigProcessor()
         Logger::destroy("ConfigProcessor");
 }
 
-std::string ConfigProcessor::layerFromHost()
-{
-    utsname buf;
-    if (uname(&buf))
-        throw Poco::Exception(std::string("uname failed: ") + std::strerror(errno));
-
-    std::string layer = numberFromHost(buf.nodename);
-    if (layer.empty())
-        throw Poco::Exception(std::string("no layer in host name: ") + buf.nodename);
-
-    return layer;
-}
-
 TOMLTablePtr ConfigProcessor::processConfig()
 {
     return cpptoml::parse_file(path);
@@ -113,6 +68,3 @@ ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig()
 void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config)
 {
 }
-
-
-#pragma GCC diagnostic pop
