@@ -1,4 +1,7 @@
 #include "TOMLConfiguration.h"
+
+#include <sstream>
+
 #include "Poco/Exception.h"
 
 namespace DB
@@ -6,21 +9,32 @@ namespace DB
 
 using TOMLBasePtr = std::shared_ptr<cpptoml::base>;
 
-TOMLConfiguration::TOMLConfiguration(TOMLTablePtr toml_doc): root(toml_doc)
-{
-    poco_check_ptr (toml_doc);
-}
+TOMLConfiguration::TOMLConfiguration(TOMLTablePtr toml_doc) : root(toml_doc) { poco_check_ptr(toml_doc); }
 
-bool TOMLConfiguration::getRaw(const std::string& key, std::string& value) const
+bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) const
 {
-    cpptoml::option<std::string> opt_value = root->get_qualified_as<std::string>(key);
-    if (opt_value)
+    try
     {
-        value = *opt_value;
+        auto node = root->get_qualified(key);
+        if (auto str_node = std::dynamic_pointer_cast<cpptoml::value<std::string>>(node))
+        {
+            // get raw value without double quote
+            value = str_node->get();
+        }
+        else
+        {
+            // get as it is in toml even if is table
+            std::ostringstream str_out;
+            cpptoml::toml_writer writer(str_out);
+            node->accept(writer);
+            value = str_out.str();
+        }
         return true;
     }
-
-    return false;
+    catch (std::out_of_range)
+    {
+        return false;
+    }
 }
 
 bool TOMLConfiguration::find_parent(const std::string key, TOMLTablePtr & parent, std::string & child_key)
@@ -54,7 +68,7 @@ bool TOMLConfiguration::find_parent(const std::string key, TOMLTablePtr & parent
     }
 }
 
-void TOMLConfiguration::setRaw(const std::string& key, const std::string& value)
+void TOMLConfiguration::setRaw(const std::string & key, const std::string & value)
 {
     TOMLTablePtr parent;
     std::string child_key;
@@ -65,7 +79,7 @@ void TOMLConfiguration::setRaw(const std::string& key, const std::string& value)
     parent->insert(child_key, value);
 }
 
-void TOMLConfiguration::enumerate(const std::string& key, Keys& range) const
+void TOMLConfiguration::enumerate(const std::string & key, Keys & range) const
 {
     range.clear();
 
@@ -77,7 +91,7 @@ void TOMLConfiguration::enumerate(const std::string& key, Keys& range) const
         range.push_back(it->first);
 }
 
-void TOMLConfiguration::removeRaw(const std::string& key)
+void TOMLConfiguration::removeRaw(const std::string & key)
 {
     TOMLTablePtr parent;
     std::string child_key;
@@ -86,4 +100,4 @@ void TOMLConfiguration::removeRaw(const std::string& key)
         parent->erase(child_key);
 }
 
-}
+} // namespace DB
