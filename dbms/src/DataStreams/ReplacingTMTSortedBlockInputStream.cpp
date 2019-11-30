@@ -16,25 +16,32 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::insertRow(MutableColumns & 
 template <typename HandleType>
 Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
 {
-    if (finished && deleted_by_range && log->debug())
+    if (finished)
     {
-        std::stringstream ss;
-
-        if (log->trace())
-        {
-            for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
-            {
-                ss << "[";
-                begin_handle_ranges[i].toString(ss);
-                ss << ",";
-                end_handle_ranges[i].toString(ss);
-                ss << ") ";
-            }
-        }
-
         LOG_DEBUG(log,
-            "Deleted by handle range: " << deleted_by_range << " rows, " << begin_handle_ranges.size() << " handle ranges " << ss.str()
-                                        << ", in table " << table_id);
+            __FUNCTION__ << ": table " << table_id << ", gc safe point " << gc_tso << ", diff pk " << diff_pk << ", final del " << final_del
+                         << ", keep history " << keep_history << ", dis history " << dis_history);
+
+        if (deleted_by_range)
+        {
+            std::stringstream ss;
+
+            if (log->trace())
+            {
+                for (size_t i = 0; i < begin_handle_ranges.size(); ++i)
+                {
+                    ss << "[";
+                    begin_handle_ranges[i].toString(ss);
+                    ss << ",";
+                    end_handle_ranges[i].toString(ss);
+                    ss << ") ";
+                }
+            }
+
+            LOG_DEBUG(log,
+                __FUNCTION__ << ": deleted by handle range " << deleted_by_range << " rows, " << begin_handle_ranges.size()
+                             << " handle ranges " << ss.str());
+        }
     }
 
     if (finished)
@@ -42,9 +49,6 @@ Block ReplacingTMTSortedBlockInputStream<HandleType>::readImpl()
 
     MutableColumns merged_columns;
     init(merged_columns);
-
-    if (has_collation)
-        throw Exception("Logical error: " + getName() + " does not support collations", ErrorCodes::LOGICAL_ERROR);
 
     if (merged_columns.empty())
         return Block();
@@ -79,13 +83,9 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
             tmt_queue.pop();
 
             if (key_differs.diffs[2] == 0) // del is equal
-            {
-                logRowGoing("key are totally equal", false);
-            }
+            {}
             else
             {
-                logRowGoing("handle and tso are equal, del not", false);
-
                 setRowRef(selected_row, current);
                 current_key.swap(next_key);
             }
@@ -94,7 +94,6 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
         {
             if (merged_rows >= max_block_size)
             {
-                logRowGoing("merged_rows >= max_block_size", false);
                 return;
             }
             else
@@ -125,7 +124,12 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
         if (isDefiniteDeleted())
             ++deleted_by_range;
         else if (!(final && hasDeleteFlag() && behindGcTso()))
+        {
             insertRow(merged_columns, merged_rows);
+            ++diff_pk;
+        }
+        else
+            ++final_del;
     }
 
     finished = true;
@@ -137,7 +141,6 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOp
     if (isDefiniteDeleted())
     {
         ++deleted_by_range;
-        logRowGoing("DefiniteDelete", false);
         return false;
     }
 
@@ -145,20 +148,28 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOp
     if (res.diffs[0])
     {
         if (final && hasDeleteFlag() && behindGcTso())
+        {
+            ++final_del;
             return false;
+        }
 
-        logRowGoing("PkLastRow", true);
+        ++diff_pk;
+
         return true;
     }
 
-    if (!behindGcTso())
+    if (behindGcTso())
     {
-        logRowGoing("KeepHistory", true);
-        return true;
+        // keep the last one lt or eq than gc_tso, or when read_tso is gc_tso, nothing can be read.
+        auto next_key_tso = static_cast<const ColumnUInt64 *>((*next_key.columns)[1])->getElement(next_key.row_num);
+        if (next_key_tso <= gc_tso)
+        {
+            ++dis_history;
+            return false;
+        }
     }
-
-    logRowGoing("DiscardHistory", false);
-    return false;
+    ++keep_history;
+    return true;
 }
 
 template <typename HandleType>
@@ -190,24 +201,6 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::hasDeleteFlag()
 {
     const ColumnUInt8 * column = static_cast<const ColumnUInt8 *>((*selected_row.columns)[del_column_number]);
     return MutableSupport::DelMark::isDel(column->getElement(selected_row.row_num));
-}
-
-template <typename HandleType>
-void ReplacingTMTSortedBlockInputStream<HandleType>::logRowGoing(const char * msg, bool is_output)
-{
-    // Disable debug log
-    return;
-
-    auto curr_pk = (*(*selected_row.columns)[pk_column_number])[selected_row.row_num].template get<size_t>();
-    auto curr_ver = (*(*selected_row.columns)[version_column_number])[selected_row.row_num].template get<size_t>();
-    auto curr_del = (*(*selected_row.columns)[del_column_number])[selected_row.row_num].template get<UInt8>();
-
-    auto next_pk = applyVisitor(FieldVisitorToString(), (*(*next_key.columns)[0])[next_key.row_num]);
-
-    LOG_DEBUG(log,
-        "gc tso: " << gc_tso << ". "
-                   << "curr{pk: " << curr_pk << ", npk: " << next_pk << ", ver: " << curr_ver << ", del: " << size_t(curr_del)
-                   << ". same=" << ((toString(curr_pk) == next_pk) ? "true" : "false") << ". why{" << msg << "}, output: " << is_output);
 }
 
 template <typename HandleType>
