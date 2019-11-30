@@ -103,20 +103,30 @@ RSResult MinMaxIndex::checkEqual(size_t chunk_id, const Field & value, const Dat
         return Some;
     if (!(*has_value_marks)[chunk_id])
         return RSResult ::None;
-    if (type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
+
+#define DISPATCH(TYPE)                                              \
+    if (typeid_cast<const DataType##TYPE *>(type.get()))            \
+    {                                                               \
+        auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);  \
+        auto   min           = minmaxes_data[chunk_id * 2];         \
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];     \
+        return RoughCheck::checkEqual<TYPE>(value, type, min, max); \
+    }
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (typeid_cast<const DataTypeDate *>(type.get()))
     {
-        // Currently only support handle.
-        auto & minmaxes_data = toColumnVectorData<Handle>(minmaxes);
+        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto   min           = minmaxes_data[chunk_id * 2];
         auto   max           = minmaxes_data[chunk_id * 2 + 1];
-        Handle v             = value.get<Handle>();
-
-        if (min == max && v == min)
-            return RSResult::All;
-        else if (v >= min && v <= max)
-            return RSResult::Some;
-        else
-            return RSResult::None;
+        return RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
+    }
+    if (typeid_cast<const DataTypeDateTime *>(type.get()))
+    {
+        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        auto   min           = minmaxes_data[chunk_id * 2];
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];
+        return RoughCheck::checkEqual<DataTypeDateTime::FieldType>(value, type, min, max);
     }
     return RSResult::Some;
 }
@@ -126,19 +136,30 @@ RSResult MinMaxIndex::checkGreater(size_t chunk_id, const Field & value, const D
         return Some;
     if (!(*has_value_marks)[chunk_id])
         return RSResult ::None;
-    if (type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
+
+#define DISPATCH(TYPE)                                                \
+    if (typeid_cast<const DataType##TYPE *>(type.get()))              \
+    {                                                                 \
+        auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);    \
+        auto   min           = minmaxes_data[chunk_id * 2];           \
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];       \
+        return RoughCheck::checkGreater<TYPE>(value, type, min, max); \
+    }
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (typeid_cast<const DataTypeDate *>(type.get()))
     {
-        // Currently only support handle.
-        auto & minmaxes_data = toColumnVectorData<Handle>(minmaxes);
+        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto   min           = minmaxes_data[chunk_id * 2];
         auto   max           = minmaxes_data[chunk_id * 2 + 1];
-        Handle v             = value.get<Handle>();
-
-        if (v >= max)
-            return RSResult::None;
-        else if (v < min)
-            return RSResult::All;
-        return RSResult::Some;
+        return RoughCheck::checkGreater<DataTypeDate::FieldType>(value, type, min, max);
+    }
+    if (typeid_cast<const DataTypeDateTime *>(type.get()))
+    {
+        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        auto   min           = minmaxes_data[chunk_id * 2];
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];
+        return RoughCheck::checkGreater<DataTypeDateTime::FieldType>(value, type, min, max);
     }
     return RSResult::Some;
 }
@@ -148,19 +169,30 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t chunk_id, const Field & value, co
         return Some;
     if (!(*has_value_marks)[chunk_id])
         return RSResult ::None;
-    if (type->equals(*EXTRA_HANDLE_COLUMN_TYPE))
+
+#define DISPATCH(TYPE)                                                     \
+    if (typeid_cast<const DataType##TYPE *>(type.get()))                   \
+    {                                                                      \
+        auto & minmaxes_data = toColumnVectorData<TYPE>(minmaxes);         \
+        auto   min           = minmaxes_data[chunk_id * 2];                \
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];            \
+        return RoughCheck::checkGreaterEqual<TYPE>(value, type, min, max); \
+    }
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (typeid_cast<const DataTypeDate *>(type.get()))
     {
-        // Currently only support handle.
-        auto & minmaxes_data = toColumnVectorData<Handle>(minmaxes);
+        auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(minmaxes);
         auto   min           = minmaxes_data[chunk_id * 2];
         auto   max           = minmaxes_data[chunk_id * 2 + 1];
-        Handle v             = value.get<Handle>();
-
-        if (v > max)
-            return RSResult::None;
-        else if (v <= min)
-            return RSResult::All;
-        return RSResult::Some;
+        return RoughCheck::checkGreaterEqual<DataTypeDate::FieldType>(value, type, min, max);
+    }
+    if (typeid_cast<const DataTypeDateTime *>(type.get()))
+    {
+        auto & minmaxes_data = toColumnVectorData<DataTypeDateTime::FieldType>(minmaxes);
+        auto   min           = minmaxes_data[chunk_id * 2];
+        auto   max           = minmaxes_data[chunk_id * 2 + 1];
+        return RoughCheck::checkGreaterEqual<DataTypeDateTime::FieldType>(value, type, min, max);
     }
     return RSResult::Some;
 }
