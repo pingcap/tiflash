@@ -470,7 +470,7 @@ void LocalServer::setupUsers()
 
     if (config().has("users_config") || config().has("config-file") || Poco::File("config.xml").exists())
     {
-        const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
+        const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.toml"));
         ConfigProcessor config_processor(users_config_path);
         const auto loaded_config = config_processor.loadConfig();
         config_processor.savePreprocessedConfig(loaded_config);
