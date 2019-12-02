@@ -20,4 +20,6 @@ RUN git clone https://github.com/grpc/grpc.git && cd grpc && git checkout v1.14.
  && cd /grpc && mkdir .build && cd .build && cmake .. -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DgRPC_PROTOBUF_PROVIDER=package -DgRPC_ZLIB_PROVIDER=package -DgRPC_CARES_PROVIDER=package -DgRPC_SSL_PROVIDER=package -DCMAKE_BUILD_TYPE=Release && make install -j $(nproc || grep -c ^processor /proc/cpuinfo) \
  && source /root/.profile && ldconfig \
  && cd / && mkdir libtiflash-proxy && git clone -b tiflash-proxy-lib https://github.com/solotzg/tikv.git tiflash-proxy && cd /tiflash-proxy \
- && make release && cp target/release/libtiflash_proxy.so /libtiflash-proxy && cd / && rm -rf /tiflash-proxy
+ && make release && cp target/release/libtiflash_proxy.so /libtiflash-proxy && cd / && rm -rf /tiflash-proxy \
+ && rustup self uninstall -y
+
