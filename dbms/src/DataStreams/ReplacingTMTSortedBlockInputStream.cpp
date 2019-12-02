@@ -5,6 +5,10 @@
 namespace DB
 {
 
+constexpr ssize_t PK_ORDER_DESC_POS = 0;
+constexpr ssize_t VERSION_ORDER_DESC_POS = 1;
+constexpr ssize_t DELMARK_ORDER_DESC_POS = 2;
+
 template <typename HandleType>
 void ReplacingTMTSortedBlockInputStream<HandleType>::insertRow(MutableColumns & merged_columns, size_t & merged_rows)
 {
@@ -78,11 +82,11 @@ void ReplacingTMTSortedBlockInputStream<HandleType>::merge(MutableColumns & merg
         const auto key_differs = cmpTMTCursor<true, false, TMTPKType::UNSPECIFIED>(
             *current_key.columns, current_key.row_num, *next_key.columns, next_key.row_num);
 
-        if ((key_differs.diffs[0] | key_differs.diffs[1]) == 0) // handle and tso are equal.
+        if ((key_differs.diffs[PK_ORDER_DESC_POS] | key_differs.diffs[VERSION_ORDER_DESC_POS]) == 0) // handle and tso are equal.
         {
             tmt_queue.pop();
 
-            if (key_differs.diffs[2] == 0) // del is equal
+            if (key_differs.diffs[DELMARK_ORDER_DESC_POS] == 0) // del is equal
             {}
             else
             {
@@ -145,7 +149,7 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOp
     }
 
     // next has diff pk
-    if (res.diffs[0])
+    if (res.diffs[PK_ORDER_DESC_POS])
     {
         if (final && hasDeleteFlag() && behindGcTso())
         {
@@ -161,7 +165,7 @@ bool ReplacingTMTSortedBlockInputStream<HandleType>::shouldOutput(const TMTCmpOp
     if (behindGcTso())
     {
         // keep the last one lt or eq than gc_tso, or when read_tso is gc_tso, nothing can be read.
-        auto next_key_tso = static_cast<const ColumnUInt64 *>((*next_key.columns)[1])->getElement(next_key.row_num);
+        auto next_key_tso = static_cast<const ColumnUInt64 *>((*next_key.columns)[VERSION_ORDER_DESC_POS])->getElement(next_key.row_num);
         if (next_key_tso <= gc_tso)
         {
             ++dis_history;
