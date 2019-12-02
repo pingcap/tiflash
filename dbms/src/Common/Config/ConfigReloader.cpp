@@ -51,18 +51,11 @@ void ConfigReloader::run()
 
     while (true)
     {
-        try
-        {
-            if (quit)
-                return;
+        if (quit)
+            return;
 
-            reloadIfNewer(false, /* throw_on_error = */ false);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            std::this_thread::sleep_for(reload_interval);
-        }
+        std::this_thread::sleep_for(reload_interval);
+        reloadIfNewer(false, /* throw_on_error = */ false);
     }
 }
 
@@ -132,11 +125,11 @@ struct ConfigReloader::FileWithTimestamp
 };
 
 
-void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & _path)
+void ConfigReloader::FilesChangesTracker::addIfExists(const std::string & path)
 {
-    if (!_path.empty() && Poco::File(_path).exists())
+    if (!path.empty() && Poco::File(path).exists())
     {
-        files.emplace(_path, Poco::File(_path).getLastModified().epochTime());
+        files.emplace(path, Poco::File(path).getLastModified().epochTime());
     }
 }
 
