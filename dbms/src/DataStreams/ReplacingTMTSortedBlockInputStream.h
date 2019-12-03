@@ -41,7 +41,6 @@ public:
         version_column_number = header.getPositionByName(version_column);
         del_column_number = header.getPositionByName(del_column);
         pk_column_number = header.getPositionByName(pk_column);
-        deleted_by_range = 0;
     }
 
     String getName() const override { return "ReplacingTMTSorted"; }
@@ -59,8 +58,6 @@ private:
     bool isDefiniteDeleted();
     bool hasDeleteFlag();
 
-    void logRowGoing(const char * reason, bool is_output);
-
 private:
     std::vector<Handle> begin_handle_ranges;
     std::vector<Handle> end_handle_ranges;
@@ -69,7 +66,7 @@ private:
     size_t del_column_number;
     size_t pk_column_number;
 
-    Logger * log = &Logger::get("ReplacingTMTStortedBlockInputStream");
+    Logger * log = &Logger::get("ReplacingTMTSortedBlockInputStream");
 
     bool finished = false;
 
@@ -77,7 +74,12 @@ private:
     RowRef next_key;
     RowRef selected_row;
 
-    size_t deleted_by_range;
+    size_t deleted_by_range = 0;
+    size_t diff_pk = 0;
+    size_t final_del = 0;
+    size_t keep_history = 0;
+    size_t dis_history = 0;
+
     UInt64 gc_tso;
     TableID table_id;
 
