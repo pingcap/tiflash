@@ -36,6 +36,11 @@
 │    50 │
 └───────┘
 
+=> DBGInvoke dag('select _void, col_1 from default.test') " --dag_planner="optree
+┌─_void─┬─col_1─┐
+│    50 │ test1 │
+└───────┴───────┘
+
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
