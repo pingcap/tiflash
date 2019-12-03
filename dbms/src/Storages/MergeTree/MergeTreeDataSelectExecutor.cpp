@@ -365,7 +365,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                                           << RegionException::RegionReadStatusString(status));
                         region_status = status;
                     }
-                    else if (block)
+                    else if (block.rows())
                         regions_executor_data[region_index].block = std::move(block);
                 }
             };
@@ -835,7 +835,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
     {
         TMTContext & tmt = context.getTMTContext();
 
-        auto safe_point = tmt.getPDClient()->getGCSafePoint();
+        auto safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient());
         if (mvcc_query_info.read_tso < safe_point)
             throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
                     + " is smaller than tidb gc safe point: " + toString(safe_point),
