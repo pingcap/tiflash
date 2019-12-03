@@ -128,7 +128,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         Poco::trimInPlace(fast_paths);
         if (!fast_paths.empty())
         {
-            Poco::StringTokenizer string_tokens(fast_paths, ";");
+            Poco::StringTokenizer string_tokens(fast_paths, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
                 all_fast_path.emplace_back(getCanonicalPath(std::string(*it)));
@@ -141,7 +141,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::trimInPlace(paths);
     if (paths.empty())
         throw Exception("path configuration parameter is empty");
-    Poco::StringTokenizer string_tokens(paths, ";");
+    Poco::StringTokenizer string_tokens(paths, ",");
     for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
     {
         all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
@@ -344,8 +344,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
     bool need_raft_service = false;
     std::vector<std::string> pd_addrs;
-    std::string learner_key;
-    std::string learner_value;
+    const std::string learner_key = "engine";
+    const std::string learner_value = "tiflash";
     std::unordered_set<std::string> ignore_databases{"system"};
     std::string kvstore_path = path + "kvstore/";
     String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
@@ -357,7 +357,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (config().has("raft.pd_addr"))
         {
             String pd_service_addrs = config().getString("raft.pd_addr");
-            Poco::StringTokenizer string_tokens(pd_service_addrs, ";");
+            Poco::StringTokenizer string_tokens(pd_service_addrs, ",");
             for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
             {
                 pd_addrs.push_back(*it);
@@ -367,24 +367,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         else
         {
             LOG_INFO(log, "Not found pd addrs.");
-        }
-
-        if (config().has("raft.learner_key"))
-        {
-            learner_key = config().getString("raft.learner_key");
-        }
-        else
-        {
-            learner_key = "zone";
-        }
-
-        if (config().has("raft.learner_value"))
-        {
-            learner_value = config().getString("raft.learner_value");
-        }
-        else
-        {
-            learner_value = "engine";
         }
 
         if (config().has("raft.ignore_databases"))
