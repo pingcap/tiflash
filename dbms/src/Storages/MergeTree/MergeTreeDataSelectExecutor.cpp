@@ -365,7 +365,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                                                           << RegionException::RegionReadStatusString(status));
                         region_status = status;
                     }
-                    else if (block)
+                    else if (block.rows())
                         regions_executor_data[region_index].block = std::move(block);
                 }
             };
