@@ -139,6 +139,18 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
     else
         return isAllValueCoveredByRanges<Int64>(handle_ranges, region_handle_ranges);
 }
+
+RegionException::RegionReadStatus InterpreterDAG::getRegionReadStatus(RegionPtr current_region)
+{
+    if (!current_region)
+        return RegionException::NOT_FOUND;
+    if (current_region->version() != dag.getRegionVersion() || current_region->confVer() != dag.getRegionConfVersion())
+        return RegionException::VERSION_ERROR;
+    if (current_region->isPendingRemove())
+        return RegionException::PENDING_REMOVE;
+    return RegionException::OK;
+}
+
 // the flow is the same as executeFetchcolumns
 void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
@@ -253,12 +265,12 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
     auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
-    if (!current_region || current_region->version() != dag.getRegionVersion() || current_region->confVer() != dag.getRegionConfVersion())
+    auto region_read_status = getRegionReadStatus(current_region);
+    if (region_read_status != RegionException::OK)
     {
         std::vector<RegionID> region_ids;
         region_ids.push_back(info.region_id);
-        throw RegionException(std::move(region_ids),
-            current_region ? RegionException::RegionReadStatus::NOT_FOUND : RegionException::RegionReadStatus::VERSION_ERROR);
+        throw RegionException(std::move(region_ids), region_read_status);
     }
     if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange()))
         throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
