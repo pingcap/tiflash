@@ -87,11 +87,11 @@ int64_t IndexReader::getReadIndex()
     }
 }
 
-std::unique_ptr<::kvrpcpb::ReadIndexResponse> IndexReader::getReadIndexFromLearners(
+std::shared_ptr<::kvrpcpb::ReadIndexResponse> IndexReader::getReadIndexFromLearners(
     pingcap::kv::Backoffer & bo, const metapb::Region & meta, const std::vector<metapb::Peer> & learners)
 {
-    auto request = std::make_unique<kvrpcpb::ReadIndexRequest>();
-    pingcap::kv::RpcCall<::kvrpcpb::ReadIndexRequest> rpc(std::move(request));
+    auto request = std::make_shared<kvrpcpb::ReadIndexRequest>();
+    pingcap::kv::RpcCall<::kvrpcpb::ReadIndexRequest> rpc(request);
     for (const auto & learner : learners)
     {
         std::string addr = cluster->region_cache->getStore(bo, learner.store_id()).peer_addr;
