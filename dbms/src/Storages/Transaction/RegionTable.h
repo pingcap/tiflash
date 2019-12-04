@@ -151,6 +151,8 @@ public:
 private:
     friend class MockTiDB;
     friend class StorageMergeTree;
+    friend class StorageDeltaMerge;
+    friend class StorageDebugging;
 
     Table & getOrCreateTable(const TableID table_id);
     void removeTable(TableID table_id);

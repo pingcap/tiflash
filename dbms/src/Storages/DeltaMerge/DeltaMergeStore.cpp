@@ -165,7 +165,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                hash_salt,
                                std::move(store_columns),
                                getExtraHandleColumnDefine(),
-                               0,
+                               /* min_version */ 0,
                                settings.not_compress_columns,
                                db_settings.dm_segment_limit_rows,
                                db_settings.dm_segment_delta_limit_rows,

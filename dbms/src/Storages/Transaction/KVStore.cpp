@@ -178,8 +178,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
     auto task_lock = genTaskLock();
 
-    TableIDSet tables_to_flush;
-    std::unordered_set<RegionID> dirty_regions;
+    std::vector<RegionPtr> dirty_regions;
 
     for (auto && cmd : *cmds.mutable_requests())
     {
@@ -213,13 +212,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
         if (tmt_context != nullptr && tmt_context->disableBgFlush())
         {
-            for (auto id : result.table_ids)
-            {
-                tables_to_flush.emplace(id);
-            }
-
-            if (!result.table_ids.empty())
-                dirty_regions.emplace(curr_region_id);
+            dirty_regions.push_back(curr_region_ptr);
         }
 
         const auto region_report = [&]() { *(responseBatch.add_responses()) = curr_region.toCommandResponse(); };
@@ -353,24 +346,13 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
 
     if (tmt_context != nullptr && tmt_context->disableBgFlush())
     {
-        auto & region_table = tmt_context->getRegionTable();
-        for (auto table_id : tables_to_flush)
+        auto s_time = Clock::now();
+        for (auto region : dirty_regions)
         {
-            auto s_time = Clock::now();
-            auto regions_to_flush = region_table.getRegionsByTable(table_id);
-            for (auto region : regions_to_flush)
-            {
-                if (auto && itr = dirty_regions.find(region.first); itr != dirty_regions.end())
-                {
-                    region_table.tryFlushRegion(region.first, table_id, false);
-                }
-            }
-            auto e_time = Clock::now();
-            LOG_DEBUG(log,
-                "[syncFlush]"
-                    << " table_id " << table_id << ", cost "
-                    << std::chrono::duration_cast<std::chrono::milliseconds>(e_time - s_time).count() << "ms");
+            region_table->tryFlushRegion(region, false);
         }
+        auto e_time = Clock::now();
+        LOG_DEBUG(log, "[syncFlush], cost " << std::chrono::duration_cast<std::chrono::milliseconds>(e_time - s_time).count() << "ms");
     }
 
     if (responseBatch.responses_size())

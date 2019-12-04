@@ -1,12 +1,12 @@
+#include <Storages/IManageableStorage.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <Storages/IManageableStorage.h>
-#include <Storages/StorageDeltaMerge.h>
 
 namespace DB
 {
@@ -213,6 +213,7 @@ void RegionTable::removeRegion(const RegionID region_id)
     else
     {
         TableID table_id = it->second;
+        auto & table = tables.find(table_id)->second;
 
         {
             /// Now we assume that StorageDeltaMerge::deleteRange do not block for long time and do it in sync mode.
@@ -224,14 +225,16 @@ void RegionTable::removeRegion(const RegionID region_id)
                 // acquire lock so that no other threads can change storage's structure
                 auto storage_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                HandleRange<HandleID> handle_range = region_iter->second.range_in_table;
+                auto region_it = table.regions.find(region_id);
+                if (region_it == table.regions.end())
+                    return;
+                HandleRange<HandleID> handle_range = region_it->second.range_in_table;
                 ::DB::DM::HandleRange dm_handle_range(handle_range.first.handle_id, handle_range.second.handle_id);
                 dm_storage->deleteRange(dm_handle_range, context->getSettingsRef());
             }
         }
 
         regions.erase(it);
-        auto & table = tables.find(table_id)->second;
         table.regions.erase(region_id);
         if (table.regions.empty())
         {
@@ -327,7 +330,7 @@ RegionID RegionTable::pickRegionToFlush()
             if (shouldFlush(doGetInternalRegion(table_id, region_id)))
             {
                 dirty_regions.erase(dirty_it);
-                clearDirtyFlag(region.region_id);
+                clearDirtyFlag(region_id);
                 return region_id;
             }
 
@@ -360,7 +363,7 @@ void RegionTable::clearDirtyFlag(RegionID region_id)
 void RegionTable::waitTillRegionFlushed(const RegionID region_id)
 {
     std::unique_lock lock(dirty_regions_mutex);
-    dirty_regions_cv.wait(lock, [this, region_id]{ return dirty_regions.count(region_id) == 0;});
+    dirty_regions_cv.wait(lock, [this, region_id] { return dirty_regions.count(region_id) == 0; });
 }
 
 void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const

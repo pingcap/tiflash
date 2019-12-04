@@ -288,7 +288,7 @@ BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settin
 namespace
 {
 
-void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, RegionTable::RegionReadStatus status)
+void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, RegionException::RegionReadStatus status)
 {
     std::vector<RegionID> region_ids;
     region_ids.reserve(regions_info.size());
@@ -298,17 +298,17 @@ void throwRetryRegion(const MvccQueryInfo::RegionsQueryInfo & regions_info, Regi
 }
 
 /// Check if region is invalid.
-RegionTable::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
+RegionException::RegionReadStatus isValidRegion(const RegionQueryInfo & region_to_query, const RegionPtr & region_in_mem)
 {
     if (region_in_mem->isPendingRemove())
-        return RegionTable::RegionReadStatus::PENDING_REMOVE;
+        return RegionException::RegionReadStatus::PENDING_REMOVE;
 
     const auto & [version, conf_ver, key_range] = region_in_mem->dumpVersionRange();
     (void)key_range;
     if (version != region_to_query.version || conf_ver != region_to_query.conf_version)
-        return RegionTable::RegionReadStatus::VERSION_ERROR;
+        return RegionException::RegionReadStatus::VERSION_ERROR;
 
-    return RegionTable::RegionReadStatus::OK;
+    return RegionException::RegionReadStatus::OK;
 }
 
 inline void doLearnerRead(const TiDB::TableID table_id,         //
@@ -348,7 +348,7 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
         if (region == nullptr)
         {
             LOG_WARNING(log, "[region " << info.region_id << "] is not found in KVStore, try again");
-            throwRetryRegion(regions_info, RegionTable::RegionReadStatus::NOT_FOUND);
+            throwRetryRegion(regions_info, RegionException::RegionReadStatus::NOT_FOUND);
         }
         kvstore_region.emplace(info.region_id, std::move(region));
     }
@@ -358,13 +358,13 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
 
     const size_t num_regions = regions_info.size();
     const size_t batch_size = num_regions / concurrent_num;
-    std::atomic_uint8_t region_status = RegionTable::RegionReadStatus::OK;
+    std::atomic_uint8_t region_status = RegionException::RegionReadStatus::OK;
     const auto batch_wait_index = [&](const size_t region_begin_idx) -> void {
         const size_t region_end_idx = std::min(region_begin_idx + batch_size, num_regions);
         for (size_t region_idx = region_begin_idx; region_idx < region_end_idx; ++region_idx)
         {
             // If any threads meets an error, just return.
-            if (region_status != RegionTable::RegionReadStatus::OK)
+            if (region_status != RegionException::RegionReadStatus::OK)
                 return;
 
             const RegionQueryInfo & region_to_query = regions_info[region_idx];
@@ -372,14 +372,14 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
             auto region = kvstore_region[region_id];
 
             auto status = isValidRegion(region_to_query, region);
-            if (status != RegionTable::RegionReadStatus::OK)
+            if (status != RegionException::RegionReadStatus::OK)
             {
                 region_status = status;
                 LOG_WARNING(log,
                     "Check memory cache, region " << region_id << ", version " << region_to_query.version << ", handle range ["
                                                   << region_to_query.range_in_table.first.toString() << ", "
                                                   << region_to_query.range_in_table.second.toString() << ") , status "
-                                                  << RegionTable::RegionReadStatusString(status));
+                                                  << RegionException::RegionReadStatusString(status));
                 return;
             }
 
@@ -404,8 +404,8 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
     }
 
     // Check if any region is invalid, TiDB / TiSpark should refresh region cache and retry.
-    if (region_status != RegionTable::RegionReadStatus::OK)
-        throwRetryRegion(regions_info, static_cast<RegionTable::RegionReadStatus>(region_status.load()));
+    if (region_status != RegionException::RegionReadStatus::OK)
+        throwRetryRegion(regions_info, static_cast<RegionException::RegionReadStatus>(region_status.load()));
 
     auto end_time = Clock::now();
     LOG_DEBUG(log,
@@ -420,10 +420,11 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
         auto & region_table = tmt.getRegionTable();
         for (auto && [region_id, region] : kvstore_region)
         {
-            (void)region;
-            bool is_flushed = region_table.tryFlushRegion(region_id, table_id, false);
+            if (!region->dataSize())
+                continue;
+            auto to_remove_data = region_table.tryFlushRegion(region, false);
             // If region is flushing by other bg threads, we should mark those regions to wait.
-            if (!is_flushed)
+            if (to_remove_data.empty())
             {
                 regions_flushing_in_bg_threads.insert(region_id);
                 LOG_DEBUG(log, "[Learner Read] region " << region_id << " is flushing by other thread.");
@@ -566,7 +567,7 @@ BlockInputStreams StorageDeltaMerge::read( //
             else
             {
                 // Query from ch client
-                auto create_attr_by_column_id = [this](const String &col_name) -> Attr {
+                auto create_attr_by_column_id = [this](const String & col_name) -> Attr {
                     const ColumnDefines & defines = this->store->getTableColumns();
                     auto iter = std::find_if(
                         defines.begin(), defines.end(), [&col_name](const ColumnDefine & d) -> bool { return d.name == col_name; });

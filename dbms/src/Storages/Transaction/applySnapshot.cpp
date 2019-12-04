@@ -80,20 +80,20 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
             {
                 case TiDB::StorageEngine::TMT:
                 {
-                    // acquire lock so that no other threads can change storage's structure
                     auto table_lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
-                    auto merge_tree = std::dynamic_pointer_cast<StorageMergeTree>(storage);
-                    const bool pk_is_uint64 = getTMTPKType(*merge_tree->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
+
+                    auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+                    const bool pk_is_uint64 = getTMTPKType(*tmt_storage->getData().primary_key_data_types[0]) == TMTPKType::UINT64;
 
                     if (pk_is_uint64)
                     {
                         const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                        getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[0], handle_maps[table_id]);
+                        getHandleMapByRange<UInt64>(*context, *tmt_storage, new_range[0], handle_map);
                         if (n > 1)
-                            getHandleMapByRange<UInt64>(*context, *merge_tree, new_range[1], handle_maps[table_id]);
+                            getHandleMapByRange<UInt64>(*context, *tmt_storage, new_range[1], handle_map);
                     }
                     else
-                        getHandleMapByRange<Int64>(*context, *merge_tree, handle_range, handle_maps[table_id]);
+                        getHandleMapByRange<Int64>(*context, *tmt_storage, handle_range, handle_map);
                     break;
                 }
                 case TiDB::StorageEngine::DM:
