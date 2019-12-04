@@ -62,11 +62,11 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
                 break;
             default:
                 throw Exception(
-                        "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
+                    "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
     encode_type = dag_request.encode_type();
-    if (encode_type == tipb::EncodeType::TypeArrow && hasUnsupportedTypeForArrowEncode(getResultFieldTypes({})))
+    if (encode_type == tipb::EncodeType::TypeArrow && hasUnsupportedTypeForArrowEncode(getResultFieldTypes()))
     {
         encode_type = tipb::EncodeType::TypeDefault;
     }
@@ -100,8 +100,6 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
         case tipb::ExecType::TypeTableScan:
             for (auto & ci : executor.tbl_scan().columns())
             {
-                if (ci.column_id() == -1)
-                    continue;
                 field_type.set_tp(ci.tp());
                 field_type.set_flag(ci.flag());
                 field_type.set_flen(ci.columnlen());
@@ -133,17 +131,13 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
     }
 }
 
-std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes(const tipb::FieldType & void_result_ft) const
+std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
 {
     std::vector<tipb::FieldType> executor_output;
     for (int i = dag_request.executors_size() - 1; i >= 0; i--)
     {
         if (fillExecutorOutputFieldTypes(dag_request.executors(i), executor_output))
-        {
-            if (executor_output.empty())
-                executor_output.push_back(void_result_ft);
             break;
-        }
     }
     if (executor_output.empty())
     {
