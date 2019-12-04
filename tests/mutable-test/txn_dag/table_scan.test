@@ -30,16 +30,16 @@
 │ test1 │
 └───────┘
 
-# TiDB may push down table scan with -1 column, use keyword _void testing this case.
-=> DBGInvoke dag('select _void from default.test') " --dag_planner="optree
-┌─_void─┐
-│    50 │
-└───────┘
+# select TiDB rowid
+=> DBGInvoke dag('select _tidb_rowid from default.test') " --dag_planner="optree
+┌─_tidb_rowid─┐
+│          50 │
+└─────────────┘
 
-=> DBGInvoke dag('select _void, col_1 from default.test') " --dag_planner="optree
-┌─_void─┬─col_1─┐
-│    50 │ test1 │
-└───────┴───────┘
+=> DBGInvoke dag('select _tidb_rowid, col_1 from default.test') " --dag_planner="optree
+┌─_tidb_rowid─┬─col_1─┐
+│          50 │ test1 │
+└─────────────┴───────┘
 
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)

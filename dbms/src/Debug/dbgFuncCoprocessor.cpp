@@ -145,7 +145,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     return outputDAGResponse(context, schema, dag_response);
 }
 
-const String VOID_COL_NAME = "_void";
+const String ROWID_COL_NAME = "_tidb_rowid";
 
 struct ExecutorCtx
 {
@@ -392,14 +392,14 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
         {
             if (ASTIdentifier * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
             {
-                if (identifier->getColumnName() == VOID_COL_NAME)
+                if (identifier->getColumnName() == ROWID_COL_NAME)
                 {
                     ColumnInfo ci;
                     ci.tp = TiDB::TypeLongLong;
                     ci.setPriKeyFlag();
                     ci.setNotNullFlag();
                     hijackTiDBTypeForMockTest(ci);
-                    ts_output.emplace_back(std::make_pair(VOID_COL_NAME, std::move(ci)));
+                    ts_output.emplace_back(std::make_pair(ROWID_COL_NAME, std::move(ci)));
                 }
             }
         }
@@ -465,7 +465,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
             for (const auto & info : executor_ctx.output)
             {
                 tipb::ColumnInfo * ci = ts->add_columns();
-                if (info.first == VOID_COL_NAME)
+                if (info.first == ROWID_COL_NAME)
                     ci->set_column_id(-1);
                 else
                     ci->set_column_id(table_info.getColumnID(info.first));
