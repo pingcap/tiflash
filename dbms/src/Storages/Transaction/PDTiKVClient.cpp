@@ -14,10 +14,11 @@ extern const int LOGICAL_ERROR;
 constexpr int readIndexMaxBackoff = 5000;
 
 IndexReader::IndexReader(
-    pingcap::kv::Cluster * cluster_, const pingcap::kv::RegionVerID & id_, const std::string & suggested_ip_, UInt16 suggested_port_)
-    : pingcap::kv::RegionClient(cluster_, id_),
+    KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id_, const std::string & suggested_ip_, UInt16 suggested_port_)
+    : pingcap::kv::RegionClient(cluster_.get(), id_),
       suggested_ip(suggested_ip_),
       suggested_port(suggested_port_),
+      cluster(cluster_),
       log(&Logger::get("pingcap.index_read"))
 {}
 

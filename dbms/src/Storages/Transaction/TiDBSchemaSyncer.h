@@ -16,7 +16,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
 
-    pingcap::kv::Cluster * cluster;
+    KVClusterPtr cluster;
 
     const Int64 maxNumberOfDiffs = 100;
 
@@ -28,7 +28,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Logger * log;
 
-    TiDBSchemaSyncer(pingcap::kv::Cluster * cluster_) : cluster(cluster_), cur_version(0), log(&Logger::get("SchemaSyncer")) {}
+    TiDBSchemaSyncer(KVClusterPtr cluster_) : cluster(cluster_), cur_version(0), log(&Logger::get("SchemaSyncer")) {}
 
     bool isTooOldSchema(Int64 cur_ver, Int64 new_version) { return cur_ver == 0 || new_version - cur_ver > maxNumberOfDiffs; }
 
@@ -40,7 +40,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         else
         {
-            return Getter(cluster, tso);
+            return Getter(cluster.get(), tso);
         }
     }
 

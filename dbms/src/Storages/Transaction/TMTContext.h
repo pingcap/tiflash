@@ -53,7 +53,7 @@ private:
     RegionTable region_table;
 
 private:
-    pingcap::kv::ClusterPtr cluster;
+    KVClusterPtr cluster;
 
     mutable std::mutex mutex;
     std::atomic_bool initialized = false;
