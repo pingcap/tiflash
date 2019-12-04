@@ -16,6 +16,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/KVStore.h>
@@ -144,8 +145,6 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
 
     return outputDAGResponse(context, schema, dag_response);
 }
-
-const String ROWID_COL_NAME = "_tidb_rowid";
 
 struct ExecutorCtx
 {
@@ -392,14 +391,14 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
         {
             if (ASTIdentifier * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
             {
-                if (identifier->getColumnName() == ROWID_COL_NAME)
+                if (identifier->getColumnName() == MutableSupport::tidb_pk_column_name)
                 {
                     ColumnInfo ci;
                     ci.tp = TiDB::TypeLongLong;
                     ci.setPriKeyFlag();
                     ci.setNotNullFlag();
                     hijackTiDBTypeForMockTest(ci);
-                    ts_output.emplace_back(std::make_pair(ROWID_COL_NAME, std::move(ci)));
+                    ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
                 }
             }
         }
@@ -465,7 +464,7 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
             for (const auto & info : executor_ctx.output)
             {
                 tipb::ColumnInfo * ci = ts->add_columns();
-                if (info.first == ROWID_COL_NAME)
+                if (info.first == MutableSupport::tidb_pk_column_name)
                     ci->set_column_id(-1);
                 else
                     ci->set_column_id(table_info.getColumnID(info.first));
