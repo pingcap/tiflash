@@ -240,7 +240,7 @@ struct Settings
     \
     M(SettingUInt64, dm_segment_limit_rows, 1500000, "Average rows of segments in DeltaMerge Engine")\
     M(SettingUInt64, dm_segment_delta_limit_rows, 150000, "Max rows of segment delta in DeltaMerge Engine ")\
-    M(SettingUInt64, dm_segment_delta_cache_limit_rows, 15000, "Max rows of cache in segment delta in DeltaMerge Engine")\
+    M(SettingUInt64, dm_segment_delta_cache_limit_rows, 4000, "Max rows of cache in segment delta in DeltaMerge Engine")\
     M(SettingUInt64, dm_segment_stable_chunk_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable chunk rows in DeltaMerge Engine")\
     M(SettingUInt64, dm_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaMerge Engine. By default 0 means no limit.")\
     M(SettingBool, dm_enable_rough_set_filter, true, "whether to parse where expression as Rough Set Index filter or not") \
