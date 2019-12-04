@@ -13,7 +13,9 @@
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IInterpreter.h>
+#include <Raft/RaftService.h>
 #include <Storages/RegionQueryInfo.h>
+#include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 namespace DB
@@ -84,6 +86,7 @@ private:
     AnalysisResult analyzeExpressions();
     void recordProfileStreams(Pipeline & pipeline, Int32 index);
     bool addTimeZoneCastAfterTS(std::vector<bool> & is_ts_column, Pipeline & pipeline);
+    RegionException::RegionReadStatus getRegionReadStatus(RegionPtr current_region);
 
 private:
     Context & context;
