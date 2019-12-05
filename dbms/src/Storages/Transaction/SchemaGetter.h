@@ -61,9 +61,7 @@ struct SchemaGetter
 
     Logger * log;
 
-    SchemaGetter(pingcap::kv::RegionCachePtr regionCachePtr_, pingcap::kv::RpcClientPtr rpcClientPtr_, UInt64 tso_)
-        : snap(regionCachePtr_, rpcClientPtr_, tso_), log(&Logger::get("SchemaGetter"))
-    {}
+    SchemaGetter(pingcap::kv::Cluster * cluster_, UInt64 tso_) : snap(cluster_, tso_), log(&Logger::get("SchemaGetter")) {}
 
     Int64 getVersion();
 
