@@ -463,8 +463,18 @@ String MyDateTime::toString(int fsp) const
     return result;
 }
 
+bool isZeroDate(UInt64 time)
+{
+    return time == 0;
+}
+
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to)
 {
+    if (isZeroDate(from_time))
+    {
+        to_time = from_time;
+        return;
+    }
     MyDateTime from_my_time(from_time);
     time_t epoch = time_zone_from.makeDateTime(
         from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
@@ -475,6 +485,11 @@ void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & tim
 
 void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, Int64 offset, const DateLUTImpl & time_zone)
 {
+    if (isZeroDate(from_time))
+    {
+        to_time = from_time;
+        return;
+    }
     MyDateTime from_my_time(from_time);
     time_t epoch = time_zone.makeDateTime(
         from_my_time.year, from_my_time.month, from_my_time.day, from_my_time.hour, from_my_time.minute, from_my_time.second);
