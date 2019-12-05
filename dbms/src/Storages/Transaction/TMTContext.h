@@ -53,9 +53,7 @@ private:
     RegionTable region_table;
 
 private:
-    pingcap::pd::ClientPtr pd_client;
-    pingcap::kv::RegionCachePtr region_cache;
-    pingcap::kv::RpcClientPtr rpc_client;
+    KVClusterPtr cluster;
 
     mutable std::mutex mutex;
     std::atomic_bool initialized = false;

@@ -3,7 +3,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <pingcap/kv/Region.h>
+#include <pingcap/kv/RegionCache.h>
 #pragma GCC diagnostic pop
 
 namespace DB
