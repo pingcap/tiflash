@@ -10,6 +10,11 @@
 
 #include <common/logger_useful.h>
 
+// We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
+// `share` the resource of cluster.
+using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
+
+
 namespace DB
 {
 
@@ -19,22 +24,17 @@ struct IndexReader : public pingcap::kv::RegionClient
     std::string suggested_ip;
     UInt16 suggested_port;
 
+    KVClusterPtr cluster;
+
     Logger * log;
 
-    IndexReader(pingcap::kv::RegionCachePtr cache_,
-        pingcap::kv::RpcClientPtr client_,
-        const pingcap::kv::RegionVerID & id,
-        const std::string & suggested_ip,
-        UInt16 suggested_port);
+    IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id, const std::string & suggested_ip, UInt16 suggested_port);
 
     int64_t getReadIndex();
 
 private:
-    void getReadIndexFromLearners(pingcap::kv::Backoffer & bo,
-        const metapb::Region & meta,
-        const std::vector<metapb::Peer> & learners,
-        pingcap::kv::RpcCallPtr<kvrpcpb::ReadIndexRequest>
-            rpc);
+    std::shared_ptr<::kvrpcpb::ReadIndexResponse> getReadIndexFromLearners(
+        pingcap::kv::Backoffer & bo, const metapb::Region & meta, const std::vector<metapb::Peer> & learners);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;
