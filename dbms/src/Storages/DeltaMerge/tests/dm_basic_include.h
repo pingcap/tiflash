@@ -80,9 +80,9 @@ public:
         Block        block;
         const size_t num_rows = (end - beg);
         {
-            ColumnWithTypeAndName col1(std::make_shared<DataTypeInt64>(), pk_name);
             {
-                IColumn::MutablePtr m_col = col1.type->createColumn();
+                ColumnWithTypeAndName col1({}, std::make_shared<DataTypeInt64>(), pk_name, EXTRA_HANDLE_COLUMN_ID);
+                IColumn::MutablePtr   m_col = col1.type->createColumn();
                 // insert form large to small
                 for (size_t i = 0; i < num_rows; i++)
                 {
@@ -98,33 +98,33 @@ public:
                     m_col->insert(field);
                 }
                 col1.column = std::move(m_col);
+                block.insert(col1);
             }
-            block.insert(col1);
 
-            ColumnWithTypeAndName version_col(VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME);
             {
-                IColumn::MutablePtr m_col = version_col.type->createColumn();
+                ColumnWithTypeAndName version_col({}, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID);
+                IColumn::MutablePtr   m_col = version_col.type->createColumn();
                 for (size_t i = 0; i < num_rows; ++i)
                 {
                     Field field = tso;
                     m_col->insert(field);
                 }
                 version_col.column = std::move(m_col);
+                block.insert(version_col);
             }
-            block.insert(version_col);
 
-            ColumnWithTypeAndName tag_col(TAG_COLUMN_TYPE, TAG_COLUMN_NAME);
             {
-                IColumn::MutablePtr m_col       = tag_col.type->createColumn();
-                auto &              column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
+                ColumnWithTypeAndName tag_col({}, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
+                IColumn::MutablePtr   m_col       = tag_col.type->createColumn();
+                auto &                column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
                 column_data.resize(num_rows);
                 for (size_t i = 0; i < num_rows; ++i)
                 {
                     column_data[i] = 0;
                 }
                 tag_col.column = std::move(m_col);
+                block.insert(tag_col);
             }
-            block.insert(tag_col);
         }
         return block;
     }

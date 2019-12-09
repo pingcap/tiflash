@@ -217,7 +217,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         //printf("pk:%lld\n", c->getInt(i));
                         EXPECT_EQ(c->getInt(i), i);
@@ -255,7 +255,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         EXPECT_EQ(c->getInt(i), i);
                     }
@@ -306,7 +306,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         ASSERT_EQ(c->getInt(i), i);
                     }
@@ -342,7 +342,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         // Range after deletion is [64, 128)
                         ASSERT_EQ(c->getInt(i), i + Int64(num_deleted_rows));
@@ -390,7 +390,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         ASSERT_EQ(c->getInt(i), i);
                     }
@@ -434,7 +434,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         ASSERT_EQ(c->getInt(i), i);
                     }
@@ -464,7 +464,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         ASSERT_EQ(c->getInt(i), i);
                     }
@@ -518,7 +518,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); i++)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         EXPECT_EQ(c->getInt(i), i);
                     }
@@ -558,11 +558,11 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); i++)
                 {
-                    if (iter.name == "pk" && block_num == 0)
+                    if (iter.name == DMTestEnv::pk_name && block_num == 0)
                     {
                         EXPECT_EQ(c->getInt(i), i);
                     }
-                    else if (iter.name == "pk" && block_num == 1)
+                    else if (iter.name == DMTestEnv::pk_name && block_num == 1)
                     {
                         EXPECT_EQ(c->getInt(i), i + 4);
                     }
@@ -862,7 +862,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         //printf("pk:%lld\n", c->getInt(i));
                         EXPECT_EQ(c->getInt(i), i);
@@ -971,7 +971,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         EXPECT_EQ(c->getInt(i), i);
                     }
@@ -1077,7 +1077,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         EXPECT_EQ(c->getInt(i), i);
                     }
@@ -1343,7 +1343,7 @@ try
                 auto c = iter.column;
                 for (Int64 i = 0; i < Int64(c->size()); ++i)
                 {
-                    if (iter.name == "pk")
+                    if (iter.name == DMTestEnv::pk_name)
                     {
                         //printf("pk:%lld\n", c->getInt(i));
                         EXPECT_EQ(c->getInt(i), i);
