@@ -27,15 +27,25 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
 
         bool do_index = !wal_mode && (cd.type->isInteger() || cd.type->isDateOrDateTime());
-        auto stream   = std::make_unique<Stream>(dmfile, //
-                                               cd.id,
-                                               cd.type,
+        addStreams(cd.name, cd.type, do_index);
+        dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
+    }
+}
+
+void DMFileWriter::addStreams(String col_name, DataTypePtr type, bool do_index)
+{
+    auto callback = [&](const IDataType::SubstreamPath & substream_path) {
+        auto   stream      = std::make_unique<Stream>(dmfile, //
+                                               col_name,
+                                               type,
                                                compression_settings,
                                                max_compress_block_size,
                                                do_index);
-        column_streams.emplace(cd.id, std::move(stream));
-        dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
-    }
+        String stream_name = IDataType::getFileNameForStream(col_name, substream_path);
+        column_streams.emplace(stream_name, std::move(stream));
+    };
+
+    type->enumerateStreams(callback, {});
 }
 
 void DMFileWriter::write(const Block & block, size_t not_clean_rows)
@@ -47,7 +57,7 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
     for (auto & cd : write_columns)
     {
         auto & col = getByColumnId(block, cd.id).column;
-        writeColumn(cd.id, *cd.type, *col);
+        writeColumn(cd.id, cd.name, *cd.type, *col);
 
         if (cd.id == VERSION_COLUMN_ID)
             stat.first_version = col->get64(0);
@@ -66,16 +76,16 @@ void DMFileWriter::finalize()
 {
     for (auto & cd : write_columns)
     {
-        finalizeColumn(cd.id, *(cd.type));
+        finalizeColumn(cd.name, *(cd.type));
     }
 
     dmfile->finalize();
 }
 
-void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
+void DMFileWriter::writeColumn(ColId col_id, String col_name, const IDataType & type, const IColumn & column)
 {
     size_t rows   = column.size();
-    auto & stream = column_streams.at(col_id);
+    auto & stream = column_streams.at(col_name);
     if (stream->minmaxes)
         stream->minmaxes->addChunk(column, nullptr);
 
@@ -106,14 +116,14 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
     IDataType::updateAvgValueSizeHint(column, avg_size);
 }
 
-void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
+void DMFileWriter::finalizeColumn(String col_name, const IDataType & type)
 {
-    auto & stream = column_streams.at(col_id);
+    auto & stream = column_streams.at(col_name);
     stream->flush();
 
     if (stream->minmaxes)
     {
-        WriteBufferFromFile buf(dmfile->colIndexPath(col_id));
+        WriteBufferFromFile buf(dmfile->colIndexPath(col_name));
         stream->minmaxes->write(type, buf);
     }
 }

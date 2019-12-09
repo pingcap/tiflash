@@ -33,7 +33,7 @@ public:
 
         if (!handle_range.all())
         {
-            loadIndex(EXTRA_HANDLE_COLUMN_ID);
+            loadIndex(EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME);
             auto handle_filter = toFilter(handle_range);
             for (size_t i = 0; i < dmfile->getChunks(); ++i)
             {
@@ -49,7 +49,7 @@ public:
                 Attrs attrs = filter->getAttrs();
                 for (auto & attr : attrs)
                 {
-                    loadIndex(attr.col_id);
+                    loadIndex(attr.col_id, attr.col_name);
                 }
             }
 
@@ -72,12 +72,12 @@ public:
         }
     }
 
-    void loadIndex(const ColId col_id)
+    void loadIndex(const ColId col_id, String col_name)
     {
         if (param.indexes.count(col_id))
             return;
 
-        auto       index_path = dmfile->colIndexPath(col_id);
+        auto       index_path = dmfile->colIndexPath(col_name);
         Poco::File index_file(index_path);
         if (!index_file.exists())
             return;
@@ -107,7 +107,7 @@ public:
     Handle getMinHandle(size_t chunk_id)
     {
         if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            loadIndex(EXTRA_HANDLE_COLUMN_ID);
+            loadIndex(EXTRA_HANDLE_COLUMN_ID, EXTRA_HANDLE_COLUMN_NAME);
         auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
         return minmax_index->getIntMinMax(chunk_id).first;
     }
@@ -115,7 +115,7 @@ public:
     UInt64 getMaxVersion(size_t chunk_id)
     {
         if (!param.indexes.count(VERSION_COLUMN_ID))
-            loadIndex(VERSION_COLUMN_ID);
+            loadIndex(VERSION_COLUMN_ID, VERSION_COLUMN_NAME);
         auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
         return minmax_index->getUInt64MinMax(chunk_id).second;
     }

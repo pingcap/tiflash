@@ -72,12 +72,12 @@ public:
     String chunkStatPath() { return path() + "/chunk"; }
     // Do not gc me.
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
-    String colDataPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".dat"; }
-    String colIndexPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".idx"; }
-    String colEdgePath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".edge"; }
-    String colMarkPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".mrk"; }
+    String colDataPath(String col_name) { return path() + "/" + col_name + ".dat"; }
+    String colIndexPath(String col_name) { return path() + "/" + col_name + ".idx"; }
+    String colEdgePath(String col_name) { return path() + "/" + col_name + ".edge"; }
+    String colMarkPath(String col_name) { return path() + "/" + col_name + ".mrk"; }
 
-    const auto & getColumnStat(ColId col_id)
+    const ColumnStat & getColumnStat(ColId col_id)
     {
         auto it = column_stats.find(col_id);
         if (it == column_stats.end())

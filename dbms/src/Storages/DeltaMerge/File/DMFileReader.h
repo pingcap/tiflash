@@ -20,7 +20,12 @@ class DMFileReader
 public:
     struct Stream
     {
-        Stream(DMFileReader & reader, ColId col_id, size_t aio_threshold, size_t max_read_buffer_size, Logger * log);
+        Stream(DMFileReader & reader, //
+               ColId          col_id,
+               String         col_name,
+               size_t         aio_threshold,
+               size_t         max_read_buffer_size,
+               Logger *       log);
 
         double                   avg_size_hint;
         MarksInCompressedFilePtr marks;

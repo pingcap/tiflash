@@ -1,0 +1,202 @@
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFileWriter.h>
+
+#include "dm_basic_include.h"
+
+namespace DB
+{
+namespace DM
+{
+namespace tests
+{
+
+using DMFileBlockOutputStreamPtr = std::shared_ptr<DMFileBlockOutputStream>;
+using DMFileBlockInputStreamPtr  = std::shared_ptr<DMFileBlockInputStream>;
+
+class DMFile_Test : public ::testing::Test
+{
+public:
+    DMFile_Test() : path("t"), dm_file(nullptr) {}
+
+    void SetUp() override
+    {
+        dropFiles();
+        storage_pool = std::make_unique<StoragePool>("test.t1", path);
+        dm_file      = DMFile::create(0, path);
+        db_context   = std::make_unique<Context>(DMTestEnv::getContext(DB::Settings()));
+
+        reload();
+    }
+
+    void dropFiles()
+    {
+        Poco::File file(path);
+        if (file.exists())
+        {
+            file.remove(true);
+        }
+    }
+
+    void reload(const ColumnDefines & cols = DMTestEnv::getDefaultColumns())
+    {
+        dm_context = std::make_unique<DMContext>(*db_context,
+                                                 path,
+                                                 db_context->getExtraPaths(),
+                                                 *storage_pool,
+                                                 0,
+                                                 cols,
+                                                 cols.at(0),
+                                                 0,
+                                                 settings.not_compress_columns,
+                                                 db_context->getSettingsRef().dm_segment_limit_rows,
+                                                 db_context->getSettingsRef().dm_segment_delta_limit_rows,
+                                                 db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
+                                                 db_context->getSettingsRef().dm_segment_stable_chunk_rows);
+    }
+
+
+    DMContext & dmContext() { return *dm_context; }
+
+    Context & dbContext() { return *db_context; }
+
+private:
+    String                     path;
+    std::unique_ptr<Context>   db_context;
+    std::unique_ptr<DMContext> dm_context;
+
+    std::unique_ptr<StoragePool> storage_pool;
+
+    DeltaMergeStore::Settings settings;
+
+protected:
+    DMFilePtr dm_file;
+};
+
+
+TEST_F(DMFile_Test, WriteRead)
+try
+{
+    auto         cols           = DMTestEnv::getDefaultColumns();
+    const size_t num_rows_write = 128;
+
+    {
+        // Prepare for write
+        Block block  = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        stream->writePrefix();
+        stream->write(block, 0);
+        stream->writeSuffix();
+    }
+
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>(dbContext(), //
+                                                               std::numeric_limits<UInt64>::max(),
+                                                               false,
+                                                               dmContext().hash_salt,
+                                                               dm_file,
+                                                               cols,
+                                                               HandleRange::newAll(),
+                                                               RSOperatorPtr{},
+                                                               IdSetPtr{});
+
+        size_t num_rows_read = 0;
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == DMTestEnv::pk_name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), Int64(i));
+                        num_rows_read++;
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, num_rows_write);
+    }
+}
+CATCH
+
+TEST_F(DMFile_Test, Nullable)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+    {
+        // Prepare columns
+        ColumnDefine nullable_col(2, "i32_null", DataTypeFactory::instance().get("Nullable(Int32)"));
+        cols.emplace_back(nullable_col);
+    }
+
+    reload(cols);
+
+    {
+        // Prepare write
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+
+        ColumnWithTypeAndName nullable_col({}, DataTypeFactory::instance().get("Nullable(Int32)"), "i32_null", 2);
+        auto                  col = nullable_col.type->createColumn();
+        for (int i = 0; i < 128; i++)
+        {
+            col->insertDefault();
+        }
+        nullable_col.column = std::move(col);
+
+        block.insert(nullable_col);
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        stream->writePrefix();
+        stream->write(block, 0);
+        stream->writeSuffix();
+    }
+
+    {
+        // Test read
+        auto stream = std::make_shared<DMFileBlockInputStream>(dbContext(), //
+                                                               std::numeric_limits<UInt64>::max(),
+                                                               false,
+                                                               dmContext().hash_salt,
+                                                               dm_file,
+                                                               cols,
+                                                               HandleRange::newAll(),
+                                                               RSOperatorPtr{},
+                                                               IdSetPtr{});
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == DMTestEnv::pk_name)
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), Int64(i));
+                    }
+                }
+                else if (itr.column_id == 2)
+                {
+                    const auto col = typeid_cast<const ColumnNullable *>(c.get());
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(col->isNullAt(i), true);
+                    }
+                }
+            }
+        }
+        stream->readSuffix();
+    }
+}
+CATCH
+
+} // namespace tests
+} // namespace DM
+} // namespace DB

@@ -23,17 +23,17 @@ public:
     struct Stream
     {
         Stream(const DMFilePtr &   dmfile,
-               ColId               col_id,
+               String              col_name,
                const DataTypePtr & type,
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(col_id), 0, 0, max_compress_block_size)),
+            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(col_name), 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(dmfile->colMarkPath(col_id))
+              mark_file(dmfile->colMarkPath(col_name))
         {
         }
 
@@ -54,11 +54,11 @@ public:
         CompressedWriteBuffer      compressed_buf;
         HashingWriteBuffer         original_hashing;
 
-        MinMaxIndexPtr         minmaxes;
-        WriteBufferFromFile    mark_file;
+        MinMaxIndexPtr      minmaxes;
+        WriteBufferFromFile mark_file;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
-    using ColumnStreams = std::map<ColId, StreamPtr>;
+    using ColumnStreams = std::map<String, StreamPtr>;
 
 public:
     DMFileWriter(const DMFilePtr &           dmfile_,
@@ -72,8 +72,10 @@ public:
     void finalize();
 
 private:
-    void writeColumn(ColId col_id, const IDataType & type, const IColumn & column);
-    void finalizeColumn(ColId col_id, const IDataType & type);
+    void writeColumn(ColId col_id, String col_name, const IDataType & type, const IColumn & column);
+    void finalizeColumn(String col_name, const IDataType & type);
+
+    void addStreams(String name, DataTypePtr type, bool do_index);
 
 private:
     DMFilePtr           dmfile;

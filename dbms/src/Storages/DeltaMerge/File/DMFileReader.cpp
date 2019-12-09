@@ -10,11 +10,12 @@ namespace DB
 namespace DM
 {
 
-DMFileReader::Stream::Stream(DMFileReader & reader, ColId col_id, size_t aio_threshold, size_t max_read_buffer_size, Logger * log)
+DMFileReader::Stream::Stream(
+    DMFileReader & reader, ColId col_id, String col_name, size_t aio_threshold, size_t max_read_buffer_size, Logger * log)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
-    String mark_path = reader.dmfile->colMarkPath(col_id);
-    String data_path = reader.dmfile->colDataPath(col_id);
+    String mark_path = reader.dmfile->colMarkPath(col_name);
+    String data_path = reader.dmfile->colDataPath(col_name);
 
     auto mark_load = [&]() -> MarksInCompressedFilePtr {
         auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getChunks());
@@ -122,7 +123,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
 
     for (auto & cd : read_columns)
     {
-        column_streams.emplace(cd.id, std::make_unique<Stream>(*this, cd.id, aio_threshold, max_read_buffer_size, log));
+        column_streams.emplace(cd.id, std::make_unique<Stream>(*this, cd.id, cd.name, aio_threshold, max_read_buffer_size, log));
     }
 }
 
