@@ -20,10 +20,10 @@ class StoragePool;
 struct DMContext : private boost::noncopyable
 {
     const Context &  db_context;
-    String           store_path;
+    const String     store_path;
     const PathPool & extra_paths;
     StoragePool &    storage_pool;
-    UInt64           hash_salt;
+    const UInt64     hash_salt;
 
     // The schema snapshot
     // We need a consistent snapshot of columns, copy ColumnsDefines
@@ -44,11 +44,13 @@ struct DMContext : private boost::noncopyable
     // The expected stable chunk rows.
     const size_t stable_chunk_rows;
 
+    const bool enable_logical_split;
+
     DMContext(const Context &       db_context_,
               const String &        store_path_,
               const PathPool &      extra_paths_,
               StoragePool &         storage_pool_,
-              UInt64                hash_salt_,
+              const UInt64          hash_salt_,
               const ColumnDefines & store_columns_,
               const ColumnDefine &  handle_column_,
               const UInt64          min_version_,
@@ -56,7 +58,8 @@ struct DMContext : private boost::noncopyable
               const size_t          segment_limit_rows_,
               const size_t          delta_limit_rows_,
               const size_t          delta_cache_limit_rows_,
-              const size_t          stable_chunk_rows_)
+              const size_t          stable_chunk_rows_,
+              const bool            enable_logical_split_)
         : db_context(db_context_),
           store_path(store_path_),
           extra_paths(extra_paths_),
@@ -69,7 +72,8 @@ struct DMContext : private boost::noncopyable
           segment_limit_rows(segment_limit_rows_),
           delta_limit_rows(delta_limit_rows_),
           delta_cache_limit_rows(delta_cache_limit_rows_),
-          stable_chunk_rows(stable_chunk_rows_)
+          stable_chunk_rows(stable_chunk_rows_),
+          enable_logical_split(enable_logical_split_)
     {
     }
 };

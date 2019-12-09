@@ -170,7 +170,8 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                db_settings.dm_segment_limit_rows,
                                db_settings.dm_segment_delta_limit_rows,
                                db_settings.dm_segment_delta_cache_limit_rows,
-                               db_settings.dm_segment_stable_chunk_rows);
+                               db_settings.dm_segment_stable_chunk_rows,
+                               db_settings.dm_enable_logical_split);
     return DMContextPtr(ctx);
 }
 

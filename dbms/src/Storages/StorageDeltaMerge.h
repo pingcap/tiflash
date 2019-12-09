@@ -80,7 +80,7 @@ protected:
         const ASTPtr & primary_expr_ast_,
         Context & global_context_);
 
-    Block buildInsertBlock(bool is_import, const Block & block);
+    Block buildInsertBlock(bool is_import, bool is_delete, const Block & block);
 
 private:
     void alterImpl(const AlterCommands & commands,

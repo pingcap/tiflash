@@ -272,7 +272,6 @@ private:
     const PageId      next_segment_id;
 
     DiskValueSpacePtr delta;
-    //    DMFilePtr         stable;
     StableValueSpacePtr stable;
 
     std::atomic_bool is_merge_delta            = false;
