@@ -1,0 +1,7 @@
+[profiles]
+	[profiles.readonly]
+		readonly = 1
+	[profiles.default]
+		load_balancing = "random"
+		use_uncompressed_cache = 0
+		max_memory_usage = 4000000000

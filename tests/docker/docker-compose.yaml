@@ -10,21 +10,21 @@ services:
       - "8123:8123"
       - "9009:9009"
     volumes:
-      - ./config/config.xml:/config.xml:ro
-      - ./config/users.xml:/users.xml:ro
+      - ./config/config.toml:/config.toml:ro
+      - ./config/users.toml:/users.toml:ro
       - ./data/tics0:/tmp/tiflash/data
       - ./log/tics0:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     command:
       - --config-file
-      - /config.xml
+      - /config.toml
   # tics-gtest container is for gtest cases
   tics-gtest:
     image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     volumes:
-      - ./config/config.xml:/config.xml:ro
-      - ./config/users.xml:/users.xml:ro
+      - ./config/config.toml:/config.toml:ro
+      - ./config/users.toml:/users.toml:ro
       - ./log/tics-gtest:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
@@ -95,15 +95,15 @@ services:
       - "8123:8123"
       - "9009:9009"
     volumes:
-      - ./config/tiflash.xml:/config.xml:ro
-      - ./config/tiflash-users.xml:/users.xml:ro
+      - ./config/tiflash.toml:/config.toml:ro
+      - ./config/tiflash-users.toml:/users.toml:ro
       - ./data/tiflash0:/tmp/tiflash/data
       - ./log/tiflash0:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     command:
       - --config-file
-      - /config.xml
+      - /config.toml
     restart: on-failure
   tikv-learner0:
     image: hub.pingcap.net/tiflash/tikv-learner:191025
@@ -126,10 +126,10 @@ services:
   tiflash-cluster-manager0:
     image: hub.pingcap.net/tiflash/cluster_manage:latest
     volumes:
-      - ./config/tiflash.xml:/config.xml:ro
+      - ./config/tiflash.toml:/config.toml:ro
       - ./log/tiflash-cluster-manager0:/tmp/tiflash/data/tmp
     command:
-      - /config.xml
+      - /config.toml
     depends_on:
       - "tidb0"
       - "tiflash0"
