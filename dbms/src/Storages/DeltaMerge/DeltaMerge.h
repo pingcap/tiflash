@@ -71,7 +71,12 @@ private:
     bool stable_done = false;
     bool delta_done  = false;
 
-    Handle last_handle = N_INF_HANDLE;
+    // How many times `read` is called.
+    size_t num_read             = 0;
+
+    Handle last_handle          = N_INF_HANDLE;
+    size_t last_handle_pos      = 0;
+    size_t last_handle_read_num = 0;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -143,6 +148,7 @@ public:
 
     Block read() override
     {
+        ++num_read;
         if (finished())
             return {};
         while (!finished())
@@ -181,10 +187,14 @@ public:
                 {
                     if (handle_column[i] < last_handle)
                     {
-                        throw Exception("DeltaMerge return wrong result, current handle [" + DB::toString(handle_column[i])
-                                        + "] is expected >= last handle [" + DB::toString(last_handle) + "]");
+                        throw Exception("DeltaMerge return wrong result, current handle [" + DB::toString(handle_column[i]) + "]@read["
+                                        + DB::toString(num_read) + "]@pos[" + DB::toString(i) + "] is expected >= last handle ["
+                                        + DB::toString(last_handle) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
+                                        + DB::toString(last_handle_pos) + "]");
                     }
-                    last_handle = handle_column[i];
+                    last_handle          = handle_column[i];
+                    last_handle_pos      = i;
+                    last_handle_read_num = num_read;
                 }
             }
             return result;
