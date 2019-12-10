@@ -80,7 +80,7 @@ public:
     };
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    std::vector<tipb::FieldType> getResultFieldTypes(const tipb::FieldType & void_result_ft) const;
+    std::vector<tipb::FieldType> getResultFieldTypes() const;
 
     ASTPtr getAST() const { return ast; };
 

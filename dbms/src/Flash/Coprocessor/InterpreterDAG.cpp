@@ -139,6 +139,18 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
     else
         return isAllValueCoveredByRanges<Int64>(handle_ranges, region_handle_ranges);
 }
+
+RegionException::RegionReadStatus InterpreterDAG::getRegionReadStatus(RegionPtr current_region)
+{
+    if (!current_region)
+        return RegionException::NOT_FOUND;
+    if (current_region->version() != dag.getRegionVersion() || current_region->confVer() != dag.getRegionConfVersion())
+        return RegionException::VERSION_ERROR;
+    if (current_region->isPendingRemove())
+        return RegionException::PENDING_REMOVE;
+    return RegionException::OK;
+}
+
 // the flow is the same as executeFetchcolumns
 void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
 {
@@ -171,39 +183,30 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         ColumnID cid = ci.column_id();
 
         if (cid == -1)
-            // Column ID -1 means TiDB expects no specific column, mostly it is for cases like `select count(*)`.
-            // This means we can return whatever column, we'll choose it later if no other columns are specified either.
+        {
+            // Column ID -1 return the handle column
+            if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
+            {
+                required_columns.push_back(pk_handle_col->get().name);
+                auto pair = storage->getColumns().getPhysical(pk_handle_col->get().name);
+                source_columns.push_back(pair);
+                is_ts_column.push_back(false);
+            }
+            else
+            {
+                required_columns.push_back(MutableSupport::tidb_pk_column_name);
+                auto pair = storage->getColumns().getPhysical(MutableSupport::tidb_pk_column_name);
+                source_columns.push_back(pair);
+                is_ts_column.push_back(false);
+            }
             continue;
+        }
 
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
         is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
-    }
-    if (required_columns.empty())
-    {
-        // No column specified, we choose the handle column as it will be emitted by storage read anyhow.
-        // Set `void` column field type correspondingly for further needs, i.e. encoding results.
-        if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
-        {
-            required_columns.push_back(pk_handle_col->get().name);
-            auto pair = storage->getColumns().getPhysical(pk_handle_col->get().name);
-            source_columns.push_back(pair);
-            is_ts_column.push_back(false);
-            // For PK handle, use original column info of itself.
-            dag.getDAGContext().void_result_ft = columnInfoToFieldType(pk_handle_col->get());
-        }
-        else
-        {
-            required_columns.push_back(MutableSupport::tidb_pk_column_name);
-            auto pair = storage->getColumns().getPhysical(MutableSupport::tidb_pk_column_name);
-            source_columns.push_back(pair);
-            is_ts_column.push_back(false);
-            // For implicit handle, reverse get a column info.
-            auto column_info = reverseGetColumnInfo(pair, -1, Field());
-            dag.getDAGContext().void_result_ft = columnInfoToFieldType(column_info);
-        }
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -262,12 +265,12 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
     auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
-    if (!current_region || current_region->version() != dag.getRegionVersion() || current_region->confVer() != dag.getRegionConfVersion())
+    auto region_read_status = getRegionReadStatus(current_region);
+    if (region_read_status != RegionException::OK)
     {
         std::vector<RegionID> region_ids;
         region_ids.push_back(info.region_id);
-        throw RegionException(std::move(region_ids),
-            current_region ? RegionException::RegionReadStatus::NOT_FOUND : RegionException::RegionReadStatus::VERSION_ERROR);
+        throw RegionException(std::move(region_ids), region_read_status);
     }
     if (!checkKeyRanges(dag.getKeyRanges(), table_id, /* pk_is_uint64= */ storage->getPKType() == IManageableStorage::PKType::UINT64,
             current_region->getRange()))
