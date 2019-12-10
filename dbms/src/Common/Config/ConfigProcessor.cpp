@@ -1,14 +1,14 @@
 #include "ConfigProcessor.h"
 
+#include <Common/Config/TOMLConfiguration.h>
+#include <Common/Config/cpptoml.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <sys/utsname.h>
+#include <algorithm>
 #include <cerrno>
 #include <cstring>
-#include <algorithm>
-#include <iostream>
 #include <functional>
-#include <Common/StringUtils/StringUtils.h>
-#include <Common/Config/cpptoml.h>
-#include <Common/Config/TOMLConfiguration.h>
+#include <iostream>
 
 #define PREPROCESSED_SUFFIX "-preprocessed"
 
@@ -19,19 +19,11 @@ static std::string preprocessedConfigPath(const std::string & path)
     return preprocessed_path.toString();
 }
 
-bool ConfigProcessor::isPreprocessedFile(const std::string & path)
-{
-    return endsWith(Poco::Path(path).getBaseName(), PREPROCESSED_SUFFIX);
-}
+bool ConfigProcessor::isPreprocessedFile(const std::string & path) { return endsWith(Poco::Path(path).getBaseName(), PREPROCESSED_SUFFIX); }
 
 
-ConfigProcessor::ConfigProcessor(
-    const std::string & path_,
-    bool log_to_console,
-    const Substitutions & substitutions_)
-    : path(path_)
-    , preprocessed_path(preprocessedConfigPath(path))
-    , substitutions(substitutions_)
+ConfigProcessor::ConfigProcessor(const std::string & path_, bool log_to_console, const Substitutions & substitutions_)
+    : path(path_), preprocessed_path(preprocessedConfigPath(path)), substitutions(substitutions_)
 {
     if (log_to_console && Logger::has("ConfigProcessor") == nullptr)
     {
@@ -50,10 +42,7 @@ ConfigProcessor::~ConfigProcessor()
         Logger::destroy("ConfigProcessor");
 }
 
-TOMLTablePtr ConfigProcessor::processConfig()
-{
-    return cpptoml::parse_file(path);
-}
+TOMLTablePtr ConfigProcessor::processConfig() { return cpptoml::parse_file(path); }
 
 ConfigProcessor::LoadedConfig ConfigProcessor::loadConfig()
 {
@@ -68,6 +57,6 @@ void ConfigProcessor::savePreprocessedConfig(const LoadedConfig & loaded_config)
 {
     std::ofstream out(preprocessed_path);
     cpptoml::toml_writer writer(out);
-    loaded_config.preprocessed_conf->accept(writer);
+    loaded_config.preprocessed_conf->accept(std::move(writer));
     out.close();
 }

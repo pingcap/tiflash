@@ -26,7 +26,7 @@ bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) con
             // get as it is in toml even if is table
             std::ostringstream str_out;
             cpptoml::toml_writer writer(str_out);
-            node->accept(writer);
+            node->accept(std::move(writer));
             value = str_out.str();
         }
         return true;
@@ -37,7 +37,7 @@ bool TOMLConfiguration::getRaw(const std::string & key, std::string & value) con
     }
 }
 
-bool TOMLConfiguration::find_parent(const std::string key, TOMLTablePtr & parent, std::string & child_key)
+bool TOMLConfiguration::find_parent(const std::string & key, TOMLTablePtr & parent, std::string & child_key)
 {
     auto pos = key.find_last_of('.');
 

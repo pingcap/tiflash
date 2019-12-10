@@ -14,7 +14,7 @@ int main(int argc, char ** argv)
         ConfigProcessor processor(argv[1], false);
         TOMLTablePtr document = processor.processConfig();
         cpptoml::toml_writer writer(std::cout);
-        document->accept(writer);
+        document->accept(std::move(writer));
     }
     catch (Poco::Exception & e)
     {

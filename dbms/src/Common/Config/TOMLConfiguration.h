@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include <Common/Config/cpptoml.h>
 
 #include <istream>
@@ -36,7 +35,7 @@ protected:
     /// Does nothing if the key does not exist.
 private:
     TOMLTablePtr root;
-    bool find_parent(const std::string key, TOMLTablePtr & parent, std::string & child_key);
+    bool find_parent(const std::string & key, TOMLTablePtr & parent, std::string & child_key);
 };
 
 } // namespace DB
