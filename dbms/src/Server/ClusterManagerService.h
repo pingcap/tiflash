@@ -13,7 +13,7 @@ class BackgroundProcessingPool;
 class ClusterManagerService : private boost::noncopyable
 {
 public:
-    ClusterManagerService(Context & context_, const std::string config_path);
+    ClusterManagerService(Context & context_, const std::string & config_path);
     ~ClusterManagerService();
 
 private:
