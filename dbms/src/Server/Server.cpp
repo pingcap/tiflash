@@ -109,15 +109,9 @@ struct TiFlashProxy
             const auto k = config_prefix + "." + key;
             val_map["--" + key] = config.getString(k);
         }
-        {
-            auto pd_addrs = config.getString("raft.pd_addr");
-            for (auto && c : pd_addrs)
-            {
-                if (c == ';')
-                    c = ',';
-            }
-            val_map["--pd-endpoints"] = pd_addrs;
-        }
+
+        val_map["--pd-endpoints"] = config.getString("raft.pd_addr");
+
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
         {

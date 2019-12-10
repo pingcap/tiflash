@@ -94,6 +94,7 @@ services:
       - "9000:9000"
       - "8123:8123"
       - "9009:9009"
+      - "20170:20170"
     volumes:
       - ./config/tiflash.toml:/config.toml:ro
       - ./config/tiflash-users.toml:/users.toml:ro
@@ -102,25 +103,10 @@ services:
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
       - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
-    command:
-      - --config-file
-      - /config.toml
-    restart: on-failure
-  tikv-learner0:
-    image: hub.pingcap.net/tiflash/tikv-learner:191025
-    ports:
-      - "20170:20170"
-    volumes:
       - ./config/tikv-learner.toml:/tikv.toml:ro
       - ./data/tikv-learner0:/data
       - ./log/tikv-learner0:/log
     command:
-      - --addr=0.0.0.0:20170
-      - --advertise-addr=tikv-learner0:20170
-      - --pd=pd0:2379
-      - --config=/tikv.toml
-      - --data-dir=/data
-      - --log-file=/log/tikv.log
-    depends_on:
-      - "tiflash0"
+      - --config-file
+      - /config.toml
     restart: on-failure

@@ -16,6 +16,12 @@ interserver_http_port = 9009
 		update_rule_interval = 5
 		master_ttl = 60
 		cluster_manager_path = "/tics/flash_cluster_manager"
+	[proxy]
+        addr = "0.0.0.0:20170"
+        advertise-addr = "tiflash0:20170"
+        data-dir = "/data"
+        config = "/tikv.toml"
+        log-file = "/log/tikv.log"
 [logger]
 	count = 10
 	errorlog = "/tmp/tiflash/log/error.log"
