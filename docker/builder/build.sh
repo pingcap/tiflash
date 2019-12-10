@@ -14,6 +14,11 @@ fi
 
 set -xe
 
+install_dir="$SRCPATH/docker/builder/tics"
+if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
+
+cp -r /flash_cluster_manager "$install_dir"
+
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
   rm -rf cpp/kvproto
@@ -36,8 +41,6 @@ cmake "$SRCPATH" \
     -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE
 make -j $NPROC
 
-install_dir="$SRCPATH/docker/builder/tics"
-if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
 cp -f "$build_dir/dbms/src/Server/theflash" "$install_dir/theflash"
 
 ldd "$build_dir/dbms/src/Server/theflash" | grep '/' | grep '=>' | \

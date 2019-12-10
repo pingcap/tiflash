@@ -101,6 +101,7 @@ services:
       - ./log/tiflash0:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
+      - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
     command:
       - --config-file
       - /config.toml
@@ -121,16 +122,5 @@ services:
       - --data-dir=/data
       - --log-file=/log/tikv.log
     depends_on:
-      - "tiflash0"
-    restart: on-failure
-  tiflash-cluster-manager0:
-    image: hub.pingcap.net/tiflash/cluster_manage:latest
-    volumes:
-      - ./config/tiflash.toml:/config.toml:ro
-      - ./log/tiflash-cluster-manager0:/tmp/tiflash/data/tmp
-    command:
-      - /config.toml
-    depends_on:
-      - "tidb0"
       - "tiflash0"
     restart: on-failure

@@ -13,7 +13,7 @@ namespace DB
 {
 
 const std::string CLUSTER_MANAGER_PATH_KEY = "flash.flash_cluster.cluster_manager_path";
-const std::string BIN_NAME = "flash_cluster_manager/flash_cluster_manager";
+const std::string BIN_NAME = "flash_cluster_manager";
 const std::string TASK_INTERVAL_KEY = "flash.flash_cluster.update_rule_interval";
 
 constexpr long MILLISECOND = 1000;
@@ -36,7 +36,7 @@ ClusterManagerService::ClusterManagerService(DB::Context & context_, const std::
         return;
     }
 
-    auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY, ".") + Poco::Path::separator() + BIN_NAME;
+    auto bin_path = conf.getString(CLUSTER_MANAGER_PATH_KEY) + Poco::Path::separator() + BIN_NAME;
     auto task_interval = conf.getInt(TASK_INTERVAL_KEY, 10);
 
     if (!Poco::File(bin_path).exists())

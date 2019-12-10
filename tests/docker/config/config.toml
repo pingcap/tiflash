@@ -8,13 +8,6 @@ listen_host = "0.0.0.0"
 tcp_port = 9000
 http_port = 8123
 interserver_http_port = 9009
-[flash]
-	tidb_status_addr = "tidb0:10080"
-	service_addr = "0.0.0.0:3930"
-	[flash.flash_cluster]
-		refresh_interval = 20
-		update_rule_interval = 5
-		master_ttl = 60
 [logger]
 	count = 10
 	errorlog = "/tmp/tiflash/log/error.log"
@@ -23,3 +16,4 @@ interserver_http_port = 9009
 	level = "trace"
 [application]
 	runAsDaemon = true
+[raft]
