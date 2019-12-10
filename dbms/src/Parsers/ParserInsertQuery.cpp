@@ -28,9 +28,11 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     // TODO: support partition in sub query
 
-    ParserKeyword s_insert_into("INSERT INTO");
-    ParserKeyword s_upsert_into("UPSERT INTO");
-    ParserKeyword s_import_into("IMPORT INTO");
+    ParserKeyword s_insert_into("INSERT");
+    ParserKeyword s_upsert_into("UPSERT");
+    ParserKeyword s_import_into("IMPORT");
+    ParserKeyword s_delete("DELETE");
+    ParserKeyword s_into("INTO");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_partition("PARTITION");
     ParserKeyword s_function("FUNCTION");
@@ -59,6 +61,11 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     bool is_upsert = s_upsert_into.ignore(pos, expected);
     bool is_import = s_import_into.ignore(pos, expected);
     if (!is_insert && !is_upsert && !is_import)
+        return false;
+
+    bool is_delete = s_delete.ignore(pos, expected);
+
+    if (!s_into.ignore(pos, expected))
         return false;
 
     s_table.ignore(pos, expected);
@@ -170,6 +177,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->end = end;
     query->is_import = is_import;
     query->is_upsert = is_upsert;
+    query->is_delete = is_delete;
 
     if (columns)
         query->children.push_back(columns);

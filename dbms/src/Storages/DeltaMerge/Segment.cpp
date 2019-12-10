@@ -63,8 +63,6 @@ namespace DM
 const Segment::Version Segment::CURRENT_VERSION = 1;
 const static size_t    SEGMENT_BUFFER_SIZE      = 128; // More than enough.
 
-const static bool FORCE_SPLIT_PHYSICAL = false;
-
 DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
                              const BlockInputStreamPtr & input_stream,
                              UInt64                      file_id,
@@ -428,7 +426,9 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
 
     SegmentPair res;
 
-    if (FORCE_SPLIT_PHYSICAL || segment_snap.stable->getChunks() <= 3 || segment_snap.delta->num_rows() > segment_snap.stable->getRows())
+    if (!dm_context.enable_logical_split         //
+        || segment_snap.stable->getChunks() <= 3 //
+        || segment_snap.delta->num_rows() > segment_snap.stable->getRows())
         res = doSplitPhysical(dm_context, segment_snap, storage_snap, wbs);
     else
     {

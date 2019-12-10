@@ -35,6 +35,7 @@ public:
 
     bool is_import;
     bool is_upsert;
+    bool is_delete;
 
     /** Get the text that identifies this element. */
     String getID() const override { return "InsertQuery_" + database + "_" + table; };

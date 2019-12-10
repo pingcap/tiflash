@@ -149,7 +149,7 @@ void StorageDeltaMerge::drop()
     }
 }
 
-Block StorageDeltaMerge::buildInsertBlock(bool is_import, const Block & old_block)
+Block StorageDeltaMerge::buildInsertBlock(bool is_import, bool is_delete, const Block & old_block)
 {
     Block block = old_block;
 
@@ -211,9 +211,10 @@ Block StorageDeltaMerge::buildInsertBlock(bool is_import, const Block & old_bloc
         auto column = TAG_COLUMN_TYPE->createColumn();
         auto & column_data = typeid_cast<ColumnVector<UInt8> &>(*column).getData();
         column_data.resize(rows);
+        UInt8 tag = is_delete ? 1 : 0;
         for (size_t i = 0; i < rows; ++i)
         {
-            column_data[i] = 0;
+            column_data[i] = tag;
         }
 
         addColumnToBlock(block, TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE, std::move(column));
@@ -280,7 +281,9 @@ private:
 BlockOutputStreamPtr StorageDeltaMerge::write(const ASTPtr & query, const Settings & settings)
 {
     auto & insert_query = typeid_cast<const ASTInsertQuery &>(*query);
-    BlockDecorator decorator = std::bind(&StorageDeltaMerge::buildInsertBlock, this, insert_query.is_import, std::placeholders::_1);
+    auto decorator = [&](const Block & block) { //
+        return this->buildInsertBlock(insert_query.is_import, insert_query.is_delete, block);
+    };
     return std::make_shared<DMBlockOutputStream>(store, decorator, global_context, settings);
 }
 

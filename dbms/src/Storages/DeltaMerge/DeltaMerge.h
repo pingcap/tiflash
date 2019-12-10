@@ -24,7 +24,6 @@ template <class DeltaValueSpace, class IndexIterator>
 class DeltaMergeBlockInputStream final : public IBlockInputStream, Allocator<false>
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
-    //    static constexpr size_t COPY_ROWS_LIMIT = 2048;
 
 private:
     using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
@@ -39,13 +38,11 @@ private:
     };
 
     SkippableBlockInputStreamPtr stable_input_stream;
-    //    ChunkBlockInputStreamPtr stable_input_stream;
-    //    ChunkBlockInputStream *  stable_input_stream_raw_ptr;
 
     // How many rows we need to skip before writing stable rows into output.
     // == 0: None
-    // > 0 : do skip
-    // < 0 : some rows are filtered out by index, should not write into output.
+    // > 0 : some rows are ignored by delta tree (index), should not write into output.
+    // < 0 : some rows are filtered out by stable filter, should not write into output.
     ssize_t stable_skip = 0;
 
     DeltaValueSpacePtr delta_value_space;
@@ -73,6 +70,13 @@ private:
 
     bool stable_done = false;
     bool delta_done  = false;
+
+    // How many times `read` is called.
+    size_t num_read             = 0;
+
+    Handle last_handle          = N_INF_HANDLE;
+    size_t last_handle_pos      = 0;
+    size_t last_handle_read_num = 0;
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -144,6 +148,7 @@ public:
 
     Block read() override
     {
+        ++num_read;
         if (finished())
             return {};
         while (!finished())
@@ -174,7 +179,25 @@ public:
             if (limit == max_block_size)
                 continue;
 
-            return header.cloneWithColumns(std::move(columns));
+            auto result = header.cloneWithColumns(std::move(columns));
+            if constexpr (DM_RUN_CHECK)
+            {
+                auto & handle_column = toColumnVectorData<Handle>(result.getByPosition(0).column);
+                for (size_t i = 0; i < handle_column.size(); ++i)
+                {
+                    if (handle_column[i] < last_handle)
+                    {
+                        throw Exception("DeltaMerge return wrong result, current handle [" + DB::toString(handle_column[i]) + "]@read["
+                                        + DB::toString(num_read) + "]@pos[" + DB::toString(i) + "] is expected >= last handle ["
+                                        + DB::toString(last_handle) + "]@read[" + DB::toString(last_handle_read_num) + "]@pos["
+                                        + DB::toString(last_handle_pos) + "]");
+                    }
+                    last_handle          = handle_column[i];
+                    last_handle_pos      = i;
+                    last_handle_read_num = num_read;
+                }
+            }
+            return result;
         }
         return {};
     }
@@ -235,8 +258,6 @@ private:
         for (size_t i = 0; i < num_columns; ++i)
         {
             columns[i] = header.safeGetByPosition(i).column->cloneEmpty();
-            // TODO: Should we do reserve?
-            // columns[i]->reserve(max_block_size);
         }
     }
 

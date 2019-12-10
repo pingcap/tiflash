@@ -715,12 +715,18 @@ DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_read
         auto & chunk = chunks[chunk_index];
         if (chunk.isDeleteRange() || !chunk.getRows())
             continue;
+#if 0
+        // FIXME: Disable filter since we need to use all values to build DeltaTree.
         auto & handle_meta            = chunk.getColumn(EXTRA_HANDLE_COLUMN_ID);
         auto [min_handle, max_handle] = handle_meta.minmax->getIntMinMax(0);
         if (range.intersect(min_handle, max_handle))
             mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
         else
             mvs->addBlock({}, chunk.getRows());
+#else
+        (void) range;
+        mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
+#endif
 
         already_read_rows += chunk.getRows();
         if (already_read_rows >= rows_limit)
