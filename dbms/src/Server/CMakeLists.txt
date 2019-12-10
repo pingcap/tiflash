@@ -24,7 +24,8 @@ add_library (clickhouse-server-lib
     RootRequestHandler.cpp
     Server.cpp
     StatusFile.cpp
-    TCPHandler.cpp)
+    TCPHandler.cpp
+    ClusterManagerService.cpp)
 
 target_link_libraries (clickhouse-server-lib clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
 target_include_directories (clickhouse-server-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)

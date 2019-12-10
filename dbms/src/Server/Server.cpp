@@ -40,6 +40,7 @@
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
+#include "ClusterManagerService.h"
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
@@ -732,6 +733,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         SessionCleaner session_cleaner(*global_context);
+        ClusterManagerService clusterMgrSvc(*global_context, config_path);
 
         waitForTerminationRequest();
     }
