@@ -72,10 +72,10 @@ public:
     String chunkStatPath() { return path() + "/chunk"; }
     // Do not gc me.
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
-    String colDataPath(String col_name) { return path() + "/" + col_name + ".dat"; }
-    String colIndexPath(String col_name) { return path() + "/" + col_name + ".idx"; }
-    String colEdgePath(String col_name) { return path() + "/" + col_name + ".edge"; }
-    String colMarkPath(String col_name) { return path() + "/" + col_name + ".mrk"; }
+    String colDataPath(String file_name) { return path() + "/" + file_name + ".dat"; }
+    String colIndexPath(String file_name) { return path() + "/" + file_name + ".idx"; }
+    String colEdgePath(String file_name) { return path() + "/" + file_name + ".edge"; }
+    String colMarkPath(String file_name) { return path() + "/" + file_name + ".mrk"; }
 
     const ColumnStat & getColumnStat(ColId col_id)
     {

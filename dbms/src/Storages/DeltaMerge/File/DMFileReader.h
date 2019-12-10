@@ -22,7 +22,7 @@ public:
     {
         Stream(DMFileReader & reader, //
                ColId          col_id,
-               String         col_name,
+               String         name,
                size_t         aio_threshold,
                size_t         max_read_buffer_size,
                Logger *       log);
@@ -33,7 +33,7 @@ public:
         std::unique_ptr<CompressedReadBufferFromFile> buf;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
-    using ColumnStreams = std::map<ColId, StreamPtr>;
+    using ColumnStreams = std::map<String, StreamPtr>;
 
     DMFileReader(bool                  enable_clean_read_,
                  UInt64                max_data_version_,
@@ -57,6 +57,11 @@ public:
 
 private:
     bool shouldSeek(size_t chunk_id);
+
+    String getStreamName(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
 
 private:
     bool          enable_clean_read;

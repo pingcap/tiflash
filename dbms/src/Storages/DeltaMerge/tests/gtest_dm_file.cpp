@@ -85,10 +85,12 @@ try
 
     {
         // Prepare for write
-        Block block  = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 2, false);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 2, num_rows_write, false);
         auto  stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
         stream->writePrefix();
-        stream->write(block, 0);
+        stream->write(block1, 0);
+        stream->write(block2, 0);
         stream->writeSuffix();
     }
 
@@ -124,7 +126,7 @@ try
         stream->readSuffix();
         ASSERT_EQ(num_rows_read, num_rows_write);
     }
-}
+} // namespace tests
 CATCH
 
 TEST_F(DMFile_Test, Nullable)
@@ -145,7 +147,11 @@ try
 
         ColumnWithTypeAndName nullable_col({}, DataTypeFactory::instance().get("Nullable(Int32)"), "i32_null", 2);
         auto                  col = nullable_col.type->createColumn();
-        for (int i = 0; i < 128; i++)
+        for (int i = 0; i < 64; i++)
+        {
+            col->insert(toField(i));
+        }
+        for (int i = 64; i < 128; i++)
         {
             col->insertDefault();
         }
@@ -184,10 +190,14 @@ try
                 }
                 else if (itr.column_id == 2)
                 {
-                    const auto col = typeid_cast<const ColumnNullable *>(c.get());
-                    for (size_t i = 0; i < c->size(); i++)
+                    const auto col    = typeid_cast<const ColumnNullable *>(c.get());
+                    auto       nested = col->getNestedColumnPtr();
+                    for (size_t i = 0; i < col->size(); i++)
                     {
-                        EXPECT_EQ(col->isNullAt(i), true);
+                        if (i < 64)
+                            EXPECT_EQ(nested->getInt(i), Int64(i));
+                        else
+                            EXPECT_EQ(col->isNullAt(i), true);
                     }
                 }
             }

@@ -23,17 +23,17 @@ public:
     struct Stream
     {
         Stream(const DMFilePtr &   dmfile,
-               String              col_name,
+               String              stream_name,
                const DataTypePtr & type,
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(col_name), 0, 0, max_compress_block_size)),
+            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(stream_name), 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(dmfile->colMarkPath(col_name))
+              mark_file(dmfile->colMarkPath(stream_name))
         {
         }
 
@@ -72,10 +72,15 @@ public:
     void finalize();
 
 private:
-    void writeColumn(ColId col_id, String col_name, const IDataType & type, const IColumn & column);
-    void finalizeColumn(String col_name, const IDataType & type);
+    void writeColumn(ColId col_id, const IDataType & type, const IColumn & column);
+    void finalizeColumn(ColId col_id, const IDataType & type);
 
-    void addStreams(String name, DataTypePtr type, bool do_index);
+    void addStreams(ColId col_id, DataTypePtr type, bool do_index);
+
+    String getStreamName(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
 
 private:
     DMFilePtr           dmfile;
