@@ -129,7 +129,147 @@ try
 } // namespace tests
 CATCH
 
-TEST_F(DMFile_Test, Nullable)
+TEST_F(DMFile_Test, NumberTypes)
+try
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+    // Prepare columns
+    ColumnDefine i64_col(2, "i64", DataTypeFactory::instance().get("Int64"));
+    ColumnDefine f64_col(3, "f64", DataTypeFactory::instance().get("Float64"));
+    cols.push_back(i64_col);
+    cols.push_back(f64_col);
+
+    reload(cols);
+
+    {
+        // Prepare write
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+
+        auto col = i64_col.type->createColumn();
+        for (int i = 0; i < 128; i++)
+        {
+            col->insert(toField(Int64(i)));
+        }
+        ColumnWithTypeAndName i64(std::move(col), i64_col.type, i64_col.name, i64_col.id);
+
+        col = f64_col.type->createColumn();
+        for (int i = 0; i < 128; i++)
+        {
+            col->insert(toField(Float64(0.125)));
+        }
+        ColumnWithTypeAndName f64(std::move(col), f64_col.type, f64_col.name, f64_col.id);
+
+        block.insert(i64);
+        block.insert(f64);
+
+        auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        stream->writePrefix();
+        stream->write(block, 0);
+        stream->writeSuffix();
+    }
+
+    {
+        // Test Read
+        auto stream = std::make_unique<DMFileBlockInputStream>(dbContext(), //
+                                                               std::numeric_limits<UInt64>::max(),
+                                                               false,
+                                                               dmContext().hash_salt,
+                                                               dm_file,
+                                                               cols,
+                                                               HandleRange::newAll(),
+                                                               RSOperatorPtr{},
+                                                               IdSetPtr{});
+
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == "i64")
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        EXPECT_EQ(c->getInt(i), Int64(i));
+                    }
+                }
+                else if (itr.name == "f64")
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        Field value;
+                        c->get(i, value);
+                        Float64 v = value.get<Float64>();
+                        EXPECT_EQ(v, 0.125);
+                    }
+                }
+            }
+        }
+    }
+}
+CATCH
+
+TEST_F(DMFile_Test, StringType)
+{
+    auto cols = DMTestEnv::getDefaultColumns();
+    // Prepare columns
+    ColumnDefine fixed_str_col(2, "str", DataTypeFactory::instance().get("FixedString(5)"));
+    cols.push_back(fixed_str_col);
+
+    reload(cols);
+
+    {
+        // Prepare write
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, 128, false);
+
+        auto col = fixed_str_col.type->createColumn();
+        for (int i = 0; i < 128; i++)
+        {
+            col->insert(toField(String("hello")));
+        }
+        ColumnWithTypeAndName str(std::move(col), fixed_str_col.type, fixed_str_col.name, fixed_str_col.id);
+
+        block.insert(str);
+
+        auto stream = std::make_unique<DMFileBlockOutputStream>(dbContext(), dm_file, cols);
+        stream->writePrefix();
+        stream->write(block, 0);
+        stream->writeSuffix();
+    }
+
+    {
+        // Test Read
+        auto stream = std::make_unique<DMFileBlockInputStream>(dbContext(), //
+                                                               std::numeric_limits<UInt64>::max(),
+                                                               false,
+                                                               dmContext().hash_salt,
+                                                               dm_file,
+                                                               cols,
+                                                               HandleRange::newAll(),
+                                                               RSOperatorPtr{},
+                                                               IdSetPtr{});
+
+        stream->readPrefix();
+        while (Block in = stream->read())
+        {
+            for (auto itr : in)
+            {
+                auto c = itr.column;
+                if (itr.name == "str")
+                {
+                    for (size_t i = 0; i < c->size(); i++)
+                    {
+                        Field value;
+                        c->get(i, value);
+                        EXPECT_EQ(value.get<String>(), "hello");
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_F(DMFile_Test, NullableType)
 try
 {
     auto cols = DMTestEnv::getDefaultColumns();
