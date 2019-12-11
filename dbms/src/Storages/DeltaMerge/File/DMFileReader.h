@@ -58,10 +58,6 @@ public:
 private:
     bool shouldSeek(size_t chunk_id);
 
-    String getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
-    {
-        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
-    }
 
 private:
     bool          enable_clean_read;

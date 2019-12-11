@@ -105,6 +105,11 @@ public:
     const ColumnStats & getColumnStats() { return column_stats; }
     Status              getStatus() { return status; }
 
+    static String getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
+
 private:
     DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Status status_, Logger * log_)
         : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), status(status_), log(log_)

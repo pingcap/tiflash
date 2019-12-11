@@ -128,7 +128,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
     for (auto & cd : read_columns)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            String stream_name = getFileNameBase(cd.id, substream);
+            String stream_name = DMFile::getFileNameBase(cd.id, substream);
             auto   stream      = std::make_unique<Stream>(*this, //
                                                    cd.id,
                                                    stream_name,
@@ -231,7 +231,7 @@ Block DMFileReader::read()
         }
         else
         {
-            String stream_name = getFileNameBase(cd.id);
+            String stream_name = DMFile::getFileNameBase(cd.id);
             auto & stream      = column_streams.at(stream_name);
             if (shouldSeek(start_chunk_id) || skip_chunks_by_column[i] > 0)
             {
@@ -242,7 +242,7 @@ Block DMFileReader::read()
             auto column = cd.type->createColumn();
             cd.type->deserializeBinaryBulkWithMultipleStreams(*column, //
                                                               [&](const IDataType::SubstreamPath & substream) {
-                                                                  String name   = getFileNameBase(cd.id, substream);
+                                                                  String name   = DMFile::getFileNameBase(cd.id, substream);
                                                                   auto & stream = column_streams.at(name);
                                                                   return stream->buf.get();
                                                               },

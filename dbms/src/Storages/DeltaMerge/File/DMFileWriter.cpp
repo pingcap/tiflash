@@ -35,7 +35,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream_path) {
-        String stream_name = getFileNameBase(col_id, substream_path);
+        String stream_name = DMFile::getFileNameBase(col_id, substream_path);
         auto   stream      = std::make_unique<Stream>(dmfile, //
                                                stream_name,
                                                type,
@@ -88,7 +88,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
     type.enumerateStreams(
         [&](const IDataType::SubstreamPath & substream) {
-            String name   = getFileNameBase(col_id, substream);
+            String name   = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(name);
             if (stream->minmaxes)
                 stream->minmaxes->addChunk(column, nullptr);
@@ -108,7 +108,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
     type.serializeBinaryBulkWithMultipleStreams(column, //
                                                 [&](const IDataType::SubstreamPath & substream) {
-                                                    String stream_name = getFileNameBase(col_id, substream);
+                                                    String stream_name = DMFile::getFileNameBase(col_id, substream);
                                                     auto & stream      = column_streams.at(stream_name);
                                                     return &(stream->original_hashing);
                                                 },
@@ -119,7 +119,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
     type.enumerateStreams(
         [&](const IDataType::SubstreamPath & substream) {
-            String name   = getFileNameBase(col_id, substream);
+            String name   = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(name);
             if (wal_mode)
                 stream->flush();
@@ -135,7 +135,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 {
     auto callback = [&](const IDataType::SubstreamPath & substream) {
-        String stream_name = getFileNameBase(col_id, substream);
+        String stream_name = DMFile::getFileNameBase(col_id, substream);
         auto & stream      = column_streams.at(stream_name);
         stream->flush();
 
