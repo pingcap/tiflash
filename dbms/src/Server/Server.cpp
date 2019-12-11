@@ -297,7 +297,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (!persisted_cache_path.empty())
         global_context->setPersistedCache(persisted_cache_size, persisted_cache_path);
 
-    bool use_L0_opt = config().getBool("l0_optimize", true);
+    bool use_L0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_L0_opt);
 
     /// Load global settings from default_profile and system_profile.
