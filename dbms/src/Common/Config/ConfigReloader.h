@@ -9,6 +9,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <list>
+#include <set>
 
 
 namespace Poco { class Logger; }
@@ -32,8 +33,6 @@ public:
       */
     ConfigReloader(
             const std::string & path,
-            const std::string & include_from_path,
-            zkutil::ZooKeeperNodeCache && zk_node_cache,
             Updater && updater,
             bool already_loaded);
 
@@ -43,12 +42,12 @@ public:
     void start();
 
     /// Reload immediately. For SYSTEM RELOAD CONFIG query.
-    void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true, /* fallback_to_preprocessed */ false); }
+    void reload() { reloadIfNewer(/* force */ true, /* throw_on_error */ true); }
 
 private:
     void run();
 
-    void reloadIfNewer(bool force, bool throw_on_error, bool fallback_to_preprocessed);
+    void reloadIfNewer(bool force, bool throw_on_error);
 
     struct FileWithTimestamp;
 
@@ -69,9 +68,7 @@ private:
     Poco::Logger * log = &Logger::get("ConfigReloader");
 
     std::string path;
-    std::string include_from_path;
     FilesChangesTracker files;
-    zkutil::ZooKeeperNodeCache zk_node_cache;
 
     Updater updater;
 
