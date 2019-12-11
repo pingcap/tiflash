@@ -19,7 +19,7 @@ namespace tests
 class DiskValueSpace_test : public ::testing::Test
 {
 public:
-    DiskValueSpace_test() : name("t"), path("./" + name), storage_pool() {}
+    DiskValueSpace_test() : name("tmp"), path("./" + name), storage_pool() {}
 
 private:
     void dropDataInDisk()
@@ -57,7 +57,9 @@ protected:
                                                  context.getSettingsRef().dm_segment_limit_rows,
                                                  context.getSettingsRef().dm_segment_delta_limit_rows,
                                                  context.getSettingsRef().dm_segment_delta_cache_limit_rows,
-                                                 context.getSettingsRef().dm_segment_stable_chunk_rows);
+                                                 context.getSettingsRef().dm_segment_stable_chunk_rows,
+                                                 context.getSettingsRef().dm_enable_logical_split
+                                                 );
     }
 
 protected:
