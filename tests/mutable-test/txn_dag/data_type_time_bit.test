@@ -13,12 +13,12 @@
 => DBGInvoke __put_region(4, 0, 100, default, test)
 => DBGInvoke __raft_insert_row(default, test, 4, 50, 100, 98, 9572888)
 
-=> DBGInvoke dag('select * from default.test',4,'arrow') " --dag_planner="optree
+=> DBGInvoke dag('select * from default.test',4,'arrow') 
 ┌─col_1─┬─col_2─┬───col_3─┐
 │   100 │    98 │ 9572888 │
 └───────┴───────┴─────────┘
 
-=> DBGInvoke dag('select * from default.test',4) " --dag_planner="optree
+=> DBGInvoke dag('select * from default.test',4) 
 ┌─col_1─┬─col_2─┬───col_3─┐
 │   100 │    98 │ 9572888 │
 └───────┴───────┴─────────┘
