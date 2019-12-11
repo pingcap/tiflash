@@ -1,8 +1,8 @@
 build:
-	docker run --rm -v $(realpath ../..):/tics hub.pingcap.net/tiflash/tics-builder /tics/docker/builder/build.sh
+	docker run --rm -v $(realpath ../..):/tics hub.pingcap.net/tiflash/tics-builder:with-proxy-cluster_manager /tics/docker/builder/build.sh
 
 pull:
-	docker pull hub.pingcap.net/tiflash/tics-builder
+	docker pull hub.pingcap.net/tiflash/tics-builder:with-proxy-cluster_manager
 
 push:
 	docker push hub.pingcap.net/tiflash/tics-builder
