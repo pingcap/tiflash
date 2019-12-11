@@ -12,14 +12,14 @@ namespace DM
 
 DMFileReader::Stream::Stream(DMFileReader & reader, //
                              ColId          col_id,
-                             String         name,
+                             String         file_name_base,
                              size_t         aio_threshold,
                              size_t         max_read_buffer_size,
                              Logger *       log)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
 {
-    String mark_path = reader.dmfile->colMarkPath(name);
-    String data_path = reader.dmfile->colDataPath(name);
+    String mark_path = reader.dmfile->colMarkPath(file_name_base);
+    String data_path = reader.dmfile->colDataPath(file_name_base);
 
     auto mark_load = [&]() -> MarksInCompressedFilePtr {
         auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getChunks());
@@ -128,7 +128,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
     for (auto & cd : read_columns)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
-            String stream_name = getStreamName(cd.id, substream);
+            String stream_name = getFileNameBase(cd.id, substream);
             auto   stream      = std::make_unique<Stream>(*this, //
                                                    cd.id,
                                                    stream_name,
@@ -231,7 +231,7 @@ Block DMFileReader::read()
         }
         else
         {
-            String stream_name = getStreamName(cd.id);
+            String stream_name = getFileNameBase(cd.id);
             auto & stream      = column_streams.at(stream_name);
             if (shouldSeek(start_chunk_id) || skip_chunks_by_column[i] > 0)
             {
@@ -242,7 +242,7 @@ Block DMFileReader::read()
             auto column = cd.type->createColumn();
             cd.type->deserializeBinaryBulkWithMultipleStreams(*column, //
                                                               [&](const IDataType::SubstreamPath & substream) {
-                                                                  String name   = getStreamName(cd.id, substream);
+                                                                  String name   = getFileNameBase(cd.id, substream);
                                                                   auto & stream = column_streams.at(name);
                                                                   return stream->buf.get();
                                                               },

@@ -22,7 +22,7 @@ public:
     {
         Stream(DMFileReader & reader, //
                ColId          col_id,
-               String         name,
+               String         file_name_base,
                size_t         aio_threshold,
                size_t         max_read_buffer_size,
                Logger *       log);
@@ -58,7 +58,7 @@ public:
 private:
     bool shouldSeek(size_t chunk_id);
 
-    String getStreamName(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    String getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
     {
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
