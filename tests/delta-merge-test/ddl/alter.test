@@ -1,3 +1,6 @@
+#TODO: enable ddl tests for DeltaMerge
+#RETURN
+
 >> drop table if exists dm_test
 
 ## Prepare table

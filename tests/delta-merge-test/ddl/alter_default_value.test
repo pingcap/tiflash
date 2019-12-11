@@ -1,3 +1,6 @@
+#TODO: enable ddl tests for DeltaMerge
+#RETURN
+
 # modify column default value
 
 >> drop table if exists dm_test
