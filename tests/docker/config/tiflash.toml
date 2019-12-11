@@ -16,7 +16,7 @@ interserver_http_port = 9009
 		update_rule_interval = 5
 		master_ttl = 60
 		cluster_manager_path = "/tics/flash_cluster_manager"
-	[proxy]
+	[flash.proxy]
         addr = "0.0.0.0:20170"
         advertise-addr = "tiflash0:20170"
         data-dir = "/data"
@@ -32,4 +32,4 @@ interserver_http_port = 9009
 	runAsDaemon = true
 
 [raft]
-    pd_addr = "pd0:2379"
+	pd_addr = "pd0:2379"
