@@ -122,24 +122,34 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
     if (isInOrGlobalInOperator(func_name))
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
-        throw Exception("Function " + func_name + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
+        ss << exprToString(expr.children(0), input_col) << " " << func_name << " (";
+        bool first = true;
+        for (int i = 1; i < expr.children_size(); i++)
+        {
+            String s = exprToString(expr.children(i), input_col);
+            if (first)
+                first = false;
+            else
+                ss << ", ";
+            ss << s;
+        }
+        ss << ")";
     }
-    ss << func_name << "(";
-    bool first = true;
-    for (const tipb::Expr & child : expr.children())
+    else
     {
-        String s = exprToString(child, input_col);
-        if (first)
+        ss << func_name << "(";
+        bool first = true;
+        for (const tipb::Expr & child : expr.children())
         {
-            first = false;
+            String s = exprToString(child, input_col);
+            if (first)
+                first = false;
+            else
+                ss << ", ";
+            ss << s;
         }
-        else
-        {
-            ss << ", ";
-        }
-        ss << s;
+        ss << ")";
     }
-    ss << ") ";
     return ss.str();
 }
 
