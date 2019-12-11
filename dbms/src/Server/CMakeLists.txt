@@ -24,7 +24,13 @@ add_library (clickhouse-server-lib
     RootRequestHandler.cpp
     Server.cpp
     StatusFile.cpp
-    TCPHandler.cpp)
+    TCPHandler.cpp
+    ClusterManagerService.cpp)
+
+set(TIFLASH_PROXY_LIB_PATH ${ClickHouse_SOURCE_DIR}/libs/libtiflash-proxy)
+set(TIFLASH_PROXY_LIBRARY "TIFLASH_PROXY_LIBRARY-NOTFOUND")
+find_library(TIFLASH_PROXY_LIBRARY NAMES tiflash_proxy HINTS ${TIFLASH_PROXY_LIB_PATH})
+target_link_libraries(clickhouse-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
 target_link_libraries (clickhouse-server-lib clickhouse_common_io daemon clickhouse_storages_system clickhouse_functions clickhouse_aggregate_functions clickhouse_table_functions)
 target_include_directories (clickhouse-server-lib PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)

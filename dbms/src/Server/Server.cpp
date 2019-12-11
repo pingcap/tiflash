@@ -36,6 +36,7 @@
 #include <sys/resource.h>
 #include <ext/scope_guard.h>
 #include <memory>
+#include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
 #include "MetricsTransmitter.h"
 #include "StatusFile.h"
@@ -86,6 +87,43 @@ void Server::initialize(Poco::Util::Application & self)
 
 std::string Server::getDefaultCorePath() const { return getCanonicalPath(config().getString("path")) + "cores"; }
 
+extern "C" void run_tiflash_proxy(int, const char **);
+extern "C" void print_tiflash_proxy_version();
+
+struct TiFlashProxy
+{
+    static const std::string config_prefix;
+    std::vector<const char *> args;
+    std::unordered_map<std::string, std::string> val_map;
+    bool inited = false;
+
+    TiFlashProxy(Poco::Util::LayeredConfiguration & config)
+    {
+        if (!config.has(config_prefix))
+            return;
+
+        Poco::Util::AbstractConfiguration::Keys keys;
+        config.keys(config_prefix, keys);
+        for (const auto & key : keys)
+        {
+            const auto k = config_prefix + "." + key;
+            val_map["--" + key] = config.getString(k);
+        }
+
+        val_map["--pd-endpoints"] = config.getString("raft.pd_addr");
+
+        args.push_back("TiFlash Proxy");
+        for (const auto & v : val_map)
+        {
+            args.push_back(v.first.data());
+            args.push_back(v.second.data());
+        }
+        inited = true;
+    }
+};
+
+const std::string TiFlashProxy::config_prefix = "flash.proxy";
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     Logger * log = &logger();
@@ -105,17 +143,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
     bool has_zookeeper = config().has("zookeeper");
-
-    zkutil::ZooKeeperNodeCache main_config_zk_node_cache([&] { return global_context->getZooKeeper(); });
-    if (loaded_config.has_zk_includes)
-    {
-        auto old_configuration = loaded_config.configuration;
-        ConfigProcessor config_processor(config_path);
-        loaded_config = config_processor.loadConfigWithZooKeeperIncludes(main_config_zk_node_cache, /* fallback_to_preprocessed = */ true);
-        config_processor.savePreprocessedConfig(loaded_config);
-        config().removeConfiguration(old_configuration.get());
-        config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
-    }
 
     std::vector<String> all_fast_path;
     if (config().has("fast_path"))
@@ -260,10 +287,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
     /// Initialize main config reloader.
-    std::string include_from_path = config().getString("include_from", "/etc/metrika.xml");
     auto main_config_reloader = std::make_unique<ConfigReloader>(config_path,
-        include_from_path,
-        std::move(main_config_zk_node_cache),
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
             global_context->setClustersConfig(config);
@@ -282,8 +306,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             users_config_path = config_dir + users_config_path;
     }
     auto users_config_reloader = std::make_unique<ConfigReloader>(users_config_path,
-        include_from_path,
-        zkutil::ZooKeeperNodeCache([&] { return global_context->getZooKeeper(); }),
         [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
         /* already_loaded = */ false);
 
@@ -312,7 +334,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (!persisted_cache_path.empty())
         global_context->setPersistedCache(persisted_cache_size, persisted_cache_path);
 
-    bool use_L0_opt = config().getBool("l0_optimize", true);
+    bool use_L0_opt = config().getBool("l0_optimize", false);
     global_context->setUseL0Opt(use_L0_opt);
 
     /// Load global settings from default_profile and system_profile.
@@ -479,6 +501,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->shutdownRaftService();
             LOG_INFO(log, "Shut down raft service");
         }
+    });
+
+    TiFlashProxy proxy(config());
+
+    auto proxy_runner = std::thread([&proxy, &log]() {
+        if (!proxy.inited)
+            return;
+
+        LOG_INFO(log, "Start tiflash proxy");
+        run_tiflash_proxy((int)proxy.args.size(), proxy.args.data());
+        LOG_INFO(log, "End tiflash proxy");
+    });
+
+    SCOPE_EXIT({
+        LOG_INFO(log, "Wait for tiflash proxy to join");
+        proxy_runner.join();
+        LOG_INFO(log, "TiFlash proxy finish");
     });
 
     if (has_zookeeper && config().has("distributed_ddl"))
@@ -748,6 +787,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         SessionCleaner session_cleaner(*global_context);
+        ClusterManagerService cluster_manager_service(*global_context, config_path);
 
         waitForTerminationRequest();
     }

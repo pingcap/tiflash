@@ -69,7 +69,7 @@ void LocalServer::defineOptions(Poco::Util::OptionSet& _options)
         Poco::Util::Option("config-file", "", "Load configuration from a given file")
             .required(false)
             .repeatable(false)
-            .argument("[config.xml]")
+            .argument("[config.toml]")
             .binding("config-file"));
 
     /// Arguments that define first query creating initial table:
@@ -245,9 +245,9 @@ try
     }
 
     /// Load config files if exists
-    if (config().has("config-file") || Poco::File("config.xml").exists())
+    if (config().has("config-file") || Poco::File("config.toml").exists())
     {
-        ConfigProcessor config_processor(config().getString("config-file", "config.xml"), false, true);
+        ConfigProcessor config_processor(config().getString("config-file", "config.toml"), true);
         auto loaded_config = config_processor.loadConfig();
         config_processor.savePreprocessedConfig(loaded_config);
         config().add(loaded_config.configuration.duplicate(), PRIO_DEFAULT, false);
@@ -468,9 +468,9 @@ void LocalServer::setupUsers()
 {
     ConfigurationPtr users_config;
 
-    if (config().has("users_config") || config().has("config-file") || Poco::File("config.xml").exists())
+    if (config().has("users_config") || config().has("config-file") || Poco::File("config.toml").exists())
     {
-        const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
+        const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.toml"));
         ConfigProcessor config_processor(users_config_path);
         const auto loaded_config = config_processor.loadConfig();
         config_processor.savePreprocessedConfig(loaded_config);
