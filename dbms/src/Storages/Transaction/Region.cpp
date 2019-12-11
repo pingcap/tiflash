@@ -96,8 +96,7 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     if (index_reader != nullptr)
     {
         new_region = std::make_shared<Region>(std::move(meta), [&](pingcap::kv::RegionVerID ver_id) {
-            return std::make_shared<IndexReader>(
-                index_reader->cluster, ver_id, index_reader->suggested_ip, index_reader->suggested_port);
+            return std::make_shared<IndexReader>(index_reader->cluster, ver_id, index_reader->suggested_ip, index_reader->suggested_port);
         });
     }
     else
@@ -624,8 +623,11 @@ void Region::tryPreDecodeTiKVValue()
         default_val = data.defaultCF().getExtra().popAll();
         write_val = data.writeCF().getExtra().popAll();
     }
-    DB::tryPreDecodeTiKVValue(std::move(default_val));
-    DB::tryPreDecodeTiKVValue(std::move(write_val));
+
+    auto default_sz = DB::tryPreDecodeTiKVValue(std::move(default_val));
+    auto write_sz = DB::tryPreDecodeTiKVValue(std::move(write_val));
+    if (default_sz + write_sz)
+        LOG_DEBUG(log, toString() << ": pre-decoded [default, write] cf [" << default_sz << ", " << write_sz << "] rows");
 }
 
 Region::Region(RegionMeta && meta_) : Region(std::move(meta_), [](pingcap::kv::RegionVerID) { return nullptr; }) {}

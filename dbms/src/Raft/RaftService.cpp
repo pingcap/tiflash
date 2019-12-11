@@ -6,6 +6,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/applySnapshot.h>
 
+#include <numeric>
+
 namespace DB
 {
 
@@ -47,9 +49,12 @@ RaftService::RaftService(DB::Context & db_context_)
     data_reclaim_handle = background_pool.addTask([this] {
         std::list<RegionDataReadInfoList> tmp;
         {
-            std::lock_guard<std::mutex> lock(region_mutex);
+            std::lock_guard<std::mutex> lock(reclaim_mutex);
             tmp = std::move(data_to_reclaim);
         }
+        auto total = std::accumulate(tmp.begin(), tmp.end(), size_t(0), [](size_t sum, const auto & list) { return sum + list.size(); });
+        if (total)
+            LOG_INFO(log, "Reclaimed " << total << " rows");
         return false;
     });
 

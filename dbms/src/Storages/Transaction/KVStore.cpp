@@ -94,6 +94,8 @@ bool KVStore::onSnapshot(RegionPtr new_region, Context * context, const RegionsA
 {
     RegionID region_id = new_region->id();
 
+    new_region->tryPreDecodeTiKVValue();
+
     if (context)
     {
         const auto range = new_region->getRange();

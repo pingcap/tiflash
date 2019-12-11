@@ -3,11 +3,12 @@
 namespace DB
 {
 
-inline void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
+inline size_t tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
 {
     if (!values)
-        return;
+        return 0;
 
+    size_t cnt = 0;
     for (const auto & val : *values)
     {
         auto & decoded_row_info = val->extraInfo();
@@ -15,7 +16,10 @@ inline void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values)
             continue;
         DecodedRow * decoded_row = ValueExtraInfo<>::computeDecodedRow(val->getStr());
         decoded_row_info.atomicUpdate(decoded_row);
+        cnt++;
     }
+
+    return cnt;
 }
 
 inline const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
