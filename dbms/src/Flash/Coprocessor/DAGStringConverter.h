@@ -42,7 +42,6 @@ protected:
 protected:
     Context & context;
     const tipb::DAGRequest & dag_request;
-    // used by columnRef, which starts with 1, and refs column index in the original ts/agg output
     std::vector<NameAndTypePair> columns_from_ts;
     std::vector<NameAndTypePair> columns_from_agg;
     bool afterAgg;
