@@ -502,12 +502,19 @@ BlockInputStreams StorageDeltaMerge::read( //
             throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
         const auto & mvcc_query_info = *query_info.mvcc_query_info;
+
         // Read with specify tso, check if tso is smaller than TiDB GcSafePoint
-        const auto safe_point = tmt.getPDClient()->getGCSafePoint();
-        if (mvcc_query_info.read_tso < safe_point)
-            throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
-                    + " is smaller than tidb gc safe point: " + toString(safe_point),
-                ErrorCodes::LOGICAL_ERROR);
+        auto pd_client = tmt.getPDClient();
+        if (likely(!pd_client->isMock()))
+        {
+            auto safe_point = PDClientHelper::getGCSafePointWithRetry(pd_client,
+                /* ignore_cache= */ false,
+                global_context.getSettingsRef().safe_point_update_interval_seconds);
+            if (mvcc_query_info.read_tso < safe_point)
+                throw Exception("query id: " + context.getCurrentQueryId() + ", read tso: " + toString(mvcc_query_info.read_tso)
+                        + " is smaller than tidb gc safe point: " + toString(safe_point),
+                    ErrorCodes::LOGICAL_ERROR);
+        }
 
         /// If request comes from TiDB/TiSpark, mvcc_query_info.concurrent is 0,
         /// and `concurrent_num` should be 1. Concurrency handled by TiDB/TiSpark.
