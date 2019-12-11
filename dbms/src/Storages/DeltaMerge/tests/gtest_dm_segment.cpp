@@ -22,7 +22,7 @@ namespace tests
 class Segment_test : public ::testing::Test
 {
 public:
-    Segment_test() : name("t"), path("./" + name), storage_pool() {}
+    Segment_test() : name("tmp"), path("./" + name), storage_pool() {}
 
 private:
     void dropDataInDisk()

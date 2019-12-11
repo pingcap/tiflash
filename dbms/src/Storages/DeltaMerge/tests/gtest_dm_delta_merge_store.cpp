@@ -22,7 +22,7 @@ namespace tests
 class DeltaMergeStore_test : public ::testing::Test
 {
 public:
-    DeltaMergeStore_test() : name("t"), path("./" + name) {}
+    DeltaMergeStore_test() : name("tmp"), path("./" + name) {}
 
 protected:
     static void SetUpTestCase()

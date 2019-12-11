@@ -35,6 +35,7 @@ namespace tests
 
 
 TEST(StorageDeltaMergeDummy_test, ReadWriteCase1)
+try
 {
     // prepare block data
     Block sample;
@@ -84,10 +85,17 @@ TEST(StorageDeltaMergeDummy_test, ReadWriteCase1)
             column_names.push_back(name_type.name);
         }
 
-        ASTPtr astptr(new ASTIdentifier("mytemptable", ASTIdentifier::Kind::Table));
+        const String path_name = "tmp/";
+        Poco::File   path(path_name);
+        if (path.exists())
+            path.remove(true);
+        path.createDirectories();
+
+        const String table_name = "tmp_table";
+        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
         astptr->children.emplace_back(new ASTIdentifier("col1"));
 
-        storage = StorageDeltaMergeDummy::create(".", "mytemptable", ColumnsDescription{names_and_types_list}, astptr, false, 1000);
+        storage = StorageDeltaMergeDummy::create(path_name, table_name, ColumnsDescription{names_and_types_list}, astptr, false, 1000);
         storage->startup();
     }
 
@@ -129,7 +137,10 @@ TEST(StorageDeltaMergeDummy_test, ReadWriteCase1)
     }
     dms->readSuffix();
     ASSERT_EQ(num_rows_read, sample.rows());
+
+    storage->drop();
 }
+CATCH
 
 TEST(StorageDeltaMerge_test, ReadWriteCase1)
 try
@@ -172,7 +183,6 @@ try
     Names      column_names;
     // create table
     {
-        // FIXME: if we define col1 as UInt64, exception raised while reading data
         NamesAndTypesList names_and_types_list{
             //{"col1", std::make_shared<DataTypeUInt64>()},
             {"col1", std::make_shared<DataTypeInt64>()},
@@ -184,16 +194,17 @@ try
             column_names.push_back(name_type.name);
         }
 
-        // primary_expr_ast
-        ASTPtr astptr(new ASTIdentifier("t", ASTIdentifier::Kind::Table));
-        astptr->children.emplace_back(new ASTIdentifier("col1"));
-
-        String     table_name = "t";
-        Poco::File path(table_name);
+        const String path_name = "tmp/";
+        Poco::File   path(path_name);
         if (path.exists())
             path.remove(true);
 
-        storage = StorageDeltaMerge::create(".",
+        // primary_expr_ast
+        const String table_name = "tmp_table";
+        ASTPtr       astptr(new ASTIdentifier(table_name, ASTIdentifier::Kind::Table));
+        astptr->children.emplace_back(new ASTIdentifier("col1"));
+
+        storage = StorageDeltaMerge::create(path_name,
                                             /* db_name= */ "default",
                                             table_name,
                                             std::nullopt,
