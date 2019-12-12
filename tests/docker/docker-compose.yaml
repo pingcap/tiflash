@@ -10,21 +10,21 @@ services:
       - "8123:8123"
       - "9009:9009"
     volumes:
-      - ./config/config.xml:/config.xml:ro
-      - ./config/users.xml:/users.xml:ro
+      - ./config/config.toml:/config.toml:ro
+      - ./config/users.toml:/users.toml:ro
       - ./data/tics0:/tmp/tiflash/data
       - ./log/tics0:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
     command:
       - --config-file
-      - /config.xml
+      - /config.toml
   # tics-gtest container is for gtest cases
   tics-gtest:
     image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     volumes:
-      - ./config/config.xml:/config.xml:ro
-      - ./config/users.xml:/users.xml:ro
+      - ./config/config.toml:/config.toml:ro
+      - ./config/users.toml:/users.toml:ro
       - ./log/tics-gtest:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
@@ -94,43 +94,19 @@ services:
       - "9000:9000"
       - "8123:8123"
       - "9009:9009"
+      - "20170:20170"
     volumes:
-      - ./config/tiflash.xml:/config.xml:ro
-      - ./config/tiflash-users.xml:/users.xml:ro
+      - ./config/tiflash.toml:/config.toml:ro
+      - ./config/tiflash-users.toml:/users.toml:ro
       - ./data/tiflash0:/tmp/tiflash/data
       - ./log/tiflash0:/tmp/tiflash/log
       - ..:/tests
       - ./_env.sh:/tests/_env.sh
-    command:
-      - --config-file
-      - /config.xml
-    restart: on-failure
-  tikv-learner0:
-    image: hub.pingcap.net/tiflash/tikv-learner:191025
-    ports:
-      - "20170:20170"
-    volumes:
+      - ./log/tiflash-cluster-manager:/tmp/tiflash/data/tmp
       - ./config/tikv-learner.toml:/tikv.toml:ro
       - ./data/tikv-learner0:/data
       - ./log/tikv-learner0:/log
     command:
-      - --addr=0.0.0.0:20170
-      - --advertise-addr=tikv-learner0:20170
-      - --pd=pd0:2379
-      - --config=/tikv.toml
-      - --data-dir=/data
-      - --log-file=/log/tikv.log
-    depends_on:
-      - "tiflash0"
-    restart: on-failure
-  tiflash-cluster-manager0:
-    image: hub.pingcap.net/tiflash/cluster_manage:latest
-    volumes:
-      - ./config/tiflash.xml:/config.xml:ro
-      - ./log/tiflash-cluster-manager0:/tmp/tiflash/data/tmp
-    command:
-      - /config.xml
-    depends_on:
-      - "tidb0"
-      - "tiflash0"
+      - --config-file
+      - /config.toml
     restart: on-failure

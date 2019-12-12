@@ -22,7 +22,8 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-grpc::Status CoprocessorHandler::execute() try
+grpc::Status CoprocessorHandler::execute()
+try
 {
     switch (cop_request->tp())
     {
@@ -59,9 +60,8 @@ grpc::Status CoprocessorHandler::execute() try
 }
 catch (const LockException & e)
 {
-    LOG_ERROR(log,
-        __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << "\n"
-                            << e.getStackTrace().toString());
+    LOG_WARNING(
+        log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
     cop_response->Clear();
     kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
     lock_info->set_key(e.lock_infos[0]->key);
@@ -73,9 +73,8 @@ catch (const LockException & e)
 }
 catch (const RegionException & e)
 {
-    LOG_ERROR(log,
-        __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << "\n"
-                            << e.getStackTrace().toString());
+    LOG_WARNING(
+        log, __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << ", message: " << e.message());
     cop_response->Clear();
     errorpb::Error * region_err;
     switch (e.status)

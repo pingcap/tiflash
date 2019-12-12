@@ -175,6 +175,8 @@ void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * con
         }
     }
 
+    new_region->tryPreDecodeTiKVValue();
+
     if (new_region->isPeerRemoved())
         throw Exception("[applySnapshot] region is removed, should not happen", ErrorCodes::LOGICAL_ERROR);
 

@@ -30,7 +30,6 @@ struct Settings
     M(SettingBool, resolve_locks, false, "tmt resolve locks.") \
     M(SettingUInt64, read_tso, DEFAULT_MAX_READ_TSO, "tmt read tso.") \
     M(SettingInt64, dag_records_per_chunk, DEFAULT_DAG_RECORDS_PER_CHUNK, "default chunk size of a DAG response.") \
-    M(SettingString, dag_planner, "optree", "planner for DAG query, sql builds the SQL string, optree builds the internal operator(stream) tree.") \
     M(SettingBool, dag_expr_field_type_strict_check, true, "when set to true, every expr in the dag request must provide field type, otherwise only the result expr will be checked.") \
     M(SettingInt64, schema_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, "tmt schema version.") \
     M(SettingInt64, safe_point_update_interval_seconds, 1, "The interval in seconds to update safe point from PD.")\

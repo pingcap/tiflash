@@ -11,9 +11,10 @@ int main(int argc, char ** argv)
             return 3;
         }
 
-        ConfigProcessor processor(argv[1], false, true);
-        XMLDocumentPtr document = processor.processConfig();
-        Poco::XML::DOMWriter().writeNode(std::cout, document);
+        ConfigProcessor processor(argv[1], false);
+        TOMLTablePtr document = processor.processConfig();
+        cpptoml::toml_writer writer(std::cout);
+        document->accept(std::move(writer));
     }
     catch (Poco::Exception & e)
     {

@@ -49,13 +49,19 @@ int mainEntryClickHouseClusterCopier(int argc, char ** argv);
     int mainEntryClickHouseLLD(int argc, char ** argv);
 #endif
 
+extern "C" void print_tiflash_proxy_version();
+
 int mainEntryVersion(int , char **)
 {
-    std::cerr << "TiFlash" << std::endl
+    std::cout << "TiFlash" << std::endl << std::endl
               << "Release Version:   " << TiFlashBuildInfo::getVersionString() << std::endl
               << "Git Commit Hash:   " << TiFlashBuildInfo::getGitHash() << std::endl
               << "Git Commit Branch: " << TiFlashBuildInfo::getGitBranch() << std::endl
               << "UTC Build Time:    " << TiFlashBuildInfo::getUTCBuildTime() << std::endl;
+
+    std::cout << std::endl;
+    std::cout << "Raft Proxy" << std::endl;
+    print_tiflash_proxy_version();
     return 0;
 }
 
