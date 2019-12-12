@@ -43,25 +43,8 @@ try
 
     DAGContext dag_context(dag_request.executors_size());
     DAGQuerySource dag(context, dag_context, region_id, region_version, region_conf_version, key_ranges, dag_request);
-    BlockIO streams;
 
-    String planner = context.getSettings().dag_planner;
-    if (planner == "sql")
-    {
-        DAGStringConverter converter(context, dag_request);
-        String query = converter.buildSqlString();
-        if (!query.empty())
-            streams = executeQuery(query, context, internal, QueryProcessingStage::Complete);
-    }
-    else if (planner == "optree")
-    {
-        streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
-    }
-    else
-    {
-        throw Exception("Unknown DAG planner type " + planner, ErrorCodes::LOGICAL_ERROR);
-    }
-
+    BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw Exception("DAG is not query.", ErrorCodes::LOGICAL_ERROR);
