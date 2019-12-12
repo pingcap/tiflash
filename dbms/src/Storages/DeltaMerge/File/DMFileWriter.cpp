@@ -27,15 +27,25 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
 
         bool do_index = !wal_mode && (cd.type->isInteger() || cd.type->isDateOrDateTime());
-        auto stream   = std::make_unique<Stream>(dmfile, //
-                                               cd.id,
-                                               cd.type,
-                                               compression_settings,
-                                               max_compress_block_size,
-                                               do_index);
-        column_streams.emplace(cd.id, std::move(stream));
+        addStreams(cd.id, cd.type, do_index);
         dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
+}
+
+void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
+{
+    auto callback = [&](const IDataType::SubstreamPath & substream_path) {
+        String stream_name = DMFile::getFileNameBase(col_id, substream_path);
+        auto   stream      = std::make_unique<Stream>(dmfile, //
+                                               stream_name,
+                                               type,
+                                               compression_settings,
+                                               max_compress_block_size,
+                                               IDataType::isNullMap(substream_path) ? false : do_index);
+        column_streams.emplace(stream_name, std::move(stream));
+    };
+
+    type->enumerateStreams(callback, {});
 }
 
 void DMFileWriter::write(const Block & block, size_t not_clean_rows)
@@ -74,33 +84,49 @@ void DMFileWriter::finalize()
 
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
 {
-    size_t rows   = column.size();
-    auto & stream = column_streams.at(col_id);
-    if (stream->minmaxes)
-        stream->minmaxes->addChunk(column, nullptr);
+    size_t rows = column.size();
 
-    /// There could already be enough data to compress into the new block.
-    if (stream->original_hashing.offset() >= min_compress_block_size)
-        stream->original_hashing.next();
+    type.enumerateStreams(
+        [&](const IDataType::SubstreamPath & substream) {
+            String name   = DMFile::getFileNameBase(col_id, substream);
+            auto & stream = column_streams.at(name);
+            if (stream->minmaxes)
+                stream->minmaxes->addChunk(column, nullptr);
 
-    auto offset_in_compressed_block = stream->original_hashing.offset();
-    if (unlikely(wal_mode && offset_in_compressed_block != 0))
-        throw Exception("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block));
+            /// There could already be enough data to compress into the new block.
+            if (stream->original_hashing.offset() >= min_compress_block_size)
+                stream->original_hashing.next();
 
-    writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
-    writeIntBinary(offset_in_compressed_block, stream->mark_file);
+            auto offset_in_compressed_block = stream->original_hashing.offset();
+            if (unlikely(wal_mode && offset_in_compressed_block != 0))
+                throw Exception("Offset in compressed block is expected to be 0, now " + DB::toString(offset_in_compressed_block));
+
+            writeIntBinary(stream->plain_hashing.count(), stream->mark_file);
+            writeIntBinary(offset_in_compressed_block, stream->mark_file);
+        },
+        {});
 
     type.serializeBinaryBulkWithMultipleStreams(column, //
-                                                [&](const IDataType::SubstreamPath &) { return &(stream->original_hashing); },
+                                                [&](const IDataType::SubstreamPath & substream) {
+                                                    String stream_name = DMFile::getFileNameBase(col_id, substream);
+                                                    auto & stream      = column_streams.at(stream_name);
+                                                    return &(stream->original_hashing);
+                                                },
                                                 0,
                                                 rows,
                                                 true,
                                                 {});
 
-    if (wal_mode)
-        stream->flush();
-    else
-        stream->original_hashing.nextIfAtEnd();
+    type.enumerateStreams(
+        [&](const IDataType::SubstreamPath & substream) {
+            String name   = DMFile::getFileNameBase(col_id, substream);
+            auto & stream = column_streams.at(name);
+            if (wal_mode)
+                stream->flush();
+            else
+                stream->original_hashing.nextIfAtEnd();
+        },
+        {});
 
     auto & avg_size = dmfile->column_stats.at(col_id).avg_size;
     IDataType::updateAvgValueSizeHint(column, avg_size);
@@ -108,14 +134,19 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
 
 void DMFileWriter::finalizeColumn(ColId col_id, const IDataType & type)
 {
-    auto & stream = column_streams.at(col_id);
-    stream->flush();
+    auto callback = [&](const IDataType::SubstreamPath & substream) {
+        String stream_name = DMFile::getFileNameBase(col_id, substream);
+        auto & stream      = column_streams.at(stream_name);
+        stream->flush();
 
-    if (stream->minmaxes)
-    {
-        WriteBufferFromFile buf(dmfile->colIndexPath(col_id));
-        stream->minmaxes->write(type, buf);
-    }
+        if (stream->minmaxes)
+        {
+            WriteBufferFromFile buf(dmfile->colIndexPath(stream_name));
+            stream->minmaxes->write(type, buf);
+        }
+    };
+
+    type.enumerateStreams(callback, {});
 }
 
 } // namespace DM

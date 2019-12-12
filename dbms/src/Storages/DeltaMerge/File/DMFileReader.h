@@ -20,7 +20,12 @@ class DMFileReader
 public:
     struct Stream
     {
-        Stream(DMFileReader & reader, ColId col_id, size_t aio_threshold, size_t max_read_buffer_size, Logger * log);
+        Stream(DMFileReader & reader, //
+               ColId          col_id,
+               const String & file_name_base,
+               size_t         aio_threshold,
+               size_t         max_read_buffer_size,
+               Logger *       log);
 
         double                   avg_size_hint;
         MarksInCompressedFilePtr marks;
@@ -28,7 +33,7 @@ public:
         std::unique_ptr<CompressedReadBufferFromFile> buf;
     };
     using StreamPtr     = std::unique_ptr<Stream>;
-    using ColumnStreams = std::map<ColId, StreamPtr>;
+    using ColumnStreams = std::map<String, StreamPtr>;
 
     DMFileReader(bool                  enable_clean_read_,
                  UInt64                max_data_version_,
@@ -52,6 +57,7 @@ public:
 
 private:
     bool shouldSeek(size_t chunk_id);
+
 
 private:
     bool          enable_clean_read;

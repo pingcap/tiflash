@@ -77,7 +77,7 @@ public:
         if (param.indexes.count(col_id))
             return;
 
-        auto       index_path = dmfile->colIndexPath(col_id);
+        auto       index_path = dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
         Poco::File index_file(index_path);
         if (!index_file.exists())
             return;
