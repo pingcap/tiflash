@@ -49,11 +49,6 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         // no column selected, must be something wrong
         throw Exception("No column is selected in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    const auto & column_list = storage->getColumns().getAllPhysical();
-    for (auto & column : column_list)
-    {
-        columns_from_ts.emplace_back(column.name, column.type);
-    }
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
@@ -179,7 +174,16 @@ String DAGStringConverter::buildSqlString()
         //append final project
         project << "SELECT ";
         bool first = true;
-        for (UInt32 index : dag_request.output_offsets())
+        auto current_columns = getCurrentColumns();
+        std::vector<UInt64> output_index;
+        if (afterAgg)
+            for(UInt64 i = 0; i < current_columns.size(); i++)
+                output_index.push_back(i);
+        else
+            for (UInt64 index : dag_request.output_offsets())
+                output_index.push_back(index);
+
+        for (UInt64 index : output_index)
         {
             if (first)
             {
@@ -189,7 +193,7 @@ String DAGStringConverter::buildSqlString()
             {
                 project << ", ";
             }
-            project << getCurrentColumns()[index].name;
+            project << current_columns[index].name;
         }
         project << " ";
     }
