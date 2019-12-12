@@ -12,7 +12,7 @@ namespace DM
 
 DMFileReader::Stream::Stream(DMFileReader & reader, //
                              ColId          col_id,
-                             String         file_name_base,
+                             const String & file_name_base,
                              size_t         aio_threshold,
                              size_t         max_read_buffer_size,
                              Logger *       log)

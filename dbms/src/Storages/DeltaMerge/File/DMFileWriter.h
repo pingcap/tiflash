@@ -23,17 +23,17 @@ public:
     struct Stream
     {
         Stream(const DMFilePtr &   dmfile,
-               String              stream_name,
+               const String &      file_base_name,
                const DataTypePtr & type,
                CompressionSettings compression_settings,
                size_t              max_compress_block_size,
                bool                do_index)
-            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(stream_name), 0, 0, max_compress_block_size)),
+            : plain_file(createWriteBufferFromFileBase(dmfile->colDataPath(file_base_name), 0, 0, max_compress_block_size)),
               plain_hashing(*plain_file),
               compressed_buf(plain_hashing, compression_settings),
               original_hashing(compressed_buf),
               minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr),
-              mark_file(dmfile->colMarkPath(stream_name))
+              mark_file(dmfile->colMarkPath(file_base_name))
         {
         }
 

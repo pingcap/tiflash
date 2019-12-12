@@ -20,7 +20,7 @@ using DMFileBlockInputStreamPtr  = std::shared_ptr<DMFileBlockInputStream>;
 class DMFile_Test : public ::testing::Test
 {
 public:
-    DMFile_Test() : path("t"), dm_file(nullptr) {}
+    DMFile_Test() : path("tmp"), dm_file(nullptr) {}
 
     void SetUp() override
     {
@@ -180,6 +180,7 @@ try
                                                                RSOperatorPtr{},
                                                                IdSetPtr{});
 
+        size_t num_rows_read = 0;
         stream->readPrefix();
         while (Block in = stream->read())
         {
@@ -204,7 +205,10 @@ try
                     }
                 }
             }
+            num_rows_read += in.rows();
         }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, 128UL);
     }
 }
 CATCH
@@ -249,6 +253,7 @@ TEST_F(DMFile_Test, StringType)
                                                                RSOperatorPtr{},
                                                                IdSetPtr{});
 
+        size_t num_rows_read = 0;
         stream->readPrefix();
         while (Block in = stream->read())
         {
@@ -265,7 +270,10 @@ TEST_F(DMFile_Test, StringType)
                     }
                 }
             }
+            num_rows_read += in.rows();
         }
+        stream->readSuffix();
+        ASSERT_EQ(num_rows_read, 128UL);
     }
 }
 
@@ -306,7 +314,7 @@ try
 
     {
         // Test read
-        auto stream = std::make_shared<DMFileBlockInputStream>(dbContext(), //
+        auto   stream        = std::make_shared<DMFileBlockInputStream>(dbContext(), //
                                                                std::numeric_limits<UInt64>::max(),
                                                                false,
                                                                dmContext().hash_salt,
@@ -315,6 +323,7 @@ try
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
                                                                IdSetPtr{});
+        size_t num_rows_read = 0;
         stream->readPrefix();
         while (Block in = stream->read())
         {
@@ -335,13 +344,20 @@ try
                     for (size_t i = 0; i < col->size(); i++)
                     {
                         if (i < 64)
+                        {
+                            EXPECT_FALSE(col->isNullAt(i));
                             EXPECT_EQ(nested->getInt(i), Int64(i));
+                        }
                         else
-                            EXPECT_EQ(col->isNullAt(i), true);
+                        {
+                            EXPECT_TRUE(col->isNullAt(i));
+                        }
                     }
                 }
             }
+            num_rows_read += in.rows();
         }
+        ASSERT_EQ(num_rows_read, 128UL);
         stream->readSuffix();
     }
 }
