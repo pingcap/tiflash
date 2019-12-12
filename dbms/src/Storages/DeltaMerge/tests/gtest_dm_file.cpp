@@ -55,7 +55,8 @@ public:
                                                  db_context->getSettingsRef().dm_segment_limit_rows,
                                                  db_context->getSettingsRef().dm_segment_delta_limit_rows,
                                                  db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_stable_chunk_rows);
+                                                 db_context->getSettingsRef().dm_segment_stable_chunk_rows,
+                                                 db_context->getSettingsRef().dm_enable_logical_split);
     }
 
 
