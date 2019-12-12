@@ -88,7 +88,6 @@ void Server::initialize(Poco::Util::Application & self)
 std::string Server::getDefaultCorePath() const { return getCanonicalPath(config().getString("path")) + "cores"; }
 
 extern "C" void run_tiflash_proxy(int, const char **);
-extern "C" void print_tiflash_proxy_version();
 
 struct TiFlashProxy
 {
