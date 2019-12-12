@@ -20,7 +20,7 @@ using DMFileBlockInputStreamPtr  = std::shared_ptr<DMFileBlockInputStream>;
 class DMFile_Test : public ::testing::Test
 {
 public:
-    DMFile_Test() : path("tmp"), dm_file(nullptr) {}
+    DMFile_Test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_tests"), dm_file(nullptr) {}
 
     void SetUp() override
     {
