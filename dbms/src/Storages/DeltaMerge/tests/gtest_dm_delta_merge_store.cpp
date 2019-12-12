@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <memory>
+#include <test_utils/TiflashTestBasic.h>
 #include "dm_basic_include.h"
 
 #include <Poco/ConsoleChannel.h>
@@ -22,7 +23,7 @@ namespace tests
 class DeltaMergeStore_test : public ::testing::Test
 {
 public:
-    DeltaMergeStore_test() : name("tmp"), path("./" + name) {}
+    DeltaMergeStore_test() : name("tmp"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name) {}
 
 protected:
     static void SetUpTestCase()

@@ -13,10 +13,12 @@ namespace tests
 class TiFlashTestEnv
 {
 public:
+    static String getTemporaryPath() { return "./tmp/"; }
+
     static Context & getContext(const DB::Settings & settings = DB::Settings())
     {
         static Context context = DB::Context::createGlobal();
-        context.setPath(".");
+        context.setPath(getTemporaryPath());
         context.setGlobalContext(context);
         try
         {
@@ -28,7 +30,7 @@ public:
             context.setGlobalContext(context);
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
-            context.createTMTContext({}, "", "", {"default"}, "./tmp/kvstore", "", TiDB::StorageEngine::TMT, false);
+            context.createTMTContext({}, "", "", {"default"}, getTemporaryPath() + "/kvstore", "", TiDB::StorageEngine::TMT, false);
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;

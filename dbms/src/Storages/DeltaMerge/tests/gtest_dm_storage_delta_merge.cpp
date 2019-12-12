@@ -86,7 +86,7 @@ try
             column_names.push_back(name_type.name);
         }
 
-        const String path_name = "tmp/";
+        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
         Poco::File   path(path_name);
         if (path.exists())
             path.remove(true);
@@ -195,7 +195,7 @@ try
             column_names.push_back(name_type.name);
         }
 
-        const String path_name = "tmp/";
+        const String path_name = DB::tests::TiFlashTestEnv::getTemporaryPath();
         Poco::File   path(path_name);
         if (path.exists())
             path.remove(true);

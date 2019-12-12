@@ -19,7 +19,7 @@ namespace tests
 class DiskValueSpace_test : public ::testing::Test
 {
 public:
-    DiskValueSpace_test() : name("tmp"), path("./" + name), storage_pool() {}
+    DiskValueSpace_test() : name("tmp"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() +name), storage_pool() {}
 
 private:
     void dropDataInDisk()
