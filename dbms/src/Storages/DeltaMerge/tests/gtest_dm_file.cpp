@@ -20,7 +20,7 @@ using DMFileBlockInputStreamPtr  = std::shared_ptr<DMFileBlockInputStream>;
 class DMFile_Test : public ::testing::Test
 {
 public:
-    DMFile_Test() : path("tmp"), dm_file(nullptr) {}
+    DMFile_Test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/dm_file_tests"), dm_file(nullptr) {}
 
     void SetUp() override
     {
@@ -55,7 +55,8 @@ public:
                                                  db_context->getSettingsRef().dm_segment_limit_rows,
                                                  db_context->getSettingsRef().dm_segment_delta_limit_rows,
                                                  db_context->getSettingsRef().dm_segment_delta_cache_limit_rows,
-                                                 db_context->getSettingsRef().dm_segment_stable_chunk_rows);
+                                                 db_context->getSettingsRef().dm_segment_stable_chunk_rows,
+                                                 db_context->getSettingsRef().dm_enable_logical_split);
     }
 
 

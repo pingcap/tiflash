@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#include <test_utils/TiflashTestBasic.h>
 
 #include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
@@ -27,7 +28,7 @@ namespace tests
 class PageStorage_test : public ::testing::Test
 {
 public:
-    PageStorage_test() : path("./t"), storage() {}
+    PageStorage_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/page_storage_test"), storage() {}
 
 protected:
     static void SetUpTestCase()

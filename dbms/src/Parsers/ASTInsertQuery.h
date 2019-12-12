@@ -33,9 +33,10 @@ public:
     const char * data = nullptr;
     const char * end = nullptr;
 
-    bool is_import;
-    bool is_upsert;
-    bool is_delete;
+    // If insert block is synced from TiDB, set is_import = true
+    bool is_import = false;
+    bool is_upsert = false;
+    bool is_delete = false;
 
     /** Get the text that identifies this element. */
     String getID() const override { return "InsertQuery_" + database + "_" + table; };
