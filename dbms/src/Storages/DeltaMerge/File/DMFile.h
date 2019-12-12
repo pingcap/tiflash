@@ -72,12 +72,12 @@ public:
     String chunkStatPath() { return path() + "/chunk"; }
     // Do not gc me.
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
-    String colDataPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".dat"; }
-    String colIndexPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".idx"; }
-    String colEdgePath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".edge"; }
-    String colMarkPath(ColId col_id) { return path() + "/" + DB::toString(col_id) + ".mrk"; }
+    String colDataPath(const String & file_name_base) { return path() + "/" + file_name_base + ".dat"; }
+    String colIndexPath(const String & file_name_base) { return path() + "/" + file_name_base + ".idx"; }
+    String colEdgePath(const String & file_name_base) { return path() + "/" + file_name_base + ".edge"; }
+    String colMarkPath(const String & file_name_base) { return path() + "/" + file_name_base + ".mrk"; }
 
-    const auto & getColumnStat(ColId col_id)
+    const ColumnStat & getColumnStat(ColId col_id)
     {
         auto it = column_stats.find(col_id);
         if (it == column_stats.end())
@@ -104,6 +104,11 @@ public:
     const ChunkStat &   getChunkStat(size_t chunk_index) { return chunk_stats[chunk_index]; }
     const ColumnStats & getColumnStats() { return column_stats; }
     Status              getStatus() { return status; }
+
+    static String getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
 
 private:
     DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Status status_, Logger * log_)
