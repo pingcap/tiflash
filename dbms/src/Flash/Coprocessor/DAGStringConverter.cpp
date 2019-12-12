@@ -2,10 +2,12 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -55,12 +57,19 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
-        if (cid <= 0 || cid > (ColumnID)columns_from_ts.size())
+        if (cid == -1)
         {
-            throw Exception("column id out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
+            // Column ID -1 returns the handle column
+            auto pk_handle_col = storage->getTableInfo().getPKHandleColumn();
+            pk_handle_col.has_value();
+            auto pair = storage->getColumns().getPhysical(
+                pk_handle_col.has_value() ? pk_handle_col->get().name : MutableSupport::tidb_pk_column_name);
+            columns_from_ts.push_back(pair);
+            continue;
         }
-        String name = merge_tree->getTableInfo().columns[cid - 1].name;
-        output_from_ts.push_back(std::move(name));
+        auto name = storage->getTableInfo().getColumnName(cid);
+        auto pair = storage->getColumns().getPhysical(name);
+        columns_from_ts.push_back(pair);
     }
     ss << "FROM " << storage->getDatabaseName() << "." << storage->getTableName() << " ";
 }
@@ -86,6 +95,43 @@ void DAGStringConverter::buildSelString(const tipb::Selection & sel, std::string
 
 void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::stringstream & ss) { ss << "LIMIT " << limit.limit() << " "; }
 
+void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stringstream & ss)
+{
+    if (agg.group_by_size() != 0)
+    {
+        ss << "GROUP BY ";
+        bool first = true;
+        for (auto & group_by : agg.group_by())
+        {
+            if (first)
+                first = false;
+            else
+                ss << ", ";
+            ss << exprToString(group_by, getCurrentColumns());
+        }
+    }
+    for (auto & agg_func : agg.agg_func())
+    {
+        columns_from_agg.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldType(agg_func.field_type()));
+    }
+    afterAgg = true;
+}
+void DAGStringConverter::buildTopNString(const tipb::TopN & topN, std::stringstream & ss)
+{
+    ss << "ORDER BY ";
+    bool first = true;
+    for (auto & order_by_item : topN.order_by())
+    {
+        if (first)
+            first = false;
+        else
+            ss << ", ";
+        ss << exprToString(order_by_item.expr(), getCurrentColumns()) << " ";
+        ss << (order_by_item.desc() ? "DESC" : "ASC");
+    }
+    ss << " LIMIT " << topN.limit() << " ";
+}
+
 //todo return the error message
 void DAGStringConverter::buildString(const tipb::Executor & executor, std::stringstream & ss)
 {
@@ -101,11 +147,9 @@ void DAGStringConverter::buildString(const tipb::Executor & executor, std::strin
         case tipb::ExecType::TypeAggregation:
             // stream agg is not supported, treated as normal agg
         case tipb::ExecType::TypeStreamAgg:
-            //todo support agg
-            throw Exception("Aggregation is not supported", ErrorCodes::NOT_IMPLEMENTED);
+            return buildAggString(executor.aggregation(), ss);
         case tipb::ExecType::TypeTopN:
-            // todo support top n
-            throw Exception("TopN is not supported", ErrorCodes::NOT_IMPLEMENTED);
+            return buildTopNString(executor.topn(), ss);
         case tipb::ExecType::TypeLimit:
             return buildLimitString(executor.limit(), ss);
     }
@@ -145,7 +189,7 @@ String DAGStringConverter::buildSqlString()
             {
                 project << ", ";
             }
-            project << getCurrentOutputColumns()[index];
+            project << getCurrentColumns()[index].name;
         }
         project << " ";
     }
