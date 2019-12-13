@@ -9,9 +9,10 @@ RUN apt update -y \
         liblld-5.0-dev libclang-5.0-dev liblld-5.0 \
         build-essential autoconf libtool pkg-config \
         libgflags-dev libgtest-dev \
-        golang curl \
+        golang curl python3-pip \
         # For tests: # bash expect python python-lxml python-termcolor curl perl sudo tzdata
  && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly \
+ && pip3 install pybind11 pyinstaller dnspython uri requests urllib3 toml setuptools \
  && rm -rf /var/lib/apt/lists/*
 
 RUN git clone https://github.com/grpc/grpc.git && cd grpc && git checkout v1.14.2 && git submodule update --init \
@@ -21,5 +22,11 @@ RUN git clone https://github.com/grpc/grpc.git && cd grpc && git checkout v1.14.
  && source /root/.profile && ldconfig \
  && cd / && mkdir libtiflash-proxy && git clone -b tiflash-proxy-lib https://github.com/solotzg/tikv.git tiflash-proxy && cd /tiflash-proxy \
  && make release && cp target/release/libtiflash_proxy.so /libtiflash-proxy && cd / && rm -rf /tiflash-proxy \
- && rustup self uninstall -y
+ && rustup self uninstall -y \
+ && git clone https://github.com/pingcap/tics.git /tics-build \
+ && cd tics-build && cd cluster_manage \
+ && ./release.sh \
+ && rm -rf /flash_cluster_manager && cp -r dist/flash_cluster_manager/ /flash_cluster_manager \
+ && cd / && rm -rf tics-build/
+
 
