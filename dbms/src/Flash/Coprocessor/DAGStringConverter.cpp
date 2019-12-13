@@ -56,7 +56,6 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         {
             // Column ID -1 returns the handle column
             auto pk_handle_col = storage->getTableInfo().getPKHandleColumn();
-            pk_handle_col.has_value();
             auto pair = storage->getColumns().getPhysical(
                 pk_handle_col.has_value() ? pk_handle_col->get().name : MutableSupport::tidb_pk_column_name);
             columns_from_ts.push_back(pair);
@@ -92,6 +91,12 @@ void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::string
 
 void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stringstream & ss)
 {
+    for (auto & agg_func : agg.agg_func())
+    {
+        if (!agg_func.has_field_type())
+            throw Exception("Agg func without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        columns_from_agg.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldType(agg_func.field_type()));
+    }
     if (agg.group_by_size() != 0)
     {
         ss << "GROUP BY ";
@@ -102,12 +107,12 @@ void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stri
                 first = false;
             else
                 ss << ", ";
-            ss << exprToString(group_by, getCurrentColumns());
+            auto name = exprToString(group_by, getCurrentColumns());
+            ss << name;
+            if (!group_by.has_field_type())
+                throw Exception("group by expr without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+            columns_from_agg.emplace_back(name, getDataTypeByFieldType(group_by.field_type()));
         }
-    }
-    for (auto & agg_func : agg.agg_func())
-    {
-        columns_from_agg.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldType(agg_func.field_type()));
     }
     afterAgg = true;
 }
