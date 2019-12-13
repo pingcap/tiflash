@@ -8,7 +8,7 @@ replicas configuration in tidb and try to build flash engine peers or monitor th
 ## Prepare
 
 * install `python3.7`, `pybind11`, `pyinstaller`, `clang-format`, `dnspython`, `uri`, `requests`, `urllib3`
-, `toml`, `dnspython`, `C++17`
+, `toml`, `C++17`
 , `setuptools`
 
 * use `release.sh` and get dir `dist/flash_cluster_manager/`.
