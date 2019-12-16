@@ -1,5 +1,6 @@
 #include <common/config_common.h>
 #include <Common/config.h>
+#include <Common/ClickHouseRevision.h>
 #include <config_tools.h>
 #include <iostream>
 #include <vector>
@@ -48,6 +49,22 @@ int mainEntryClickHouseClusterCopier(int argc, char ** argv);
     int mainEntryClickHouseLLD(int argc, char ** argv);
 #endif
 
+extern "C" void print_tiflash_proxy_version();
+
+int mainEntryVersion(int , char **)
+{
+    std::cout << "TiFlash" << std::endl << std::endl
+              << "Release Version:   " << TiFlashBuildInfo::getVersionString() << std::endl
+              << "Git Commit Hash:   " << TiFlashBuildInfo::getGitHash() << std::endl
+              << "Git Commit Branch: " << TiFlashBuildInfo::getGitBranch() << std::endl
+              << "UTC Build Time:    " << TiFlashBuildInfo::getUTCBuildTime() << std::endl;
+
+    std::cout << std::endl;
+    std::cout << "Raft Proxy" << std::endl;
+    print_tiflash_proxy_version();
+    return 0;
+}
+
 namespace
 {
 
@@ -85,6 +102,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"clang++", mainEntryClickHouseClang},
     {"lld", mainEntryClickHouseLLD},
 #endif
+    {"version", mainEntryVersion},
 };
 
 
@@ -92,7 +110,7 @@ int printHelp(int, char **)
 {
     std::cerr << "Use one of the following commands:" << std::endl;
     for (auto & application : clickhouse_applications)
-        std::cerr << "clickhouse " << application.first << " [args] " << std::endl;
+        std::cerr << "tiflash " << application.first << " [args] " << std::endl;
     return -1;
 };
 
@@ -104,7 +122,7 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
     {
         auto first_arg = argv.begin() + 1;
 
-        /// 'clickhouse --client ...' and 'clickhouse client ...' are Ok
+        /// 'tiflash --client ...' and 'tiflash client ...' are Ok
         if (*first_arg == "--" + app_suffix || *first_arg == app_suffix)
         {
             argv.erase(first_arg);
@@ -112,8 +130,8 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
         }
     }
 
-    /// Use app if clickhouse binary is run through symbolic link with name clickhouse-app
-    std::string app_name = "clickhouse-" + app_suffix;
+    /// Use app if tiflash binary is run through symbolic link with name tiflash-app
+    std::string app_name = "tiflash-" + app_suffix;
     return !argv.empty() && (app_name == argv[0] || endsWith(argv[0], "/" + app_name));
 }
 

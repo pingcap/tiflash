@@ -229,7 +229,8 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds)
         };
 
         const auto handle_compact_log = [&]() {
-            if (curr_region.writeCFCount())
+            constexpr size_t MIN_FLUSH_SIZE = 10 * 1024 * 1024;
+            if (curr_region.writeCFCount() && curr_region.dataSize() > MIN_FLUSH_SIZE)
             {
                 try
                 {

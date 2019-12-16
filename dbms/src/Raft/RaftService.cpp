@@ -47,7 +47,7 @@ RaftService::RaftService(DB::Context & db_context_)
     data_reclaim_handle = background_pool.addTask([this] {
         std::list<RegionDataReadInfoList> tmp;
         {
-            std::lock_guard<std::mutex> lock(region_mutex);
+            std::lock_guard<std::mutex> lock(reclaim_mutex);
             tmp = std::move(data_to_reclaim);
         }
         return false;

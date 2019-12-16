@@ -1,0 +1,3 @@
+/dist/
+*.spec
+version.py

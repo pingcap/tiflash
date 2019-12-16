@@ -97,7 +97,7 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     {
         new_region = std::make_shared<Region>(std::move(meta), [&](pingcap::kv::RegionVerID ver_id) {
             return std::make_shared<IndexReader>(
-                index_reader->cache, index_reader->client, ver_id, index_reader->suggested_ip, index_reader->suggested_port);
+                index_reader->cluster, ver_id, index_reader->suggested_ip, index_reader->suggested_port);
         });
     }
     else

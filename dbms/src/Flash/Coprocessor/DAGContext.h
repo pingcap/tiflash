@@ -13,8 +13,6 @@ struct DAGContext
 {
     DAGContext(size_t profile_list_size) { profile_streams_list.resize(profile_list_size); };
     std::vector<BlockInputStreams> profile_streams_list;
-
-    tipb::FieldType void_result_ft;
 };
 
 } // namespace DB

@@ -16,14 +16,11 @@ TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs
     const std::string & flash_service_address_)
     : kvstore(std::make_shared<KVStore>(context, kvstore_path)),
       region_table(context),
-      pd_client(addrs.size() == 0 ? static_cast<pingcap::pd::IClient *>(new pingcap::pd::MockPDClient())
-                                  : static_cast<pingcap::pd::IClient *>(new pingcap::pd::Client(addrs))),
-      region_cache(std::make_shared<pingcap::kv::RegionCache>(pd_client, learner_key, learner_value)),
-      rpc_client(std::make_shared<pingcap::kv::RpcClient>()),
+      cluster(addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
+                                : std::make_shared<pingcap::kv::Cluster>(addrs, learner_key, learner_value)),
       ignore_databases(ignore_databases_),
-      schema_syncer(addrs.size() == 0
-              ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(pd_client, region_cache, rpc_client))
-              : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(pd_client, region_cache, rpc_client))),
+      schema_syncer(addrs.size() == 0 ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(cluster))
+                                      : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster))),
       flash_service_address(flash_service_address_)
 {}
 
@@ -60,12 +57,12 @@ void TMTContext::setSchemaSyncer(SchemaSyncerPtr rhs)
     schema_syncer = rhs;
 }
 
-pingcap::pd::ClientPtr TMTContext::getPDClient() const { return pd_client; }
+pingcap::pd::ClientPtr TMTContext::getPDClient() const { return cluster->pd_client; }
 
 IndexReaderPtr TMTContext::createIndexReader(pingcap::kv::RegionVerID region_version_id) const
 {
     std::lock_guard<std::mutex> lock(mutex);
-    if (pd_client->isMock())
+    if (cluster->pd_client->isMock())
     {
         return nullptr;
     }
@@ -77,7 +74,7 @@ IndexReaderPtr TMTContext::createIndexReader(pingcap::kv::RegionVerID region_ver
     {
         throw Exception("Cannot resolve flash service address " + flash_service_address, ErrorCodes::LOGICAL_ERROR);
     }
-    return std::make_shared<IndexReader>(region_cache, rpc_client, region_version_id, flash_service_ip, flash_service_port);
+    return std::make_shared<IndexReader>(cluster, region_version_id, flash_service_ip, flash_service_port);
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
