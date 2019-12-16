@@ -145,7 +145,7 @@ static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
 RegionTable::RegionTable(Context & context_)
     : flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
-          {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
+        {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
       context(&context_),
       log(&Logger::get("RegionTable"))
 {}
@@ -326,10 +326,8 @@ RegionID RegionTable::pickRegionToFlush()
         if (auto it = regions.find(region_id); it != regions.end())
         {
             auto table_id = it->second;
-
             if (shouldFlush(doGetInternalRegion(table_id, region_id)))
             {
-                dirty_regions.erase(dirty_it);
                 clearDirtyFlag(region_id);
                 return region_id;
             }
@@ -337,7 +335,7 @@ RegionID RegionTable::pickRegionToFlush()
             dirty_it++;
         }
         else
-            dirty_it = dirty_regions.erase(dirty_it);
+            dirty_it = clearDirtyFlag(dirty_it);
     }
     return InvalidRegionID;
 }
@@ -355,9 +353,16 @@ bool RegionTable::tryFlushRegions()
 
 void RegionTable::clearDirtyFlag(RegionID region_id)
 {
+    auto iter = dirty_regions.find(region_id);
+    clearDirtyFlag(iter);
+}
+
+RegionTable::DirtyRegions::iterator RegionTable::clearDirtyFlag(const RegionTable::DirtyRegions::iterator & region_iter)
+{
     std::lock_guard lock(dirty_regions_mutex);
-    dirty_regions.erase(region_id);
+    auto next_iter = dirty_regions.erase(region_iter);
     dirty_regions_cv.notify_all();
+    return next_iter;
 }
 
 void RegionTable::waitTillRegionFlushed(const RegionID region_id)

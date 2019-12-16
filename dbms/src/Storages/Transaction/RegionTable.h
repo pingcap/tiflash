@@ -166,6 +166,7 @@ private:
     RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
 
     void clearDirtyFlag(RegionID region_id);
+    DirtyRegions::iterator clearDirtyFlag(const RegionTable::DirtyRegions::iterator & region_iter);
 
 private:
     TableMap tables;
