@@ -224,12 +224,10 @@ private:
         std::string config_path;
         if (config().has("config-file"))
             config_path = config().getString("config-file");
-        else if (Poco::File("./clickhouse-client.xml").exists())
-            config_path = "./clickhouse-client.xml";
-        else if (!home_path.empty() && Poco::File(home_path + "/.clickhouse-client/config.xml").exists())
-            config_path = home_path + "/.clickhouse-client/config.xml";
-        else if (Poco::File("/etc/clickhouse-client/config.xml").exists())
-            config_path = "/etc/clickhouse-client/config.xml";
+        else if (Poco::File("./config.toml").exists())
+            config_path = "./config.toml";
+        else if (!home_path.empty() && Poco::File(home_path + "/.tiflash/config.toml").exists())
+            config_path = home_path + "/.tiflash/config.toml";
 
         if (!config_path.empty())
         {
