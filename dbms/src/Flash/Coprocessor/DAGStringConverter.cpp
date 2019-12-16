@@ -50,11 +50,6 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         // no column selected, must be something wrong
         throw Exception("No column is selected in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    const auto & column_list = storage->getColumns().getAllPhysical();
-    for (auto & column : column_list)
-    {
-        columns_from_ts.emplace_back(column.name, column.type);
-    }
     for (const tipb::ColumnInfo & ci : ts.columns())
     {
         ColumnID cid = ci.column_id();
@@ -62,7 +57,6 @@ void DAGStringConverter::buildTSString(const tipb::TableScan & ts, std::stringst
         {
             // Column ID -1 returns the handle column
             auto pk_handle_col = storage->getTableInfo().getPKHandleColumn();
-            pk_handle_col.has_value();
             auto pair = storage->getColumns().getPhysical(
                 pk_handle_col.has_value() ? pk_handle_col->get().name : MutableSupport::tidb_pk_column_name);
             columns_from_ts.push_back(pair);
@@ -98,6 +92,12 @@ void DAGStringConverter::buildLimitString(const tipb::Limit & limit, std::string
 
 void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stringstream & ss)
 {
+    for (auto & agg_func : agg.agg_func())
+    {
+        if (!agg_func.has_field_type())
+            throw Exception("Agg func without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+        columns_from_agg.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldType(agg_func.field_type()));
+    }
     if (agg.group_by_size() != 0)
     {
         ss << "GROUP BY ";
@@ -108,12 +108,12 @@ void DAGStringConverter::buildAggString(const tipb::Aggregation & agg, std::stri
                 first = false;
             else
                 ss << ", ";
-            ss << exprToString(group_by, getCurrentColumns());
+            auto name = exprToString(group_by, getCurrentColumns());
+            ss << name;
+            if (!group_by.has_field_type())
+                throw Exception("group by expr without field type", ErrorCodes::COP_BAD_DAG_REQUEST);
+            columns_from_agg.emplace_back(name, getDataTypeByFieldType(group_by.field_type()));
         }
-    }
-    for (auto & agg_func : agg.agg_func())
-    {
-        columns_from_agg.emplace_back(exprToString(agg_func, getCurrentColumns()), getDataTypeByFieldType(agg_func.field_type()));
     }
     afterAgg = true;
 }
@@ -180,7 +180,16 @@ String DAGStringConverter::buildSqlString()
         //append final project
         project << "SELECT ";
         bool first = true;
-        for (UInt32 index : dag_request.output_offsets())
+        auto current_columns = getCurrentColumns();
+        std::vector<UInt64> output_index;
+        if (afterAgg)
+            for(UInt64 i = 0; i < current_columns.size(); i++)
+                output_index.push_back(i);
+        else
+            for (UInt64 index : dag_request.output_offsets())
+                output_index.push_back(index);
+
+        for (UInt64 index : output_index)
         {
             if (first)
             {
@@ -190,7 +199,7 @@ String DAGStringConverter::buildSqlString()
             {
                 project << ", ";
             }
-            project << getCurrentColumns()[index].name;
+            project << current_columns[index].name;
         }
         project << " ";
     }
