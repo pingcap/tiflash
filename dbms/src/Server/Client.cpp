@@ -224,10 +224,6 @@ private:
         std::string config_path;
         if (config().has("config-file"))
             config_path = config().getString("config-file");
-        else if (Poco::File("./config.toml").exists())
-            config_path = "./config.toml";
-        else if (!home_path.empty() && Poco::File(home_path + "/.tiflash/config.toml").exists())
-            config_path = home_path + "/.tiflash/config.toml";
 
         if (!config_path.empty())
         {
