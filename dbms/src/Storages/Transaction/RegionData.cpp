@@ -118,8 +118,9 @@ LockInfoPtr RegionData::getLockInfo(Timestamp start_ts) const
         const auto & [lock_type, primary, ts, ttl, data] = decoded_val;
         std::ignore = tikv_val;
         std::ignore = data;
+        std::ignore = lock_type;
 
-        if (lock_type == DelFlag || ts > start_ts)
+        if (ts > start_ts)
             continue;
 
         return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(*tikv_key), ttl});
