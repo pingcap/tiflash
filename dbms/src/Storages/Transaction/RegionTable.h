@@ -165,8 +165,9 @@ private:
     RegionID pickRegionToFlush();
     RegionDataReadInfoList flushRegion(const RegionPtr & region, bool try_persist) const;
 
+    void incrDirtyFlag(RegionID region_id);
     void clearDirtyFlag(RegionID region_id);
-    DirtyRegions::iterator clearDirtyFlag(const RegionTable::DirtyRegions::iterator & region_iter);
+    DirtyRegions::iterator clearDirtyFlag(const RegionTable::DirtyRegions::iterator & region_iter, std::lock_guard<std::mutex> &);
 
 private:
     TableMap tables;
