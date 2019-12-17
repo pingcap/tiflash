@@ -222,7 +222,7 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     ColumnInfo column_info;
     column_info.id = id;
     column_info.name = column.name;
-    const IDataType *nested_type = column.type.get();
+    const IDataType * nested_type = column.type.get();
 
     // Fill not null.
     if (!column.type->isNullable())
@@ -292,8 +292,7 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
             column_info.tp = TiDB::TypeEnum;
             break;
         default:
-            throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type",
-                                ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception("Unable reverse map TiFlash type " + nested_type->getName() + " to TiDB type", ErrorCodes::LOGICAL_ERROR);
     }
 
     // Fill unsigned flag.
@@ -318,7 +317,7 @@ ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, con
     if (checkDataType<DataTypeEnum16>(nested_type))
     {
         auto enum16_type = checkAndGetDataType<DataTypeEnum16>(nested_type);
-        for (auto &element : enum16_type->getValues())
+        for (auto & element : enum16_type->getValues())
         {
             column_info.elems.emplace_back(element.first, element.second);
         }
