@@ -118,6 +118,7 @@ LockInfoPtr RegionData::getLockInfo(Timestamp start_ts) const
         const auto & [lock_type, primary, ts, ttl, data] = decoded_val;
         std::ignore = tikv_val;
         std::ignore = data;
+        std::ignore = lock_type;
 
         if (ts > start_ts)
             continue;
