@@ -11,7 +11,7 @@ namespace DM
 class DeltaValueSpace
 {
 public:
-    DeltaValueSpace() {}
+    DeltaValueSpace(size_t handle_col_pos_) : handle_col_pos(handle_col_pos_) {}
 
     void addBlock(const Block & block, size_t rows)
     {
@@ -19,37 +19,44 @@ public:
         sizes.push_back(rows);
     }
 
-    size_t write(MutableColumns & output_columns, size_t offset, size_t limit)
+    size_t write(const HandleRange & range, MutableColumns & output_columns, size_t offset, size_t limit)
     {
         auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(offset);
         auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(offset + limit);
 
-        size_t actually_read = 0;
-        size_t chunk_index   = start_chunk_index;
+        size_t actual_write = 0;
+        size_t chunk_index  = start_chunk_index;
         for (; chunk_index <= end_chunk_index && chunk_index < sizes.size(); ++chunk_index)
         {
             size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
             size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : sizes[chunk_index];
             size_t rows_in_chunk_limit = rows_end_in_chunk - rows_start_in_chunk;
 
-            auto & block = blocks[chunk_index];
-            // Empty block means we don't need to read.
-            if (rows_end_in_chunk > rows_start_in_chunk && block)
+            // TODO: block should be loaded by demand.
+            auto & block           = blocks[chunk_index];
+            auto & handle_col_data = toColumnVectorData<Handle>(block.getByPosition(handle_col_pos).column);
+            if (rows_end_in_chunk > rows_start_in_chunk)
             {
-                for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
+                if (rows_in_chunk_limit == 1)
                 {
-                    if (rows_in_chunk_limit == 1)
-                        output_columns[col_index]->insertFrom(*(block.getByPosition(col_index).column), rows_start_in_chunk);
-                    else
-                        output_columns[col_index]->insertRangeFrom(*(block.getByPosition(col_index).column), //
-                                                                   rows_start_in_chunk,
-                                                                   rows_in_chunk_limit);
+                    if (range.check(handle_col_data[rows_start_in_chunk]))
+                    {
+                        ++actual_write;
+                        for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
+                            output_columns[col_index]->insertFrom(*(block.getByPosition(col_index).column), rows_start_in_chunk);
+                    }
                 }
-
-                actually_read += rows_in_chunk_limit;
+                else
+                {
+                    auto [actual_offset, actual_limit]
+                        = HandleFilter::getPosRangeOfSorted(range, handle_col_data, rows_start_in_chunk, rows_in_chunk_limit);
+                    actual_write += actual_limit;
+                    for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
+                        output_columns[col_index]->insertRangeFrom(*(block.getByPosition(col_index).column), actual_offset, actual_limit);
+                }
             }
         }
-        return actually_read;
+        return actual_write;
     }
 
 private:
@@ -66,6 +73,7 @@ private:
     }
 
 private:
+    size_t              handle_col_pos;
     Blocks              blocks;
     std::vector<size_t> sizes;
 };

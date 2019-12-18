@@ -165,7 +165,8 @@ bool isExtraColumn(const ColumnDefine & cd)
 Block DMFileReader::read()
 {
     // Go to next available chunk.
-    for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id) {}
+    size_t skip_rows;
+    getSkippedRows(skip_rows);
 
     if (next_chunk_id >= use_chunks.size())
         return {};

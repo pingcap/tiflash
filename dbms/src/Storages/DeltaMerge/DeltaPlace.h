@@ -34,9 +34,9 @@ inline int compareTuple(const Columns & left, size_t l_pos, const Columns & righ
 
 struct RidGenerator
 {
-    BlockInputStreamPtr     stable_stream;
-    const SortDescription & sort_desc;
-    const size_t            num_sort_columns;
+    SkippableBlockInputStreamPtr stable_stream;
+    const SortDescription &      sort_desc;
+    const size_t                 num_sort_columns;
 
     Columns delta_block_columns;
     size_t  delta_block_rows;
@@ -53,7 +53,7 @@ struct RidGenerator
 
     UInt64 rid = 0;
 
-    RidGenerator(const BlockInputStreamPtr & stable_stream_, const SortDescription & sort_desc_, const Block & delta_block)
+    RidGenerator(const SkippableBlockInputStreamPtr & stable_stream_, const SortDescription & sort_desc_, const Block & delta_block)
         : stable_stream(stable_stream_),
           sort_desc(sort_desc_),
           num_sort_columns(sort_desc.size()),
@@ -61,6 +61,10 @@ struct RidGenerator
           delta_block_dup_next(delta_block_rows, 0)
     {
         stable_stream->readPrefix();
+
+        size_t skip = 0;
+        stable_stream->getSkippedRows(skip);
+        rid = skip;
 
         for (size_t i = 0; i < num_sort_columns; ++i)
             delta_block_columns.push_back(delta_block.getByName(sort_desc[i].column_name).column);
@@ -185,15 +189,15 @@ struct RidGenerator
 };
 
 /**
- * Index the block which is already sorted by primary keys. The indexing is recorded into delta_tree.
+ * Index the block which is already sorted by primary keys. The indexing result is recorded into delta_tree.
  */
 template <bool use_row_id_ref, class DeltaTree>
-void placeInsert(const BlockInputStreamPtr &  stable, //
-                 const Block &                delta_block,
-                 DeltaTree &                  delta_tree,
-                 RowId                        delta_value_space_offset,
-                 const IColumn::Permutation & row_id_ref,
-                 const SortDescription &      sort)
+void placeInsert(const SkippableBlockInputStreamPtr & stable, //
+                 const Block &                        delta_block,
+                 DeltaTree &                          delta_tree,
+                 RowId                                delta_value_space_offset,
+                 const IColumn::Permutation &         row_id_ref,
+                 const SortDescription &              sort)
 {
     auto block_rows = delta_block.rows();
     if (!block_rows)
@@ -221,12 +225,48 @@ void placeInsert(const BlockInputStreamPtr &  stable, //
     }
 }
 
-/// del_range_id: the pos of delete range action in value space. It is used to filter out irrelevant deletes.
+using InsertRids = std::vector<std::pair<UInt64, bool>>;
+
+InsertRids preparePlaceInsert(const SkippableBlockInputStreamPtr & stable, //
+                              const Block &                        delta_block,
+                              const SortDescription &              sort)
+{
+    auto block_rows = delta_block.rows();
+    if (!block_rows)
+        return {};
+
+    RidGenerator rid_gen(stable, sort, delta_block);
+
+    InsertRids rids(block_rows);
+    for (size_t i = 0; i < block_rows; ++i)
+        rids[i] = rid_gen.nextForUpsert();
+
+    return rids;
+}
+
+template <bool use_row_id_ref, class DeltaTree>
+void doPlaceInsert(const InsertRids & rids, DeltaTree & delta_tree, RowId delta_value_space_offset, const IColumn::Permutation & row_id_ref)
+{
+    for (size_t i = 0; i < rids.size(); ++i)
+    {
+        auto [rid, dup] = rids[i];
+        UInt64 tuple_id;
+        if constexpr (use_row_id_ref)
+            tuple_id = delta_value_space_offset + row_id_ref[i];
+        else
+            tuple_id = delta_value_space_offset + i;
+
+        if (dup)
+            delta_tree.addDelete(rid);
+        delta_tree.addInsert(rid, tuple_id);
+    }
+}
+
 template <class DeltaTree>
-void placeDelete(const BlockInputStreamPtr & stable, //
-                 const Block &               delta_block,
-                 DeltaTree &                 delta_tree,
-                 const SortDescription &     sort)
+void placeDelete(const SkippableBlockInputStreamPtr & stable, //
+                 const Block &                        delta_block,
+                 DeltaTree &                          delta_tree,
+                 const SortDescription &              sort)
 {
     auto block_rows = delta_block.rows();
     if (!block_rows)
@@ -239,6 +279,33 @@ void placeDelete(const BlockInputStreamPtr & stable, //
     for (size_t i = 0; i < block_rows; ++i)
         rids[i] = rid_gen.nextForDelete();
     for (size_t i = 0; i < block_rows; ++i)
+    {
+        if (rids[i] >= 0)
+            delta_tree.addDelete(rids[i]);
+    }
+}
+
+using DeleteRids = std::vector<Int64>;
+DeleteRids preparePlaceDelete(const SkippableBlockInputStreamPtr & stable, //
+                              const Block &                        delta_block,
+                              const SortDescription &              sort)
+{
+    auto block_rows = delta_block.rows();
+    if (!block_rows)
+        return {};
+
+    RidGenerator rid_gen(stable, sort, delta_block);
+
+    DeleteRids rids(block_rows);
+    for (size_t i = 0; i < block_rows; ++i)
+        rids[i] = rid_gen.nextForDelete();
+    return rids;
+}
+
+template <class DeltaTree>
+void doPlaceDelete(const DeleteRids & rids, DeltaTree & delta_tree)
+{
+    for (size_t i = 0; i < rids.size(); ++i)
     {
         if (rids[i] >= 0)
             delta_tree.addDelete(rids[i]);

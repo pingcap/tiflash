@@ -496,8 +496,10 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     }
 #endif
 
+//    auto after_segment_read
+//        = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) { this->checkSegmentUpdate<false>(dm_context_, segment_); };
     auto after_segment_read
-        = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) { this->checkSegmentUpdate<false>(dm_context_, segment_); };
+        = [&](const DMContextPtr & , const SegmentPtr & ) { };
 
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));
@@ -534,7 +536,8 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, Segmen
     size_t delta_updates = segment->updatesInDeltaTree();
 
     bool should_background_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->delta_limit_rows;
-    bool should_foreground_merge_delta = std::max(delta_rows, delta_updates) >= dm_context->segment_limit_rows;
+    bool should_foreground_merge_delta
+        = std::max(delta_rows, delta_updates) >= dm_context->segment_limit_rows + dm_context->delta_limit_rows * 2;
 
     if constexpr (by_write_thread)
     {
@@ -685,7 +688,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     // FIXME: enable segment merge again.
     if (true)
     {
-        LOG_WARNING(log, "We don't support merge currently!!!");
+        LOG_DEBUG(log, "We don't support merge currently!!!");
         return;
     }
 

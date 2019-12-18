@@ -194,10 +194,7 @@ public:
     // TODO: getInputStream can be removed
     ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
-    DeltaValueSpacePtr getValueSpace(const PageReader &    page_reader, //
-                                     const ColumnDefines & read_columns,
-                                     const HandleRange &   range,
-                                     size_t                rows_limit) const;
+    DeltaValueSpacePtr getValueSpace(const PageReader & page_reader, const ColumnDefines & read_columns, size_t rows_limit) const;
 
     MutableColumnMap cloneCache();
     size_t           cacheChunks() { return cache_chunks; }

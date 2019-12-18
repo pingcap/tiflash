@@ -550,8 +550,8 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
     auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(rows_begin, deletes_begin);
     auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(rows_end, deletes_end);
 
-    size_t block_rows_start = rows_begin;
-    size_t block_rows_end   = rows_begin;
+    size_t read_rows_start = rows_begin;
+    size_t read_rows_end   = rows_begin;
 
     for (size_t chunk_index = start_chunk_index; chunk_index < chunks.size() && chunk_index <= end_chunk_index; ++chunk_index)
     {
@@ -560,17 +560,21 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
         size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
         size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.getRows();
 
-        block_rows_end += rows_end_in_chunk - rows_start_in_chunk;
+        read_rows_end += rows_end_in_chunk - rows_start_in_chunk;
 
-        if (chunk.isDeleteRange() || (chunk_index == chunks.size() - 1 || chunk_index == end_chunk_index))
+        if (chunk.isDeleteRange() //
+            || (chunk_index == chunks.size() - 1 || chunk_index == end_chunk_index))
         {
-            if (block_rows_end != block_rows_start)
-                res.emplace_back(
-                    read({handle, getVersionColumnDefine()}, page_reader, block_rows_start, block_rows_end - block_rows_start));
+            if (read_rows_end != read_rows_start)
+            {
+                auto block = read({handle, getVersionColumnDefine()}, page_reader, read_rows_start, read_rows_end - read_rows_start);
+                res.emplace_back(std::move(block));
+            }
+
             if (chunk.isDeleteRange())
                 res.emplace_back(chunk.getDeleteRange());
 
-            block_rows_start = block_rows_end;
+            read_rows_start = read_rows_end;
         }
     }
 
@@ -700,12 +704,10 @@ ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & re
     return std::make_shared<ChunkBlockInputStream>(chunks, read_columns, page_reader, RSOperatorPtr());
 }
 
-DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_reader,
-                                                 const ColumnDefines & read_columns,
-                                                 const HandleRange &   range,
-                                                 size_t                rows_limit) const
+DeltaValueSpacePtr
+DiskValueSpace::getValueSpace(const PageReader & page_reader, const ColumnDefines & read_columns, size_t rows_limit) const
 {
-    auto mvs = std::make_shared<DeltaValueSpace>();
+    auto mvs = std::make_shared<DeltaValueSpace>(0);
 
     size_t chunk_cache_start = chunks.size() - cache_chunks;
     size_t already_read_rows = 0;
@@ -715,18 +717,7 @@ DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_read
         auto & chunk = chunks[chunk_index];
         if (chunk.isDeleteRange() || !chunk.getRows())
             continue;
-#if 0
-        // FIXME: Disable filter since we need to use all values to build DeltaTree.
-        auto & handle_meta            = chunk.getColumn(EXTRA_HANDLE_COLUMN_ID);
-        auto [min_handle, max_handle] = handle_meta.minmax->getIntMinMax(0);
-        if (range.intersect(min_handle, max_handle))
-            mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
-        else
-            mvs->addBlock({}, chunk.getRows());
-#else
-        (void) range;
         mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
-#endif
 
         already_read_rows += chunk.getRows();
         if (already_read_rows >= rows_limit)

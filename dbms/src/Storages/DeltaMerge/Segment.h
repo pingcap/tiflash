@@ -196,23 +196,22 @@ private:
     ReadInfo getReadInfo(const DMContext &       dm_context,
                          const ColumnDefines &   read_columns,
                          const SegmentSnapshot & segment_snap,
-                         const StorageSnapshot & storage_snap,
-                         const HandleRange &     read_range) const;
+                         const StorageSnapshot & storage_snap) const;
 
     template <bool add_tag_column>
     static ColumnDefines arrangeReadColumns(const ColumnDefine & handle, const ColumnDefines & columns_to_read);
 
-    template <class IndexIterator = DeltaIndex::Iterator>
-    BlockInputStreamPtr getPlacedStream(const DMContext &           dm_context,
-                                        const ColumnDefines &       read_columns,
-                                        const HandleRange &         handle_range,
-                                        const RSOperatorPtr &       filter,
-                                        const StableValueSpacePtr & stable_snap,
-                                        const DeltaValueSpacePtr &  delta_value_space,
-                                        const IndexIterator &       delta_index_begin,
-                                        const IndexIterator &       delta_index_end,
-                                        size_t                      index_size,
-                                        size_t                      expected_block_size) const;
+    template <class IndexIterator = DeltaIndex::Iterator, bool skippable_place = false>
+    SkippableBlockInputStreamPtr getPlacedStream(const DMContext &           dm_context,
+                                                 const ColumnDefines &       read_columns,
+                                                 const HandleRange &         handle_range,
+                                                 const RSOperatorPtr &       filter,
+                                                 const StableValueSpacePtr & stable_snap,
+                                                 const DeltaValueSpacePtr &  delta_value_space,
+                                                 const IndexIterator &       delta_index_begin,
+                                                 const IndexIterator &       delta_index_end,
+                                                 size_t                      index_size,
+                                                 size_t                      expected_block_size) const;
 
     /// Merge delta & stable, and then take the middle one.
     Handle getSplitPointSlow(DMContext & dm_context, const ReadInfo & read_info) const;
@@ -271,7 +270,7 @@ private:
     const PageId      segment_id;
     const PageId      next_segment_id;
 
-    DiskValueSpacePtr delta;
+    DiskValueSpacePtr   delta;
     StableValueSpacePtr stable;
 
     std::atomic_bool is_merge_delta            = false;
