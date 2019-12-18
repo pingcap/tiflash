@@ -168,14 +168,6 @@ inline Block getNewBlockByHeader(const Block & header, const Block & block)
     return new_block;
 }
 
-inline ColumnDefines getColumnDefinesFromBlock(const Block & block)
-{
-    ColumnDefines columns;
-    for (auto & c : block)
-        columns.push_back(ColumnDefine(c.column_id, c.name, c.type));
-    return columns;
-}
-
 inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
 {
     for (auto & c : columns)

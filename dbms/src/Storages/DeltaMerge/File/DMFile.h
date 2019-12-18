@@ -12,9 +12,11 @@ namespace DB
 {
 namespace DM
 {
+using DMFileID = UInt64;
 class DMFile;
 using DMFilePtr = std::shared_ptr<DMFile>;
 using DMFiles   = std::vector<DMFilePtr>;
+using DMFileMap = std::unordered_map<DMFileID, DMFilePtr>;
 
 static const String NGC_FILE_NAME = "NGC";
 
@@ -53,20 +55,20 @@ public:
 
     using ChunkStats = PaddedPODArray<ChunkStat>;
 
-    static DMFilePtr create(UInt64 file_id, const String & parent_path);
-    static DMFilePtr restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
+    static DMFilePtr create(DMFileID file_id, const String & parent_path);
+    static DMFilePtr restore(DMFileID file_id, DMFileID ref_id, const String & parent_path, bool read_meta = true);
 
     void writeMeta();
     void readMeta();
 
-    static std::set<UInt64> listAllInPath(const String & parent_path, bool can_gc);
+    static std::set<DMFileID> listAllInPath(const String & parent_path, bool can_gc);
 
     bool canGC();
     void enableGC();
     void remove();
 
-    UInt64 fileId() { return file_id; }
-    UInt64 refId() { return ref_id; }
+    DMFileID fileId() { return file_id; }
+    DMFileID refId() { return ref_id; }
     String path() { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
     String metaPath() { return path() + "/meta.txt"; }
     String chunkStatPath() { return path() + "/chunk"; }
@@ -74,7 +76,6 @@ public:
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
     String colDataPath(const String & file_name_base) { return path() + "/" + file_name_base + ".dat"; }
     String colIndexPath(const String & file_name_base) { return path() + "/" + file_name_base + ".idx"; }
-    String colEdgePath(const String & file_name_base) { return path() + "/" + file_name_base + ".edge"; }
     String colMarkPath(const String & file_name_base) { return path() + "/" + file_name_base + ".mrk"; }
 
     const ColumnStat & getColumnStat(ColId col_id)
@@ -111,7 +112,7 @@ public:
     }
 
 private:
-    DMFile(UInt64 file_id_, UInt64 ref_id_, const String & parent_path_, Status status_, Logger * log_)
+    DMFile(DMFileID file_id_, DMFileID ref_id_, const String & parent_path_, Status status_, Logger * log_)
         : file_id(file_id_), ref_id(ref_id_), parent_path(parent_path_), status(status_), log(log_)
     {
     }
@@ -122,8 +123,8 @@ private:
     void finalize();
 
 private:
-    UInt64 file_id;
-    UInt64 ref_id; // It is a reference to file_id, could be the same.
+    DMFileID file_id;
+    DMFileID ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
     ChunkStats  chunk_stats;

@@ -100,7 +100,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
                            const ColumnDefines & read_columns_,
                            const HandleRange &   handle_range_,
                            const RSOperatorPtr & filter_,
-                           const IdSetPtr &      read_chunks_,
+                           const IndexSetPtr &   read_chunks_,
                            MarkCache *           mark_cache_,
                            MinMaxIndexCache *    index_cache_,
                            UInt64                hash_salt_,
@@ -121,10 +121,6 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
       skip_chunks_by_column(read_columns.size(), 0),
       log(&Logger::get("DMFileReader"))
 {
-    if (dmfile->getStatus() != DMFile::Status::READABLE)
-        throw Exception("DMFile [" + DB::toString(dmfile->fileId())
-                        + "] is expected to be in READABLE status, but: " + DMFile::statusString(dmfile->getStatus()));
-
     for (auto & cd : read_columns)
     {
         auto callback = [&](const IDataType::SubstreamPath & substream) {
@@ -206,7 +202,7 @@ Block DMFileReader::read()
 
     for (size_t i = 0; i < read_columns.size(); ++i)
     {
-        auto & cd = read_columns[i];
+        const auto & cd = read_columns[i];
         if (do_clean_read && isExtraColumn(cd))
         {
             ColumnPtr column;
@@ -240,16 +236,17 @@ Block DMFileReader::read()
             }
 
             auto column = cd.type->createColumn();
-            cd.type->deserializeBinaryBulkWithMultipleStreams(*column, //
-                                                              [&](const IDataType::SubstreamPath & substream) {
-                                                                  String name   = DMFile::getFileNameBase(cd.id, substream);
-                                                                  auto & stream = column_streams.at(name);
-                                                                  return stream->buf.get();
-                                                              },
-                                                              read_rows,
-                                                              stream->avg_size_hint,
-                                                              true,
-                                                              {});
+            cd.type->deserializeBinaryBulkWithMultipleStreams( //
+                *column,
+                [&](const IDataType::SubstreamPath & substream) {
+                    String name   = DMFile::getFileNameBase(cd.id, substream);
+                    auto & stream = column_streams.at(name);
+                    return stream->buf.get();
+                },
+                read_rows,
+                stream->avg_size_hint,
+                true,
+                {});
             IDataType::updateAvgValueSizeHint(*column, stream->avg_size_hint);
 
             res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});

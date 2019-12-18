@@ -12,6 +12,7 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/HandleFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/DeltaMerge/DeltaValueSpace.h>
 
 namespace DB
 {
@@ -20,13 +21,12 @@ namespace DM
 
 // Note that the columns in stable input stream and value space must exactly the same, including name, type, and id.
 // The first column must be handle column.
-template <class DeltaValueSpace, class IndexIterator>
+template <class IndexIterator>
 class DeltaMergeBlockInputStream final : public IBlockInputStream, Allocator<false>
 {
     static constexpr size_t UNLIMITED = std::numeric_limits<UInt64>::max();
 
 private:
-    using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
     using SharedLock         = std::shared_lock<std::shared_mutex>;
 
     struct IndexEntry
@@ -45,7 +45,7 @@ private:
     // < 0 : some rows are filtered out by stable filter, should not write into output.
     ssize_t stable_skip = 0;
 
-    DeltaValueSpacePtr delta_value_space;
+    DeltaValuesPtr delta_value_space;
 
     IndexEntry * index;
     size_t       index_capacity;
@@ -80,7 +80,7 @@ private:
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
-                               const DeltaValueSpacePtr &           delta_value_space_,
+                               const DeltaValuesPtr &               delta_value_space_,
                                IndexIterator                        index_begin,
                                IndexIterator                        index_end,
                                size_t                               index_size_,

@@ -142,6 +142,22 @@ PageId PageStorage::getNormalPageId(PageId page_id, SnapshotPtr snapshot)
     return is_ref_id ? normal_page_id : page_id;
 }
 
+PageIdSet PageStorage::filterValidPages(const PageIdSet & pages, SnapshotPtr snapshot)
+{
+    if (!snapshot)
+    {
+        snapshot = this->getSnapshot();
+    }
+
+    PageIdSet valid_pages;
+    for (const auto & page_id: pages)
+    {
+        if (auto entry = snapshot->version()->find(page_id); entry)
+            valid_pages.insert(page_id);
+    }
+    return valid_pages;
+}
+
 PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
 {
     if (!snapshot)

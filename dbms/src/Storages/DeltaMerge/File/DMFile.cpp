@@ -76,7 +76,7 @@ void DMFile::finalize()
     if (status != Status::WRITING)
         throw Exception("Expected WRITING status, now " + statusString(status));
     Poco::File old_file(path());
-    status = Status ::READABLE;
+    status = Status::READABLE;
 
     auto new_path = path();
 

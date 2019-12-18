@@ -1,76 +1,247 @@
 #pragma once
 
+#include <common/logger_useful.h>
+#include <mutex>
+
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
+
+#include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFileChunkFilter.h>
+#include <Storages/DeltaMerge/File/DMFileWriter.h>
+#include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/StoragePool.h>
+#include <Storages/Page/WriteBatch.h>
 
 namespace DB
 {
 namespace DM
 {
 
-class DeltaValueSpace
+struct BlockOrDelete
+{
+    BlockOrDelete() = default;
+    BlockOrDelete(Block block_) : block(std::move(block_)) {}
+    BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
+
+    bool isDelete() const { return !block; }
+
+    Block       block;
+    HandleRange delete_range;
+};
+using BlockOrDeletes = std::vector<BlockOrDelete>;
+
+// Chunk info in disk.
+using ChunkID = UInt64;
+class ChunkMeta
 {
 public:
-    DeltaValueSpace() {}
+    // Binary version of chunk
+    using Version = UInt32;
+    static const Version CURRENT_VERSION;
 
-    void addBlock(const Block & block, size_t rows)
-    {
-        blocks.push_back(block);
-        sizes.push_back(rows);
-    }
+public:
+    // For data block
+    ChunkID id      = 0;
+    PageId  file_id = 0; // Which DMFile is belong to
+    size_t  index   = 0; // The index in DMFile
+    size_t  rows    = 0; // Num of rows
 
-    size_t write(MutableColumns & output_columns, size_t offset, size_t limit)
-    {
-        auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(offset);
-        auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(offset + limit);
+    // For delete_range
+    HandleRange delete_range;
+    bool        is_delete_range = false;
 
-        size_t actually_read = 0;
-        size_t chunk_index   = start_chunk_index;
-        for (; chunk_index <= end_chunk_index && chunk_index < sizes.size(); ++chunk_index)
-        {
-            size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
-            size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : sizes[chunk_index];
-            size_t rows_in_chunk_limit = rows_end_in_chunk - rows_start_in_chunk;
+    ChunkMeta() = default;
+    ChunkMeta(HandleRange delete_range_) : delete_range(delete_range_), is_delete_range(true) {}
 
-            auto & block = blocks[chunk_index];
-            // Empty block means we don't need to read.
-            if (rows_end_in_chunk > rows_start_in_chunk && block)
-            {
-                for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
-                {
-                    if (rows_in_chunk_limit == 1)
-                        output_columns[col_index]->insertFrom(*(block.getByPosition(col_index).column), rows_start_in_chunk);
-                    else
-                        output_columns[col_index]->insertRangeFrom(*(block.getByPosition(col_index).column), //
-                                                                   rows_start_in_chunk,
-                                                                   rows_in_chunk_limit);
-                }
+    void             serialize(WriteBuffer & buf) const;
+    static ChunkMeta deserialize(ReadBuffer & buf);
+};
+// Use list so that we can use iterator for snapshot.
+using ChunkMetaList = std::list<ChunkMeta>;
 
-                actually_read += rows_in_chunk_limit;
-            }
-        }
-        return actually_read;
-    }
+void          serializeChunkMetas(WriteBuffer &                 buf,
+                                  ChunkMetaList::const_iterator begin,
+                                  ChunkMetaList::const_iterator end,
+                                  ChunkMeta *                   uncommitted_chunk = nullptr);
+ChunkMetaList deserializeChunkMetas(WriteBuffer & buf);
 
-private:
-    inline std::pair<size_t, size_t> findChunk(size_t offset)
-    {
-        size_t rows = 0;
-        for (size_t block_id = 0; block_id < sizes.size(); ++block_id)
-        {
-            rows += sizes[block_id];
-            if (rows > offset)
-                return {block_id, sizes[block_id] - (rows - offset)};
-        }
-        return {sizes.size(), 0};
-    }
 
-private:
-    Blocks              blocks;
-    std::vector<size_t> sizes;
+struct ChunkOrDelete
+{
+    ChunkOrDelete() = default;
+    ChunkOrDelete(ChunkMeta && chunk_) : chunk(std::move(chunk_)) {}
+    ChunkOrDelete(HandleRange && delete_range_) : delete_range(std::move(delete_range_)) {}
+
+    ChunkMeta   chunk;
+    HandleRange delete_range;
 };
 
-using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
+class DeltaSpace;
+using DeltaSpacePtr = std::shared_ptr<DeltaSpace>;
+
+// TODO: rename this class to DeltaValueSpace?
+class DeltaSpace
+{
+public:
+    struct AppendTask
+    {
+        ChunkMeta append_chunk;
+    };
+    using AppendTaskPtr = std::shared_ptr<AppendTask>;
+
+public:
+    class Values
+    {
+    public:
+        void addBlock(const Block & block, size_t rows)
+        {
+            blocks.push_back(block);
+            sizes.push_back(rows);
+        }
+
+        size_t write(MutableColumns & output_columns, size_t offset, size_t limit) const;
+
+    private:
+        inline std::pair<size_t, size_t> findChunk(size_t offset) const
+        {
+            size_t rows = 0;
+            for (size_t block_id = 0; block_id < sizes.size(); ++block_id)
+            {
+                rows += sizes[block_id];
+                if (rows > offset)
+                    return {block_id, sizes[block_id] - (rows - offset)};
+            }
+            return {sizes.size(), 0};
+        }
+
+    private:
+        Blocks              blocks;
+        std::vector<size_t> sizes;
+    };
+    using DeltaValuesPtr = std::shared_ptr<Values>;
+
+public:
+    class Snapshot
+    {
+    public:
+        Snapshot(ChunkMetaList::const_iterator beg_, size_t chunks_size_, DMFileMap files_)
+            : beg(std::move(beg_)), chunks_size(chunks_size_), files(std::move(files_))
+        {
+        }
+
+        DeltaValuesPtr getValues(const ColumnDefines & read_columns, //
+                                 const DMContext &     context) const;
+
+        BlockOrDeletes getMergeBlocks(const ColumnDefine & handle, //
+                                      size_t               rows_begin,
+                                      size_t               deletes_begin,
+                                      const DMContext &    context) const;
+
+        size_t numChunks() const;
+        size_t numDeletes() const;
+        size_t numRows() const;
+        size_t numBytes() const;
+
+    private:
+        Block read(const ColumnDefines & read_columns,
+                   size_t                rows_offset,
+                   size_t                rows_limit,
+                   const DMContext &     context,
+                   std::optional<size_t> reserve_rows_ = {}) const;
+
+        using ReadCallback = std::function<void(const Block &, size_t block_rows_offset, size_t block_rows_limit)>;
+
+        /// Read from a specific DMFile
+        void readFromFile(DMFileID              file_id, //
+                          const ColumnDefines & read_columns,
+                          const IndexSetPtr &   indices,
+                          const DMContext &     context,
+                          const ReadCallback &  callback,
+                          std::optional<size_t> rows_offset_ = std::nullopt,
+                          std::optional<size_t> rows_limit_  = std::nullopt) const;
+
+        std::pair<size_t, size_t> findChunk(size_t rows_offset, size_t deletes_offset) const;
+        std::pair<size_t, size_t> findChunk(size_t rows_offset) const;
+
+    private:
+        const ChunkMetaList::const_iterator beg;
+        const size_t                        chunks_size;
+        const DMFileMap                     files;
+
+        friend class DeltaSpace;
+    };
+    using SnapshotPtr = std::shared_ptr<Snapshot>;
+
+    SnapshotPtr getSnapshot() const
+    {
+        std::shared_lock lock(read_write_mutex);
+        return std::make_shared<Snapshot>(chunks.begin(), chunks.size(), files);
+    }
+
+public:
+    DeltaSpace(PageId id_, String parent_path_) : id(id_), parent_path(std::move(parent_path_)), log(&Logger::get("DeltaSpace")) {}
+
+    // Generate a new delta(with the same id) and remove the chunks in snap
+    DeltaSpacePtr nextGeneration(const SnapshotPtr & snap, WriteBatches & wbs);
+
+    static DeltaSpacePtr
+    newRef(const SnapshotPtr & snap, PageId new_delta_id, const String & parent_path, const GenPageId & gen_chunk_id, WriteBatches & wbs);
+
+    /// Serialize
+    void saveMeta(WriteBatch & meta_wb);
+    /// Restore an instance from existing metadata.
+    static DeltaSpacePtr restore(PageId id, const String & parent_path, const DMContext & context);
+
+    /// For write
+    AppendTaskPtr appendToDisk(const BlockOrDelete & update, WriteBatches & wbs, const DMContext & context);
+    void          applyAppend(const AppendTaskPtr & task);
+
+public:
+    PageId         pageId() const { return id; }
+    const String & parentPath() const { return parent_path; }
+
+    size_t numChunks() const
+    {
+        auto snap = getSnapshot();
+        return snap->numChunks();
+    }
+    size_t numDeletes() const
+    {
+        auto snap = getSnapshot();
+        return snap->numDeletes();
+    }
+    size_t numRows() const
+    {
+
+        auto snap = getSnapshot();
+        return snap->numRows();
+    }
+    size_t numBytes() const
+    {
+        //FIXME:
+        // auto snap = getSnapshot();
+        return 0;
+    }
+
+private:
+    PageId id; // PageId to store this delta's meta in PageStorage.
+    String parent_path;
+
+    mutable std::shared_mutex read_write_mutex;
+    ChunkMetaList             chunks;
+
+    DMFileMap files;
+    DMFilePtr file_writting = nullptr;
+
+    std::unique_ptr<DMFileWriter> writer = nullptr;
+
+    Logger * log;
+};
+
+using DeltaSnapshotPtr = DeltaSpace::SnapshotPtr;
+using DeltaValuesPtr   = DeltaSpace::DeltaValuesPtr;
 
 } // namespace DM
 } // namespace DB

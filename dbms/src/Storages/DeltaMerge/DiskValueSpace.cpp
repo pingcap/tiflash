@@ -117,7 +117,7 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
 
     // If the newly appended object is a delete_range, then we must clear the cache and flush them.
 
-    if (is_delta_vs && !is_delete //
+    if (!is_delete //
         && (cache_rows + append_rows) < context.dm_context.delta_cache_limit_rows)
     {
         // Simply put the newly appended block into cache.
@@ -216,7 +216,7 @@ DiskValueSpacePtr DiskValueSpace::applyAppendTask(const OpContext & context, con
     WriteBatch wb;
     auto       data_size = buf.count();
     wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
-    context.meta_storage.write(wb);
+    context.meta_storage.write(wb); // FIXME: this should be commit in Storage level.
 
     // Apply in memory.
     DiskValueSpace * instance = this;
@@ -890,6 +890,7 @@ std::pair<size_t, size_t> DiskValueSpace::findChunk(size_t rows_offset, size_t d
     {
         if (rows_count == rows_offset && deletes_count == deletes_offset)
             return {chunk_index, 0};
+
         const auto & chunk = chunks[chunk_index];
         if (chunk.getRows())
         {
@@ -898,7 +899,6 @@ std::pair<size_t, size_t> DiskValueSpace::findChunk(size_t rows_offset, size_t d
             {
                 if (unlikely(deletes_count != deletes_offset))
                     throw Exception("deletes_offset and rows_offset are not matched");
-
                 return {chunk_index, chunk.getRows() - (rows_count - rows_offset)};
             }
         }

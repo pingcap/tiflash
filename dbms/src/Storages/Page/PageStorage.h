@@ -82,6 +82,9 @@ public:
 
     PageId getNormalPageId(PageId page_id, SnapshotPtr snapshot = {});
 
+    // Given a set of page ids, return valid page ids in that set.
+    PageIdSet filterValidPages(const PageIdSet & pages, SnapshotPtr snapshot = {});
+
     // Register two callback:
     // `scanner` for scanning avaliable external page ids.
     // `remover` will be called with living normal page ids after gc run a round.
@@ -154,6 +157,7 @@ public:
     PageId    getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
     UInt64    getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }
     PageEntry getPageEntry(PageId page_id) const { return storage.getEntry(page_id, snap); }
+    PageIdSet filterValidPages(const PageIdSet & pages) const { return storage.filterValidPages(pages, snap); }
 
 private:
     PageStorage &            storage;

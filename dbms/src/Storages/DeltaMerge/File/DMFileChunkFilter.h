@@ -9,8 +9,8 @@ namespace DB
 namespace DM
 {
 
-using IdSet    = std::set<UInt64>;
-using IdSetPtr = std::shared_ptr<IdSet>;
+using IndexSet    = std::set<UInt64>;
+using IndexSetPtr = std::shared_ptr<IndexSet>;
 
 class DMFileChunkFilter
 {
@@ -20,7 +20,7 @@ public:
                       UInt64                hash_salt_,
                       const HandleRange &   handle_range_,
                       const RSOperatorPtr & filter_,
-                      const IdSetPtr &      read_chunks_)
+                      const IndexSetPtr &   read_chunks_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
           hash_salt(hash_salt_),
@@ -135,7 +135,7 @@ private:
     UInt64             hash_salt;
     HandleRange        handle_range;
     RSOperatorPtr      filter;
-    IdSetPtr           read_chunks;
+    IndexSetPtr        read_chunks;
 
     RSCheckParam param;
 

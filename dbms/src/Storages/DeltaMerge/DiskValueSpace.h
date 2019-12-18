@@ -21,81 +21,6 @@ namespace DB
 namespace DM
 {
 
-struct BlockOrDelete
-{
-    BlockOrDelete() = default;
-    BlockOrDelete(Block && block_) : block(block_) {}
-    BlockOrDelete(const HandleRange & delete_range_) : delete_range(delete_range_) {}
-
-    Block       block;
-    HandleRange delete_range;
-};
-using BlockOrDeletes = std::vector<BlockOrDelete>;
-
-struct WriteBatches
-{
-    WriteBatch log;
-    WriteBatch data;
-    WriteBatch meta;
-
-    PageIds writtenLog;
-    PageIds writtenData;
-
-    WriteBatch removed_log;
-    WriteBatch removed_data;
-    WriteBatch removed_meta;
-
-    void writeLogAndData(StoragePool & storage_pool)
-    {
-        storage_pool.log().write(log);
-        storage_pool.data().write(data);
-
-        for (auto & w : log.getWrites())
-            writtenLog.push_back(w.page_id);
-        for (auto & w : data.getWrites())
-            writtenData.push_back(w.page_id);
-
-        log.clear();
-        data.clear();
-    }
-
-    void rollbackWrittenLogAndData(StoragePool & storage_pool)
-    {
-        WriteBatch log_wb;
-        for (auto p : writtenLog)
-            log_wb.delPage(p);
-        WriteBatch data_wb;
-        for (auto p : writtenData)
-            data_wb.delPage(p);
-
-        storage_pool.log().write(log_wb);
-        storage_pool.data().write(data_wb);
-    }
-
-    void writeMeta(StoragePool & storage_pool)
-    {
-        storage_pool.meta().write(meta);
-        meta.clear();
-    }
-
-    void writeRemoves(StoragePool & storage_pool)
-    {
-        storage_pool.log().write(removed_log);
-        storage_pool.data().write(removed_data);
-        storage_pool.meta().write(removed_meta);
-
-        removed_log.clear();
-        removed_data.clear();
-        removed_meta.clear();
-    }
-
-    void writeAll(StoragePool & storage_pool)
-    {
-        writeLogAndData(storage_pool);
-        writeMeta(storage_pool);
-        writeRemoves(storage_pool);
-    }
-};
 
 struct AppendTask
 {
@@ -104,6 +29,69 @@ struct AppendTask
     Chunks append_chunks;
 };
 using AppendTaskPtr = std::shared_ptr<AppendTask>;
+
+class DeltaValueSpace
+{
+public:
+    DeltaValueSpace() {}
+
+    void addBlock(const Block & block, size_t rows)
+    {
+        blocks.push_back(block);
+        sizes.push_back(rows);
+    }
+
+    size_t write(MutableColumns & output_columns, size_t offset, size_t limit)
+    {
+        auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(offset);
+        auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(offset + limit);
+
+        size_t actually_read = 0;
+        size_t chunk_index   = start_chunk_index;
+        for (; chunk_index <= end_chunk_index && chunk_index < sizes.size(); ++chunk_index)
+        {
+            size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
+            size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : sizes[chunk_index];
+            size_t rows_in_chunk_limit = rows_end_in_chunk - rows_start_in_chunk;
+
+            auto & block = blocks[chunk_index];
+            // Empty block means we don't need to read.
+            if (rows_end_in_chunk > rows_start_in_chunk && block)
+            {
+                for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
+                {
+                    if (rows_in_chunk_limit == 1)
+                        output_columns[col_index]->insertFrom(*(block.getByPosition(col_index).column), rows_start_in_chunk);
+                    else
+                        output_columns[col_index]->insertRangeFrom(*(block.getByPosition(col_index).column), //
+                                                                   rows_start_in_chunk,
+                                                                   rows_in_chunk_limit);
+                }
+
+                actually_read += rows_in_chunk_limit;
+            }
+        }
+        return actually_read;
+    }
+
+private:
+    inline std::pair<size_t, size_t> findChunk(size_t offset)
+    {
+        size_t rows = 0;
+        for (size_t block_id = 0; block_id < sizes.size(); ++block_id)
+        {
+            rows += sizes[block_id];
+            if (rows > offset)
+                return {block_id, sizes[block_id] - (rows - offset)};
+        }
+        return {sizes.size(), 0};
+    }
+
+private:
+    Blocks              blocks;
+    std::vector<size_t> sizes;
+};
+using DeltaValueSpacePtr = std::shared_ptr<DeltaValueSpace>;
 
 class DiskValueSpace;
 using DiskValueSpacePtr = std::shared_ptr<DiskValueSpace>;

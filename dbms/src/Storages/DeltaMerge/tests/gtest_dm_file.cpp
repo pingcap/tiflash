@@ -105,7 +105,7 @@ try
                                                                cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
-                                                               IdSetPtr{});
+                                                               IndexSetPtr{});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -179,7 +179,7 @@ try
                                                                cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
-                                                               IdSetPtr{});
+                                                               IndexSetPtr{});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -252,7 +252,7 @@ TEST_F(DMFile_Test, StringType)
                                                                cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
-                                                               IdSetPtr{});
+                                                               IndexSetPtr{});
 
         size_t num_rows_read = 0;
         stream->readPrefix();
@@ -323,7 +323,7 @@ try
                                                                cols,
                                                                HandleRange::newAll(),
                                                                RSOperatorPtr{},
-                                                               IdSetPtr{});
+                                                               IndexSetPtr{});
         size_t num_rows_read = 0;
         stream->readPrefix();
         while (Block in = stream->read())

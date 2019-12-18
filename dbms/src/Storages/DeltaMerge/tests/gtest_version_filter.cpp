@@ -49,6 +49,14 @@ BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefine
     return std::make_shared<DMVersionFilterBlockInputStream<MODE>>(std::make_shared<DebugBlockInputStream>(blocks), columns, max_version);
 }
 
+inline ColumnDefines getColumnDefinesFromBlock(const Block & block)
+{
+    ColumnDefines columns;
+    for (auto & c : block)
+        columns.push_back(ColumnDefine(c.column_id, c.name, c.type));
+    return columns;
+}
+
 } // namespace
 
 TEST(VersionFilter_test, MVCC)

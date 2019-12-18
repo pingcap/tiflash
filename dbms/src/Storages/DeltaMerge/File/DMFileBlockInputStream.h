@@ -12,6 +12,9 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
+    // `handle_range` for filter chunks by handle column
+    // `filter` for filter chunks by RSOperator infered from where clause
+    // `read_chunks`
     DMFileBlockInputStream(const Context &       context,
                            UInt64                max_data_version,
                            bool                  enable_clean_read,
@@ -20,7 +23,7 @@ public:
                            const ColumnDefines & read_columns,
                            const HandleRange &   handle_range,
                            const RSOperatorPtr & filter,
-                           const IdSetPtr &      read_chunks,
+                           const IndexSetPtr &      read_chunks,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(enable_clean_read,
                  max_data_version,

@@ -41,7 +41,7 @@ public:
                  const ColumnDefines & read_columns_,
                  const HandleRange &   handle_range_,
                  const RSOperatorPtr & filter,
-                 const IdSetPtr &      read_chunks,
+                 const IndexSetPtr &   read_chunks,
                  MarkCache *           mark_cache_,
                  MinMaxIndexCache *    index_cache_,
                  UInt64                hash_salt_,

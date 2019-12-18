@@ -99,7 +99,7 @@ SkippableBlockInputStreamPtr StableValueSpace::getInputStream(const DMContext & 
                                                                    read_columns,
                                                                    handle_range,
                                                                    filter,
-                                                                   IdSetPtr{}));
+                                                                   IndexSetPtr{}));
     }
     return std::make_shared<ConcatSkippableBlockInputStream>(streams);
 }

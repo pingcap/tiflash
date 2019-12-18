@@ -328,7 +328,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                                      expected_block_size);
         }
 
-        stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range, 0);
+        constexpr size_t handle_col_position = 0; // Handle col always is the first column now.
+        stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stream, read_range, handle_col_position);
         stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(stream, columns_to_read, max_version);
 
         return stream;
@@ -676,6 +677,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
 {
     LOG_TRACE(log, "getReadInfo start");
 
+    // Always put handle, version, tag become the first 3 columns
     auto new_read_columns = arrangeReadColumns<add_tag_column>(dm_context.handle_column, read_columns);
     auto delta_value_space
         = segment_snap.delta->getValueSpace(storage_snap.log_reader, new_read_columns, read_range, segment_snap.delta_rows);
@@ -775,7 +777,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
     auto & dmfiles = stable_snap->getDMFiles();
 
     DMFilePtr read_file;
-    auto      read_chunk        = std::make_shared<IdSet>();
+    auto      read_chunk        = std::make_shared<IndexSet>();
     size_t    read_row_in_chunk = 0;
 
     size_t cur_rows = 0;

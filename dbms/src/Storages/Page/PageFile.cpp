@@ -178,7 +178,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
         // this field is always true now
         const auto version = PageUtil::get<PageFileVersion>(pos);
         if (version != PageFile::CURRENT_VERSION)
-            throw Exception("Version not match, version: " + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
+            throw Exception("PageFile's version not match: " + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
 
         // check the checksum of WriteBatch
         const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);

@@ -84,7 +84,7 @@ void DMFileWriter::finalize()
 
 void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColumn & column)
 {
-    size_t rows = column.size();
+    const size_t rows = column.size();
 
     type.enumerateStreams(
         [&](const IDataType::SubstreamPath & substream) {
@@ -106,16 +106,17 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
         },
         {});
 
-    type.serializeBinaryBulkWithMultipleStreams(column, //
-                                                [&](const IDataType::SubstreamPath & substream) {
-                                                    String stream_name = DMFile::getFileNameBase(col_id, substream);
-                                                    auto & stream      = column_streams.at(stream_name);
-                                                    return &(stream->original_hashing);
-                                                },
-                                                0,
-                                                rows,
-                                                true,
-                                                {});
+    type.serializeBinaryBulkWithMultipleStreams( //
+        column,                                  //
+        [&](const IDataType::SubstreamPath & substream) {
+            String stream_name = DMFile::getFileNameBase(col_id, substream);
+            auto & stream      = column_streams.at(stream_name);
+            return &(stream->original_hashing);
+        },
+        0,
+        rows,
+        true,
+        {});
 
     type.enumerateStreams(
         [&](const IDataType::SubstreamPath & substream) {

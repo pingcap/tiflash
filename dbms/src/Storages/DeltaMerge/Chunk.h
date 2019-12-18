@@ -12,6 +12,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Range.h>
+#include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 
 
@@ -114,7 +115,7 @@ public:
     {
         if (likely(!is_delete_range))
             return "Chunk[" + DB::toString(handle_start) + "," + DB::toString(handle_end) + "]";
-        else 
+        else
             return "DeleteRange[" + DB::toString(handle_start) + "," + DB::toString(handle_end) + ")";
     }
 
@@ -127,8 +128,7 @@ private:
 };
 
 // TODO: use list instead of vector, so that DiskValueSpace won't need to do copy during Segment#getReadSnapshot.
-using Chunks    = std::vector<Chunk>;
-using GenPageId = std::function<PageId()>;
+using Chunks = std::vector<Chunk>;
 
 Chunk  createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, WriteBatch & wb);
 Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id, WriteBatch & wb);
