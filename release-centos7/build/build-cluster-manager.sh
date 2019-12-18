@@ -3,7 +3,7 @@
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 
-set -xe
+set -ueo pipefail
 
 cd $SRCPATH/cluster_manage
 ./release.sh
