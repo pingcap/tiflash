@@ -1,12 +1,12 @@
 #!/bin/bash
 
+set -ueo pipefail
+
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 CMAKE_BUILD_TYPE="RELWITHDEBINFO"
 ENABLE_EMBEDDED_COMPILER="FALSE"
-
-set -ueo pipefail
 
 install_dir="$SRCPATH/release-centos7/tiflash"
 if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
