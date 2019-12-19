@@ -277,6 +277,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         auto mut_col = ch_col.type->createColumn();
         column_map.insert(handle_col_id, std::move(mut_col), std::move(ch_col), -1, data_list.size());
     }
+    else
+    {
+        // should not contain pk, which may lead to schema not match.
+        schema_all_column_ids.erase(handle_col_id);
+    }
 
     const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
 
@@ -327,7 +332,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 for (const auto & item : column_id_to_info_index)
                 {
                     const auto & column = table_info.columns[item.second];
-                    decoded_data.emplace_back(column.id, GenDecodeRow(column));
+                    decoded_data.emplace_back(column.id, (column.hasNotNullFlag() ? GenDecodeRow(column) : Field()));
                 }
             }
             else
