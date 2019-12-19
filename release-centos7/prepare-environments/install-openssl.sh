@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -euo pipefail
 
 curl -s https://packagecloud.io/install/repositories/altinity/clickhouse/script.rpm.sh | bash
 yum install -y openssl-altinity-devel openssl-altinity-static

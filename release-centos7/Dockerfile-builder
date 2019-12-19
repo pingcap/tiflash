@@ -36,6 +36,6 @@ RUN yum makecache \
   && ./install-mysql-dev.sh \
   && ./install-cmake.sh \
   && ./install-gcc.sh \
-  && ./install-clang.sh \
+  && ./install-llvm.sh \
   && ./install-grpc.sh \
   && yum clean all
