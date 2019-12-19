@@ -234,6 +234,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     constexpr size_t MustHaveColCnt = 3; // pk, del, version
     constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
+    constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
 
     // column_map contains columns in column_names_to_read exclude del and version.
     ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
@@ -244,6 +245,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     SchemaAllColumnIds schema_all_column_ids;
     schema_all_column_ids.set_empty_key(EmptyColumnID);
+    schema_all_column_ids.set_deleted_key(DeleteColumnID);
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
