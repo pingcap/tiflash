@@ -44,3 +44,6 @@
 [submodule "contrib/client-c"]
 	path = contrib/client-c
 	url = git@github.com:tikv/client-c.git
+[submodule "contrib/tiflash-proxy"]
+	path = contrib/tiflash-proxy
+	url = git@github.com:solotzg/tikv.git
