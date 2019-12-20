@@ -11,8 +11,6 @@ ENABLE_EMBEDDED_COMPILER="FALSE"
 install_dir="$SRCPATH/release-centos7/tiflash"
 if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
 
-cp -r /flash_cluster_manager "$install_dir"
-
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
   rm -rf cpp/kvproto
@@ -28,7 +26,7 @@ if [ -d "$SRCPATH/contrib/tipb" ]; then
 fi
 
 rm -rf ${SRCPATH}/libs/libtiflash-proxy
-ln -s /libtiflash-proxy ${SRCPATH}/libs/libtiflash-proxy
+ln -s ${SRCPATH}/contrib/tiflash-proxy/target/release ${SRCPATH}/libs/libtiflash-proxy
 
 build_dir="$SRCPATH/release-centos7/build-release"
 rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
