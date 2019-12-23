@@ -10,7 +10,3 @@ push_image_builder:
 image_tiflash:
 	docker build -f Dockerfile-tiflash-centos7 -t hub.pingcap.net/tiflash/tiflash-server-centos7 .
 	docker build -f Dockerfile-tiflash-ubuntu -t hub.pingcap.net/tiflash/tiflash-server-ubuntu .
-
-push_image_tiflash:
-	docker push hub.pingcap.net/tiflash/tiflash-server-centos7
-	docker push hub.pingcap.net/tiflash/tiflash-server-ubuntu
