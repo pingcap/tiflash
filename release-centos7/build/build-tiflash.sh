@@ -36,13 +36,11 @@ rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 cmake "$SRCPATH" \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
       -DENABLE_EMBEDDED_COMPILER=$ENABLE_EMBEDDED_COMPILER \
+      -DENABLE_ICU=OFF \
+      -DENABLE_MYSQL=OFF \
       -Wno-dev
 
 make -j $NPROC
 
 cp -f "$build_dir/dbms/src/Server/theflash" "$install_dir/theflash"
 
-ldd "$build_dir/dbms/src/Server/theflash" | grep '/' | grep '=>' | \
-  awk -F '=>' '{print $2}' | awk '{print $1}' | while read lib; do
-  cp -f "$lib" "$install_dir"
-done
