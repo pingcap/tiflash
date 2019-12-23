@@ -37,6 +37,7 @@ extern const Int8 VAR_SIZE;
 tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci);
 TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types);
+bool hasUnsupportedTypeForCHBlockEncode(const std::vector<tipb::FieldType> & types);
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
 
 } // namespace DB

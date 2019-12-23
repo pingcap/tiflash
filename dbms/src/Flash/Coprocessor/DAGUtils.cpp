@@ -274,6 +274,14 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
     return expr.has_field_type() && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1);
 }
 
+bool hasUnsupportedTypeForCHBlockEncode(const std::vector<tipb::FieldType> & types)
+{
+    for (const auto & type : types)
+        if (type.tp() == TiDB::TypeSet || type.tp() == TiDB::TypeEnum)
+            return true;
+    return false;
+}
+
 bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types)
 {
     for (const auto & type : types)

@@ -37,12 +37,9 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
       region_version(region_version_),
       region_conf_version(region_conf_version_),
       key_ranges(key_ranges_),
-      dag_request(dag_request_)
-{
-    for (int i = 0; i < dag_request.executors_size(); i++)
-    {
-        switch (dag_request.executors(i).tp())
-        {
+      dag_request(dag_request_) {
+    for (int i = 0; i < dag_request.executors_size(); i++) {
+        switch (dag_request.executors(i).tp()) {
             case tipb::ExecType::TypeTableScan:
                 assignOrThrowException(ts_index, i, TS_NAME);
                 break;
@@ -62,11 +59,16 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
                 break;
             default:
                 throw Exception(
-                    "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
+                        "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(),
+                        ErrorCodes::NOT_IMPLEMENTED);
         }
     }
     encode_type = dag_request.encode_type();
     if (encode_type == tipb::EncodeType::TypeChunk && hasUnsupportedTypeForArrowEncode(getResultFieldTypes()))
+    {
+        encode_type = tipb::EncodeType::TypeDefault;
+    }
+    if (encode_type == tipb::EncodeType::TypeCHBlock && hasUnsupportedTypeForCHBlockEncode(getResultFieldTypes()))
     {
         encode_type = tipb::EncodeType::TypeDefault;
     }
