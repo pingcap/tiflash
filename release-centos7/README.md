@@ -16,8 +16,8 @@ The executable files are located in `tiflash` dir.
 
 Following OS are tested OK
 
-* CentOS 7.6 or higher version
-* Ubuntu 16.04 or higher version
+* CentOS 7.6
+* Ubuntu 16.04 and 18.04
 
 **NOTE** CentOS 8 has newer `libnsl.so.2`. If we want to run on CentOS 8 , maybe we should copy old libnsl manually.
 
