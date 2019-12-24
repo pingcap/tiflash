@@ -108,8 +108,17 @@ RegionDataReadInfo RegionData::readDataByWriteIt(const ConstWriteCFIter & write_
         throw Exception(" key [" + key->toString() + "] not found in data cf", ErrorCodes::LOGICAL_ERROR);
 }
 
+// https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs#L179-L203
 LockInfoPtr RegionData::getLockInfo(Timestamp start_ts) const
 {
+    enum LockType : UInt8
+    {
+        Put = 'P',
+        Delete = 'D',
+        Lock = 'L',
+        Pessimistic = 'S',
+    };
+
     for (const auto & [handle, value] : lock_cf.getData())
     {
         std::ignore = handle;
@@ -119,7 +128,7 @@ LockInfoPtr RegionData::getLockInfo(Timestamp start_ts) const
         std::ignore = tikv_val;
         std::ignore = data;
 
-        if (lock_type == DelFlag || ts > start_ts)
+        if (ts > start_ts || lock_type == Lock || lock_type == Pessimistic)
             continue;
 
         return std::make_unique<LockInfo>(LockInfo{primary, ts, RecordKVFormat::decodeTiKVKey(*tikv_key), ttl});
