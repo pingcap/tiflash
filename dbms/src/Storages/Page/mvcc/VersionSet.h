@@ -39,8 +39,10 @@ public:
         next->prev = prev;
     }
 
+    // REVIEW: this should lock it up
     void incrRefCount() { ++ref_count; }
 
+    // REVIEW: MS used the method names of increase/release, we could use it too.
     void decrRefCount(std::shared_mutex & mutex)
     {
         assert(ref_count >= 1);
@@ -52,6 +54,7 @@ public:
         }
     }
 
+    // REVIEW: this set of methods about ref are not graceful
     // Not thread-safe, caller ensure.
     void decrRefCount()
     {
@@ -105,6 +108,7 @@ public:
 
     virtual ~VersionSet()
     {
+        // REVIEW: why this doesn't need the mutex?
         current->decrRefCount();
         assert(placeholder_node.next == &placeholder_node); // List must be empty
     }
@@ -183,9 +187,11 @@ public:
     }
 
 protected:
+    // REVIEW: why can't we just use std::list?
     VersionType placeholder_node; // Head of circular double-linked list of all versions
     VersionPtr  current;          // current version; current == placeholder_node.prev
 
+    // REVIEW: this name is not accurate, cause this mutex also be used for editing
     mutable std::shared_mutex read_mutex;
 
 protected:
