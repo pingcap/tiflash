@@ -14,6 +14,7 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/Aggregator.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -140,7 +141,7 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
         return isAllValueCoveredByRanges<Int64>(handle_ranges, region_handle_ranges);
 }
 
-RegionException::RegionReadStatus InterpreterDAG::getRegionReadStatus(RegionPtr current_region)
+RegionException::RegionReadStatus InterpreterDAG::getRegionReadStatus(const RegionPtr & current_region)
 {
     if (!current_region)
         return RegionException::NOT_FOUND;
@@ -270,6 +271,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         std::vector<RegionID> region_ids;
         region_ids.push_back(info.region_id);
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << info.region_id);
         throw RegionException(std::move(region_ids), region_read_status);
     }
     if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange()))
@@ -374,7 +376,7 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
         // add cast if type is not match
         analyzer->appendAggSelect(chain, dag.getAggregation(), dag.getDAGRequest(), keep_session_timezone_info);
         //todo use output_offset to reconstruct the final project columns
-        for (auto element : analyzer->getCurrentInputColumns())
+        for (auto & element : analyzer->getCurrentInputColumns())
         {
             final_project.emplace_back(element.name, "");
         }
@@ -654,7 +656,7 @@ void InterpreterDAG::executeFinalProject(Pipeline & pipeline)
 {
     auto columns = pipeline.firstStream()->getHeader();
     NamesAndTypesList input_column;
-    for (auto column : columns.getColumnsWithTypeAndName())
+    for (auto & column : columns.getColumnsWithTypeAndName())
     {
         input_column.emplace_back(column.name, column.type);
     }
@@ -686,6 +688,20 @@ BlockIO InterpreterDAG::execute()
 
     LOG_DEBUG(
         log, __PRETTY_FUNCTION__ << " Convert DAG request to BlockIO, adding " << analyzer->getImplicitCastCount() << " implicit cast");
+    if (log->debug())
+    {
+        try
+        {
+            DAGStringConverter converter(context, dag.getDAGRequest());
+            auto sql_text = converter.buildSqlString();
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << " SQL in DAG request is " << sql_text);
+        }
+        catch (...)
+        {
+            // catch all the exceptions so the convert error will not affect the query execution
+            LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Failed to convert DAG request to sql text");
+        }
+    }
     return res;
 }
 } // namespace DB
