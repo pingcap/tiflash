@@ -251,17 +251,15 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     // Locate which segments to write
     WriteActions actions = prepareWriteActions(block, segments, EXTRA_HANDLE_COLUMN_NAME, std::shared_lock(read_write_mutex));
 
-    auto         op_context = OpContext::createForLogStorage(*dm_context);
-    WriteBatches wbs;
-
     // Prepare updates' information.
+    WriteBatches wbs;
     for (auto & action : actions)
     {
         action.update = getSubBlock(block, action.offset, action.limit);
-        action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
+        action.task   = action.segment->createAppendTask(*dm_context, wbs, action.update);
     }
 
-    commitWrites(actions, wbs, dm_context, op_context);
+    commitWrites(actions, wbs, dm_context);
 }
 
 
@@ -293,25 +291,23 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     WriteActions actions = prepareWriteActions(delete_range, segments, std::shared_lock(read_write_mutex));
 
-    auto         op_context = OpContext::createForLogStorage(*dm_context);
     WriteBatches wbs;
 
     // Prepare updates' information.
     for (auto & action : actions)
     {
         // action.update is set in `prepareWriteActions` for delete_range
-        action.task = action.segment->createAppendTask(op_context, wbs, action.update);
+        action.task = action.segment->createAppendTask(*dm_context, wbs, action.update);
     }
 
     // TODO: We need to do a delta merge after write a delete range, otherwise, the rows got deleted could never be actually removed.
 
-    commitWrites(actions, wbs, dm_context, op_context);
+    commitWrites(actions, wbs, dm_context);
 }
 
 void DeltaMergeStore::commitWrites(const WriteActions & actions,
                                    WriteBatches &       wbs,
-                                   const DMContextPtr & dm_context,
-                                   OpContext &          op_context)
+                                   const DMContextPtr & dm_context)
 {
     if (unlikely(!wbs.data.empty() || !wbs.meta.empty()))
         throw Exception("Unexpected data or meta modifications!");
@@ -339,7 +335,7 @@ void DeltaMergeStore::commitWrites(const WriteActions & actions,
                 throw Exception("Segment with end [" + DB::toString(range.end) + "] can not find in segments map after write");
             auto & segment = it->second;
             updated_segments.push_back(segment);
-            segment->applyAppendTask(op_context, action.task, action.update);
+            segment->applyAppendTask(action.task, action.update);
         }
     }
 
@@ -949,23 +945,23 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
     for (const auto & [handle, segment] : segments)
     {
         (void)handle;
-        auto delta  = segment->getDelta();
+        auto delta  = segment->getDeltaSnapshot();
         auto stable = segment->getStable();
 
         total_placed_rows += segment->getPlacedDeltaRows();
 
-        if (delta.num_chunks())
+        if (delta->numChunks())
         {
-            stat.total_rows += delta.num_rows();
-            stat.total_bytes += delta.num_bytes();
+            stat.total_rows += delta->numRows();
+            stat.total_bytes += delta->numBytes();
 
-            stat.total_delete_ranges += delta.num_deletes();
+            stat.total_delete_ranges += delta->numDeletes();
 
             stat.delta_count += 1;
-            stat.total_chunk_count_in_delta += delta.num_chunks();
+            stat.total_chunk_count_in_delta += delta->numChunks();
 
-            stat.total_delta_rows += delta.num_rows();
-            stat.total_delta_bytes += delta.num_bytes();
+            stat.total_delta_rows += delta->numRows();
+            stat.total_delta_bytes += delta->numBytes();
         }
 
         if (stable->getChunks())

@@ -60,7 +60,7 @@ extern const int UNKNOWN_FORMAT_VERSION;
 namespace DM
 {
 
-const Segment::Version Segment::CURRENT_VERSION = 1;
+const Segment::Version Segment::CURRENT_VERSION = 2;
 const static size_t    SEGMENT_BUFFER_SIZE      = 128; // More than enough.
 
 DMFilePtr writeIntoNewDMFile(DMContext &                 dm_context, //
@@ -121,30 +121,34 @@ Segment::Segment(UInt64                      epoch_, //
                  const HandleRange &         range_,
                  PageId                      segment_id_,
                  PageId                      next_segment_id_,
-                 const DiskValueSpacePtr &   delta_,
+                 DeltaSpacePtr &&            delta_,
                  const StableValueSpacePtr & stable_)
     : epoch(epoch_),
       range(range_),
       segment_id(segment_id_),
       next_segment_id(next_segment_id_),
-      delta(delta_),
+      delta(std::move(delta_)),
       stable(stable_),
       delta_tree(std::make_shared<DefaultDeltaTree>()),
       log(&Logger::get("Segment"))
 {
 }
 
-SegmentPtr Segment::newSegment(
-    DMContext & context, const HandleRange & range, PageId segment_id, PageId next_segment_id, PageId delta_id, PageId stable_id)
+SegmentPtr Segment::newSegment( //
+    DMContext &         context,
+    const HandleRange & range,
+    PageId              segment_id,
+    PageId              next_segment_id,
+    PageId              delta_id,
+    PageId              stable_id)
 {
     WriteBatches wbs;
 
-    auto delta = std::make_shared<DiskValueSpace>(true, delta_id);
-    delta->replaceChunks(wbs.meta, wbs.log, {}); // Write done the meta data of delta.
+    auto delta = std::make_shared<DeltaSpace>(delta_id, context.store_path + "/delta");
 
     auto stable = createNewStable(context, std::make_shared<EmptySkippableBlockInputStream>(context.store_columns), stable_id, wbs);
 
-    auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
+    auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, std::move(delta), stable);
 
     // Write metadata.
     segment->serialize(wbs.meta);
@@ -169,7 +173,7 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
     Version              version;
     readIntBinary(version, buf);
     if (version != CURRENT_VERSION)
-        throw Exception("version not match", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Segment's version not match: " + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
     UInt64      epoch;
     HandleRange range;
     PageId      next_segment_id, delta_id, stable_id;
@@ -181,10 +185,9 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);
 
-    auto delta = std::make_shared<DiskValueSpace>(true, delta_id);
-    delta->restore(OpContext::createForLogStorage(context));
+    auto delta   = DeltaSpace::restore(delta_id, context.store_path, context);
     auto stable  = StableValueSpace::restore(context, stable_id);
-    auto segment = std::make_shared<Segment>(epoch, range, segment_id, next_segment_id, delta, stable);
+    auto segment = std::make_shared<Segment>(epoch, range, segment_id, next_segment_id, std::move(delta), stable);
 
     return segment;
 }
@@ -200,8 +203,11 @@ void Segment::serialize(WriteBatch & wb)
     writeIntBinary(delta->pageId(), buf);
     writeIntBinary(stable->getId(), buf);
 
-    auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
+    const auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
     wb.putPage(segment_id, 0, buf.tryGetReadBuffer(), data_size);
+
+    // TODO: maybe move stable->saveMeta inside too?
+    delta->saveMeta(wb);
 }
 
 //==========================================================================================
@@ -210,75 +216,62 @@ void Segment::serialize(WriteBatch & wb)
 
 void Segment::write(DMContext & dm_context, const BlockOrDelete & update)
 {
-    auto         op_context   = OpContext::createForLogStorage(dm_context);
+    // Note: This function only guarantees atomic on segment level.
     auto &       storage_pool = dm_context.storage_pool;
     WriteBatches wbs;
 
-    auto task = createAppendTask(op_context, wbs, update);
-
+    // Append data to disk.
+    auto task = createAppendTask(dm_context, wbs, update);
     wbs.writeLogAndData(storage_pool);
-    wbs.writeMeta(storage_pool);
 
-    applyAppendTask(op_context, task, update);
+    // Commit delta's changes to disk.
+    wbs.writeMeta(storage_pool);
+    // Commit delta's changes in memory.
+    applyAppendTask(task, update);
 
     wbs.writeRemoves(storage_pool);
 }
 
-AppendTaskPtr Segment::createAppendTask(const OpContext & opc, WriteBatches & wbs, const BlockOrDelete & update)
+DeltaSpace::AppendTaskPtr Segment::createAppendTask(const DMContext & dm_context, WriteBatches & wbs, const BlockOrDelete & update)
 {
     if (update.block)
-        LOG_TRACE(log,
-                  "Segment [" << DB::toString(segment_id) << "] create append task, write rows: " << DB::toString(update.block.rows()));
+        LOG_TRACE(log, "Segment [" << segment_id << "] create append task, write rows: " << update.block.rows());
     else
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] create append task, delete range: " << update.delete_range.toString());
+        LOG_TRACE(log, "Segment [" << segment_id << "] create append task, delete range: " << update.delete_range.toString());
 
     EventRecorder recorder(ProfileEvents::DMAppendDeltaPrepare, ProfileEvents::DMAppendDeltaPrepareNS);
 
     // Create everything we need to do the update.
     // We only need a shared lock because this operation won't do any modifications.
     std::shared_lock lock(read_write_mutex);
-    return delta->createAppendTask(opc, wbs, update);
+    return delta->appendToDisk(update, wbs, dm_context);
 }
 
-void Segment::applyAppendTask(const OpContext & opc, const AppendTaskPtr & task, const BlockOrDelete & update)
+void Segment::applyAppendTask(const DeltaSpace::AppendTaskPtr & task, const BlockOrDelete & update)
 {
     // Unique lock, to protect memory modifications against read threads.
     std::unique_lock segment_lock(read_write_mutex);
 
     EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitMemory, ProfileEvents::DMAppendDeltaCommitMemoryNS);
 
-    auto new_delta = delta->applyAppendTask(opc, task, update);
+    delta->applyAppend(task);
 
     if (update.block)
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] apply append task, write rows: " << DB::toString(update.block.rows()));
+        LOG_TRACE(log, "Segment [" << segment_id << "] apply append task, write rows: " << update.block.rows());
     else
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] apply append task, delete range: " << update.delete_range.toString());
-
-    if (new_delta)
-    {
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] update delta instance");
-        delta = new_delta;
-    }
+        LOG_TRACE(log, "Segment [" << segment_id << "] apply append task, delete range: " << update.delete_range.toString());
 }
 
-SegmentSnapshot Segment::getReadSnapshot(bool use_delta_cache) const
+SegmentSnapshot Segment::getReadSnapshot(bool /* use_delta_cache */) const
 {
     SegmentSnapshot segment_snap;
     {
         // Synchronize between read/write threads.
         std::shared_lock lock(read_write_mutex);
 
-        size_t delta_rows = delta->num_rows();
-        if (!use_delta_cache)
-            delta_rows -= delta->cacheRows();
-
         segment_snap = SegmentSnapshot{
-            .stable          = stable, // Stable is constant.
-            .delta           = std::make_shared<DiskValueSpace>(*delta),
-            .delta_rows      = delta_rows,
-            .delta_deletes   = delta->num_deletes(),
-            .delta_index     = {},
-            .delta_has_cache = use_delta_cache,
+            .stable = stable,
+            .delta  = delta->getSnapshot(),
         };
     }
 
@@ -286,7 +279,7 @@ SegmentSnapshot Segment::getReadSnapshot(bool use_delta_cache) const
         std::scoped_lock lock(read_read_mutex);
 
         // If current delta tree matches delta status, copy it now.
-        if (segment_snap.delta_rows == placed_delta_rows && segment_snap.delta_deletes == placed_delta_deletes)
+        if (segment_snap.delta->numRows() == placed_delta_rows && segment_snap.delta->numDeletes() == placed_delta_deletes)
             segment_snap.delta_index = delta_tree->getEntriesCopy<Allocator<false>>();
     }
     return segment_snap;
@@ -305,9 +298,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
 
     auto create_stream = [&](const HandleRange & read_range) -> BlockInputStreamPtr {
         BlockInputStreamPtr stream;
-        if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0 //
-            && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)          //
-            && !hasColumn(columns_to_read, VERSION_COLUMN_ID)               //
+        if (segment_snap.delta->numRows() == 0 && segment_snap.delta->numDeletes() == 0 //
+            && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)                      //
+            && !hasColumn(columns_to_read, VERSION_COLUMN_ID)                           //
             && !hasColumn(columns_to_read, TAG_COLUMN_ID))
         {
             // No delta, let's try some optimizations.
@@ -337,7 +330,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
 
     if (read_ranges.size() == 1)
     {
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(1) << " ranges");
+        LOG_TRACE(log, "Segment [" << segment_id << "] is read by 1 range");
         return create_stream(range.shrink(read_ranges[0]));
     }
     else
@@ -350,7 +343,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                 streams.push_back(create_stream(real_range));
         }
 
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(streams.size()) << " ranges");
+        LOG_TRACE(log, "Segment [" << segment_id << "] is read by " << streams.size() << " ranges");
 
         return std::make_shared<ConcatBlockInputStream>(streams);
     }
@@ -391,26 +384,34 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
         }
     }
 
+    (void)storage_snap;
+#if 0
+    // FIXME: read from delta
     auto                delta_chunks = segment_snap.delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
     BlockInputStreamPtr delta_stream = std::make_shared<ChunkBlockInputStream>(delta_chunks, //
                                                                                new_columns_to_read,
                                                                                storage_snap.log_reader,
                                                                                EMPTY_FILTER);
+#endif
 
     BlockInputStreamPtr stable_stream
         = segment_snap.stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, false);
 
     if (do_range_filter)
     {
+#if 0
         delta_stream = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
         delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
+#endif
 
         stable_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stable_stream, range, 0);
         stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
     }
 
     BlockInputStreams streams;
+#if 0
     streams.push_back(delta_stream);
+#endif
     streams.push_back(stable_stream);
     return std::make_shared<ConcatBlockInputStream>(streams);
 }
@@ -429,7 +430,7 @@ Segment::split(DMContext & dm_context, const SegmentSnapshot & segment_snap, con
 
     if (!dm_context.enable_logical_split         //
         || segment_snap.stable->getChunks() <= 3 //
-        || segment_snap.delta->num_rows() > segment_snap.stable->getRows())
+        || segment_snap.delta->numRows() > segment_snap.stable->getRows())
         res = doSplitPhysical(dm_context, segment_snap, storage_snap, wbs);
     else
     {
@@ -512,8 +513,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_contex
                                                WriteBatches &          wbs) const
 {
     LOG_DEBUG(log,
-              "Segment [" << DB::toString(segment_id) << "] prepare merge delta start. delta chunks: " << DB::toString(delta->num_chunks())
-                          << ", delta total rows: " << DB::toString(delta->num_rows()));
+              "Segment [" << segment_id << "] prepare merge delta start. delta chunks: " << delta->numChunks()
+                          << ", delta total rows: " << delta->numRows());
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
@@ -547,29 +548,13 @@ SegmentPtr Segment::applyMergeDelta(const SegmentSnapshot & segment_snap, WriteB
     /// Here we use current delta instead of delta in segment_snap,
     /// because there could be new data appended into delta during preparing merge delta.
 
-    auto remove_delta_chunks = delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
-    auto new_delta_chunks    = delta->getChunksAfter(segment_snap.delta_rows, segment_snap.delta_deletes);
-
-    auto new_delta = std::make_shared<DiskValueSpace>(true, delta->pageId(), std::move(remove_delta_chunks));
-    if (segment_snap.delta_has_cache)
-    {
-        // The delta data we just merge already contains the cache part of delta, so no need to copy the cache.
-        new_delta->replaceChunks(wbs.meta, wbs.removed_log, std::move(new_delta_chunks));
-    }
-    else
-    {
-        new_delta->replaceChunks(wbs.meta, //
-                                 wbs.removed_log,
-                                 std::move(new_delta_chunks),
-                                 delta->cloneCache(),
-                                 delta->cacheChunks());
-    }
+    auto new_delta = delta->nextGeneration(segment_snap.delta, wbs);
 
     auto new_me = std::make_shared<Segment>(epoch + 1, //
                                             range,
                                             segment_id,
                                             next_segment_id,
-                                            new_delta,
+                                            std::move(new_delta),
                                             new_stable);
 
     // Store new meta data
@@ -609,8 +594,10 @@ void Segment::check(DMContext & dm_context, const String & when) const
 {
     auto &     storage_pool = dm_context.storage_pool;
     PageReader reader(storage_pool.meta(), storage_pool.meta().getSnapshot());
-    delta->check(reader, when);
-    //    stable->check(reader, when);
+    (void)reader;
+    (void)when;
+    // delta->check(reader, when);
+    // stable->check(reader, when);
 }
 
 void Segment::flushCache(DMContext & dm_context)
@@ -638,13 +625,10 @@ size_t Segment::getEstimatedBytes() const
     return estimatedBytes();
 }
 
-size_t Segment::getDeltaRawRows(bool with_delta_cache) const
+size_t Segment::getDeltaRawRows(bool /* with_delta_cache */) const
 {
     std::shared_lock lock(read_write_mutex);
-    auto             rows = delta->num_rows();
-    if (!with_delta_cache)
-        rows -= delta->cacheRows();
-    return rows;
+    return delta->numRows();
 }
 
 size_t Segment::updatesInDeltaTree() const
@@ -677,10 +661,11 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
 {
     LOG_TRACE(log, "getReadInfo start");
 
-    // Always put handle, version, tag become the first 3 columns
+    // Always put handle, version, tag the first 3 columns
     auto new_read_columns = arrangeReadColumns<add_tag_column>(dm_context.handle_column, read_columns);
-    auto delta_value_space
-        = segment_snap.delta->getValueSpace(storage_snap.log_reader, new_read_columns, read_range, segment_snap.delta_rows);
+    // TODO: Here we read all values from delta, since `ensurePlace` need all values now. Maybe we can find a better way to do this.
+    (void)read_range;
+    auto delta_value_space = segment_snap.delta->getValues(new_read_columns, dm_context);
 
     DeltaIndexPtr delta_index;
     if (segment_snap.delta_index)
@@ -692,9 +677,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
         delta_index = ensurePlace(dm_context, //
                                   storage_snap,
                                   segment_snap.stable,
-                                  *segment_snap.delta,
-                                  segment_snap.delta_rows,
-                                  segment_snap.delta_deletes,
+                                  segment_snap.delta,
                                   delta_value_space);
     }
 
@@ -703,7 +686,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext &       dm_context,
 
     LOG_TRACE(log, "getReadInfo end");
 
-    return {
+    return Segment::ReadInfo{
         .storage_snap      = storage_snap,
         .segment_snap      = segment_snap,
         .delta_value_space = delta_value_space,
@@ -745,7 +728,7 @@ BlockInputStreamPtr Segment::getPlacedStream(const DMContext &           dm_cont
                                              const HandleRange &         handle_range,
                                              const RSOperatorPtr &       filter,
                                              const StableValueSpacePtr & stable_snap,
-                                             const DeltaValueSpacePtr &  delta_value_space,
+                                             const DeltaValuesPtr &      delta_value_space,
                                              const IndexIterator &       delta_index_begin,
                                              const IndexIterator &       delta_index_end,
                                              size_t                      index_size,
@@ -753,7 +736,7 @@ BlockInputStreamPtr Segment::getPlacedStream(const DMContext &           dm_cont
 {
     SkippableBlockInputStreamPtr stable_input_stream
         = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
-    return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator>>( //
+    return std::make_shared<DeltaMergeBlockInputStream<IndexIterator>>( //
         stable_input_stream,
         delta_value_space,
         delta_index_begin,
@@ -769,7 +752,7 @@ Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpace
 
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
     auto          stable_rows = stable_snap->getRows();
-    if (unlikely(!stable_rows))
+    if (unlikely(stable_rows == 0))
         throw Exception("No stable rows");
 
     size_t split_row_index = stable_rows / 2;
@@ -912,11 +895,6 @@ SegmentPair Segment::doSplitLogical(DMContext &             dm_context,
     if (my_range.none() || other_range.none())
         throw Exception("doSplitLogical: unexpected range! my_range: " + my_range.toString() + ", other_range: " + other_range.toString());
 
-    GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
-
-    Chunks my_delta_chunks    = createRefChunks(segment_snap.delta->getChunks(), log_gen_page_id, wbs.log);
-    Chunks other_delta_chunks = createRefChunks(segment_snap.delta->getChunks(), log_gen_page_id, wbs.log);
-
     DMFiles my_stable_files;
     DMFiles other_stable_files;
 
@@ -954,37 +932,28 @@ SegmentPair Segment::doSplitLogical(DMContext &             dm_context,
     my_stable->setFiles(my_stable_files, &dm_context, my_range);
     other_stable->setFiles(other_stable_files, &dm_context, other_range);
 
-    auto my_delta    = std::make_shared<DiskValueSpace>(*segment_snap.delta);
-    auto other_delta = std::make_shared<DiskValueSpace>(true, other_delta_id);
+    // Generate ref chunks for delta, old chunks will be remove later (wbs.remove_log)
+    GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &storage_pool);
+    auto      my_delta        = DeltaSpace::newRef(segment_snap.delta, delta->pageId(), delta->parentPath(), log_gen_page_id, wbs);
+    auto      other_delta     = DeltaSpace::newRef(segment_snap.delta, other_delta_id, delta->parentPath(), log_gen_page_id, wbs);
 
     auto new_me = std::make_shared<Segment>(this->epoch + 1, //
                                             my_range,
                                             this->segment_id,
                                             other_segment_id,
-                                            my_delta,
+                                            std::move(my_delta),
                                             my_stable);
 
     auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
                                            other_range,
                                            other_segment_id,
                                            this->next_segment_id,
-                                           other_delta,
+                                           std::move(other_delta),
                                            other_stable);
 
-    // Here remove the old pages in old delta chunks.
-    new_me->delta->replaceChunks(wbs.meta, //
-                                 wbs.removed_log,
-                                 std::move(my_delta_chunks),
-                                 segment_snap.delta->cloneCache(),
-                                 segment_snap.delta->cacheChunks());
     new_me->stable->saveMeta(wbs.meta);
     new_me->serialize(wbs.meta);
 
-    other->delta->replaceChunks(wbs.meta, //
-                                wbs.removed_log,
-                                std::move(other_delta_chunks),
-                                segment_snap.delta->cloneCache(),
-                                segment_snap.delta->cacheChunks());
     other->stable->saveMeta(wbs.meta);
     other->serialize(wbs.meta);
 
@@ -1058,21 +1027,24 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
     auto other_segment_id = storage_pool.newMetaPageId();
     auto other_delta_id   = storage_pool.newMetaPageId();
 
+    auto new_me_delta = delta->nextGeneration(segment_snap.delta, wbs);
+    if (new_me_delta->numChunks() > 0)
+        throw Exception("There are some modifications on delta during split!", ErrorCodes::LOGICAL_ERROR);
+
     auto new_me = std::make_shared<Segment>(this->epoch + 1, //
                                             my_range,
                                             this->segment_id,
                                             other_segment_id,
-                                            std::make_shared<DiskValueSpace>(*segment_snap.delta),
+                                            std::move(new_me_delta),
                                             my_new_stable);
 
     auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
                                            other_range,
                                            other_segment_id,
                                            this->next_segment_id,
-                                           std::make_shared<DiskValueSpace>(true, other_delta_id),
+                                           std::make_shared<DeltaSpace>(other_delta_id, delta->parentPath()),
                                            other_stable);
 
-    new_me->delta->replaceChunks(wbs.meta, wbs.removed_log, {});
     // Remove old stable's files.
     for (auto & file : stable->getDMFiles())
     {
@@ -1080,9 +1052,8 @@ SegmentPair Segment::doSplitPhysical(DMContext &             dm_context,
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
         wbs.removed_data.delPage(file->refId());
     }
-    new_me->serialize(wbs.meta);
 
-    other->delta->replaceChunks(wbs.meta, wbs.removed_log, {});
+    new_me->serialize(wbs.meta);
     other->serialize(wbs.meta);
 
     return {new_me, other};
@@ -1094,7 +1065,12 @@ SegmentPtr Segment::doMergeLogical(
     if (unlikely(left->range.end != right->range.start || left->next_segment_id != right->segment_id))
         throw Exception("The ranges of merge segments are not consecutive: first end: " + DB::toString(left->range.end)
                         + ", second start: " + DB::toString(right->range.start));
-
+#if 1
+    (void)dm_context;
+    (void)storage_snap;
+    (void)wbs;
+    return {};
+#else
     EventRecorder recorder(ProfileEvents::DMSegmentMerge, ProfileEvents::DMSegmentMergeNS);
 
     auto & storage_pool = dm_context.storage_pool;
@@ -1146,10 +1122,15 @@ SegmentPtr Segment::doMergeLogical(
     merged->serialize(wbs.meta);
 
     return merged;
+#endif
 }
 
 void Segment::doFlushCache(DMContext & dm_context, WriteBatch & remove_log_wb)
 {
+#if 1
+    (void)dm_context;
+    (void)remove_log_wb;
+#else
     std::unique_lock lock(read_write_mutex);
 
     auto new_delta = delta->tryFlushCache(OpContext::createForLogStorage(dm_context), remove_log_wb, /* force= */ true);
@@ -1159,18 +1140,21 @@ void Segment::doFlushCache(DMContext & dm_context, WriteBatch & remove_log_wb)
 
         delta = new_delta;
     }
+#endif
 }
 
 DeltaIndexPtr Segment::ensurePlace(const DMContext &           dm_context,
                                    const StorageSnapshot &     storage_snapshot,
                                    const StableValueSpacePtr & stable_snap,
-                                   const DiskValueSpace &      to_place_delta,
-                                   size_t                      delta_rows_limit,
-                                   size_t                      delta_deletes_limit,
-                                   const DeltaValueSpacePtr &  delta_value_space) const
+                                   const DeltaSnapshotPtr &    to_place_delta,
+                                   const DeltaValuesPtr &      delta_value_space) const
 {
     // Synchronize between read/read threads.
     std::scoped_lock lock(read_read_mutex);
+
+    const size_t delta_rows_limit    = to_place_delta->numRows();
+    const size_t delta_deletes_limit = to_place_delta->numDeletes();
+    (void)storage_snapshot;
 
     DeltaTreePtr update_delta_tree;
     size_t       my_placed_delta_rows;
@@ -1199,12 +1183,7 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &           dm_context,
 
     EventRecorder recorder(ProfileEvents::DMPlace, ProfileEvents::DMPlaceNS);
 
-    auto blocks = to_place_delta.getMergeBlocks(dm_context.handle_column,
-                                                storage_snapshot.log_reader,
-                                                my_placed_delta_rows,
-                                                my_placed_delta_deletes,
-                                                delta_rows_limit,
-                                                delta_deletes_limit);
+    auto blocks = to_place_delta->getMergeBlocks(dm_context.handle_column, my_placed_delta_rows, my_placed_delta_deletes, dm_context);
 
     for (auto & v : blocks)
     {
@@ -1215,7 +1194,7 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &           dm_context,
         }
         else if (v.block)
         {
-            auto rows = v.block.rows();
+            const auto rows = v.block.rows();
             placeUpsert(dm_context, stable_snap, delta_value_space, my_placed_delta_rows, std::move(v.block), *update_delta_tree);
             my_placed_delta_rows += rows;
         }
@@ -1235,7 +1214,7 @@ DeltaIndexPtr Segment::ensurePlace(const DMContext &           dm_context,
 
 void Segment::placeUpsert(const DMContext &           dm_context,
                           const StableValueSpacePtr & stable_snap,
-                          const DeltaValueSpacePtr &  delta_value_space,
+                          const DeltaValuesPtr &      delta_value_space,
                           size_t                      delta_value_space_offset,
                           Block &&                    block,
                           DeltaTree &                 update_delta_tree) const
@@ -1267,7 +1246,7 @@ void Segment::placeUpsert(const DMContext &           dm_context,
 
 void Segment::placeDelete(const DMContext &           dm_context,
                           const StableValueSpacePtr & stable_snap,
-                          const DeltaValueSpacePtr &  delta_value_space,
+                          const DeltaValuesPtr &      delta_value_space,
                           const HandleRange &         delete_range,
                           DeltaTree &                 update_delta_tree) const
 {
@@ -1335,7 +1314,7 @@ size_t Segment::stableRows() const
 size_t Segment::deltaRows() const
 {
     // Not 100% accurate.
-    ssize_t rows = delta_tree->numInserts() - delta_tree->numDeletes() + (delta->num_rows() - placed_delta_rows);
+    ssize_t rows = delta_tree->numInserts() - delta_tree->numDeletes() + (delta->numRows() - placed_delta_rows);
     return std::max(0, rows);
 }
 
@@ -1349,11 +1328,11 @@ size_t Segment::estimatedBytes() const
     size_t stable_bytes = stable->getBytes();
     if (!stable_bytes)
     {
-        return delta->num_bytes();
+        return delta->numBytes();
     }
     else
     {
-        return stable_bytes + delta->num_bytes() - (stable_bytes / stable->getRows()) * delta_tree->numDeletes();
+        return stable_bytes + delta->numBytes() - (stable_bytes / stable->getRows()) * delta_tree->numDeletes();
     }
 }
 

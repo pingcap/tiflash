@@ -95,7 +95,8 @@ public:
         const size_t     limit  = 0;
         BlockOrDelete    update = {};
 
-        AppendTaskPtr task = {};
+        // AppendTaskPtr task = {};
+        DeltaSpace::AppendTaskPtr task = {};
 
         WriteAction(){};
         WriteAction(const SegmentPtr & segment_, size_t offset_, size_t limit_) : segment(segment_), offset(offset_), limit(limit_) {}
@@ -242,7 +243,7 @@ private:
                     const OptionTableInfoConstRef table_info,
                     ColumnID &                    max_column_id_used);
 
-    void commitWrites(const WriteActions & actions, WriteBatches & wbs, const DMContextPtr & dm_context, OpContext & op_context);
+    void commitWrites(const WriteActions & actions, WriteBatches & wbs, const DMContextPtr & dm_context);
 
     bool isSegmentValid(const SegmentPtr & segment);
 
