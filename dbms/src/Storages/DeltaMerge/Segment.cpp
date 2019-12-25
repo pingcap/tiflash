@@ -583,9 +583,7 @@ void Segment::check(DMContext & dm_context, const String & when) const
 {
     auto &     storage_pool = dm_context.storage_pool;
     PageReader reader(storage_pool.meta(), storage_pool.meta().getSnapshot());
-    (void)reader;
-    (void)when;
-    // delta->check(reader, when);
+    delta->check(reader, when);
     // stable->check(reader, when);
 }
 

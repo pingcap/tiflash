@@ -1,5 +1,7 @@
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 
+#include <ext/scope_guard.h>
+
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
@@ -265,6 +267,26 @@ DeltaSpacePtr DeltaSpace::newRef(
     // Keep file_writting empty so that `ref_delta` will open a new DMFile to write next time.
 
     return ref_delta;
+}
+
+void DeltaSpace::check(const PageReader & meta_page_reader, const String & when)
+{
+    MemoryWriteBuffer buf(0, DELTA_SPACE_SERIALIZE_BUFFER_SIZE);
+    serializeChunkMetas(buf, chunks.cbegin(), chunks.cend());
+    const auto data_size   = buf.count(); // Must be called before tryGetReadBuffer.
+    char *     data_buffer = (char *)::malloc(data_size);
+    SCOPE_EXIT({ ::free(data_buffer); });
+    auto read_buf = buf.tryGetReadBuffer();
+    read_buf->readStrict(data_buffer, data_size);
+    auto page_checksum = CityHash_v1_0_2::CityHash64(data_buffer, data_size);
+    if (meta_page_reader.getPageChecksum(id) != page_checksum)
+    {
+        auto                 page = meta_page_reader.read(id);
+        ReadBufferFromMemory rb(page.data.begin(), page.data.size());
+        auto                 disk_chunks = deserializeChunkMetas(rb);
+        throw Exception(when + ", DeltaSpace[" + DB::toString(id) + "] memory and disk content not match, memory: "
+                        + DB::toString(chunks.size()) + ", disk: " + DB::toString(disk_chunks.size()));
+    }
 }
 
 //==================================================================

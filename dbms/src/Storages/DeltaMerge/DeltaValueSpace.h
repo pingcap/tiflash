@@ -180,7 +180,6 @@ public:
 
     SnapshotPtr getSnapshot() const
     {
-        std::shared_lock lock(read_write_mutex);
         return std::make_shared<Snapshot>(chunks, files);
     }
 
@@ -203,6 +202,7 @@ public:
     AppendTaskPtr appendToDisk(const BlockOrDelete & update, WriteBatches & wbs, const DMContext & context);
     void          applyAppend(const AppendTaskPtr & task);
 
+    void check(const PageReader & meta_page_reader, const String & when);
 public:
     PageId         pageId() const { return id; }
     const String & parentPath() const { return parent_path; }
@@ -236,8 +236,8 @@ private:
 
     /// Here we use vector of ChunkMeta. Create a snapshot means copy the vector of ChunkMetas.
     /// We may try to write a list for ChunkMeta for eliminating the copying and manage valid chunks' lifetime by std::shared_ptr
-    mutable std::shared_mutex read_write_mutex;
-    ChunkMetas                chunks;
+    ChunkMetas chunks;
+    // mutable std::shared_mutex read_write_mutex; // We already protect delta in higher level now.
 
     DMFileMap files;
     DMFilePtr file_writting = nullptr; // Keep it so that we can easily track the chunk index we are writing to.
