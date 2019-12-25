@@ -106,7 +106,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
         {});
 
     type.serializeBinaryBulkWithMultipleStreams( //
-        column,                                  //
+        column,
         [&](const IDataType::SubstreamPath & substream) {
             String stream_name = DMFile::getFileNameBase(col_id, substream);
             auto & stream      = column_streams.at(stream_name);

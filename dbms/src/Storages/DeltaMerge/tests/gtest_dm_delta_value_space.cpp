@@ -69,7 +69,7 @@ protected:
             columns[i] = defines[i].type->createColumn();
     }
 
-    void writeToDelta(DeltaSpacePtr & delta, BlockOrDelete && update)
+    void writeToDelta(const DeltaSpacePtr & delta, BlockOrDelete && update)
     {
         WriteBatches wbs;
         // Append data to disk
@@ -236,7 +236,7 @@ try
     EXPECT_EQ(snap1->numChunks(), 1UL);
     EXPECT_EQ(snap1->numRows(), 20UL);
 
-    // Write [10, 30)
+    // Write [10, 35)
     write_to_delta(10, 25);
     EXPECT_EQ(delta->numChunks(), 2UL);
     EXPECT_EQ(delta->numRows(), 20 + 25UL);
@@ -249,6 +249,8 @@ try
 
     WriteBatches wbs;
 
+    /// Mock that we apply a delta merge after one chunk wrote.
+    // Remove snap1( Chunk[10,30) ) and generate a new delta
     auto new_delta = delta->nextGeneration(snap1, wbs);
     auto snap3     = new_delta->getSnapshot();
     EXPECT_EQ(snap3->numChunks(), 1UL);
@@ -284,7 +286,7 @@ try
         EXPECT_EQ(block.block.rows(), 25UL);
     }
 
-    // check wbs
+    // check wbs, we need to mark old chunks are removed.
     {
         auto & writes = wbs.removed_log.getWrites();
         EXPECT_EQ(writes.size(), 1UL);
@@ -310,7 +312,53 @@ try
         EXPECT_EQ(block.block.rows(), 20 + 25UL);
     }
     {
-        // check read from new snapshot
+        auto blocks = snap3->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 25UL);
+    }
+
+    /// Write to new_delta
+    {
+        // write [20, 50)
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(20, 50, false);
+        writeToDelta(new_delta, std::move(block1));
+    }
+    // Read from new snapshot
+    auto snap4 = new_delta->getSnapshot();
+    {
+        ASSERT_EQ(snap4->numChunks(), 2UL);
+        EXPECT_EQ(snap4->numRows(), 25 + 30UL);
+        // new chunk is written to another DMFile
+        auto chunk1 = snap4->getChunks()[0];
+        auto chunk2 = snap4->getChunks()[1];
+        EXPECT_NE(chunk1.file_id, chunk2.file_id);
+    }
+    {
+        auto blocks = snap4->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 25 + 30UL);
+    }
+
+    // Read from old snapshots
+    {
+        auto blocks = snap1->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 20UL);
+    }
+    {
+        auto blocks = snap2->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 20 + 25UL);
+    }
+    {
         auto blocks = snap3->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
         ASSERT_EQ(blocks.size(), 1UL);
         auto block = *blocks.begin();
@@ -323,7 +371,73 @@ CATCH
 TEST_F(DeltaDiskValueSpace_test, CreateRefDelta)
 try
 {
-    //
+    GenPageId log_gen_page_id = std::bind(&StoragePool::newLogPageId, &(*storage_pool));
+
+    auto delta = std::make_shared<DeltaSpace>(1, delta_path);
+
+    auto write_to_delta = [this](const DeltaSpacePtr & d, size_t first_pk, size_t num_rows) {
+        // write to DiskValueSpace
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(first_pk, first_pk + num_rows, false);
+        writeToDelta(d, std::move(block1));
+    };
+
+    // Write [10, 30), [10, 35)
+    write_to_delta(delta, 10, 20);
+    write_to_delta(delta, 10, 25);
+    auto snap1 = delta->getSnapshot();
+    ASSERT_EQ(snap1->numChunks(), 2UL);
+    ASSERT_EQ(snap1->numRows(), 20 + 25UL);
+
+    WriteBatches wbs;
+
+    auto lhs    = DeltaSpace::newRef(snap1, 1, delta_path, log_gen_page_id, wbs);
+    auto rhs_id = log_gen_page_id();
+    auto rhs    = DeltaSpace::newRef(snap1, rhs_id, delta_path, log_gen_page_id, wbs);
+
+    // Write [15, 25), [20, 25) to left
+    write_to_delta(lhs, 15, 10);
+    write_to_delta(lhs, 20, 5);
+    // Write [25, 100) to right
+    write_to_delta(rhs, 25, 75);
+    auto snap_lhs = lhs->getSnapshot();
+    {
+        ASSERT_EQ(snap_lhs->numChunks(), 4UL);
+        ASSERT_EQ(snap_lhs->numRows(), 20 + 25 + 10 + 5UL);
+        auto & chunk0 = snap_lhs->getChunks()[0];
+        auto & chunk1 = snap_lhs->getChunks()[1];
+        auto & chunk2 = snap_lhs->getChunks()[2];
+        auto & chunk3 = snap_lhs->getChunks()[3];
+        ASSERT_EQ(chunk0.file_id, chunk1.file_id);
+        ASSERT_NE(chunk1.file_id, chunk2.file_id);
+        ASSERT_EQ(chunk2.file_id, chunk3.file_id);
+    }
+    auto snap_rhs = rhs->getSnapshot();
+    {
+        ASSERT_EQ(snap_rhs->numChunks(), 3UL);
+        ASSERT_EQ(snap_rhs->numRows(), 20 + 25 + 75UL);
+        auto & chunk0 = snap_lhs->getChunks()[0];
+        auto & chunk1 = snap_lhs->getChunks()[1];
+        auto & chunk2 = snap_lhs->getChunks()[2];
+        ASSERT_EQ(chunk0.file_id, chunk1.file_id);
+        ASSERT_NE(chunk1.file_id, chunk2.file_id);
+    }
+    // read tests
+    {
+        auto blocks = snap_lhs->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 20 + 25 + 10 + 5UL);
+    }
+    {
+        auto blocks = snap_rhs->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 20 + 25 + 75UL);
+    }
+
+    // TODO: check wbs
 }
 CATCH
 

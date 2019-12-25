@@ -494,7 +494,9 @@ Block DeltaSpace::Snapshot::read( //
             current_file_id = chunk.file_id;
             chunks_to_read->clear();
             chunks_to_read->insert(chunk.index);
-            rows_offset_in_read = std::nullopt;
+            // A new read action in next DMFile, reset offset and limit
+            rows_offset_in_read.emplace((chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0));
+            rows_limit_in_read = (chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.rows);
         }
     }
 
