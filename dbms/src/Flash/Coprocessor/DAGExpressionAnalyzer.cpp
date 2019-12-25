@@ -181,7 +181,7 @@ String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & c
     // 2. if the column is string, convert it to numeric column, and compare with 0
     // 3. if the column is date/datetime, compare it with zeroDate
     // 4. if the column is other type, throw exception
-    auto & org_type = chain.steps.back().actions->getSampleBlock().getByName(column_name).type;
+    const auto & org_type = removeNullable(chain.steps.back().actions->getSampleBlock().getByName(column_name).type);
     auto & actions = chain.steps.back().actions;
     if (org_type->isNumber() || org_type->isDecimal())
     {
