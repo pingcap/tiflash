@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ueo pipefail
+set -ueox pipefail
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SRCPATH=${1:-$(cd $SCRIPTPATH/../..; pwd -P)}
