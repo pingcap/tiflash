@@ -25,6 +25,9 @@ struct DMContext : private boost::noncopyable
     StoragePool &    storage_pool;
     const UInt64     hash_salt;
 
+    // Path for delta's DMFile
+    String deltaPath() const { return store_path + "/delta"; }
+
     // The schema snapshot
     // We need a consistent snapshot of columns, copy ColumnsDefines
     const ColumnDefines store_columns;

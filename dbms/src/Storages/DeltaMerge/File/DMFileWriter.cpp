@@ -21,7 +21,6 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       wal_mode(wal_mode_),
       chunk_stat_file(dmfile->chunkStatPath())
 {
-    dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.

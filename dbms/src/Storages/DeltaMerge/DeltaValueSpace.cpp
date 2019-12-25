@@ -106,6 +106,16 @@ ChunkMetas deserializeChunkMetas(ReadBuffer & buf)
 //==================================================================
 // DeltaSpace
 //==================================================================
+DeltaSpace::~DeltaSpace()
+{
+    if (file_writting)
+    {
+        writer->finalize();
+        writer.reset();
+        file_writting->enableGC();
+        file_writting.reset();
+    }
+}
 
 DeltaSpacePtr DeltaSpace::restore(PageId id, const String & parent_path, const DMContext & context)
 {
@@ -158,7 +168,7 @@ DeltaSpace::AppendTaskPtr DeltaSpace::appendToDisk(const BlockOrDelete & update,
     {
         // Create a new DMFile for write
         PageId    file_id = context.storage_pool.newLogPageId();
-        DMFilePtr file    = DMFile::create(file_id, parent_path);
+        DMFilePtr file    = DMFile::create(file_id, parent_path, true);
         wbs.log.putExternal(file_id, 0);
         file_writting = file;
         files.emplace(file_id, file);
@@ -235,12 +245,7 @@ DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches 
                 new_delta->files.emplace(chunk.file_id, iter->second);
         }
     }
-    // 
-    new_delta->file_writting = nullptr;
-    new_delta->writer = nullptr;
-
-    this->writer->finalize();
-    this->writer.reset();
+    // Keep file_writting empty so that `new_delta` will open a new DMFile to write next time.
 
     return new_delta;
 }
@@ -254,7 +259,10 @@ DeltaSpacePtr DeltaSpace::newRef(
     for (size_t i = 0; i < snap->chunks.size(); ++i)
         new_chunks.push_back(createRefChunk(snap->chunks[i], gen_chunk_id, wbs));
     ref_delta->chunks.swap(new_chunks);
-    // TODO: files
+    // Copy opened DMfiles
+    for (const auto & [file_id, file] : snap->files)
+        ref_delta->files.emplace(file_id, file);
+    // Keep file_writting empty so that `ref_delta` will open a new DMFile to write next time.
 
     return ref_delta;
 }

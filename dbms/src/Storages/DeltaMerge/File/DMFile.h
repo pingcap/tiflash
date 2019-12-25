@@ -25,8 +25,11 @@ class DMFile : private boost::noncopyable
 public:
     enum Status : int
     {
-        WRITABLE,
-        WRITING,
+        // For delta, both read and write.
+        APPENDING,
+        // Fro stable, write to temporary file with ".tmp." prefix
+        INVISIBLE,
+        // Readable.
         READABLE,
     };
 
@@ -34,12 +37,12 @@ public:
     {
         switch (status)
         {
-        case WRITABLE:
-            return "WRITABLE";
-        case WRITING:
-            return "WRITING";
+        case INVISIBLE:
+            return "INVISIBLE";
         case READABLE:
             return "READABLE";
+        case APPENDING:
+            return "APPENDING";
         default:
             throw Exception("Unexpected status: " + DB::toString((int)status));
         }
@@ -55,7 +58,7 @@ public:
 
     using ChunkStats = PaddedPODArray<ChunkStat>;
 
-    static DMFilePtr create(DMFileID file_id, const String & parent_path);
+    static DMFilePtr create(DMFileID file_id, const String & parent_path, bool wal_mode_ = false);
     static DMFilePtr restore(DMFileID file_id, DMFileID ref_id, const String & parent_path, bool read_meta = true);
 
     void writeMeta();
@@ -69,7 +72,7 @@ public:
 
     DMFileID fileId() { return file_id; }
     DMFileID refId() { return ref_id; }
-    String path() { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
+    String   path() { return parent_path + (status == Status::INVISIBLE ? "/.tmp.dmf_" : "/dmf_") + DB::toString(file_id); }
     String metaPath() { return path() + "/meta.txt"; }
     String chunkStatPath() { return path() + "/chunk"; }
     // Do not gc me.
@@ -118,7 +121,6 @@ private:
     }
 
     void addChunk(const ChunkStat & chunk_stat) { chunk_stats.push_back(chunk_stat); }
-    void setStatus(Status status_) { status = status_; }
 
     void finalize();
 

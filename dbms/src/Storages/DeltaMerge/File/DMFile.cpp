@@ -14,11 +14,16 @@ namespace DB
 namespace DM
 {
 
-DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
+DMFilePtr DMFile::create(DMFileID file_id, const String & parent_path, bool wal_mode_)
 {
     Logger * log = &Logger::get("DMFile");
     // On create, ref_id is the same as file_id.
-    DMFilePtr new_dmfile(new DMFile(file_id, file_id, parent_path, Status::WRITABLE, log));
+    DMFilePtr new_dmfile(new DMFile( //
+        file_id,
+        file_id,
+        parent_path,
+        (wal_mode_ ? Status::APPENDING : Status::INVISIBLE),
+        log));
 
     auto       path = new_dmfile->path();
     Poco::File file(path);
@@ -35,7 +40,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path)
     return new_dmfile;
 }
 
-DMFilePtr DMFile::restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta)
+DMFilePtr DMFile::restore(DMFileID file_id, DMFileID ref_id, const String & parent_path, bool read_meta)
 {
     DMFilePtr dmfile(new DMFile(file_id, ref_id, parent_path, Status::READABLE, &Logger::get("DMFile")));
     if (read_meta)
@@ -73,8 +78,16 @@ void DMFile::readMeta()
 void DMFile::finalize()
 {
     writeMeta();
-    if (status != Status::WRITING)
-        throw Exception("Expected WRITING status, now " + statusString(status));
+    if (status != Status::INVISIBLE && status != Status::APPENDING)
+        throw Exception("Try to finialize invalid status(" + statusString(status) + ") DMFile: " + path());
+
+    // For APPENDING, we don't need to rename file.
+    if (status == Status::APPENDING)
+    {
+        status = Status::READABLE;
+        return;
+    }
+
     Poco::File old_file(path());
     status = Status::READABLE;
 
@@ -87,15 +100,15 @@ void DMFile::finalize()
     old_file.renameTo(new_path);
 }
 
-std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
+std::set<DMFileID> DMFile::listAllInPath(const String & parent_path, bool can_gc)
 {
     Poco::File folder(parent_path);
     if (!folder.exists())
         return {};
     std::vector<std::string> file_names;
     folder.list(file_names);
-    std::set<UInt64> file_ids;
-    Logger *         log = &Logger::get("DMFile");
+    std::set<DMFileID> file_ids;
+    Logger *           log = &Logger::get("DMFile");
     for (auto & name : file_names)
     {
         if (!startsWith(name, "dmf_"))
@@ -107,7 +120,7 @@ std::set<UInt64> DMFile::listAllInPath(const String & parent_path, bool can_gc)
             LOG_INFO(log, "Unrecognized DM file, ignored: " + name);
             continue;
         }
-        UInt64 file_id = std::stoull(ss[1]);
+        DMFileID file_id = std::stoull(ss[1]);
         if (can_gc)
         {
             Poco::File ngc_file(parent_path + "/" + name + "/" + NGC_FILE_NAME);

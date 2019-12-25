@@ -105,37 +105,70 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
     gc_handle              = background_pool.addTask([this] { return storage_pool.gc(); });
     background_task_handle = background_pool.addTask([this] { return handleBackgroundTask(); });
 
-    auto dmfile_scanner = [=]() {
-        PageStorage::PathAndIdsVec path_and_ids_vec;
-        for (auto & [_, extra_path] : extra_paths.listPaths())
-        {
-            (void)_;
-            auto & path_and_ids           = path_and_ids_vec.emplace_back();
-            path_and_ids.first            = extra_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(extra_path + "/" + STABLE_FOLDER_NAME, /* can_gc= */ true);
-            for (auto id : file_ids_in_current_path)
-                path_and_ids.second.insert(id);
-        }
-        return path_and_ids_vec;
-    };
-    auto dmfile_remover = [&](const PageStorage::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
-        for (auto & [extra_path, ids] : path_and_ids_vec)
-        {
-            for (auto id : ids)
+    {
+        // GC for stable DMFiles.
+        auto dmfile_scanner = [=]() {
+            PageStorage::PathAndIdsVec path_and_ids_vec;
+            for (auto & [_, extra_path] : extra_paths.listPaths())
             {
-                if (valid_ids.count(id))
-                    continue;
-
-                // Note that ref_id is useless here.
-                auto dmfile = DMFile::restore(id, /* ref_id= */ 0, extra_path + "/" + STABLE_FOLDER_NAME, false);
-                if (dmfile->canGC())
-                    dmfile->remove();
-
-                LOG_DEBUG(log, "GC removed useless dmfile: " << dmfile->path());
+                (void)_;
+                auto & path_and_ids           = path_and_ids_vec.emplace_back();
+                path_and_ids.first            = extra_path + "/" + STABLE_FOLDER_NAME;
+                auto file_ids_in_current_path = DMFile::listAllInPath(path_and_ids.first, /* can_gc= */ true);
+                for (auto id : file_ids_in_current_path)
+                    path_and_ids.second.insert(id);
             }
-        }
-    };
-    storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
+            return path_and_ids_vec;
+        };
+        auto dmfile_remover = [&](const PageStorage::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+            for (auto & [parent_path, ids] : path_and_ids_vec)
+            {
+                for (auto id : ids)
+                {
+                    if (valid_ids.count(id))
+                        continue;
+
+                    // Note that ref_id is useless here.
+                    auto dmfile = DMFile::restore(id, /* ref_id= */ 0, parent_path, false);
+                    if (dmfile->canGC())
+                        dmfile->remove();
+
+                    LOG_DEBUG(log, "GC removed useless dmfile in stable: " << dmfile->path());
+                }
+            }
+        };
+        storage_pool.data().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
+    }
+    {
+        // GC for delta DMFiles
+        const String delta_path = dm_context->deltaPath();
+
+        auto dmfile_scanner = [delta_path]() -> PageStorage::PathAndIdsVec {
+            PageStorage::PathAndIdsVec path_and_ids_vec;
+            path_and_ids_vec.emplace_back( //
+                delta_path,
+                DMFile::listAllInPath(delta_path, /* can_gc= */ true));
+            return path_and_ids_vec;
+        };
+        auto dmfile_remover = [&](const PageStorage::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+            for (auto & [parent_path, ids] : path_and_ids_vec)
+            {
+                for (auto id : ids)
+                {
+                    if (valid_ids.count(id))
+                        continue;
+
+                    // Note that ref_id is useless here.
+                    auto dmfile = DMFile::restore(id, /* ref_id= */ 0, parent_path, false);
+                    if (dmfile->canGC())
+                        dmfile->remove();
+
+                    LOG_DEBUG(log, "GC removed useless dmfile in delta: " << dmfile->path());
+                }
+            }
+        };
+        storage_pool.log().registerExternalPagesCallbacks(dmfile_scanner, dmfile_remover);
+    }
 
     LOG_INFO(log, "Restore DeltaMerge Store end");
 }
@@ -305,9 +338,7 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
     commitWrites(actions, wbs, dm_context);
 }
 
-void DeltaMergeStore::commitWrites(const WriteActions & actions,
-                                   WriteBatches &       wbs,
-                                   const DMContextPtr & dm_context)
+void DeltaMergeStore::commitWrites(const WriteActions & actions, WriteBatches & wbs, const DMContextPtr & dm_context)
 {
     if (unlikely(!wbs.data.empty() || !wbs.meta.empty()))
         throw Exception("Unexpected data or meta modifications!");

@@ -144,7 +144,7 @@ SegmentPtr Segment::newSegment( //
 {
     WriteBatches wbs;
 
-    auto delta = std::make_shared<DeltaSpace>(delta_id, context.store_path + "/delta");
+    auto delta = std::make_shared<DeltaSpace>(delta_id, context.deltaPath());
 
     auto stable = createNewStable(context, std::make_shared<EmptySkippableBlockInputStream>(context.store_columns), stable_id, wbs);
 

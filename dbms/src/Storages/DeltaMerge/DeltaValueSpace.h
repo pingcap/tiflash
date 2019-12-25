@@ -186,6 +186,7 @@ public:
 
 public:
     DeltaSpace(PageId id_, String parent_path_) : id(id_), parent_path(std::move(parent_path_)), log(&Logger::get("DeltaSpace")) {}
+    ~DeltaSpace();
 
     // Generate a new delta(with the same id) and remove the chunks in snap
     DeltaSpacePtr nextGeneration(const SnapshotPtr & snap, WriteBatches & wbs);
