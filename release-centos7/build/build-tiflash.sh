@@ -9,7 +9,6 @@ CMAKE_BUILD_TYPE="RELWITHDEBINFO"
 ENABLE_EMBEDDED_COMPILER="FALSE"
 
 install_dir="$SRCPATH/release-centos7/tiflash"
-if [ -d "$install_dir" ]; then rm -rf "$install_dir"/*; else mkdir -p "$install_dir"; fi
 
 if [ -d "$SRCPATH/contrib/kvproto" ]; then
   cd "$SRCPATH/contrib/kvproto"
