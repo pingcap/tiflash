@@ -284,7 +284,39 @@ try
         EXPECT_EQ(block.block.rows(), 25UL);
     }
 
-    //TODO: check wbs
+    // check wbs
+    {
+        auto & writes = wbs.removed_log.getWrites();
+        EXPECT_EQ(writes.size(), 1UL);
+        EXPECT_EQ(writes[0].type, WriteBatch::WriteType::DEL);
+        auto & chunks_in_snap1 = snap1->getChunks();
+        EXPECT_EQ(writes[0].page_id, chunks_in_snap1[0].id);
+    }
+
+    // Release old delta and read from snapshot again.
+    delta.reset();
+    {
+        auto blocks = snap1->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 20UL);
+    }
+    {
+        auto blocks = snap2->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 20 + 25UL);
+    }
+    {
+        // check read from new snapshot
+        auto blocks = snap3->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto block = *blocks.begin();
+        ASSERT_FALSE(block.isDelete());
+        EXPECT_EQ(block.block.rows(), 25UL);
+    }
 }
 CATCH
 

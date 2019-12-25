@@ -1,5 +1,6 @@
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 
@@ -57,23 +58,26 @@ ChunkMeta ChunkMeta::deserialize(ReadBuffer & buf)
     return chunk;
 }
 
-static ChunkMeta createRefChunk(const ChunkMeta & chunk, const GenPageId & gen_chunk_id, WriteBatches & wbs)
+namespace
+{
+ChunkMeta createRefChunk(const ChunkMeta & chunk, const GenPageId & gen_chunk_id, WriteBatches & wbs)
 {
     if (chunk.is_delete_range)
         return ChunkMeta(chunk.delete_range);
 
     ChunkMeta ref_chunk(chunk);
     ref_chunk.id = gen_chunk_id();
-    wbs.log.putRefPage(ref_chunk.id, chunk.id);
+    // Add ref for chunk.id to DMFile.id and remove old chunk
+    wbs.log.putRefPage(ref_chunk.id, ref_chunk.file_id);
     wbs.removed_log.delPage(chunk.id);
 
     return ref_chunk;
 }
 
-void serializeChunkMetas(WriteBuffer &                 buf,
-                         ChunkMetaList::const_iterator begin,
-                         ChunkMetaList::const_iterator end,
-                         ChunkMeta *                   uncommitted_chunk)
+void serializeChunkMetas(WriteBuffer &              buf,
+                         ChunkMetas::const_iterator begin,
+                         ChunkMetas::const_iterator end,
+                         ChunkMeta *                uncommitted_chunk = nullptr)
 {
     size_t size = 0;
     for (auto iter = begin; iter != end; ++iter)
@@ -82,20 +86,22 @@ void serializeChunkMetas(WriteBuffer &                 buf,
         ++size;
 
     writeIntBinary(size, buf);
-    for (; begin != end; ++begin)
-        begin->serialize(buf);
+    for (auto iter = begin; iter != end; ++iter)
+        iter->serialize(buf);
     if (uncommitted_chunk)
         uncommitted_chunk->serialize(buf);
 }
-ChunkMetaList deserializeChunkMetas(ReadBuffer & buf)
+
+ChunkMetas deserializeChunkMetas(ReadBuffer & buf)
 {
-    ChunkMetaList chunks;
-    UInt64        size = 0;
+    ChunkMetas chunks;
+    UInt64     size = 0;
     readIntBinary(size, buf);
     for (UInt64 i = 0; i < size; ++i)
         chunks.emplace_back(ChunkMeta::deserialize(buf));
     return chunks;
 }
+} // namespace
 
 //==================================================================
 // DeltaSpace
@@ -124,7 +130,7 @@ DeltaSpacePtr DeltaSpace::restore(PageId id, const String & parent_path, const D
 void DeltaSpace::saveMeta(WriteBatch & meta_wb)
 {
     MemoryWriteBuffer buf(0, DELTA_SPACE_SERIALIZE_BUFFER_SIZE);
-    serializeChunkMetas(buf, chunks.begin(), chunks.end());
+    serializeChunkMetas(buf, chunks.cbegin(), chunks.cend());
 
     const auto data_size = buf.count(); // Must be called before tryGetReadBuffer.
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
@@ -200,12 +206,12 @@ void DeltaSpace::applyAppend(const DeltaSpace::AppendTaskPtr & task)
 DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches & wbs)
 {
     DeltaSpacePtr new_delta = std::make_shared<DeltaSpace>(id, parent_path);
-    if (chunks.begin() != snap->beg)
+    if (!chunks.empty() && !snap->chunks.empty() && !chunks[0].equals(snap->chunks[0]))
         throw Exception("Try to get next generation of delta with invalid snapshot.");
 
     // Remove the chunks in snap
     auto snap_iter = chunks.begin();
-    for (size_t i = 0; i < snap->chunks_size; ++i, ++snap_iter)
+    for (size_t i = 0; i < snap->chunks.size(); ++i, ++snap_iter)
     {
         // Remove the chunk from log. If all chunks of DMFile have been removed,
         // the DMFile will be gc by PageStorage later.
@@ -229,8 +235,12 @@ DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches 
                 new_delta->files.emplace(chunk.file_id, iter->second);
         }
     }
-    new_delta->file_writting = file_writting;
-    new_delta->writer.swap(writer);
+    // 
+    new_delta->file_writting = nullptr;
+    new_delta->writer = nullptr;
+
+    this->writer->finalize();
+    this->writer.reset();
 
     return new_delta;
 }
@@ -240,10 +250,9 @@ DeltaSpacePtr DeltaSpace::newRef(
 {
     DeltaSpacePtr ref_delta = std::make_shared<DeltaSpace>(new_delta_id, parent_path);
 
-    ChunkMetaList new_chunks;
-    auto          iter = snap->beg;
-    for (size_t i = 0; i < snap->chunks_size; ++i, ++iter)
-        new_chunks.push_back(createRefChunk(*iter, gen_chunk_id, wbs));
+    ChunkMetas new_chunks;
+    for (size_t i = 0; i < snap->chunks.size(); ++i)
+        new_chunks.push_back(createRefChunk(snap->chunks[i], gen_chunk_id, wbs));
     ref_delta->chunks.swap(new_chunks);
     // TODO: files
 
@@ -264,17 +273,16 @@ DeltaSpace::DeltaValuesPtr DeltaSpace::Snapshot::getValues( //
 
     DMFileID    current_file   = 0;
     IndexSetPtr chunks_to_read = std::make_shared<IndexSet>();
-    auto        iter           = beg;
-    for (size_t i = 0; /* empty */; ++i, ++iter)
+    for (size_t i = 0; /* empty */; ++i)
     {
-        if (i == chunks_size && !chunks_to_read->empty())
+        if (i == chunks.size() && !chunks_to_read->empty())
         {
             readFromFile(current_file, read_columns, chunks_to_read, context, callback);
             break;
         }
 
-        const ChunkMeta & chunk = *iter;
-        if (iter == beg)
+        const ChunkMeta & chunk = chunks[i];
+        if (i == 0)
             current_file = chunk.file_id;
 
         if (unlikely(chunk.is_delete_range))
@@ -322,20 +330,19 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     size_t block_rows_start = rows_begin;
     size_t block_rows_end   = rows_begin;
 
-    auto iter = beg;
-    for (size_t chunk_index = 0; chunk_index <= end_chunk_index; ++chunk_index, ++iter)
+    for (size_t chunk_index = 0; chunk_index <= end_chunk_index; ++chunk_index)
     {
         // Locate the first chunk
         if (chunk_index < start_chunk_index)
             continue;
 
-        if (chunk_index == chunks_size)
+        if (chunk_index == chunks.size())
         {
             res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
             break;
         }
 
-        const ChunkMeta & chunk = *iter;
+        const ChunkMeta & chunk = chunks[chunk_index];
 
         size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
         size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.rows;
@@ -354,6 +361,53 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     }
 
     return res;
+}
+
+BlockInputStreamPtr DeltaSpace::Snapshot::getInputStream(const ColumnDefines & read_columns, const DMContext & context) const
+{
+    // This function is just for readRaw, simply read all data from delta and return a BlocksList
+    BlocksList blocks;
+
+    auto callback = [&blocks](const Block & block, size_t, size_t) { blocks.emplace_back(block); };
+
+    DMFileID    current_file   = 0;
+    IndexSetPtr chunks_to_read = std::make_shared<IndexSet>();
+    for (size_t i = 0; /* empty */; ++i)
+    {
+        if (i == chunks.size() && !chunks_to_read->empty())
+        {
+            readFromFile(current_file, read_columns, chunks_to_read, context, callback);
+            break;
+        }
+
+        const ChunkMeta & chunk = chunks[i];
+        if (i == 0)
+            current_file = chunk.file_id;
+
+        if (unlikely(chunk.is_delete_range))
+        {
+            // DeleteRange, read from current file.
+            readFromFile(current_file, read_columns, chunks_to_read, context, callback);
+
+            chunks_to_read->clear();
+            chunks_to_read->insert(chunk.index);
+        }
+        else
+        {
+            if (chunk.file_id == current_file)
+            {
+                chunks_to_read->insert(chunk.index);
+                continue;
+            }
+
+            // Chunk in another file (or the last chunk), read from current file and move to collect chunks in next file.
+            readFromFile(current_file, read_columns, chunks_to_read, context, callback);
+            current_file = chunk.file_id;
+            chunks_to_read->clear();
+            chunks_to_read->insert(chunk.index);
+        }
+    }
+    return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 }
 
 Block DeltaSpace::Snapshot::read( //
@@ -395,18 +449,17 @@ Block DeltaSpace::Snapshot::read( //
     std::optional<size_t> rows_offset_in_read = std::nullopt;
     size_t                rows_limit_in_read  = 0;
 
-    auto iter = beg;
-    for (size_t chunk_index = 0; chunk_index <= end_chunk_index; ++chunk_index, ++iter)
+    for (size_t chunk_index = 0; chunk_index <= end_chunk_index; ++chunk_index)
     {
         if (chunk_index < start_chunk_index)
             continue;
-        if (chunk_index == chunks_size)
+        if (chunk_index == chunks.size())
         {
             readFromFile(current_file_id, read_columns, chunks_to_read, context, callback, rows_offset_in_read, rows_limit_in_read);
             break;
         }
 
-        const ChunkMeta & chunk = *iter;
+        const ChunkMeta & chunk = chunks[chunk_index];
         if (chunk_index == start_chunk_index)
             current_file_id = chunk.file_id;
 
@@ -513,12 +566,12 @@ std::pair<size_t, size_t> DeltaSpace::Snapshot::findChunk(size_t rows_offset, si
     size_t rows_count    = 0;
     size_t deletes_count = 0;
     size_t chunk_index   = 0;
-    for (auto iter = beg; chunk_index < chunks_size; ++iter, ++chunk_index)
+    for (; chunk_index < chunks.size(); ++chunk_index)
     {
         if (rows_count == rows_offset && deletes_count == deletes_offset)
             return {chunk_index, 0};
 
-        const auto & chunk = *iter;
+        const auto & chunk = chunks[chunk_index];
         if (chunk.rows > 0)
         {
             rows_count += chunk.rows;
@@ -550,11 +603,11 @@ std::pair<size_t, size_t> DeltaSpace::Snapshot::findChunk(size_t rows_offset) co
 {
     size_t rows_count  = 0;
     size_t chunk_index = 0;
-    for (auto iter = beg; chunk_index < chunks_size; ++iter, ++chunk_index)
+    for (; chunk_index < chunks.size(); ++chunk_index)
     {
         if (rows_count == rows_offset)
             return {chunk_index, 0};
-        auto cur_chunk_rows = iter->rows;
+        auto cur_chunk_rows = chunks[chunk_index].rows;
         rows_count += cur_chunk_rows;
         if (rows_count > rows_offset)
             return {chunk_index, cur_chunk_rows - (rows_count - rows_offset)};
@@ -568,22 +621,20 @@ std::pair<size_t, size_t> DeltaSpace::Snapshot::findChunk(size_t rows_offset) co
 size_t DeltaSpace::Snapshot::numDeletes() const
 {
     size_t num_deletes = 0;
-    auto   iter        = beg;
-    for (size_t i = 0; i < chunks_size; ++i, ++iter)
-        num_deletes += iter->is_delete_range;
+    for (size_t i = 0; i < chunks.size(); ++i)
+        num_deletes += chunks[i].is_delete_range;
     return num_deletes;
 }
 size_t DeltaSpace::Snapshot::numChunks() const
 {
-    return chunks_size;
+    return chunks.size();
 }
 size_t DeltaSpace::Snapshot::numRows() const
 {
     // Note that DeleteRange.rows is always 0.
     size_t rows = 0;
-    auto   iter = beg;
-    for (size_t i = 0; i < chunks_size; ++i, ++iter)
-        rows += iter->rows;
+    for (size_t i = 0; i < chunks.size(); ++i)
+        rows += chunks[i].rows;
     return rows;
 }
 size_t DeltaSpace::Snapshot::numBytes() const

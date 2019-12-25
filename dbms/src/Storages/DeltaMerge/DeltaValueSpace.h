@@ -6,6 +6,7 @@
 #include <Columns/IColumn.h>
 #include <Core/Block.h>
 
+#include <DataStreams/IBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileChunkFilter.h>
@@ -55,17 +56,18 @@ public:
     ChunkMeta() = default;
     ChunkMeta(HandleRange delete_range_) : delete_range(delete_range_), is_delete_range(true) {}
 
+    bool equals(const ChunkMeta & rhs) const
+    {
+        if (is_delete_range)
+            return rhs.is_delete_range && delete_range == rhs.delete_range;
+        else
+            return id == rhs.id && file_id == rhs.file_id && index == rhs.index && rows == rhs.rows;
+    }
+
     void             serialize(WriteBuffer & buf) const;
     static ChunkMeta deserialize(ReadBuffer & buf);
 };
-// Use list so that we can use iterator for snapshot.
-using ChunkMetaList = std::list<ChunkMeta>;
-
-void          serializeChunkMetas(WriteBuffer &                 buf,
-                                  ChunkMetaList::const_iterator begin,
-                                  ChunkMetaList::const_iterator end,
-                                  ChunkMeta *                   uncommitted_chunk = nullptr);
-ChunkMetaList deserializeChunkMetas(WriteBuffer & buf);
+using ChunkMetas = std::vector<ChunkMeta>;
 
 
 struct ChunkOrDelete
@@ -126,10 +128,7 @@ public:
     class Snapshot
     {
     public:
-        Snapshot(ChunkMetaList::const_iterator beg_, size_t chunks_size_, DMFileMap files_)
-            : beg(std::move(beg_)), chunks_size(chunks_size_), files(std::move(files_))
-        {
-        }
+        Snapshot(ChunkMetas chunks_, DMFileMap files_) : chunks(std::move(chunks_)), files(std::move(files_)) {}
 
         DeltaValuesPtr getValues(const ColumnDefines & read_columns, //
                                  const DMContext &     context) const;
@@ -143,6 +142,12 @@ public:
         size_t numDeletes() const;
         size_t numRows() const;
         size_t numBytes() const;
+
+        // Simply read all data from delta and return a BlocksListInputStream (Just for raw read now)
+        BlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const DMContext & context) const;
+
+        // Just for test
+        const ChunkMetas & getChunks() const { return chunks; }
 
     private:
         Block read(const ColumnDefines & read_columns,
@@ -166,9 +171,8 @@ public:
         std::pair<size_t, size_t> findChunk(size_t rows_offset) const;
 
     private:
-        const ChunkMetaList::const_iterator beg;
-        const size_t                        chunks_size;
-        const DMFileMap                     files;
+        const ChunkMetas chunks;
+        const DMFileMap  files;
 
         friend class DeltaSpace;
     };
@@ -177,7 +181,7 @@ public:
     SnapshotPtr getSnapshot() const
     {
         std::shared_lock lock(read_write_mutex);
-        return std::make_shared<Snapshot>(chunks.begin(), chunks.size(), files);
+        return std::make_shared<Snapshot>(chunks, files);
     }
 
 public:
@@ -229,11 +233,13 @@ private:
     PageId id; // PageId to store this delta's meta in PageStorage.
     String parent_path;
 
+    /// Here we use vector of ChunkMeta. Create a snapshot means copy the vector of ChunkMetas.
+    /// We may try to write a list for ChunkMeta for eliminating the copying and manage valid chunks' lifetime by std::shared_ptr
     mutable std::shared_mutex read_write_mutex;
-    ChunkMetaList             chunks;
+    ChunkMetas                chunks;
 
     DMFileMap files;
-    DMFilePtr file_writting = nullptr;
+    DMFilePtr file_writting = nullptr; // Keep it so that we can easily track the chunk index we are writing to.
 
     std::unique_ptr<DMFileWriter> writer = nullptr;
 

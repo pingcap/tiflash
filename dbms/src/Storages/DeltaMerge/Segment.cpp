@@ -385,33 +385,22 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
     }
 
     (void)storage_snap;
-#if 0
-    // FIXME: read from delta
-    auto                delta_chunks = segment_snap.delta->getChunksBefore(segment_snap.delta_rows, segment_snap.delta_deletes);
-    BlockInputStreamPtr delta_stream = std::make_shared<ChunkBlockInputStream>(delta_chunks, //
-                                                                               new_columns_to_read,
-                                                                               storage_snap.log_reader,
-                                                                               EMPTY_FILTER);
-#endif
+    BlockInputStreamPtr delta_stream = segment_snap.delta->getInputStream(new_columns_to_read, dm_context);
 
     BlockInputStreamPtr stable_stream
         = segment_snap.stable->getInputStream(dm_context, new_columns_to_read, range, EMPTY_FILTER, MAX_UINT64, false);
 
     if (do_range_filter)
     {
-#if 0
         delta_stream = std::make_shared<DMHandleFilterBlockInputStream<false>>(delta_stream, range, 0);
         delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
-#endif
 
         stable_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(stable_stream, range, 0);
         stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
     }
 
     BlockInputStreams streams;
-#if 0
     streams.push_back(delta_stream);
-#endif
     streams.push_back(stable_stream);
     return std::make_shared<ConcatBlockInputStream>(streams);
 }
