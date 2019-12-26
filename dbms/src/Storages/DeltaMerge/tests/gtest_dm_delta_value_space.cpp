@@ -162,7 +162,7 @@ try
 CATCH
 
 
-TEST_F(DeltaDiskValueSpace_test, SimpleGetMergeBlocks)
+TEST_F(DeltaDiskValueSpace_test, GetMergeBlocksSimple)
 try
 {
     auto delta = std::make_shared<DeltaSpace>(1, delta_path);
@@ -211,6 +211,95 @@ try
             ASSERT_FALSE(b.isDelete());
             EXPECT_EQ(b.block.rows(), 25UL);
         }
+    }
+}
+CATCH
+
+TEST_F(DeltaDiskValueSpace_test, GetMergeBlocksWithDelete)
+try
+{
+    auto delta = std::make_shared<DeltaSpace>(1, delta_path);
+
+    auto write_to_delta = [&](size_t first_pk, size_t num_rows) {
+        // write to DiskValueSpace
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(first_pk, first_pk + num_rows, false);
+        writeToDelta(delta, std::move(block1));
+    };
+
+    // Write [10, 30)
+    write_to_delta(10, 20);
+    // Write [10, 35) again
+    write_to_delta(10, 25);
+    // Delete [12, 15)
+    HandleRange range_to_delete(12, 15);
+    writeToDelta(delta, range_to_delete);
+    write_to_delta(15, 45);
+    write_to_delta(20, 80);
+
+
+    EXPECT_EQ(delta->numChunks(), 5UL);
+    EXPECT_EQ(delta->numRows(), 20 + 25 + 45 + 80UL);
+    EXPECT_EQ(delta->numDeletes(), 1UL);
+    auto snap = delta->getSnapshot();
+    {
+        // Read all, should get Block[10, 35); Del[12,15); Block[15,100)
+        auto blocks = snap->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 3UL);
+        auto iter = blocks.begin();
+        auto b1   = *iter++;
+        ASSERT_FALSE(b1.isDelete());
+        EXPECT_EQ(b1.block.rows(), 20 + 25UL);
+        auto b2 = *iter++;
+        ASSERT_TRUE(b2.isDelete());
+        EXPECT_RANGE_EQ(b2.delete_range, range_to_delete);
+        auto b3 = *iter++;
+        ASSERT_FALSE(b3.isDelete());
+        EXPECT_EQ(b3.block.rows(), 45 + 80UL);
+    }
+    {
+        // Read from the second chunk, should get Block[10, 35); Del[12,15); Block[15,100]
+        auto blocks = snap->getMergeBlocks(table_handle_define, 20, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 3UL);
+        auto iter = blocks.begin();
+        auto b1   = *iter++;
+        ASSERT_FALSE(b1.isDelete());
+        EXPECT_EQ(b1.block.rows(), 25UL);
+        auto b2 = *iter++;
+        ASSERT_TRUE(b2.isDelete());
+        EXPECT_RANGE_EQ(b2.delete_range, range_to_delete);
+        auto b3 = *iter++;
+        ASSERT_FALSE(b3.isDelete());
+        EXPECT_EQ(b3.block.rows(), 45 + 80UL);
+    }
+    {
+        // Read from the third chunk, should get Del[12,15); Block[15,100]
+        auto blocks = snap->getMergeBlocks(table_handle_define, 20 + 25, 0, *dm_context);
+        ASSERT_EQ(blocks.size(), 2UL);
+        auto iter = blocks.begin();
+        auto b1   = *iter++;
+        ASSERT_TRUE(b1.isDelete());
+        EXPECT_RANGE_EQ(b1.delete_range, range_to_delete);
+        auto b2 = *iter++;
+        ASSERT_FALSE(b2.isDelete());
+        EXPECT_EQ(b2.block.rows(), 45 + 80UL);
+    }
+    {
+        // Read from the fourth chunk, should get Block[15,100]
+        auto blocks = snap->getMergeBlocks(table_handle_define, 20 + 25, 1, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto iter = blocks.begin();
+        auto b1 = *iter++;
+        ASSERT_FALSE(b1.isDelete());
+        EXPECT_EQ(b1.block.rows(), 45 + 80UL);
+    }
+    {
+        // Read from the fifth chunk, should get Block[20,100]
+        auto blocks = snap->getMergeBlocks(table_handle_define, 20 + 25 + 45, 1, *dm_context);
+        ASSERT_EQ(blocks.size(), 1UL);
+        auto iter = blocks.begin();
+        auto b1 = *iter++;
+        ASSERT_FALSE(b1.isDelete());
+        EXPECT_EQ(b1.block.rows(), 80UL);
     }
 }
 CATCH

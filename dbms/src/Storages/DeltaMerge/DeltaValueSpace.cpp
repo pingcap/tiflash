@@ -129,7 +129,10 @@ DeltaSpacePtr DeltaSpace::restore(PageId id, const String & parent_path, const D
     // Open DMFiles for later read
     std::unordered_set<DMFileID> file_ids;
     for (const auto & chunk : instance->chunks)
-        file_ids.insert(chunk.file_id);
+    {
+        if (!chunk.is_delete_range)
+            file_ids.insert(chunk.file_id);
+    }
     for (const auto & file_id : file_ids)
     {
         DMFilePtr file = DMFile::restore(file_id, 0, parent_path);
@@ -298,30 +301,32 @@ DeltaSpace::DeltaValuesPtr DeltaSpace::Snapshot::getValues( //
 
     auto callback = [&values](const Block & block, size_t, size_t) { values->addBlock(block, block.rows()); };
 
+    bool        is_first_chunk = true;
     DMFileID    current_file   = 0;
     IndexSetPtr chunks_to_read = std::make_shared<IndexSet>();
     for (size_t i = 0; /* empty */; ++i)
     {
-        if (i == chunks.size() && !chunks_to_read->empty())
+        if (i == chunks.size())
         {
             readFromFile(current_file, read_columns, chunks_to_read, context, callback);
             break;
         }
 
         const ChunkMeta & chunk = chunks[i];
-        if (i == 0)
-            current_file = chunk.file_id;
-
         if (unlikely(chunk.is_delete_range))
         {
             // DeleteRange, read from current file.
             readFromFile(current_file, read_columns, chunks_to_read, context, callback);
-
             chunks_to_read->clear();
-            chunks_to_read->insert(chunk.index);
         }
         else
         {
+            if (is_first_chunk)
+            {
+                current_file   = chunk.file_id;
+                is_first_chunk = false;
+            }
+
             if (chunk.file_id == current_file)
             {
                 chunks_to_read->insert(chunk.index);
@@ -357,12 +362,8 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     size_t block_rows_start = rows_begin;
     size_t block_rows_end   = rows_begin;
 
-    for (size_t chunk_index = 0; chunk_index <= end_chunk_index; ++chunk_index)
+    for (size_t chunk_index = start_chunk_index; chunk_index <= end_chunk_index; ++chunk_index)
     {
-        // Locate the first chunk
-        if (chunk_index < start_chunk_index)
-            continue;
-
         if (chunk_index == chunks.size())
         {
             res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
@@ -378,10 +379,10 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
 
         if (chunk.is_delete_range || chunk_index == end_chunk_index)
         {
+            if (block_rows_end != block_rows_start)
+                res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
             if (chunk.is_delete_range)
                 res.emplace_back(chunk.delete_range);
-            else if (block_rows_end != block_rows_start)
-                res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
 
             block_rows_start = block_rows_end;
         }
@@ -397,30 +398,32 @@ BlockInputStreamPtr DeltaSpace::Snapshot::getInputStream(const ColumnDefines & r
 
     auto callback = [&blocks](const Block & block, size_t, size_t) { blocks.emplace_back(block); };
 
+    bool        is_first_chunk = true;
     DMFileID    current_file   = 0;
     IndexSetPtr chunks_to_read = std::make_shared<IndexSet>();
     for (size_t i = 0; /* empty */; ++i)
     {
-        if (i == chunks.size() && !chunks_to_read->empty())
+        if (i == chunks.size())
         {
             readFromFile(current_file, read_columns, chunks_to_read, context, callback);
             break;
         }
 
         const ChunkMeta & chunk = chunks[i];
-        if (i == 0)
-            current_file = chunk.file_id;
-
         if (unlikely(chunk.is_delete_range))
         {
             // DeleteRange, read from current file.
             readFromFile(current_file, read_columns, chunks_to_read, context, callback);
-
             chunks_to_read->clear();
-            chunks_to_read->insert(chunk.index);
         }
         else
         {
+            if (is_first_chunk)
+            {
+                current_file   = chunk.file_id;
+                is_first_chunk = false;
+            }
+
             if (chunk.file_id == current_file)
             {
                 chunks_to_read->insert(chunk.index);
@@ -470,52 +473,51 @@ Block DeltaSpace::Snapshot::read( //
     const auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(rows_offset);
     const auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(rows_offset + rows_limit);
 
+    bool        is_first_chunk  = true;
     DMFileID    current_file_id = 0;
     IndexSetPtr chunks_to_read  = std::make_shared<IndexSet>();
 
-    std::optional<size_t> rows_offset_in_read = std::nullopt;
-    size_t                rows_limit_in_read  = 0;
+    std::optional<size_t> block_rows_offset = std::nullopt;
+    size_t                block_rows_limit  = 0;
 
-    for (size_t chunk_index = 0; chunk_index <= end_chunk_index; ++chunk_index)
+    for (size_t chunk_index = start_chunk_index; chunk_index <= end_chunk_index; ++chunk_index)
     {
-        if (chunk_index < start_chunk_index)
-            continue;
         if (chunk_index == chunks.size())
         {
-            readFromFile(current_file_id, read_columns, chunks_to_read, context, callback, rows_offset_in_read, rows_limit_in_read);
+            readFromFile(current_file_id, read_columns, chunks_to_read, context, callback, block_rows_offset, block_rows_limit);
             break;
         }
 
         const ChunkMeta & chunk = chunks[chunk_index];
-        if (chunk_index == start_chunk_index)
-            current_file_id = chunk.file_id;
-
-        if (chunk.is_delete_range)
-            continue;
-
-        if (chunk.file_id == current_file_id)
+        if (!chunk.is_delete_range && is_first_chunk)
         {
-            if (!rows_offset_in_read.has_value())
+            current_file_id = chunk.file_id;
+            is_first_chunk  = false;
+        }
+
+        if (!chunk.is_delete_range && chunk.file_id == current_file_id)
+        {
+            if (!block_rows_offset.has_value())
             {
                 // A new read action in DMFile{current_file_id}
-                rows_offset_in_read.emplace((chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0));
-                rows_limit_in_read = 0;
+                block_rows_offset.emplace((chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0));
+                block_rows_limit = 0;
             }
-            rows_limit_in_read += (chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.rows);
+            block_rows_limit += (chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.rows);
             chunks_to_read->insert(chunk.index);
         }
 
-        if (chunk.file_id != current_file_id || chunk_index == end_chunk_index)
+        if (chunk_index == end_chunk_index || (!chunk.is_delete_range && chunk.file_id != current_file_id))
         {
             // Finish read action
-            readFromFile(current_file_id, read_columns, chunks_to_read, context, callback, rows_offset_in_read, rows_limit_in_read);
+            readFromFile(current_file_id, read_columns, chunks_to_read, context, callback, block_rows_offset, block_rows_limit);
             // Move to read next DMFile
             current_file_id = chunk.file_id;
             chunks_to_read->clear();
             chunks_to_read->insert(chunk.index);
             // A new read action in next DMFile, reset offset and limit
-            rows_offset_in_read.emplace((chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0));
-            rows_limit_in_read = (chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.rows);
+            block_rows_offset.emplace(0);
+            block_rows_limit = (chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.rows);
         }
     }
 
@@ -535,21 +537,6 @@ void DeltaSpace::Snapshot::readFromFile(DMFileID              file_id,
     if (indices->empty())
         return;
 
-    auto iter = files.find(file_id);
-    if (iter == files.end())
-        throw Exception("Read chunks in non-open DMFile[" + DB::toString(file_id) + "]", ErrorCodes::LOGICAL_ERROR);
-    const auto & file = iter->second;
-
-    DMFileBlockInputStream stream(context.db_context,
-                                  MAX_UINT64, // TODO: enable version filter
-                                  /* enable_clean_read */ false,
-                                  context.hash_salt,
-                                  file,
-                                  read_columns,
-                                  HandleRange::newAll(),
-                                  EMPTY_FILTER,
-                                  indices);
-
     // The rows offset for this read.
     const size_t rows_offset = rows_offset_ ? *rows_offset_ : 0;
 
@@ -566,6 +553,21 @@ void DeltaSpace::Snapshot::readFromFile(DMFileID              file_id,
                   << ss.str() << "] offset[" << rows_offset << "]"          //
                   << std::endl;
     }
+
+    auto iter = files.find(file_id);
+    if (iter == files.end())
+        throw Exception("Read chunks in non-open DMFile[" + DB::toString(file_id) + "]", ErrorCodes::LOGICAL_ERROR);
+    const auto & file = iter->second;
+
+    DMFileBlockInputStream stream(context.db_context,
+                                  MAX_UINT64, // TODO: enable version filter
+                                  /* enable_clean_read */ false,
+                                  context.hash_salt,
+                                  file,
+                                  read_columns,
+                                  HandleRange::newAll(),
+                                  EMPTY_FILTER,
+                                  indices);
 
     Block  block;
     bool   is_first      = true;
