@@ -41,3 +41,7 @@ make -j $NPROC
 
 cp -f "$build_dir/dbms/src/Server/theflash" "$install_dir/theflash"
 
+ldd "$build_dir/dbms/src/Server/theflash" | grep '/' | grep '=>' | \
+  awk -F '=>' '{print $2}' | awk '{print $1}' | grep proxy | while read lib; do
+  cp -f "$lib" "$install_dir"
+done
