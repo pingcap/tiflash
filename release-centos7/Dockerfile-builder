@@ -15,10 +15,7 @@ RUN yum makecache \
          debhelper \
          libtool \
          ncurses-static \
-         readline-devel \
-         unixODBC-devel \
          openssl-devel \
-         libicu-devel \
          libtool-ltdl-devel \
          python3-devel \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
@@ -33,7 +30,6 @@ RUN yum makecache \
           setuptools \
   && cd /prepare-environments \
   && ./install-openssl.sh \
-  && ./install-mysql-dev.sh \
   && ./install-cmake.sh \
   && ./install-gcc.sh \
   && ./install-llvm.sh \
