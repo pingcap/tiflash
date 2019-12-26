@@ -185,7 +185,7 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
     readIntBinary(delta_id, buf);
     readIntBinary(stable_id, buf);
 
-    auto delta   = DeltaSpace::restore(delta_id, context.store_path, context);
+    auto delta   = DeltaSpace::restore(delta_id, context);
     auto stable  = StableValueSpace::restore(context, stable_id);
     auto segment = std::make_shared<Segment>(epoch, range, segment_id, next_segment_id, std::move(delta), stable);
 

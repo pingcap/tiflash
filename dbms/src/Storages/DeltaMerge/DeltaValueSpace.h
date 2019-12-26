@@ -197,7 +197,7 @@ public:
     /// Serialize
     void saveMeta(WriteBatch & meta_wb);
     /// Restore an instance from existing metadata.
-    static DeltaSpacePtr restore(PageId id, const String & parent_path, const DMContext & context);
+    static DeltaSpacePtr restore(PageId id, const DMContext & context);
 
     /// For write
     // Append to disk and create task for changes of chunks. Do it without lock since write is heavy.

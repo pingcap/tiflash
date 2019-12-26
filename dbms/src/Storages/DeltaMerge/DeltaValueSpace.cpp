@@ -119,10 +119,11 @@ DeltaSpace::~DeltaSpace()
     }
 }
 
-DeltaSpacePtr DeltaSpace::restore(PageId id, const String & parent_path, const DMContext & context)
+DeltaSpacePtr DeltaSpace::restore(PageId id, const DMContext & context)
 {
-    DeltaSpacePtr        instance = std::make_shared<DeltaSpace>(id, parent_path);
-    Page                 page     = context.storage_pool.meta().read(instance->id);
+    const String         parent_path = context.deltaPath();
+    DeltaSpacePtr        instance    = std::make_shared<DeltaSpace>(id, parent_path);
+    const Page           page        = context.storage_pool.meta().read(instance->id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
 
     instance->chunks = deserializeChunkMetas(buf);

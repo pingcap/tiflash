@@ -163,6 +163,7 @@ try
             block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
             // Add a column of col2:String for test
             ColumnWithTypeAndName col2(col_str_define.type, col_str_define.name);
+            col2.column_id = col_str_define.id;
             {
                 IColumn::MutablePtr m_col2 = col2.type->createColumn();
                 for (size_t i = 0; i < num_rows_write; i++)
@@ -177,6 +178,7 @@ try
 
             // Add a column of i8:Int8 for test
             ColumnWithTypeAndName i8(col_i8_define.type, col_i8_define.name);
+            i8.column_id = col_i8_define.id;
             {
                 IColumn::MutablePtr m_i8 = i8.type->createColumn();
                 for (size_t i = 0; i < num_rows_write; i++)
