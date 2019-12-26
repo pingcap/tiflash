@@ -75,14 +75,15 @@ protected:
         // Append data to disk
         DeltaSpace::AppendTaskPtr task;
         if (update.isDelete())
-            task = delta->appendToDisk(update.delete_range, wbs, *dm_context);
+            task = delta->createAppendTask(*dm_context, update.delete_range, wbs);
         else
-            task = delta->appendToDisk(std::move(update.block), wbs, *dm_context);
+            task = delta->createAppendTask(*dm_context, std::move(update.block), wbs);
+        delta->applyAppendToWriteBatches(task, wbs);
         wbs.writeLogAndData(dm_context->storage_pool);
         // Commit new delta in disk
         wbs.writeMeta(dm_context->storage_pool);
         // Apply changes to delta
-        delta->applyAppend(task);
+        delta->applyAppendInMemory(task);
     }
 
 protected:

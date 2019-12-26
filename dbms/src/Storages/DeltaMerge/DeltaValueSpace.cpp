@@ -148,20 +148,17 @@ void DeltaSpace::saveMeta(WriteBatch & meta_wb)
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-DeltaSpace::AppendTaskPtr DeltaSpace::appendToDisk(const BlockOrDelete & update, WriteBatches & wbs, const DMContext & context)
+DeltaSpace::AppendTaskPtr DeltaSpace::createAppendTask(const DMContext & context, const BlockOrDelete & update, WriteBatches & wbs)
 {
-    /// Note that this function is NOT thread safe! Now we only allow one thread to write.
+    /// Note that this function is NOT thread safe! Now caller must ensure only one thread to write.
 
     AppendTaskPtr task = std::make_shared<AppendTask>();
 
     if (unlikely(update.isDelete()))
     {
         const auto & delete_range = update.delete_range;
-        // TODO: do we need to open another file for write?
-        ChunkMeta meta;
-        meta.is_delete_range = true;
-        meta.delete_range    = delete_range;
-        task->append_chunk   = meta;
+        ChunkMeta    meta(delete_range);
+        task->append_chunk = meta;
         return task;
     }
 
@@ -169,8 +166,8 @@ DeltaSpace::AppendTaskPtr DeltaSpace::appendToDisk(const BlockOrDelete & update,
     if (file_writting == nullptr)
     {
         // Create a new DMFile for write
-        PageId    file_id = context.storage_pool.newLogPageId();
-        DMFilePtr file    = DMFile::create(file_id, parent_path, true);
+        const DMFileID file_id = context.storage_pool.newLogPageId();
+        DMFilePtr      file    = DMFile::create(file_id, parent_path, true);
         wbs.log.putExternal(file_id, 0);
         file_writting = file;
         files.emplace(file_id, file);
@@ -183,34 +180,34 @@ DeltaSpace::AppendTaskPtr DeltaSpace::appendToDisk(const BlockOrDelete & update,
             true);
     }
 
-    const auto & append_block = update.block;
-    // Allocate chunk_id and apply in memory
-    const PageId chunk_id = context.storage_pool.newLogPageId();
-    ChunkMeta    meta;
-    meta.id            = chunk_id;
-    meta.file_id       = file_writting->fileId();
-    meta.index         = file_writting->getChunks();
-    meta.rows          = append_block.rows();
+    const auto &  append_block = update.block;
+    const ChunkID chunk_id     = context.storage_pool.newLogPageId();
+    ChunkMeta     meta(chunk_id, file_writting->fileId(), file_writting->getChunks(), append_block.rows());
     task->append_chunk = meta;
 
     // Append to disk
     writer->write(append_block, append_block.rows());
+    return task;
+}
 
-    // Chunk{meta.id} is in DMFile{meta.file_id}
-    wbs.log.putRefPage(meta.id, meta.file_id);
-    if (meta.index == 0)
-        wbs.log.delPage(meta.file_id);
-
+void DeltaSpace::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs)
+{
+    const ChunkMeta & meta = task->append_chunk;
+    if (!meta.is_delete_range)
+    {
+        // Chunk{meta.id} is in DMFile{meta.file_id}
+        wbs.log.putRefPage(meta.id, meta.file_id);
+        if (meta.index == 0)
+            wbs.log.delPage(meta.file_id);
+    }
     // Delta's chunks info after apply.
     MemoryWriteBuffer buf(0, DELTA_SPACE_SERIALIZE_BUFFER_SIZE);
     serializeChunkMetas(buf, chunks.begin(), chunks.end(), &(task->append_chunk));
     const auto data_size = buf.count();
     wbs.meta.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
-
-    return task;
 }
 
-void DeltaSpace::applyAppend(const DeltaSpace::AppendTaskPtr & task)
+void DeltaSpace::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task)
 {
     chunks.emplace_back(std::move(task->append_chunk));
 }
@@ -534,6 +531,10 @@ void DeltaSpace::Snapshot::readFromFile(DMFileID              file_id,
                                         std::optional<size_t> rows_offset_,
                                         std::optional<size_t> rows_limit_) const
 {
+    assert(indices != nullptr);
+    if (indices->empty())
+        return;
+
     auto iter = files.find(file_id);
     if (iter == files.end())
         throw Exception("Read chunks in non-open DMFile[" + DB::toString(file_id) + "]", ErrorCodes::LOGICAL_ERROR);

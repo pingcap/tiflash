@@ -90,12 +90,11 @@ public:
 
     struct WriteAction
     {
-        const SegmentPtr segment;
-        const size_t     offset = 0;
-        const size_t     limit  = 0;
-        BlockOrDelete    update = {};
+        SegmentPtr    segment;
+        const size_t  offset = 0;
+        const size_t  limit  = 0;
+        BlockOrDelete update = {};
 
-        // AppendTaskPtr task = {};
         DeltaSpace::AppendTaskPtr task = {};
 
         WriteAction(){};
@@ -243,7 +242,7 @@ private:
                     const OptionTableInfoConstRef table_info,
                     ColumnID &                    max_column_id_used);
 
-    void commitWrites(const WriteActions & actions, WriteBatches & wbs, const DMContextPtr & dm_context);
+    void commitWrites(WriteActions && actions, WriteBatches && wbs, const DMContextPtr & dm_context);
 
     bool isSegmentValid(const SegmentPtr & segment);
 

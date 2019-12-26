@@ -97,9 +97,10 @@ public:
     /// Write an update. This function only guarantees atomic on segment level.
     void write(DMContext & dm_context, const BlockOrDelete & update);
 
-    /// Use #createAppendTask and #applyAppendTask to build higher atomic level.
-    DeltaSpace::AppendTaskPtr createAppendTask(const DMContext & dm_context, WriteBatches & wbs, const BlockOrDelete & update);
-    void                      applyAppendTask(const DeltaSpace::AppendTaskPtr & task, const BlockOrDelete & update);
+    /// Use #createAppendTask, #applyAppendToWriteBatches and #applyAppendInMemory to build higher atomic level.
+    DeltaSpace::AppendTaskPtr createAppendTask(const DMContext & dm_context, const BlockOrDelete & update, WriteBatches & wbs);
+    void                      applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs);
+    void                      applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task, const BlockOrDelete & update);
 
     SegmentSnapshot getReadSnapshot(bool use_delta_cache = true) const;
 

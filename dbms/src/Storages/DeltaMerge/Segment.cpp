@@ -221,18 +221,18 @@ void Segment::write(DMContext & dm_context, const BlockOrDelete & update)
     WriteBatches wbs;
 
     // Append data to disk.
-    auto task = createAppendTask(dm_context, wbs, update);
+    auto task = createAppendTask(dm_context, update, wbs);
+    applyAppendToWriteBatches(task, wbs);
     wbs.writeLogAndData(storage_pool);
-
     // Commit delta's changes to disk.
     wbs.writeMeta(storage_pool);
     // Commit delta's changes in memory.
-    applyAppendTask(task, update);
+    applyAppendInMemory(task, update);
 
     wbs.writeRemoves(storage_pool);
 }
 
-DeltaSpace::AppendTaskPtr Segment::createAppendTask(const DMContext & dm_context, WriteBatches & wbs, const BlockOrDelete & update)
+DeltaSpace::AppendTaskPtr Segment::createAppendTask(const DMContext & dm_context, const BlockOrDelete & update, WriteBatches & wbs)
 {
     if (update.block)
         LOG_TRACE(log, "Segment [" << segment_id << "] create append task, write rows: " << update.block.rows());
@@ -242,19 +242,25 @@ DeltaSpace::AppendTaskPtr Segment::createAppendTask(const DMContext & dm_context
     EventRecorder recorder(ProfileEvents::DMAppendDeltaPrepare, ProfileEvents::DMAppendDeltaPrepareNS);
 
     // Create everything we need to do the update.
-    // We only need a shared lock because this operation won't do any modifications.
-    std::shared_lock lock(read_write_mutex);
-    return delta->appendToDisk(update, wbs, dm_context);
+    // We need a unique lock because this operation will append data to delta.
+    std::unique_lock lock(read_write_mutex);
+    return delta->createAppendTask(dm_context, update, wbs);
 }
 
-void Segment::applyAppendTask(const DeltaSpace::AppendTaskPtr & task, const BlockOrDelete & update)
+void Segment::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs)
+{
+    std::shared_lock segment_lock(read_write_mutex);
+    delta->applyAppendToWriteBatches(task, wbs);
+}
+
+void Segment::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task, const BlockOrDelete & update)
 {
     // Unique lock, to protect memory modifications against read threads.
     std::unique_lock segment_lock(read_write_mutex);
 
     EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitMemory, ProfileEvents::DMAppendDeltaCommitMemoryNS);
 
-    delta->applyAppend(task);
+    delta->applyAppendInMemory(task);
 
     if (update.block)
         LOG_TRACE(log, "Segment [" << segment_id << "] apply append task, write rows: " << update.block.rows());

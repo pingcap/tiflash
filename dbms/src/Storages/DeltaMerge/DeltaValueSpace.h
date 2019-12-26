@@ -44,16 +44,20 @@ public:
 
 public:
     // For data block
-    ChunkID id      = 0;
-    PageId  file_id = 0; // Which DMFile is belong to
-    size_t  index   = 0; // The index in DMFile
-    size_t  rows    = 0; // Num of rows
+    ChunkID  id      = 0;
+    DMFileID file_id = 0; // Which DMFile is belong to
+    size_t   index   = 0; // The index in DMFile
+    size_t   rows    = 0; // Num of rows
 
     // For delete_range
     HandleRange delete_range;
     bool        is_delete_range = false;
 
     ChunkMeta() = default;
+    ChunkMeta(ChunkID id_, DMFileID file_id_, size_t index_, size_t rows_)
+        : id(id_), file_id(file_id_), index(index_), rows(rows_), is_delete_range(false)
+    {
+    }
     ChunkMeta(HandleRange delete_range_) : delete_range(delete_range_), is_delete_range(true) {}
 
     bool equals(const ChunkMeta & rhs) const
@@ -178,10 +182,7 @@ public:
     };
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-    SnapshotPtr getSnapshot() const
-    {
-        return std::make_shared<Snapshot>(chunks, files);
-    }
+    SnapshotPtr getSnapshot() const { return std::make_shared<Snapshot>(chunks, files); }
 
 public:
     DeltaSpace(PageId id_, String parent_path_) : id(id_), parent_path(std::move(parent_path_)), log(&Logger::get("DeltaSpace")) {}
@@ -199,10 +200,15 @@ public:
     static DeltaSpacePtr restore(PageId id, const String & parent_path, const DMContext & context);
 
     /// For write
-    AppendTaskPtr appendToDisk(const BlockOrDelete & update, WriteBatches & wbs, const DMContext & context);
-    void          applyAppend(const AppendTaskPtr & task);
+    // Append to disk and create task for changes of chunks. Do it without lock since write is heavy.
+    AppendTaskPtr createAppendTask(const DMContext & context, const BlockOrDelete & update, WriteBatches & wbs);
+    // Apply chunks' changes to wbs, use it to build higher atomic level.
+    void applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs);
+    // Apply chunks' changes commited in disk, apply changes in memory.
+    void applyAppendInMemory(const AppendTaskPtr & task);
 
     void check(const PageReader & meta_page_reader, const String & when);
+
 public:
     PageId         pageId() const { return id; }
     const String & parentPath() const { return parent_path; }

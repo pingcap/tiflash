@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <memory>
 #include <test_utils/TiflashTestBasic.h>
+#include <memory>
 #include "dm_basic_include.h"
 
 #include <Poco/ConsoleChannel.h>
@@ -1380,11 +1380,11 @@ DeltaMergeStore::SegmentSortedMap prepareSegments(const HandleRanges & ranges)
     PageId       stable_id  = 2048;
 
     auto segment_generator = [&](HandleRange range) -> SegmentPtr {
-        auto delta  = std::make_shared<DiskValueSpace>(true, delta_id);
+        auto delta  = std::make_shared<DeltaSpace>(delta_id, ::DB::tests::TiFlashTestEnv::getTemporaryPath() + "/t/delta");
         auto stable = std::make_shared<StableValueSpace>(stable_id);
 
         SegmentPtr s = std::make_shared<Segment>(
-            epoch, /* range= */ range, /* segment_id= */ segment_id, /*next_segment_id=*/segment_id + 1, delta, stable);
+            epoch, /* range= */ range, /* segment_id= */ segment_id, /*next_segment_id=*/segment_id + 1, std::move(delta), stable);
 
         segment_id++;
         delta_id++;

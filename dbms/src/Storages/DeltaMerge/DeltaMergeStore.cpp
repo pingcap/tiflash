@@ -289,10 +289,10 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     for (auto & action : actions)
     {
         action.update = getSubBlock(block, action.offset, action.limit);
-        action.task   = action.segment->createAppendTask(*dm_context, wbs, action.update);
+        action.task   = action.segment->createAppendTask(*dm_context, action.update, wbs);
     }
 
-    commitWrites(actions, wbs, dm_context);
+    commitWrites(std::move(actions), std::move(wbs), dm_context);
 }
 
 
@@ -330,33 +330,23 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
     for (auto & action : actions)
     {
         // action.update is set in `prepareWriteActions` for delete_range
-        action.task = action.segment->createAppendTask(*dm_context, wbs, action.update);
+        action.task = action.segment->createAppendTask(*dm_context, action.update, wbs);
     }
 
     // TODO: We need to do a delta merge after write a delete range, otherwise, the rows got deleted could never be actually removed.
 
-    commitWrites(actions, wbs, dm_context);
+    commitWrites(std::move(actions), std::move(wbs), dm_context);
 }
 
-void DeltaMergeStore::commitWrites(const WriteActions & actions, WriteBatches & wbs, const DMContextPtr & dm_context)
+void DeltaMergeStore::commitWrites(WriteActions && actions, WriteBatches && wbs, const DMContextPtr & dm_context)
 {
     if (unlikely(!wbs.data.empty() || !wbs.meta.empty()))
         throw Exception("Unexpected data or meta modifications!");
 
-    // Save generated chunks to disk.
-    {
-        EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitDisk, ProfileEvents::DMAppendDeltaCommitDiskNS);
-        wbs.writeLogAndData(dm_context->storage_pool);
-    }
-
-    Segments updated_segments;
-    updated_segments.reserve(actions.size());
-
     {
         std::unique_lock lock(read_write_mutex);
 
-        // Commit the meta of updates to memory and apply updates in memory.
-        for (auto & action : actions)
+        for (WriteAction & action : actions)
         {
             // During write, segment instances could have been updated by background merge delta threads.
             // So we must get segment instances again from segments map.
@@ -364,19 +354,37 @@ void DeltaMergeStore::commitWrites(const WriteActions & actions, WriteBatches & 
             auto   it    = segments.find(range.end);
             if (unlikely(it == segments.end()))
                 throw Exception("Segment with end [" + DB::toString(range.end) + "] can not find in segments map after write");
-            auto & segment = it->second;
-            updated_segments.push_back(segment);
-            segment->applyAppendTask(action.task, action.update);
+            action.segment = it->second; // Update action.segment to the newest segment.
+            action.segment->applyAppendToWriteBatches(action.task, wbs);
+        }
+
+        // Atomic commit store level changes in disk. Log and data first, then meta.
+        {
+            if (unlikely(!wbs.data.empty()))
+                throw Exception("Unexpected data modifications!");
+            if (unlikely(wbs.meta.empty()))
+                throw Exception("Expected updates on meta modifications but empty!");
+            EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitDisk, ProfileEvents::DMAppendDeltaCommitDiskNS);
+            wbs.writeLogAndData(dm_context->storage_pool);
+            wbs.writeMeta(dm_context->storage_pool);
+        }
+
+        // Commit the meta of updates to memory and apply updates in memory.
+        for (const auto & action : actions)
+        {
+            action.segment->applyAppendInMemory(action.task, action.update);
         }
     }
 
     // Clean up deleted data on disk.
-    EventRecorder recorder(ProfileEvents::DMAppendDeltaCleanUp, ProfileEvents::DMAppendDeltaCleanUpNS);
-    wbs.writeRemoves(dm_context->storage_pool);
-
-    for (auto & segment : updated_segments)
     {
-        checkSegmentUpdate<true>(dm_context, segment);
+        EventRecorder recorder(ProfileEvents::DMAppendDeltaCleanUp, ProfileEvents::DMAppendDeltaCleanUpNS);
+        wbs.writeRemoves(dm_context->storage_pool);
+    }
+
+    for (const auto & action : actions)
+    {
+        checkSegmentUpdate<true>(dm_context, action.segment);
     }
 }
 
