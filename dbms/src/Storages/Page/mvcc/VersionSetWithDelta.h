@@ -131,6 +131,7 @@ public:
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
 
+        // REVIEW: make sure Snapshot is uncopyable, or this will go wrong
         ~Snapshot()
         {
             vset->compactOnDeltaRelease(view.transferTailVersionOwn());
@@ -292,6 +293,7 @@ protected:
         tail.reset();
     }
 
+    // REVIEW: maybe relocate this two methods to VersionType?
     virtual VersionPtr compactDeltas(const VersionPtr & tail) const = 0;
 
     virtual VersionPtr compactDeltaAndBase(const VersionPtr & old_base, const VersionPtr & delta) const = 0;
@@ -341,6 +343,7 @@ public:
     }
 
 protected:
+    // REVIEW: this name is not accurate, cause this mutex also be used for editing
     mutable std::shared_mutex    read_mutex;
     VersionPtr                   current;
     SnapshotPtr                  snapshots;

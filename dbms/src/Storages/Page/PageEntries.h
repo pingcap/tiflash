@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <optional>
+// REVIEW: mutex unused
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -232,6 +233,7 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
     max_page_id = std::max(max_page_id, page_id);
 }
 
+// REVIEW: the name `move` confused me for a while, until I see this code
 template <typename T>
 void PageEntriesMixin<T>::move_normal_page(PageId normal_page_id, PageEntry entry)
 {

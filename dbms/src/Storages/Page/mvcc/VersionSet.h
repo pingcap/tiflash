@@ -24,6 +24,7 @@ template <typename T>
 struct MultiVersionCountable
 {
 public:
+    // REVIEW: thit two status: <this is valid, ref count> are related, and should be under a same mutex
     std::atomic<uint32_t> ref_count;
     T *                   next;
     T *                   prev;
@@ -39,13 +40,13 @@ public:
         next->prev = prev;
     }
 
-    // REVIEW: this should lock it up
     void incrRefCount() { ++ref_count; }
 
-    // REVIEW: MS used the method names of increase/release, we could use it too.
+    // REVIEW: MS used the method names of increase/release, is a stander name, we could use it too.
     void decrRefCount(std::shared_mutex & mutex)
     {
         assert(ref_count >= 1);
+        // REVIEW: potential bug: 2 threads detected that ref_count == 1, then both execute delete (execute one by one cause by mutex)
         if (--ref_count == 0)
         {
             // in case two neighbor nodes remove from linked list
@@ -54,7 +55,6 @@ public:
         }
     }
 
-    // REVIEW: this set of methods about ref are not graceful
     // Not thread-safe, caller ensure.
     void decrRefCount()
     {
@@ -144,6 +144,7 @@ public:
         return sz;
     }
 
+    // REVIEW: I read the tests, and I think lock it up should be better
     std::string toDebugStringUnlocked() const
     {
         std::string s;
