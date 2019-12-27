@@ -23,7 +23,7 @@ extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
 DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
-    UInt64 region_conf_version_, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
+    UInt64 region_conf_version_, UInt64 start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
     tipb::SelectResponse & dag_response_, bool internal_)
     : context(context_),
       dag_request(dag_request_),
@@ -34,13 +34,13 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
       dag_response(dag_response_),
       internal(internal_),
       log(&Logger::get("DAGDriver"))
-{}
+{
+    context.setSetting("read_tso", start_ts);
+}
 
 void DAGDriver::execute()
 try
 {
-    context.setSetting("read_tso", UInt64(dag_request.start_ts()));
-
     DAGContext dag_context(dag_request.executors_size());
     DAGQuerySource dag(context, dag_context, region_id, region_version, region_conf_version, key_ranges, dag_request);
 
