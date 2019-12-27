@@ -13,10 +13,14 @@ class WriteBatch
 public:
     enum class WriteType : UInt8
     {
-        DEL              = 0,
-        PUT              = 1,
-        REF              = 2,
-        MOVE_NORMAL_PAGE = 3, // Move an exist normal page to new PageFile. Now only used by GC.
+        DEL = 0,
+        // Create / Update a page, will implicitly create a RefPage{id} -> Page{id}.
+        PUT = 1,
+        // Create a RefPage{ref_id} -> Page{id}
+        REF = 2,
+        // Move an exist normal page to new PageFile. Now only used by GC.
+        // Compare to `PUT`, this type won't create the RefPage{id} -> Page{id} by default.
+        MOVE_NORMAL_PAGE = 3,
     };
 
 private:

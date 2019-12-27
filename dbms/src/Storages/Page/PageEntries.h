@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <optional>
-#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -43,7 +42,12 @@ public:
      */
     void put(PageId page_id, const PageEntry & entry);
 
-    void move_normal_page(PageId page_id, PageEntry entry);
+    /** Update Page{normal_page_id}'s entry, if the entry is existed, this method
+     *  will inherit the ref-counting of old entry.
+     *  Compare to method `put`, this method won't create RefPage{page_id} -> Page{page_id}.
+     *  Caller should ensure Page{normal_page_id} is exists.
+     */
+    void updateNormalPage(PageId normal_page_id, PageEntry entry);
 
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
@@ -154,6 +158,14 @@ protected:
     template <bool must_exist = true>
     void decreasePageRef(PageId page_id);
 
+    void copyEntries(const PageEntriesMixin & rhs)
+    {
+        page_ref      = rhs.page_ref;
+        normal_pages  = rhs.normal_pages;
+        max_page_id   = rhs.max_page_id;
+        ref_deletions = rhs.ref_deletions;
+    }
+
 private:
     PageId resolveRefId(PageId page_id) const
     {
@@ -163,14 +175,6 @@ private:
         // resolveRefId(4) -> 1
         auto [is_ref, normal_page_id] = isRefId(page_id);
         return is_ref ? normal_page_id : page_id;
-    }
-
-    void copyEntries(const PageEntriesMixin & rhs)
-    {
-        page_ref      = rhs.page_ref;
-        normal_pages  = rhs.normal_pages;
-        max_page_id   = rhs.max_page_id;
-        ref_deletions = rhs.ref_deletions;
     }
 
 public:
@@ -195,7 +199,6 @@ public:
     friend class PageEntriesBuilder;
     friend class DeltaVersionEditAcceptor;
     friend class PageEntriesView;
-    friend class PageEntriesVersionSetWithDelta; // For copyEntries
 };
 
 template <typename T>
@@ -233,7 +236,7 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
 }
 
 template <typename T>
-void PageEntriesMixin<T>::move_normal_page(PageId normal_page_id, PageEntry entry)
+void PageEntriesMixin<T>::updateNormalPage(PageId normal_page_id, PageEntry entry)
 {
     assert(is_base); // can only call by base
 
@@ -443,6 +446,8 @@ public:
 };
 
 /// For PageEntriesVersionSetWithDelta
+class PageEntriesForDelta;
+using PageEntriesForDeltaPtr = std::shared_ptr<PageEntriesForDelta>;
 class PageEntriesForDelta : public PageEntriesMixin<PageEntriesForDelta>,
                             public ::DB::MVCC::MultiVersionCountableForDelta<PageEntriesForDelta>
 {
@@ -452,6 +457,63 @@ public:
     {
     }
 
+    bool shouldCompactToBase(const ::DB::MVCC::VersionSetConfig & config)
+    {
+        assert(!this->isBase());
+        return numDeletions() >= config.compact_hint_delta_deletions //
+            || numRefEntries() >= config.compact_hint_delta_entries || numNormalEntries() >= config.compact_hint_delta_entries;
+    }
+
+    //==========================================================================================
+    // Functions used when view release and do compact on version-list
+    //==========================================================================================
+
+    static PageEntriesForDeltaPtr compactDeltaAndBase( //
+        const PageEntriesForDeltaPtr & old_base,
+        const PageEntriesForDeltaPtr & delta)
+    {
+        PageEntriesForDeltaPtr base = createBase();
+        base->copyEntries(*old_base);
+        // apply delta edits
+        base->merge(*delta);
+        return base;
+    }
+
+    static PageEntriesForDeltaPtr compactDeltas(const PageEntriesForDeltaPtr & tail)
+    {
+        if (tail->prev == nullptr || tail->prev->isBase())
+        {
+            // Only one delta, do nothing
+            return nullptr;
+        }
+
+        auto tmp = createDelta();
+
+        std::stack<PageEntriesForDeltaPtr> nodes;
+        for (auto node = tail; node != nullptr; node = node->prev)
+        {
+            if (node->isBase())
+            {
+                // link `tmp` to `base` version
+                tmp->prev = node;
+            }
+            else
+            {
+                nodes.push(node);
+            }
+        }
+        // merge delta forward
+        while (!nodes.empty())
+        {
+            auto node = nodes.top();
+            nodes.pop();
+            tmp->merge(*node);
+        }
+
+        return tmp;
+    }
+
+private:
     void merge(PageEntriesForDelta & rhs)
     {
         // TODO we need more test on this function
@@ -482,13 +544,6 @@ public:
             }
         }
         max_page_id = std::max(max_page_id, rhs.max_page_id);
-    }
-
-    bool shouldCompactToBase(const ::DB::MVCC::VersionSetConfig & config)
-    {
-        assert(!this->isBase());
-        return numDeletions() >= config.compact_hint_delta_deletions //
-            || numRefEntries() >= config.compact_hint_delta_entries || numNormalEntries() >= config.compact_hint_delta_entries;
     }
 };
 

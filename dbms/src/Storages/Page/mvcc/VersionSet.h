@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <boost/core/noncopyable.hpp>
 #include <cassert>
 #include <mutex>
 #include <shared_mutex>
@@ -65,27 +66,28 @@ public:
 
 /// VersionSet -- Manage multiple versions
 ///
-/// \tparam Version_t
+/// \tparam TVersion
 ///   member required:
-///     Version_t::prev
+///     TVersion::prev
 ///         -- previous version
-///     Version_t::next
+///     TVersion::next
 ///         -- next version
 ///   functions required:
-///     void Version_t::incrRefCount()
+///     void TVersion::incrRefCount()
 ///         -- increase version's ref count
 ///         -- Note: must be thread safe
-///     void Version_t::decrRefCount(std::shared_mutex &mutex)
+///     void TVersion::decrRefCount(std::shared_mutex &mutex)
 ///         -- decrease version's ref count. If version's ref count down to 0, it acquire unique_lock for mutex and then remove itself from version set
 ///
-/// \tparam VersionEdit_t -- Changes between two version
-/// \tparam Builder_t     -- Apply one or more VersionEdit_t to base version and build a new version
+/// \tparam TVersionEdit -- Changes between two version
+/// 
+/// \tparam TBuilder     -- Apply one or more TVersionEdit to base version and build a new version
 ///   functions required:
-///     Builder_t(Version_t *base)
+///     TBuilder(Version_t *base)
 ///         -- Create a builder base on version `base`
-///     void Builder_t::apply(const VersionEdit_t &)
+///     void TBuilder::apply(const TVersionEdit &)
 ///         -- Apply edit to builder
-///     Version_t* Builder_t::build()
+///     Version_t* TBuilder::build()
 ///         -- Build new version
 template <typename TVersion, typename TVersionEdit, typename TBuilder>
 class VersionSet
@@ -105,20 +107,21 @@ public:
 
     virtual ~VersionSet()
     {
+        // All versions of this VersionSet must be released before destructuring VersionSet, so we don't need to lock on mutex.
         current->decrRefCount();
-        assert(placeholder_node.next == &placeholder_node); // List must be empty
+        assert(placeholder_node.next == &placeholder_node); // All versions are removed. (List must be empty)
     }
 
     void restore(VersionPtr const v)
     {
-        std::unique_lock read_lock(read_mutex);
+        std::unique_lock read_lock(read_write_mutex);
         appendVersion(v);
     }
 
     /// `apply` accept changes and append new version to version-list
     void apply(const TVersionEdit & edit)
     {
-        std::unique_lock read_lock(read_mutex);
+        std::unique_lock read_lock(read_write_mutex);
 
         // apply edit on base
         VersionPtr v = nullptr;
@@ -133,16 +136,17 @@ public:
 
     size_t size() const
     {
-        std::unique_lock read_lock(read_mutex);
+        std::unique_lock read_lock(read_write_mutex);
         size_t           sz = 0;
         for (VersionPtr v = current; v != &placeholder_node; v = v->prev)
             sz += 1;
         return sz;
     }
 
-    std::string toDebugStringUnlocked() const
+    std::string toDebugString() const
     {
-        std::string s;
+        std::shared_lock lock(read_write_mutex);
+        std::string      s;
         for (VersionPtr v = placeholder_node.next; v != &placeholder_node; v = v->next)
         {
             if (!s.empty())
@@ -178,15 +182,15 @@ public:
     /// Create a snapshot for current version
     SnapshotPtr getSnapshot()
     {
-        std::shared_lock<std::shared_mutex> lock(read_mutex);
-        return std::make_shared<Snapshot>(current, &read_mutex);
+        std::shared_lock<std::shared_mutex> lock(read_write_mutex);
+        return std::make_shared<Snapshot>(current, &read_write_mutex);
     }
 
 protected:
     VersionType placeholder_node; // Head of circular double-linked list of all versions
     VersionPtr  current;          // current version; current == placeholder_node.prev
 
-    mutable std::shared_mutex read_mutex;
+    mutable std::shared_mutex read_write_mutex;
 
 protected:
     void appendVersion(VersionPtr const v)
@@ -208,7 +212,7 @@ protected:
         current->next->prev = current;
     }
 
-    std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_mutex); }
+    std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_write_mutex); }
 
 public:
     // No copying allowed

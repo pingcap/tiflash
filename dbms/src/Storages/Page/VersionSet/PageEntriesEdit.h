@@ -55,7 +55,6 @@ public:
     struct EditRecord
     {
         WriteBatch::WriteType type;
-        char                  _padding[7]; // 7 bytes unused since type is only 1 byte.
         PageId                page_id;
         PageId                ori_page_id;
         PageEntry             entry;
