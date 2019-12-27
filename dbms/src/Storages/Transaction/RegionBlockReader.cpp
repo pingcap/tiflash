@@ -286,7 +286,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                     const auto & column = table_info.columns[item.second];
                     auto field = GenFieldByColumnInfo(column);
                     if (!field)
-                        throw Exception("decode row error, not null or has no default value", ErrorCodes::LOGICAL_ERROR);
+                    {
+                        // not null or has no default value
+                        // !!! it can happen
+                        decoded_data.emplace_back(column.id, GenCustomField(column));
+                    }
                     else
                         decoded_data.emplace_back(column.id, std::move(*field));
                 }
