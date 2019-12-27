@@ -88,7 +88,7 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
         if (!field)
         {
             has_dropped_column = true;
-            decoded_row.emplace_back(column.id, GenCustomField(column));
+            decoded_row.emplace_back(column.id, GenDefaultField(column));
         }
         else
             decoded_row.emplace_back(column.id, std::move(*field));

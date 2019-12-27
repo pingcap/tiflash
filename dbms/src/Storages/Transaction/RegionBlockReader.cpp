@@ -22,7 +22,7 @@ using TiDB::ColumnInfo;
 using TiDB::DatumFlat;
 using TiDB::TableInfo;
 
-Field GenCustomField(const ColumnInfo & col_info)
+Field GenDefaultField(const ColumnInfo & col_info)
 {
     switch (col_info.getCodecFlag())
     {
@@ -152,7 +152,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     ColumnIdToIndex column_id_to_info_index;
     column_id_to_info_index.set_empty_key(EmptyColumnID);
 
-    google::dense_hash_map<ColumnID, size_t> schema_all_column_ids;
+    ColumnIdToIndex schema_all_column_ids;
     schema_all_column_ids.set_empty_key(EmptyColumnID);
     schema_all_column_ids.set_deleted_key(DeleteColumnID);
 
@@ -241,7 +241,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 for (const auto & item : column_id_to_info_index)
                 {
                     const auto & column = table_info.columns[item.second];
-                    decoded_data.emplace_back(column.id, (column.hasNotNullFlag() ? GenCustomField(column) : Field()));
+                    decoded_data.emplace_back(column.id, (column.hasNotNullFlag() ? GenDefaultField(column) : Field()));
                 }
             }
             else
@@ -277,8 +277,13 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                         tmp_ele.col_id = item.first;
                         if (auto it = tmp_ele.findByColumnID(unknown_col); it != unknown_col.end())
                         {
-                            // TODO: if row->extra.known_type is false
-                            decoded_data.push_back(it);
+                            if (likely(row->unknown_data.known_type))
+                                decoded_data.push_back(it);
+                            else
+                            {
+                                // TODO: if type is unknown, decode value from string.
+                                throw Exception("not support decode unknown type.", ErrorCodes::LOGICAL_ERROR);
+                            }
                             continue;
                         }
                     }
@@ -287,9 +292,8 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                     auto field = GenFieldByColumnInfo(column);
                     if (!field)
                     {
-                        // not null or has no default value
-                        // !!! it can happen
-                        decoded_data.emplace_back(column.id, GenCustomField(column));
+                        // not null or has no default value, tidb will fill with default value.
+                        decoded_data.emplace_back(column.id, GenDefaultField(column));
                     }
                     else
                         decoded_data.emplace_back(column.id, std::move(*field));

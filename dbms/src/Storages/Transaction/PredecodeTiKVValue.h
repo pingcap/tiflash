@@ -19,7 +19,8 @@ using ColumnIdToIndex = google::dense_hash_map<ColumnID, size_t>;
 constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
 constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
 
-Field GenCustomField(const TiDB::ColumnInfo &);
+// should keep the same way tidb does.
+Field GenDefaultField(const TiDB::ColumnInfo & col_info);
 
 std::optional<Field> GenFieldByColumnInfo(const TiDB::ColumnInfo & column);
 

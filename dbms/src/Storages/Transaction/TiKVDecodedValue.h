@@ -62,11 +62,15 @@ struct DecodedRowBySchema : boost::noncopyable
     }
 
 private:
+    // schema version used while pre-decode.
     const Int64 decode_schema_version;
 
 public:
+    // if decoded row doesn't contain column in schema.
     const bool has_dropped_column;
+    // decoded column in schema and default/null column
     const DecodedRow row;
+    // decoded column not in schema
     const UnknownData unknown_data;
 };
 
