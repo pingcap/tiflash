@@ -1,6 +1,7 @@
 #pragma once
 
 #include <common/logger_useful.h>
+#include <boost/core/noncopyable.hpp>
 #include <mutex>
 
 #include <Columns/IColumn.h>
@@ -129,7 +130,7 @@ public:
     using DeltaValuesPtr = std::shared_ptr<Values>;
 
 public:
-    class Snapshot
+    class Snapshot : private boost::noncopyable
     {
     public:
         Snapshot(ChunkMetas chunks_, DMFileMap files_) : chunks(std::move(chunks_)), files(std::move(files_)) {}

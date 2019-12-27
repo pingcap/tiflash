@@ -590,7 +590,9 @@ void DeltaSpace::Snapshot::readFromFile(DMFileID              file_id,
         if (block.rows())
         {
             const size_t rows_offset_in_this_block = is_first ? rows_offset : 0;
-            const size_t rows_limit_in_this_block  = rows_limit_ ? (*rows_limit_ - num_rows_read) : block.rows();
+            const size_t rows_limit_in_this_block  = rows_limit_ ?     //
+                std::min((*rows_limit_ - num_rows_read), block.rows()) //
+                                                                : block.rows();
             callback(block, rows_offset_in_this_block, rows_limit_in_this_block);
             is_first = false;
             num_rows_read += block.rows();
