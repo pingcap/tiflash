@@ -508,8 +508,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_contex
                                                WriteBatches &          wbs) const
 {
     LOG_DEBUG(log,
-              "Segment [" << segment_id << "] prepare merge delta start. delta chunks: " << delta->numChunks()
-                          << ", delta total rows: " << delta->numRows());
+              "Segment [" << segment_id << "] prepare merge delta start. delta chunks: " << segment_snap.delta->numChunks()
+                          << ", delta total rows: " << segment_snap.delta->numRows());
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
