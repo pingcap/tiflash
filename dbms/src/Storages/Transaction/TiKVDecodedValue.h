@@ -5,77 +5,67 @@
 namespace DB
 {
 class Field;
+struct DecodedRowElement;
+using DecodedRow = std::vector<DecodedRowElement>;
 
-struct DecodedRowElement
+struct DecodedRowElement : boost::noncopyable
 {
-    const Int64 col_id;
-    const Field field;
+    Int64 col_id;
+    Field field;
 
+    DecodedRowElement & operator=(DecodedRowElement && e)
+    {
+        if (this == &e)
+            return *this;
+        col_id = e.col_id;
+        field = std::move(e.field);
+        return *this;
+    }
+    DecodedRowElement(DecodedRowElement && e) : col_id(e.col_id), field(std::move(e.field)) {}
     DecodedRowElement(const Int64 col_id_, Field && field_) : col_id(col_id_), field(std::move(field_)) {}
 
     bool operator<(const DecodedRowElement & e) const { return col_id < e.col_id; }
+    DecodedRow::const_iterator findByColumnID(const DecodedRow & row) const
+    {
+        auto it = std::lower_bound(row.cbegin(), row.cend(), *this);
+        if (it != row.cend() && it->col_id == col_id)
+            return it;
+        return row.cend();
+    }
+    DecodedRow::iterator findByColumnID(DecodedRow & row)
+    {
+        auto it = std::lower_bound(row.begin(), row.end(), *this);
+        if (it != row.end() && it->col_id == col_id)
+            return it;
+        return row.end();
+    }
 };
 
-using DecodedRow = std::vector<DecodedRowElement>;
-
-template <bool is_key = false>
-struct ValueExtraInfo
+/// force decode tikv value into row by a specific schema, if there is data can't be decoded, store it in extra.
+struct DecodedRowBySchema : boost::noncopyable
 {
-    ~ValueExtraInfo()
+    struct UnknownData
     {
-        auto ptr = decoded.load();
-        if (ptr)
-        {
-            auto decoded_ptr = reinterpret_cast<DecodedRow *>(ptr);
-            delete decoded_ptr;
-            decoded = nullptr;
-        }
-    }
+        // for new way that tidb encode column, there is no codec flag
+        // if type is unknown, field is string.
+        const DecodedRow row;
+        const bool known_type;
+    };
 
-    const DecodedRow * load() const { return reinterpret_cast<DecodedRow *>(decoded.load()); }
-
-    void atomicUpdate(DecodedRow *& data) const
-    {
-        static void * expected = nullptr;
-        if (!decoded.compare_exchange_strong(expected, (void *)data))
-            delete data;
-        data = nullptr;
-    }
-
-    static DecodedRow * computeDecodedRow(const std::string & raw_value)
-    {
-        size_t cursor = 0;
-        DecodedRow decoded_row;
-
-        while (cursor < raw_value.size())
-        {
-            Field f = DecodeDatum(cursor, raw_value);
-            if (f.isNull())
-                break;
-            ColumnID col_id = f.get<ColumnID>();
-            decoded_row.emplace_back(col_id, DecodeDatum(cursor, raw_value));
-        }
-
-        if (cursor != raw_value.size())
-            throw Exception("ComputeDecodedRow cursor is not end in ", ErrorCodes::LOGICAL_ERROR);
-
-        DecodedRow * res = new DecodedRow(std::move(decoded_row));
-        return res;
-    }
-
-    ValueExtraInfo() = default;
+    DecodedRowBySchema(Int64 decode_schema_version_, bool schema_match_, DecodedRow && row_, DecodedRow && extra_, bool known_type)
+        : decode_schema_version(decode_schema_version_),
+          schema_match(schema_match_),
+          row(std::move(row_)),
+          unknown_data{std::move(extra_), known_type}
+    {}
 
 private:
-    ValueExtraInfo(const ValueExtraInfo &) = delete;
-    ValueExtraInfo(ValueExtraInfo &&) = delete;
+    [[maybe_unused]] const Int64 decode_schema_version;
 
-private:
-    mutable std::atomic<void *> decoded{nullptr};
-};
-
-template <>
-struct ValueExtraInfo<true>
-{
+public:
+    const bool schema_match;
+    const DecodedRow row;
+    const UnknownData unknown_data;
 };
 
 } // namespace DB
