@@ -48,6 +48,7 @@ Field ColumnInfo::defaultValueToField() const
         case TypeBlob:
         case TypeVarString:
         case TypeString:
+        case TypeJSON:
             return value.convert<String>();
         case TypeEnum:
             return getEnumIndex(value.convert<String>());
@@ -282,8 +283,7 @@ catch (const Poco::Exception & e)
 
 TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
-String TableInfo::serialize() const
-try
+String TableInfo::serialize() const try
 {
     std::stringstream buf;
 

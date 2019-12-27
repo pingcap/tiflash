@@ -56,7 +56,7 @@ Field GenDefaultField(const ColumnInfo & col_info)
         case TiDB::CodecFlagVarUInt:
             return Field(UInt64(0));
         case TiDB::CodecFlagJson:
-            return Field(String());
+            return Field(String("null"));
         case TiDB::CodecFlagDuration:
             return Field(Int64(0));
         default:
