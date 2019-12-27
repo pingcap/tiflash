@@ -16,7 +16,20 @@ using ColumnIdToIndex = google::dense_hash_map<ColumnID, size_t>;
 constexpr ColumnID EmptyColumnID = InvalidColumnID - 1;
 constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
 
-Field GenDecodeRow(const TiDB::ColumnInfo &);
+Field GenCustomField(const TiDB::ColumnInfo &);
+
+std::optional<Field> GenFieldByColumnInfo(const TiDB::ColumnInfo & column)
+{
+    if (column.hasNoDefaultValueFlag())
+    {
+        if (column.hasNotNullFlag())
+            return {};
+        else
+            return Field();
+    }
+    else
+        return column.defaultValueToField();
+}
 
 struct ValueDecodeHelper
 {
@@ -26,6 +39,8 @@ struct ValueDecodeHelper
     bool forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRow & unknown)
     {
         bool schema_match = decoded_row.size() == schema_all_column_ids.size();
+        bool has_dropped_column = false;
+
         for (auto it = decoded_row.cbegin(); schema_match && it != decoded_row.cend(); ++it)
         {
             if (!schema_all_column_ids.count(it->col_id))
@@ -33,7 +48,7 @@ struct ValueDecodeHelper
         }
 
         if (schema_match)
-            return true;
+            return has_dropped_column;
 
         DecodedRow tmp_row;
         {
@@ -67,19 +82,15 @@ struct ValueDecodeHelper
                     continue;
                 }
             }
-            if (column.hasNoDefaultValueFlag())
-            {
-                if (column.hasNotNullFlag())
-                    decoded_row.emplace_back(column.id, GenDecodeRow(column));
-                else
-                    decoded_row.emplace_back(column.id, Field());
-            }
+            auto field = GenFieldByColumnInfo(column);
+            if (!field)
+                has_dropped_column = true;
             else
-                decoded_row.emplace_back(column.id, column.defaultValueToField());
+                decoded_row.emplace_back(column.id, std::move(*field));
         }
 
         ::std::sort(decoded_row.begin(), decoded_row.end());
-        return false;
+        return has_dropped_column;
     }
 };
 
@@ -112,9 +123,9 @@ static inline void forceDecodeTiKVValue(const TiKVValue & value, ValueDecodeHelp
             ::std::sort(decoded_row.begin(), decoded_row.end());
         }
 
-        auto schema_match = helper.forceDecodeTiKVValue(decoded_row, unknown);
-        DecodedRowBySchema * decoded_row_ptr
-            = new DecodedRowBySchema(helper.table_info.schema_version, schema_match, std::move(decoded_row), std::move(unknown), true);
+        auto has_dropped_column = helper.forceDecodeTiKVValue(decoded_row, unknown);
+        DecodedRowBySchema * decoded_row_ptr = new DecodedRowBySchema(
+            helper.table_info.schema_version, has_dropped_column, std::move(decoded_row), std::move(unknown), true);
         decoded_row_info.atomicUpdate(decoded_row_ptr);
     }
 }

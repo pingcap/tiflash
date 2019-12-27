@@ -52,18 +52,20 @@ struct DecodedRowBySchema : boost::noncopyable
         const bool known_type;
     };
 
-    DecodedRowBySchema(Int64 decode_schema_version_, bool schema_match_, DecodedRow && row_, DecodedRow && extra_, bool known_type)
+    DecodedRowBySchema(Int64 decode_schema_version_, bool has_dropped_column_, DecodedRow && row_, DecodedRow && extra_, bool known_type)
         : decode_schema_version(decode_schema_version_),
-          schema_match(schema_match_),
+          has_dropped_column(has_dropped_column_),
           row(std::move(row_)),
           unknown_data{std::move(extra_), known_type}
-    {}
+    {
+        std::ignore = decode_schema_version;
+    }
 
 private:
-    [[maybe_unused]] const Int64 decode_schema_version;
+    const Int64 decode_schema_version;
 
 public:
-    const bool schema_match;
+    const bool has_dropped_column;
     const DecodedRow row;
     const UnknownData unknown_data;
 };

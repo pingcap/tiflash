@@ -22,7 +22,7 @@ using TiDB::ColumnInfo;
 using TiDB::DatumFlat;
 using TiDB::TableInfo;
 
-Field GenDecodeRow(const ColumnInfo & col_info)
+Field GenCustomField(const ColumnInfo & col_info)
 {
     switch (col_info.getCodecFlag())
     {
@@ -220,8 +220,6 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     // optimize for only need handle, tso, delmark.
     if (column_names_to_read.size() > MustHaveColCnt)
     {
-        //        google::dense_hash_set<ColumnID> decoded_col_ids_set;
-        //        decoded_col_ids_set.set_empty_key(EmptyColumnID);
         DecodedRecordData decoded_data(column_id_to_info_index.size());
         ValueDecodeHelper helper{table_info, schema_all_column_ids};
         DecodedRowElement tmp_ele(InvalidColumnID, {});
@@ -243,7 +241,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 for (const auto & item : column_id_to_info_index)
                 {
                     const auto & column = table_info.columns[item.second];
-                    decoded_data.emplace_back(column.id, (column.hasNotNullFlag() ? GenDecodeRow(column) : Field()));
+                    decoded_data.emplace_back(column.id, (column.hasNotNullFlag() ? GenCustomField(column) : Field()));
                 }
             }
             else
@@ -261,7 +259,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                 if (!force_decode)
                 {
-                    if (!row->schema_match)
+                    if (row->has_dropped_column || !unknown_col.empty())
                         return std::make_tuple(Block(), false);
                 }
 
@@ -286,10 +284,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                     }
 
                     const auto & column = table_info.columns[item.second];
-
-                    decoded_data.emplace_back(column.id,
-                        column.hasNoDefaultValueFlag() ? (column.hasNotNullFlag() ? GenDecodeRow(column) : Field())
-                                                       : column.defaultValueToField());
+                    auto field = GenFieldByColumnInfo(column);
+                    if (!field)
+                        throw Exception("decode row error, not null or has no default value", ErrorCodes::LOGICAL_ERROR);
+                    else
+                        decoded_data.emplace_back(column.id, std::move(*field));
                 }
             }
 
