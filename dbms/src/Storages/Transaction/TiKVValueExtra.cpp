@@ -25,7 +25,7 @@ const DecodedRowBySchema * ValueExtraInfo<false>::load() const
 template <>
 void ValueExtraInfo<false>::atomicUpdate(DB::DecodedRowBySchema *& data) const
 {
-    static void * expected = nullptr;
+    void * expected = nullptr;
     if (!decoded.compare_exchange_strong(expected, (void *)data))
         delete data;
     data = nullptr;
