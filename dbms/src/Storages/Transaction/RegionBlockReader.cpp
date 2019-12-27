@@ -4,7 +4,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/PredecodeValue.h>
+#include <Storages/Transaction/PredecodeTiKVValue.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
@@ -64,7 +64,7 @@ Field GenCustomField(const ColumnInfo & col_info)
     }
 }
 
-inline void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
+void ReorderRegionDataReadList(RegionDataReadInfoList & data_list)
 {
     // resort the data_list
     // if the order in int64 is like -3 -1 0 1 2 3, the real order in uint64 is 0 1 2 3 -3 -1
@@ -250,7 +250,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 const DecodedRowBySchema * row = value.extraInfo().load();
                 if (!row)
                 {
-                    forceDecodeTiKVValue(value, helper);
+                    helper.forceDecodeTiKVValue(value);
                     row = value.extraInfo().load();
                 }
 
