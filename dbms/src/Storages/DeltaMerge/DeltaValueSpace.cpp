@@ -223,19 +223,20 @@ DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches 
         throw Exception("Try to get next generation of delta with invalid snapshot.");
 
     // Remove the chunks in snap
-    auto snap_iter = chunks.begin();
-    for (size_t i = 0; i < snap->chunks.size(); ++i, ++snap_iter)
     {
-        // Remove the chunk from log. If all chunks of DMFile have been removed,
-        // the DMFile will be gc by PageStorage later.
-        if (!snap_iter->is_delete_range)
+        auto iter = chunks.begin();
+        for (size_t i = 0; i < snap->chunks.size(); ++i, ++iter)
         {
-            std::cerr << "Remove chunk[" << snap_iter->id << "]" << std::endl;
-            wbs.removed_log.delPage(snap_iter->id);
+            // Remove the chunk from log. If all chunks of DMFile have been removed,
+            // the DMFile will be gc by PageStorage later.
+            if (!iter->is_delete_range)
+            {
+                wbs.removed_log.delPage(iter->id);
+            }
         }
+        assert(new_delta->chunks.empty());
+        new_delta->chunks.insert(new_delta->chunks.end(), iter, chunks.end());
     }
-    assert(new_delta->chunks.empty());
-    new_delta->chunks.insert(new_delta->chunks.end(), snap_iter, chunks.end());
 
     for (const auto & chunk : new_delta->chunks)
     {
@@ -550,9 +551,6 @@ void DeltaSpace::Snapshot::readFromFile(DMFileID              file_id,
                 ss << ",";
             ss << *iter;
         }
-        std::cerr << "Reading from DMFile[" << file_id << "] with indices[" //
-                  << ss.str() << "] offset[" << rows_offset << "]"          //
-                  << std::endl;
     }
 
     auto iter = files.find(file_id);
@@ -586,9 +584,6 @@ void DeltaSpace::Snapshot::readFromFile(DMFileID              file_id,
         {
             const size_t rows_offset_in_this_block = is_first ? rows_offset : 0;
             const size_t rows_limit_in_this_block  = rows_limit_ ? (*rows_limit_ - num_rows_read) : block.rows();
-            std::cerr << "Callback with a block with " << block.rows()     //
-                      << " rows, off[" << rows_offset_in_this_block << "]" //
-                      << " limit[" << rows_limit_in_this_block << "]" << std::endl;
             callback(block, rows_offset_in_this_block, rows_limit_in_this_block);
             is_first = false;
             num_rows_read += block.rows();
