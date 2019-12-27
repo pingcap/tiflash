@@ -935,6 +935,16 @@ void DeltaMergeStore::flushCache(const Context & db_context)
     }
 }
 
+void DeltaMergeStore::drop()
+{
+    std::scoped_lock lock(write_write_mutex);
+    for (auto && [_handle, segment] : segments)
+    {
+        (void)_handle;
+        segment->drop();
+    }
+}
+
 void DeltaMergeStore::check(const Context & /*db_context*/)
 {
     std::shared_lock lock(read_write_mutex);

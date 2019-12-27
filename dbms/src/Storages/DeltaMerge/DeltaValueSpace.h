@@ -209,6 +209,8 @@ public:
 
     void check(const PageReader & meta_page_reader, const String & when);
 
+    void drop();
+
 public:
     PageId         pageId() const { return id; }
     const String & parentPath() const { return parent_path; }

@@ -641,6 +641,12 @@ String Segment::info() const
         + ", stable(" + DB::toString(stable->getDMFilesString()) + "): " + DB::toString(stableRows()) + "}";
 }
 
+void Segment::drop()
+{
+    std::scoped_lock lock(read_write_mutex);
+    delta->drop();
+}
+
 //==========================================================================================
 // Segment private methods.
 //==========================================================================================

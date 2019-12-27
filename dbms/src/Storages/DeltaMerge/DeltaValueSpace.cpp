@@ -119,6 +119,13 @@ DeltaSpace::~DeltaSpace()
     }
 }
 
+void DeltaSpace::drop()
+{
+    // Simply free the writer so that we don't apply finalize in destructor.
+    writer.reset();
+    file_writting.reset();
+}
+
 DeltaSpacePtr DeltaSpace::restore(PageId id, const DMContext & context)
 {
     const String         parent_path = context.deltaPath();

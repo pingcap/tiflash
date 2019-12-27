@@ -161,6 +161,8 @@ public:
     /// Flush delta's cache chunks.
     void flushCache(DMContext & dm_context);
 
+    void drop();
+
     size_t getEstimatedRows() const;
     size_t getEstimatedStableRows() const;
     size_t getEstimatedBytes() const;

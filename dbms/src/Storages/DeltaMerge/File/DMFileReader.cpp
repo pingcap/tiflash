@@ -33,7 +33,8 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         return res;
     };
 
-    if (reader.mark_cache)
+    // Only cache mark if DMFile's status is readable(immutable mark file).
+    if (reader.mark_cache && reader.dmfile->getStatus() == DMFile::Status::READABLE)
         marks = reader.mark_cache->getOrSet(MarkCache::hash(mark_path, reader.hash_salt), mark_load);
     else
         marks = mark_load();
@@ -42,6 +43,13 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     size_t chunks         = reader.dmfile->getChunks();
     size_t buffer_size    = 0;
     size_t estimated_size = 0;
+    if (unlikely(chunks != marks->size()))
+    {
+        throw Exception("Marks and chunks size not match! (" + DB::toString(marks->size()) + "!=" + DB::toString(chunks)
+                            + ") File: " + data_path,
+                        ErrorCodes::LOGICAL_ERROR);
+    }
+
     for (size_t i = 0; i < chunks;)
     {
         if (!reader.use_chunks[i])

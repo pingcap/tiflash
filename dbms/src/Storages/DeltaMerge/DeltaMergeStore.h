@@ -213,6 +213,7 @@ public:
     DataTypePtr           getPKDataType() const { return table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
 
+    void                drop();
     void                check(const Context & db_context);
     DeltaMergeStoreStat getStat();
 
