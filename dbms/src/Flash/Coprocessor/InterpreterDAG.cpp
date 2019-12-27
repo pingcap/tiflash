@@ -46,7 +46,7 @@ extern const int COP_BAD_DAG_REQUEST;
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_),
       dag(dag_),
-      keep_session_timezone_info(dag.getEncodeType() == tipb::EncodeType::TypeArrow),
+      keep_session_timezone_info(dag.getEncodeType() == tipb::EncodeType::TypeChunk),
       log(&Logger::get("InterpreterDAG"))
 {}
 

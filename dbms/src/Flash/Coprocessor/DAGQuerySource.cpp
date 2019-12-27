@@ -66,10 +66,14 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
         }
     }
     encode_type = dag_request.encode_type();
-    if (encode_type == tipb::EncodeType::TypeArrow && hasUnsupportedTypeForArrowEncode(getResultFieldTypes()))
+    if (encode_type == tipb::EncodeType::TypeChunk && hasUnsupportedTypeForArrowEncode(getResultFieldTypes()))
     {
         encode_type = tipb::EncodeType::TypeDefault;
     }
+    if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
+        && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
+        // todo support BigEndian encode for chunk encode type
+        throw Exception("BigEndian encode for chunk encode type is not supported yet.", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)
