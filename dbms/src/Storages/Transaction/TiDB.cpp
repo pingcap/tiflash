@@ -54,7 +54,6 @@ Field ColumnInfo::defaultValueToField() const
         case TypeBlob:
         case TypeVarString:
         case TypeString:
-        case TypeJSON:
             return value.convert<String>();
         case TypeJSON:
             // JSON can't have a default value
