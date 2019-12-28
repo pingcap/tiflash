@@ -39,9 +39,9 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
     if (schema_match)
         return has_dropped_column;
 
-    DecodedRow tmp_row;
     {
-        tmp_row.reserve(schema_all_column_ids.size());
+        DecodedRow tmp_row;
+        tmp_row.reserve(decoded_row.size());
         for (auto && item : decoded_row)
         {
             if (schema_all_column_ids.count(item.col_id))
@@ -49,13 +49,11 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
             else
                 unknown.emplace_back(std::move(item));
         }
-        decoded_row.clear();
-    }
 
-    {
         // must be sorted.
         ::std::sort(tmp_row.begin(), tmp_row.end());
         ::std::sort(unknown.begin(), unknown.end());
+        tmp_row.swap(decoded_row);
     }
 
     DecodedRowElement tmp_ele(InvalidColumnID, {});
@@ -65,24 +63,16 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
         const auto & column = table_info.columns[column_index.second];
         {
             tmp_ele.col_id = column.id;
-            if (auto it = tmp_ele.findByColumnID(tmp_row); it != tmp_row.end())
-            {
-                decoded_row.emplace_back(std::move(*it));
+            if (auto it = tmp_ele.findByColumnID(decoded_row); it != decoded_row.end())
                 continue;
-            }
         }
+        if (column.hasNoDefaultValueFlag() && column.hasNotNullFlag())
         {
-            if (column.hasNoDefaultValueFlag())
-            {
-                if (column.hasNotNullFlag())
-                    has_dropped_column = true;
-            }
-            else
-                decoded_row.emplace_back(column.id, column.defaultValueToField());
+            has_dropped_column = true;
+            break;
         }
     }
 
-    ::std::sort(decoded_row.begin(), decoded_row.end());
     return has_dropped_column;
 }
 
@@ -93,7 +83,7 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
         return;
 
     DecodedRow decoded_row, unknown;
-    // TODO: support fast codec of tidb
+    // TODO: support fast codec of TiDB
     {
         size_t cursor = 0;
 

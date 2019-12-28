@@ -32,13 +32,6 @@ struct DecodedRowElement : boost::noncopyable
             return it;
         return row.cend();
     }
-    DecodedRow::iterator findByColumnID(DecodedRow & row)
-    {
-        auto it = std::lower_bound(row.begin(), row.end(), *this);
-        if (it != row.end() && it->col_id == col_id)
-            return it;
-        return row.end();
-    }
 };
 
 /// force decode tikv value into row by a specific schema, if there is data can't be decoded, store it in extra.
@@ -46,8 +39,9 @@ struct DecodedRowBySchema : boost::noncopyable
 {
     struct UnknownData
     {
-        // for new way that tidb encode column, there is no codec flag
+        // for new way that TiDB encode column, there is no codec flag
         // if type is unknown, field is string.
+        // should be sorted by column id.
         const DecodedRow row;
         const bool known_type;
     };
@@ -59,6 +53,19 @@ struct DecodedRowBySchema : boost::noncopyable
           unknown_data{std::move(extra_), known_type}
     {
         std::ignore = decode_schema_version;
+        if (!isSortedByColumnID(row) || !isSortedByColumnID(unknown_data.row))
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": should be sorted by column id", ErrorCodes::LOGICAL_ERROR);
+    }
+
+private:
+    static bool isSortedByColumnID(const DecodedRow & decoded_row)
+    {
+        for (size_t i = 1; i < decoded_row.size(); ++i)
+        {
+            if (decoded_row[i - 1].col_id >= decoded_row[i].col_id)
+                return false;
+        }
+        return true;
     }
 
 private:
@@ -68,7 +75,7 @@ private:
 public:
     // if decoded row doesn't contain column in schema.
     const bool has_dropped_column;
-    // decoded column in schema and default/null column
+    // decoded column in schema and default/null column. should be sorted by column id.
     const DecodedRow row;
     // decoded column not in schema
     const UnknownData unknown_data;
