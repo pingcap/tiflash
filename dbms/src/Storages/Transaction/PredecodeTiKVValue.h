@@ -22,8 +22,6 @@ constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
 // should keep the same way tidb does.
 Field GenDefaultField(const TiDB::ColumnInfo & col_info);
 
-std::optional<Field> GenFieldByColumnInfo(const TiDB::ColumnInfo & column);
-
 struct ValueDecodeHelper
 {
     const TiDB::TableInfo & table_info;

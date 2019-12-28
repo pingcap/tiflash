@@ -25,19 +25,6 @@ void Region::tryPreDecodeTiKVValue(Context & context)
     DB::tryPreDecodeTiKVValue(std::move(write_val), *storage);
 }
 
-std::optional<Field> GenFieldByColumnInfo(const TiDB::ColumnInfo & column)
-{
-    if (column.hasNoDefaultValueFlag())
-    {
-        if (column.hasNotNullFlag())
-            return {};
-        else
-            return Field();
-    }
-    else
-        return column.defaultValueToField();
-}
-
 bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRow & unknown)
 {
     bool schema_match = decoded_row.size() == schema_all_column_ids.size();
@@ -84,14 +71,15 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
                 continue;
             }
         }
-        auto field = GenFieldByColumnInfo(column);
-        if (!field)
         {
-            has_dropped_column = true;
-            decoded_row.emplace_back(column.id, GenDefaultField(column));
+            if (column.hasNoDefaultValueFlag())
+            {
+                if (column.hasNotNullFlag())
+                    has_dropped_column = true;
+            }
+            else
+                decoded_row.emplace_back(column.id, column.defaultValueToField());
         }
-        else
-            decoded_row.emplace_back(column.id, std::move(*field));
     }
 
     ::std::sort(decoded_row.begin(), decoded_row.end());

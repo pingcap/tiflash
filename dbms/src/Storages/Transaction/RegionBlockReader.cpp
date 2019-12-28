@@ -289,14 +289,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                     }
 
                     const auto & column = table_info.columns[item.second];
-                    auto field = GenFieldByColumnInfo(column);
-                    if (!field)
-                    {
-                        // not null or has no default value, tidb will fill with default value.
-                        decoded_data.emplace_back(column.id, GenDefaultField(column));
-                    }
-                    else
-                        decoded_data.emplace_back(column.id, std::move(*field));
+
+                    // not null or has no default value, tidb will fill with specific value.
+                    decoded_data.emplace_back(column.id,
+                        column.hasNoDefaultValueFlag() ? (column.hasNotNullFlag() ? GenDefaultField(column) : Field())
+                                                       : column.defaultValueToField());
                 }
             }
 
