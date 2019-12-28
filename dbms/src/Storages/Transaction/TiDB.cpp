@@ -4,6 +4,12 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
 
+namespace DB
+{
+extern const UInt8 TYPE_CODE_LITERAL;
+extern const UInt8 LITERAL_NIL;
+} // namespace DB
+
 namespace TiDB
 {
 using DB::Decimal128;
@@ -49,6 +55,9 @@ Field ColumnInfo::defaultValueToField() const
         case TypeVarString:
         case TypeString:
             return value.convert<String>();
+        case TypeJSON:
+            // JSON can't have a default value
+            return genJsonNull();
         case TypeEnum:
             return getEnumIndex(value.convert<String>());
         case TypeNull:
@@ -282,8 +291,7 @@ catch (const Poco::Exception & e)
 
 TableInfo::TableInfo(const String & table_info_json) { deserialize(table_info_json); }
 
-String TableInfo::serialize() const
-try
+String TableInfo::serialize() const try
 {
     std::stringstream buf;
 
@@ -506,5 +514,12 @@ TableInfo TableInfo::producePartitionTableInfo(TableID table_or_partition_id) co
 }
 
 String TableInfo::getPartitionTableName(TableID part_id) const { return name + "_" + std::to_string(part_id); }
+
+String genJsonNull()
+{
+    // null
+    const static String null({char(DB::TYPE_CODE_LITERAL), char(DB::LITERAL_NIL)});
+    return null;
+}
 
 } // namespace TiDB
