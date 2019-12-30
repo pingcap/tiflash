@@ -47,13 +47,13 @@ public:
         next->prev = prev;
     }
 
-    void incrRefCount(const std::unique_lock<std::shared_mutex> & lock)
+    void increase(const std::unique_lock<std::shared_mutex> & lock)
     {
         (void)lock;
         ++ref_count;
     }
 
-    void decrRefCount(const std::unique_lock<std::shared_mutex> & lock)
+    void release(const std::unique_lock<std::shared_mutex> & lock)
     {
         (void)lock;
         assert(ref_count >= 1);
@@ -67,10 +67,10 @@ public:
     // Not thread-safe function. Only for VersionSet::Builder.
 
     // Not thread-safe, caller ensure.
-    void incrRefCount() { ++ref_count; }
+    void increase() { ++ref_count; }
 
     // Not thread-safe, caller ensure.
-    void decrRefCount()
+    void release()
     {
         assert(ref_count >= 1);
         if (--ref_count == 0)
@@ -89,9 +89,9 @@ public:
 ///     TVersion::next
 ///         -- next version
 ///   functions required:
-///     void TVersion::incrRefCount
+///     void TVersion::increase
 ///         -- increase version's ref count
-///     void TVersion::decrRefCount
+///     void TVersion::release
 ///         -- decrease version's ref count. If version's ref count down to 0, it acquire unique_lock for mutex and then remove itself from version set
 ///
 /// \tparam TVersionEdit -- Changes between two version
@@ -123,7 +123,7 @@ public:
     virtual ~VersionSet()
     {
         // All versions of this VersionSet must be released before destructuring VersionSet.
-        current->decrRefCount(std::unique_lock<std::shared_mutex>(read_write_mutex));
+        current->release(std::unique_lock<std::shared_mutex>(read_write_mutex));
         assert(placeholder_node.next == &placeholder_node); // All versions are removed. (List must be empty)
     }
 
@@ -186,12 +186,12 @@ public:
         Snapshot(VersionPtr version_, std::shared_mutex * mutex_) : v(version_), mutex(mutex_)
         {
             std::unique_lock lock(*mutex);
-            v->incrRefCount(lock);
+            v->increase(lock);
         }
         ~Snapshot()
         {
             std::unique_lock lock(*mutex);
-            v->decrRefCount(lock);
+            v->release(lock);
         }
 
         VersionPtr version() const { return v; }
@@ -220,10 +220,10 @@ protected:
         assert(v != current);
         if (current != nullptr)
         {
-            current->decrRefCount(lock);
+            current->release(lock);
         }
         current = v;
-        current->incrRefCount(lock);
+        current->increase(lock);
 
         // Append to linked list
         current->prev       = placeholder_node.prev;
