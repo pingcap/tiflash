@@ -30,15 +30,19 @@ void ClusterManage::dumpRegionTable(Context & context, const ASTs & args, Printe
     std::vector<RegionID> region_list;
     size_t count = 0;
 
-    tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
-        count = regions.size();
-        if (dump_regions)
-        {
-            region_list.reserve(regions.size());
-            for (const auto & region : regions)
-                region_list.push_back(region.first);
-        }
-    });
+    // if storage is not created in ch, flash replica should not be available.
+    if (tmt.getStorages().get(table_id))
+    {
+        tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
+            count = regions.size();
+            if (dump_regions)
+            {
+                region_list.reserve(regions.size());
+                for (const auto & region : regions)
+                    region_list.push_back(region.first);
+            }
+        });
+    }
 
     output(toString(count));
     if (dump_regions)
