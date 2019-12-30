@@ -139,8 +139,19 @@ void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMer
 
 DecodedRow::const_iterator findByColumnID(Int64 col_id, const DecodedRow & row)
 {
-    const DecodedRowElement * e = (DecodedRowElement *)((char *)(&col_id) - offsetof(DecodedRowElement, col_id));
+#ifndef M_CONTAINER_OF
+#define M_CONTAINER_OF(ptr, type, member)                     \
+    ({                                                        \
+        const decltype(((type *)0)->member) * __mptr = (ptr); \
+        (type *)((char *)__mptr - offsetof(type, member));    \
+    })
+
+    auto e = M_CONTAINER_OF(&col_id, DecodedRowElement, col_id);
     return e->findByColumnID(row);
+#undef M_CONTAINER_OF
+#else
+    static_assert(false);
+#endif
 }
 
 } // namespace DB
