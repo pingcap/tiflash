@@ -78,6 +78,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             loadAllSchema(getter, version, context);
         }
         cur_version = version;
+        LOG_INFO(log, "end sync schema, version has been updated to " + std::to_string(cur_version));
         return true;
     }
 

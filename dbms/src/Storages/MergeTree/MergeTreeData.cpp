@@ -938,6 +938,9 @@ void MergeTreeData::checkAlter(const AlterCommands & commands)
                     continue;
             }
 
+            if (command.type == AlterCommand::RENAME_COLUMN)
+		    continue;
+
             throw Exception(
                     "ALTER of key column " + command.column_name + " must be metadata-only",
                     ErrorCodes::ILLEGAL_COLUMN);
