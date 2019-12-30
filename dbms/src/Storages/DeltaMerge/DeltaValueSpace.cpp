@@ -189,6 +189,7 @@ DeltaSpace::AppendTaskPtr DeltaSpace::createAppendTask(const DMContext & context
             context.db_context.getSettingsRef().max_compress_block_size,
             CompressionSettings(CompressionMethod::NONE), // FIXME: do we need compress for delta?
             true);
+        LOG_TRACE(log, "Delta[" + DB::toString(id) + "] create DMFile[" + DB::toString(file_id) + "] to write.");
     }
 
     const auto &  append_block = update.block;
@@ -201,7 +202,7 @@ DeltaSpace::AppendTaskPtr DeltaSpace::createAppendTask(const DMContext & context
     return task;
 }
 
-void DeltaSpace::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs)
+void DeltaSpace::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs) const
 {
     const ChunkMeta & meta = task->append_chunk;
     if (!meta.is_delete_range)
@@ -220,6 +221,15 @@ void DeltaSpace::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & tas
 
 void DeltaSpace::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task)
 {
+    // In case the DMFilePtr is removed by `nextGeneration`.
+    // See test Concurrency_CreateNextGeneration_Append for details.
+    const auto & chunk = task->append_chunk;
+    if (!chunk.is_delete_range && files.find(chunk.file_id) == files.end())
+    {
+        const auto file_id = chunk.file_id;
+        DMFilePtr  file    = DMFile::restore(file_id, 0, parent_path);
+        files.emplace(file_id, std::move(file));
+    }
     chunks.emplace_back(std::move(task->append_chunk));
 }
 
@@ -245,6 +255,7 @@ DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches 
         new_delta->chunks.insert(new_delta->chunks.end(), iter, chunks.end());
     }
 
+    // Copy the DMFilePtr we need.
     for (const auto & chunk : new_delta->chunks)
     {
         if (new_delta->files.count(chunk.file_id) == 0)
@@ -258,6 +269,23 @@ DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches 
     }
     // Keep file_writting empty so that `new_delta` will open a new DMFile to write next time.
 
+    if (log->trace())
+    {
+        std::stringstream ss;
+        for (const auto & chunk : new_delta->chunks)
+        {
+            if (chunk.is_delete_range)
+                ss << "DeleteRange" << chunk.delete_range.toString();
+            else
+                ss << "DMFile_" << chunk.file_id << "_" << chunk.index << "_" << chunk.id << ",";
+        }
+
+        LOG_TRACE(log,
+                  "Generate new delta [" + DB::toString(new_delta->id) + "] with " + DB::toString(new_delta->numChunks()) + " chunks("
+                      + DB::toString(new_delta->numDeletes()) + " deletes), chunks[" + ss.str() + "]. Removed " //
+                      + DB::toString(snap->numChunks()) + " chunks(" + DB::toString(snap->numDeletes()) + " deletes)");
+    }
+
     return new_delta;
 }
 
@@ -267,6 +295,7 @@ DeltaSpacePtr DeltaSpace::newRef(
     DeltaSpacePtr ref_delta = std::make_shared<DeltaSpace>(new_delta_id, parent_path);
 
     ChunkMetas new_chunks;
+    new_chunks.reserve(snap->chunks.size());
     for (size_t i = 0; i < snap->chunks.size(); ++i)
         new_chunks.push_back(createRefChunk(snap->chunks[i], gen_chunk_id, wbs));
     ref_delta->chunks.swap(new_chunks);
@@ -274,6 +303,22 @@ DeltaSpacePtr DeltaSpace::newRef(
     for (const auto & [file_id, file] : snap->files)
         ref_delta->files.emplace(file_id, file);
     // Keep file_writting empty so that `ref_delta` will open a new DMFile to write next time.
+
+    if (ref_delta->log->trace())
+    {
+        std::stringstream ss;
+        for (const auto & chunk : ref_delta->chunks)
+        {
+            if (chunk.is_delete_range)
+                ss << "DeleteRange" << chunk.delete_range.toString();
+            else
+                ss << "DMFile_" << chunk.file_id << "_" << chunk.index << "_" << chunk.id << ",";
+        }
+
+        LOG_TRACE(ref_delta->log,
+                  "Generate ref delta [" + DB::toString(ref_delta->id) + "] with " + DB::toString(ref_delta->numChunks()) + " chunks("
+                      + DB::toString(ref_delta->numDeletes()) + " deletes), chunks[" + ss.str() + "].");
+    }
 
     return ref_delta;
 }
@@ -296,15 +341,47 @@ void DeltaSpace::check(const PageReader & meta_page_reader, const String & when)
         throw Exception(when + ", DeltaSpace[" + DB::toString(id) + "] memory and disk content not match, memory: "
                         + DB::toString(chunks.size()) + ", disk: " + DB::toString(disk_chunks.size()));
     }
+
+    for (const auto & chunk : chunks)
+    {
+        if (chunk.is_delete_range)
+            continue;
+        if (auto iter = files.find(chunk.file_id); iter == files.end())
+        {
+            throw Exception(when + ", DeltaSpace[" + DB::toString(id) + "] Chunk[" + DB::toString(chunk.id) + "] DMFile["
+                            + DB::toString(chunk.file_id) + "] not open. Chunk index:" + DB::toString(chunk.index));
+        }
+    }
 }
 
 //==================================================================
 // DeltaSpace::Snapshot
 //==================================================================
+DeltaSpace::SnapshotPtr DeltaSpace::getSnapshot() const
+{
+    if constexpr (DM_RUN_CHECK)
+    {
+        for (const auto & chunk : chunks)
+        {
+            if (chunk.is_delete_range)
+                continue;
+            if (files.find(chunk.file_id) == files.end())
+            {
+                throw Exception("Try to create borken snapshot for delta[" + DB::toString(id) + "]: Chunk[" + DB::toString(chunk.id)
+                                    + "] should be in DMFile" + DB::toString(chunk.file_id) + ", index " + DB::toString(chunk.index)
+                                    + ", but no DMFile ptr.",
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    }
+
+    return std::make_shared<Snapshot>(id, chunks, files);
+}
 
 DeltaSpace::DeltaValuesPtr DeltaSpace::Snapshot::getValues( //
     const ColumnDefines & read_columns,
     const DMContext &     context) const
+try
 {
     auto values = std::make_shared<DeltaSpace::Values>();
 
@@ -352,6 +429,11 @@ DeltaSpace::DeltaValuesPtr DeltaSpace::Snapshot::getValues( //
 
     return values;
 }
+catch (Exception & e)
+{
+    e.addMessage("(while getValues from delta[" + DB::toString(id) + "])");
+    throw;
+}
 
 BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     const ColumnDefine & handle,
@@ -375,7 +457,16 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     {
         if (chunk_index == chunks.size())
         {
-            res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
+            try
+            {
+                res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
+            }
+            catch (Exception & e)
+            {
+                e.addMessage("(while getValues from delta[" + DB::toString(id) + "])");
+                throw;
+            }
+
             break;
         }
 
@@ -389,7 +480,18 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
         if (chunk.is_delete_range || chunk_index == end_chunk_index)
         {
             if (block_rows_end != block_rows_start)
-                res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
+            {
+                try
+                {
+                    res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
+                }
+                catch (Exception & e)
+                {
+                    e.addMessage("(while getValues from delta[" + DB::toString(id) + "])");
+                    throw;
+                }
+            }
+
             if (chunk.is_delete_range)
                 res.emplace_back(chunk.delete_range);
 
@@ -549,20 +651,26 @@ void DeltaSpace::Snapshot::readFromFile(DMFileID              file_id,
     // The rows offset for this read.
     const size_t rows_offset = rows_offset_ ? *rows_offset_ : 0;
 
+    String str_indices;
     if (true)
     {
         std::stringstream ss;
+        ss << "[";
         for (auto iter = indices->cbegin(); iter != indices->cend(); ++iter)
         {
             if (iter != indices->begin())
                 ss << ",";
             ss << *iter;
         }
+        ss << "]";
+        str_indices = ss.str();
     }
 
     auto iter = files.find(file_id);
     if (iter == files.end())
-        throw Exception("Read chunks in non-open DMFile[" + DB::toString(file_id) + "]", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Read " + DB::toString(indices->size()) + " chunks in non-open DMFile[" + DB::toString(file_id)
+                            + "], indices: " + str_indices,
+                        ErrorCodes::LOGICAL_ERROR);
     const auto & file = iter->second;
 
     DMFileBlockInputStream stream(context.db_context,

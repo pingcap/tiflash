@@ -133,7 +133,7 @@ public:
     class Snapshot : private boost::noncopyable
     {
     public:
-        Snapshot(ChunkMetas chunks_, DMFileMap files_) : chunks(std::move(chunks_)), files(std::move(files_)) {}
+        Snapshot(PageId id_, ChunkMetas chunks_, DMFileMap files_) : id(id_), chunks(std::move(chunks_)), files(std::move(files_)) {}
 
         DeltaValuesPtr getValues(const ColumnDefines & read_columns, //
                                  const DMContext &     context) const;
@@ -176,6 +176,7 @@ public:
         std::pair<size_t, size_t> findChunk(size_t rows_offset) const;
 
     private:
+        const PageId     id;
         const ChunkMetas chunks;
         const DMFileMap  files;
 
@@ -183,7 +184,7 @@ public:
     };
     using SnapshotPtr = std::shared_ptr<Snapshot>;
 
-    SnapshotPtr getSnapshot() const { return std::make_shared<Snapshot>(chunks, files); }
+    SnapshotPtr getSnapshot() const;
 
 public:
     DeltaSpace(PageId id_, String parent_path_) : id(id_), parent_path(std::move(parent_path_)), log(&Logger::get("DeltaSpace")) {}
@@ -204,7 +205,7 @@ public:
     // Append to disk and create task for changes of chunks. Do it without lock since write is heavy.
     AppendTaskPtr createAppendTask(const DMContext & context, const BlockOrDelete & update, WriteBatches & wbs);
     // Apply chunks' changes to wbs, use it to build higher atomic level.
-    void applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs);
+    void applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs) const;
     // Apply chunks' changes commited in disk, apply changes in memory.
     void applyAppendInMemory(const AppendTaskPtr & task);
 

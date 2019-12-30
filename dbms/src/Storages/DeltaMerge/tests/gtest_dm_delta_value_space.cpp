@@ -288,7 +288,7 @@ try
         auto blocks = snap->getMergeBlocks(table_handle_define, 20 + 25, 1, *dm_context);
         ASSERT_EQ(blocks.size(), 1UL);
         auto iter = blocks.begin();
-        auto b1 = *iter++;
+        auto b1   = *iter++;
         ASSERT_FALSE(b1.isDelete());
         EXPECT_EQ(b1.block.rows(), 45 + 80UL);
     }
@@ -297,7 +297,7 @@ try
         auto blocks = snap->getMergeBlocks(table_handle_define, 20 + 25 + 45, 1, *dm_context);
         ASSERT_EQ(blocks.size(), 1UL);
         auto iter = blocks.begin();
-        auto b1 = *iter++;
+        auto b1   = *iter++;
         ASSERT_FALSE(b1.isDelete());
         EXPECT_EQ(b1.block.rows(), 80UL);
     }
@@ -531,6 +531,67 @@ try
 }
 CATCH
 
+TEST_F(DeltaDiskValueSpace_test, Concurrency_CreateNextGeneration_Append)
+try
+{
+    auto delta = std::make_shared<DeltaSpace>(1, delta_path);
+
+    // Mock that write thread and DeltaMerge run in concurrency.
+    // Threads:           Write  |  DeltaMerge
+    //                           |    getSnapshot
+    //          createAppendTask |
+    //  applyAppendToWriteBaches |
+    //                           |    nextGeneration
+    //       applyAppendInMemory |
+
+    // Append some chunk first
+    auto write_to_delta = [&](size_t first_pk, size_t num_rows) {
+        // write to DiskValueSpace
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(first_pk, first_pk + num_rows, false);
+        writeToDelta(delta, std::move(block1));
+    };
+    // Write [10, 30)
+    write_to_delta(10, 20);
+    // Write [10, 35) again
+    write_to_delta(10, 25);
+
+
+    DeltaSpacePtr new_delta;
+    {
+        ////// Mock
+        // DeltaMerge get its snapshot
+        auto delta_merge_snapshot = delta->getSnapshot();
+
+        // Write thread
+        Block        block1 = DMTestEnv::prepareSimpleWriteBlock(60, 60 + 40, false);
+        WriteBatches wbs;
+        // Append data to disk
+        DeltaSpace::AppendTaskPtr task;
+        task = delta->createAppendTask(*dm_context, std::move(block1), wbs);
+        delta->applyAppendToWriteBatches(task, wbs);
+        wbs.writeLogAndData(dm_context->storage_pool);
+        // Commit new delta in disk
+        wbs.writeMeta(dm_context->storage_pool);
+
+        /// DeltaMerge thread applied and generate a new delta
+        new_delta = delta->nextGeneration(delta_merge_snapshot, wbs);
+
+        // Write thread will get ** new_delta ** after DeltaMerge applied
+        // Apply changes to ** new_delta **
+        new_delta->applyAppendInMemory(task);
+    }
+
+    auto snap = new_delta->getSnapshot();
+    ASSERT_EQ(snap->numChunks(), 1UL);
+    ASSERT_EQ(snap->numDeletes(), 0UL);
+    ASSERT_EQ(snap->numRows(), 40UL);
+    auto blocks = snap->getMergeBlocks(table_handle_define, 0, 0, *dm_context);
+    ASSERT_EQ(blocks.size(), 1UL);
+    auto block = *blocks.begin();
+    ASSERT_FALSE(block.isDelete());
+    EXPECT_EQ(block.block.rows(), 40UL);
+}
+CATCH
 
 } // namespace tests
 } // namespace DM
