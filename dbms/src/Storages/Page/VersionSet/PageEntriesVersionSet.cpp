@@ -15,7 +15,7 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet:
         v = builder.build();
     }
 
-    this->appendVersion(v);
+    this->appendVersion(v, lock);
 
     return listAllLiveFiles(lock);
 }

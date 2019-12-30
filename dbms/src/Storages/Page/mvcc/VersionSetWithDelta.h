@@ -157,7 +157,8 @@ public:
     {
         // acquire for unique_lock since we need to add all snapshots to link list
         std::unique_lock<std::shared_mutex> lock(read_write_mutex);
-        auto                                s = std::make_shared<Snapshot>(this, current);
+
+        auto s = std::make_shared<Snapshot>(this, current);
         // Register snapshot to VersionSet
         s->prev               = snapshots->prev;
         s->next               = snapshots.get();
