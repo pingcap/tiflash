@@ -32,5 +32,6 @@ struct ValueDecodeHelper
 
 using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;
 void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMergeTree & storage);
+DecodedRow::const_iterator findByColumnID(const Int64 col_id, const DecodedRow & row);
 
 } // namespace DB

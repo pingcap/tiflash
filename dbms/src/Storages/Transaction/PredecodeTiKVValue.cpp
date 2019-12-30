@@ -56,16 +56,12 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
         tmp_row.swap(decoded_row);
     }
 
-    DecodedRowElement tmp_ele(InvalidColumnID, {});
-
     for (const auto & column_index : schema_all_column_ids)
     {
         const auto & column = table_info.columns[column_index.second];
-        {
-            tmp_ele.col_id = column.id;
-            if (auto it = tmp_ele.findByColumnID(decoded_row); it != decoded_row.end())
-                continue;
-        }
+        if (auto it = findByColumnID(column.id, decoded_row); it != decoded_row.end())
+            continue;
+
         if (column.hasNoDefaultValueFlag() && column.hasNotNullFlag())
         {
             has_dropped_column = true;
@@ -139,6 +135,12 @@ void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMer
     ValueDecodeHelper helper{table_info, schema_all_column_ids};
     for (const auto & value : *values)
         helper.forceDecodeTiKVValue(*value);
+}
+
+DecodedRow::const_iterator findByColumnID(Int64 col_id, const DecodedRow & row)
+{
+    const DecodedRowElement * e = (DecodedRowElement *)((char *)(&col_id) - offsetof(DecodedRowElement, col_id));
+    return e->findByColumnID(row);
 }
 
 } // namespace DB

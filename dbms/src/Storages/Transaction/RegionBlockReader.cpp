@@ -222,7 +222,6 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     {
         DecodedRecordData decoded_data(column_id_to_info_index.size());
         ValueDecodeHelper helper{table_info, schema_all_column_ids};
-        DecodedRowElement tmp_ele(InvalidColumnID, {});
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
@@ -265,27 +264,24 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                 for (const auto & item : column_id_to_info_index)
                 {
+
+                    if (auto it = findByColumnID(item.first, id_fields); it != id_fields.end())
                     {
-                        tmp_ele.col_id = item.first;
-                        if (auto it = tmp_ele.findByColumnID(id_fields); it != id_fields.end())
-                        {
-                            decoded_data.push_back(it);
-                            continue;
-                        }
+                        decoded_data.push_back(it);
+                        continue;
                     }
+
+
+                    if (auto it = findByColumnID(item.first, unknown_col); it != unknown_col.end())
                     {
-                        tmp_ele.col_id = item.first;
-                        if (auto it = tmp_ele.findByColumnID(unknown_col); it != unknown_col.end())
+                        if (likely(row->unknown_data.known_type))
+                            decoded_data.push_back(it);
+                        else
                         {
-                            if (likely(row->unknown_data.known_type))
-                                decoded_data.push_back(it);
-                            else
-                            {
-                                // TODO: if type is unknown, decode value from string.
-                                throw Exception("not support decode unknown type.", ErrorCodes::LOGICAL_ERROR);
-                            }
-                            continue;
+                            // TODO: if type is unknown, decode value from string.
+                            throw Exception("not support decode unknown type.", ErrorCodes::LOGICAL_ERROR);
                         }
+                        continue;
                     }
 
                     const auto & column = table_info.columns[item.second];
