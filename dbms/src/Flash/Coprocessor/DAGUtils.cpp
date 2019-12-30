@@ -210,6 +210,8 @@ bool isLiteralExpr(const tipb::Expr & expr)
     }
 }
 
+bool isNull(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::Null; }
+
 bool isColumnExpr(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::ColumnRef; }
 
 Field decodeLiteral(const tipb::Expr & expr)
