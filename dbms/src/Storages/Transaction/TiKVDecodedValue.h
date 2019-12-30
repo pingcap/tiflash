@@ -36,7 +36,7 @@ struct ValueExtraInfo
 
     void atomicUpdate(DecodedRow *& data) const
     {
-        static void * expected = nullptr;
+        void * expected = nullptr;
         if (!decoded.compare_exchange_strong(expected, (void *)data))
             delete data;
         data = nullptr;
