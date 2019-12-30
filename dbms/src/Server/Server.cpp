@@ -1,7 +1,7 @@
 #include "Server.h"
 
-#include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
@@ -64,6 +64,7 @@ namespace ErrorCodes
 extern const int NO_ELEMENTS_IN_CONFIG;
 extern const int SUPPORT_IS_DISABLED;
 extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
 
@@ -169,7 +170,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (paths.empty())
             throw Exception("path configuration parameter is empty");
         Poco::StringTokenizer string_tokens(paths, ",");
-        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++) {
+        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+        {
             all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
             LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
         }
@@ -196,7 +198,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             extra_paths.emplace_back(id, getCanonicalPath(path));
             LOG_DEBUG(log, "Extra path add " + DB::toString(id) + ":" + path);
         }
-
     }
 
     std::string path = all_normal_path[0];
@@ -317,7 +318,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
 
     /// Initialize main config reloader.
-    auto main_config_reloader = std::make_unique<ConfigReloader>(config_path,
+    auto main_config_reloader = std::make_unique<ConfigReloader>(
+        config_path,
         [&](ConfigurationPtr config) {
             buildLoggers(*config);
             global_context->setClustersConfig(config);
@@ -335,7 +337,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (Poco::File(config_dir + users_config_path).exists())
             users_config_path = config_dir + users_config_path;
     }
-    auto users_config_reloader = std::make_unique<ConfigReloader>(users_config_path,
+    auto users_config_reloader = std::make_unique<ConfigReloader>(
+        users_config_path,
         [&](ConfigurationPtr config) { global_context->setUsersConfig(config); },
         /* already_loaded = */ false);
 
@@ -377,7 +380,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMarkCache(mark_cache_size);
 
     /// Size of cache for minmax index, used by DeltaMerge engine.
-    size_t minmax_index_cache_size = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    size_t minmax_index_cache_size
+        = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
@@ -447,8 +451,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (config().has("raft.storage_engine"))
         {
             String s_engine = config().getString("raft.storage_engine");
-            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(),
-                    [](char ch){return std::tolower(ch);});
+            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
             if (s_engine == "tmt")
                 engine = ::TiDB::StorageEngine::TMT;
             else if (s_engine == "dm")
@@ -461,14 +464,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             bool disable = config().getBool("raft.disable_bg_flush");
             if (disable)
+            {
+                if (engine == ::TiDB::StorageEngine::TMT)
+                {
+                    throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
+                        ErrorCodes::INVALID_CONFIG_PARAMETER);
+                }
                 disable_bg_flush = true;
+            }
         }
     }
 
     {
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr, engine, disable_bg_flush);
+        global_context->createTMTContext(
+            pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr, engine, disable_bg_flush);
         global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.9));
     }
 
