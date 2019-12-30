@@ -30,7 +30,7 @@ RaftService::RaftService(DB::Context & db_context_)
         },
         false);
 
-    if (!db_context.getTMTContext().disableBgFlush())
+    if (!db_context.getTMTContext().isBgFlushDisabled())
     {
         table_flush_handle = background_pool.addTask([this] {
             auto & tmt = db_context.getTMTContext();

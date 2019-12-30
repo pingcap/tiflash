@@ -414,8 +414,8 @@ inline void doLearnerRead(const TiDB::TableID table_id,         //
     LOG_DEBUG(log,
         "[Learner Read] wait index cost " << std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() << " ms");
 
-    /// If `disable_bg_flush` is true, we don't need to do both flushing KVStore or waiting for background tasks.
-    if (!tmt.disableBgFlush())
+    /// If background flush is disabled, we don't need to do both flushing KVStore or waiting for background tasks.
+    if (!tmt.isBgFlushDisabled())
     {
         // After raft index is satisfied, we flush region to StorageDeltaMerge so that we can read all data
         start_time = Clock::now();
