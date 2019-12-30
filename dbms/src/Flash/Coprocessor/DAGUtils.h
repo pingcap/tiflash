@@ -38,5 +38,6 @@ tipb::FieldType columnInfoToFieldType(const TiDB::ColumnInfo & ci);
 TiDB::ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
 bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types);
 UInt8 getFieldLengthForArrowEncode(Int32 tp);
+bool isNull(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::Null; }
 
 } // namespace DB

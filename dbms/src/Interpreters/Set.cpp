@@ -292,6 +292,17 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, 
 
         if (!value.isNull())
             columns[0]->insert(value);
+        else
+            // since TiFlash ignore the NULL value,
+            // for expr col in (null, constant1, constant2, ...)
+            // if expr is not in (constant1, constant2, ...)
+            // TiFlash will return false, while TiDB expect NULL
+            // so add Null expr to the remaining exprs, the
+            // original in expr will be converted to
+            // or(col eq null, col in (constant1, constant2, ...))
+            // and the return value is aligned with TiDB after this
+            // rewrite
+            remainingExprs.push_back(&child);
     }
 
     Block block = header.cloneWithColumns(std::move(columns));
