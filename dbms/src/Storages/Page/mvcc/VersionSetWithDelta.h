@@ -344,12 +344,7 @@ public:
     }
 
 protected:
-<<<<<<< HEAD
-    // REVIEW: this name is not accurate, cause this mutex also be used for editing
-    mutable std::shared_mutex    read_mutex;
-=======
     mutable std::shared_mutex    read_write_mutex;
->>>>>>> b2517bd1561ed3abcf8b4be9dc99dee3cd64758b
     VersionPtr                   current;
     SnapshotPtr                  snapshots;
     ::DB::MVCC::VersionSetConfig config;

@@ -2,11 +2,6 @@
 
 #include <cassert>
 #include <optional>
-<<<<<<< HEAD
-// REVIEW: mutex unused
-#include <shared_mutex>
-=======
->>>>>>> b2517bd1561ed3abcf8b4be9dc99dee3cd64758b
 #include <unordered_map>
 #include <unordered_set>
 

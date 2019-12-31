@@ -32,16 +32,9 @@ template <typename T>
 struct MultiVersionCountable
 {
 public:
-<<<<<<< HEAD
-    // REVIEW: thit two status: <this is valid, ref count> are related, and should be under a same mutex
-    std::atomic<uint32_t> ref_count;
-    T *                   next;
-    T *                   prev;
-=======
     uint32_t ref_count;
     T *      next;
     T *      prev;
->>>>>>> b2517bd1561ed3abcf8b4be9dc99dee3cd64758b
 
 public:
     explicit MultiVersionCountable(T * self) : ref_count(0), next(self), prev(self) {}
@@ -58,92 +51,9 @@ public:
     {
         (void)lock;
         ++ref_count;
-    }
-
-<<<<<<< HEAD
-    // REVIEW: MS used the method names of increase/release, is a stander name, we could use it too.
-    void decrRefCount(std::shared_mutex & mutex)
-=======
-    void release(const std::unique_lock<std::shared_mutex> & lock)
->>>>>>> b2517bd1561ed3abcf8b4be9dc99dee3cd64758b
-    {
-        (void)lock;
-        assert(ref_count >= 1);
-        // REVIEW: potential bug: 2 threads detected that ref_count == 1, then both execute delete (execute one by one cause by mutex)
-        if (--ref_count == 0)
-        {
-            // in case two neighbor nodes remove from linked list
-            delete this;
-        }
-    }
-
-    // Not thread-safe function. Only for VersionSet::Builder.
-
-    // Not thread-safe, caller ensure.
-    void increase() { ++ref_count; }
-
-    // Not thread-safe, caller ensure.
-    void release()
-    {
-        assert(ref_count >= 1);
-        if (--ref_count == 0)
-        {
-            delete this; // remove this node from version set
-        }
-    }
-};
-
-/// VersionSet -- Manage multiple versions
-///
-/// \tparam TVersion
-///   member required:
-///     TVersion::prev
-///         -- previous version
-///     TVersion::next
-///         -- next version
-///   functions required:
-///     void TVersion::increase
-///         -- increase version's ref count
-///     void TVersion::release
-///         -- decrease version's ref count. If version's ref count down to 0, it acquire unique_lock for mutex and then remove itself from version set
-///
-/// \tparam TVersionEdit -- Changes between two version
-///
-/// \tparam TBuilder     -- Apply one or more TVersionEdit to base version and build a new version
-///   functions required:
-///     TBuilder(Version_t *base)
-///         -- Create a builder base on version `base`
-///     void TBuilder::apply(const TVersionEdit &)
-///         -- Apply edit to builder
-///     Version_t* TBuilder::build()
-///         -- Build new version
-template <typename TVersion, typename TVersionEdit, typename TBuilder>
-class VersionSet
-{
-public:
-    using BuilderType = TBuilder;
-    using VersionType = TVersion;
-    using VersionPtr  = VersionType *;
-
-public:
-    explicit VersionSet(const VersionSetConfig & config_ = VersionSetConfig()) : placeholder_node(), current(nullptr)
-    {
-        (void)config_; // just ignore config
-        // append a init version to link
-        appendVersion(new VersionType, std::unique_lock(read_write_mutex));
-    }
-
-    virtual ~VersionSet()
-    {
-<<<<<<< HEAD
-        // REVIEW: why this doesn't need the mutex?
-        current->decrRefCount();
-        assert(placeholder_node.next == &placeholder_node); // List must be empty
-=======
         // All versions of this VersionSet must be released before destructuring VersionSet.
         current->release(std::unique_lock<std::shared_mutex>(read_write_mutex));
         assert(placeholder_node.next == &placeholder_node); // All versions are removed. (List must be empty)
->>>>>>> b2517bd1561ed3abcf8b4be9dc99dee3cd64758b
     }
 
     void restore(VersionPtr const v)
@@ -230,12 +140,7 @@ protected:
     VersionType placeholder_node; // Head of circular double-linked list of all versions
     VersionPtr  current;          // current version; current == placeholder_node.prev
 
-<<<<<<< HEAD
-    // REVIEW: this name is not accurate, cause this mutex also be used for editing
-    mutable std::shared_mutex read_mutex;
-=======
     mutable std::shared_mutex read_write_mutex;
->>>>>>> b2517bd1561ed3abcf8b4be9dc99dee3cd64758b
 
 protected:
     void appendVersion(VersionPtr const v, const std::unique_lock<std::shared_mutex> & lock)
