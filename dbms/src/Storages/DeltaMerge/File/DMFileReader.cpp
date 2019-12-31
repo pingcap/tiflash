@@ -21,11 +21,14 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     String mark_path = reader.dmfile->colMarkPath(file_name_base);
     String data_path = reader.dmfile->colDataPath(file_name_base);
 
+    // Get num of chunks first, in case some chunks append by other threads.
+    const size_t chunks = reader.dmfile->getChunks();
+
     auto mark_load = [&]() -> MarksInCompressedFilePtr {
-        auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getChunks());
+        auto res = std::make_shared<MarksInCompressedFile>(chunks);
         if (res->empty()) // 0 rows.
             return res;
-        size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getChunks();
+        size_t size = sizeof(MarkInCompressedFile) * chunks;
         auto   fd   = PageUtil::openFile<true>(mark_path);
         SCOPE_EXIT({ ::close(fd); });
         PageUtil::readFile(fd, 0, reinterpret_cast<char *>(res->data()), size, mark_path);
@@ -40,13 +43,12 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         marks = mark_load();
 
     size_t data_file_size = Poco::File(data_path).getSize();
-    size_t chunks         = reader.dmfile->getChunks();
     size_t buffer_size    = 0;
     size_t estimated_size = 0;
     if (unlikely(chunks != marks->size()))
     {
         throw Exception("Marks and chunks size not match! (" + DB::toString(marks->size()) + "!=" + DB::toString(chunks)
-                            + ") File: " + data_path,
+                            + "), reader status: " + DMFile::statusString(reader.dmfile->getStatus()) + ", File: " + data_path,
                         ErrorCodes::LOGICAL_ERROR);
     }
 
