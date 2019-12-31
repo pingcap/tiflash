@@ -24,11 +24,11 @@ public:
             assert(log != nullptr);
         }
 #endif
-        old_version->incrRefCount();
+        old_version->increase();
         current_version->copyEntries(*old_version);
     }
 
-    ~PageEntriesBuilder() { old_version->decrRefCount(); }
+    ~PageEntriesBuilder() { old_version->release(); }
 
     void apply(const PageEntriesEdit & edit);
 

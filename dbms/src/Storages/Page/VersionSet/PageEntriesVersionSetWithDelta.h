@@ -36,10 +36,6 @@ public:
     std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> listAllLiveFiles(const std::unique_lock<std::shared_mutex> &,
                                                                                bool need_scan_page_ids = true) const;
 
-    VersionPtr compactDeltas(const VersionPtr & tail) const override;
-
-    VersionPtr compactDeltaAndBase(const VersionPtr & old_base, const VersionPtr & delta) const override;
-
 private:
     void collectLiveFilesFromVersionList(const PageEntriesView &        view,
                                          std::set<PageFileIdAndLevel> & live_files,

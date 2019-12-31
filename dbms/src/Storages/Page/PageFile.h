@@ -1,7 +1,5 @@
 #pragma once
 
-// REVIEW: mutex unused
-#include <mutex>
 #include <unordered_map>
 #include <vector>
 

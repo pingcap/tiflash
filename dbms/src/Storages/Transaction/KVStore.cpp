@@ -210,7 +210,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         curr_region.makeRaftCommandDelegate(task_lock).onCommand(std::move(cmd), *this, region_table, *raft_cmd_res);
         RaftCommandResult & result = *raft_cmd_res;
 
-        if (tmt_context != nullptr && tmt_context->disableBgFlush())
+        if (tmt_context != nullptr && tmt_context->isBgFlushDisabled())
         {
             dirty_regions.push_back(curr_region_ptr);
         }
@@ -344,7 +344,7 @@ void KVStore::onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContex
         }
     }
 
-    if (tmt_context != nullptr && tmt_context->disableBgFlush())
+    if (tmt_context != nullptr && tmt_context->isBgFlushDisabled())
     {
         auto s_time = Clock::now();
         for (auto region : dirty_regions)

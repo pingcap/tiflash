@@ -31,7 +31,7 @@ public:
 
     bool isInitialized() const;
 
-    bool disableBgFlush() const { return disable_bg_flush; }
+    bool isBgFlushDisabled() const { return disable_bg_flush; }
 
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,

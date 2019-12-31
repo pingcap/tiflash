@@ -69,16 +69,16 @@ extern const int LOGICAL_ERROR;
 
 using JsonVar = Poco::Dynamic::Var;
 
-constexpr UInt8 TYPE_CODE_OBJECT = 0x01;  // TypeCodeObject indicates the JSON is an object.
-constexpr UInt8 TYPE_CODE_ARRAY = 0x03;   // TypeCodeArray indicates the JSON is an array.
-constexpr UInt8 TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
-constexpr UInt8 TYPE_CODE_INT64 = 0x09;   // TypeCodeInt64 indicates the JSON is a signed integer.
-constexpr UInt8 TYPE_CODE_UINT64 = 0x0a;  // TypeCodeUint64 indicates the JSON is a unsigned integer.
-constexpr UInt8 TYPE_CODE_FLOAT64 = 0x0b; // TypeCodeFloat64 indicates the JSON is a double float number.
-constexpr UInt8 TYPE_CODE_STRING = 0x0c;  // TypeCodeString indicates the JSON is a string.
-constexpr UInt8 LITERAL_NIL = 0x00;       // LiteralNil represents JSON null.
-constexpr UInt8 LITERAL_TRUE = 0x01;      // LiteralTrue represents JSON true.
-constexpr UInt8 LITERAL_FALSE = 0x02;     // LiteralFalse represents JSON false.
+extern const UInt8 TYPE_CODE_OBJECT = 0x01;  // TypeCodeObject indicates the JSON is an object.
+extern const UInt8 TYPE_CODE_ARRAY = 0x03;   // TypeCodeArray indicates the JSON is an array.
+extern const UInt8 TYPE_CODE_LITERAL = 0x04; // TypeCodeLiteral indicates the JSON is a literal.
+extern const UInt8 TYPE_CODE_INT64 = 0x09;   // TypeCodeInt64 indicates the JSON is a signed integer.
+extern const UInt8 TYPE_CODE_UINT64 = 0x0a;  // TypeCodeUint64 indicates the JSON is a unsigned integer.
+extern const UInt8 TYPE_CODE_FLOAT64 = 0x0b; // TypeCodeFloat64 indicates the JSON is a double float number.
+extern const UInt8 TYPE_CODE_STRING = 0x0c;  // TypeCodeString indicates the JSON is a string.
+extern const UInt8 LITERAL_NIL = 0x00;       // LiteralNil represents JSON null.
+extern const UInt8 LITERAL_TRUE = 0x01;      // LiteralTrue represents JSON true.
+extern const UInt8 LITERAL_FALSE = 0x02;     // LiteralFalse represents JSON false.
 
 constexpr size_t VALUE_ENTRY_SIZE = 5;
 constexpr size_t KEY_ENTRY_LENGTH = 6;
@@ -212,15 +212,23 @@ String DecodeJsonAsString(size_t & cursor, const String & raw_value)
     return decodeValue(type, cursor, raw_value);
 }
 
-template<bool doDecode>
-struct need_decode{};
+template <bool doDecode>
+struct need_decode
+{
+};
 
 
-template<>
-struct need_decode<true>{ typedef String type; };
+template <>
+struct need_decode<true>
+{
+    typedef String type;
+};
 
-template<>
-struct need_decode<false>{ typedef void type; };
+template <>
+struct need_decode<false>
+{
+    typedef void type;
+};
 
 template <bool doDecode>
 typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & raw_value)
@@ -263,14 +271,8 @@ typename need_decode<doDecode>::type DecodeJson(size_t & cursor, const String & 
         return static_cast<typename need_decode<doDecode>::type>(raw_value.substr(base, size));
 }
 
-void SkipJson(size_t & cursor, const String & raw_value)
-{
-    DecodeJson<false>(cursor, raw_value);
-}
+void SkipJson(size_t & cursor, const String & raw_value) { DecodeJson<false>(cursor, raw_value); }
 
-String DecodeJsonAsBinary(size_t & cursor, const String & raw_value)
-{
-    return DecodeJson<true>(cursor, raw_value);
-}
+String DecodeJsonAsBinary(size_t & cursor, const String & raw_value) { return DecodeJson<true>(cursor, raw_value); }
 
 } // namespace DB

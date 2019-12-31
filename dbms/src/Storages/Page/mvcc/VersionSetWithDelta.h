@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <boost/core/noncopyable.hpp>
 #include <cassert>
 #include <memory>
 #include <mutex>
@@ -84,7 +85,7 @@ public:
 
     void apply(TVersionEdit & edit)
     {
-        std::unique_lock read_lock(read_mutex);
+        std::unique_lock read_lock(read_write_mutex);
 
         if (current.use_count() == 1 && current->isBase())
         {
@@ -116,7 +117,7 @@ public:
     /// Snapshot.
     /// When snapshot object is free, it will call `view.release()` to compact VersionList,
     /// and remove itself from VersionSet's snapshots list.
-    class Snapshot
+    class Snapshot : private boost::noncopyable
     {
     public:
         VersionSetWithDelta * vset;
@@ -156,8 +157,9 @@ public:
     SnapshotPtr getSnapshot()
     {
         // acquire for unique_lock since we need to add all snapshots to link list
-        std::unique_lock<std::shared_mutex> lock(read_mutex);
-        auto                                s = std::make_shared<Snapshot>(this, current);
+        std::unique_lock<std::shared_mutex> lock(read_write_mutex);
+
+        auto s = std::make_shared<Snapshot>(this, current);
         // Register snapshot to VersionSet
         s->prev               = snapshots->prev;
         s->next               = snapshots.get();
@@ -201,7 +203,7 @@ protected:
     RebaseResult rebase(const VersionPtr & old_base, const VersionPtr & new_base)
     {
         assert(old_base != nullptr);
-        std::unique_lock lock(read_mutex);
+        std::unique_lock lock(read_write_mutex);
         // Should check `old_base` is valid
         if (!isValidVersion(old_base))
         {
@@ -226,7 +228,7 @@ protected:
         return RebaseResult::SUCCESS;
     }
 
-    std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_mutex); }
+    std::unique_lock<std::shared_mutex> acquireForLock() { return std::unique_lock<std::shared_mutex>(read_write_mutex); }
 
     // Return true if `tail` is in current version-list
     bool isValidVersion(const VersionPtr tail) const
@@ -254,13 +256,13 @@ protected:
             {
                 // If we can not found tail from `current` version-list, then other view has already
                 // do compaction on `tail` version, and we can just free that version
-                std::shared_lock lock(read_mutex);
+                std::shared_lock lock(read_write_mutex);
                 if (!isValidVersion(tail))
                     break;
             }
             // do compact on delta
             ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnDelta);
-            VersionPtr tmp = compactDeltas(tail); // Note: May be compacted by different threads
+            VersionPtr tmp = VersionType::compactDeltas(tail); // Note: May be compacted by different threads
             if (tmp != nullptr)
             {
                 // rebase vset->current on `this->tail` to base on `tmp`
@@ -280,7 +282,7 @@ protected:
                 ProfileEvents::increment(ProfileEvents::PSMVCCCompactOnBase);
                 auto old_base = tail->prev;
                 assert(old_base != nullptr);
-                VersionPtr new_base = compactDeltaAndBase(old_base, tail);
+                VersionPtr new_base = VersionType::compactDeltaAndBase(old_base, tail);
                 // replace nodes [head, tail] -> new_base
                 if (this->rebase(tail, new_base) == RebaseResult::INVALID_VERSION)
                 {
@@ -293,17 +295,12 @@ protected:
         tail.reset();
     }
 
-    // REVIEW: maybe relocate this two methods to VersionType?
-    virtual VersionPtr compactDeltas(const VersionPtr & tail) const = 0;
-
-    virtual VersionPtr compactDeltaAndBase(const VersionPtr & old_base, const VersionPtr & delta) const = 0;
-
 public:
     /// Some helper functions
 
     size_t size() const
     {
-        std::shared_lock read_lock(read_mutex);
+        std::shared_lock read_lock(read_write_mutex);
         return sizeUnlocked();
     }
 
@@ -317,7 +314,11 @@ public:
         return sz;
     }
 
-    std::string toDebugStringUnlocked() const { return versionToDebugString(current); }
+    std::string toDebugString() const
+    {
+        std::shared_lock lock(read_write_mutex);
+        return versionToDebugString(current);
+    }
 
     static std::string versionToDebugString(VersionPtr tail)
     {
@@ -343,8 +344,12 @@ public:
     }
 
 protected:
+<<<<<<< HEAD
     // REVIEW: this name is not accurate, cause this mutex also be used for editing
     mutable std::shared_mutex    read_mutex;
+=======
+    mutable std::shared_mutex    read_write_mutex;
+>>>>>>> b2517bd1561ed3abcf8b4be9dc99dee3cd64758b
     VersionPtr                   current;
     SnapshotPtr                  snapshots;
     ::DB::MVCC::VersionSetConfig config;

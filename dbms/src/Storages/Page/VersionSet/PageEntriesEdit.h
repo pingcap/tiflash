@@ -55,11 +55,6 @@ public:
     struct EditRecord
     {
         WriteBatch::WriteType type;
-        // REVIEW: small opinion: I think this is a bit over engineering, cause this struct doesn't need to serialize,
-        //   even if it need to serialize, we could use pragma packing,
-        //   or use union{char, uint32}, union can be more reliable (if we change the type of WriteType, it don't cause problem)
-        //   manually padding seems to be the worst way to do it.
-        char                  _padding[7]; // 7 bytes unused since type is only 1 byte.
         PageId                page_id;
         PageId                ori_page_id;
         PageEntry             entry;

@@ -5,7 +5,7 @@ namespace DB
 
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet::gcApply(PageEntriesEdit & edit)
 {
-    std::unique_lock lock(read_mutex);
+    std::unique_lock lock(read_write_mutex);
 
     // apply edit on base
     PageEntries * v = nullptr;
@@ -15,7 +15,7 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSet:
         v = builder.build();
     }
 
-    this->appendVersion(v);
+    this->appendVersion(v, lock);
 
     return listAllLiveFiles(lock);
 }

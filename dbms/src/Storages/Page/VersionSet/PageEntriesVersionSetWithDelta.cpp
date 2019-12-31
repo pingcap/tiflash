@@ -14,7 +14,7 @@ namespace DB
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetWithDelta::gcApply(PageEntriesEdit & edit,
                                                                                                   bool              need_scan_page_ids)
 {
-    std::unique_lock lock(read_mutex);
+    std::unique_lock lock(read_write_mutex);
     if (!edit.empty())
     {
         if (current.use_count() == 1 && current->isBase())
@@ -40,7 +40,7 @@ std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>> PageEntriesVersionSetW
 std::pair<std::set<PageFileIdAndLevel>, std::set<PageId>>
 PageEntriesVersionSetWithDelta::listAllLiveFiles(const std::unique_lock<std::shared_mutex> & lock, bool need_scan_page_ids) const
 {
-    (void)lock; // Note read_mutex must be hold.
+    (void)lock; // Note read_write_mutex must be hold.
 
     /// TODO: this is costly, maybe we should find a better way not to block generating other snapshot.
     std::set<PageFileIdAndLevel> live_files;
@@ -73,59 +73,6 @@ void PageEntriesVersionSetWithDelta::collectLiveFilesFromVersionList( //
         }
     }
 }
-
-//==========================================================================================
-// Functions used when view release and do compact on version-list
-//==========================================================================================
-
-PageEntriesVersionSetWithDelta::VersionPtr           //
-PageEntriesVersionSetWithDelta::compactDeltaAndBase( //
-    const PageEntriesVersionSetWithDelta::VersionPtr & old_base,
-    const PageEntriesVersionSetWithDelta::VersionPtr & delta) const
-{
-    PageEntriesVersionSetWithDelta::VersionPtr base = PageEntriesForDelta::createBase();
-    base->copyEntries(*old_base);
-    // apply delta edits
-    base->merge(*delta);
-    return base;
-}
-
-PageEntriesVersionSetWithDelta::VersionPtr     //
-PageEntriesVersionSetWithDelta::compactDeltas( //
-    const PageEntriesVersionSetWithDelta::VersionPtr & tail) const
-{
-    if (tail->prev == nullptr || tail->prev->isBase())
-    {
-        // Only one delta, do nothing
-        return nullptr;
-    }
-
-    auto tmp = PageEntriesVersionSetWithDelta::VersionType::createDelta();
-
-    std::stack<PageEntriesVersionSetWithDelta::VersionPtr> nodes;
-    for (auto node = tail; node != nullptr; node = node->prev)
-    {
-        if (node->isBase())
-        {
-            // link `tmp` to `base` version
-            tmp->prev = node;
-        }
-        else
-        {
-            nodes.push(node);
-        }
-    }
-    // merge delta forward
-    while (!nodes.empty())
-    {
-        auto node = nodes.top();
-        nodes.pop();
-        tmp->merge(*node);
-    }
-
-    return tmp;
-}
-
 //==========================================================================================
 // DeltaVersionEditAcceptor
 //==========================================================================================
@@ -284,7 +231,7 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
             current->ref<false>(rec.page_id, rec.ori_page_id);
             break;
         case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-            current->move_normal_page(rec.page_id, rec.entry);
+            current->updateNormalPage(rec.page_id, rec.entry);
             break;
         }
     }

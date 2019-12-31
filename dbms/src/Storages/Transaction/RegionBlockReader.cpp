@@ -55,7 +55,7 @@ static Field GenDecodeRow(const ColumnInfo & col_info)
         case TiDB::CodecFlagVarUInt:
             return Field(UInt64(0));
         case TiDB::CodecFlagJson:
-            return Field(String());
+            return TiDB::genJsonNull();
         case TiDB::CodecFlagDuration:
             return Field(Int64(0));
         default:
@@ -234,6 +234,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     constexpr size_t MustHaveColCnt = 3; // pk, del, version
     constexpr ColumnID EmptyColumnID = TiDBPkColumnID - 1;
+    constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
 
     // column_map contains columns in column_names_to_read exclude del and version.
     ColumnDataInfoMap column_map(column_names_to_read.size() - MustHaveColCnt + 1, EmptyColumnID);
@@ -244,6 +245,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
     SchemaAllColumnIds schema_all_column_ids;
     schema_all_column_ids.set_empty_key(EmptyColumnID);
+    schema_all_column_ids.set_deleted_key(DeleteColumnID);
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
@@ -276,6 +278,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
         auto ch_col = columns.getPhysical(MutableSupport::tidb_pk_column_name);
         auto mut_col = ch_col.type->createColumn();
         column_map.insert(handle_col_id, std::move(mut_col), std::move(ch_col), -1, data_list.size());
+    }
+    else
+    {
+        // should not contain pk, which may lead to schema not match.
+        schema_all_column_ids.erase(handle_col_id);
     }
 
     const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
@@ -327,7 +334,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 for (const auto & item : column_id_to_info_index)
                 {
                     const auto & column = table_info.columns[item.second];
-                    decoded_data.emplace_back(column.id, GenDecodeRow(column));
+                    decoded_data.emplace_back(column.id, (column.hasNotNullFlag() ? GenDecodeRow(column) : Field()));
                 }
             }
             else
