@@ -51,7 +51,7 @@ public:
     {
         (void)lock;
         ++ref_count;
-   }
+    }
 
     void release(const std::unique_lock<std::shared_mutex> & lock)
     {
