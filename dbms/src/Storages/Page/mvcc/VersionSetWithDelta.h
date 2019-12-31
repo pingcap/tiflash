@@ -132,7 +132,6 @@ public:
             CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
         }
 
-        // REVIEW: make sure Snapshot is uncopyable, or this will go wrong
         ~Snapshot()
         {
             vset->compactOnDeltaRelease(view.transferTailVersionOwn());

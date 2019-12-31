@@ -207,7 +207,6 @@ public:
     SnapshotPtr getSnapshot() { return std::make_shared<Snapshot>(current, &read_write_mutex); }
 
 protected:
-    // REVIEW: why can't we just use std::list?
     VersionType placeholder_node; // Head of circular double-linked list of all versions
     VersionPtr  current;          // current version; current == placeholder_node.prev
 
