@@ -1043,8 +1043,8 @@ void DT_CLASS::addDelete(const UInt64 rid)
     std::tie(leaf, delta) = findLeftLeaf<true>(rid);
     std::tie(pos, delta)  = leaf->searchRid(rid, delta);
 
-    bool   merge = false;
-    size_t merge_pos;
+    bool          merge = false;
+    EntryIterator merge_it;
 
     bool exists = pos != leaf->count && leaf->rid(pos, delta) == rid;
     if (exists && leaf->type(pos) == DT_DEL)
@@ -1054,11 +1054,16 @@ void DT_CLASS::addDelete(const UInt64 rid)
         EntryIterator leaf_end(this->end());
         while (leaf_it != leaf_end && leaf_it.getRid() == rid && leaf_it.getType() == DT_DEL)
         {
-            merge     = true;
-            merge_pos = leaf_it.getPos();
-
+            merge = true;
             ++leaf_it;
         }
+
+        if (merge)
+        {
+            merge_it = leaf_it;
+            --merge_it;
+        }
+
         leaf  = leaf_it.getLeaf();
         pos   = leaf_it.getPos();
         delta = leaf_it.getDelta();
@@ -1116,7 +1121,7 @@ void DT_CLASS::addDelete(const UInt64 rid)
     if (merge)
     {
         /// Simply increase delete count at the last one of delete chain.
-        ++(leaf->mutations[merge_pos].count);
+        ++(merge_it.getLeaf()->mutations[merge_it.getPos()].count);
     }
     else
     {
