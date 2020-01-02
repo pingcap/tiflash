@@ -114,6 +114,9 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
         case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
             throw Exception("WriteType::MOVE_NORMAL_PAGE should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
+        case WriteBatch::WriteType::INGEST:
+            throw Exception("WriteType::INGEST should only write by apply inplace", ErrorCodes::LOGICAL_ERROR);
+            break;
         }
     }
 }
@@ -166,13 +169,12 @@ void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
     /// We should postpone changes to the last of this function.
 
     auto [is_ref, normal_page_id] = view->isRefId(rec.page_id);
-    view->resolveRefId(rec.page_id);
     current_version->ref_deletions.insert(rec.page_id);
     current_version->page_ref.erase(rec.page_id);
     if (is_ref)
     {
         // If ref exists, we need to decrease entry ref-count
-        this->decreasePageRef(normal_page_id);
+        decreasePageRef(normal_page_id);
     }
 }
 
@@ -243,6 +245,9 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
             break;
         case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
             current->updateNormalPage(rec.page_id, rec.entry);
+            break;
+        case WriteBatch::WriteType::INGEST:
+            current->ingest(rec.page_id, rec.entry);
             break;
         }
     }

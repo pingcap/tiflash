@@ -22,6 +22,15 @@ public:
         records.emplace_back(record);
     }
 
+    void ingest(PageId page_id, const PageEntry & entry)
+    {
+        EditRecord record;
+        record.type    = WriteBatch::WriteType::INGEST;
+        record.page_id = page_id;
+        record.entry   = entry;
+        records.emplace_back(record);
+    }
+
     void moveNormalPage(PageId page_id, const PageEntry & entry)
     {
         EditRecord record;

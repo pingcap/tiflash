@@ -62,6 +62,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         {
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+        // For ingest page, write.size is 0
+        case WriteBatch::WriteType::INGEST:
             data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
             break;
@@ -95,6 +97,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         {
         case WriteBatch::WriteType::PUT:
         case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+        case WriteBatch::WriteType::INGEST:
         {
             if (write.read_buffer) // In case read_buffer is nullptr
                 write.read_buffer->readStrict(data_pos, write.size);
@@ -202,6 +205,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             {
             case WriteBatch::WriteType::PUT:
             case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+            case WriteBatch::WriteType::INGEST:
             {
                 auto      page_id = PageUtil::get<PageId>(pos);
                 PageEntry pc;
@@ -216,6 +220,8 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
                     edit.put(page_id, pc);
                 else if (write_type == WriteBatch::WriteType::MOVE_NORMAL_PAGE)
                     edit.moveNormalPage(page_id, pc);
+                else if (write_type == WriteBatch::WriteType::INGEST)
+                    edit.ingest(page_id, pc);
 
                 page_data_file_size += pc.size;
                 break;
@@ -420,14 +426,8 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 
 const PageFile::Version PageFile::CURRENT_VERSION = 1;
 
-PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, bool is_tmp_, bool is_create, Logger * log_)
-    : file_id(file_id_),
-      level(level_),
-      type(is_tmp_ ? Type::Temp : Type::Formal),
-      parent_path(parent_path),
-      data_file_pos(0),
-      meta_file_pos(0),
-      log(log_)
+PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, PageFile::Type type_, bool is_create, Logger * log_)
+    : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), data_file_pos(0), meta_file_pos(0), log(log_)
 {
     if (is_create)
     {
@@ -457,7 +457,7 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
 
     PageFileId file_id = std::stoull(ss[1]);
     UInt32     level   = std::stoi(ss[2]);
-    PageFile   pf(file_id, level, parent_path, /* is_temp */ false, /* is_create */ false, log);
+    PageFile   pf(file_id, level, parent_path, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
         LOG_INFO(log, "Temporary page file, ignored: " + page_file_name);
@@ -496,14 +496,14 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     return {{}, Type::Invalid};
 }
 
-PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, bool is_tmp, Logger * log)
+PageFile PageFile::newPageFile(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
 {
-    return PageFile(file_id, level, parent_path, is_tmp, true, log);
+    return PageFile(file_id, level, parent_path, type, true, log);
 }
 
-PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, Logger * log)
+PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const std::string & parent_path, PageFile::Type type, Logger * log)
 {
-    return PageFile(file_id, level, parent_path, false, false, log);
+    return PageFile(file_id, level, parent_path, type, false, log);
 }
 
 void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
@@ -548,6 +548,15 @@ void PageFile::setLegacy()
     {
         data_file.remove();
     }
+}
+
+void PageFile::setSnapshot()
+{
+    if (type != Type::Temp)
+        return;
+    Poco::File file(folderPath());
+    type = Type::Snapshot;
+    file.renameTo(folderPath());
 }
 
 void PageFile::removeDataIfExists() const
@@ -609,6 +618,9 @@ String PageFile::folderPath() const
         break;
     case Type::Legacy:
         path += folder_prefix_legacy;
+        break;
+    case Type::Snapshot:
+        path += folder_prefix_snapshot;
         break;
 
     case Type::Invalid:

@@ -21,6 +21,8 @@ public:
         // Move an exist normal page to new PageFile. Now only used by GC.
         // Compare to `PUT`, this type won't create the RefPage{id} -> Page{id} by default.
         MOVE_NORMAL_PAGE = 3,
+        // Ingest an exists normal page, the concrete meta will be apply soon by MOVE_NORMAL_PAGE.
+        INGEST           = 4,
     };
 
 private:
@@ -41,6 +43,12 @@ public:
     void putPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, PageSize size)
     {
         Write w = {WriteType::PUT, page_id, tag, read_buffer, size, 0};
+        writes.emplace_back(w);
+    }
+
+    void ingestPage(PageId page_id, UInt64 tag)
+    {
+        Write w = {WriteType::INGEST, page_id, tag, nullptr, 0, 0};
         writes.emplace_back(w);
     }
 

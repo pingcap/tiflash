@@ -87,8 +87,8 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
-    static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const String & storage_path, bool remove_tmp_file, bool ignore_legacy, Poco::Logger * page_file_log);
+    static std::set<PageFile, PageFile::Comparator> listAllPageFiles(
+        const String & storage_path, bool remove_tmp_file, bool ignore_legacy, bool ignore_snapshot, Poco::Logger * page_file_log);
 
 private:
     PageFile::Writer & getWriter();
@@ -96,11 +96,14 @@ private:
     // gc helper functions
     using GcCandidates = std::set<PageFileIdAndLevel>;
     using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
-    GcCandidates    gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                           const GcLivesPages &                             file_valid_pages,
-                                           const PageFileIdAndLevel &                       writing_file_id_level,
-                                           UInt64 &                                         candidate_total_size,
-                                           size_t &                                         migrate_page_count) const;
+    GcCandidates gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                        const GcLivesPages &                             file_valid_pages,
+                                        const PageFileIdAndLevel &                       writing_file_id_level,
+                                        UInt64 &                                         candidate_total_size,
+                                        size_t &                                         migrate_page_count) const;
+
+    void gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files, const PageFileIdAndLevel & writing_file_id_level);
+
     PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
                                    const GcLivesPages & file_valid_pages,
                                    const GcCandidates & merge_files,

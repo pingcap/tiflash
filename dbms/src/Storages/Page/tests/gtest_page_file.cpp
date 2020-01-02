@@ -11,8 +11,8 @@ namespace tests
 
 TEST(PageFile_test, Compare)
 {
-    PageFile pf0 = PageFile::openPageFileForRead(0, 0, ".", &Poco::Logger::get("PageFile"));
-    PageFile pf1 = PageFile::openPageFileForRead(0, 1, ".", &Poco::Logger::get("PageFile"));
+    PageFile pf0 = PageFile::openPageFileForRead(0, 0, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
+    PageFile pf1 = PageFile::openPageFileForRead(0, 1, ".", PageFile::Type::Formal, &Poco::Logger::get("PageFile"));
 
     PageFile::Comparator comp;
     ASSERT_EQ(comp(pf0, pf1), true);

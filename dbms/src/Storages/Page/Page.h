@@ -33,11 +33,11 @@ struct PageEntry
 {
     // if file_id == 0, means it is invalid
     PageFileId file_id  = 0;
-    UInt32     level    = 0;
     PageSize   size     = 0;
     UInt64     offset   = 0;
     UInt64     tag      = 0;
     UInt64     checksum = 0;
+    UInt32     level    = 0;
     UInt32     ref      = 1; // for ref counting
 
     inline bool               isValid() const { return file_id != 0; }

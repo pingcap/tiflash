@@ -92,25 +92,24 @@ public:
             ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentBase);
             // If no readers, we could directly merge edits.
             TEditAcceptor::applyInplace(current, edit);
+            return;
+        }
+
+        if (current.use_count() != 1)
+        {
+            ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnNewDelta);
+            // There are reader(s) on current, generate new delta version and append to version-list
+            VersionPtr v = VersionType::createDelta();
+            appendVersion(std::move(v), read_lock);
         }
         else
         {
-            if (current.use_count() != 1)
-            {
-                ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnNewDelta);
-                // There are reader(s) on current, generate new delta version and append to version-list
-                VersionPtr v = VersionType::createDelta();
-                appendVersion(std::move(v), read_lock);
-            }
-            else
-            {
-                ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentDelta);
-            }
-            // Make a view from head to new version, then apply edits on `current`.
-            auto         view = std::make_shared<TVersionView>(current);
-            EditAcceptor builder(view.get(), /* ignore_invalid_ref_= */ true, log);
-            builder.apply(edit);
+            ProfileEvents::increment(ProfileEvents::PSMVCCApplyOnCurrentDelta);
         }
+        // Make a view from head to new version, then apply edits on `current`.
+        auto         view = std::make_shared<TVersionView>(current);
+        EditAcceptor builder(view.get(), /* ignore_invalid_ref_= */ true, log);
+        builder.apply(edit);
     }
 
 public:

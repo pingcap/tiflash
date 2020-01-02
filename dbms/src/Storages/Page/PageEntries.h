@@ -49,6 +49,9 @@ public:
      */
     void updateNormalPage(PageId normal_page_id, PageEntry entry);
 
+    void ingest(PageId page_id, const PageEntry & entry);
+
+
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
      *  template must_exist = true ensure that corresponding Page must exist.
@@ -232,6 +235,27 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
     }
 
     // update max_page_id
+    max_page_id = std::max(max_page_id, page_id);
+}
+
+template <typename T>
+void PageEntriesMixin<T>::ingest(PageId page_id, const PageEntry & entry)
+{
+    assert(is_base);
+    const PageId normal_page_id = resolveRefId(page_id);
+    assert(page_id == normal_page_id);
+
+    auto ori_iter = normal_pages.find(page_id);
+    if (likely(ori_iter == normal_pages.end()))
+    {
+        normal_pages[page_id]     = entry;
+        normal_pages[page_id].ref = 0;
+    }
+    else
+    {
+        throw Exception("Try to ingest existed normal page: " + DB::toString(page_id), ErrorCodes::LOGICAL_ERROR);
+    }
+
     max_page_id = std::max(max_page_id, page_id);
 }
 

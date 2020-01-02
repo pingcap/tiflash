@@ -35,6 +35,9 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
         case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
             current_version->updateNormalPage(rec.page_id, rec.entry);
             break;
+        case WriteBatch::WriteType::INGEST:
+            current_version->ingest(rec.page_id, rec.entry);
+            break;
         }
     }
 }

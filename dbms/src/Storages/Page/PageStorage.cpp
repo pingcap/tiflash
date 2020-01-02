@@ -4,6 +4,7 @@
 #include <Storages/Page/PageStorage.h>
 
 #include <IO/ReadBufferFromMemory.h>
+#include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
 #include <common/logger_useful.h>
 #include <ext/scope_guard.h>
@@ -16,8 +17,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::set<PageFile, PageFile::Comparator>
-PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file, bool ignore_legacy, Logger * page_file_log)
+std::set<PageFile, PageFile::Comparator> PageStorage::listAllPageFiles(
+    const String & storage_path, bool remove_tmp_file, bool ignore_legacy, bool ignore_snapshot, Logger * page_file_log)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -53,6 +54,13 @@ PageStorage::listAllPageFiles(const String & storage_path, bool remove_tmp_file,
                 }
             }
         }
+        else if (page_file_type == PageFile::Type::Snapshot)
+        {
+            if (!ignore_snapshot)
+            {
+                page_files.insert(page_file);
+            }
+        }
         else
         {
             // For temporary and invalid
@@ -77,7 +85,8 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
       versioned_page_entries(config.version_set_config, log)
 {
     /// page_files are in ascending ordered by (file_id, level).
-    auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, /* ignore_legacy */ false, page_file_log);
+    auto page_files
+        = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, /* ignore_legacy */ false, false, page_file_log);
     // recover current version from both formal and legacy page files
 
 #ifdef DELTA_VERSION_SET
@@ -170,7 +179,7 @@ PageFile::Writer & PageStorage::getWriter()
     if (!is_writable)
     {
         // create a new PageFile if old file is full
-        write_file        = PageFile::newPageFile(write_file.getFileId() + 1, 0, storage_path, false, page_file_log);
+        write_file        = PageFile::newPageFile(write_file.getFileId() + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
         write_file_writer = write_file.createWriter(config.sync_on_write);
     }
     else if (write_file_writer == nullptr)
@@ -188,8 +197,9 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
     auto & pages_reader = open_read_files[file_id_level];
     if (pages_reader == nullptr)
     {
-        auto page_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
-        pages_reader   = page_file.createReader();
+        auto page_file
+            = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, PageFile::Type::Formal, page_file_log);
+        pages_reader = page_file.createReader();
     }
     return pages_reader;
 }
@@ -419,7 +429,8 @@ bool PageStorage::gc()
     {
         external_pages = external_pages_scanner();
     }
-    auto page_files = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file */ true, /* ignore_legacy */ true, page_file_log);
+    auto page_files = PageStorage::listAllPageFiles(
+        storage_path, /* remove_tmp_file */ true, /* ignore_legacy */ false, /* ignore_snapshot */ false, page_file_log);
     if (page_files.empty())
     {
         return false;
@@ -429,6 +440,17 @@ bool PageStorage::gc()
     {
         std::lock_guard<std::mutex> lock(write_mutex);
         writing_file_id_level = write_file.fileIdLevel();
+    }
+
+    gcCompactLegacy(page_files, writing_file_id_level);
+    {
+        for (auto itr = page_files.begin(); itr != page_files.end();)
+        {
+            if (itr->getType() == PageFile::Type::Legacy)
+                itr = page_files.erase(itr);
+            else
+                itr++;
+        }
     }
 
     bool   should_merge         = false;
@@ -561,6 +583,74 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     return merge_files;
 }
 
+void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                  const PageFileIdAndLevel &                       writing_file_id_level)
+{
+    PageId smallest_file_id = 0;
+    if (page_files.size() > 0)
+    {
+        smallest_file_id = page_files.begin()->getFileId();
+    }
+
+    std::set<PageFile, PageFile::Comparator> page_files_to_compact;
+    for (auto & page_file : page_files)
+    {
+        auto file_id_level = page_file.fileIdLevel();
+        if (file_id_level >= writing_file_id_level)
+            break;
+
+        auto page_file_type = page_file.getType();
+
+        if (page_file_type == PageFile::Type::Legacy)
+            page_files_to_compact.emplace(page_file);
+        else
+            break;
+    }
+
+    if (page_files_to_compact.size() == 0)
+    {
+        return;
+    }
+
+    PageEntriesVersionSetWithDelta version_set(config.version_set_config, log);
+
+    for (auto & page_file : page_files_to_compact)
+    {
+        PageEntriesEdit edit;
+        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
+
+        version_set.apply(edit);
+    }
+
+    auto snapshot = version_set.getSnapshot();
+
+    WriteBatch wb;
+
+    auto normal_ids = snapshot->version()->validNormalPageIds();
+    for (auto & page_id : normal_ids)
+    {
+        auto page = snapshot->version()->at(page_id);
+        wb.ingestPage(page_id, page.tag);
+    }
+
+    auto ref_ids = snapshot->version()->validPageIds();
+    for (auto & page_id : ref_ids)
+    {
+        auto ori_id = snapshot->version()->isRefId(page_id).second;
+        wb.putRefPage(page_id, ori_id);
+    }
+
+    auto snapshot_file = PageFile::newPageFile(smallest_file_id, 0, storage_path, PageFile::Type::Temp, log);
+    {
+        auto snapshot_writer = snapshot_file.createWriter(false);
+
+        PageEntriesEdit edit;
+        snapshot_writer->write(wb, edit);
+    }
+
+    snapshot_file.setSnapshot();
+}
+
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                                             const GcLivesPages & file_valid_pages,
                                             const GcCandidates & merge_files,
@@ -575,7 +665,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
 
     {
         // In case that those files are hold by snapshot and do gcMigrate to same PageFile again, we need to check if gc_file is already exist.
-        PageFile gc_file = PageFile::openPageFileForRead(largest_file_id, level + 1, storage_path, page_file_log);
+        PageFile gc_file = PageFile::openPageFileForRead(largest_file_id, level + 1, storage_path, PageFile::Type::Formal, page_file_log);
         if (gc_file.isExist())
         {
             LOG_INFO(log, storage_name << " GC migration to PageFile_" << largest_file_id << "_" << level + 1 << " is done before.");
@@ -584,7 +674,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
     }
 
     // Create a tmp PageFile for migration
-    PageFile gc_file = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
+    PageFile gc_file = PageFile::newPageFile(largest_file_id, level + 1, storage_path, PageFile::Type::Temp, page_file_log);
     LOG_INFO(log,
              storage_name << " GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count
                           << " regions to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
@@ -601,7 +691,8 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
 
         for (const auto & file_id_level : merge_files)
         {
-            PageFile to_merge_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
+            PageFile to_merge_file = PageFile::openPageFileForRead(
+                file_id_level.first, file_id_level.second, storage_path, PageFile::Type::Formal, page_file_log);
             // Note: This file may not contain any valid page, but valid RefPages which we need to migrate
             to_merge_file.readAndSetPageMetas(legacy_edit);
 
