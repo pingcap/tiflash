@@ -6,6 +6,7 @@
 
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeDummy.h>
+#include <Storages/DeltaMerge/Range.h>
 
 namespace DB
 {

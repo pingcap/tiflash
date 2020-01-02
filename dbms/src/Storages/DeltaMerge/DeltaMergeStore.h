@@ -80,8 +80,6 @@ static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
 class DeltaMergeStore : private boost::noncopyable
 {
-    using OpContext = DiskValueSpace::OpContext;
-
 public:
     struct Settings
     {

@@ -3,10 +3,8 @@
 #include <Core/Block.h>
 
 #include <Interpreters/ExpressionActions.h>
-#include <Storages/DeltaMerge/Chunk.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/DiskValueSpace.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/MinMax.h>
@@ -20,14 +18,9 @@ namespace DM
 {
 
 class Segment;
-struct SegmentSnapshot;
-
 using SegmentPtr  = std::shared_ptr<Segment>;
 using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
 using Segments    = std::vector<SegmentPtr>;
-
-using SegmentAndStorageSnap = std::pair<SegmentSnapshot, StorageSnapshot>;
-using SegmentSnapAndChunks  = std::pair<SegmentSnapshot, Chunks>;
 
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot

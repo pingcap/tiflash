@@ -24,6 +24,7 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionException.h>
@@ -609,6 +610,11 @@ BlockInputStreams StorageDeltaMerge::read( //
 }
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
+
+void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
+{
+    return store->deleteRange(global_context, settings, range_to_delete);
+}
 
 void StorageDeltaMerge::deleteRows(const Context & context, size_t rows)
 {

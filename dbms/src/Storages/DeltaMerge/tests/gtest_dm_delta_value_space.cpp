@@ -8,7 +8,6 @@
 
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/DiskValueSpace.h>
 
 namespace DB
 {
