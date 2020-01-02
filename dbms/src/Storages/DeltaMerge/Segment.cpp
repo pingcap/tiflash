@@ -749,37 +749,16 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext &         
                                                       size_t                      index_size,
                                                       size_t                      expected_block_size) const
 {
-    if (!skippable_place)
-    {
-        SkippableBlockInputStreamPtr stable_input_stream
-            = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
-        return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator, false>>( //
-            stable_input_stream,
-            delta_value_space,
-            delta_index_begin,
-            delta_index_end,
-            index_size,
-            handle_range,
-            expected_block_size);
-    }
-    else
-    {
-        SkippableBlockInputStreamPtr stable_input_stream
-            = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
-
-        SkippableBlockInputStreamPtr stream = std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator, true>>( //
-            stable_input_stream,
-            delta_value_space,
-            delta_index_begin,
-            delta_index_end,
-            index_size,
-            handle_range,
-            expected_block_size);
-
-        //        stream = std::make_shared<SkipHeadBlockInputStream>(stream, handle_range, 0);
-
-        return stream;
-    }
+    SkippableBlockInputStreamPtr stable_input_stream
+        = stable_snap->getInputStream(dm_context, read_columns, handle_range, filter, MAX_UINT64, false);
+    return std::make_shared<DeltaMergeBlockInputStream<DeltaValueSpace, IndexIterator, skippable_place>>( //
+        stable_input_stream,
+        delta_value_space,
+        delta_index_begin,
+        delta_index_end,
+        index_size,
+        handle_range,
+        expected_block_size);
 }
 
 Handle Segment::getSplitPointFast(DMContext & dm_context, const StableValueSpacePtr & stable_snap) const
@@ -1269,25 +1248,12 @@ void Segment::placeUpsert(const DMContext &           dm_context,
     auto   delta_index_begin = update_delta_tree.begin();
     auto   delta_index_end   = update_delta_tree.end();
     bool   do_sort           = sortBlockByPk(handle, block, perm);
-//    Handle first_handle      = block.getByPosition(0).column->getInt(0);
+    Handle first_handle      = block.getByPosition(0).column->getInt(0);
 
-//    auto merged_stream_opt = getPlacedStream<DefaultDeltaTree::EntryIterator, true>( //
-//        dm_context,
-//        {handle, getVersionColumnDefine()},
-//        HandleRange(first_handle, HandleRange::MAX),
-//        EMPTY_FILTER,
-//        stable_snap,
-//        delta_value_space,
-//        delta_index_begin,
-//        delta_index_end,
-//        update_delta_tree.numEntries(),
-//        dm_context.stable_chunk_rows);
-//    auto rids_opt          = DM::preparePlaceInsert(merged_stream_opt, block, getPkSort(handle));
-
-    auto merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator, false>( //
+    auto merged_stream_opt = getPlacedStream<DefaultDeltaTree::EntryIterator, true>( //
         dm_context,
         {handle, getVersionColumnDefine()},
-        HandleRange::newAll(),
+        HandleRange(first_handle, HandleRange::MAX),
         EMPTY_FILTER,
         stable_snap,
         delta_value_space,
@@ -1295,19 +1261,32 @@ void Segment::placeUpsert(const DMContext &           dm_context,
         delta_index_end,
         update_delta_tree.numEntries(),
         dm_context.stable_chunk_rows);
-    auto rids          = DM::preparePlaceInsert(merged_stream, block, getPkSort(handle));
+    auto rids_opt          = DM::preparePlaceInsert(merged_stream_opt, block, getPkSort(handle));
 
-//    auto rows = block.rows();
-//    for (size_t i = 0; i < rows; ++i)
-//    {
-//        if (rids_opt[i] != rids[i])
-//            throw Exception("ffff");
-//    }
+    //    auto merged_stream = getPlacedStream<DefaultDeltaTree::EntryIterator, false>( //
+    //        dm_context,
+    //        {handle, getVersionColumnDefine()},
+    //        HandleRange::newAll(),
+    //        EMPTY_FILTER,
+    //        stable_snap,
+    //        delta_value_space,
+    //        delta_index_begin,
+    //        delta_index_end,
+    //        update_delta_tree.numEntries(),
+    //        dm_context.stable_chunk_rows);
+    //    auto rids          = DM::preparePlaceInsert(merged_stream, block, getPkSort(handle));
+
+    //    auto rows = block.rows();
+    //    for (size_t i = 0; i < rows; ++i)
+    //    {
+    //        if (rids_opt[i] != rids[i])
+    //            throw Exception("ffff");
+    //    }
 
     if (do_sort)
-        DM::doPlaceInsert<true>(rids, update_delta_tree, delta_value_space_offset, perm);
+        DM::doPlaceInsert<true>(rids_opt, update_delta_tree, delta_value_space_offset, perm);
     else
-        DM::doPlaceInsert<false>(rids, update_delta_tree, delta_value_space_offset, perm);
+        DM::doPlaceInsert<false>(rids_opt, update_delta_tree, delta_value_space_offset, perm);
 
     //    if (do_sort)
     //        DM::placeInsert<true>(merged_stream, block, update_delta_tree, delta_value_space_offset, perm, getPkSort(handle));
@@ -1360,25 +1339,12 @@ void Segment::placeDelete(const DMContext &           dm_context,
     {
         auto   delta_index_begin = update_delta_tree.begin();
         auto   delta_index_end   = update_delta_tree.end();
-//        Handle first_handle      = block.getByPosition(0).column->getInt(0);
+        Handle first_handle      = block.getByPosition(0).column->getInt(0);
 
-//        auto merged_stream_opt = getPlacedStream<DefaultDeltaTree::EntryIterator, true>( //
-//            dm_context,
-//            {handle, getVersionColumnDefine()},
-//            HandleRange(first_handle, HandleRange::MAX),
-//            EMPTY_FILTER,
-//            stable_snap,
-//            delta_value_space,
-//            delta_index_begin,
-//            delta_index_end,
-//            update_delta_tree.numEntries(),
-//            dm_context.stable_chunk_rows);
-//        auto rids_opt          = DM::preparePlaceDelete(merged_stream_opt, block, getPkSort(handle));
-
-        auto merged_stream_normal = getPlacedStream<DefaultDeltaTree::EntryIterator, false>( //
+        auto merged_stream_opt = getPlacedStream<DefaultDeltaTree::EntryIterator, true>( //
             dm_context,
             {handle, getVersionColumnDefine()},
-            HandleRange::newAll(),
+            HandleRange(first_handle, HandleRange::MAX),
             EMPTY_FILTER,
             stable_snap,
             delta_value_space,
@@ -1386,18 +1352,31 @@ void Segment::placeDelete(const DMContext &           dm_context,
             delta_index_end,
             update_delta_tree.numEntries(),
             dm_context.stable_chunk_rows);
-        auto rids_normal          = DM::preparePlaceDelete(merged_stream_normal, block, getPkSort(handle));
+        auto rids_opt          = DM::preparePlaceDelete(merged_stream_opt, block, getPkSort(handle));
 
-//        auto rows = block.rows();
-//        for (size_t i = 0; i < rows; ++i)
-//        {
-//            if (rids_opt[i] != rids_normal[i])
-//            {
-//                throw Exception("expected " + DB::toString(rids_normal[i]) + ", got " + DB::toString(rids_opt[i]));
-//            }
-//        }
+        //        auto merged_stream_normal = getPlacedStream<DefaultDeltaTree::EntryIterator, false>( //
+        //            dm_context,
+        //            {handle, getVersionColumnDefine()},
+        //            HandleRange::newAll(),
+        //            EMPTY_FILTER,
+        //            stable_snap,
+        //            delta_value_space,
+        //            delta_index_begin,
+        //            delta_index_end,
+        //            update_delta_tree.numEntries(),
+        //            dm_context.stable_chunk_rows);
+        //        auto rids_normal          = DM::preparePlaceDelete(merged_stream_normal, block, getPkSort(handle));
+        //
+        //                auto rows = block.rows();
+        //                for (size_t i = 0; i < rows; ++i)
+        //                {
+        //                    if (rids_opt[i] != rids_normal[i])
+        //                    {
+        //                        throw Exception("expected " + DB::toString(rids_normal[i]) + ", got " + DB::toString(rids_opt[i]));
+        //                    }
+        //                }
 
-        DM::doPlaceDelete(rids_normal, update_delta_tree);
+        DM::doPlaceDelete(rids_opt, update_delta_tree);
     }
 }
 

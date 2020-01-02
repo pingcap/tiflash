@@ -114,10 +114,6 @@ public:
         size_t        pos = 0;
         while (it != index_end)
         {
-            if (it.getSid() == 1048576)
-            {
-                pos += 0;
-            }
             if (pos > 0 && it.getType() == DT_INS)
             {
                 auto & prev_index = index[pos - 1];
