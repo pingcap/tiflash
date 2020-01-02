@@ -603,22 +603,25 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
-void StorageDeltaMerge::deleteRows(const Context & context, size_t rows)
+
+size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::HandleRange & range)
 {
-    size_t total_rows = 0;
+    size_t rows = 0;
 
-    {
-        ColumnDefines to_read{getExtraHandleColumnDefine()};
-        auto stream = store->read(context, context.getSettingsRef(), to_read, {DM::HandleRange::newAll()}, 1, MAX_UINT64, EMPTY_FILTER)[0];
-        stream->readPrefix();
-        Block block;
-        while ((block = stream->read()))
-            total_rows += block.rows();
-        stream->readSuffix();
-    }
+    ColumnDefines to_read{getExtraHandleColumnDefine()};
+    auto stream = store->read(context, context.getSettingsRef(), to_read, {range}, 1, MAX_UINT64, EMPTY_FILTER)[0];
+    stream->readPrefix();
+    Block block;
+    while ((block = stream->read()))
+        rows += block.rows();
+    stream->readSuffix();
 
-    rows = std::min(total_rows, rows);
-    auto start_index = rand() % (total_rows - rows + 1);
+    return rows;
+}
+
+DM::HandleRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
+{
+    auto start_index = rand() % (total_rows - delete_rows + 1);
 
     DM::HandleRange range = DM::HandleRange::newAll();
     {
@@ -634,7 +637,7 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t rows)
             {
                 if (index == start_index)
                     range.start = data[i];
-                if (index == start_index + rows)
+                if (index == start_index + delete_rows)
                     range.end = data[i];
                 ++index;
             }
@@ -642,7 +645,24 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t rows)
         stream->readSuffix();
     }
 
-    store->deleteRange(context, context.getSettingsRef(), range);
+    return range;
+}
+
+void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
+{
+    size_t total_rows = getRows(store, context, DM::HandleRange::newAll());
+    delete_rows = std::min(total_rows, delete_rows);
+    auto delete_range = getRange(store, context, total_rows, delete_rows);
+    size_t actual_delete_rows = getRows(store, context, delete_range);
+    if (actual_delete_rows != delete_rows)
+        throw Exception("Expected delete rows: " + DB::toString(delete_rows) + ", got: " + DB::toString(actual_delete_rows));
+
+    store->deleteRange(context, context.getSettingsRef(), delete_range);
+
+    size_t after_delete_rows = getRows(store, context, DM::HandleRange::newAll());
+    if (after_delete_rows != total_rows - delete_rows)
+        throw Exception("Rows after delete range not match, expected: " + DB::toString(total_rows - delete_rows)
+            + ", got: " + DB::toString(after_delete_rows));
 }
 
 //==========================================================================================
