@@ -112,7 +112,8 @@ DeltaSpace::~DeltaSpace()
 {
     if (file_writting)
     {
-        writer->finalize();
+        if (writer)
+            writer->finalize();
         writer.reset();
         file_writting->enableGC();
         file_writting.reset();
@@ -121,9 +122,11 @@ DeltaSpace::~DeltaSpace()
 
 void DeltaSpace::drop()
 {
+    std::unique_lock write_lock(read_write_mutex);
     // Simply free the writer so that we don't apply finalize in destructor.
     writer.reset();
     file_writting.reset();
+    chunks.clear();
 }
 
 DeltaSpacePtr DeltaSpace::restore(PageId id, const DMContext & context)
@@ -173,24 +176,33 @@ DeltaSpace::AppendTaskPtr DeltaSpace::createAppendTask(const DMContext & context
         return task;
     }
 
-    // If no file for write or current file is full, open a new file for write.
-    if (file_writting == nullptr)
+    // If no file for write, open a new file for write.
     {
-        // Create a new DMFile for write
-        const DMFileID file_id = context.storage_pool.newLogPageId();
-        DMFilePtr      file    = DMFile::create(file_id, parent_path, true);
-        wbs.log.putExternal(file_id, 0);
-        file_writting = file;
-        files.emplace(file_id, file);
-        writer = std::make_unique<DMFileWriter>( //
-            file_writting,
-            context.store_columns,
-            context.db_context.getSettingsRef().min_compress_block_size,
-            context.db_context.getSettingsRef().max_compress_block_size,
-            CompressionSettings(CompressionMethod::NONE), // FIXME: do we need compress for delta?
-            true);
-        LOG_TRACE(log, "Delta[" + DB::toString(id) + "] create DMFile[" + DB::toString(file_id) + "] to write.");
+        std::unique_lock write_lock(read_write_mutex);
+        if (file_writting == nullptr)
+        {
+            // Create a new DMFile for write
+            const DMFileID file_id = context.storage_pool.newLogPageId();
+            DMFilePtr      file    = DMFile::create(file_id, parent_path, true);
+            wbs.log.putExternal(file_id, 0);
+            file_writting = file;
+            files.emplace(file_id, file);
+            writer = std::make_unique<DMFileWriter>( //
+                file_writting,
+                context.store_columns,
+                context.db_context.getSettingsRef().min_compress_block_size,
+                context.db_context.getSettingsRef().max_compress_block_size,
+                CompressionSettings(CompressionMethod::NONE), // FIXME: do we need compress for delta?
+                true);
+            LOG_TRACE(log, "Delta[" + DB::toString(id) + "] create DMFile[" + DB::toString(file_id) + "] to write.");
+        }
     }
+
+    /// Note that caller should ensure only one thread call this function,
+    /// and before its write committed by `applyAppendToWriteBatches` and
+    /// `applyAppendInMemory`, no other thread will call this function
+    /// again. Or there maybe two ChunkMeta indicate to the same position.
+    std::shared_lock read_lock(read_write_mutex);
 
     const auto &  append_block = update.block;
     const ChunkID chunk_id     = context.storage_pool.newLogPageId();
@@ -204,6 +216,7 @@ DeltaSpace::AppendTaskPtr DeltaSpace::createAppendTask(const DMContext & context
 
 void DeltaSpace::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs) const
 {
+    std::shared_lock  read_lock(read_write_mutex);
     const ChunkMeta & meta = task->append_chunk;
     if (!meta.is_delete_range)
     {
@@ -223,7 +236,8 @@ void DeltaSpace::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task)
 {
     // In case the DMFilePtr is removed by `nextGeneration`.
     // See test Concurrency_CreateNextGeneration_Append for details.
-    const auto & chunk = task->append_chunk;
+    const auto &     chunk = task->append_chunk;
+    std::unique_lock write_lock(read_write_mutex);
     if (!chunk.is_delete_range && files.find(chunk.file_id) == files.end())
     {
         const auto file_id = chunk.file_id;
@@ -235,6 +249,8 @@ void DeltaSpace::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task)
 
 DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches & wbs)
 {
+    std::shared_lock read_lock(read_write_mutex);
+
     DeltaSpacePtr new_delta = std::make_shared<DeltaSpace>(id, parent_path);
     if (!chunks.empty() && !snap->chunks.empty() && !chunks[0].equals(snap->chunks[0]))
         throw Exception("Try to get next generation of delta with invalid snapshot.");
@@ -359,6 +375,7 @@ void DeltaSpace::check(const PageReader & meta_page_reader, const String & when)
 //==================================================================
 DeltaSpace::SnapshotPtr DeltaSpace::getSnapshot() const
 {
+    std::shared_lock read_lock(read_write_mutex);
     if constexpr (DM_RUN_CHECK)
     {
         for (const auto & chunk : chunks)

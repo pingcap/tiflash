@@ -233,14 +233,17 @@ private:
     PageId id; // PageId to store this delta's meta in PageStorage.
     String parent_path;
 
+    // Used to synchronize between read threads and write thread.
+    // Mainly to protect chunks, files, file_writing from them.
+    mutable std::shared_mutex read_write_mutex;
+
     /// Here we use vector of ChunkMeta. Create a snapshot means copy the vector of ChunkMetas.
     /// We may try to write a list for ChunkMeta for eliminating the copying and manage valid chunks' lifetime by std::shared_ptr
     ChunkMetas chunks;
-    // mutable std::shared_mutex read_write_mutex; // We already protect delta in higher level now.
 
     DMFileMap files;
     DMFilePtr file_writting = nullptr; // Keep it so that we can easily track the chunk index we are writing to.
-
+    // We don't want any share on writer, use unique_ptr to ensure it.
     std::unique_ptr<DMFileWriter> writer = nullptr;
 
     Logger * log;

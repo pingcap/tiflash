@@ -92,7 +92,7 @@ public:
 
     /// Use #createAppendTask, #applyAppendToWriteBatches and #applyAppendInMemory to build higher atomic level.
     DeltaSpace::AppendTaskPtr createAppendTask(const DMContext & dm_context, const BlockOrDelete & update, WriteBatches & wbs);
-    void                      applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs);
+    void                      applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs) const;
     void                      applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task, const BlockOrDelete & update);
 
     SegmentSnapshot getReadSnapshot(bool use_delta_cache = true) const;
@@ -281,9 +281,6 @@ private:
     mutable size_t       placed_delta_rows    = 0;
     mutable size_t       placed_delta_deletes = 0;
 
-    // Used to synchronize between read threads and write thread.
-    // Write thread holds a unique lock, and read threads hold shared lock.
-    mutable std::shared_mutex read_write_mutex;
     // Used to synchronize between read threads.
     // Mainly to protect delta_tree's update between them.
     mutable std::mutex read_read_mutex;

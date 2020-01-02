@@ -244,22 +244,16 @@ DeltaSpace::AppendTaskPtr Segment::createAppendTask(const DMContext & dm_context
     EventRecorder recorder(ProfileEvents::DMAppendDeltaPrepare, ProfileEvents::DMAppendDeltaPrepareNS);
 
     // Create everything we need to do the update.
-    // We need a unique lock because this operation will append data to delta.
-    std::unique_lock lock(read_write_mutex);
     return delta->createAppendTask(dm_context, update, wbs);
 }
 
 void Segment::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs)
 {
-    std::shared_lock segment_lock(read_write_mutex);
     delta->applyAppendToWriteBatches(task, wbs);
 }
 
 void Segment::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task, const BlockOrDelete & update)
 {
-    // Unique lock, to protect memory modifications against read threads.
-    std::unique_lock segment_lock(read_write_mutex);
-
     EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitMemory, ProfileEvents::DMAppendDeltaCommitMemoryNS);
 
     delta->applyAppendInMemory(task);
@@ -272,16 +266,10 @@ void Segment::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task, const 
 
 SegmentSnapshot Segment::getReadSnapshot(bool /* use_delta_cache */) const
 {
-    SegmentSnapshot segment_snap;
-    {
-        // Synchronize between read/write threads.
-        std::shared_lock lock(read_write_mutex);
-
-        segment_snap = SegmentSnapshot{
-            .stable = stable,
-            .delta  = delta->getSnapshot(),
-        };
-    }
+    SegmentSnapshot segment_snap{
+        .stable = stable,
+        .delta  = delta->getSnapshot(),
+    };
 
     {
         std::scoped_lock lock(read_read_mutex);
@@ -604,7 +592,6 @@ void Segment::flushCache(DMContext & dm_context)
 
 size_t Segment::getEstimatedRows() const
 {
-    std::shared_lock lock(read_write_mutex);
     return estimatedRows();
 }
 
@@ -616,13 +603,11 @@ size_t Segment::getEstimatedStableRows() const
 
 size_t Segment::getEstimatedBytes() const
 {
-    std::shared_lock lock(read_write_mutex);
     return estimatedBytes();
 }
 
 size_t Segment::getDeltaRawRows(bool /* with_delta_cache */) const
 {
-    std::shared_lock lock(read_write_mutex);
     return delta->numRows();
 }
 
@@ -645,7 +630,6 @@ String Segment::info() const
 
 void Segment::drop()
 {
-    std::scoped_lock lock(read_write_mutex);
     delta->drop();
 }
 
@@ -1128,20 +1112,8 @@ SegmentPtr Segment::doMergeLogical(
 
 void Segment::doFlushCache(DMContext & dm_context, WriteBatch & remove_log_wb)
 {
-#if 1
     (void)dm_context;
     (void)remove_log_wb;
-#else
-    std::unique_lock lock(read_write_mutex);
-
-    auto new_delta = delta->tryFlushCache(OpContext::createForLogStorage(dm_context), remove_log_wb, /* force= */ true);
-    if (new_delta)
-    {
-        LOG_DEBUG(log, "Segment [" << DB::toString(segment_id) << "] update delta instance");
-
-        delta = new_delta;
-    }
-#endif
 }
 
 DeltaIndexPtr Segment::ensurePlace(const DMContext &           dm_context,

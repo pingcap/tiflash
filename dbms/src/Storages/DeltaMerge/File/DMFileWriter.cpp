@@ -29,7 +29,8 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
         addStreams(cd.id, cd.type, do_index);
         dmfile->column_stats.emplace(cd.id, ColumnStat{cd.id, cd.type, /*avg_size=*/0});
     }
-    // For DMFile open in wal_mode, we need to flush the meta(num of columns and its type, etc), else we can NOT restore it.
+    // For DMFile open in wal_mode, we need to flush the meta (num of columns 
+    // and its type, etc) right after we create a writer, else we can NOT restore it.
     if (wal_mode)
         dmfile->writeMeta();
 }
