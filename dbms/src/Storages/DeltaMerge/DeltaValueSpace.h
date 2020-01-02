@@ -74,17 +74,6 @@ public:
 };
 using ChunkMetas = std::vector<ChunkMeta>;
 
-
-struct ChunkOrDelete
-{
-    ChunkOrDelete() = default;
-    ChunkOrDelete(ChunkMeta && chunk_) : chunk(std::move(chunk_)) {}
-    ChunkOrDelete(HandleRange && delete_range_) : delete_range(std::move(delete_range_)) {}
-
-    ChunkMeta   chunk;
-    HandleRange delete_range;
-};
-
 class DeltaSpace;
 using DeltaSpacePtr = std::shared_ptr<DeltaSpace>;
 

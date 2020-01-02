@@ -1,6 +1,11 @@
 #include <cstring>
 #include <thread>
 
+#include <common/config_common.h>
+#if USE_TCMALLOC
+#include <gperftools/malloc_extension.h>
+#endif
+
 #include <DataStreams/StringStreamBlockInputStream.h>
 #include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
@@ -29,11 +34,21 @@ void dbgFuncSleep(Context &, const ASTs & args, DBGInvoker::Printer output)
     output(res.str());
 }
 
+void dbgFuncMallocExtensionRelease(Context &, const ASTs &, DBGInvoker::Printer output)
+{
+#if USE_TCMALLOC
+    // Reclaim memory.
+    MallocExtension::instance()->ReleaseFreeMemory();
+#endif
+    output("done.");
+}
+
 DBGInvoker::DBGInvoker()
 {
     regSchemalessFunc("echo", dbgFuncEcho);
     // TODO: remove this, use sleep in bash script
     regSchemalessFunc("sleep", dbgFuncSleep);
+    regSchemalessFunc("tcmalloc_release", dbgFuncMallocExtensionRelease);
 
     regSchemalessFunc("clean_up_region", MockTiDBTable::dbgFuncCleanUpRegions);
     regSchemalessFunc("mock_tidb_table", MockTiDBTable::dbgFuncMockTiDBTable);

@@ -1,4 +1,7 @@
+#include <common/config_common.h>
+#if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
+#endif
 
 #include <Storages/DeltaMerge/DummyDeltaMergeBlockInputStream.h>
 #include <Storages/DeltaMerge/DummyDeltaMergeBlockOutputStream.h>
@@ -62,9 +65,11 @@ void StorageDeltaMergeDummy::initDelta()
     modify_value_space = std::make_shared<MemoryValueSpace>(name, stable_storage->getColumns().getAllPhysical(), primary_sort_descr);
     delta_tree = std::make_shared<MyDeltaTree>(insert_value_space, modify_value_space);
 
+#if USE_TCMALLOC
     // Force tcmalloc to return memory back to system.
     // https://internal.pingcap.net/jira/browse/FLASH-41
     MallocExtension::instance()->ReleaseFreeMemory();
+#endif
 }
 
 BlockInputStreams StorageDeltaMergeDummy::read( //

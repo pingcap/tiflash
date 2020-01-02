@@ -23,7 +23,7 @@ public:
                            const ColumnDefines & read_columns,
                            const HandleRange &   handle_range,
                            const RSOperatorPtr & filter,
-                           const IndexSetPtr &      read_chunks,
+                           const IndexSetPtr &   read_chunks,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(enable_clean_read,
                  max_data_version,
