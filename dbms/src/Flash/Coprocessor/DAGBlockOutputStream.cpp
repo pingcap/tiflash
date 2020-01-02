@@ -1,8 +1,8 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include "CHBlockChunkCodec.h"
 
 namespace DB
 {
@@ -78,10 +78,13 @@ void DAGBlockOutputStream::write(const Block & block)
             encodeChunkToDAGResponse();
         }
     }
-    else {
+    else
+    {
         size_t rows = block.rows();
-        for (size_t row_index = 0; row_index < rows;) {
-            if (current_records_num >= records_per_chunk) {
+        for (size_t row_index = 0; row_index < rows;)
+        {
+            if (current_records_num >= records_per_chunk)
+            {
                 encodeChunkToDAGResponse();
             }
             const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);

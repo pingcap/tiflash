@@ -37,9 +37,12 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
       region_version(region_version_),
       region_conf_version(region_conf_version_),
       key_ranges(key_ranges_),
-      dag_request(dag_request_) {
-    for (int i = 0; i < dag_request.executors_size(); i++) {
-        switch (dag_request.executors(i).tp()) {
+      dag_request(dag_request_)
+{
+    for (int i = 0; i < dag_request.executors_size(); i++)
+    {
+        switch (dag_request.executors(i).tp())
+        {
             case tipb::ExecType::TypeTableScan:
                 assignOrThrowException(ts_index, i, TS_NAME);
                 break;
@@ -59,23 +62,22 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
                 break;
             default:
                 throw Exception(
-                        "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(),
-                        ErrorCodes::NOT_IMPLEMENTED);
+                    "Unsupported executor in DAG request: " + dag_request.executors(i).DebugString(), ErrorCodes::NOT_IMPLEMENTED);
         }
     }
+    analyzeResultFieldTypes();
+    analyzeDAGEncodeType();
+}
+
+void DAGQuerySource::analyzeDAGEncodeType()
+{
     encode_type = dag_request.encode_type();
-    if (encode_type == tipb::EncodeType::TypeChunk && hasUnsupportedTypeForArrowEncode(getResultFieldTypes()))
-    {
+    if (isUnsupportedEncodeType(getResultFieldTypes(), encode_type))
         encode_type = tipb::EncodeType::TypeDefault;
-    }
-    if (encode_type == tipb::EncodeType::TypeCHBlock && hasUnsupportedTypeForCHBlockEncode(getResultFieldTypes()))
-    {
-        encode_type = tipb::EncodeType::TypeDefault;
-    }
     if (encode_type == tipb::EncodeType::TypeChunk && dag_request.has_chunk_memory_layout()
         && dag_request.chunk_memory_layout().has_endian() && dag_request.chunk_memory_layout().endian() == tipb::Endian::BigEndian)
         // todo support BigEndian encode for chunk encode type
-        throw Exception("BigEndian encode for chunk encode type is not supported yet.", ErrorCodes::NOT_IMPLEMENTED);
+        encode_type = tipb::EncodeType::TypeDefault;
 }
 
 std::tuple<std::string, ASTPtr> DAGQuerySource::parse(size_t max_query_size)
@@ -137,7 +139,7 @@ bool fillExecutorOutputFieldTypes(const tipb::Executor & executor, std::vector<t
     }
 }
 
-std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
+void DAGQuerySource::analyzeResultFieldTypes()
 {
     std::vector<tipb::FieldType> executor_output;
     for (int i = dag_request.executors_size() - 1; i >= 0; i--)
@@ -154,14 +156,13 @@ std::vector<tipb::FieldType> DAGQuerySource::getResultFieldTypes() const
     // todo should always use output offset to re-construct the output field types
     if (hasAggregation())
     {
-        return executor_output;
+        result_field_types = std::move(executor_output);
     }
-    std::vector<tipb::FieldType> ret;
-    for (int i : dag_request.output_offsets())
+    else
     {
-        ret.push_back(executor_output[i]);
+        for (UInt32 i : dag_request.output_offsets())
+            result_field_types.push_back(executor_output[i]);
     }
-    return ret;
 }
 
 } // namespace DB

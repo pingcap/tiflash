@@ -274,19 +274,17 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
     return expr.has_field_type() && !(expr.field_type().tp() == TiDB::TP::TypeNewDecimal && expr.field_type().decimal() == -1);
 }
 
-bool hasUnsupportedTypeForCHBlockEncode(const std::vector<tipb::FieldType> & types)
+bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
 {
+    if (encode_type == tipb::EncodeType::TypeDefault)
+        return false;
     for (const auto & type : types)
-        if (type.tp() == TiDB::TypeSet || type.tp() == TiDB::TypeEnum)
+    {
+        if (encode_type == tipb::EncodeType::TypeCHBlock && (type.tp() == TiDB::TypeSet || type.tp() == TiDB::TypeEnum))
             return true;
-    return false;
-}
-
-bool hasUnsupportedTypeForArrowEncode(const std::vector<tipb::FieldType> & types)
-{
-    for (const auto & type : types)
-        if (type.tp() == TiDB::TypeSet)
+        if (encode_type == tipb::EncodeType::TypeChunk && type.tp() == TiDB::TypeSet)
             return true;
+    }
     return false;
 }
 
@@ -437,76 +435,46 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastJsonAsJson, "cast"},
      */
 
-    {tipb::ScalarFuncSig::CoalesceInt, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceString, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceDecimal, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceTime, "coalesce"},
-    {tipb::ScalarFuncSig::CoalesceDuration, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceInt, "coalesce"}, {tipb::ScalarFuncSig::CoalesceReal, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceString, "coalesce"}, {tipb::ScalarFuncSig::CoalesceDecimal, "coalesce"},
+    {tipb::ScalarFuncSig::CoalesceTime, "coalesce"}, {tipb::ScalarFuncSig::CoalesceDuration, "coalesce"},
     {tipb::ScalarFuncSig::CoalesceJson, "coalesce"},
 
-    {tipb::ScalarFuncSig::LTInt, "less"},
-    {tipb::ScalarFuncSig::LTReal, "less"},
-    {tipb::ScalarFuncSig::LTString, "less"},
-    {tipb::ScalarFuncSig::LTDecimal, "less"},
-    {tipb::ScalarFuncSig::LTTime, "less"},
-    {tipb::ScalarFuncSig::LTDuration, "less"},
+    {tipb::ScalarFuncSig::LTInt, "less"}, {tipb::ScalarFuncSig::LTReal, "less"}, {tipb::ScalarFuncSig::LTString, "less"},
+    {tipb::ScalarFuncSig::LTDecimal, "less"}, {tipb::ScalarFuncSig::LTTime, "less"}, {tipb::ScalarFuncSig::LTDuration, "less"},
     {tipb::ScalarFuncSig::LTJson, "less"},
 
-    {tipb::ScalarFuncSig::LEInt, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LEReal, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LEString, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LEDecimal, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LETime, "lessOrEquals"},
-    {tipb::ScalarFuncSig::LEDuration, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEInt, "lessOrEquals"}, {tipb::ScalarFuncSig::LEReal, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LEString, "lessOrEquals"}, {tipb::ScalarFuncSig::LEDecimal, "lessOrEquals"},
+    {tipb::ScalarFuncSig::LETime, "lessOrEquals"}, {tipb::ScalarFuncSig::LEDuration, "lessOrEquals"},
     {tipb::ScalarFuncSig::LEJson, "lessOrEquals"},
 
-    {tipb::ScalarFuncSig::GTInt, "greater"},
-    {tipb::ScalarFuncSig::GTReal, "greater"},
-    {tipb::ScalarFuncSig::GTString, "greater"},
-    {tipb::ScalarFuncSig::GTDecimal, "greater"},
-    {tipb::ScalarFuncSig::GTTime, "greater"},
-    {tipb::ScalarFuncSig::GTDuration, "greater"},
+    {tipb::ScalarFuncSig::GTInt, "greater"}, {tipb::ScalarFuncSig::GTReal, "greater"}, {tipb::ScalarFuncSig::GTString, "greater"},
+    {tipb::ScalarFuncSig::GTDecimal, "greater"}, {tipb::ScalarFuncSig::GTTime, "greater"}, {tipb::ScalarFuncSig::GTDuration, "greater"},
     {tipb::ScalarFuncSig::GTJson, "greater"},
 
-    {tipb::ScalarFuncSig::GreatestInt, "greatest"},
-    {tipb::ScalarFuncSig::GreatestReal, "greatest"},
-    {tipb::ScalarFuncSig::GreatestString, "greatest"},
-    {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
+    {tipb::ScalarFuncSig::GreatestInt, "greatest"}, {tipb::ScalarFuncSig::GreatestReal, "greatest"},
+    {tipb::ScalarFuncSig::GreatestString, "greatest"}, {tipb::ScalarFuncSig::GreatestDecimal, "greatest"},
     {tipb::ScalarFuncSig::GreatestTime, "greatest"},
 
-    {tipb::ScalarFuncSig::LeastInt, "least"},
-    {tipb::ScalarFuncSig::LeastReal, "least"},
-    {tipb::ScalarFuncSig::LeastString, "least"},
-    {tipb::ScalarFuncSig::LeastDecimal, "least"},
-    {tipb::ScalarFuncSig::LeastTime, "least"},
+    {tipb::ScalarFuncSig::LeastInt, "least"}, {tipb::ScalarFuncSig::LeastReal, "least"}, {tipb::ScalarFuncSig::LeastString, "least"},
+    {tipb::ScalarFuncSig::LeastDecimal, "least"}, {tipb::ScalarFuncSig::LeastTime, "least"},
 
     //{tipb::ScalarFuncSig::IntervalInt, "cast"},
     //{tipb::ScalarFuncSig::IntervalReal, "cast"},
 
-    {tipb::ScalarFuncSig::GEInt, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GEReal, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GEString, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GEDecimal, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GETime, "greaterOrEquals"},
-    {tipb::ScalarFuncSig::GEDuration, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEInt, "greaterOrEquals"}, {tipb::ScalarFuncSig::GEReal, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GEString, "greaterOrEquals"}, {tipb::ScalarFuncSig::GEDecimal, "greaterOrEquals"},
+    {tipb::ScalarFuncSig::GETime, "greaterOrEquals"}, {tipb::ScalarFuncSig::GEDuration, "greaterOrEquals"},
     {tipb::ScalarFuncSig::GEJson, "greaterOrEquals"},
 
-    {tipb::ScalarFuncSig::EQInt, "equals"},
-    {tipb::ScalarFuncSig::EQReal, "equals"},
-    {tipb::ScalarFuncSig::EQString, "equals"},
-    {tipb::ScalarFuncSig::EQDecimal, "equals"},
-    {tipb::ScalarFuncSig::EQTime, "equals"},
-    {tipb::ScalarFuncSig::EQDuration, "equals"},
+    {tipb::ScalarFuncSig::EQInt, "equals"}, {tipb::ScalarFuncSig::EQReal, "equals"}, {tipb::ScalarFuncSig::EQString, "equals"},
+    {tipb::ScalarFuncSig::EQDecimal, "equals"}, {tipb::ScalarFuncSig::EQTime, "equals"}, {tipb::ScalarFuncSig::EQDuration, "equals"},
     {tipb::ScalarFuncSig::EQJson, "equals"},
 
-    {tipb::ScalarFuncSig::NEInt, "notEquals"},
-    {tipb::ScalarFuncSig::NEReal, "notEquals"},
-    {tipb::ScalarFuncSig::NEString, "notEquals"},
-    {tipb::ScalarFuncSig::NEDecimal, "notEquals"},
-    {tipb::ScalarFuncSig::NETime, "notEquals"},
-    {tipb::ScalarFuncSig::NEDuration, "notEquals"},
-    {tipb::ScalarFuncSig::NEJson, "notEquals"},
+    {tipb::ScalarFuncSig::NEInt, "notEquals"}, {tipb::ScalarFuncSig::NEReal, "notEquals"}, {tipb::ScalarFuncSig::NEString, "notEquals"},
+    {tipb::ScalarFuncSig::NEDecimal, "notEquals"}, {tipb::ScalarFuncSig::NETime, "notEquals"},
+    {tipb::ScalarFuncSig::NEDuration, "notEquals"}, {tipb::ScalarFuncSig::NEJson, "notEquals"},
 
     //{tipb::ScalarFuncSig::NullEQInt, "cast"},
     //{tipb::ScalarFuncSig::NullEQReal, "cast"},
@@ -516,57 +484,37 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::NullEQDuration, "cast"},
     //{tipb::ScalarFuncSig::NullEQJson, "cast"},
 
-    {tipb::ScalarFuncSig::PlusReal, "plus"},
-    {tipb::ScalarFuncSig::PlusDecimal, "plus"},
-    {tipb::ScalarFuncSig::PlusInt, "plus"},
+    {tipb::ScalarFuncSig::PlusReal, "plus"}, {tipb::ScalarFuncSig::PlusDecimal, "plus"}, {tipb::ScalarFuncSig::PlusInt, "plus"},
 
-    {tipb::ScalarFuncSig::MinusReal, "minus"},
-    {tipb::ScalarFuncSig::MinusDecimal, "minus"},
-    {tipb::ScalarFuncSig::MinusInt, "minus"},
+    {tipb::ScalarFuncSig::MinusReal, "minus"}, {tipb::ScalarFuncSig::MinusDecimal, "minus"}, {tipb::ScalarFuncSig::MinusInt, "minus"},
 
-    {tipb::ScalarFuncSig::MultiplyReal, "multiply"},
-    {tipb::ScalarFuncSig::MultiplyDecimal, "multiply"},
+    {tipb::ScalarFuncSig::MultiplyReal, "multiply"}, {tipb::ScalarFuncSig::MultiplyDecimal, "multiply"},
     {tipb::ScalarFuncSig::MultiplyInt, "multiply"},
 
-    {tipb::ScalarFuncSig::DivideReal, "divide"},
-    {tipb::ScalarFuncSig::DivideDecimal, "divide"},
-    {tipb::ScalarFuncSig::IntDivideInt, "intDiv"},
-    {tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
+    {tipb::ScalarFuncSig::DivideReal, "divide"}, {tipb::ScalarFuncSig::DivideDecimal, "divide"},
+    {tipb::ScalarFuncSig::IntDivideInt, "intDiv"}, {tipb::ScalarFuncSig::IntDivideDecimal, "divide"},
 
-    {tipb::ScalarFuncSig::ModReal, "modulo"},
-    {tipb::ScalarFuncSig::ModDecimal, "modulo"},
-    {tipb::ScalarFuncSig::ModInt, "modulo"},
+    {tipb::ScalarFuncSig::ModReal, "modulo"}, {tipb::ScalarFuncSig::ModDecimal, "modulo"}, {tipb::ScalarFuncSig::ModInt, "modulo"},
 
     {tipb::ScalarFuncSig::MultiplyIntUnsigned, "multiply"},
 
-    {tipb::ScalarFuncSig::AbsInt, "abs"},
-    {tipb::ScalarFuncSig::AbsUInt, "abs"},
-    {tipb::ScalarFuncSig::AbsReal, "abs"},
+    {tipb::ScalarFuncSig::AbsInt, "abs"}, {tipb::ScalarFuncSig::AbsUInt, "abs"}, {tipb::ScalarFuncSig::AbsReal, "abs"},
     {tipb::ScalarFuncSig::AbsDecimal, "abs"},
 
-    {tipb::ScalarFuncSig::CeilIntToDec, "ceil"},
-    {tipb::ScalarFuncSig::CeilIntToInt, "ceil"},
-    {tipb::ScalarFuncSig::CeilDecToInt, "ceil"},
-    {tipb::ScalarFuncSig::CeilDecToDec, "ceil"},
-    {tipb::ScalarFuncSig::CeilReal, "ceil"},
+    {tipb::ScalarFuncSig::CeilIntToDec, "ceil"}, {tipb::ScalarFuncSig::CeilIntToInt, "ceil"}, {tipb::ScalarFuncSig::CeilDecToInt, "ceil"},
+    {tipb::ScalarFuncSig::CeilDecToDec, "ceil"}, {tipb::ScalarFuncSig::CeilReal, "ceil"},
 
-    {tipb::ScalarFuncSig::FloorIntToDec, "floor"},
-    {tipb::ScalarFuncSig::FloorIntToInt, "floor"},
-    {tipb::ScalarFuncSig::FloorDecToInt, "floor"},
-    {tipb::ScalarFuncSig::FloorDecToDec, "floor"},
-    {tipb::ScalarFuncSig::FloorReal, "floor"},
+    {tipb::ScalarFuncSig::FloorIntToDec, "floor"}, {tipb::ScalarFuncSig::FloorIntToInt, "floor"},
+    {tipb::ScalarFuncSig::FloorDecToInt, "floor"}, {tipb::ScalarFuncSig::FloorDecToDec, "floor"}, {tipb::ScalarFuncSig::FloorReal, "floor"},
 
-    {tipb::ScalarFuncSig::RoundReal, "round"},
-    {tipb::ScalarFuncSig::RoundInt, "round"},
-    {tipb::ScalarFuncSig::RoundDec, "round"},
+    {tipb::ScalarFuncSig::RoundReal, "round"}, {tipb::ScalarFuncSig::RoundInt, "round"}, {tipb::ScalarFuncSig::RoundDec, "round"},
     //{tipb::ScalarFuncSig::RoundWithFracReal, "cast"},
     //{tipb::ScalarFuncSig::RoundWithFracInt, "cast"},
     //{tipb::ScalarFuncSig::RoundWithFracDec, "cast"},
 
     {tipb::ScalarFuncSig::Log1Arg, "log"},
     //{tipb::ScalarFuncSig::Log2Args, "cast"},
-    {tipb::ScalarFuncSig::Log2, "log2"},
-    {tipb::ScalarFuncSig::Log10, "log10"},
+    {tipb::ScalarFuncSig::Log2, "log2"}, {tipb::ScalarFuncSig::Log10, "log10"},
 
     {tipb::ScalarFuncSig::Rand, "rand"},
     //{tipb::ScalarFuncSig::RandWithSeedFirstGen, "cast"},
@@ -576,9 +524,7 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::CRC32, "cast"},
     //{tipb::ScalarFuncSig::Sign, "cast"},
 
-    {tipb::ScalarFuncSig::Sqrt, "sqrt"},
-    {tipb::ScalarFuncSig::Acos, "acos"},
-    {tipb::ScalarFuncSig::Asin, "asin"},
+    {tipb::ScalarFuncSig::Sqrt, "sqrt"}, {tipb::ScalarFuncSig::Acos, "acos"}, {tipb::ScalarFuncSig::Asin, "asin"},
     {tipb::ScalarFuncSig::Atan1Arg, "atan"},
     //{tipb::ScalarFuncSig::Atan2Args, "cast"},
     {tipb::ScalarFuncSig::Cos, "cos"},
@@ -587,28 +533,17 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Exp, "exp"},
     //{tipb::ScalarFuncSig::PI, "cast"},
     //{tipb::ScalarFuncSig::Radians, "cast"},
-    {tipb::ScalarFuncSig::Sin, "sin"},
-    {tipb::ScalarFuncSig::Tan, "tan"},
-    {tipb::ScalarFuncSig::TruncateInt, "trunc"},
+    {tipb::ScalarFuncSig::Sin, "sin"}, {tipb::ScalarFuncSig::Tan, "tan"}, {tipb::ScalarFuncSig::TruncateInt, "trunc"},
     {tipb::ScalarFuncSig::TruncateReal, "trunc"},
     //{tipb::ScalarFuncSig::TruncateDecimal, "cast"},
     {tipb::ScalarFuncSig::TruncateUint, "trunc"},
 
-    {tipb::ScalarFuncSig::LogicalAnd, "and"},
-    {tipb::ScalarFuncSig::LogicalOr, "or"},
-    {tipb::ScalarFuncSig::LogicalXor, "xor"},
-    {tipb::ScalarFuncSig::UnaryNotDecimal, "not"},
-    {tipb::ScalarFuncSig::UnaryNotInt, "not"},
-    {tipb::ScalarFuncSig::UnaryNotReal, "not"},
-    {tipb::ScalarFuncSig::UnaryMinusInt, "negate"},
-    {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
-    {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"},
-    {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
-    {tipb::ScalarFuncSig::DurationIsNull, "isNull"},
-    {tipb::ScalarFuncSig::RealIsNull, "isNull"},
-    {tipb::ScalarFuncSig::StringIsNull, "isNull"},
-    {tipb::ScalarFuncSig::TimeIsNull, "isNull"},
-    {tipb::ScalarFuncSig::IntIsNull, "isNull"},
+    {tipb::ScalarFuncSig::LogicalAnd, "and"}, {tipb::ScalarFuncSig::LogicalOr, "or"}, {tipb::ScalarFuncSig::LogicalXor, "xor"},
+    {tipb::ScalarFuncSig::UnaryNotDecimal, "not"}, {tipb::ScalarFuncSig::UnaryNotInt, "not"}, {tipb::ScalarFuncSig::UnaryNotReal, "not"},
+    {tipb::ScalarFuncSig::UnaryMinusInt, "negate"}, {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
+    {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"}, {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
+    {tipb::ScalarFuncSig::DurationIsNull, "isNull"}, {tipb::ScalarFuncSig::RealIsNull, "isNull"},
+    {tipb::ScalarFuncSig::StringIsNull, "isNull"}, {tipb::ScalarFuncSig::TimeIsNull, "isNull"}, {tipb::ScalarFuncSig::IntIsNull, "isNull"},
     {tipb::ScalarFuncSig::JsonIsNull, "isNull"},
 
     //{tipb::ScalarFuncSig::BitAndSig, "cast"},
@@ -638,28 +573,16 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::ValuesString, "cast"},
     //{tipb::ScalarFuncSig::ValuesTime, "cast"},
 
-    {tipb::ScalarFuncSig::InInt, "in"},
-    {tipb::ScalarFuncSig::InReal, "in"},
-    {tipb::ScalarFuncSig::InString, "in"},
-    {tipb::ScalarFuncSig::InDecimal, "in"},
-    {tipb::ScalarFuncSig::InTime, "in"},
-    {tipb::ScalarFuncSig::InDuration, "in"},
+    {tipb::ScalarFuncSig::InInt, "in"}, {tipb::ScalarFuncSig::InReal, "in"}, {tipb::ScalarFuncSig::InString, "in"},
+    {tipb::ScalarFuncSig::InDecimal, "in"}, {tipb::ScalarFuncSig::InTime, "in"}, {tipb::ScalarFuncSig::InDuration, "in"},
     {tipb::ScalarFuncSig::InJson, "in"},
 
-    {tipb::ScalarFuncSig::IfNullInt, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullReal, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullString, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullDecimal, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullTime, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullDuration, "ifNull"},
-    {tipb::ScalarFuncSig::IfNullJson, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullInt, "ifNull"}, {tipb::ScalarFuncSig::IfNullReal, "ifNull"}, {tipb::ScalarFuncSig::IfNullString, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullDecimal, "ifNull"}, {tipb::ScalarFuncSig::IfNullTime, "ifNull"},
+    {tipb::ScalarFuncSig::IfNullDuration, "ifNull"}, {tipb::ScalarFuncSig::IfNullJson, "ifNull"},
 
-    {tipb::ScalarFuncSig::IfInt, "if"},
-    {tipb::ScalarFuncSig::IfReal, "if"},
-    {tipb::ScalarFuncSig::IfString, "if"},
-    {tipb::ScalarFuncSig::IfDecimal, "if"},
-    {tipb::ScalarFuncSig::IfTime, "if"},
-    {tipb::ScalarFuncSig::IfDuration, "if"},
+    {tipb::ScalarFuncSig::IfInt, "if"}, {tipb::ScalarFuncSig::IfReal, "if"}, {tipb::ScalarFuncSig::IfString, "if"},
+    {tipb::ScalarFuncSig::IfDecimal, "if"}, {tipb::ScalarFuncSig::IfTime, "if"}, {tipb::ScalarFuncSig::IfDuration, "if"},
     {tipb::ScalarFuncSig::IfJson, "if"},
 
     //todo need further check for caseWithExpression and multiIf
@@ -956,7 +879,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Trim2Args, "cast"},
     //{tipb::ScalarFuncSig::Trim3Args, "cast"},
     //{tipb::ScalarFuncSig::UnHex, "cast"},
-    {tipb::ScalarFuncSig::Upper, "upper"},
+    {tipb::ScalarFuncSig::UpperUTF8, "upper"},
+    //{tipb::ScalarFuncSig::Upper, "upper"},
     //{tipb::ScalarFuncSig::CharLength, "upper"},
 });
 
