@@ -32,7 +32,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
-extern const int LOGICA_ERROR;
+extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 using TiDB::DatumFlat;
@@ -172,13 +172,6 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
     }
     else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
     {
-        // TODO: Support agg functions.
-        for (const auto & child_ast : func->arguments->children)
-        {
-            tipb::Expr * child = expr->add_children();
-            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
-        }
-
         String func_name_lowercase = Poco::toLower(func->name);
         // TODO: Support more functions.
         // TODO: Support type inference.
@@ -231,11 +224,55 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
             ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
+        else if (func_name_lowercase == "in" || func_name_lowercase == "notin")
+        {
+            tipb::Expr * in_expr = expr;
+            if (func_name_lowercase == "notin")
+            {
+                // notin is transformed into not(in()) by tidb
+                expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                expr->set_tp(tipb::ExprType::ScalarFunc);
+                in_expr = expr->add_children();
+            }
+            in_expr->set_sig(tipb::ScalarFuncSig::InInt);
+            auto * ft = in_expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+            in_expr->set_tp(tipb::ExprType::ScalarFunc);
+            for (const auto & child_ast : func->arguments->children)
+            {
+                auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
+                if (tuple_func != nullptr && tuple_func->name == "tuple")
+                {
+                    // flatten tuple elements
+                    for (const auto & c : tuple_func->arguments->children)
+                    {
+                        tipb::Expr * child = in_expr->add_children();
+                        compileExpr(input, c, child, referred_columns, col_ref_map);
+                    }
+                }
+                else
+                {
+                    tipb::Expr * child = in_expr->add_children();
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+                }
+            }
+            return;
+        }
         else
         {
             throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
         }
         expr->set_tp(tipb::ExprType::ScalarFunc);
+        // TODO: Support agg functions.
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+        }
     }
     else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
