@@ -56,7 +56,7 @@ public:
     /**
       * Create a Set from DAG Expr, used when processing DAG Request
       */
-    void createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements);
+    std::vector<const tipb::Expr *> createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements);
 
     /** Create a Set from stream.
       * Call setHeader, then call insertFromBlock for each block.
