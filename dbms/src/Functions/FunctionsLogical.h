@@ -49,7 +49,7 @@ struct AndImpl
         return !is_null && !value;
     }
 
-    static void adjustForNullValue(UInt8 & value, UInt8 & is_null)
+    static inline void adjustForNullValue(UInt8 & value, UInt8 & is_null)
     {
         is_null = false;
         value = false;
@@ -89,7 +89,7 @@ struct OrImpl
         return !is_null && value;
     }
 
-    static void adjustForNullValue(UInt8 & value, UInt8 & is_null)
+    static inline void adjustForNullValue(UInt8 & value, UInt8 & is_null)
     {
         is_null = false;
         value = true;
@@ -124,7 +124,7 @@ struct XorImpl
         return true;
     }
 
-    static void adjustForNullValue(UInt8 & , UInt8 & )
+    static inline void adjustForNullValue(UInt8 & , UInt8 & )
     {
     }
 
