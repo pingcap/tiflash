@@ -442,6 +442,7 @@ bool PageStorage::gc()
         writing_file_id_level = write_file.fileIdLevel();
     }
 
+    // Compact consecutive Legacy PageFiles into a snapshot
     gcCompactLegacy(page_files, writing_file_id_level);
     {
         for (auto itr = page_files.begin(); itr != page_files.end();)
@@ -592,6 +593,7 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
         smallest_file_id = page_files.begin()->getFileId();
     }
 
+    // Select PageFiles to compact
     std::set<PageFile, PageFile::Comparator> page_files_to_compact;
     for (auto & page_file : page_files)
     {
@@ -603,17 +605,19 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
 
         if (page_file_type == PageFile::Type::Legacy)
             page_files_to_compact.emplace(page_file);
+        else if (page_file_type == PageFile::Type::Snapshot)
+            page_files_to_compact.emplace(page_file);
         else
             break;
     }
 
-    if (page_files_to_compact.size() == 0)
+    if (page_files_to_compact.size() <= 1)
     {
         return;
     }
 
+    // Build a version_set with snapshot
     PageEntriesVersionSetWithDelta version_set(config.version_set_config, log);
-
     for (auto & page_file : page_files_to_compact)
     {
         PageEntriesEdit edit;
@@ -621,11 +625,11 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
 
         version_set.apply(edit);
     }
-
     auto snapshot = version_set.getSnapshot();
 
     WriteBatch wb;
 
+    // First Ingest exists pages with normal_id
     auto normal_ids = snapshot->version()->validNormalPageIds();
     for (auto & page_id : normal_ids)
     {
@@ -633,6 +637,7 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
         wb.ingestPage(page_id, page.tag);
     }
 
+    // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.
     auto ref_ids = snapshot->version()->validPageIds();
     for (auto & page_id : ref_ids)
     {

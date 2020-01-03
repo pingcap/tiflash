@@ -49,6 +49,10 @@ public:
      */
     void updateNormalPage(PageId normal_page_id, PageEntry entry);
 
+    /** Ingest Page{page_id} with entry. Should only be applied in snapshot. The ingested
+     *  page's ref-count is 0, since it will be referenced by Ref soon.
+     *  Notice that ingested page entry hasn't data.
+     */
     void ingest(PageId page_id, const PageEntry & entry);
 
 
