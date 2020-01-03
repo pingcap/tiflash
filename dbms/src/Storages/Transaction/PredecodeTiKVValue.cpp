@@ -50,7 +50,7 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
                 unknown.emplace_back(std::move(item));
         }
 
-        // must be sorted.
+        // must be sorted, for binary search.
         ::std::sort(tmp_row.begin(), tmp_row.end());
         ::std::sort(unknown.begin(), unknown.end());
         tmp_row.swap(decoded_row);
@@ -97,7 +97,7 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
             throw Exception(std::string(__PRETTY_FUNCTION__) + ": cursor is not end", ErrorCodes::LOGICAL_ERROR);
 
         {
-            // must be sorted.
+            // must be sorted, for binary search.
             ::std::sort(decoded_row.begin(), decoded_row.end());
         }
 
@@ -139,19 +139,11 @@ void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMer
 
 DecodedRow::const_iterator findByColumnID(Int64 col_id, const DecodedRow & row)
 {
-#ifndef M_CONTAINER_OF
-#define M_CONTAINER_OF(ptr, type, member)                     \
-    ({                                                        \
-        const decltype(((type *)0)->member) * __mptr = (ptr); \
-        (type *)((char *)__mptr - offsetof(type, member));    \
-    })
-
-    auto e = M_CONTAINER_OF(&col_id, DecodedRowElement, col_id);
-    return e->findByColumnID(row);
-#undef M_CONTAINER_OF
-#else
-    static_assert(false);
-#endif
+    const static auto cmp = [](const DecodedRowElement & e, const Int64 cid) -> bool { return e.col_id < cid; };
+    auto it = std::lower_bound(row.cbegin(), row.cend(), col_id, cmp);
+    if (it != row.cend() && it->col_id == col_id)
+        return it;
+    return row.cend();
 }
 
 } // namespace DB

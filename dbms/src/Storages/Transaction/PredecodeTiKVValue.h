@@ -26,8 +26,10 @@ struct ValueDecodeHelper
 {
     const TiDB::TableInfo & table_info;
     const ColumnIdToIndex & schema_all_column_ids;
-    bool forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRow & unknown);
     void forceDecodeTiKVValue(const TiKVValue & value);
+
+private:
+    bool forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRow & unknown);
 };
 
 using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;

@@ -25,22 +25,15 @@ struct DecodedRowElement : boost::noncopyable
     DecodedRowElement(const Int64 col_id_, Field && field_) : col_id(col_id_), field(std::move(field_)) {}
 
     bool operator<(const DecodedRowElement & e) const { return col_id < e.col_id; }
-    DecodedRow::const_iterator findByColumnID(const DecodedRow & row) const
-    {
-        auto it = std::lower_bound(row.cbegin(), row.cend(), *this);
-        if (it != row.cend() && it->col_id == col_id)
-            return it;
-        return row.cend();
-    }
 };
 
-/// force decode tikv value into row by a specific schema, if there is data can't be decoded, store it in extra.
+/// force decode TiKV value into row by a specific schema, if there is data can't be decoded, store it in unknown_data.
 struct DecodedRowBySchema : boost::noncopyable
 {
     struct UnknownData
     {
         // for new way that TiDB encode column, there is no codec flag
-        // if type is unknown, field is string.
+        // if type is unknown, field is string and known_type is false.
         // should be sorted by column id.
         const DecodedRow row;
         const bool known_type;
