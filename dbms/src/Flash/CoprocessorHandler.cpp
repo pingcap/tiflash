@@ -22,7 +22,8 @@ CoprocessorHandler::CoprocessorHandler(
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
-grpc::Status CoprocessorHandler::execute() try
+grpc::Status CoprocessorHandler::execute()
+try
 {
     switch (cop_request->tp())
     {
@@ -40,9 +41,12 @@ grpc::Status CoprocessorHandler::execute() try
             tipb::DAGRequest dag_request;
             dag_request.ParseFromString(cop_request->data());
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
+            if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
+                throw Exception("DAG request with rpn expression is not supported in TiFlash", ErrorCodes::NOT_IMPLEMENTED);
             tipb::SelectResponse dag_response;
             DAGDriver driver(cop_context.db_context, dag_request, cop_context.kv_context.region_id(),
-                cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(), std::move(key_ranges),
+                cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(),
+                cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), std::move(key_ranges),
                 dag_response);
             driver.execute();
             cop_response->set_data(dag_response.SerializeAsString());
@@ -59,9 +63,8 @@ grpc::Status CoprocessorHandler::execute() try
 }
 catch (const LockException & e)
 {
-    LOG_ERROR(log,
-        __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << "\n"
-                            << e.getStackTrace().toString());
+    LOG_WARNING(
+        log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
     cop_response->Clear();
     kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
     lock_info->set_key(e.lock_infos[0]->key);
@@ -73,9 +76,8 @@ catch (const LockException & e)
 }
 catch (const RegionException & e)
 {
-    LOG_ERROR(log,
-        __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << "\n"
-                            << e.getStackTrace().toString());
+    LOG_WARNING(
+        log, __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << ", message: " << e.message());
     cop_response->Clear();
     errorpb::Error * region_err;
     switch (e.status)

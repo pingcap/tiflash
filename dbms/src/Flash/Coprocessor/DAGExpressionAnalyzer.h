@@ -6,6 +6,7 @@
 #pragma GCC diagnostic pop
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGSet.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/ExpressionActions.h>
@@ -15,8 +16,8 @@ namespace DB
 {
 
 class Set;
-using SetPtr = std::shared_ptr<Set>;
-using DAGPreparedSets = std::unordered_map<const tipb::Expr *, SetPtr>;
+using DAGSetPtr = std::shared_ptr<DAGSet>;
+using DAGPreparedSets = std::unordered_map<const tipb::Expr *, DAGSetPtr>;
 
 /** Transforms an expression from DAG expression into a sequence of actions to execute it.
   *
@@ -59,6 +60,7 @@ public:
     }
     void appendFinalProject(ExpressionActionsChain & chain, const NamesWithAliases & final_project);
     String getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions);
+    String getActionsForInOperator(const tipb::Expr & expr, ExpressionActionsPtr & actions);
     const std::vector<NameAndTypePair> & getCurrentInputColumns();
     void makeExplicitSet(const tipb::Expr & expr, const Block & sample_block, bool create_ordered_set, const String & left_arg_name);
     void makeExplicitSetForIndex(const tipb::Expr & expr, const TMTStoragePtr & storage);

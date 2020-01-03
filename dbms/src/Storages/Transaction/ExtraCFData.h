@@ -13,7 +13,6 @@ using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;
 template <typename Trait>
 struct ExtraCFData
 {
-    void add(const std::shared_ptr<const TiKVValue> &) {}
 };
 
 template <>

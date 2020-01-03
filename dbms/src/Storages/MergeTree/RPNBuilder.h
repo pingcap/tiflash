@@ -12,7 +12,6 @@
 namespace DB
 {
 using RPN = std::vector<RPNElement>;
-using DAGPreparedSets = std::unordered_map<const tipb::Expr *, SetPtr>;
 
 void applyFunction(
     const FunctionBasePtr & func, const DataTypePtr & arg_type, const Field & arg_value, DataTypePtr & res_type, Field & res_value);
