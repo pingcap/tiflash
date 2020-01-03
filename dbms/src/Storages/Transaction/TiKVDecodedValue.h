@@ -33,9 +33,9 @@ struct DecodedRowBySchema : boost::noncopyable
     struct UnknownData
     {
         // for new way that TiDB encode column, there is no codec flag
-        // if type is unknown, field is string and known_type is false.
         // should be sorted by column id.
         const DecodedRow row;
+        // if type is unknown(in tidb fast codec), field are all string and known_type is false.
         const bool known_type;
     };
 
