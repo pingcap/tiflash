@@ -1,3 +1,4 @@
+#include <common/config_common.h>
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
 #endif
@@ -237,9 +238,15 @@ void Segment::write(DMContext & dm_context, const BlockOrDelete & update)
 DeltaSpace::AppendTaskPtr Segment::createAppendTask(const DMContext & dm_context, const BlockOrDelete & update, WriteBatches & wbs)
 {
     if (update.block)
-        LOG_TRACE(log, "Segment [" << segment_id << "] create append task, write rows: " << update.block.rows());
+        LOG_TRACE(
+            log,
+            "Segment [" + DB::toString(segment_id) + "](delta[" + DB::toString(delta->pageId()) + "]) create append task, write rows: "
+                << update.block.rows());
     else
-        LOG_TRACE(log, "Segment [" << segment_id << "] create append task, delete range: " << update.delete_range.toString());
+        LOG_TRACE(
+            log,
+            "Segment [" + DB::toString(segment_id) + "](delta[" + DB::toString(delta->pageId()) + "]) create append task, delete range: "
+                << update.delete_range.toString());
 
     EventRecorder recorder(ProfileEvents::DMAppendDeltaPrepare, ProfileEvents::DMAppendDeltaPrepareNS);
 
@@ -247,7 +254,7 @@ DeltaSpace::AppendTaskPtr Segment::createAppendTask(const DMContext & dm_context
     return delta->createAppendTask(dm_context, update, wbs);
 }
 
-void Segment::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs)
+void Segment::applyAppendToWriteBatches(const DeltaSpace::AppendTaskPtr & task, WriteBatches & wbs) const
 {
     delta->applyAppendToWriteBatches(task, wbs);
 }
@@ -259,9 +266,14 @@ void Segment::applyAppendInMemory(const DeltaSpace::AppendTaskPtr & task, const 
     delta->applyAppendInMemory(task);
 
     if (update.block)
-        LOG_TRACE(log, "Segment [" << segment_id << "] apply append task, write rows: " << update.block.rows());
+        LOG_TRACE(log,
+                  "Segment [" + DB::toString(segment_id) + "](delta[" + DB::toString(delta->pageId()) + "]) apply append task, write rows: "
+                      << update.block.rows());
     else
-        LOG_TRACE(log, "Segment [" << segment_id << "] apply append task, delete range: " << update.delete_range.toString());
+        LOG_TRACE(
+            log,
+            "Segment [" + DB::toString(segment_id) + "](delta[" + DB::toString(delta->pageId()) + "]) apply append task, delete range: "
+                << update.delete_range.toString());
 }
 
 SegmentSnapshot Segment::getReadSnapshot(bool /* use_delta_cache */) const

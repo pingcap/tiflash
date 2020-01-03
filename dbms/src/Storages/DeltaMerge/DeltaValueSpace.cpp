@@ -297,7 +297,7 @@ DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches 
         }
 
         LOG_TRACE(log,
-                  "Generate new delta [" + DB::toString(new_delta->id) + "] with " + DB::toString(new_delta->numChunks()) + " chunks("
+                  "Generate new delta[" + DB::toString(new_delta->id) + "] with " + DB::toString(new_delta->numChunks()) + " chunks("
                       + DB::toString(new_delta->numDeletes()) + " deletes), chunks[" + ss.str() + "]. Removed " //
                       + DB::toString(snap->numChunks()) + " chunks(" + DB::toString(snap->numDeletes()) + " deletes)");
     }
@@ -448,7 +448,16 @@ try
 }
 catch (Exception & e)
 {
-    e.addMessage("(while getValues from delta[" + DB::toString(id) + "])");
+    std::stringstream ss;
+    for (const auto & chunk : chunks)
+    {
+        if (chunk.is_delete_range)
+            ss << "DeleteRange" << chunk.delete_range.toString();
+        else
+            ss << "DMFile_" << chunk.file_id << "_" << chunk.index << "_" << chunk.id << ",";
+    }
+
+    e.addMessage("(while getValues from delta[" + DB::toString(id) + "] with chunks[" + ss.str() + "])");
     throw;
 }
 
@@ -457,6 +466,7 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     size_t               rows_begin,
     size_t               deletes_begin,
     const DMContext &    context) const
+try
 {
     BlockOrDeletes res;
 
@@ -474,15 +484,7 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     {
         if (chunk_index == chunks.size())
         {
-            try
-            {
-                res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
-            }
-            catch (Exception & e)
-            {
-                e.addMessage("(while getValues from delta[" + DB::toString(id) + "])");
-                throw;
-            }
+            res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
 
             break;
         }
@@ -498,15 +500,7 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
         {
             if (block_rows_end != block_rows_start)
             {
-                try
-                {
-                    res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
-                }
-                catch (Exception & e)
-                {
-                    e.addMessage("(while getValues from delta[" + DB::toString(id) + "])");
-                    throw;
-                }
+                res.emplace_back(read(read_columns, block_rows_start, block_rows_end - block_rows_start, context));
             }
 
             if (chunk.is_delete_range)
@@ -517,6 +511,20 @@ BlockOrDeletes DeltaSpace::Snapshot::getMergeBlocks( //
     }
 
     return res;
+}
+catch (Exception & e)
+{
+    std::stringstream ss;
+    for (const auto & chunk : chunks)
+    {
+        if (chunk.is_delete_range)
+            ss << "DeleteRange" << chunk.delete_range.toString();
+        else
+            ss << "DMFile_" << chunk.file_id << "_" << chunk.index << "_" << chunk.id << ",";
+    }
+
+    e.addMessage("(while getMergeBlocks from delta[" + DB::toString(id) + "] with chunks[" + ss.str() + "])");
+    throw;
 }
 
 BlockInputStreamPtr DeltaSpace::Snapshot::getInputStream(const ColumnDefines & read_columns, const DMContext & context) const
