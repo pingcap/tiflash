@@ -586,8 +586,8 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::TruncateDecimal, "cast"},
     {tipb::ScalarFuncSig::TruncateUint, "trunc"},
 
-    {tipb::ScalarFuncSig::LogicalAnd, "tidbAnd"},
-    {tipb::ScalarFuncSig::LogicalOr, "tidbOr"},
+    {tipb::ScalarFuncSig::LogicalAnd, "and"},
+    {tipb::ScalarFuncSig::LogicalOr, "or"},
     {tipb::ScalarFuncSig::LogicalXor, "xor"},
     {tipb::ScalarFuncSig::UnaryNotDecimal, "not"},
     {tipb::ScalarFuncSig::UnaryNotInt, "not"},
