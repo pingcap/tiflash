@@ -407,6 +407,10 @@ public:
             return;
         }
 
+        /// If this value is a neutral element, let's forget about it.
+        if (!has_nullable_input_column && has_consts && Impl::apply(const_val, 0) == 0 && Impl::apply(const_val, 1) == 1)
+            has_consts = false;
+
         auto col_res = ColumnUInt8::create();
         UInt8Container & vec_res = col_res->getData();
         auto col_input_has_null = ColumnUInt8::create();
@@ -418,14 +422,20 @@ public:
         {
             vec_res.assign(rows, const_val);
             in.push_back(col_res.get());
-            vec_input_has_null.assign(rows, const_val_input_has_null);
-            vec_res_not_null.assign(rows, const_val_res_not_null);
+            if constexpr (special_impl_for_nulls)
+            {
+                vec_input_has_null.assign(rows, const_val_input_has_null);
+                vec_res_not_null.assign(rows, const_val_res_not_null);
+            }
         }
         else
         {
             vec_res.resize(rows);
-            vec_input_has_null.assign(rows, (UInt8)0);
-            vec_res_not_null.assign(rows, (UInt8)0);
+            if constexpr (special_impl_for_nulls)
+            {
+                vec_input_has_null.assign(rows, (UInt8) 0);
+                vec_res_not_null.assign(rows, (UInt8) 0);
+            }
         }
 
         /// Convert all columns to UInt8
@@ -486,6 +496,7 @@ public:
         }
     }
 };
+
 
 template <template <typename> class Impl, typename Name>
 class FunctionUnaryLogical : public IFunction
