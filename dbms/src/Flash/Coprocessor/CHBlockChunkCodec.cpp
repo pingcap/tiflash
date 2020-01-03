@@ -42,7 +42,7 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
 
 void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
 {
-    // Encode data in chunk by arrow encode
+    // Encode data in chunk by chblock encode
     if (start != 0 || end != block.rows())
         throw Exception("CHBlock encode only support encode whole block");
     block.checkNumberOfRows();
