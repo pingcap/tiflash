@@ -253,7 +253,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             analyzer->makeExplicitSetForIndex(condition, storage);
         }
     }
-    //todo support index in
     SelectQueryInfo query_info;
     // set query to avoid unexpected NPE
     query_info.query = dag.getAST();
