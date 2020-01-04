@@ -3,6 +3,7 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -150,11 +151,15 @@ void applyFunction(
     block.safeGetByPosition(1).column->get(0, res_value);
 }
 
-bool setContains(const tipb::Expr & expr, DAGPreparedSets & sets) { return sets.count(&expr); }
+bool setContains(const tipb::Expr & expr, DAGPreparedSets & sets)
+{
+    // todo support remaining exprs
+    return sets.count(&expr) && sets[&expr]->remaining_exprs.empty();
+}
 
 bool setContains(const ASTPtr & expr, PreparedSets & sets) { return sets.count(getChild(expr, 1).get()); }
 
-SetPtr & lookByExpr(const tipb::Expr & expr, DAGPreparedSets & sets) { return sets[&expr]; }
+SetPtr & lookByExpr(const tipb::Expr & expr, DAGPreparedSets & sets) { return sets[&expr]->constant_set; }
 
 SetPtr & lookByExpr(const ASTPtr & expr, PreparedSets & sets) { return sets[getChild(expr, 1).get()]; }
 
