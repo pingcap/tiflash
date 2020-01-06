@@ -393,9 +393,8 @@ public:
                 block.getByPosition(result).column = DataTypeUInt8().createColumnConst(rows, toField(const_val));
             else
             {
-                if (const_val_input_has_null && const_val_res_not_null) {
+                if (const_val_input_has_null && const_val_res_not_null)
                     Impl::adjustForNullValue(const_val, const_val_input_has_null);
-                }
                 if (const_val_input_has_null)
                     block.getByPosition(result).column =
                             block.getByPosition(result).type->createColumnConst(rows,Null());
@@ -482,7 +481,8 @@ public:
             block.getByPosition(result).column = std::move(col_res);
         }
         else {
-            if (has_nullable_input_column) {
+            if (has_nullable_input_column)
+            {
                 for (size_t i = 0; i < rows; i++)
                 {
                     if (vec_input_has_null[i] && vec_res_not_null[i])
