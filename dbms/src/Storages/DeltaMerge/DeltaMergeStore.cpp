@@ -158,21 +158,21 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Here we use global context from db_context, instead of db_context directly.
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
-    auto * ctx = new DMContext(db_context.getGlobalContext(),
-                               path,
-                               extra_paths,
-                               storage_pool,
-                               hash_salt,
-                               std::move(store_columns),
-                               getExtraHandleColumnDefine(),
-                               /* min_version */ 0,
-                               settings.not_compress_columns,
-                               db_settings.dm_segment_limit_rows,
-                               db_settings.dm_segment_delta_limit_rows,
-                               db_settings.dm_segment_delta_cache_limit_rows,
-                               db_settings.dm_segment_stable_chunk_rows,
-                               db_settings.dm_enable_logical_split);
-    return DMContextPtr(ctx);
+    return std::make_shared<DMContext>(db_context.getGlobalContext(),
+                                       path,
+                                       extra_paths,
+                                       storage_pool,
+                                       hash_salt,
+                                       std::move(store_columns),
+                                       getExtraHandleColumnDefine(),
+                                       /* min_version */ 0,
+                                       settings.not_compress_columns,
+                                       db_settings.dm_segment_limit_rows,
+                                       db_settings.dm_segment_delta_limit_rows,
+                                       db_settings.dm_segment_delta_cache_limit_rows,
+                                       db_settings.dm_segment_stable_chunk_rows,
+                                       db_settings.dm_enable_logical_split,
+                                       db_settings.dm_enable_skippable_place);
 }
 
 inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
@@ -496,10 +496,9 @@ BlockInputStreams DeltaMergeStore::read(const Context &       db_context,
     }
 #endif
 
-//    auto after_segment_read
-//        = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) { this->checkSegmentUpdate<false>(dm_context_, segment_); };
-    auto after_segment_read
-        = [&](const DMContextPtr & , const SegmentPtr & ) { };
+    //    auto after_segment_read
+    //        = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) { this->checkSegmentUpdate<false>(dm_context_, segment_); };
+    auto after_segment_read = [&](const DMContextPtr &, const SegmentPtr &) {};
 
     size_t final_num_stream = std::min(num_streams, tasks.size());
     auto   read_task_pool   = std::make_shared<SegmentReadTaskPool>(std::move(tasks));

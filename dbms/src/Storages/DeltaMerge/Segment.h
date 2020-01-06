@@ -246,6 +246,7 @@ private:
                               const DeltaValueSpacePtr &  delta_value_space) const;
 
     /// Reference the inserts/updates by delta tree.
+    template <bool skippable_place>
     void placeUpsert(const DMContext &           dm_context,
                      const StableValueSpacePtr & stable_snap,
                      const DeltaValueSpacePtr &  delta_value_space,
@@ -253,6 +254,7 @@ private:
                      Block &&                    block,
                      DeltaTree &                 delta_tree) const;
     /// Reference the deletes by delta tree.
+    template <bool skippable_place>
     void placeDelete(const DMContext &           dm_context,
                      const StableValueSpacePtr & stable_snap,
                      const DeltaValueSpacePtr &  delta_value_space,
