@@ -1,6 +1,7 @@
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 
 namespace DB
@@ -27,6 +28,11 @@ DAGBlockOutputStream::DAGBlockOutputStream(tipb::SelectResponse & dag_response_,
     else if (encodeType == tipb::EncodeType::TypeChunk)
     {
         chunk_codec_stream = std::make_unique<ArrowChunkCodec>()->newCodecStream(result_field_types);
+    }
+    else if (encodeType == tipb::EncodeType::TypeCHBlock)
+    {
+        chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(result_field_types);
+        records_per_chunk = -1;
     }
     else
     {
@@ -63,17 +69,29 @@ void DAGBlockOutputStream::write(const Block & block)
 {
     if (block.columns() != result_field_types.size())
         throw Exception("Output column size mismatch with field type size", ErrorCodes::LOGICAL_ERROR);
-    size_t rows = block.rows();
-    for (size_t row_index = 0; row_index < rows;)
+    if (records_per_chunk == -1)
     {
-        if (current_records_num >= records_per_chunk)
+        current_records_num = 0;
+        if (block.rows() > 0)
         {
+            chunk_codec_stream->encode(block, 0, block.rows());
             encodeChunkToDAGResponse();
         }
-        const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
-        chunk_codec_stream->encode(block, row_index, upper);
-        current_records_num += (upper - row_index);
-        row_index = upper;
+    }
+    else
+    {
+        size_t rows = block.rows();
+        for (size_t row_index = 0; row_index < rows;)
+        {
+            if (current_records_num >= records_per_chunk)
+            {
+                encodeChunkToDAGResponse();
+            }
+            const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
+            chunk_codec_stream->encode(block, row_index, upper);
+            current_records_num += (upper - row_index);
+            row_index = upper;
+        }
     }
 }
 

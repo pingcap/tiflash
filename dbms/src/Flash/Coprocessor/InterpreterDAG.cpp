@@ -46,7 +46,7 @@ extern const int COP_BAD_DAG_REQUEST;
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_),
       dag(dag_),
-      keep_session_timezone_info(dag.getEncodeType() == tipb::EncodeType::TypeChunk),
+      keep_session_timezone_info(dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
       log(&Logger::get("InterpreterDAG"))
 {}
 
@@ -253,7 +253,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
             analyzer->makeExplicitSetForIndex(condition, storage);
         }
     }
-    //todo support index in
     SelectQueryInfo query_info;
     // set query to avoid unexpected NPE
     query_info.query = dag.getAST();

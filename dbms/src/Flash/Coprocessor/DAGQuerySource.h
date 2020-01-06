@@ -80,7 +80,7 @@ public:
     };
     const tipb::DAGRequest & getDAGRequest() const { return dag_request; };
 
-    std::vector<tipb::FieldType> getResultFieldTypes() const;
+    std::vector<tipb::FieldType> getResultFieldTypes() const { return result_field_types; };
 
     ASTPtr getAST() const { return ast; };
 
@@ -94,6 +94,9 @@ protected:
             throw Exception("Access invalid executor: " + name);
         }
     }
+
+    void analyzeResultFieldTypes();
+    void analyzeDAGEncodeType();
 
 protected:
     Context & context;
@@ -112,6 +115,7 @@ protected:
     Int32 order_index = -1;
     Int32 limit_index = -1;
 
+    std::vector<tipb::FieldType> result_field_types;
     tipb::EncodeType encode_type;
 
     ASTPtr ast;
