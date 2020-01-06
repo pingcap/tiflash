@@ -2,8 +2,8 @@
 import logging
 import os
 import socket
-import sys
 import time
+from logging.handlers import RotatingFileHandler
 
 import conf
 import etcd
@@ -253,12 +253,14 @@ class TiFlashClusterManager:
 
 def main():
     flash_conf = conf.flash_conf
+    parent_path = os.path.dirname(flash_conf.log_path)
+    if not os.path.exists(parent_path):
+        os.makedirs(parent_path)
 
-    if not os.path.exists(flash_conf.tmp_path):
-        os.makedirs(flash_conf.tmp_path)
-
-    logging.basicConfig(filename='{}/flash_cluster_manager.log'.format(flash_conf.tmp_path), level=conf.log_level,
-                        format='%(asctime)s <%(levelname)s> %(name)s: %(message)s')
+    # keep at most 10G log files
+    logging.basicConfig(
+        handlers=[RotatingFileHandler(flash_conf.log_path, maxBytes=1024 * 1024 * 1024, backupCount=10)],
+        level=conf.log_level, format='%(asctime)s <%(levelname)s> %(name)s: %(message)s')
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
