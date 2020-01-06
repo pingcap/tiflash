@@ -477,10 +477,9 @@ public:
             vec_res.assign(uint8_in[0]->getData());
 
         if constexpr (!special_impl_for_nulls)
-        {
             block.getByPosition(result).column = std::move(col_res);
-        }
-        else {
+        else
+        {
             if (has_nullable_input_column)
             {
                 for (size_t i = 0; i < rows; i++)
