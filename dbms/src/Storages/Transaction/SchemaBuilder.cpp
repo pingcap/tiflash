@@ -55,7 +55,10 @@ AlterCommand newRenameColCommand(const String & old_col, const String & new_col,
     {
         if (pk->get().name == old_col)
         {
-            command.primary_key = std::make_shared<ASTIdentifier>(new_col);
+            auto list = std::make_shared<ASTExpressionList>();
+            auto new_pk = std::make_shared<ASTIdentifier>(new_col);
+            list->children.push_back(new_pk);
+            command.primary_key = list;
         }
     }
     return command;
