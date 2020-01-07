@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include <Storages/Transaction/Types.h>
 
 namespace DB
