@@ -123,7 +123,7 @@ class PDClient:
         for store in all_stores['stores']:
             store = store['store']
             for label in store.get('labels', []):
-                if label == flash_label and store.get('state_name') == 'Up':
+                if label == flash_label and store.get('state_name') in ('Up', 'Offline'):
                     res[store['id']] = store
         return res
 
