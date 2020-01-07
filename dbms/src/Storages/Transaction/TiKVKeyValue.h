@@ -60,7 +60,7 @@ public:
 
     static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
 
-    ValueExtraInfo<is_key> & extraInfo() const { return extra; }
+    AtomicDecodedRow<is_key> & extraInfo() const { return extra; }
 
 private:
     StringObject(const Base & str_) : Base(str_) {}
@@ -68,7 +68,7 @@ private:
     size_t size() const = delete;
 
 private:
-    mutable ValueExtraInfo<is_key> extra;
+    mutable AtomicDecodedRow<is_key> extra;
 };
 
 using TiKVKey = StringObject<true>;

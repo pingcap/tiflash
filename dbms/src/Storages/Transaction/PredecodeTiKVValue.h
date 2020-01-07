@@ -29,11 +29,11 @@ struct ValueDecodeHelper
     void forceDecodeTiKVValue(const TiKVValue & value);
 
 private:
-    bool forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRow & unknown);
+    bool forceDecodeTiKVValue(DecodedFields & decoded_row, DecodedFields & unknown);
 };
 
 using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;
 void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMergeTree & storage);
-DecodedRow::const_iterator findByColumnID(const Int64 col_id, const DecodedRow & row);
+DecodedFields::const_iterator findByColumnID(const Int64 col_id, const DecodedFields & row);
 
 } // namespace DB

@@ -25,7 +25,7 @@ void Region::tryPreDecodeTiKVValue(Context & context)
     DB::tryPreDecodeTiKVValue(std::move(write_val), *storage);
 }
 
-bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRow & unknown)
+bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedFields & decoded_row, DecodedFields & unknown)
 {
     bool schema_match = decoded_row.size() == schema_all_column_ids.size();
     bool has_dropped_column = false;
@@ -40,7 +40,7 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedRow & decoded_row, DecodedRo
         return has_dropped_column;
 
     {
-        DecodedRow tmp_row;
+        DecodedFields tmp_row;
         tmp_row.reserve(decoded_row.size());
         for (auto && item : decoded_row)
         {
@@ -78,7 +78,7 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
     if (decoded_row_info.load())
         return;
 
-    DecodedRow decoded_row, unknown;
+    DecodedFields decoded_row, unknown;
     // TODO: support fast codec of TiDB
     {
         size_t cursor = 0;
@@ -102,7 +102,7 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
         }
 
         auto has_dropped_column = forceDecodeTiKVValue(decoded_row, unknown);
-        DecodedRowBySchema * decoded_row_ptr = new DecodedRowBySchema(has_dropped_column, std::move(decoded_row), std::move(unknown), true);
+        DecodedRow * decoded_row_ptr = new DecodedRow(has_dropped_column, std::move(unknown), true, std::move(decoded_row));
         decoded_row_info.atomicUpdate(decoded_row_ptr);
     }
 }
@@ -136,9 +136,9 @@ void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMer
         helper.forceDecodeTiKVValue(*value);
 }
 
-DecodedRow::const_iterator findByColumnID(Int64 col_id, const DecodedRow & row)
+DecodedFields::const_iterator findByColumnID(Int64 col_id, const DecodedFields & row)
 {
-    const static auto cmp = [](const DecodedRowElement & e, const Int64 cid) -> bool { return e.col_id < cid; };
+    const static auto cmp = [](const DecodedField & e, const Int64 cid) -> bool { return e.col_id < cid; };
     auto it = std::lower_bound(row.cbegin(), row.cend(), col_id, cmp);
     if (it != row.cend() && it->col_id == col_id)
         return it;

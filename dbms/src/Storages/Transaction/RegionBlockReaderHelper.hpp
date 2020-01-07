@@ -74,7 +74,7 @@ struct DecodedRecordData
         decoded_col_iter.clear();
     }
 
-    const DecodedRow::value_type & operator[](const size_t index) const { return *decoded_col_iter[index]; }
+    const DecodedFields::value_type & operator[](const size_t index) const { return *decoded_col_iter[index]; }
 
     template <class... _Args>
     void emplace_back(_Args &&... __args)
@@ -83,11 +83,11 @@ struct DecodedRecordData
         decoded_col_iter.emplace_back(additional_decoded_row.cend() - 1);
     }
 
-    void push_back(const DecodedRow::const_iterator & iter) { decoded_col_iter.push_back(iter); }
+    void push_back(const DecodedFields::const_iterator & iter) { decoded_col_iter.push_back(iter); }
 
 private:
-    DecodedRow additional_decoded_row;
-    std::vector<DecodedRow::const_iterator> decoded_col_iter;
+    DecodedFields additional_decoded_row;
+    std::vector<DecodedFields::const_iterator> decoded_col_iter;
     size_t ori_cap;
 };
 

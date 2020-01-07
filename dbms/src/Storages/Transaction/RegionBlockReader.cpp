@@ -246,19 +246,19 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
             else
             {
                 const TiKVValue & value = *value_ptr;
-                const DecodedRowBySchema * row = value.extraInfo().load();
+                const DecodedRow * row = value.extraInfo().load();
                 if (!row)
                 {
                     helper.forceDecodeTiKVValue(value);
                     row = value.extraInfo().load();
                 }
 
-                const DecodedRow & id_fields = row->row;
-                const DecodedRow & unknown_col = row->unknown_data.row;
+                const DecodedFields & id_fields = row->decoded_fields;
+                const DecodedFields & unknown_col = row->unknown_fields.fields;
 
                 if (!force_decode)
                 {
-                    if (row->has_dropped_column || !unknown_col.empty())
+                    if (row->has_missing_columns || !unknown_col.empty())
                         return std::make_tuple(Block(), false);
                 }
 
@@ -274,7 +274,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                     if (auto it = findByColumnID(item.first, unknown_col); it != unknown_col.end())
                     {
-                        if (likely(row->unknown_data.has_codec_flag))
+                        if (likely(row->unknown_fields.with_codec_flag))
                             decoded_data.push_back(it);
                         else
                         {

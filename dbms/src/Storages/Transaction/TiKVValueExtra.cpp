@@ -5,25 +5,25 @@ namespace DB
 {
 
 template <>
-ValueExtraInfo<false>::~ValueExtraInfo()
+AtomicDecodedRow<false>::~AtomicDecodedRow()
 {
     auto ptr = decoded.load();
     if (ptr)
     {
-        auto decoded_ptr = reinterpret_cast<DecodedRowBySchema *>(ptr);
+        auto decoded_ptr = reinterpret_cast<DecodedRow *>(ptr);
         delete decoded_ptr;
         decoded = nullptr;
     }
 }
 
 template <>
-const DecodedRowBySchema * ValueExtraInfo<false>::load() const
+const DecodedRow * AtomicDecodedRow<false>::load() const
 {
-    return reinterpret_cast<DecodedRowBySchema *>(decoded.load());
+    return reinterpret_cast<DecodedRow *>(decoded.load());
 }
 
 template <>
-void ValueExtraInfo<false>::atomicUpdate(DB::DecodedRowBySchema *& data) const
+void AtomicDecodedRow<false>::atomicUpdate(DB::DecodedRow *& data) const
 {
     void * expected = nullptr;
     if (!decoded.compare_exchange_strong(expected, (void *)data))

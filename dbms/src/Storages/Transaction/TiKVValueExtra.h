@@ -5,30 +5,30 @@
 namespace DB
 {
 class Field;
-struct DecodedRowElement;
-struct DecodedRowBySchema;
+struct DecodedField;
+struct DecodedRow;
 
 template <bool is_key = false>
-struct ValueExtraInfo
+struct AtomicDecodedRow
 {
-    ~ValueExtraInfo();
+    ~AtomicDecodedRow();
 
-    const DecodedRowBySchema * load() const;
+    const DecodedRow * load() const;
 
-    void atomicUpdate(DecodedRowBySchema *& data) const;
+    void atomicUpdate(DecodedRow *& data) const;
 
-    ValueExtraInfo() = default;
+    AtomicDecodedRow() = default;
 
 private:
-    ValueExtraInfo(const ValueExtraInfo &) = delete;
-    ValueExtraInfo(ValueExtraInfo &&) = delete;
+    AtomicDecodedRow(const AtomicDecodedRow &) = delete;
+    AtomicDecodedRow(AtomicDecodedRow &&) = delete;
 
 private:
     mutable std::atomic<void *> decoded{nullptr};
 };
 
 template <>
-struct ValueExtraInfo<true>
+struct AtomicDecodedRow<true>
 {
 };
 
