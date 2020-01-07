@@ -112,9 +112,7 @@ DeltaSpace::~DeltaSpace()
 {
     if (file_writting)
     {
-        if (writer)
-            writer->finalize();
-        writer.reset();
+        // TODO: `enableGC` after write commit.
         file_writting->enableGC();
         file_writting.reset();
     }
@@ -278,7 +276,7 @@ DeltaSpacePtr DeltaSpace::nextGeneration(const SnapshotPtr & snap, WriteBatches 
         {
             auto iter = files.find(chunk.file_id);
             if (unlikely(iter == files.end()))
-                throw Exception("");
+                throw Exception("Copy DMFile_" + DB::toString(chunk.file_id) + " for chunk[" + DB::toString(chunk.id) + "] failed!");
             else
                 new_delta->files.emplace(chunk.file_id, iter->second);
         }

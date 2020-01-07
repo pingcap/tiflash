@@ -616,6 +616,8 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
+void StorageDeltaMerge::resetDeltaTree(const Context &) { store->resetDeltaTree(); }
+
 void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
 {
     return store->deleteRange(global_context, settings, range_to_delete);

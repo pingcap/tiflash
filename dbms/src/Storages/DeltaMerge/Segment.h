@@ -182,6 +182,8 @@ public:
     String simpleInfo() const;
     String info() const;
 
+    // Just for test
+    void resetDeltaTree();
 private:
     template <bool add_tag_column>
     ReadInfo getReadInfo(const DMContext &       dm_context,

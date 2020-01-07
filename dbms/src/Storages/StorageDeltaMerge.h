@@ -74,6 +74,7 @@ public:
 
     void checkStatus(const Context & context) override;
     void deleteRows(const Context &, size_t rows) override;
+    void resetDeltaTree(const Context &);
 
 protected:
     StorageDeltaMerge(const String & path_,

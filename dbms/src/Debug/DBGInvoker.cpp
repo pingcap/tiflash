@@ -16,6 +16,11 @@
 #include <Debug/dbgFuncSchema.h>
 #include <Parsers/ASTLiteral.h>
 
+#include <Interpreters/Context.h>
+#include <Storages/StorageDeltaMerge.h>
+#include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/TMTContext.h>
+
 namespace DB
 {
 
@@ -40,6 +45,25 @@ void dbgFuncMallocExtensionRelease(Context &, const ASTs &, DBGInvoker::Printer 
     // Reclaim memory.
     MallocExtension::instance()->ReleaseFreeMemory();
 #endif
+    output("done.");
+}
+
+void dbgFuncResetDeltaTree(Context & context, const ASTs & args, DBGInvoker::Printer output)
+{
+    // TODO: move these debug function for Engine DeltaMerge to a seperate file.
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: database table", ErrorCodes::BAD_ARGUMENTS);
+
+    const String database_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    const String table_name = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+
+    auto & storages = context.getTMTContext().getStorages();
+    auto table = storages.getByName(database_name, table_name);
+    if (!table || table->engineType() != ::TiDB::StorageEngine::DM)
+        throw Exception("table `" + database_name + "`.`" + table_name + "` engine type is invalid!");
+
+    auto dm_table = std::dynamic_pointer_cast<StorageDeltaMerge>(table);
+    dm_table->resetDeltaTree(context);
     output("done.");
 }
 

@@ -212,6 +212,7 @@ public:
     SortDescription       getPrimarySortDescription() const;
 
     void                drop();
+    void                resetDeltaTree();
     void                check(const Context & db_context);
     DeltaMergeStoreStat getStat();
 

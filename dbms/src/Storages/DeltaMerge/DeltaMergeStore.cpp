@@ -284,6 +284,10 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
     // Locate which segments to write
     WriteActions actions = prepareWriteActions(block, segments, EXTRA_HANDLE_COLUMN_NAME, std::shared_lock(read_write_mutex));
 
+    // We need to keep a snapshot for storage, in case DMFile in delta removed by PageStorage's GC thread by accident.
+    // See FLASH-763 for detail. (We don't need this for deleteRange. DeleteRange do nothing with DMFile)
+    StorageSnapshotPtr storage_snapshot = std::make_shared<StorageSnapshot>(storage_pool);
+
     // Prepare updates' information.
     WriteBatches wbs;
     for (auto & action : actions)
@@ -942,6 +946,16 @@ void DeltaMergeStore::drop()
     {
         (void)_handle;
         segment->drop();
+    }
+}
+
+void DeltaMergeStore::resetDeltaTree()
+{
+    std::scoped_lock lock(write_write_mutex);
+    for (auto && [_handle, segment] : segments)
+    {
+        (void)_handle;
+        segment->resetDeltaTree();
     }
 }
 

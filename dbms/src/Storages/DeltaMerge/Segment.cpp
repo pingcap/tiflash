@@ -645,6 +645,16 @@ void Segment::drop()
     delta->drop();
 }
 
+void Segment::resetDeltaTree()
+{
+    // Synchronize between read/read threads.
+    std::scoped_lock lock(read_read_mutex);
+
+    delta_tree           = std::make_shared<DefaultDeltaTree>();
+    placed_delta_rows    = 0;
+    placed_delta_deletes = 0;
+}
+
 //==========================================================================================
 // Segment private methods.
 //==========================================================================================
