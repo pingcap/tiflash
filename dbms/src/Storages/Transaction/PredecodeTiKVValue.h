@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Transaction/TiKVDecodedValue.h>
+#include <Storages/Transaction/DecodedTiKVValue.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 #include <sparsehash/dense_hash_map>
@@ -29,7 +29,7 @@ struct ValueDecodeHelper
     void forceDecodeTiKVValue(const TiKVValue & value);
 
 private:
-    bool forceDecodeTiKVValue(DecodedFields & decoded_row, DecodedFields & unknown);
+    bool forceDecodeTiKVValue(DecodedFields & decoded_fields, DecodedFields & unknown);
 };
 
 using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;

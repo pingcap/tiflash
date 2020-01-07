@@ -1,5 +1,5 @@
-#include <Storages/Transaction/TiKVDecodedValue.h>
-#include <Storages/Transaction/TiKVValueExtra.h>
+#include <Storages/Transaction/AtomicDecodedRow.h>
+#include <Storages/Transaction/DecodedTiKVValue.h>
 
 namespace DB
 {

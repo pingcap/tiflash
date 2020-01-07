@@ -25,24 +25,24 @@ void Region::tryPreDecodeTiKVValue(Context & context)
     DB::tryPreDecodeTiKVValue(std::move(write_val), *storage);
 }
 
-bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedFields & decoded_row, DecodedFields & unknown)
+bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedFields & decoded_fields, DecodedFields & unknown)
 {
-    bool schema_match = decoded_row.size() == schema_all_column_ids.size();
-    bool has_dropped_column = false;
+    bool schema_match = decoded_fields.size() == schema_all_column_ids.size();
+    bool has_missing_columns = false;
 
-    for (auto it = decoded_row.cbegin(); schema_match && it != decoded_row.cend(); ++it)
+    for (auto it = decoded_fields.cbegin(); schema_match && it != decoded_fields.cend(); ++it)
     {
         if (!schema_all_column_ids.count(it->col_id))
             schema_match = false;
     }
 
     if (schema_match)
-        return has_dropped_column;
+        return has_missing_columns;
 
     {
         DecodedFields tmp_row;
-        tmp_row.reserve(decoded_row.size());
-        for (auto && item : decoded_row)
+        tmp_row.reserve(decoded_fields.size());
+        for (auto && item : decoded_fields)
         {
             if (schema_all_column_ids.count(item.col_id))
                 tmp_row.emplace_back(std::move(item));
@@ -53,32 +53,32 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedFields & decoded_row, Decode
         // must be sorted, for binary search.
         ::std::sort(tmp_row.begin(), tmp_row.end());
         ::std::sort(unknown.begin(), unknown.end());
-        tmp_row.swap(decoded_row);
+        tmp_row.swap(decoded_fields);
     }
 
     for (const auto & column_index : schema_all_column_ids)
     {
         const auto & column = table_info.columns[column_index.second];
-        if (auto it = findByColumnID(column.id, decoded_row); it != decoded_row.end())
+        if (auto it = findByColumnID(column.id, decoded_fields); it != decoded_fields.end())
             continue;
 
         if (column.hasNoDefaultValueFlag() && column.hasNotNullFlag())
         {
-            has_dropped_column = true;
+            has_missing_columns = true;
             break;
         }
     }
 
-    return has_dropped_column;
+    return has_missing_columns;
 }
 
 void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
 {
-    auto & decoded_row_info = value.extraInfo();
-    if (decoded_row_info.load())
+    auto & decoded_fields_info = value.extraInfo();
+    if (decoded_fields_info.load())
         return;
 
-    DecodedFields decoded_row, unknown;
+    DecodedFields decoded_fields, unknown;
     // TODO: support fast codec of TiDB
     {
         size_t cursor = 0;
@@ -90,7 +90,7 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
             if (f.isNull())
                 break;
             ColumnID col_id = f.get<ColumnID>();
-            decoded_row.emplace_back(col_id, DecodeDatum(cursor, raw_value));
+            decoded_fields.emplace_back(col_id, DecodeDatum(cursor, raw_value));
         }
 
         if (cursor != raw_value.size())
@@ -98,12 +98,12 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
 
         {
             // must be sorted, for binary search.
-            ::std::sort(decoded_row.begin(), decoded_row.end());
+            ::std::sort(decoded_fields.begin(), decoded_fields.end());
         }
 
-        auto has_dropped_column = forceDecodeTiKVValue(decoded_row, unknown);
-        DecodedRow * decoded_row_ptr = new DecodedRow(has_dropped_column, std::move(unknown), true, std::move(decoded_row));
-        decoded_row_info.atomicUpdate(decoded_row_ptr);
+        auto has_missing_columns = forceDecodeTiKVValue(decoded_fields, unknown);
+        DecodedRow * decoded_fields_ptr = new DecodedRow(has_missing_columns, std::move(unknown), true, std::move(decoded_fields));
+        decoded_fields_info.atomicUpdate(decoded_fields_ptr);
     }
 }
 

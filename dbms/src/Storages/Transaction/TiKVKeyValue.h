@@ -1,7 +1,7 @@
 #pragma once
 
+#include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
-#include <Storages/Transaction/TiKVValueExtra.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB

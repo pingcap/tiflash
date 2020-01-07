@@ -27,9 +27,10 @@ struct DecodedField : boost::noncopyable
     bool operator<(const DecodedField & e) const { return col_id < e.col_id; }
 };
 
-/// force decode TiKV value into row by a specific schema, if there is data can't be decoded, store it in unknown_data.
+/// force decode TiKV value into row by a specific schema, if there is data can't be decoded, store it in unknown_fields.
 struct DecodedRow : boost::noncopyable
 {
+    // In old way, tidb encode each record like: codec-flag1, column-info1,
     struct UnknownFields
     {
         // for new way that TiDB encode column, there is no codec flag
@@ -39,8 +40,8 @@ struct DecodedRow : boost::noncopyable
         const bool with_codec_flag;
     };
 
-    DecodedRow(bool has_dropped_column_, DecodedFields && unknown_, bool has_codec_flag, DecodedFields && decoded_fields_)
-        : has_missing_columns(has_dropped_column_),
+    DecodedRow(bool has_missing_columns_, DecodedFields && unknown_, bool has_codec_flag, DecodedFields && decoded_fields_)
+        : has_missing_columns(has_missing_columns_),
           unknown_fields{std::move(unknown_), has_codec_flag},
           decoded_fields(std::move(decoded_fields_))
     {
@@ -49,11 +50,11 @@ struct DecodedRow : boost::noncopyable
     }
 
 private:
-    static bool isSortedByColumnID(const DecodedFields & decoded_row)
+    static bool isSortedByColumnID(const DecodedFields & decoded_fields)
     {
-        for (size_t i = 1; i < decoded_row.size(); ++i)
+        for (size_t i = 1; i < decoded_fields.size(); ++i)
         {
-            if (decoded_row[i - 1].col_id >= decoded_row[i].col_id)
+            if (decoded_fields[i - 1].col_id >= decoded_fields[i].col_id)
                 return false;
         }
         return true;
