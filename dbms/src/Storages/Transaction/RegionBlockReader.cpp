@@ -274,7 +274,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
 
                     if (auto it = findByColumnID(item.first, unknown_col); it != unknown_col.end())
                     {
-                        if (likely(row->unknown_data.known_type))
+                        if (likely(row->unknown_data.has_codec_flag))
                             decoded_data.push_back(it);
                         else
                         {

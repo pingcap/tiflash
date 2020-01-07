@@ -36,16 +36,12 @@ struct DecodedRowBySchema : boost::noncopyable
         // should be sorted by column id.
         const DecodedRow row;
         // if type is unknown(in tidb fast codec), field are all string and known_type is false.
-        const bool known_type;
+        const bool has_codec_flag;
     };
 
-    DecodedRowBySchema(Int64 decode_schema_version_, bool has_dropped_column_, DecodedRow && row_, DecodedRow && extra_, bool known_type)
-        : decode_schema_version(decode_schema_version_),
-          has_dropped_column(has_dropped_column_),
-          row(std::move(row_)),
-          unknown_data{std::move(extra_), known_type}
+    DecodedRowBySchema(bool has_dropped_column_, DecodedRow && row_, DecodedRow && extra_, bool has_codec_flag)
+        : has_dropped_column(has_dropped_column_), row(std::move(row_)), unknown_data{std::move(extra_), has_codec_flag}
     {
-        std::ignore = decode_schema_version;
         if (!isSortedByColumnID(row) || !isSortedByColumnID(unknown_data.row))
             throw Exception(std::string(__PRETTY_FUNCTION__) + ": should be sorted by column id", ErrorCodes::LOGICAL_ERROR);
     }
@@ -60,10 +56,6 @@ private:
         }
         return true;
     }
-
-private:
-    // schema version used while pre-decode.
-    const Int64 decode_schema_version;
 
 public:
     // if decoded row doesn't contain column in schema.

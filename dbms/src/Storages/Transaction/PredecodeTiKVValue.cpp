@@ -102,8 +102,7 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
         }
 
         auto has_dropped_column = forceDecodeTiKVValue(decoded_row, unknown);
-        DecodedRowBySchema * decoded_row_ptr
-            = new DecodedRowBySchema(table_info.schema_version, has_dropped_column, std::move(decoded_row), std::move(unknown), true);
+        DecodedRowBySchema * decoded_row_ptr = new DecodedRowBySchema(has_dropped_column, std::move(decoded_row), std::move(unknown), true);
         decoded_row_info.atomicUpdate(decoded_row_ptr);
     }
 }
