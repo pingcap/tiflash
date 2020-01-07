@@ -62,13 +62,10 @@ private:
     }
 
 public:
-    struct
-    {
-        // if decoded row doesn't contain column in schema.
-        const bool has_missing_columns;
-        // decoded column not in schema
-        const UnknownFields unknown_fields;
-    };
+    // if decoded row doesn't contain column in schema.
+    const bool has_missing_columns;
+    // decoded column not in schema
+    const UnknownFields unknown_fields;
     // decoded column in schema and default/null column. should be sorted by column id.
     const DecodedFields decoded_fields;
 };
