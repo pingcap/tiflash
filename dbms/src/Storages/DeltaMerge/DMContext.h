@@ -45,6 +45,8 @@ struct DMContext : private boost::noncopyable
     const size_t stable_chunk_rows;
 
     const bool enable_logical_split;
+    const bool read_delta_only;
+    const bool read_stable_only;
 
     DMContext(const Context &       db_context_,
               const String &        store_path_,
@@ -59,7 +61,9 @@ struct DMContext : private boost::noncopyable
               const size_t          delta_limit_rows_,
               const size_t          delta_cache_limit_rows_,
               const size_t          stable_chunk_rows_,
-              const bool            enable_logical_split_)
+              const bool            enable_logical_split_,
+              const bool            read_delta_only_,
+              const bool            read_stable_only)
         : db_context(db_context_),
           store_path(store_path_),
           extra_paths(extra_paths_),
@@ -73,7 +77,9 @@ struct DMContext : private boost::noncopyable
           delta_limit_rows(delta_limit_rows_),
           delta_cache_limit_rows(delta_cache_limit_rows_),
           stable_chunk_rows(stable_chunk_rows_),
-          enable_logical_split(enable_logical_split_)
+          enable_logical_split(enable_logical_split_),
+          read_delta_only(read_delta_only_),
+          read_stable_only(read_stable_only)
     {
     }
 };

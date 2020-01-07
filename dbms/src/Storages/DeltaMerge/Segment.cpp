@@ -312,10 +312,19 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
 
     auto create_stream = [&](const HandleRange & read_range) -> BlockInputStreamPtr {
         BlockInputStreamPtr stream;
-        if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0 //
-            && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)          //
-            && !hasColumn(columns_to_read, VERSION_COLUMN_ID)               //
-            && !hasColumn(columns_to_read, TAG_COLUMN_ID))
+        if (dm_context.read_delta_only)
+        {
+            throw Exception("Unsupported");
+        }
+        else if (dm_context.read_stable_only)
+        {
+            stream
+                = read_info.segment_snap.stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, false);
+        }
+        else if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0 //
+                 && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)          //
+                 && !hasColumn(columns_to_read, VERSION_COLUMN_ID)               //
+                 && !hasColumn(columns_to_read, TAG_COLUMN_ID))
         {
             // No delta, let's try some optimizations.
             stream
@@ -416,8 +425,20 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
     }
 
     BlockInputStreams streams;
-    streams.push_back(delta_stream);
-    streams.push_back(stable_stream);
+
+    if (dm_context.read_delta_only)
+    {
+        streams.push_back(delta_stream);
+    }
+    else if (dm_context.read_stable_only)
+    {
+        streams.push_back(stable_stream);
+    }
+    else
+    {
+        streams.push_back(delta_stream);
+        streams.push_back(stable_stream);
+    }
     return std::make_shared<ConcatBlockInputStream>(streams);
 }
 

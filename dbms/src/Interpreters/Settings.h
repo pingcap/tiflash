@@ -244,6 +244,8 @@ struct Settings
     M(SettingUInt64, dm_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaMerge Engine. By default 0 means no limit.")\
     M(SettingBool, dm_enable_rough_set_filter, true, "Whether to parse where expression as Rough Set Index filter or not") \
     M(SettingBool, dm_raw_filter_range, true, "Do range filter or not when read data in raw mode in DeltaMerge Engine.")\
+    M(SettingBool, dm_read_delta_only, false, "Only read delta data in DeltaMerge Engine.")\
+    M(SettingBool, dm_read_stable_only, false, "Only read stable data in DeltaMerge Engine.")\
     M(SettingBool, dm_enable_logical_split, true, "Enable logical split or not in DeltaMerge Engine.")\
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.") \
