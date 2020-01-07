@@ -220,7 +220,7 @@ void RegionData::deleteRange(const ColumnFamilyType cf, const RegionRange & rang
             cf_data_size -= lock_cf.deleteRange(range);
             break;
         default:
-            throw Exception("[RegionData::deleteRange] with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 

@@ -66,7 +66,7 @@ raft_serverpb::RaftApplyState RegionMeta::getApplyState() const
 void RegionMeta::doSetRegion(const metapb::Region & region)
 {
     if (regionId() != region.id())
-        throw Exception("[RegionMeta::doSetRegion] region id is not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region id is not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     region_state.setRegion(region);
 }
@@ -188,7 +188,7 @@ void RegionMeta::assignRegionMeta(RegionMeta && rhs)
     std::lock_guard<std::mutex> lock(mutex);
 
     if (regionId() != rhs.regionId())
-        throw Exception("[RegionMeta::assignRegionMeta] region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region_id not equal, should not happen", ErrorCodes::LOGICAL_ERROR);
 
     peer = std::move(rhs.peer);
     apply_state = std::move(rhs.apply_state);
@@ -223,7 +223,7 @@ void MetaRaftCommandDelegate::execChangePeer(
             break;
         }
         default:
-            throw Exception("[RegionMeta::execChangePeer] unsupported cmd", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": unsupported cmd", ErrorCodes::LOGICAL_ERROR);
     }
 
     if (pending_remove)
@@ -260,17 +260,17 @@ RegionMergeResult MetaRaftCommandDelegate::checkBeforeCommitMerge(
             break;
         default:
         {
-            throw Exception("[RegionMeta::execCommitMerge] " + toString(false)
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": " + toString(false)
                     + " unexpected state of source region: " + raft_serverpb::PeerState_Name(state),
                 ErrorCodes::LOGICAL_ERROR);
         }
     }
 
     if (source_meta.apply_state.applied_index() < commit_merge_request.commit())
-        throw Exception("[RegionMeta::execCommitMerge] applied index of source region < commit index", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": applied index of source region < commit index", ErrorCodes::LOGICAL_ERROR);
 
     if (!(source_region == source_meta.region_state.getRegion()))
-        throw Exception("[RegionMeta::execCommitMerge] source_region not match exist region", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": source_region not match exist region", ErrorCodes::LOGICAL_ERROR);
 
     RegionMergeResult res;
 
@@ -294,10 +294,10 @@ void MetaRaftCommandDelegate::execRollbackMerge(
     auto & rollback_request = request.rollback_merge();
 
     if (region_state.getState() != raft_serverpb::PeerState::Merging)
-        throw Exception("[RegionMeta::execRollbackMerge] region state is " + raft_serverpb::PeerState_Name(region_state.getState()),
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": region state is " + raft_serverpb::PeerState_Name(region_state.getState()),
             ErrorCodes::LOGICAL_ERROR);
     if (region_state.getMergeState().commit() != rollback_request.commit())
-        throw Exception("[RegionMeta::execRollbackMerge] merge commit index " + DB::toString(region_state.getMergeState().commit())
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": merge commit index " + DB::toString(region_state.getMergeState().commit())
                 + " != " + DB::toString(rollback_request.commit()),
             ErrorCodes::LOGICAL_ERROR);
 
@@ -334,8 +334,8 @@ void MetaRaftCommandDelegate::execPrepareMerge(
     auto first_index = apply_state.truncated_state().index() + 1;
     auto min_index = prepare_merge_request.min_index();
     if (min_index < first_index)
-        throw Exception("[RegionMeta::execPrepareMerge] [region " + DB::toString(regionId()) + "] first_index " + DB::toString(first_index)
-                + " > min_index " + DB::toString(min_index),
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": [region " + DB::toString(regionId()) + "] first_index "
+                + DB::toString(first_index) + " > min_index " + DB::toString(min_index),
             ErrorCodes::LOGICAL_ERROR);
 
     auto & region = region_state.getRegion();
