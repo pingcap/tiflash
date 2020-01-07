@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Transaction/DecodedTiKVValue.h>
+#include <Storages/Transaction/DecodedRow.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 
 #include <sparsehash/dense_hash_map>

@@ -30,13 +30,14 @@ struct DecodedField : boost::noncopyable
 /// force decode TiKV value into row by a specific schema, if there is data can't be decoded, store it in unknown_fields.
 struct DecodedRow : boost::noncopyable
 {
-    // In old way, tidb encode each record like: codec-flag1, column-info1,
+    // In old way, tidb encode each record like: (codec-flag, column-data), (codec-flag, column-data), ...
+    // we can use codec-flag to tell type of column. But, in new way, https://github.com/pingcap/tidb/pull/7597,
+    // there is codec-flag, and we should find type in schema by column id.
     struct UnknownFields
     {
-        // for new way that TiDB encode column, there is no codec flag
         // should be sorted by column id.
         const DecodedFields fields;
-        // if type is unknown(in tidb fast codec), field are all string and known_type is false.
+        // if there is no codec-flag (in tidb fast codec), field are all string and with_codec_flag is false.
         const bool with_codec_flag;
     };
 
