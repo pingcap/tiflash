@@ -365,9 +365,12 @@ void StorageMergeTree::alterInternal(
         else if (param.type == AlterCommand::RENAME_COLUMN)
         {
             rename_column = true;
+            if (param.primary_key != nullptr) {
+                new_primary_key_ast = param.primary_key;
+            }
             if (params.size() != 1)
             {
-                throw Exception("There is an internal error for rename columns", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("There is an internal error for rename columns, params size should be 1", ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
