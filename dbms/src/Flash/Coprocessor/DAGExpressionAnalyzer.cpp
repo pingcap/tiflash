@@ -181,7 +181,7 @@ String DAGExpressionAnalyzer::convertToUInt8ForFilter(ExpressionActionsChain & c
     // 2. if the column is string, convert it to numeric column, and compare with 0
     // 3. if the column is date/datetime, compare it with zeroDate
     // 4. if the column is other type, throw exception
-    auto & org_type = chain.steps.back().actions->getSampleBlock().getByName(column_name).type;
+    const auto & org_type = removeNullable(chain.steps.back().actions->getSampleBlock().getByName(column_name).type);
     auto & actions = chain.steps.back().actions;
     if (org_type->isNumber() || org_type->isDecimal())
     {
@@ -447,8 +447,8 @@ void DAGExpressionAnalyzer::makeExplicitSet(
 
     // todo if this is a single value in, then convert it to equal expr
     SetPtr set = std::make_shared<Set>(SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode));
-    set->createFromDAGExpr(set_element_types, expr, create_ordered_set);
-    prepared_sets[&expr] = std::move(set);
+    auto remaining_exprs = set->createFromDAGExpr(set_element_types, expr, create_ordered_set);
+    prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 
 static String getUniqueName(const Block & block, const String & prefix)
@@ -457,6 +457,47 @@ static String getUniqueName(const Block & block, const String & prefix)
     while (block.has(prefix + toString(i)))
         ++i;
     return prefix + toString(i);
+}
+
+String DAGExpressionAnalyzer::getActionsForInOperator(const tipb::Expr & expr, ExpressionActionsPtr & actions)
+{
+    const String & func_name = getFunctionName(expr);
+    Names argument_names;
+    String key_name = getActions(expr.children(0), actions);
+    argument_names.push_back(key_name);
+    makeExplicitSet(expr, actions->getSampleBlock(), false, key_name);
+    const DAGSetPtr & set = prepared_sets[&expr];
+
+    ColumnWithTypeAndName column;
+    column.type = std::make_shared<DataTypeSet>();
+
+    column.name = getUniqueName(actions->getSampleBlock(), "___set");
+    column.column = ColumnSet::create(1, set->constant_set);
+    actions->add(ExpressionAction::addColumn(column));
+    argument_names.push_back(column.name);
+
+    String expr_name = applyFunction(func_name, argument_names, actions);
+    // add cast if needed
+    expr_name = appendCastIfNeeded(expr, actions, expr_name);
+    if (set->remaining_exprs.empty())
+    {
+        return expr_name;
+    }
+    // if there are remaining non_constant_expr, then convert
+    // key in (const1, const2, non_const1, non_const2) => or(key in (const1, const2), key eq non_const1, key eq non_const2)
+    // key not in (const1, const2, non_const1, non_const2) => and(key not in (const1, const2), key not eq non_const1, key not eq non_const2)
+    argument_names.clear();
+    argument_names.push_back(expr_name);
+    bool is_not_in = func_name == "notIn" || func_name == "globalNotIn";
+    for (const tipb::Expr * non_constant_expr : set->remaining_exprs)
+    {
+        Names eq_arg_names;
+        eq_arg_names.push_back(key_name);
+        eq_arg_names.push_back(getActions(*non_constant_expr, actions));
+        // do not need extra cast because TiDB will ensure type of key_name and right_expr_name is the same
+        argument_names.push_back(applyFunction(is_not_in ? "notEquals" : "equals", eq_arg_names, actions));
+    }
+    return applyFunction(is_not_in ? "and" : "or", argument_names, actions);
 }
 
 String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActionsPtr & actions)
@@ -490,36 +531,17 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
             throw Exception("agg function is not supported yet", ErrorCodes::UNSUPPORTED_METHOD);
         }
         const String & func_name = getFunctionName(expr);
-        Names argument_names;
-        DataTypes argument_types;
 
         if (isInOrGlobalInOperator(func_name))
         {
-            String name = getActions(expr.children(0), actions);
-            argument_names.push_back(name);
-            argument_types.push_back(actions->getSampleBlock().getByName(name).type);
-            makeExplicitSet(expr, actions->getSampleBlock(), false, name);
-            ColumnWithTypeAndName column;
-            column.type = std::make_shared<DataTypeSet>();
-
-            const SetPtr & set = prepared_sets[&expr];
-
-            column.name = getUniqueName(actions->getSampleBlock(), "___set");
-            column.column = ColumnSet::create(1, set);
-            actions->add(ExpressionAction::addColumn(column));
-            argument_names.push_back(column.name);
-            argument_types.push_back(column.type);
+            return getActionsForInOperator(expr, actions);
         }
-        else
+        Names argument_names;
+        for (auto & child : expr.children())
         {
-            for (auto & child : expr.children())
-            {
-                String name = getActions(child, actions);
-                argument_names.push_back(name);
-                argument_types.push_back(actions->getSampleBlock().getByName(name).type);
-            }
+            String name = getActions(child, actions);
+            argument_names.push_back(name);
         }
-
         String expr_name = applyFunction(func_name, argument_names, actions);
         // add cast if needed
         expr_name = appendCastIfNeeded(expr, actions, expr_name);

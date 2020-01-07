@@ -4,6 +4,7 @@
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -31,7 +32,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
-extern const int LOGICA_ERROR;
+extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 using TiDB::DatumFlat;
@@ -41,9 +42,9 @@ using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using SchemaFetcher = std::function<TableInfo(const String &, const String &)>;
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type);
+    Int64 tz_offset, const String & tz_name, const String & encode_type);
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
-    UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
+    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges);
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 
 BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
@@ -75,7 +76,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
                 throw Exception("Not TMT", ErrorCodes::BAD_ARGUMENTS);
             return mmt->getTableInfo();
         },
-        start_ts, tz_offset, tz_name, encode_type);
+        tz_offset, tz_name, encode_type);
 
     RegionPtr region;
     if (region_id == InvalidRegionID)
@@ -98,7 +99,7 @@ BlockInputStreamPtr dbgFuncDAG(Context & context, const ASTs & args)
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
     tipb::SelectResponse dag_response
-        = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), key_ranges);
+        = executeDAGRequest(context, dag_request, region->id(), region->version(), region->confVer(), start_ts, key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
@@ -131,7 +132,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
         [&](const String & database_name, const String & table_name) {
             return MockTiDB::instance().getTableByName(database_name, table_name)->table_info;
         },
-        start_ts, tz_offset, tz_name, encode_type);
+        tz_offset, tz_name, encode_type);
     std::ignore = table_id;
 
     RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
@@ -141,7 +142,7 @@ BlockInputStreamPtr dbgFuncMockDAG(Context & context, const ASTs & args)
     DecodedTiKVKey end_key = RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id);
     key_ranges.emplace_back(std::make_pair(std::move(start_key), std::move(end_key)));
     tipb::SelectResponse dag_response
-        = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), key_ranges);
+        = executeDAGRequest(context, dag_request, region_id, region->version(), region->confVer(), start_ts, key_ranges);
 
     return outputDAGResponse(context, schema, dag_response);
 }
@@ -171,13 +172,6 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
     }
     else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
     {
-        // TODO: Support agg functions.
-        for (const auto & child_ast : func->arguments->children)
-        {
-            tipb::Expr * child = expr->add_children();
-            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
-        }
-
         String func_name_lowercase = Poco::toLower(func->name);
         // TODO: Support more functions.
         // TODO: Support type inference.
@@ -230,11 +224,55 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
             ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
+        else if (func_name_lowercase == "in" || func_name_lowercase == "notin")
+        {
+            tipb::Expr * in_expr = expr;
+            if (func_name_lowercase == "notin")
+            {
+                // notin is transformed into not(in()) by tidb
+                expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                expr->set_tp(tipb::ExprType::ScalarFunc);
+                in_expr = expr->add_children();
+            }
+            in_expr->set_sig(tipb::ScalarFuncSig::InInt);
+            auto * ft = in_expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+            in_expr->set_tp(tipb::ExprType::ScalarFunc);
+            for (const auto & child_ast : func->arguments->children)
+            {
+                auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
+                if (tuple_func != nullptr && tuple_func->name == "tuple")
+                {
+                    // flatten tuple elements
+                    for (const auto & c : tuple_func->arguments->children)
+                    {
+                        tipb::Expr * child = in_expr->add_children();
+                        compileExpr(input, c, child, referred_columns, col_ref_map);
+                    }
+                }
+                else
+                {
+                    tipb::Expr * child = in_expr->add_children();
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+                }
+            }
+            return;
+        }
         else
         {
             throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
         }
         expr->set_tp(tipb::ExprType::ScalarFunc);
+        // TODO: Support agg functions.
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+        }
     }
     else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
@@ -322,16 +360,17 @@ void hijackTiDBTypeForMockTest(ColumnInfo & ci)
 }
 
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
-    Timestamp start_ts, Int64 tz_offset, const String & tz_name, const String & encode_type)
+    Int64 tz_offset, const String & tz_name, const String & encode_type)
 {
     DAGSchema schema;
     tipb::DAGRequest dag_request;
     dag_request.set_time_zone_name(tz_name);
     dag_request.set_time_zone_offset(tz_offset);
 
-    dag_request.set_start_ts(start_ts);
-    if (encode_type == "arrow")
-        dag_request.set_encode_type(tipb::EncodeType::TypeArrow);
+    if (encode_type == "chunk")
+        dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
+    else if (encode_type == "chblock")
+        dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
     else
         dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
 
@@ -622,33 +661,38 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
 }
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version,
-    UInt64 region_conf_version, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges)
+    UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges)
 {
     static Logger * log = &Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
-    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, std::move(key_ranges), dag_response, true);
+    DAGDriver driver(
+        context, dag_request, region_id, region_version, region_conf_version, start_ts, std::move(key_ranges), dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;
 }
 
-void arrowChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
 {
-    ArrowChunkCodec codec;
-    for (const auto & chunk : dag_response.chunks())
+    switch (encode_type)
     {
-        blocks.emplace_back(codec.decode(chunk, schema));
+        case tipb::EncodeType::TypeDefault:
+            return std::make_unique<DefaultChunkCodec>();
+        case tipb::EncodeType::TypeChunk:
+            return std::make_unique<ArrowChunkCodec>();
+        case tipb::EncodeType::TypeCHBlock:
+            return std::make_unique<CHBlockChunkCodec>();
+        default:
+            throw Exception("Unsupported encode type", ErrorCodes::BAD_ARGUMENTS);
     }
 }
 
-void defaultChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
 {
-    DefaultChunkCodec codec;
+    auto codec = getCodec(dag_response.encode_type());
     for (const auto & chunk : dag_response.chunks())
-    {
-        blocks.emplace_back(codec.decode(chunk, schema));
-    }
+        blocks.emplace_back(codec->decode(chunk, schema));
 }
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
@@ -657,14 +701,7 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
         throw Exception(dag_response.error().msg(), dag_response.error().code());
 
     BlocksList blocks;
-    if (dag_response.encode_type() == tipb::EncodeType::TypeArrow)
-    {
-        arrowChunkToBlocks(schema, dag_response, blocks);
-    }
-    else
-    {
-        defaultChunkToBlocks(schema, dag_response, blocks);
-    }
+    chunksToBlocks(schema, dag_response, blocks);
     return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 }
 

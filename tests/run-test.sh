@@ -12,7 +12,7 @@ function run_file()
 	local ext=${path##*.}
 
 	if [ "$ext" == "test" ]; then
-		python run-test.py "$dbc" "$path" "$fuzz" "$mysql_client"
+		python2 run-test.py "$dbc" "$path" "$fuzz" "$mysql_client"
 	else
 		if [ "$ext" == "visual" ]; then
 			python run-test-gen-from-visual.py "$path" "$skip_raw_test"
@@ -152,6 +152,8 @@ fi
 mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
 
 if [ "$fullstack" = true ]; then
+    # TODO: Workaround to use row format v1, will switch to v2 when we implement it in TiFlash.
+    mysql -u root -P $tidb_port -h $tidb_server -e "set @@global.tidb_row_format_version = 1"
     mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
     sleep 10
     if [ $? != 0 ]; then

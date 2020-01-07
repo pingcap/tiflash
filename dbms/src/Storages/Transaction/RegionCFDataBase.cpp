@@ -291,6 +291,15 @@ ExtraCFData<Trait> & RegionCFDataBase<Trait>::getExtra()
     return extra;
 }
 
+template <>
+RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(
+    std::pair<RegionLockCFDataTrait::Key, RegionLockCFDataTrait::Value> && kv_pair)
+{
+    // according to the process of pessimistic lock, just overwrite.
+    data.insert_or_assign(std::move(kv_pair.first), std::move(kv_pair.second));
+    return true;
+}
+
 template struct RegionCFDataBase<RegionWriteCFDataTrait>;
 template struct RegionCFDataBase<RegionDefaultCFDataTrait>;
 template struct RegionCFDataBase<RegionLockCFDataTrait>;
