@@ -288,6 +288,8 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
     return false;
 }
 
+bool isNull(const tipb::Expr & expr) { return expr.tp() == tipb::ExprType::Null; }
+
 UInt8 getFieldLengthForArrowEncode(Int32 tp)
 {
     switch (tp)
