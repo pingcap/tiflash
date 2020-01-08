@@ -36,21 +36,6 @@
 │   776 │   777 │
 └───────┴───────┘
 
-=> DBGInvoke dag('select * from default.test where col_1 in (777,888,null)')
-┌─col_1─┬─col_2─┐
-│   777 │   777 │
-└───────┴───────┘
-
-=> DBGInvoke dag('select * from default.test where col_1 in (col_2,777,888,null)')
-┌─col_1─┬─col_2─┐
-│   666 │   666 │
-│   777 │   777 │
-└───────┴───────┘
-
-=> DBGInvoke dag('select * from default.test where col_1 not in (777,888,null)')
-
-=> DBGInvoke dag('select * from default.test where col_1 not in (col_2,777,888,null)')
-
 # Clean up.
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
