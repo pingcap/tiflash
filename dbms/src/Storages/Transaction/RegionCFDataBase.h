@@ -2,7 +2,7 @@
 
 #include <map>
 
-#include <Storages/Transaction/ExtraCFData.h>
+#include <Storages/Transaction/CFDataPreDecode.h>
 
 namespace DB
 {
@@ -70,7 +70,7 @@ struct RegionCFDataBase
 
     size_t deleteRange(const RegionRange & range);
 
-    ExtraCFData<Trait> & getExtra();
+    CFDataPreDecode<Trait> & getCFDataPreDecode();
 
 private:
     static bool shouldIgnoreInsert(const Value & value);
@@ -78,7 +78,7 @@ private:
 
 private:
     Data data;
-    ExtraCFData<Trait> extra;
+    CFDataPreDecode<Trait> pre_decode;
 };
 
 } // namespace DB
