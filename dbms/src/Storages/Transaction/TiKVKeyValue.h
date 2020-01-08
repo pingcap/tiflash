@@ -1,7 +1,7 @@
 #pragma once
 
+#include <Storages/Transaction/AtomicDecodedRow.h>
 #include <Storages/Transaction/SerializationHelper.h>
-#include <Storages/Transaction/TiKVDecodedValue.h>
 #include <Storages/Transaction/Types.h>
 
 namespace DB
@@ -60,7 +60,7 @@ public:
 
     static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
 
-    ValueExtraInfo<is_key> & extraInfo() const { return extra; }
+    AtomicDecodedRow<is_key> & getDecodedRow() const { return decoded_row; }
 
 private:
     StringObject(const Base & str_) : Base(str_) {}
@@ -68,7 +68,7 @@ private:
     size_t size() const = delete;
 
 private:
-    mutable ValueExtraInfo<is_key> extra;
+    mutable AtomicDecodedRow<is_key> decoded_row;
 };
 
 using TiKVKey = StringObject<true>;
