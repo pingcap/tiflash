@@ -509,12 +509,12 @@ void SchemaBuilder<Getter>::applyDropSchemaImpl(const String & database_name)
 
 String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Logger * log)
 {
-    LOG_DEBUG(log,  "create table :" << table_info.serialize());
+    LOG_DEBUG(log, "create table :" << table_info.serialize());
     NamesAndTypes columns;
     std::vector<String> pks;
     for (const auto & column : table_info.columns)
     {
-        LOG_DEBUG(log,  "create column :" + column.name + " type " + std::to_string((int)column.tp) );
+        LOG_DEBUG(log, "create column :" + column.name + " type " + std::to_string((int)column.tp));
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(NameAndTypePair(column.name, type));
 
@@ -563,6 +563,12 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Log
 template <typename Getter>
 void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info)
 {
+    if (table_info.is_view)
+    {
+        LOG_INFO(log, "Table " << table_info.name << " is a view table, we should not sync it.");
+        return;
+    }
+
     table_info.schema_version = target_version;
 
     String stmt = createTableStmt(db_info, table_info, log);
