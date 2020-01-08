@@ -23,13 +23,21 @@ struct RaftCommandResult : private boost::noncopyable
         UpdateTable,
         ChangePeer,
         CompactLog,
+        CommitMerge
     };
 
     bool sync_log;
 
     Type type = Type::Default;
     std::vector<RegionPtr> split_regions{};
-    ImutRegionRangePtr range_before_split;
+    ImutRegionRangePtr ori_region_range;
+    RegionID source_region_id;
+};
+
+struct RegionMergeResult
+{
+    bool source_at_left;
+    UInt64 version;
 };
 
 } // namespace DB
