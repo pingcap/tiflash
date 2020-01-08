@@ -14,11 +14,11 @@ void Region::tryPreDecodeTiKVValue(Context & context)
     if (!storage)
         return;
 
-    std::optional<ExtraCFDataQueue> default_val, write_val;
+    std::optional<CFDataPreDecodeQueue> default_val, write_val;
     {
         std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
-        default_val = data.defaultCF().getExtra().popAll();
-        write_val = data.writeCF().getExtra().popAll();
+        default_val = data.defaultCF().getCFDataPreDecode().popAll();
+        write_val = data.writeCF().getCFDataPreDecode().popAll();
     }
 
     DB::tryPreDecodeTiKVValue(std::move(default_val), *storage);
@@ -74,7 +74,7 @@ bool ValueDecodeHelper::forceDecodeTiKVValue(DecodedFields & decoded_fields, Dec
 
 void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
 {
-    auto & decoded_fields_info = value.extraInfo();
+    auto & decoded_fields_info = value.getDecodedRow();
     if (decoded_fields_info.load())
         return;
 
@@ -107,7 +107,7 @@ void ValueDecodeHelper::forceDecodeTiKVValue(const TiKVValue & value)
     }
 }
 
-void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMergeTree & storage)
+void tryPreDecodeTiKVValue(std::optional<CFDataPreDecodeQueue> && values, StorageMergeTree & storage)
 {
     if (!values)
         return;

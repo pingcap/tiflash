@@ -246,11 +246,11 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
             else
             {
                 const TiKVValue & value = *value_ptr;
-                const DecodedRow * row = value.extraInfo().load();
+                const DecodedRow * row = value.getDecodedRow().load();
                 if (!row)
                 {
                     helper.forceDecodeTiKVValue(value);
-                    row = value.extraInfo().load();
+                    row = value.getDecodedRow().load();
                 }
 
                 const DecodedFields & id_fields = row->decoded_fields;

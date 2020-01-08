@@ -32,8 +32,8 @@ private:
     bool forceDecodeTiKVValue(DecodedFields & decoded_fields, DecodedFields & unknown);
 };
 
-using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;
-void tryPreDecodeTiKVValue(std::optional<ExtraCFDataQueue> && values, StorageMergeTree & storage);
+using CFDataPreDecodeQueue = std::deque<std::shared_ptr<const TiKVValue>>;
+void tryPreDecodeTiKVValue(std::optional<CFDataPreDecodeQueue> && values, StorageMergeTree & storage);
 DecodedFields::const_iterator findByColumnID(const Int64 col_id, const DecodedFields & row);
 
 } // namespace DB

@@ -10,40 +10,40 @@ namespace DB
 struct RegionDefaultCFDataTrait;
 struct RegionWriteCFDataTrait;
 
-using ExtraCFDataQueue = std::deque<std::shared_ptr<const TiKVValue>>;
+using CFDataPreDecodeQueue = std::deque<std::shared_ptr<const TiKVValue>>;
 
 template <typename Trait>
-struct ExtraCFData
+struct CFDataPreDecode
 {
 };
 
 template <>
-struct ExtraCFData<RegionDefaultCFDataTrait>
+struct CFDataPreDecode<RegionDefaultCFDataTrait>
 {
-    ExtraCFData() = default;
+    CFDataPreDecode() = default;
 
     void add(const std::shared_ptr<const TiKVValue> & e) { queue.push_back(e); }
 
-    std::optional<ExtraCFDataQueue> popAll()
+    std::optional<CFDataPreDecodeQueue> popAll()
     {
         if (queue.empty())
             return {};
 
-        ExtraCFDataQueue res;
+        CFDataPreDecodeQueue res;
         queue.swap(res);
         return res;
     }
 
-    ExtraCFData(const ExtraCFData & src) = delete;
+    CFDataPreDecode(const CFDataPreDecode & src) = delete;
 
 private:
-    ExtraCFDataQueue queue;
+    CFDataPreDecodeQueue queue;
 };
 
 template <>
-struct ExtraCFData<RegionWriteCFDataTrait> : ExtraCFData<RegionDefaultCFDataTrait>
+struct CFDataPreDecode<RegionWriteCFDataTrait> : CFDataPreDecode<RegionDefaultCFDataTrait>
 {
-    using Base = ExtraCFData<RegionDefaultCFDataTrait>;
+    using Base = CFDataPreDecode<RegionDefaultCFDataTrait>;
     void add(const std::shared_ptr<const TiKVValue> & e)
     {
         if (!e)
