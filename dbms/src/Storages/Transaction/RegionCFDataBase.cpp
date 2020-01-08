@@ -53,9 +53,9 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
         throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
 
     if constexpr (std::is_same_v<Trait, RegionWriteCFDataTrait>)
-        extra.add(Trait::getRowRawValuePtr(it->second));
+        pre_decode.add(Trait::getRowRawValuePtr(it->second));
     else
-        extra.add(getTiKVValuePtr(it->second));
+        pre_decode.add(getTiKVValuePtr(it->second));
     return true;
 }
 
@@ -286,9 +286,9 @@ size_t RegionCFDataBase<Trait>::deleteRange(const RegionRange & range)
 }
 
 template <typename Trait>
-ExtraCFData<Trait> & RegionCFDataBase<Trait>::getExtra()
+CFDataPreDecode<Trait> & RegionCFDataBase<Trait>::getCFDataPreDecode()
 {
-    return extra;
+    return pre_decode;
 }
 
 template <>

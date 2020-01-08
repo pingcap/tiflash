@@ -20,6 +20,7 @@ class KVStore;
 class RegionTable;
 class RegionRaftCommandDelegate;
 class KVStoreTaskLock;
+class Context;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -153,7 +154,7 @@ public:
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
-    void tryPreDecodeTiKVValue();
+    void tryPreDecodeTiKVValue(Context & context);
 
     TableID getMappedTableID() const;
 

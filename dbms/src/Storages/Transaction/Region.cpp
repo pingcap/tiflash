@@ -6,7 +6,6 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <Storages/Transaction/RegionHelper.hpp>
 
 namespace DB
 {
@@ -98,8 +97,7 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     if (index_reader != nullptr)
     {
         new_region = std::make_shared<Region>(std::move(meta), [&](pingcap::kv::RegionVerID ver_id) {
-            return std::make_shared<IndexReader>(
-                index_reader->cluster, ver_id, index_reader->suggested_ip, index_reader->suggested_port);
+            return std::make_shared<IndexReader>(index_reader->cluster, ver_id, index_reader->suggested_ip, index_reader->suggested_port);
         });
     }
     else
@@ -119,6 +117,18 @@ void RegionRaftCommandDelegate::execChangePeer(
     LOG_INFO(log, toString(false) << " execute change peer type: " << eraftpb::ConfChangeType_Name(change_peer_request.change_type()));
 
     meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
+}
+
+inline const metapb::Peer & findPeer(const metapb::Region & region, UInt64 store_id)
+{
+    for (const auto & peer : region.peers())
+    {
+        if (peer.store_id() == store_id)
+            return peer;
+    }
+
+    throw Exception(
+        std::string(__PRETTY_FUNCTION__) + ": peer with store_id " + DB::toString(store_id) + " not found", ErrorCodes::LOGICAL_ERROR);
 }
 
 Regions RegionRaftCommandDelegate::execBatchSplit(
@@ -695,18 +705,6 @@ void Region::doDeleteRange(const std::string & cf, const RegionRange & range)
 }
 
 std::tuple<RegionVersion, RegionVersion, ImutRegionRangePtr> Region::dumpVersionRange() const { return meta.dumpVersionRange(); }
-
-void Region::tryPreDecodeTiKVValue()
-{
-    std::optional<ExtraCFDataQueue> default_val, write_val;
-    {
-        std::lock_guard<std::mutex> predecode_lock(predecode_mutex);
-        default_val = data.defaultCF().getExtra().popAll();
-        write_val = data.writeCF().getExtra().popAll();
-    }
-    DB::tryPreDecodeTiKVValue(std::move(default_val));
-    DB::tryPreDecodeTiKVValue(std::move(write_val));
-}
 
 Region::Region(RegionMeta && meta_) : Region(std::move(meta_), [](pingcap::kv::RegionVerID) { return nullptr; }) {}
 
