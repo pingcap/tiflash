@@ -9,12 +9,19 @@
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB
 {
+
+namespace DM
+{
+class DeltaMergeStore;
+using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+} // namespace DM
 
 class StorageDeltaMerge : public ext::shared_ptr_helper<StorageDeltaMerge>, public IManageableStorage
 {
@@ -37,10 +44,7 @@ public:
 
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
-    void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
-    {
-        return store->deleteRange(global_context, settings, range_to_delete);
-    }
+    void deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings);
 
     void rename(const String & /*new_path_to_db*/, const String & /*new_database_name*/, const String & /*new_table_name*/) override;
 
