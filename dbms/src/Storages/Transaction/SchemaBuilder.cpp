@@ -507,12 +507,14 @@ void SchemaBuilder<Getter>::applyDropSchemaImpl(const String & database_name)
     drop_interpreter.execute();
 }
 
-String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
+String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Logger * log)
 {
+    LOG_DEBUG(log,  "create table :" << table_info.serialize());
     NamesAndTypes columns;
     std::vector<String> pks;
     for (const auto & column : table_info.columns)
     {
+        LOG_DEBUG(log,  "create column :" + column.name + " type " + std::to_string((int)column.tp) );
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(NameAndTypePair(column.name, type));
 
@@ -563,7 +565,7 @@ void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db
 {
     table_info.schema_version = target_version;
 
-    String stmt = createTableStmt(db_info, table_info);
+    String stmt = createTableStmt(db_info, table_info, log);
 
     LOG_INFO(log, "try to create table with stmt: " << stmt);
 
