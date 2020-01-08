@@ -32,7 +32,7 @@ struct DecodedRow : boost::noncopyable
 {
     // In old way, tidb encode each record like: (codec-flag, column-data), (codec-flag, column-data), ...
     // we can use codec-flag to tell type of column. But, in new way, https://github.com/pingcap/tidb/pull/7597,
-    // there is codec-flag, and we should find type in schema by column id.
+    // there is no codec-flag, and we should find type in schema by column id.
     struct UnknownFields
     {
         // should be sorted by column id.
