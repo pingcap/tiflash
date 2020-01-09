@@ -1,7 +1,6 @@
-#include <Flash/CoprocessorHandler.h>
-
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/CoprocessorHandler.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/LockException.h>
@@ -27,8 +26,7 @@ try
 {
     switch (cop_request->tp())
     {
-        case COP_REQ_TYPE_DAG:
-        {
+        case COP_REQ_TYPE_DAG: {
             std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
             for (auto & range : cop_request->ranges())
             {
@@ -46,8 +44,8 @@ try
             tipb::SelectResponse dag_response;
             DAGDriver driver(cop_context.db_context, dag_request, cop_context.kv_context.region_id(),
                 cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(),
-                cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), std::move(key_ranges),
-                dag_response);
+                cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
+                std::move(key_ranges), dag_response);
             driver.execute();
             cop_response->set_data(dag_response.SerializeAsString());
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");

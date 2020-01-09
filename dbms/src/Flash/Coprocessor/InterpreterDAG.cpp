@@ -1,5 +1,3 @@
-#include <Flash/Coprocessor/InterpreterDAG.h>
-
 #include <Core/TMTPKType.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
@@ -16,6 +14,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Interpreters/Aggregator.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/MutableSupport.h>
@@ -46,7 +45,8 @@ extern const int COP_BAD_DAG_REQUEST;
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_),
       dag(dag_),
-      keep_session_timezone_info(dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
+      keep_session_timezone_info(
+          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
       log(&Logger::get("InterpreterDAG"))
 {}
 
@@ -161,8 +161,11 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     TableID table_id = ts.table_id();
-    // TODO: Get schema version from DAG request.
-    if (context.getSettingsRef().schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
+
+    const Settings & settings = context.getSettingsRef();
+
+    Int64 query_schema_version = settings.schema_version;
+    if (query_schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
     {
         storage = context.getTMTContext().getStorages().get(table_id);
         if (storage == nullptr)
@@ -173,7 +176,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     else
     {
-        getAndLockStorageWithSchemaVersion(table_id, DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+        getAndLockStorageWithSchemaVersion(table_id, query_schema_version);
     }
 
     Names required_columns;
@@ -228,8 +231,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         }
     }
     // todo handle alias column
-    const Settings & settings = context.getSettingsRef();
-
     if (settings.max_columns_to_read && required_columns.size() > settings.max_columns_to_read)
     {
         throw Exception("Limit for number of columns to read exceeded. "
