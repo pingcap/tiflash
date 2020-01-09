@@ -270,9 +270,9 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
         const auto page_entry = snapshot->version()->find(page_id);
         if (!page_entry)
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-        auto file_id_level                       = page_entry->fileIdLevel();
-        auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
-        page_id_and_caches.emplace_back(page_id, *page_entry);
+        auto file_id_level                        = page_entry->fileIdLevel();
+        auto & [page_id_and_entries, file_reader] = file_read_infos[file_id_level];
+        page_id_and_entries.emplace_back(page_id, *page_entry);
         if (file_reader == nullptr)
             file_reader = getReader(file_id_level);
     }
@@ -281,9 +281,9 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
     for (auto & [file_id_level, cache_and_reader] : file_read_infos)
     {
         (void)file_id_level;
-        auto & page_id_and_caches = cache_and_reader.first;
-        auto & reader             = cache_and_reader.second;
-        auto   page_in_file       = reader->read(page_id_and_caches);
+        auto & page_id_and_entries = cache_and_reader.first;
+        auto & reader              = cache_and_reader.second;
+        auto   page_in_file        = reader->read(page_id_and_entries);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, page);
     }
@@ -584,7 +584,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
     PageFile gc_file = PageFile::newPageFile(largest_file_id, level + 1, storage_path, /* is_tmp= */ true, page_file_log);
     LOG_INFO(log,
              storage_name << " GC decide to merge " << merge_files.size() << " files, containing " << migrate_page_count
-                          << " regions to PageFile_" << largest_file_id << "_" << level + 1);
+                          << " regions to PageFile_" << gc_file.getFileId() << "_" << gc_file.getLevel());
 
     // We should check these nums, if any of them is non-zero, we should set `gc_file` to formal.
     size_t num_successful_migrate_pages = 0;
@@ -606,6 +606,10 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
             if (it == file_valid_pages.end())
             {
                 // This file does not contain any valid page.
+                LOG_DEBUG(log,
+                          storage_name << " No valid pages from PageFile_"                                      //
+                                       << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
+                                       << gc_file.getFileId() << "_" << gc_file.getLevel());
                 continue;
             }
 
@@ -642,6 +646,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                 for (const auto & [page_id, page_entry] : page_id_and_entries)
                 {
                     auto & page = pages.find(page_id)->second;
+                    LOG_TRACE(log, storage_name << " Migrating page_" << page_id);
                     wb.gcMovePage(page_id,
                                   page_entry.tag,
                                   std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
@@ -650,6 +655,11 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
 
                 gc_file_writer->write(wb, gc_file_edit);
             }
+
+            LOG_DEBUG(log,
+                      storage_name << " Migrate " << page_id_and_entries.size() << " pages from PageFile_"  //
+                                   << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
+                                   << gc_file.getFileId() << "_" << gc_file.getLevel());
         }
 
 #if 0

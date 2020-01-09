@@ -256,7 +256,16 @@ int main(int argc, char ** argv)
 
     // create PageStorage
     DB::PageStorage::Config config;
-    PSPtr                   ps = std::make_shared<DB::PageStorage>(path, config);
+    PSPtr                   ps = std::make_shared<DB::PageStorage>("stress_test", path, config);
+    {
+        size_t num_of_pages = 0;
+        auto   check        = [&num_of_pages](const DB::Page & page) {
+            (void)page;
+            num_of_pages++;
+        };
+        ps->traverse(check);
+        LOG_INFO(&Logger::get("root"), "Recover " << num_of_pages << " pages.");
+    }
 
     // init all pages in PageStorage
     PSWriter::fillAllPages(ps);
