@@ -147,6 +147,15 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     new_region_data.cf_data_size += size_changed;
 }
 
+void RegionData::mergeFrom(const RegionData & ori_region_data)
+{
+    size_t size_changed = 0;
+    size_changed += default_cf.mergeFrom(ori_region_data.default_cf);
+    size_changed += write_cf.mergeFrom(ori_region_data.write_cf);
+    size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
+    cf_data_size += size_changed;
+}
+
 size_t RegionData::dataSize() const { return cf_data_size; }
 
 void RegionData::assignRegionData(RegionData && new_region_data)
@@ -211,7 +220,7 @@ void RegionData::deleteRange(const ColumnFamilyType cf, const RegionRange & rang
             cf_data_size -= lock_cf.deleteRange(range);
             break;
         default:
-            throw Exception("[RegionData::deleteRange] with undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": undefined CF, should not happen", ErrorCodes::LOGICAL_ERROR);
     }
 }
 

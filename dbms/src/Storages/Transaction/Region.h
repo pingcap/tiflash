@@ -20,6 +20,7 @@ class KVStore;
 class RegionTable;
 class RegionRaftCommandDelegate;
 class KVStoreTaskLock;
+class Context;
 
 /// Store all kv data of one region. Including 'write', 'data' and 'lock' column families.
 /// TODO: currently the synchronize mechanism is broken and need to fix.
@@ -153,7 +154,7 @@ public:
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
-    void tryPreDecodeTiKVValue();
+    void tryPreDecodeTiKVValue(Context & context);
 
     TableID getMappedTableID() const;
 
@@ -210,6 +211,12 @@ private:
     void execChangePeer(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
     void execCompactLog(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    void execPrepareMerge(
+        const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
+    RegionID execCommitMerge(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index,
+        const UInt64 term, const KVStore & kvstore, RegionTable * region_table);
+    void execRollbackMerge(
         const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, const UInt64 index, const UInt64 term);
 };
 

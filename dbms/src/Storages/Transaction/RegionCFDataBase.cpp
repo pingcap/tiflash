@@ -53,9 +53,9 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair)
         throw Exception("Found existing key in hex: " + getTiKVKey(it->second).toHex(), ErrorCodes::LOGICAL_ERROR);
 
     if constexpr (std::is_same_v<Trait, RegionWriteCFDataTrait>)
-        extra.add(Trait::getRowRawValuePtr(it->second));
+        pre_decode.add(Trait::getRowRawValuePtr(it->second));
     else
-        extra.add(getTiKVValuePtr(it->second));
+        pre_decode.add(getTiKVValuePtr(it->second));
     return true;
 }
 
@@ -165,6 +165,25 @@ RegionCFDataBase<Trait> & RegionCFDataBase<Trait>::operator=(RegionCFDataBase &&
 }
 
 template <typename Trait>
+size_t RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_region_data)
+{
+    size_t size_changed = 0;
+
+    const auto & ori_map = ori_region_data.data;
+    auto & tar_map = data;
+
+    for (auto it = ori_map.begin(); it != ori_map.end(); it++)
+    {
+        size_changed += calcTiKVKeyValueSize(it->second);
+        auto ok = tar_map.emplace(*it).second;
+        if (!ok)
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": got duplicate key", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return size_changed;
+}
+
+template <typename Trait>
 size_t RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDataBase & new_region_data)
 {
     const auto & [start_key, end_key] = range;
@@ -267,9 +286,9 @@ size_t RegionCFDataBase<Trait>::deleteRange(const RegionRange & range)
 }
 
 template <typename Trait>
-ExtraCFData<Trait> & RegionCFDataBase<Trait>::getExtra()
+CFDataPreDecode<Trait> & RegionCFDataBase<Trait>::getCFDataPreDecode()
 {
-    return extra;
+    return pre_decode;
 }
 
 template <>
