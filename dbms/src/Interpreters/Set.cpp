@@ -222,6 +222,8 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
 
             if (!value.isNull())
                 columns[0]->insert(value);
+            else
+                setContainsNullValue(true);
         }
         else if (ASTFunction * func = typeid_cast<ASTFunction *>(elem.get()))
         {
@@ -292,6 +294,8 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, 
 
         if (!value.isNull())
             columns[0]->insert(value);
+        else
+            setContainsNullValue(true);
     }
 
     Block block = header.cloneWithColumns(std::move(columns));

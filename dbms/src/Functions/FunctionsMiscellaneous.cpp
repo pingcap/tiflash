@@ -19,8 +19,10 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/NumberTraits.h>
@@ -681,34 +683,44 @@ public:
     }
 };
 
-template <bool negative, bool global>
+template <bool negative, bool global, bool ignore_null>
 struct FunctionInName;
 template <>
-struct FunctionInName<false, false>
+struct FunctionInName<false, false, true>
 {
     static constexpr auto name = "in";
 };
 template <>
-struct FunctionInName<false, true>
+struct FunctionInName<false, false, false>
+{
+    static constexpr auto name = "tidbIn";
+};
+template <>
+struct FunctionInName<false, true, true>
 {
     static constexpr auto name = "globalIn";
 };
 template <>
-struct FunctionInName<true, false>
+struct FunctionInName<true, false, true>
 {
     static constexpr auto name = "notIn";
 };
 template <>
-struct FunctionInName<true, true>
+struct FunctionInName<true, false, false>
+{
+    static constexpr auto name = "tidbNotIn";
+};
+template <>
+struct FunctionInName<true, true, true>
 {
     static constexpr auto name = "globalNotIn";
 };
 
-template <bool negative, bool global>
+template <bool negative, bool global, bool ignore_null>
 class FunctionIn : public IFunction
 {
 public:
-    static constexpr auto name = FunctionInName<negative, global>::name;
+    static constexpr auto name = FunctionInName<negative, global, ignore_null>::name;
     static FunctionPtr create(const Context &)
     {
         return std::make_shared<FunctionIn>();
@@ -724,9 +736,27 @@ public:
         return 2;
     }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
-        return std::make_shared<DataTypeUInt8>();
+        if constexpr (ignore_null)
+            return std::make_shared<DataTypeUInt8>();
+
+        auto type = removeNullable(arguments[0].type);
+        if (typeid_cast<const DataTypeTuple *>(type.get()))
+            throw Exception("Illegal type (" + arguments[0].type->getName() + ") of 1 argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!typeid_cast<const DataTypeSet *>(arguments[1].type.get()))
+            throw Exception("Illegal type (" + arguments[1].type->getName() + ") of 2 argument of function " + getName(),
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        bool return_nullable = arguments[0].type->isNullable();
+        ColumnPtr column_set_ptr = arguments[1].column;
+        auto * column_set = typeid_cast<const ColumnSet *>(&*column_set_ptr);
+        return_nullable |= column_set->getData()->containsNullValue();
+
+        if (return_nullable)
+            return makeNullable(std::make_shared<DataTypeUInt8>());
+        else
+            return std::make_shared<DataTypeUInt8>();
     }
 
     bool useDefaultImplementationForNulls() const override
@@ -736,6 +766,16 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) override
     {
+        const ColumnWithTypeAndName & left_arg = block.getByPosition(arguments[0]);
+        if constexpr (!ignore_null)
+        {
+            if (left_arg.type->onlyNull())
+            {
+                block.getByPosition(result).column =
+                        block.getByPosition(result).type->createColumnConst(block.rows(),Null());
+                return;
+            }
+        }
         /// Second argument must be ColumnSet.
         ColumnPtr column_set_ptr = block.getByPosition(arguments[1]).column;
         const ColumnSet * column_set = typeid_cast<const ColumnSet *>(&*column_set_ptr);
@@ -743,10 +783,16 @@ public:
             throw Exception("Second argument for function '" + getName() + "' must be Set; found " + column_set_ptr->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
 
+        bool return_nullable = false;
+        bool set_contains_null = column_set->getData()->containsNullValue();
+        if constexpr (!ignore_null)
+        {
+            return_nullable = left_arg.type->isNullable() || set_contains_null;
+        }
+
         Block block_of_key_columns;
 
         /// First argument may be tuple or single column.
-        const ColumnWithTypeAndName & left_arg = block.getByPosition(arguments[0]);
         const ColumnTuple * tuple = typeid_cast<const ColumnTuple *>(left_arg.column.get());
         const ColumnConst * const_tuple = checkAndGetColumnConst<ColumnTuple>(left_arg.column.get());
         const DataTypeTuple * type_tuple = typeid_cast<const DataTypeTuple *>(left_arg.type.get());
@@ -769,7 +815,53 @@ public:
         else
             block_of_key_columns.insert(left_arg);
 
-        block.getByPosition(result).column = column_set->getData()->execute(block_of_key_columns, negative);
+        if constexpr (ignore_null)
+        {
+            block.getByPosition(result).column = column_set->getData()->execute(block_of_key_columns, negative);
+        }
+        else
+        {
+            if (return_nullable)
+            {
+                auto nested_res = column_set->getData()->execute(block_of_key_columns, negative);
+                if (left_arg.column->isColumnNullable())
+                {
+                    ColumnPtr result_null_map_column = dynamic_cast<const ColumnNullable &>(*left_arg.column).getNullMapColumnPtr();
+                    if (set_contains_null)
+                    {
+                        MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
+                        NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
+                        auto uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
+                        const auto & data = uint8_column->getData();
+                        for (size_t i = 0, size = result_null_map.size(); i < size; i++)
+                        {
+                            if (data[i] == negative)
+                                result_null_map[i] = 1;
+                        }
+                        result_null_map_column = std::move(mutable_result_null_map_column);
+                    }
+                    block.getByPosition(result).column = ColumnNullable::create(nested_res, result_null_map_column);
+                }
+                else
+                {
+                    auto col_null_map = ColumnUInt8::create();
+                    ColumnUInt8::Container & vec_null_map = col_null_map->getData();
+                    vec_null_map.assign(block.rows(), (UInt8) 0);
+                    auto uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
+                    const auto & data = uint8_column->getData();
+                    for (size_t i = 0, size = vec_null_map.size(); i < size; i++)
+                    {
+                        if (data[i] == negative)
+                            vec_null_map[i] = 1;
+                    }
+                    block.getByPosition(result).column = ColumnNullable::create(nested_res, std::move(col_null_map));
+                }
+            }
+            else
+            {
+                block.getByPosition(result).column = column_set->getData()->execute(block_of_key_columns, negative);
+            }
+        }
     }
 };
 
@@ -1865,10 +1957,12 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     factory.registerFunction<FunctionBar>();
     factory.registerFunction<FunctionHasColumnInTable>();
 
-    factory.registerFunction<FunctionIn<false, false>>();
-    factory.registerFunction<FunctionIn<false, true>>();
-    factory.registerFunction<FunctionIn<true, false>>();
-    factory.registerFunction<FunctionIn<true, true>>();
+    factory.registerFunction<FunctionIn<false, false, true>>();
+    factory.registerFunction<FunctionIn<false, true, true>>();
+    factory.registerFunction<FunctionIn<true, false, true>>();
+    factory.registerFunction<FunctionIn<true, true, true>>();
+    factory.registerFunction<FunctionIn<true, false, false>>();
+    factory.registerFunction<FunctionIn<false, false, false>>();
 
     factory.registerFunction<FunctionIsFinite>();
     factory.registerFunction<FunctionIsInfinite>();
