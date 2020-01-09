@@ -26,7 +26,8 @@ try
 {
     switch (cop_request->tp())
     {
-        case COP_REQ_TYPE_DAG: {
+        case COP_REQ_TYPE_DAG:
+        {
             std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
             for (auto & range : cop_request->ranges())
             {
