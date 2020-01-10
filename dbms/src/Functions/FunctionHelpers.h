@@ -103,6 +103,4 @@ bool functionIsInOperator(const String & name);
 
 bool functionIsInOrGlobalInOperator(const String & name);
 
-
-
 }
