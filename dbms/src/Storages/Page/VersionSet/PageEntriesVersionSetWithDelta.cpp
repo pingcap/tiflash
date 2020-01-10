@@ -111,11 +111,8 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
         case WriteBatch::WriteType::REF:
             this->applyRef(rec);
             break;
-        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
+        case WriteBatch::WriteType::UPSERT:
             throw Exception("WriteType::MOVE_NORMAL_PAGE should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
-            break;
-        case WriteBatch::WriteType::INGEST:
-            throw Exception("WriteType::INGEST should only write by apply inplace", ErrorCodes::LOGICAL_ERROR);
             break;
         }
     }
@@ -243,11 +240,8 @@ void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta
             // Shorten ref-path in case there is RefPage to RefPage
             current->ref<false>(rec.page_id, rec.ori_page_id);
             break;
-        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-            current->updateNormalPage(rec.page_id, rec.entry);
-            break;
-        case WriteBatch::WriteType::INGEST:
-            current->ingest(rec.page_id, rec.entry);
+        case WriteBatch::WriteType::UPSERT:
+            current->upsertPage(rec.page_id, rec.entry);
             break;
         }
     }

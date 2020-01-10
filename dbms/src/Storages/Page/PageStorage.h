@@ -139,7 +139,7 @@ private:
     size_t deletes = 0;
     size_t puts    = 0;
     size_t refs    = 0;
-    size_t moves   = 0;
+    size_t upserts   = 0;
 };
 
 class PageReader

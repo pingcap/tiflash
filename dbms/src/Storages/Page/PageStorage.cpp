@@ -232,8 +232,8 @@ void PageStorage::write(const WriteBatch & wb)
         case WriteBatch::WriteType::REF:
             refs++;
             break;
-        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-            moves++;
+        case WriteBatch::WriteType::UPSERT:
+            upserts++;
             break;
         default:
             throw Exception("Unexpected type " + DB::toString((UInt64)w.type));
@@ -421,7 +421,8 @@ bool PageStorage::gc()
     });
 
     LOG_TRACE(log,
-              storage_name << " Before gc, deletes[" << deletes << "], puts[" << puts << "], refs[" << refs << "], moves[" << moves << "]");
+              storage_name << " Before gc, deletes[" << deletes << "], puts[" << puts << "], refs[" << refs << "], upserts[" << upserts
+                           << "]");
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -587,11 +588,16 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
 void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files,
                                   const PageFileIdAndLevel &                       writing_file_id_level)
 {
-    PageId smallest_file_id = 0;
+    PageFileIdAndLevel largest_id_level;
     if (page_files.size() > 0)
     {
-        smallest_file_id = page_files.begin()->getFileId();
+        largest_id_level = page_files.begin()->fileIdLevel();
     }
+    else
+    {
+        return;
+    }
+    largest_id_level.second++;
 
     // Select PageFiles to compact
     std::set<PageFile, PageFile::Comparator> page_files_to_compact;
@@ -634,7 +640,7 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
     for (auto & page_id : normal_ids)
     {
         auto page = snapshot->version()->at(page_id);
-        wb.ingestPage(page_id, page.tag);
+        wb.upsertPage(page_id, page.tag, nullptr, page.size);
     }
 
     // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.
@@ -645,7 +651,7 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
         wb.putRefPage(page_id, ori_id);
     }
 
-    auto snapshot_file = PageFile::newPageFile(smallest_file_id, 0, storage_path, PageFile::Type::Temp, log);
+    auto snapshot_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
     {
         auto snapshot_writer = snapshot_file.createWriter(false);
 
@@ -745,7 +751,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                 for (const auto & [page_id, page_entry] : page_id_and_entries)
                 {
                     auto & page = pages.find(page_id)->second;
-                    wb.gcMovePage(page_id,
+                    wb.upsertPage(page_id,
                                   page_entry.tag,
                                   std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
                                   page.data.size());

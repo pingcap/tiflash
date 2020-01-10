@@ -43,9 +43,9 @@ public:
         for (auto & rec : edit.getRecords())
         {
             if (unlikely(rec.type == WriteBatch::WriteType::PUT))
-                throw Exception("Should use MOVE_NORMAL_PAGE for gc edits, please check your code!!", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Should use UPDATE for gc edits, please check your code!!", ErrorCodes::LOGICAL_ERROR);
 
-            if (rec.type != WriteBatch::WriteType::MOVE_NORMAL_PAGE)
+            if (rec.type != WriteBatch::WriteType::UPSERT)
                 continue;
             // Gc only apply MOVE_NORMAL_PAGE for updating normal page entries
             const auto old_page_entry = old_version->findNormalPageEntry(rec.page_id);

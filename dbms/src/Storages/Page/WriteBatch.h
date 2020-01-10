@@ -18,11 +18,9 @@ public:
         PUT = 1,
         // Create a RefPage{ref_id} -> Page{id}
         REF = 2,
-        // Move an exist normal page to new PageFile. Now only used by GC.
+        // Create or update a Page. Now only used by GC.
         // Compare to `PUT`, this type won't create the RefPage{id} -> Page{id} by default.
-        MOVE_NORMAL_PAGE = 3,
-        // Ingest an exists normal page, the concrete meta will be apply soon by MOVE_NORMAL_PAGE.
-        INGEST           = 4,
+        UPSERT = 3,
     };
 
 private:
@@ -46,12 +44,6 @@ public:
         writes.emplace_back(w);
     }
 
-    void ingestPage(PageId page_id, UInt64 tag)
-    {
-        Write w = {WriteType::INGEST, page_id, tag, nullptr, 0, 0};
-        writes.emplace_back(w);
-    }
-
     void putExternal(PageId page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
@@ -59,9 +51,9 @@ public:
         writes.emplace_back(w);
     }
 
-    void gcMovePage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, UInt32 size)
+    void upsertPage(PageId page_id, UInt64 tag, const ReadBufferPtr & read_buffer, UInt32 size)
     {
-        Write w = {WriteType::MOVE_NORMAL_PAGE, page_id, tag, read_buffer, size, 0};
+        Write w = {WriteType::UPSERT, page_id, tag, read_buffer, size, 0};
         writes.emplace_back(w);
     }
 

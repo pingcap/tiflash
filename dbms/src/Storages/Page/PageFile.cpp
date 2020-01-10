@@ -61,9 +61,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-        // For ingest page, write.size is 0
-        case WriteBatch::WriteType::INGEST:
+        case WriteBatch::WriteType::UPSERT:
             data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
             break;
@@ -96,8 +94,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
         switch (write.type)
         {
         case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-        case WriteBatch::WriteType::INGEST:
+        case WriteBatch::WriteType::UPSERT:
         {
             if (write.read_buffer) // In case read_buffer is nullptr
                 write.read_buffer->readStrict(data_pos, write.size);
@@ -114,8 +111,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
             if (write.type == WriteBatch::WriteType::PUT)
                 edit.put(write.page_id, pc);
-            else if (write.type == WriteBatch::WriteType::MOVE_NORMAL_PAGE)
-                edit.moveNormalPage(write.page_id, pc);
+            else if (write.type == WriteBatch::WriteType::UPSERT)
+                edit.upsertPage(write.page_id, pc);
 
             PageUtil::put(meta_pos, (PageId)write.page_id);
             PageUtil::put(meta_pos, (PageTag)write.tag);
@@ -204,8 +201,7 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             switch (write_type)
             {
             case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-            case WriteBatch::WriteType::INGEST:
+            case WriteBatch::WriteType::UPSERT:
             {
                 auto      page_id = PageUtil::get<PageId>(pos);
                 PageEntry pc;
@@ -218,10 +214,8 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
 
                 if (write_type == WriteBatch::WriteType::PUT)
                     edit.put(page_id, pc);
-                else if (write_type == WriteBatch::WriteType::MOVE_NORMAL_PAGE)
-                    edit.moveNormalPage(page_id, pc);
-                else if (write_type == WriteBatch::WriteType::INGEST)
-                    edit.ingest(page_id, pc);
+                else if (write_type == WriteBatch::WriteType::UPSERT)
+                    edit.upsertPage(page_id, pc);
 
                 page_data_file_size += pc.size;
                 break;

@@ -42,19 +42,11 @@ public:
      */
     void put(PageId page_id, const PageEntry & entry);
 
-    /** Update Page{normal_page_id}'s entry, if the entry is existed, this method
-     *  will inherit the ref-counting of old entry.
+    /** Create or Update Page{normal_page_id}'s entry, if the entry is existed, this method
+     *  will inherit the ref-counting of old entry, otherwise the ref count will be set to 0.
      *  Compare to method `put`, this method won't create RefPage{page_id} -> Page{page_id}.
-     *  Caller should ensure Page{normal_page_id} is exists.
      */
-    void updateNormalPage(PageId normal_page_id, PageEntry entry);
-
-    /** Ingest Page{page_id} with entry. Should only be applied in snapshot. The ingested
-     *  page's ref-count is 0, since it will be referenced by Ref soon.
-     *  Notice that ingested page entry hasn't data.
-     */
-    void ingest(PageId page_id, const PageEntry & entry);
-
+    void upsertPage(PageId normal_page_id, PageEntry entry);
 
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
@@ -243,28 +235,7 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
 }
 
 template <typename T>
-void PageEntriesMixin<T>::ingest(PageId page_id, const PageEntry & entry)
-{
-    assert(is_base);
-    const PageId normal_page_id = resolveRefId(page_id);
-    assert(page_id == normal_page_id);
-
-    auto ori_iter = normal_pages.find(page_id);
-    if (likely(ori_iter == normal_pages.end()))
-    {
-        normal_pages[page_id]     = entry;
-        normal_pages[page_id].ref = 0;
-    }
-    else
-    {
-        throw Exception("Try to ingest existed normal page: " + DB::toString(page_id), ErrorCodes::LOGICAL_ERROR);
-    }
-
-    max_page_id = std::max(max_page_id, page_id);
-}
-
-template <typename T>
-void PageEntriesMixin<T>::updateNormalPage(PageId normal_page_id, PageEntry entry)
+void PageEntriesMixin<T>::upsertPage(PageId normal_page_id, PageEntry entry)
 {
     assert(is_base); // can only call by base
 
@@ -280,7 +251,8 @@ void PageEntriesMixin<T>::updateNormalPage(PageId normal_page_id, PageEntry entr
     else
     {
         // Page{normal_page_id} not exist
-        throw Exception("Try to move non-exist normal page: " + DB::toString(normal_page_id), ErrorCodes::LOGICAL_ERROR);
+        entry.ref                    = 0;
+        normal_pages[normal_page_id] = entry;
     }
 
     // update max_page_id
