@@ -1,5 +1,3 @@
-#include <Flash/Coprocessor/InterpreterDAG.h>
-
 #include <Core/TMTPKType.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
@@ -16,6 +14,7 @@
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Interpreters/Aggregator.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/MutableSupport.h>
@@ -46,7 +45,8 @@ extern const int COP_BAD_DAG_REQUEST;
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_),
       dag(dag_),
-      keep_session_timezone_info(dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
+      keep_session_timezone_info(
+          dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
       log(&Logger::get("InterpreterDAG"))
 {}
 
@@ -161,8 +161,10 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         throw Exception("Table id not specified in table scan executor", ErrorCodes::COP_BAD_DAG_REQUEST);
     }
     TableID table_id = ts.table_id();
-    // TODO: Get schema version from DAG request.
-    if (context.getSettingsRef().schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
+
+    const Settings & settings = context.getSettingsRef();
+
+    if (settings.schema_version == DEFAULT_UNSPECIFIED_SCHEMA_VERSION)
     {
         storage = context.getTMTContext().getStorages().get(table_id);
         if (storage == nullptr)
@@ -173,7 +175,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     }
     else
     {
-        getAndLockStorageWithSchemaVersion(table_id, DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+        getAndLockStorageWithSchemaVersion(table_id, settings.schema_version);
     }
 
     Names required_columns;
@@ -228,8 +230,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         }
     }
     // todo handle alias column
-    const Settings & settings = context.getSettingsRef();
-
     if (settings.max_columns_to_read && required_columns.size() > settings.max_columns_to_read)
     {
         throw Exception("Limit for number of columns to read exceeded. "
@@ -486,21 +486,30 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
         /// Lock storage.
         auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
 
-        /// Check schema version.
+        /// Check schema version, requiring TiDB/TiSpark and TiFlash both use exactly the same schema.
+        // We have three schema versions, two in TiFlash:
+        // 1. Storage: the version that this TiFlash table (storage) was last altered.
+        // 2. Global: the version that TiFlash global schema is at.
+        // And one from TiDB/TiSpark:
+        // 3. Query: the version that TiDB/TiSpark used for this query.
         auto storage_schema_version = storage_->getTableInfo().schema_version;
-        // Not allow storage schema version greater than query schema version in any case.
+        // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
             throw Exception("Table " + std::to_string(table_id) + " schema version " + std::to_string(storage_schema_version)
                     + " newer than query schema version " + std::to_string(query_schema_version),
                 ErrorCodes::SCHEMA_VERSION_ERROR);
-
-        // If schema synced, we must be very recent so we are good as long as storage schema version is no greater than query schema version.
-        // If schema not synced, we are good if storage schema version is right on query schema version.
-        // Otherwise we are at the risk of out-of-date schema, but we still have a chance to be sure that we are good, if global schema version is greater than query schema version.
-        if ((schema_synced && storage_schema_version <= query_schema_version)
-            || (!schema_synced && (storage_schema_version == query_schema_version || global_schema_version > query_schema_version)))
+        // From now on we have storage <= query.
+        // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
+        if (schema_synced)
             return std::make_tuple(storage_, lock, storage_schema_version, true);
-
+        // From now on the schema was not synced.
+        // 1. storage == query, TiDB/TiSpark is using exactly the same schema that altered this table, we are just OK to serve.
+        // 2. global >= query, TiDB/TiSpark is using a schema older than TiFlash global, but as mentioned above we have storage <= query,
+        // meaning that the query schema is still newer than the time when this table was last altered, so we still OK to serve.
+        if (storage_schema_version == query_schema_version || global_schema_version >= query_schema_version)
+            return std::make_tuple(storage_, lock, storage_schema_version, true);
+        // From now on we have global < query.
+        // Return false for outer to sync and retry.
         return std::make_tuple(nullptr, nullptr, storage_schema_version, false);
     };
 
