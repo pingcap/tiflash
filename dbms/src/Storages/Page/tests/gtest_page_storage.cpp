@@ -450,8 +450,13 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     PageStorage::GcCandidates candidates{
         id_and_lvl,
     };
-    auto            s0         = storage->getSnapshot();
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, true, storage->page_file_log);
+    auto                             s0 = storage->getSnapshot();
+    PageStorage::ListPageFilesOption opt;
+    opt.remove_tmp_files       = true;
+    opt.ignore_legacy          = true;
+    opt.ignore_snapshot        = true;
+    opt.ignore_gc_compacted    = true;
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     s0.reset();
     auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
@@ -561,7 +566,12 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     PageStorage::GcCandidates candidates{
         id_and_lvl,
     };
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, true, storage->page_file_log);
+    PageStorage::ListPageFilesOption opt;
+    opt.remove_tmp_files       = true;
+    opt.ignore_legacy          = true;
+    opt.ignore_snapshot        = true;
+    opt.ignore_gc_compacted    = true;
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     auto            s0         = storage->getSnapshot();
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
     s0.reset();
@@ -608,7 +618,12 @@ try
 
     PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
 
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, true, storage->page_file_log);
+    PageStorage::ListPageFilesOption opt;
+    opt.remove_tmp_files       = true;
+    opt.ignore_legacy          = true;
+    opt.ignore_snapshot        = true;
+    opt.ignore_gc_compacted    = true;
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit;
     {
         // migrate PageFile{1, 0} -> PageFile{1, 1}

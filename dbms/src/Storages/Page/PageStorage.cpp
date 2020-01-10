@@ -17,8 +17,8 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::set<PageFile, PageFile::Comparator> PageStorage::listAllPageFiles(
-    const String & storage_path, bool remove_tmp_file, bool ignore_legacy, bool ignore_snapshot, Logger * page_file_log)
+std::set<PageFile, PageFile::Comparator>
+PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -38,38 +38,31 @@ std::set<PageFile, PageFile::Comparator> PageStorage::listAllPageFiles(
     for (const auto & name : file_names)
     {
         auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
-        if (page_file_type == PageFile::Type::Formal)
-        {
-            page_files.insert(page_file);
-        }
-        else if (page_file_type == PageFile::Type::Legacy)
-        {
-            if (!ignore_legacy)
-            {
-                page_files.insert(page_file);
-
-                if (remove_tmp_file)
-                {
-                    page_file.removeDataIfExists();
-                }
-            }
-        }
-        else if (page_file_type == PageFile::Type::Snapshot)
-        {
-            if (!ignore_snapshot)
-            {
-                page_files.insert(page_file);
-            }
-        }
+        if ((page_file_type == PageFile::Type::Legacy && option.ignore_legacy)
+            || (page_file_type == PageFile::Type::Snapshot && option.ignore_snapshot))
+            continue;
+        else if (option.remove_tmp_files && page_file_type == PageFile::Type::Temp)
+            page_file.destroy();
         else
+            page_files.insert(page_file);
+    }
+
+    if (option.ignore_gc_compacted)
+    {
+        // Ignore PageFiles before last Snapshot
+        auto flag = page_files.end();
+        for (auto itr = page_files.begin(); itr != page_files.end(); itr++)
         {
-            // For temporary and invalid
-            if (remove_tmp_file)
+            // Bubbles the last Snapshot
+            if (itr->getType() == PageFile::Type::Snapshot)
             {
-                // Remove temporary file.
-                Poco::File file(storage_path + "/" + name);
-                file.remove(true);
+                flag = itr;
             }
+        }
+        // Remove compacted PageFiles
+        if (flag != page_files.end())
+        {
+            page_files.erase(page_files.begin(), flag);
         }
     }
 
@@ -85,8 +78,10 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
       versioned_page_entries(config.version_set_config, log)
 {
     /// page_files are in ascending ordered by (file_id, level).
-    auto page_files
-        = PageStorage::listAllPageFiles(storage_path, /* remove_tmp_file= */ true, /* ignore_legacy */ false, false, page_file_log);
+    ListPageFilesOption opt;
+    opt.remove_tmp_files    = true;
+    opt.ignore_gc_compacted = true;
+    auto page_files         = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     // recover current version from both formal and legacy page files
 
 #ifdef DELTA_VERSION_SET
@@ -430,8 +425,10 @@ bool PageStorage::gc()
     {
         external_pages = external_pages_scanner();
     }
-    auto page_files = PageStorage::listAllPageFiles(
-        storage_path, /* remove_tmp_file */ true, /* ignore_legacy */ false, /* ignore_snapshot */ false, page_file_log);
+    ListPageFilesOption opt;
+    opt.remove_tmp_files    = true;
+    opt.ignore_gc_compacted = true;
+    auto page_files         = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     if (page_files.empty())
     {
         return false;

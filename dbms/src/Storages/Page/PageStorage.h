@@ -4,6 +4,7 @@
 #include <optional>
 #include <set>
 #include <shared_mutex>
+#include <type_traits>
 #include <unordered_map>
 
 #include <Storages/Page/Page.h>
@@ -44,6 +45,16 @@ public:
         size_t  merge_hint_low_used_file_num        = 10;
 
         ::DB::MVCC::VersionSetConfig version_set_config;
+    };
+
+    struct ListPageFilesOption
+    {
+        ListPageFilesOption() {}
+
+        bool remove_tmp_files    = false;
+        bool ignore_legacy       = false;
+        bool ignore_snapshot     = false;
+        bool ignore_gc_compacted = false;
     };
 
 #ifdef DELTA_VERSION_SET
@@ -87,8 +98,8 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
-    static std::set<PageFile, PageFile::Comparator> listAllPageFiles(
-        const String & storage_path, bool remove_tmp_file, bool ignore_legacy, bool ignore_snapshot, Poco::Logger * page_file_log);
+    static std::set<PageFile, PageFile::Comparator>
+    listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
 private:
     PageFile::Writer & getWriter();
@@ -139,7 +150,7 @@ private:
     size_t deletes = 0;
     size_t puts    = 0;
     size_t refs    = 0;
-    size_t upserts   = 0;
+    size_t upserts = 0;
 };
 
 class PageReader
