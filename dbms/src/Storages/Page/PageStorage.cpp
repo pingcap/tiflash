@@ -69,6 +69,43 @@ PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_f
     return page_files;
 }
 
+std::optional<PageFile> PageStorage::tryGetLastSnapshot(const String & storage_path, Poco::Logger * page_file_logger, bool remove_old)
+{
+    Poco::File folder(storage_path);
+    if (!folder.exists())
+    {
+        folder.createDirectories();
+    }
+    std::vector<std::string> file_names;
+    folder.list(file_names);
+
+    if (file_names.empty())
+        return {};
+
+    std::optional<PageFile> ret = {};
+    std::vector<PageFile>   snapshots;
+    for (const auto & name : file_names)
+    {
+        auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_logger);
+        if (page_file_type == PageFile::Type::Snapshot)
+        {
+            ret = page_file;
+            snapshots.emplace_back(page_file);
+        }
+    }
+
+    if (remove_old)
+    {
+        for (auto page_file : snapshots)
+        {
+            if (page_file.fileIdLevel() != ret->fileIdLevel())
+                page_file.destroy();
+        }
+    }
+
+    return ret;
+}
+
 PageStorage::PageStorage(String name, const String & storage_path_, const Config & config_)
     : storage_name(std::move(name)),
       storage_path(storage_path_),
@@ -79,12 +116,37 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
 {
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
-    opt.remove_tmp_files    = true;
-    opt.ignore_gc_compacted = true;
-    auto page_files         = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    opt.remove_tmp_files = true;
+    opt.ignore_snapshot  = true;
+    auto page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     // recover current version from both formal and legacy page files
 
 #ifdef DELTA_VERSION_SET
+    // Remove old snapshots and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
+    auto snapshot_file = PageStorage::tryGetLastSnapshot(storage_path, page_file_log, true);
+    {
+        std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
+        if (snapshot_file)
+        {
+            for (auto itr = page_files.begin(); itr != page_files.end();)
+            {
+                if (itr->fileIdLevel() < snapshot_file->fileIdLevel() //
+                    || itr->fileIdLevel() == snapshot_file->fileIdLevel())
+                {
+                    page_files_to_archieve.insert(*itr);
+                    itr = page_files.erase(itr);
+                }
+                else
+                {
+                    itr++;
+                }
+            }
+
+            archievePageFiles(page_files_to_archieve);
+            page_files.insert(*snapshot_file);
+        }
+    }
+
     for (auto & page_file : page_files)
     {
         try
@@ -440,15 +502,25 @@ bool PageStorage::gc()
         writing_file_id_level = write_file.fileIdLevel();
     }
 
-    // Compact consecutive Legacy PageFiles into a snapshot
-    gcCompactLegacy(page_files, writing_file_id_level);
     {
-        for (auto itr = page_files.begin(); itr != page_files.end();)
+        // Compact consecutive Legacy PageFiles into a snapshot
+        auto id_level = gcCompactLegacy(page_files, writing_file_id_level);
         {
-            if (itr->getType() == PageFile::Type::Legacy)
-                itr = page_files.erase(itr);
-            else
-                itr++;
+            for (auto itr = page_files.begin(); itr != page_files.end();)
+            {
+                if (itr->fileIdLevel() < id_level || itr->fileIdLevel() == id_level)
+                {
+                    itr = page_files.erase(itr);
+                }
+                else if (itr->getType() == PageFile::Type::Legacy)
+                {
+                    itr = page_files.erase(itr);
+                }
+                else
+                {
+                    itr++;
+                }
+            }
         }
     }
 
@@ -582,20 +654,9 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     return merge_files;
 }
 
-void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                  const PageFileIdAndLevel &                       writing_file_id_level)
+PageFileIdAndLevel PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                                const PageFileIdAndLevel &                       writing_file_id_level)
 {
-    PageFileIdAndLevel largest_id_level;
-    if (page_files.size() > 0)
-    {
-        largest_id_level = page_files.begin()->fileIdLevel();
-    }
-    else
-    {
-        return;
-    }
-    largest_id_level.second++;
-
     // Select PageFiles to compact
     std::set<PageFile, PageFile::Comparator> page_files_to_compact;
     for (auto & page_file : page_files)
@@ -616,7 +677,7 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
 
     if (page_files_to_compact.size() <= 1)
     {
-        return;
+        return {-1, 0};
     }
 
     // Build a version_set with snapshot
@@ -648,6 +709,8 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
         wb.putRefPage(page_id, ori_id);
     }
 
+    // Use the largest id-level in page_files_to_compact as Snapshot's
+    PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
     auto snapshot_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
     {
         auto snapshot_writer = snapshot_file.createWriter(false);
@@ -657,6 +720,31 @@ void PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator>
     }
 
     snapshot_file.setSnapshot();
+
+    // Archieve obsolete PageFiles
+    {
+        std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
+        for (auto & page_file : page_files)
+        {
+            if (page_file.fileIdLevel() < largest_id_level || page_file.fileIdLevel() == largest_id_level)
+            {
+                page_file.destroy();
+                page_files_to_archieve.insert(page_file);
+            }
+        }
+
+        archievePageFiles(page_files_to_archieve);
+    }
+
+    return largest_id_level;
+}
+
+void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files)
+{
+    for (auto & page_file : page_files)
+    {
+        page_file.destroy();
+    }
 }
 
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,

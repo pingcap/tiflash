@@ -101,6 +101,8 @@ public:
     static std::set<PageFile, PageFile::Comparator>
     listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
+    static std::optional<PageFile> tryGetLastSnapshot(const String & storage_path, Poco::Logger * page_file_log, bool remove_old = false);
+
 private:
     PageFile::Writer & getWriter();
     ReaderPtr          getReader(const PageFileIdAndLevel & file_id_level);
@@ -113,7 +115,10 @@ private:
                                         UInt64 &                                         candidate_total_size,
                                         size_t &                                         migrate_page_count) const;
 
-    void gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files, const PageFileIdAndLevel & writing_file_id_level);
+    PageFileIdAndLevel gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                       const PageFileIdAndLevel &                       writing_file_id_level);
+
+    void archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files_to_archieve);
 
     PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
                                    const GcLivesPages & file_valid_pages,
