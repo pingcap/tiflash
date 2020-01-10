@@ -48,3 +48,6 @@
 	path = contrib/tiflash-proxy
 	url = git@github.com:solotzg/tikv.git
 	branch = tiflash-proxy-lib
+[submodule "contrib/prometheus-cpp"]
+	path = contrib/prometheus-cpp
+	url = git@github.com:marsishandsome/prometheus-cpp.git

@@ -18,6 +18,7 @@ add_library (clickhouse-server-lib
     HTTPHandler.cpp
     InterserverIOHTTPHandler.cpp
     MetricsTransmitter.cpp
+    MetricsPrometheus.cpp
     NotFoundHandler.cpp
     PingRequestHandler.cpp
     ReplicasStatusHandler.cpp

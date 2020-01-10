@@ -7,6 +7,8 @@ ENV HOME /root/
 
 COPY prepare-environments /prepare-environments
 
+RUN yum remove -y epel-release
+
 RUN yum makecache \
   && yum install -y \
          ccache \
@@ -18,6 +20,8 @@ RUN yum makecache \
          openssl-devel \
          libtool-ltdl-devel \
          python3-devel \
+         libcurl-devel \
+         bzip2 \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
   && pip3 install \
           pybind11 \
