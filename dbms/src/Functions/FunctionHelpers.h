@@ -99,5 +99,8 @@ Block createBlockWithNestedColumns(const Block & block, const ColumnNumbers & ar
 /// Similar function as above. Additionally transform the result type if needed.
 Block createBlockWithNestedColumns(const Block & block, const ColumnNumbers & args, size_t result);
 
+bool functionIsInOperator(const String & name);
+
+bool functionIsInOrGlobalInOperator(const String & name);
 
 }

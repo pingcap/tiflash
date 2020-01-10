@@ -25,7 +25,6 @@ bool isColumnExpr(const tipb::Expr & expr);
 String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
 const String & getTypeName(const tipb::Expr & expr);
 String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> & input_col);
-bool isInOrGlobalInOperator(const String & name);
 bool exprHasValidFieldType(const tipb::Expr & expr);
 void constructStringLiteralTiExpr(tipb::Expr & expr, const String & value);
 void constructInt64LiteralTiExpr(tipb::Expr & expr, Int64 value);
