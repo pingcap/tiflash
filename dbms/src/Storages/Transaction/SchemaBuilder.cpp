@@ -514,7 +514,7 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Log
     std::vector<String> pks;
     for (const auto & column : table_info.columns)
     {
-        LOG_DEBUG(log, "Analyze column :" + column.name + " type " + std::to_string((int)column.tp));
+        LOG_DEBUG(log, "Analyzing column :" + column.name + " type " + std::to_string((int)column.tp));
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(NameAndTypePair(column.name, type));
 

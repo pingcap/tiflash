@@ -373,7 +373,7 @@ void StorageMergeTree::alterInternal(
             }
             if (params.size() != 1)
             {
-                throw Exception("There is an internal error for rename columns, params size should be 1", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("There is an internal error for rename columns, params size is " + std::to_string(params.size()) + ", but should be 1", ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
