@@ -8,6 +8,7 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/TiDB.h>
+
 #include <Storages/Transaction/RegionBlockReaderHelper.hpp>
 
 namespace DB
@@ -152,16 +153,16 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     ColumnIdToIndex column_id_to_info_index;
     column_id_to_info_index.set_empty_key(EmptyColumnID);
 
-    ColumnIdToIndex schema_all_column_ids;
-    schema_all_column_ids.set_empty_key(EmptyColumnID);
-    schema_all_column_ids.set_deleted_key(DeleteColumnID);
+    ColumnIdToIndex column_lut;
+    column_lut.set_empty_key(EmptyColumnID);
+    column_lut.set_deleted_key(DeleteColumnID);
 
     for (size_t i = 0; i < table_info.columns.size(); i++)
     {
         auto & column_info = table_info.columns[i];
         ColumnID col_id = column_info.id;
         const String & col_name = column_info.name;
-        schema_all_column_ids.insert({col_id, i});
+        column_lut.insert({col_id, i});
         if (std::find(column_names_to_read.begin(), column_names_to_read.end(), col_name) == column_names_to_read.end())
         {
             continue;
@@ -191,7 +192,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     else
     {
         // should not contain pk, which may lead to schema not match.
-        schema_all_column_ids.erase(handle_col_id);
+        column_lut.erase(handle_col_id);
     }
 
     const TMTPKType pk_type = getTMTPKType(*column_map.getNameAndTypePair(handle_col_id).type);
@@ -221,7 +222,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     if (column_names_to_read.size() > MustHaveColCnt)
     {
         DecodedRecordData decoded_data(column_id_to_info_index.size());
-        ValueDecodeHelper helper{table_info, schema_all_column_ids};
+        RowPreDecoder preDecoder{table_info, column_lut};
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
@@ -249,7 +250,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 const DecodedRow * row = value.getDecodedRow().load();
                 if (!row)
                 {
-                    helper.forceDecodeTiKVValue(value);
+                    preDecoder.preDecodeRow(value);
                     row = value.getDecodedRow().load();
                 }
 
