@@ -106,5 +106,4 @@ bool functionIsInOrGlobalInOperator(const String & name)
     return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn" || name == "tidbIn" || name == "tidbNotIn";
 }
 
-
 }

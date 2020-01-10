@@ -783,13 +783,6 @@ public:
             throw Exception("Second argument for function '" + getName() + "' must be Set; found " + column_set_ptr->getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
 
-        bool return_nullable = false;
-        bool set_contains_null = column_set->getData()->containsNullValue();
-        if constexpr (!ignore_null)
-        {
-            return_nullable = left_arg.type->isNullable() || set_contains_null;
-        }
-
         Block block_of_key_columns;
 
         /// First argument may be tuple or single column.
@@ -821,6 +814,8 @@ public:
         }
         else
         {
+            bool set_contains_null = column_set->getData()->containsNullValue();
+            bool return_nullable = left_arg.type->isNullable() || set_contains_null;
             if (return_nullable)
             {
                 auto nested_res = column_set->getData()->execute(block_of_key_columns, negative);
@@ -830,7 +825,7 @@ public:
                     if (set_contains_null)
                     {
                         MutableColumnPtr mutable_result_null_map_column = (*std::move(result_null_map_column)).mutate();
-                        NullMap & result_null_map = static_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
+                        NullMap & result_null_map = dynamic_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
                         auto uint8_column = checkAndGetColumn<ColumnUInt8>(nested_res.get());
                         const auto & data = uint8_column->getData();
                         for (size_t i = 0, size = result_null_map.size(); i < size; i++)

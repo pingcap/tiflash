@@ -279,6 +279,10 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, 
     MutableColumns columns = header.cloneEmptyColumns();
     std::vector<const tipb::Expr *> remainingExprs;
 
+    // if left arg is null constant, just return without decode children expr
+    if (types[0]->onlyNull())
+        return remainingExprs;
+
     for (int i = 1; i < expr.children_size(); i++)
     {
         auto & child = expr.children(i);
