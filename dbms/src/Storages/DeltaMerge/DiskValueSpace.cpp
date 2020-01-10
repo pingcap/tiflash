@@ -206,17 +206,19 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
     return task;
 }
 
+void DiskValueSpace::applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs)
+{
+    assert(is_delta_vs == true);
+    // Serialize meta updates and return by wbs.meta, later we will commit them in DeltaMergeStore level.
+    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+    serializeChunks(buf, chunks.begin(), chunks.begin() + (chunks.size() - task->remove_chunks_back), task->append_chunks);
+    const auto data_size = buf.count();
+    wbs.meta.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
+}
+
 DiskValueSpacePtr DiskValueSpace::applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update)
 {
     assert(is_delta_vs == true);
-
-    // Commit meta updates to disk.
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
-    serializeChunks(buf, chunks.begin(), chunks.begin() + (chunks.size() - task->remove_chunks_back), task->append_chunks);
-    WriteBatch wb;
-    auto       data_size = buf.count();
-    wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
-    context.meta_storage.write(wb);
 
     // Apply in memory.
     DiskValueSpace * instance = this;
@@ -724,7 +726,7 @@ DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_read
         else
             mvs->addBlock({}, chunk.getRows());
 #else
-        (void) range;
+        (void)range;
         mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
 #endif
 

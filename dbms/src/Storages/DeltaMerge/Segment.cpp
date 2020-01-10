@@ -217,10 +217,11 @@ void Segment::write(DMContext & dm_context, const BlockOrDelete & update)
     auto task = createAppendTask(op_context, wbs, update);
 
     wbs.writeLogAndData(storage_pool);
+
+    applyAppendToWriteBatches(task, wbs);
     wbs.writeMeta(storage_pool);
 
     applyAppendTask(op_context, task, update);
-
     wbs.writeRemoves(storage_pool);
 }
 
@@ -238,6 +239,12 @@ AppendTaskPtr Segment::createAppendTask(const OpContext & opc, WriteBatches & wb
     // We only need a shared lock because this operation won't do any modifications.
     std::shared_lock lock(read_write_mutex);
     return delta->createAppendTask(opc, wbs, update);
+}
+
+void Segment::applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs)
+{
+    std::shared_lock lock(read_write_mutex);
+    delta->applyAppendToWriteBatches(task, wbs);
 }
 
 void Segment::applyAppendTask(const OpContext & opc, const AppendTaskPtr & task, const BlockOrDelete & update)

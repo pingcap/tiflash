@@ -147,6 +147,7 @@ public:
     void restore(const OpContext & context);
 
     AppendTaskPtr     createAppendTask(const OpContext & context, WriteBatches & wbs, const BlockOrDelete & update) const;
+    void              applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs);
     DiskValueSpacePtr applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
     /// Write the blocks from sorted_input_stream into underlying storage, the returned chunks can be added to
