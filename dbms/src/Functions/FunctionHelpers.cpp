@@ -96,4 +96,14 @@ Block createBlockWithNestedColumns(const Block & block, const ColumnNumbers & ar
     return createBlockWithNestedColumnsImpl(block, args_set);
 }
 
+bool functionIsInOperator(const String & name)
+{
+    return name == "in" || name == "notIn" || name == "tidbIn" || name == "tidbNotIn";
+}
+
+bool functionIsInOrGlobalInOperator(const String & name)
+{
+    return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn" || name == "tidbIn" || name == "tidbNotIn";
+}
+
 }
