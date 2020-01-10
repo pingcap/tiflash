@@ -565,7 +565,7 @@ void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db
 {
     if (table_info.is_view)
     {
-        LOG_INFO(log, "Table " << table_info.name << " is a view table, we should ignore it.");
+        LOG_INFO(log, "Table " << table_info.name << " is a view table, ignore it.");
         return;
     }
 
