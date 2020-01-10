@@ -1,5 +1,3 @@
-#include <Flash/Coprocessor/ArrowColCodec.h>
-
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
@@ -11,6 +9,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Coprocessor/ArrowColCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Endian.h>
@@ -336,6 +335,7 @@ void flashColToArrowCol(TiDBColumn & dag_column, const ColumnWithTypeAndName & f
         case TiDB::TypeLongBlob:
         case TiDB::TypeMediumBlob:
         case TiDB::TypeTinyBlob:
+        case TiDB::TypeJSON:
             if (!checkDataType<DataTypeString>(type))
                 throw Exception(
                     "Type un-matched during arrow encode, target col type is string and source column type is " + type->getName(),
@@ -631,6 +631,7 @@ const char * arrowColToFlashCol(const char * pos, UInt8 field_length, UInt32 nul
         case TiDB::TypeTinyBlob:
         case TiDB::TypeMediumBlob:
         case TiDB::TypeLongBlob:
+        case TiDB::TypeJSON:
             return arrowStringColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, flash_col, col_info, length);
         case TiDB::TypeBit:
             return arrowBitColToFlashCol(pos, field_length, null_count, null_bitmap, offsets, flash_col, col_info, length);
