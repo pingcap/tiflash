@@ -13,7 +13,8 @@ void RegionsRangeIndex::add(const RegionPtr & new_region)
     auto begin_it = split(new_range.first);
     auto end_it = split(new_range.second);
     if (begin_it == end_it)
-        throw Exception("[RegionsRangeIndex::add] range of region " + toString(new_region->id()) + " is empty", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            std::string(__PRETTY_FUNCTION__) + ": range of region " + toString(new_region->id()) + " is empty", ErrorCodes::LOGICAL_ERROR);
 
     for (auto it = begin_it; it != end_it; ++it)
         it->second.region_map.emplace(new_region->id(), new_region);
@@ -23,19 +24,20 @@ void RegionsRangeIndex::remove(const RegionRange & range, const RegionID region_
 {
     auto begin_it = root.find(range.first);
     if (begin_it == root.end())
-        throw Exception("[RegionsRangeIndex::remove] not found start key", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": not found start key", ErrorCodes::LOGICAL_ERROR);
 
     auto end_it = root.find(range.second);
     if (end_it == root.end())
-        throw Exception("[RegionsRangeIndex::remove] not found end key", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(std::string(__PRETTY_FUNCTION__) + ": not found end key", ErrorCodes::LOGICAL_ERROR);
 
     if (begin_it == end_it)
-        throw Exception("[RegionsRangeIndex::remove] range of region " + toString(region_id) + " is empty", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            std::string(__PRETTY_FUNCTION__) + ": range of region " + toString(region_id) + " is empty", ErrorCodes::LOGICAL_ERROR);
 
     for (auto it = begin_it; it != end_it; ++it)
     {
         if (it->second.region_map.erase(region_id) == 0)
-            throw Exception("[RegionsRangeIndex::remove] not found region " + toString(region_id), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(std::string(__PRETTY_FUNCTION__) + ": not found region " + toString(region_id), ErrorCodes::LOGICAL_ERROR);
     }
     tryMergeEmpty(begin_it);
 }
