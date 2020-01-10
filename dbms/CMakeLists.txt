@@ -152,6 +152,8 @@ target_link_libraries (dbms
     clickhouse_common_io
     flash_service
     kvproto
+    prometheus-cpp::core
+    prometheus-cpp::push
     kv_client
     tipb
     ${Protobuf_LIBRARIES}

@@ -10,6 +10,7 @@ RUN apt update -y \
         build-essential autoconf libtool pkg-config \
         libgflags-dev libgtest-dev \
         golang curl python3-pip \
+        libcurl4-openssl-dev \
         # For tests: # bash expect python python-lxml python-termcolor curl perl sudo tzdata
  && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly \
  && pip3 install pybind11 pyinstaller dnspython uri requests urllib3 toml setuptools \
