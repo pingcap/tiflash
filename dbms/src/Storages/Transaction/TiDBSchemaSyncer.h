@@ -110,7 +110,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         catch (Exception & e)
         {
-            LOG_ERROR(log, "apply diff meets exception : " + e.getStackTrace().toString());
+            LOG_ERROR(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
             return false;
         }
         return true;

@@ -365,7 +365,8 @@ void StorageMergeTree::alterInternal(
         else if (param.type == AlterCommand::RENAME_COLUMN)
         {
             rename_column = true;
-            if (param.primary_key != nullptr) {
+            if (param.primary_key != nullptr)
+            {
                 LOG_INFO(log, "old pk: " << *new_primary_key_ast);
                 new_primary_key_ast = param.primary_key;
                 LOG_INFO(log, "change to new pk: " << *new_primary_key_ast);
