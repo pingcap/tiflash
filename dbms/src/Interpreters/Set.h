@@ -78,6 +78,9 @@ public:
 
     SetElements & getSetElements() { return *set_elements.get(); }
 
+    void setContainsNullValue(bool contains_null_value_) { contains_null_value = contains_null_value_; }
+    bool containsNullValue() const { return contains_null_value; }
+
 private:
     size_t keys_size;
     Sizes key_sizes;
@@ -108,6 +111,8 @@ private:
 
     /// Limitations on the maximum size of the set
     SizeLimits limits;
+
+    bool contains_null_value = false;
 
     /// If in the left part columns contains the same types as the elements of the set.
     void executeOrdinary(
