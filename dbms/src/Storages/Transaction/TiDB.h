@@ -272,6 +272,8 @@ struct TableInfo
     bool is_partition_table = false;
     TableID belonging_table_id = -1;
     PartitionInfo partition;
+    // If the table is view, we should ignore it.
+    bool is_view = false;
     Int64 schema_version = -1;
 
     ColumnID getColumnID(const String & name) const;

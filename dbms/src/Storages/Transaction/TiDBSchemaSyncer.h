@@ -78,6 +78,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             loadAllSchema(getter, version, context);
         }
         cur_version = version;
+        LOG_INFO(log, "end sync schema, version has been updated to " + std::to_string(cur_version));
         return true;
     }
 
@@ -109,7 +110,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         catch (Exception & e)
         {
-            LOG_ERROR(log, "apply diff meets exception : " + e.displayText());
+            LOG_ERROR(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
             return false;
         }
         return true;
