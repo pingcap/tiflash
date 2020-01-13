@@ -45,6 +45,25 @@ inline void setAlterCommandColumn(Logger * log, AlterCommand & command, const Co
     }
 }
 
+AlterCommand newRenameColCommand(const String & old_col, const String & new_col, const TableInfo & orig_table_info)
+{
+    AlterCommand command;
+    command.type = AlterCommand::RENAME_COLUMN;
+    command.column_name = old_col;
+    command.new_column_name = new_col;
+    if (auto pk = orig_table_info.getPKHandleColumn())
+    {
+        if (pk->get().name == old_col)
+        {
+            auto list = std::make_shared<ASTExpressionList>();
+            auto new_pk = std::make_shared<ASTIdentifier>(new_col);
+            list->children.push_back(new_pk);
+            command.primary_key = list;
+        }
+    }
+    return command;
+}
+
 inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
     std::vector<AlterCommands> result;
@@ -94,11 +113,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
         for (const auto & rename_pair : rename_result)
         {
             AlterCommands rename_commands;
-            AlterCommand command;
-            command.type = AlterCommand::RENAME_COLUMN;
-            command.column_name = rename_pair.first;
-            command.new_column_name = rename_pair.second;
-            rename_commands.push_back(command);
+            rename_commands.push_back(newRenameColCommand(rename_pair.first, rename_pair.second, orig_table_info));
             result.push_back(rename_commands);
         }
     }
@@ -247,19 +262,16 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
     switch (diff.type)
     {
         case SchemaActionCreateTable:
-        case SchemaActionRecoverTable:
-        {
+        case SchemaActionRecoverTable: {
             newTableID = diff.table_id;
             break;
         }
         case SchemaActionDropTable:
-        case SchemaActionDropView:
-        {
+        case SchemaActionDropView: {
             oldTableID = diff.table_id;
             break;
         }
-        case SchemaActionTruncateTable:
-        {
+        case SchemaActionTruncateTable: {
             newTableID = diff.table_id;
             oldTableID = diff.old_table_id;
             break;
@@ -267,24 +279,20 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
         case SchemaActionAddColumn:
         case SchemaActionDropColumn:
         case SchemaActionModifyColumn:
-        case SchemaActionSetDefaultValue:
-        {
+        case SchemaActionSetDefaultValue: {
             applyAlterTable(di, diff.table_id);
             break;
         }
-        case SchemaActionRenameTable:
-        {
+        case SchemaActionRenameTable: {
             applyRenameTable(di, diff.old_schema_id, diff.table_id);
             break;
         }
         case SchemaActionAddTablePartition:
-        case SchemaActionDropTablePartition:
-        {
+        case SchemaActionDropTablePartition: {
             applyAlterPartition(di, diff.table_id);
             break;
         }
-        default:
-        {
+        default: {
             LOG_INFO(log, "ignore change type: " << int(diff.type));
             break;
         }
@@ -499,12 +507,14 @@ void SchemaBuilder<Getter>::applyDropSchemaImpl(const String & database_name)
     drop_interpreter.execute();
 }
 
-String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
+String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Logger * log)
 {
+    LOG_DEBUG(log, "Analyzing table info :" << table_info.serialize());
     NamesAndTypes columns;
     std::vector<String> pks;
     for (const auto & column : table_info.columns)
     {
+        LOG_DEBUG(log, "Analyzing column :" + column.name + " type " + std::to_string((int)column.tp));
         DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(NameAndTypePair(column.name, type));
 
@@ -553,9 +563,15 @@ String createTableStmt(const DBInfo & db_info, const TableInfo & table_info)
 template <typename Getter>
 void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db_info, TiDB::TableInfo & table_info)
 {
+    if (table_info.is_view)
+    {
+        LOG_INFO(log, "Table " << table_info.name << " is a view table, ignore it.");
+        return;
+    }
+
     table_info.schema_version = target_version;
 
-    String stmt = createTableStmt(db_info, table_info);
+    String stmt = createTableStmt(db_info, table_info, log);
 
     LOG_INFO(log, "try to create table with stmt: " << stmt);
 
