@@ -1,7 +1,6 @@
-#include <Flash/Coprocessor/DAGUtils.h>
-
 #include <Core/Types.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
@@ -275,13 +274,17 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
 {
+    const static std::unordered_map<tipb::EncodeType, std::unordered_set<Int32>> unsupported_types_map({
+        {tipb::EncodeType::TypeCHBlock, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull, TiDB::TypeEnum, TiDB::TypeJSON}},
+        {tipb::EncodeType::TypeChunk, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull}},
+    });
+
     if (encode_type == tipb::EncodeType::TypeDefault)
         return false;
     for (const auto & type : types)
     {
-        if (encode_type == tipb::EncodeType::TypeCHBlock && (type.tp() == TiDB::TypeSet || type.tp() == TiDB::TypeEnum))
-            return true;
-        if (encode_type == tipb::EncodeType::TypeChunk && type.tp() == TiDB::TypeSet)
+        auto unsupported_set = unsupported_types_map.find(encode_type);
+        if (unsupported_set != unsupported_types_map.end() && unsupported_set->second.find(type.tp()) != unsupported_set->second.end())
             return true;
     }
     return false;
@@ -319,6 +322,7 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
         case TiDB::TypeLongBlob:
         case TiDB::TypeBit:
         case TiDB::TypeEnum:
+        case TiDB::TypeJSON:
             return VAR_SIZE;
         default:
             throw Exception("not supported field type in arrow encode: " + std::to_string(tp));

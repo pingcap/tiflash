@@ -58,6 +58,8 @@ void EncodeBytes(const String & ori_str, std::stringstream & ss);
 
 void EncodeCompactBytes(const String & str, std::stringstream & ss);
 
+void EncodeJSON(const String & str, std::stringstream & ss);
+
 void EncodeVarUInt(UInt64 num, std::stringstream & ss);
 
 void EncodeVarInt(Int64 num, std::stringstream & ss);
