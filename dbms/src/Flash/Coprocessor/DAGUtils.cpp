@@ -279,12 +279,12 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
         {tipb::EncodeType::TypeChunk, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull}},
     });
 
-    if (encode_type == tipb::EncodeType::TypeDefault)
+    auto unsupported_set = unsupported_types_map.find(encode_type);
+    if (unsupported_set == unsupported_types_map.end())
         return false;
     for (const auto & type : types)
     {
-        auto unsupported_set = unsupported_types_map.find(encode_type);
-        if (unsupported_set != unsupported_types_map.end() && unsupported_set->second.find(type.tp()) != unsupported_set->second.end())
+        if (unsupported_set->second.find(type.tp()) != unsupported_set->second.end())
             return true;
     }
     return false;
