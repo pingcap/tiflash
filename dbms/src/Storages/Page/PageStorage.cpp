@@ -39,33 +39,27 @@ PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_f
     for (const auto & name : file_names)
     {
         auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
-        if (page_file_type == PageFile::Type::Invalid)
-            continue;
-        else if ((page_file_type == PageFile::Type::Legacy && option.ignore_legacy)
-                 || (page_file_type == PageFile::Type::Snapshot && option.ignore_snapshot))
-            continue;
-        else if (option.remove_tmp_files && page_file_type == PageFile::Type::Temp)
-            page_file.destroy();
-        else
+        if (page_file_type == PageFile::Type::Formal)
             page_files.insert(page_file);
-    }
-
-    if (option.ignore_gc_compacted)
-    {
-        // Ignore PageFiles before last Snapshot
-        auto erase_end = page_files.end();
-        for (auto itr = page_files.begin(); itr != page_files.end(); itr++)
+        else if (page_file_type == PageFile::Type::Legacy)
         {
-            // Bubbles the last Snapshot
-            if (itr->getType() == PageFile::Type::Snapshot)
-            {
-                erase_end = itr;
-            }
+            if (!option.ignore_legacy)
+                page_files.insert(page_file);
         }
-        // Remove compacted PageFiles
-        if (erase_end != page_files.end())
+        else if (page_file_type == PageFile::Type::Snapshot)
         {
-            page_files.erase(page_files.begin(), erase_end);
+            if (!option.ignore_snapshot)
+                page_files.insert(page_file);
+        }
+        else
+        {
+            // For Temp and Invalid
+            if (option.remove_tmp_files)
+            {
+                // Remove temporary file.
+                Poco::File file(storage_path + "/" + name);
+                file.remove(true);
+            }
         }
     }
 
@@ -492,7 +486,6 @@ bool PageStorage::gc()
     }
     ListPageFilesOption opt;
     opt.remove_tmp_files    = true;
-    opt.ignore_gc_compacted = true;
     auto page_files         = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     if (page_files.empty())
     {

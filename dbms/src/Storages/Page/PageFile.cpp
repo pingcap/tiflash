@@ -436,7 +436,7 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
-        && !startsWith(page_file_name, folder_prefix_legacy))
+        && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_snapshot))
     {
         LOG_INFO(log, "Not page file, ignored " + page_file_name);
         return {{}, Type::Invalid};

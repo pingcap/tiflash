@@ -57,7 +57,6 @@ public:
         bool remove_tmp_files    = false;
         bool ignore_legacy       = false;
         bool ignore_snapshot     = false;
-        bool ignore_gc_compacted = false;
     };
 
 #ifdef DELTA_VERSION_SET

@@ -28,7 +28,7 @@ namespace tests
 class PageStorage_test : public ::testing::Test
 {
 public:
-    PageStorage_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/page_storage_test"), storage() {}
+    PageStorage_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_test"), storage() {}
 
 protected:
     static void SetUpTestCase()
@@ -455,7 +455,6 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     opt.remove_tmp_files       = true;
     opt.ignore_legacy          = true;
     opt.ignore_snapshot        = true;
-    opt.ignore_gc_compacted    = true;
     auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     s0.reset();
@@ -570,7 +569,6 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     opt.remove_tmp_files       = true;
     opt.ignore_legacy          = true;
     opt.ignore_snapshot        = true;
-    opt.ignore_gc_compacted    = true;
     auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     auto            s0         = storage->getSnapshot();
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
@@ -622,7 +620,6 @@ try
     opt.remove_tmp_files       = true;
     opt.ignore_legacy          = true;
     opt.ignore_snapshot        = true;
-    opt.ignore_gc_compacted    = true;
     auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit;
     {
@@ -770,6 +767,72 @@ catch (const Exception & e)
         std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
 
     throw;
+}
+
+// Since it's hard to mock valid PageFiles, we'll deal with the test later
+TEST_F(PageStorage_test, DISABLED_ListPageFiles)
+{
+    Poco::File file(storage->storage_path);
+    if (file.exists())
+    {
+        file.remove(true);
+    }
+
+    WriteBatch wb;
+    char       c[0];
+    auto       buf = std::make_shared<ReadBufferFromMemory>(c, 0);
+    wb.putPage(1, 0, buf, 0);
+
+    storage->write_file = PageFile::newPageFile(1, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
+    storage->write(wb);
+    storage->write_file.setFormal();
+
+    storage->write_file = PageFile::newPageFile(2, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
+    storage->write(wb);
+    storage->write_file.setLegacy();
+
+    storage->write_file = PageFile::newPageFile(3, 0, storage->storage_path, PageFile::Type::Temp, storage->log);
+    storage->write(wb);
+
+    storage->write_file = PageFile::newPageFile(4, 0, storage->storage_path, PageFile::Type::Temp, storage->log);
+    storage->write(wb);
+    storage->write_file.setSnapshot();
+
+    {
+        PageStorage::ListPageFilesOption opt;
+        opt.ignore_legacy = true;
+        auto page_files   = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        // Temp and Legacy should be ignored
+        ASSERT_EQ(page_files.size(), 2UL);
+        for (auto & page_file : page_files)
+        {
+            EXPECT_TRUE(page_file.getType() != PageFile::Type::Legacy);
+        }
+    }
+
+    {
+        PageStorage::ListPageFilesOption opt;
+        opt.ignore_snapshot = true;
+        auto page_files     = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        // Temp and Snapshot should be ignored
+        ASSERT_EQ(page_files.size(), 2UL);
+        for (auto & page_file : page_files)
+        {
+            EXPECT_TRUE(page_file.getType() != PageFile::Type::Snapshot);
+        }
+    }
+
+    {
+        PageStorage::ListPageFilesOption opt;
+        opt.remove_tmp_files = true;
+        auto page_files      = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        // Temp should be ignored and removed
+        ASSERT_EQ(page_files.size(), 3UL);
+        for (auto & page_file : page_files)
+        {
+            EXPECT_TRUE(page_file.getType() != PageFile::Type::Temp);
+        }
+    }
 }
 
 /**
