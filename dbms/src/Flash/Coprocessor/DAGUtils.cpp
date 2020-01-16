@@ -78,11 +78,11 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             if (field.getType() == Field::Types::Decimal32)
                 return field.get<DecimalField<Decimal32>>().toString();
             else if (field.getType() == Field::Types::Decimal64)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal64>>().toString();
             else if (field.getType() == Field::Types::Decimal128)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal128>>().toString();
             else if (field.getType() == Field::Types::Decimal256)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal256>>().toString();
             else
                 throw Exception("Not decimal literal" + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
         }
