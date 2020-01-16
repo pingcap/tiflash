@@ -8,6 +8,21 @@ enum struct RowCodecVer : UInt8
     ROW_V2 = 128,
 };
 
+bool hasMissingColumns(const DecodedFields & decoded_fields, const TableInfo & table_info, const ColumnIdToIndex & column_lut)
+{
+    for (const auto & id_to_idx : column_lut)
+    {
+        const auto & column_info = table_info.columns[id_to_idx.second];
+        if (auto it = findByColumnID(column_info.id, decoded_fields); it != decoded_fields.end())
+            continue;
+        // We consider a missing column could be safely filled with NULL, unless it has not default value and is NOT NULL.
+        // This could saves lots of unnecessary schema syncs for old data with a schema that has newly added columns.
+        if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
+            return true;
+    }
+    return false;
+}
+
 DecodedRow * decodeRowV1(const TiKVValue::Base & raw_value, const TableInfo & table_info, const ColumnIdToIndex & column_lut)
 {
     /// Decode fields based on codec flag, fill into decoded_fields.
@@ -34,9 +49,9 @@ DecodedRow * decodeRowV1(const TiKVValue::Base & raw_value, const TableInfo & ta
         }
     }
 
-    /// Analyze schema, fill has_missing_columns and unknown_fields.
-    bool has_missing_columns = false;
+    /// Analyze schema, fill unknown_fields and has_missing_columns.
     DecodedFields unknown_fields;
+    bool has_missing_columns = false;
     {
         bool schema_match = decoded_fields.size() == column_lut.size()
             && std::all_of(decoded_fields.cbegin(), decoded_fields.cend(), [&column_lut](const auto & field) {
@@ -57,17 +72,7 @@ DecodedRow * decodeRowV1(const TiKVValue::Base & raw_value, const TableInfo & ta
             tmp.swap(decoded_fields);
         }
 
-        for (const auto & id_to_idx : column_lut)
-        {
-            const auto & column_info = table_info.columns[id_to_idx.second];
-            if (auto it = findByColumnID(column_info.id, decoded_fields); it != decoded_fields.end())
-                continue;
-            if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
-            {
-                has_missing_columns = true;
-                break;
-            }
-        }
+        has_missing_columns = hasMissingColumns(decoded_fields, table_info, column_lut);
     }
 
     /// Pack them all and return.
@@ -166,8 +171,7 @@ struct RowV2
                 decoded_fields.emplace_back(std::move(std::get<0>(res)));
         }
 
-        // TODO: Has missing columns.
-        bool has_missing_columns = false;
+        bool has_missing_columns = hasMissingColumns(decoded_fields, table_info, column_lut);
         return new DecodedRow(has_missing_columns, std::move(unknown_fields), false, std::move(decoded_fields));
     }
 
