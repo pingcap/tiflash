@@ -74,15 +74,20 @@ DecodedRow * decodeRowV1(const TiKVValue::Base & raw_value, const TableInfo & ta
     return new DecodedRow(has_missing_columns, std::move(unknown_fields), true, std::move(decoded_fields));
 }
 
+template <typename T>
+static T decodeUInt(size_t & cursor, const TiKVValue::Base & raw_value)
+{
+    T res = readLittleEndian<T>(&raw_value[cursor]);
+    cursor += sizeof(T);
+    return res;
+}
+
 template <typename Target, typename Source>
-static void decodeUInts(size_t & cursor, TiKVValue::Base raw_value, size_t n, std::vector<Target> & target)
+static void decodeUInts(size_t & cursor, const TiKVValue::Base & raw_value, size_t n, std::vector<Target> & target)
 {
     target.reserve(n);
     for (size_t i = 0; i < n; i++)
-    {
-        Source column_id = DecodeUInt<Source>(cursor, raw_value);
-        target.emplace_back(column_id);
-    }
+        target.emplace_back(decodeUInt<Source>(cursor, raw_value));
 }
 
 template <typename Sign, typename Source>
@@ -95,18 +100,18 @@ static Sign castIntWithSign(Source i)
 }
 
 template <typename T>
-static T decodeIntWithLength(TiKVValue::Base raw_value, size_t pos, size_t length)
+static T decodeIntWithLength(const TiKVValue::Base & raw_value, size_t pos, size_t length)
 {
     switch (length)
     {
         case sizeof(UInt8):
-            return castIntWithSign<T>(DecodeUInt<UInt8>(pos, raw_value));
+            return castIntWithSign<T>(decodeUInt<UInt8>(pos, raw_value));
         case sizeof(UInt16):
-            return castIntWithSign<T>(DecodeUInt<UInt16>(pos, raw_value));
+            return castIntWithSign<T>(decodeUInt<UInt16>(pos, raw_value));
         case sizeof(UInt32):
-            return castIntWithSign<T>(DecodeUInt<UInt32>(pos, raw_value));
+            return castIntWithSign<T>(decodeUInt<UInt32>(pos, raw_value));
         case sizeof(UInt64):
-            return castIntWithSign<T>(DecodeUInt<UInt64>(pos, raw_value));
+            return castIntWithSign<T>(decodeUInt<UInt64>(pos, raw_value));
         default:
             throw Exception(std::string("Invalid integer length ") + std::to_string(length) + " at position " + std::to_string(pos)
                 + " in value: " + raw_value);
@@ -121,10 +126,10 @@ struct RowV2
         : raw_value(raw_value_), table_info(table_info_), column_lut(column_lut_)
     {
         size_t cursor = 1; // Skip the initial codec ver.
-        UInt8 row_flag = DecodeUInt<UInt8>(cursor, raw_value);
+        UInt8 row_flag = decodeUInt<UInt8>(cursor, raw_value);
         bool is_big_row = row_flag & RowV2::BigRowMask;
-        num_not_null_columns = DecodeUInt<UInt16>(cursor, raw_value);
-        num_null_columns = DecodeUInt<UInt16>(cursor, raw_value);
+        num_not_null_columns = decodeUInt<UInt16>(cursor, raw_value);
+        num_null_columns = decodeUInt<UInt16>(cursor, raw_value);
         if (is_big_row)
         {
             decodeUInts<ColumnID, UInt32>(cursor, raw_value, num_not_null_columns, not_null_column_ids);
@@ -135,7 +140,7 @@ struct RowV2
         {
             decodeUInts<ColumnID, UInt8>(cursor, raw_value, num_not_null_columns, not_null_column_ids);
             decodeUInts<ColumnID, UInt8>(cursor, raw_value, num_null_columns, null_column_ids);
-            decodeUInts<size_t, UInt8>(cursor, raw_value, num_not_null_columns, value_offsets);
+            decodeUInts<size_t, UInt16>(cursor, raw_value, num_not_null_columns, value_offsets);
         }
         // Values starts from current cursor.
         values_start_pos = cursor;
