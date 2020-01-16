@@ -35,7 +35,6 @@ private:
     const Context & context;
     bool after_agg;
     Int32 implicit_cast_count;
-    Int32 literal_index = 0;
 
 public:
     DAGExpressionAnalyzer(std::vector<NameAndTypePair> && source_columns_, const Context & context_);

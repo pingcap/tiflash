@@ -696,7 +696,6 @@ BlockIO InterpreterDAG::execute()
 
     LOG_DEBUG(
         log, __PRETTY_FUNCTION__ << " Convert DAG request to BlockIO, adding " << analyzer->getImplicitCastCount() << " implicit cast");
-    /*
     if (log->debug())
     {
         try
@@ -711,7 +710,6 @@ BlockIO InterpreterDAG::execute()
             LOG_DEBUG(log, __PRETTY_FUNCTION__ << " Failed to convert DAG request to sql text");
         }
     }
-     */
     return res;
 }
 } // namespace DB

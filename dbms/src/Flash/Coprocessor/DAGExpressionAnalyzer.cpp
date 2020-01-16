@@ -508,9 +508,9 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         Field value = decodeLiteral(expr);
         DataTypePtr flash_type = applyVisitor(FieldToDataType(), value);
         DataTypePtr target_type = exprHasValidFieldType(expr) ? getDataTypeByFieldType(expr.field_type()) : flash_type;
-        String name = std::to_string(literal_index++) + "_" + target_type->getName();
-        //if (actions->getSampleBlock().has(name))
-        //    return name;
+        String name = exprToString(expr, getCurrentInputColumns()) + "_" + target_type->getName();
+        if (actions->getSampleBlock().has(name))
+            return name;
 
         ColumnWithTypeAndName column;
         column.column = target_type->createColumnConst(1, convertFieldToType(value, *target_type, flash_type.get()));
