@@ -1,13 +1,26 @@
-# How to build
+# How to build tiflash-release-builder-image
 
 ```shell
-#prepare build enviroment 
-make image_builer
+# build tiflash-release-builder-image
+make image_builder_release
+
+# push tiflash-release-builder-image to hub
+docker push hub.pingcap.net/tiflash/tiflash-builder
 ```
 
+# How to build tiflash-ci-builder-image
 ```shell
-#compile
-make build_release
+# build tiflash-ci-builder-image
+make image_builder_ci
+
+# push tiflash-ci-builder-image to hub
+docker push hub.pingcap.net/tiflash/tiflash-builder-ci
+```
+
+# How to build tiflash-release-binary
+```shell
+# build tilfash-release-binary
+make build_tiflash_release
 ```
 
 The executable files are located in `tiflash` dir.
