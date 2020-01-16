@@ -731,7 +731,7 @@ void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparato
     Poco::File archieve_dir(".archieve");
     if (!archieve_dir.exists())
         archieve_dir.createDirectory();
-        
+
     for (auto & page_file : page_files)
     {
         Poco::Path path(page_file.folderPath());

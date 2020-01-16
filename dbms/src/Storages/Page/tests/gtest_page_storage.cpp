@@ -11,6 +11,7 @@
 #include <Poco/PatternFormatter.h>
 #include <common/logger_useful.h>
 
+#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -757,17 +758,7 @@ try
         }
     }
 }
-catch (const Exception & e)
-{
-    std::string text = e.displayText();
-
-    auto embedded_stack_trace_pos = text.find("Stack trace");
-    std::cerr << "Code: " << e.code() << ". " << text << std::endl << std::endl;
-    if (std::string::npos == embedded_stack_trace_pos)
-        std::cerr << "Stack trace:" << std::endl << e.getStackTrace().toString() << std::endl;
-
-    throw;
-}
+CATCH
 
 // Since it's hard to mock valid PageFiles, we'll deal with the test later
 TEST_F(PageStorage_test, DISABLED_ListPageFiles)
