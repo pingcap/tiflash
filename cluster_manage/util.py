@@ -37,17 +37,20 @@ class FLOCK(object):
 def curl_http(uri, params=None):
     if params is None:
         params = {}
-    r = requests.get('http://{}'.format(uri), params)
+    import conf
+    r = requests.get('http://{}'.format(uri), params, timeout=conf.flash_conf.update_rule_interval)
     return r
 
 
 def post_http(uri, params):
-    r = requests.post('http://{}'.format(uri), json=params)
+    import conf
+    r = requests.post('http://{}'.format(uri), json=params, timeout=conf.flash_conf.update_rule_interval)
     return r
 
 
 def delete_http(uri):
-    r = requests.delete('http://{}'.format(uri))
+    import conf
+    r = requests.delete('http://{}'.format(uri), timeout=conf.flash_conf.update_rule_interval)
     return r
 
 

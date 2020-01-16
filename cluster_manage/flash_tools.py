@@ -11,7 +11,6 @@ class FlashConfig:
         self.conf_toml = toml.load(self.conf_file_path, _dict=dict)
         self.pd_addrs = util.compute_addr_list(self.conf_toml['raft']['pd_addr'])
         self.http_port = self.conf_toml['http_port']
-        self.data_path = self.conf_toml['path']
         tmp_path = self.conf_toml['tmp_path']
 
         p = self.conf_toml['flash']
@@ -29,7 +28,6 @@ class FlashConfig:
 
 
 def main():
-    conf = FlashConfig('../running/config/config.xml')
     pass
 
 
