@@ -863,6 +863,57 @@ TYPED_TEST_P(PageMapVersionSet_test, LiveFiles)
     EXPECT_GT(live_normal_pages.count(2), 0UL);
 }
 
+TYPED_TEST_P(PageMapVersionSet_test, PutOnTombstonePageEntry)
+{
+    if constexpr (std::is_same_v<TypeParam, PageEntriesVersionSetWithDelta>)
+    {
+        const PageId page_id = 2;
+
+        ::DB::MVCC::VersionSetConfig config;
+        TypeParam                    versions(config, this->log);
+        {
+            // First we put a page and add read lock by acquiring a snapshot(s1)
+            PageEntriesEdit edit;
+            PageEntry       e;
+            e.checksum = 0xf;
+            edit.put(page_id, e);
+            versions.apply(edit);
+        }
+        auto s1 = versions.getSnapshot();
+
+        {
+            // Then delete that page, because there is read lock on previouse version,
+            // we need to put tombstone on new version
+            PageEntriesEdit edit;
+            edit.del(page_id);
+            versions.apply(edit);
+            // Now there is a tombstone on current version.
+            auto s2    = versions.getSnapshot();
+            auto entry = s2->version()->find(page_id);
+            ASSERT_FALSE(entry); // Get tombstone by find return nullopt
+            auto normal_entry = s2->version()->findNormalPageEntry(page_id);
+            ASSERT_TRUE(normal_entry);
+            ASSERT_TRUE(normal_entry->isTombstone());
+            ASSERT_EQ(normal_entry->checksum, 0xfUL);
+        }
+
+        {
+            // Then we put a new version of that page, its entry ref-count should be 1
+            PageEntriesEdit edit;
+            PageEntry       e;
+            e.checksum = 0x6;
+            edit.put(page_id, e);
+            versions.apply(edit);
+            auto s3    = versions.getSnapshot();
+            auto entry = s3->version()->find(page_id);
+            ASSERT_TRUE(entry);
+            ASSERT_EQ(entry->ref, 1UL);
+            ASSERT_FALSE(entry->isTombstone());
+            ASSERT_EQ(entry->checksum, 0x6UL);
+        }
+    }
+}
+
 REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            ApplyEdit,
                            ApplyEditWithReadLock,
@@ -878,7 +929,8 @@ REGISTER_TYPED_TEST_CASE_P(PageMapVersionSet_test,
                            UpdateOnRefPage2,
                            IsRefId,
                            Snapshot,
-                           LiveFiles);
+                           LiveFiles,
+                           PutOnTombstonePageEntry);
 
 using VersionSetTypes = ::testing::Types<PageEntriesVersionSet, PageEntriesVersionSetWithDelta>;
 INSTANTIATE_TYPED_TEST_CASE_P(VersionSetTypedTest, PageMapVersionSet_test, VersionSetTypes);
