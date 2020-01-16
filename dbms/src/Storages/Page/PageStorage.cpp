@@ -485,8 +485,8 @@ bool PageStorage::gc()
         external_pages = external_pages_scanner();
     }
     ListPageFilesOption opt;
-    opt.remove_tmp_files    = true;
-    auto page_files         = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    opt.remove_tmp_files = true;
+    auto page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     if (page_files.empty())
     {
         return false;
@@ -729,10 +729,9 @@ void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBat
 void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files)
 {
     Poco::File archieve_dir(".archieve");
-    if (archieve_dir.exists())
-        archieve_dir.remove(true);
-
-    archieve_dir.createDirectory();
+    if (!archieve_dir.exists())
+        archieve_dir.createDirectory();
+        
     for (auto & page_file : page_files)
     {
         Poco::Path path(page_file.folderPath());
