@@ -188,11 +188,17 @@ private:
         size_t length = value_offsets[id] - start;
 
         if (!column_lut.count(column_id))
-            // Unknown column, decode as string.
+            // Unknown column, preserve its bytes (string) portion in the raw value.
             return std::make_tuple(DecodedField{column_id, raw_value.substr(values_start_pos + start, length)}, true);
 
         const auto & column_info = table_info.columns[column_lut.find(column_id)->second];
         size_t cursor = values_start_pos + start;
+        return std::make_tuple(DecodedField{column_id, decodeNotNullColumn(cursor, raw_value, length, column_info)}, false);
+    }
+
+public:
+    static Field decodeNotNullColumn(size_t cursor, const TiKVValue::Base & raw_value, size_t length, const ColumnInfo & column_info)
+    {
         switch (column_info.tp)
         {
             case TiDB::TypeLongLong:
@@ -202,12 +208,12 @@ private:
             case TiDB::TypeTiny:
             case TiDB::TypeYear:
                 if (column_info.hasUnsignedFlag())
-                    return std::make_tuple(DecodedField{column_id, decodeIntWithLength<UInt64>(raw_value, cursor, length)}, false);
+                    return decodeIntWithLength<UInt64>(raw_value, cursor, length);
                 else
-                    return std::make_tuple(DecodedField{column_id, decodeIntWithLength<Int64>(raw_value, cursor, length)}, false);
+                    return decodeIntWithLength<Int64>(raw_value, cursor, length);
             case TiDB::TypeFloat:
             case TiDB::TypeDouble:
-                return std::make_tuple(DecodedField{column_id, DecodeFloat64(cursor, raw_value)}, false);
+                return DecodeFloat64(cursor, raw_value);
             case TiDB::TypeVarString:
             case TiDB::TypeVarchar:
             case TiDB::TypeString:
@@ -216,18 +222,18 @@ private:
             case TiDB::TypeMediumBlob:
             case TiDB::TypeLongBlob:
             case TiDB::TypeJSON: // JSON portion could be quickly navigated by length, instead of doing real decoding.
-                return std::make_tuple(DecodedField{column_id, raw_value.substr(cursor, length)}, false);
+                return raw_value.substr(cursor, length);
             case TiDB::TypeNewDecimal:
-                return std::make_tuple(DecodedField{column_id, DecodeDecimal(cursor, raw_value)}, false);
+                return DecodeDecimal(cursor, raw_value);
             case TiDB::TypeTimestamp:
             case TiDB::TypeDate:
             case TiDB::TypeDatetime:
             case TiDB::TypeBit:
             case TiDB::TypeSet:
             case TiDB::TypeEnum:
-                return std::make_tuple(DecodedField{column_id, decodeIntWithLength<UInt64>(raw_value, cursor, length)}, false);
+                return decodeIntWithLength<UInt64>(raw_value, cursor, length);
             case TiDB::TypeTime:
-                return std::make_tuple(DecodedField{column_id, decodeIntWithLength<Int64>(raw_value, cursor, length)}, false);
+                return decodeIntWithLength<Int64>(raw_value, cursor, length);
             default:
                 throw Exception(std::string("Invalid TP ") + std::to_string(column_info.tp) + " of column " + column_info.name);
         }
@@ -260,6 +266,15 @@ DecodedRow * decodeRow(const TiKVValue::Base & raw_value, const TableInfo & tabl
         default:
             return decodeRowV1(raw_value, table_info, column_lut);
     }
+}
+
+Field decodeUnknownColumnV2(Field & unknown, const ColumnInfo & column_info)
+{
+    if (unknown.isNull())
+        return std::move(unknown);
+
+    const auto & raw_value = unknown.safeGet<TiKVValue::Base>();
+    return RowV2::decodeNotNullColumn(0, raw_value, raw_value.length(), column_info);
 }
 
 } // namespace DB

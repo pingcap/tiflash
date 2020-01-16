@@ -11,7 +11,7 @@ using DecodedFields = std::vector<DecodedField>;
 struct DecodedField : boost::noncopyable
 {
     Int64 col_id;
-    Field field;
+    mutable Field field;
 
     DecodedField & operator=(DecodedField && e)
     {
