@@ -222,6 +222,8 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
 
             if (!value.isNull())
                 columns[0]->insert(value);
+            else
+                setContainsNullValue(true);
         }
         else if (ASTFunction * func = typeid_cast<ASTFunction *>(elem.get()))
         {
@@ -260,7 +262,7 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
     insertFromBlock(block, fill_set_elements);
 }
 
-void Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements)
+std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements)
 {
     /// Will form a block with values from the set.
 
@@ -275,6 +277,11 @@ void Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bo
     setHeader(header);
 
     MutableColumns columns = header.cloneEmptyColumns();
+    std::vector<const tipb::Expr *> remainingExprs;
+
+    // if left arg is null constant, just return without decode children expr
+    if (types[0]->onlyNull())
+        return remainingExprs;
 
     for (int i = 1; i < expr.children_size(); i++)
     {
@@ -282,7 +289,8 @@ void Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bo
         // todo support constant expression by constant folding
         if (!isLiteralExpr(child))
         {
-            throw Exception("Only literal is supported in children of expr `in`", ErrorCodes::COP_BAD_DAG_REQUEST);
+            remainingExprs.push_back(&child);
+            continue;
         }
         Field value = decodeLiteral(child);
         DataTypePtr type = child.has_field_type() ? getDataTypeByFieldType(child.field_type()) : types[0];
@@ -290,10 +298,13 @@ void Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bo
 
         if (!value.isNull())
             columns[0]->insert(value);
+        else
+            setContainsNullValue(true);
     }
 
     Block block = header.cloneWithColumns(std::move(columns));
     insertFromBlock(block, fill_set_elements);
+    return remainingExprs;
 }
 
 ColumnPtr Set::execute(const Block & block, bool negative) const

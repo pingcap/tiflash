@@ -4,6 +4,7 @@
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -31,7 +32,7 @@ namespace DB
 namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
-extern const int LOGICA_ERROR;
+extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 using TiDB::DatumFlat;
@@ -173,13 +174,6 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
     }
     else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
     {
-        // TODO: Support agg functions.
-        for (const auto & child_ast : func->arguments->children)
-        {
-            tipb::Expr * child = expr->add_children();
-            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
-        }
-
         String func_name_lowercase = Poco::toLower(func->name);
         // TODO: Support more functions.
         // TODO: Support type inference.
@@ -232,11 +226,55 @@ void compileExpr(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, std::un
             ft->set_tp(TiDB::TypeLongLong);
             ft->set_flag(TiDB::ColumnFlagUnsigned);
         }
+        else if (func_name_lowercase == "in" || func_name_lowercase == "notin")
+        {
+            tipb::Expr * in_expr = expr;
+            if (func_name_lowercase == "notin")
+            {
+                // notin is transformed into not(in()) by tidb
+                expr->set_sig(tipb::ScalarFuncSig::UnaryNotInt);
+                auto * ft = expr->mutable_field_type();
+                ft->set_tp(TiDB::TypeLongLong);
+                ft->set_flag(TiDB::ColumnFlagUnsigned);
+                expr->set_tp(tipb::ExprType::ScalarFunc);
+                in_expr = expr->add_children();
+            }
+            in_expr->set_sig(tipb::ScalarFuncSig::InInt);
+            auto * ft = in_expr->mutable_field_type();
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagUnsigned);
+            in_expr->set_tp(tipb::ExprType::ScalarFunc);
+            for (const auto & child_ast : func->arguments->children)
+            {
+                auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
+                if (tuple_func != nullptr && tuple_func->name == "tuple")
+                {
+                    // flatten tuple elements
+                    for (const auto & c : tuple_func->arguments->children)
+                    {
+                        tipb::Expr * child = in_expr->add_children();
+                        compileExpr(input, c, child, referred_columns, col_ref_map);
+                    }
+                }
+                else
+                {
+                    tipb::Expr * child = in_expr->add_children();
+                    compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+                }
+            }
+            return;
+        }
         else
         {
             throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
         }
         expr->set_tp(tipb::ExprType::ScalarFunc);
+        // TODO: Support agg functions.
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            compileExpr(input, child_ast, child, referred_columns, col_ref_map);
+        }
     }
     else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
@@ -333,6 +371,8 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
 
     if (encode_type == "chunk")
         dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
+    else if (encode_type == "chblock")
+        dag_request.set_encode_type(tipb::EncodeType::TypeCHBlock);
     else
         dag_request.set_encode_type(tipb::EncodeType::TypeDefault);
 
@@ -628,29 +668,33 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     static Logger * log = &Logger::get("MockDAG");
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
     tipb::SelectResponse dag_response;
-    DAGDriver driver(
-        context, dag_request, region_id, region_version, region_conf_version, start_ts, std::move(key_ranges), dag_response, true);
+    DAGDriver driver(context, dag_request, region_id, region_version, region_conf_version, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION,
+        std::move(key_ranges), dag_response, true);
     driver.execute();
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
     return dag_response;
 }
 
-void arrowChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
 {
-    ArrowChunkCodec codec;
-    for (const auto & chunk : dag_response.chunks())
+    switch (encode_type)
     {
-        blocks.emplace_back(codec.decode(chunk, schema));
+        case tipb::EncodeType::TypeDefault:
+            return std::make_unique<DefaultChunkCodec>();
+        case tipb::EncodeType::TypeChunk:
+            return std::make_unique<ArrowChunkCodec>();
+        case tipb::EncodeType::TypeCHBlock:
+            return std::make_unique<CHBlockChunkCodec>();
+        default:
+            throw Exception("Unsupported encode type", ErrorCodes::BAD_ARGUMENTS);
     }
 }
 
-void defaultChunkToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
+void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
 {
-    DefaultChunkCodec codec;
+    auto codec = getCodec(dag_response.encode_type());
     for (const auto & chunk : dag_response.chunks())
-    {
-        blocks.emplace_back(codec.decode(chunk, schema));
-    }
+        blocks.emplace_back(codec->decode(chunk, schema));
 }
 
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
@@ -659,14 +703,7 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
         throw Exception(dag_response.error().msg(), dag_response.error().code());
 
     BlocksList blocks;
-    if (dag_response.encode_type() == tipb::EncodeType::TypeChunk)
-    {
-        arrowChunkToBlocks(schema, dag_response, blocks);
-    }
-    else
-    {
-        defaultChunkToBlocks(schema, dag_response, blocks);
-    }
+    chunksToBlocks(schema, dag_response, blocks);
     return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
 }
 

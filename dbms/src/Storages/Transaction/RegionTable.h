@@ -145,7 +145,7 @@ public:
     void checkTableOptimize(TableID, const double);
     void setTableCheckerThreshold(double);
 
-    /// traverse all table and try to extend range for possible InternalRegion or add one.
+    /// extend range for possible InternalRegion or add one.
     void extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys);
 
 private:

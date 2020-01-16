@@ -275,6 +275,8 @@ struct TableInfo
     bool is_partition_table = false;
     TableID belonging_table_id = -1;
     PartitionInfo partition;
+    // If the table is view, we should ignore it.
+    bool is_view = false;
     Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
 
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;

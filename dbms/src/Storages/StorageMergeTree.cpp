@@ -365,9 +365,15 @@ void StorageMergeTree::alterInternal(
         else if (param.type == AlterCommand::RENAME_COLUMN)
         {
             rename_column = true;
+            if (param.primary_key != nullptr)
+            {
+                LOG_INFO(log, "old pk: " << *new_primary_key_ast);
+                new_primary_key_ast = param.primary_key;
+                LOG_INFO(log, "change to new pk: " << *new_primary_key_ast);
+            }
             if (params.size() != 1)
             {
-                throw Exception("There is an internal error for rename columns", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("There is an internal error for rename columns, params size is " + std::to_string(params.size()) + ", but should be 1", ErrorCodes::LOGICAL_ERROR);
             }
         }
     }
@@ -418,7 +424,7 @@ void StorageMergeTree::alterInternal(
     if (table_info)
         setTableInfo(table_info->get());
 
-    if (primary_key_is_modified)
+    if (new_primary_key_ast != nullptr)
     {
         data.primary_expr_ast = new_primary_key_ast;
     }

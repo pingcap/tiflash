@@ -52,6 +52,7 @@
 #include <Parsers/formatAST.h>
 
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
 
 #include <ext/range.h>
@@ -131,16 +132,6 @@ const std::unordered_set<String> possibly_injective_function_names
 
 namespace
 {
-
-bool functionIsInOperator(const String & name)
-{
-    return name == "in" || name == "notIn";
-}
-
-bool functionIsInOrGlobalInOperator(const String & name)
-{
-    return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn";
-}
 
 void removeDuplicateColumns(NamesAndTypesList & columns)
 {

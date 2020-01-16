@@ -70,7 +70,7 @@ RaftService::RaftService(DB::Context & db_context_)
             region = it->second;
             regions_to_decode.erase(it);
         }
-        region->tryPreDecodeTiKVValue();
+        region->tryPreDecodeTiKVValue(db_context);
         return true;
     });
 

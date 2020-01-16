@@ -55,14 +55,14 @@ struct DecodedRecordData
 {
     DecodedRecordData(const size_t cap)
     {
-        additional_decoded_row.reserve(cap);
-        ori_cap = additional_decoded_row.capacity();
+        additional_decoded_fields.reserve(cap);
+        ori_cap = additional_decoded_fields.capacity();
     }
 
     /// just like ColumnDataInfoMap::checkValid
     void checkValid() const
     {
-        if (ori_cap != additional_decoded_row.capacity())
+        if (ori_cap != additional_decoded_fields.capacity())
             throw Exception("DecodedRecordData capacity changes", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -70,24 +70,24 @@ struct DecodedRecordData
 
     void clear()
     {
-        additional_decoded_row.clear();
+        additional_decoded_fields.clear();
         decoded_col_iter.clear();
     }
 
-    const DecodedRow::value_type & operator[](const size_t index) const { return *decoded_col_iter[index]; }
+    const DecodedFields::value_type & operator[](const size_t index) const { return *decoded_col_iter[index]; }
 
     template <class... _Args>
     void emplace_back(_Args &&... __args)
     {
-        additional_decoded_row.emplace_back(std::forward<_Args>(__args)...);
-        decoded_col_iter.emplace_back(additional_decoded_row.cend() - 1);
+        additional_decoded_fields.emplace_back(std::forward<_Args>(__args)...);
+        decoded_col_iter.emplace_back(additional_decoded_fields.cend() - 1);
     }
 
-    void push_back(const DecodedRow::const_iterator & iter) { decoded_col_iter.push_back(iter); }
+    void push_back(const DecodedFields::const_iterator & iter) { decoded_col_iter.push_back(iter); }
 
 private:
-    DecodedRow additional_decoded_row;
-    std::vector<DecodedRow::const_iterator> decoded_col_iter;
+    DecodedFields additional_decoded_fields;
+    std::vector<DecodedFields::const_iterator> decoded_col_iter;
     size_t ori_cap;
 };
 

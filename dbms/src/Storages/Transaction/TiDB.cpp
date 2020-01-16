@@ -399,6 +399,10 @@ void TableInfo::deserialize(const String & json_str) try
     {
         schema_version = obj->getValue<Int64>("schema_version");
     }
+    if (obj->has("view") && !obj->getObject("view").isNull())
+    {
+        is_view = true;
+    }
 }
 catch (const Poco::Exception & e)
 {

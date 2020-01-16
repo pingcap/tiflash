@@ -1,10 +1,9 @@
-#include <Flash/Coprocessor/DAGDriver.h>
-
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -23,7 +22,7 @@ extern const int UNKNOWN_EXCEPTION;
 } // namespace ErrorCodes
 
 DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, RegionID region_id_, UInt64 region_version_,
-    UInt64 region_conf_version_, UInt64 start_ts, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
+    UInt64 region_conf_version_, UInt64 start_ts, UInt64 schema_ver, std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> && key_ranges_,
     tipb::SelectResponse & dag_response_, bool internal_)
     : context(context_),
       dag_request(dag_request_),
@@ -36,6 +35,9 @@ DAGDriver::DAGDriver(Context & context_, const tipb::DAGRequest & dag_request_, 
       log(&Logger::get("DAGDriver"))
 {
     context.setSetting("read_tso", start_ts);
+    if (schema_ver)
+        // schema_ver being 0 means TiDB/TiSpark hasn't specified schema version.
+        context.setSetting("schema_version", schema_ver);
 }
 
 void DAGDriver::execute()

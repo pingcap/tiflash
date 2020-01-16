@@ -5,6 +5,7 @@
 #include <Debug/ClusterManage.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgFuncMockTiDBData.h>
 #include <Debug/dbgFuncMockTiDBTable.h>
 #include <Debug/dbgFuncRegion.h>
@@ -75,6 +76,11 @@ DBGInvoker::DBGInvoker()
     regSchemalessFunc("enable_schema_sync_service", dbgFuncEnableSchemaSyncService);
     regSchemalessFunc("refresh_schemas", dbgFuncRefreshSchemas);
     regSchemalessFunc("reset_schemas", dbgFuncResetSchemas);
+
+    regSchemalessFunc("region_split", MockRaftCommand::dbgFuncRegionBatchSplit);
+    regSchemalessFunc("region_prepare_merge", MockRaftCommand::dbgFuncPrepareMerge);
+    regSchemalessFunc("region_commit_merge", MockRaftCommand::dbgFuncCommitMerge);
+    regSchemalessFunc("region_rollback_merge", MockRaftCommand::dbgFuncRollbackMerge);
 
     regSchemafulFunc("dag", dbgFuncDAG);
     regSchemafulFunc("mock_dag", dbgFuncMockDAG);
