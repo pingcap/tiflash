@@ -44,6 +44,9 @@ public:
         size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
         size_t  merge_hint_low_used_file_num        = 10;
 
+        // Minimum number of legacy files to be selected for compaction
+        size_t gc_compact_legacy_min_num = 3;
+
         ::DB::MVCC::VersionSetConfig version_set_config;
     };
 
@@ -101,7 +104,7 @@ public:
     static std::set<PageFile, PageFile::Comparator>
     listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
-    static std::optional<PageFile> tryGetLastSnapshot(const String & storage_path, Poco::Logger * page_file_log, bool remove_old = false);
+    static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, Poco::Logger * page_file_log, bool remove_old = false);
 
 private:
     PageFile::Writer & getWriter();
@@ -115,8 +118,9 @@ private:
                                         UInt64 &                                         candidate_total_size,
                                         size_t &                                         migrate_page_count) const;
 
-    PageFileIdAndLevel gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                       const PageFileIdAndLevel &                       writing_file_id_level);
+    std::set<PageFile, PageFile::Comparator> gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files);
+
+    void prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb);
 
     void archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files_to_archieve);
 

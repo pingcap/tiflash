@@ -6,6 +6,7 @@
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Poco/File.h>
+#include <Poco/Path.h>
 #include <common/logger_useful.h>
 #include <ext/scope_guard.h>
 
@@ -38,8 +39,10 @@ PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_f
     for (const auto & name : file_names)
     {
         auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
-        if ((page_file_type == PageFile::Type::Legacy && option.ignore_legacy)
-            || (page_file_type == PageFile::Type::Snapshot && option.ignore_snapshot))
+        if (page_file_type == PageFile::Type::Invalid)
+            continue;
+        else if ((page_file_type == PageFile::Type::Legacy && option.ignore_legacy)
+                 || (page_file_type == PageFile::Type::Snapshot && option.ignore_snapshot))
             continue;
         else if (option.remove_tmp_files && page_file_type == PageFile::Type::Temp)
             page_file.destroy();
@@ -50,26 +53,26 @@ PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_f
     if (option.ignore_gc_compacted)
     {
         // Ignore PageFiles before last Snapshot
-        auto flag = page_files.end();
+        auto erase_end = page_files.end();
         for (auto itr = page_files.begin(); itr != page_files.end(); itr++)
         {
             // Bubbles the last Snapshot
             if (itr->getType() == PageFile::Type::Snapshot)
             {
-                flag = itr;
+                erase_end = itr;
             }
         }
         // Remove compacted PageFiles
-        if (flag != page_files.end())
+        if (erase_end != page_files.end())
         {
-            page_files.erase(page_files.begin(), flag);
+            page_files.erase(page_files.begin(), erase_end);
         }
     }
 
     return page_files;
 }
 
-std::optional<PageFile> PageStorage::tryGetLastSnapshot(const String & storage_path, Poco::Logger * page_file_logger, bool remove_old)
+std::optional<PageFile> PageStorage::tryGetCheckpoint(const String & storage_path, Poco::Logger * page_file_logger, bool remove_old)
 {
     Poco::File folder(storage_path);
     if (!folder.exists())
@@ -123,7 +126,7 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
 
 #ifdef DELTA_VERSION_SET
     // Remove old snapshots and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
-    auto snapshot_file = PageStorage::tryGetLastSnapshot(storage_path, page_file_log, true);
+    auto snapshot_file = PageStorage::tryGetCheckpoint(storage_path, page_file_log, true);
     {
         std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
         if (snapshot_file)
@@ -504,24 +507,7 @@ bool PageStorage::gc()
 
     {
         // Compact consecutive Legacy PageFiles into a snapshot
-        auto id_level = gcCompactLegacy(page_files, writing_file_id_level);
-        {
-            for (auto itr = page_files.begin(); itr != page_files.end();)
-            {
-                if (itr->fileIdLevel() < id_level || itr->fileIdLevel() == id_level)
-                {
-                    itr = page_files.erase(itr);
-                }
-                else if (itr->getType() == PageFile::Type::Legacy)
-                {
-                    itr = page_files.erase(itr);
-                }
-                else
-                {
-                    itr++;
-                }
-            }
-        }
+        page_files = gcCompactLegacy(std::move(page_files));
     }
 
     bool   should_merge         = false;
@@ -654,17 +640,12 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     return merge_files;
 }
 
-PageFileIdAndLevel PageStorage::gcCompactLegacy(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                                const PageFileIdAndLevel &                       writing_file_id_level)
+std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files)
 {
     // Select PageFiles to compact
     std::set<PageFile, PageFile::Comparator> page_files_to_compact;
     for (auto & page_file : page_files)
     {
-        auto file_id_level = page_file.fileIdLevel();
-        if (file_id_level >= writing_file_id_level)
-            break;
-
         auto page_file_type = page_file.getType();
 
         if (page_file_type == PageFile::Type::Legacy)
@@ -675,9 +656,9 @@ PageFileIdAndLevel PageStorage::gcCompactLegacy(const std::set<PageFile, PageFil
             break;
     }
 
-    if (page_files_to_compact.size() <= 1)
+    if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
-        return {-1, 0};
+        return page_files;
     }
 
     // Build a version_set with snapshot
@@ -689,25 +670,10 @@ PageFileIdAndLevel PageStorage::gcCompactLegacy(const std::set<PageFile, PageFil
 
         version_set.apply(edit);
     }
-    auto snapshot = version_set.getSnapshot();
 
+    auto       snapshot = version_set.getSnapshot();
     WriteBatch wb;
-
-    // First Ingest exists pages with normal_id
-    auto normal_ids = snapshot->version()->validNormalPageIds();
-    for (auto & page_id : normal_ids)
-    {
-        auto page = snapshot->version()->at(page_id);
-        wb.upsertPage(page_id, page.tag, nullptr, page.size);
-    }
-
-    // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.
-    auto ref_ids = snapshot->version()->validPageIds();
-    for (auto & page_id : ref_ids)
-    {
-        auto ori_id = snapshot->version()->isRefId(page_id).second;
-        wb.putRefPage(page_id, ori_id);
-    }
+    prepareSnapshotWriteBatch(snapshot, wb);
 
     // Use the largest id-level in page_files_to_compact as Snapshot's
     PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
@@ -724,27 +690,66 @@ PageFileIdAndLevel PageStorage::gcCompactLegacy(const std::set<PageFile, PageFil
     // Archieve obsolete PageFiles
     {
         std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
-        for (auto & page_file : page_files)
+        for (auto itr = page_files.begin(); itr != page_files.end();)
         {
+            auto & page_file = *itr;
             if (page_file.fileIdLevel() < largest_id_level || page_file.fileIdLevel() == largest_id_level)
             {
-                page_file.destroy();
                 page_files_to_archieve.insert(page_file);
+                itr = page_files.erase(itr);
+            }
+            else if (page_file.getType() == PageFile::Type::Legacy)
+            {
+                itr = page_files.erase(itr);
+            }
+            else
+            {
+                itr++;
             }
         }
 
         archievePageFiles(page_files_to_archieve);
     }
 
-    return largest_id_level;
+    return page_files;
+}
+
+void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb)
+{
+    // First Ingest exists pages with normal_id
+    auto normal_ids = snapshot->version()->validNormalPageIds();
+    for (auto & page_id : normal_ids)
+    {
+        auto page = snapshot->version()->findNormalPageEntry(page_id);
+        wb.upsertPage(page_id, page->tag, nullptr, page->size);
+    }
+
+    // After ingesting normal_pages, we will ref them manually to ensure the ref-count is correct.
+    auto ref_ids = snapshot->version()->validPageIds();
+    for (auto & page_id : ref_ids)
+    {
+        auto ori_id = snapshot->version()->isRefId(page_id).second;
+        wb.putRefPage(page_id, ori_id);
+    }
 }
 
 void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files)
 {
+    Poco::File archieve_dir(".archieve");
+    if (archieve_dir.exists())
+        archieve_dir.remove(true);
+
+    archieve_dir.createDirectory();
     for (auto & page_file : page_files)
     {
-        page_file.destroy();
+        Poco::Path path(page_file.folderPath());
+        auto       dest = ".archieve/" + path.getBaseName();
+        Poco::File file(path);
+        if (file.exists())
+            file.moveTo(dest);
     }
+
+    archieve_dir.remove(true);
 }
 
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
