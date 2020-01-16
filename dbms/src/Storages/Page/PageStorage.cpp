@@ -476,7 +476,10 @@ bool PageStorage::gc()
         should_merge = merge_files.size() >= config.merge_hint_low_used_file_num
             || (merge_files.size() >= 2 && candidate_total_size >= config.merge_hint_low_used_file_total_size);
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
-        gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files, migrate_page_count);
+        if (should_merge)
+        {
+            gc_file_entries_edit = gcMigratePages(snapshot, file_valid_pages, merge_files, migrate_page_count);
+        }
     }
 
     /// Here we have to apply edit to versioned_page_entries and generate a new version, then return all files that are in used
@@ -606,7 +609,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
             if (it == file_valid_pages.end())
             {
                 // This file does not contain any valid page.
-                LOG_DEBUG(log,
+                LOG_TRACE(log,
                           storage_name << " No valid pages from PageFile_"                                      //
                                        << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
                                        << gc_file.getFileId() << "_" << gc_file.getLevel());
@@ -646,7 +649,6 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                 for (const auto & [page_id, page_entry] : page_id_and_entries)
                 {
                     auto & page = pages.find(page_id)->second;
-                    LOG_TRACE(log, storage_name << " Migrating page_" << page_id);
                     wb.gcMovePage(page_id,
                                   page_entry.tag,
                                   std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size()),
@@ -656,7 +658,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
                 gc_file_writer->write(wb, gc_file_edit);
             }
 
-            LOG_DEBUG(log,
+            LOG_TRACE(log,
                       storage_name << " Migrate " << page_id_and_entries.size() << " pages from PageFile_"  //
                                    << file_id_level.first << "_" << file_id_level.second << " to PageFile_" //
                                    << gc_file.getFileId() << "_" << gc_file.getLevel());
