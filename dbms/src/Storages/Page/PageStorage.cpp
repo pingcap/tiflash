@@ -748,8 +748,6 @@ void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparato
         if (file.exists())
             file.moveTo(dest);
     }
-
-    archieve_dir.remove(true);
 }
 
 PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
