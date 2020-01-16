@@ -1,5 +1,0 @@
-FROM hub.pingcap.net/tiflash/tics-base
-
-COPY tics /tics
-
-ENTRYPOINT ["/tics/theflash", "server"]
