@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <Poco/Logger.h>
+
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -17,7 +19,7 @@ using namespace DB;
 namespace DB
 {
 
-String createTableStmt(const DBInfo & db_info, const TableInfo & table_info);
+String createTableStmt(const DBInfo & db_info, const TableInfo & table_info, Poco::Logger * log);
 
 namespace tests
 {
@@ -45,7 +47,7 @@ struct Case
         // generate create statement with db_info and table_info
         auto verify_stmt = [&](TiDB::StorageEngine engine_type) {
             table_info.engine_type = engine_type;
-            String stmt = createTableStmt(db_info, table_info);
+            String stmt = createTableStmt(db_info, table_info, &Poco::Logger::get("TiDBTableInfo_test"));
             if (engine_type == TiDB::StorageEngine::TMT)
                 ASSERT_EQ(stmt, create_stmt_tmt) << "Table info create statement (TMT) mismatch:\n" + stmt + "\n" + create_stmt_tmt;
             else
