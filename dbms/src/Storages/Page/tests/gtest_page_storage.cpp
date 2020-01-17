@@ -659,7 +659,7 @@ catch (const Exception & e)
     throw;
 }
 
-TEST_F(PageStorage_test, GcCompactLegacy)
+TEST_F(PageStorage_test, GcCompactLegacyLogicalCorrectness)
 try
 {
     PageEntriesVersionSetWithDelta original_version(config.version_set_config, storage->log);
@@ -760,41 +760,45 @@ try
 }
 CATCH
 
-// Since it's hard to mock valid PageFiles, we'll deal with the test later
-TEST_F(PageStorage_test, DISABLED_ListPageFiles)
+TEST_F(PageStorage_test, ListPageFiles)
+try
 {
-    Poco::File file(storage->storage_path);
-    if (file.exists())
+    constexpr size_t buf_sz = 512;
+    char             c_buff[buf_sz];
+
     {
-        file.remove(true);
+        WriteBatch wb;
+        memset(c_buff, 0xf, buf_sz);
+        auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        wb.putPage(1, 0, buf, buf_sz);
+        storage->write(wb);
+
+        auto f = PageFile::openPageFileForRead(1, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
+        f.setLegacy();
     }
 
-    WriteBatch wb;
-    char       c[0];
-    auto       buf = std::make_shared<ReadBufferFromMemory>(c, 0);
-    wb.putPage(1, 0, buf, 0);
+    {
+        WriteBatch wb;
+        memset(c_buff, 0xf, buf_sz);
+        auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        wb.putPage(1, 0, buf, buf_sz);
 
-    storage->write_file = PageFile::newPageFile(1, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
-    storage->write(wb);
-    storage->write_file.setFormal();
+        auto f = PageFile::newPageFile(2, 0, storage->storage_path, PageFile::Type::Temp, storage->log);
+        {
+            auto w = f.createWriter(false);
 
-    storage->write_file = PageFile::newPageFile(2, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
-    storage->write(wb);
-    storage->write_file.setLegacy();
-
-    storage->write_file = PageFile::newPageFile(3, 0, storage->storage_path, PageFile::Type::Temp, storage->log);
-    storage->write(wb);
-
-    storage->write_file = PageFile::newPageFile(4, 0, storage->storage_path, PageFile::Type::Temp, storage->log);
-    storage->write(wb);
-    storage->write_file.setSnapshot();
+            PageEntriesEdit edit;
+            w->write(wb, edit);
+        }
+        f.setSnapshot();
+    }
 
     {
         PageStorage::ListPageFilesOption opt;
         opt.ignore_legacy = true;
         auto page_files   = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
-        // Temp and Legacy should be ignored
-        ASSERT_EQ(page_files.size(), 2UL);
+        // Legacy should be ignored
+        ASSERT_EQ(page_files.size(), 1UL);
         for (auto & page_file : page_files)
         {
             EXPECT_TRUE(page_file.getType() != PageFile::Type::Legacy);
@@ -805,26 +809,15 @@ TEST_F(PageStorage_test, DISABLED_ListPageFiles)
         PageStorage::ListPageFilesOption opt;
         opt.ignore_snapshot = true;
         auto page_files     = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
-        // Temp and Snapshot should be ignored
-        ASSERT_EQ(page_files.size(), 2UL);
+        // Snapshot should be ignored
+        ASSERT_EQ(page_files.size(), 1UL);
         for (auto & page_file : page_files)
         {
             EXPECT_TRUE(page_file.getType() != PageFile::Type::Snapshot);
         }
     }
-
-    {
-        PageStorage::ListPageFilesOption opt;
-        opt.remove_tmp_files = true;
-        auto page_files      = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
-        // Temp should be ignored and removed
-        ASSERT_EQ(page_files.size(), 3UL);
-        for (auto & page_file : page_files)
-        {
-            EXPECT_TRUE(page_file.getType() != PageFile::Type::Temp);
-        }
-    }
 }
+CATCH
 
 /**
  * PageStorage tests with predefine Page1 && Page2

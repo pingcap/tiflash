@@ -487,6 +487,7 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
     }
     else if (ss[0] == folder_prefix_snapshot)
     {
+        pf.type = Type::Snapshot;
         if (!Poco::File(pf.metaPath()).exists())
         {
             LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
