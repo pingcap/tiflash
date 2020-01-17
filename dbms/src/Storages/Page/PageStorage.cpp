@@ -185,13 +185,13 @@ PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id
 {
     std::lock_guard<std::mutex> lock(open_read_files_mutex);
 
-    auto & cached_reader = open_read_files[file_id_level];
-    if (cached_reader == nullptr)
+    auto & pages_reader = open_read_files[file_id_level];
+    if (pages_reader == nullptr)
     {
         auto page_file = PageFile::openPageFileForRead(file_id_level.first, file_id_level.second, storage_path, page_file_log);
-        cached_reader  = page_file.createReader();
+        pages_reader   = page_file.createReader();
     }
-    return cached_reader;
+    return pages_reader;
 }
 
 void PageStorage::write(const WriteBatch & wb)
@@ -278,11 +278,11 @@ PageMap PageStorage::read(const std::vector<PageId> & page_ids, SnapshotPtr snap
     }
 
     PageMap page_map;
-    for (auto & [file_id_level, cache_and_reader] : file_read_infos)
+    for (auto & [file_id_level, entries_and_reader] : file_read_infos)
     {
         (void)file_id_level;
-        auto & page_id_and_entries = cache_and_reader.first;
-        auto & reader              = cache_and_reader.second;
+        auto & page_id_and_entries = entries_and_reader.first;
+        auto & reader              = entries_and_reader.second;
         auto   page_in_file        = reader->read(page_id_and_entries);
         for (auto & [page_id, page] : page_in_file)
             page_map.emplace(page_id, page);
@@ -303,20 +303,20 @@ void PageStorage::read(const std::vector<PageId> & page_ids, const PageHandler &
         const auto page_entry = snapshot->version()->find(page_id);
         if (!page_entry)
             throw Exception("Page " + DB::toString(page_id) + " not found", ErrorCodes::LOGICAL_ERROR);
-        auto file_id_level                       = page_entry->fileIdLevel();
-        auto & [page_id_and_caches, file_reader] = file_read_infos[file_id_level];
-        page_id_and_caches.emplace_back(page_id, *page_entry);
+        auto file_id_level                        = page_entry->fileIdLevel();
+        auto & [page_id_and_entries, file_reader] = file_read_infos[file_id_level];
+        page_id_and_entries.emplace_back(page_id, *page_entry);
         if (file_reader == nullptr)
             file_reader = getReader(file_id_level);
     }
 
-    for (auto & [file_id_level, cache_and_reader] : file_read_infos)
+    for (auto & [file_id_level, entries_and_reader] : file_read_infos)
     {
         (void)file_id_level;
-        auto & page_id_and_caches = cache_and_reader.first;
-        auto & reader             = cache_and_reader.second;
+        auto & page_id_and_entries = entries_and_reader.first;
+        auto & reader              = entries_and_reader.second;
 
-        reader->read(page_id_and_caches, handler);
+        reader->read(page_id_and_entries, handler);
     }
 }
 
