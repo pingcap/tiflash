@@ -78,11 +78,11 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             if (field.getType() == Field::Types::Decimal32)
                 return field.get<DecimalField<Decimal32>>().toString();
             else if (field.getType() == Field::Types::Decimal64)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal64>>().toString();
             else if (field.getType() == Field::Types::Decimal128)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal128>>().toString();
             else if (field.getType() == Field::Types::Decimal256)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal256>>().toString();
             else
                 throw Exception("Not decimal literal" + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
         }
@@ -279,12 +279,12 @@ bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::E
         {tipb::EncodeType::TypeChunk, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull}},
     });
 
-    if (encode_type == tipb::EncodeType::TypeDefault)
+    auto unsupported_set = unsupported_types_map.find(encode_type);
+    if (unsupported_set == unsupported_types_map.end())
         return false;
     for (const auto & type : types)
     {
-        auto unsupported_set = unsupported_types_map.find(encode_type);
-        if (unsupported_set != unsupported_types_map.end() && unsupported_set->second.find(type.tp()) != unsupported_set->second.end())
+        if (unsupported_set->second.find(type.tp()) != unsupported_set->second.end())
             return true;
     }
     return false;

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export build_dir="/tics"
+export build_dir="/tiflash"
 
 # Executable path
 export storage_bin="$build_dir/theflash"
