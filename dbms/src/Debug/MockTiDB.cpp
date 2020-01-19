@@ -166,9 +166,17 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         if (it != columns.defaults.end())
         {
             const auto * func = typeid_cast<const ASTFunction *>(it->second.expression.get());
-            const auto * value_ptr
-                    = typeid_cast<const ASTLiteral *>(typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
-            default_value = value_ptr->value;
+            if (func != nullptr)
+            {
+                const auto *value_ptr = typeid_cast<const ASTLiteral *>(
+                                typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
+                default_value = value_ptr->value;
+            }
+            else
+            {
+                if (typeid_cast<const ASTLiteral *>(it->second.expression.get()) != nullptr)
+                    default_value = typeid_cast<const ASTLiteral *>(it->second.expression.get())->value;
+            }
         }
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value));
         if (handle_pk_name == column.name)

@@ -183,9 +183,17 @@ void MockTiDBTable::dbgFuncAddColumnToTiDBTable(Context & context, const ASTs & 
     if (it != cols.defaults.end())
     {
         const auto * func = typeid_cast<const ASTFunction *>(it->second.expression.get());
-        const auto * value_ptr
-            = typeid_cast<const ASTLiteral *>(typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
-        default_value = value_ptr->value;
+        if (func != nullptr)
+        {
+            const auto *value_ptr = typeid_cast<const ASTLiteral *>(
+                    typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
+            default_value = value_ptr->value;
+        }
+        else
+        {
+            if (typeid_cast<const ASTLiteral *>(it->second.expression.get()) != nullptr)
+                default_value = typeid_cast<const ASTLiteral *>(it->second.expression.get())->value;
+        }
     }
     MockTiDB::instance().addColumnToTable(database_name, table_name, column, default_value);
 
