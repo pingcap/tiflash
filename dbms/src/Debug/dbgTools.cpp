@@ -1,16 +1,16 @@
-#include <random>
-
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiKV.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
 #include <Raft/RaftContext.h>
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
+
+#include <random>
 
 namespace DB
 {

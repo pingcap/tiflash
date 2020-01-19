@@ -2,8 +2,8 @@
 #include <Core/TMTPKType.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/MutableSupport.h>
-#include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/Datum.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/PredecodeTiKVValue.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>

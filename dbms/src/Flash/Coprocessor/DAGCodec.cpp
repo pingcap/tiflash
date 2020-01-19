@@ -1,6 +1,5 @@
 #include <Flash/Coprocessor/DAGCodec.h>
-
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TiKVRecordFormat.h>
 
 namespace DB

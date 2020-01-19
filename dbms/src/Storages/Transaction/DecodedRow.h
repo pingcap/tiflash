@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 
 namespace DB
 {

@@ -1,6 +1,5 @@
-#include <Storages/Transaction/Codec.h>
-
 #include <DataTypes/DataTypeDecimal.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/JSONCodec.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVVarInt.h>
