@@ -297,8 +297,8 @@ void fillTiDBColumnInfo(const String & family_name, const ASTPtr & parameters, C
 // This is a hack to create TiDB type that can not get from a TiFlash type
 // the rule is use `col_name default value` to declare a TiFlash column
 // and if the default value is a string and starts with "asTiDBType", then
-// we extract TiDB type from the default value
-// The default value should be formatted as "asTiDBType|tidbType[|defaultValue]"
+// we extract TiDB type from the default value and in this case the default
+// value should be formatted as "asTiDBType|tidbType[|defaultValue]"
 bool hijackTiDBTypeForMockTest(const Field & default_value, ColumnInfo & column_info)
 {
     if (!default_value.isNull() && default_value.getType() == Field::Types::String)
