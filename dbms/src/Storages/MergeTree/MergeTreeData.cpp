@@ -1132,6 +1132,20 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
     {
         throw Exception("L0 compact does not support alter clause.");
     }
+
+    // Check if this part has column that needs to be renamed.
+    // There is one case that column cannot be found : the column is added after the table is created.
+    auto it = std::find_if(part->columns.begin(), part->columns.end(), [&](const NameAndTypePair & pair)
+    {
+        return pair.name == command.column_name;
+    });
+
+    if (it == part->columns.end())
+    {
+        LOG_INFO(log, "Not find column name " << command.column_name << " in part " << part->name);
+        return nullptr;
+    }
+
     AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part)); /// Blocks changes to the part.
     DataPart::Checksums new_checksums = part->checksums;
 
