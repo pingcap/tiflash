@@ -175,7 +175,15 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
         {
             throw Exception("Rename column fails, new column name: " + column_name + " has existed ", ErrorCodes::LOGICAL_ERROR);
         }
+        String old_column_name = old_column_it->name;
         old_column_it->name = new_column_name;
+        // Change defaults value map.
+        auto default_it = columns_description.defaults.find(old_column_name);
+        if (default_it != columns_description.defaults.end())
+        {
+            columns_description.defaults.erase(default_it->first);
+            columns_description.defaults.emplace(new_column_name, default_it->second);
+        }
     }
     else
         throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
