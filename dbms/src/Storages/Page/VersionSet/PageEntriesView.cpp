@@ -116,7 +116,7 @@ std::set<PageId> PageEntriesView::validPageIds() const
 
 std::set<PageId> PageEntriesView::validNormalPageIds() const
 {
-    // TODO add test cases for this function
+    // TODO: add test cases for this function
     std::stack<std::shared_ptr<PageEntriesForDelta>> link_nodes;
     for (auto node = tail; node != nullptr; node = node->prev)
     {

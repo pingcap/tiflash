@@ -121,14 +121,14 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
 void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
 {
     assert(rec.type == WriteBatch::WriteType::PUT);
-    current_version->ref_deletions.erase(rec.page_id);
+    /// Note that any changes on `current_version` will break the consistency of `view`.
+    /// We should postpone changes to the last of this function.
 
     auto [is_ref_exist, normal_page_id] = view->isRefId(rec.page_id);
     if (!is_ref_exist)
     {
-        // if ref not exist, add new ref-pair
+        // if ref not exist, we should add new ref-pair later
         normal_page_id = rec.page_id;
-        current_version->page_ref.emplace(rec.page_id, normal_page_id);
     }
 
     // update normal page's entry
@@ -152,12 +152,19 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
         current_version->normal_pages[normal_page_id] = rec.entry;
     }
 
+    // Add new ref-pair if not exists.
+    if (!is_ref_exist)
+        current_version->page_ref.emplace(rec.page_id, normal_page_id);
+    current_version->ref_deletions.erase(rec.page_id);
     current_version->max_page_id = std::max(current_version->max_page_id, rec.page_id);
 }
 
 void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
 {
     assert(rec.type == WriteBatch::WriteType::DEL);
+    /// Note that any changes on `current_version` will break the consistency of `view`.
+    /// We should postpone changes to the last of this function.
+
     auto [is_ref, normal_page_id] = view->isRefId(rec.page_id);
     view->resolveRefId(rec.page_id);
     current_version->ref_deletions.insert(rec.page_id);
@@ -172,7 +179,9 @@ void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
 void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
 {
     assert(rec.type == WriteBatch::WriteType::REF);
-    current_version->ref_deletions.erase(rec.page_id);
+    /// Note that any changes on `current_version` will break the consistency of `view`.
+    /// We should postpone changes to the last of this function.
+
     // if `page_id` is a ref-id, collapse the ref-path to actual PageId
     // eg. exist RefPage2 -> Page1, add RefPage3 -> RefPage2, collapse to RefPage3 -> Page1
     const PageId normal_page_id = view->resolveRefId(rec.ori_page_id);
@@ -193,6 +202,9 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         auto new_entry = *old_entry;
         new_entry.ref += 1;
         current_version->normal_pages[normal_page_id] = new_entry;
+
+        current_version->ref_deletions.erase(rec.page_id);
+        current_version->max_page_id = std::max(current_version->max_page_id, rec.page_id);
     }
     else
     {
@@ -209,7 +221,6 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
                             ErrorCodes::LOGICAL_ERROR);
         }
     }
-    current_version->max_page_id = std::max(current_version->max_page_id, rec.page_id);
 }
 
 void DeltaVersionEditAcceptor::applyInplace(const PageEntriesVersionSetWithDelta::VersionPtr & current, const PageEntriesEdit & edit)
