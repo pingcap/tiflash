@@ -388,7 +388,8 @@ void StorageMergeTree::alterInternal(
         if (rename_column)
         {
             auto transaction = data.renameColumnPart(part, columns_for_parts, params[0]);
-            transactions.push_back(std::move(transaction));
+            if (transaction != nullptr)
+                transactions.push_back(std::move(transaction));
         }
         else if (auto transaction = data.alterDataPart(part, columns_for_parts, new_primary_key_ast, false))
             transactions.push_back(std::move(transaction));
