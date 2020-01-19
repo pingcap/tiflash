@@ -1421,6 +1421,7 @@ void MergeTreeData::AlterDataPartTransaction::commit()
         return;
     try
     {
+        LOG_DEBUG(log, "txn begin commit " << data_part->name);
         std::unique_lock<std::shared_mutex> lock(data_part->columns_lock);
 
         String path = data_part->getFullPath();
@@ -1449,6 +1450,7 @@ void MergeTreeData::AlterDataPartTransaction::commit()
         auto & mutable_part = const_cast<DataPart &>(*data_part);
         mutable_part.checksums = new_checksums;
         mutable_part.columns = new_columns;
+        LOG_DEBUG(log, "new columns " << new_columns.toString());
 
         /// 3) Delete the old files.
         for (const auto & from_to : rename_map)

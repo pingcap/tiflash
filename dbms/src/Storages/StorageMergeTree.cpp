@@ -341,6 +341,8 @@ void StorageMergeTree::alterInternal(
     /// NOTE: Here, as in ReplicatedMergeTree, you can do ALTER which does not block the writing of data for a long time.
     auto merge_blocker = merger.merges_blocker.cancel();
 
+    LOG_DEBUG(log, "begin alter type: " << std::to_string((int)params[0].type) << " " << std::to_string(params.size()));
+
     auto table_soft_lock = lockDataForAlter(__PRETTY_FUNCTION__);
 
     data.checkAlter(params);
