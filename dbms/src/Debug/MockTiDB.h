@@ -114,4 +114,6 @@ private:
     Int64 version = 0;
 };
 
+Field getDefaultValue(const ASTPtr & default_value_ast);
+
 } // namespace DB

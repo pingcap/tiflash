@@ -164,20 +164,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         Field default_value;
         auto it = columns.defaults.find(column.name);
         if (it != columns.defaults.end())
-        {
-            const auto * func = typeid_cast<const ASTFunction *>(it->second.expression.get());
-            if (func != nullptr)
-            {
-                const auto *value_ptr = typeid_cast<const ASTLiteral *>(
-                                typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
-                default_value = value_ptr->value;
-            }
-            else
-            {
-                if (typeid_cast<const ASTLiteral *>(it->second.expression.get()) != nullptr)
-                    default_value = typeid_cast<const ASTLiteral *>(it->second.expression.get())->value;
-            }
-        }
+            default_value = getDefaultValue(it->second.expression);
         table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value));
         if (handle_pk_name == column.name)
         {
@@ -204,6 +191,24 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
     version_diff[version] = diff;
 
     return table->table_info.id;
+}
+
+Field getDefaultValue(const ASTPtr & default_value_ast)
+{
+    Field default_value;
+    const auto * func = typeid_cast<const ASTFunction *>(default_value_ast.get());
+    if (func != nullptr)
+    {
+        const auto *value_ptr = typeid_cast<const ASTLiteral *>(
+                typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
+        return value_ptr->value;
+    }
+    else
+    {
+        if (typeid_cast<const ASTLiteral *>(default_value_ast.get()) != nullptr)
+            return typeid_cast<const ASTLiteral *>(default_value_ast.get())->value;
+    }
+    return Field();
 }
 
 void MockTiDB::newPartition(const String & database_name, const String & table_name, TableID partition_id, Timestamp tso, bool is_add_part)
