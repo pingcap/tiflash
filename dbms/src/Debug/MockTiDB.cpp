@@ -203,11 +203,8 @@ Field getDefaultValue(const ASTPtr & default_value_ast)
                 typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
         return value_ptr->value;
     }
-    else
-    {
-        if (typeid_cast<const ASTLiteral *>(default_value_ast.get()) != nullptr)
-            return typeid_cast<const ASTLiteral *>(default_value_ast.get())->value;
-    }
+    else if (typeid_cast<const ASTLiteral *>(default_value_ast.get()) != nullptr)
+        return typeid_cast<const ASTLiteral *>(default_value_ast.get())->value;
     return Field();
 }
 
