@@ -212,7 +212,7 @@ public:
     private:
         friend class MergeTreeData;
 
-        AlterDataPartTransaction(DataPartPtr data_part_) : data_part(data_part_), alter_lock(data_part->alter_mutex), log(&Logger::get("alter command txn")) {}
+        AlterDataPartTransaction(DataPartPtr data_part_) : data_part(data_part_), alter_lock(data_part->alter_mutex) {}
 
         void clear()
         {
@@ -228,7 +228,6 @@ public:
         /// If the value is an empty string, the file is not temporary, and it must be deleted.
         NameToNameMap rename_map;
 
-        Logger * log;
     };
 
     using AlterDataPartTransactionPtr = std::unique_ptr<AlterDataPartTransaction>;
