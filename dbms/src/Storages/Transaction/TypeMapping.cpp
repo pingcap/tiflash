@@ -218,6 +218,7 @@ void setDecimalPrecScale(const T * decimal_type, ColumnInfo & column_info)
     column_info.decimal = decimal_type->getScale();
 }
 
+void fillTiDBColumnInfo(const String & family_name, const ASTPtr & parameters, ColumnInfo & column_info);
 void fillTiDBColumnInfo(const ASTPtr & type, ColumnInfo & column_info)
 {
     auto * func = typeid_cast<const ASTFunction *>(type.get());
@@ -326,12 +327,12 @@ bool hijackTiDBTypeForMockTest(const Field & default_value, ColumnInfo & column_
         return false;
 }
 
-ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value)
+ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value, bool for_test)
 {
     ColumnInfo column_info;
     column_info.id = id;
     column_info.name = column.name;
-    if (hijackTiDBTypeForMockTest(default_value, column_info))
+    if (for_test && hijackTiDBTypeForMockTest(default_value, column_info))
         return column_info;
     const IDataType * nested_type = column.type.get();
 

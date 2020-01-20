@@ -165,7 +165,7 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
         auto it = columns.defaults.find(column.name);
         if (it != columns.defaults.end())
             default_value = getDefaultValue(it->second.expression);
-        table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value));
+        table_info.columns.emplace_back(reverseGetColumnInfo(column, i++, default_value, true));
         if (handle_pk_name == column.name)
         {
             if (!column.type->isInteger() && !column.type->isUnsignedInteger())
@@ -195,7 +195,6 @@ TableID MockTiDB::newTable(const String & database_name, const String & table_na
 
 Field getDefaultValue(const ASTPtr & default_value_ast)
 {
-    Field default_value;
     const auto * func = typeid_cast<const ASTFunction *>(default_value_ast.get());
     if (func != nullptr)
     {
@@ -281,7 +280,7 @@ void MockTiDB::addColumnToTable(
         != columns.end())
         throw Exception("Column " + column.name + " already exists in TiDB table " + qualified_name, ErrorCodes::LOGICAL_ERROR);
 
-    ColumnInfo column_info = reverseGetColumnInfo(column, table->allocColumnID(), default_value);
+    ColumnInfo column_info = reverseGetColumnInfo(column, table->allocColumnID(), default_value, true);
     columns.emplace_back(column_info);
 
     version++;
@@ -328,7 +327,7 @@ void MockTiDB::modifyColumnInTable(const String & database_name, const String & 
     if (it == columns.end())
         throw Exception("Column " + column.name + " does not exist in TiDB table  " + qualified_name, ErrorCodes::LOGICAL_ERROR);
 
-    ColumnInfo column_info = reverseGetColumnInfo(column, 0, Field());
+    ColumnInfo column_info = reverseGetColumnInfo(column, 0, Field(), true);
     if (it->hasUnsignedFlag() != column_info.hasUnsignedFlag())
         throw Exception("Modify column " + column.name + " UNSIGNED flag is not allowed", ErrorCodes::LOGICAL_ERROR);
     if (it->tp == column_info.tp && it->hasNotNullFlag() == column_info.hasNotNullFlag())

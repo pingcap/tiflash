@@ -135,6 +135,9 @@ UInt64 ColumnInfo::getSetValue(const String & set_str) const
     UInt64 value = 0;
     for (size_t i = 0; i < elems.size(); i++)
     {
+        // https://github.com/pingcap/tidb/blob/master/ddl/ddl_api.go#L752
+        // TiDB always use the set value as case insensitive value, so need
+        // to use toLower to make it case insensitive
         String key_lowercase = Poco::toLower(elems.at(i).first);
         auto it = marked.find(key_lowercase);
         if (it != marked.end())
