@@ -1,6 +1,7 @@
 #include <Common/Decimal.h>
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
+#include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/TiDB.h>
 
@@ -66,12 +67,11 @@ Field ColumnInfo::defaultValueToField() const
         case TypeNewDecimal:
             return getDecimalValue(value.convert<String>());
         case TypeTime:
-            return Field();
+            return getTimeValue(value.convert<String>());
         case TypeYear:
-            return Field();
+            return getYearValue(value.convert<Int64>());
         case TypeSet:
-            // blocked by TiDB https://github.com/pingcap/tidb/issues/12160
-            return Field();
+            return getSetValue(value.convert<String>());
         default:
             throw Exception("Have not processed type: " + std::to_string(tp));
     }
@@ -123,6 +123,67 @@ Int64 ColumnInfo::getEnumIndex(const String & enum_id_or_text) const
     }
     int num = std::stoi(enum_id_or_text);
     return num;
+}
+
+UInt64 ColumnInfo::getSetValue(const String & set_str) const
+{
+    Poco::StringTokenizer string_tokens(set_str, ",");
+    std::set<String> marked;
+    for (const auto & s : string_tokens)
+        marked.insert(Poco::toLower(s));
+
+    UInt64 value = 0;
+    for (size_t i = 0; i < elems.size(); i++)
+    {
+        // https://github.com/pingcap/tidb/blob/master/ddl/ddl_api.go#L752
+        // TiDB always use the set value as case insensitive value, so need
+        // to use toLower to make it case insensitive
+        String key_lowercase = Poco::toLower(elems.at(i).first);
+        auto it = marked.find(key_lowercase);
+        if (it != marked.end())
+        {
+            value |= 1ULL << i;
+            marked.erase(it);
+        }
+    }
+
+    if (marked.empty())
+        return value;
+
+    throw DB::Exception(
+            std::string(__PRETTY_FUNCTION__) + ": can't parse set type value.");
+}
+
+Int64 ColumnInfo::getTimeValue(const String & time_str) const
+{
+    const static long fractional_seconds_multiplier[] = {1000000000, 100000000, 10000000, 1000000,
+                                          100000, 10000, 1000, 100, 10, 1};
+    bool negative = time_str[0] == '-';
+    Poco::StringTokenizer second_and_fsp(time_str, ".");
+    Poco::StringTokenizer string_tokens(second_and_fsp[0], ":");
+    Int64 ret = 0;
+    for (auto const & s : string_tokens)
+        ret = ret * 60 + std::abs(std::stoi(s));
+    Int32 fs_length = 0;
+    Int64 fs_value = 0;
+    if (second_and_fsp.count() == 2)
+    {
+        fs_length = second_and_fsp[1].length();
+        fs_value = std::stol(second_and_fsp[1]);
+    }
+    ret = ret * fractional_seconds_multiplier[0]
+            + fs_value * fractional_seconds_multiplier[fs_length];
+    return negative ? -ret : ret;
+}
+
+Int64 ColumnInfo::getYearValue(Int64 val) const
+{
+    // do not check validation of the val because TiDB will do it
+    if (0 <= val && val < 70)
+        return 2000 + val;
+    if (70 <= val && val < 100)
+        return 1900 + val;
+    return val;
 }
 
 Poco::JSON::Object::Ptr ColumnInfo::getJSONObject() const try
