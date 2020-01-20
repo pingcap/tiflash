@@ -227,7 +227,6 @@ public:
         NamesAndTypesList new_columns;
         /// If the value is an empty string, the file is not temporary, and it must be deleted.
         NameToNameMap rename_map;
-
     };
 
     using AlterDataPartTransactionPtr = std::unique_ptr<AlterDataPartTransaction>;
