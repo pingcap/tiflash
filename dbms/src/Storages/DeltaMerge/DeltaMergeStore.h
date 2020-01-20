@@ -251,6 +251,7 @@ private:
     PathPool    extra_paths;
     StoragePool storage_pool;
 
+    String        db_name;
     String        table_name;
     ColumnDefines table_columns;
     ColumnDefine  table_handle_define;

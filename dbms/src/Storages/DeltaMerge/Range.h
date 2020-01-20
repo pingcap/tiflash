@@ -63,6 +63,19 @@ struct Range
 using HandleRange  = Range<Handle>;
 using HandleRanges = std::vector<HandleRange>;
 
+inline String toString(const HandleRanges & ranges)
+{
+    String s = "{";
+    for (auto & r : ranges)
+    {
+        s += r.toString() + ",";
+    }
+    if (!ranges.empty())
+        s.erase(s.size() - 1);
+    s += "}";
+    return s;
+}
+
 inline HandleRange mergeRanges(const HandleRanges & ranges)
 {
     HandleRange range(HandleRange::MAX, HandleRange::MIN);

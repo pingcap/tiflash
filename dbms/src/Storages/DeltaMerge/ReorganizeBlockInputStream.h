@@ -97,8 +97,8 @@ private:
                 if constexpr (DM_RUN_CHECK)
                 {
                     if (unlikely(next_pk < last_curr_pk))
-                        throw Exception("InputStream is not sorted, pk in next block is smaller than current block: " + toString(next_pk)
-                                            + " < " + toString(last_curr_pk),
+                        throw Exception("InputStream is not sorted, pk in next block is smaller than current block: "
+                                            + DB::toString(next_pk) + " < " + DB::toString(last_curr_pk),
                                         ErrorCodes::LOGICAL_ERROR);
                 }
                 break;

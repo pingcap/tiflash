@@ -72,7 +72,7 @@ private:
     bool delta_done  = false;
 
     // How many times `read` is called.
-    size_t num_read             = 0;
+    size_t num_read = 0;
 
     Handle last_handle          = N_INF_HANDLE;
     size_t last_handle_pos      = 0;
