@@ -5,7 +5,6 @@
 #include <Storages/IStorage.h>
 
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageDeltaMergeDummy.h>
 
 namespace DB
 {
@@ -18,10 +17,6 @@ BlockIO InterpreterManageQuery::execute()
     if (table->getName() == "DeltaMerge")
     {
         manageable_storage = &dynamic_cast<StorageDeltaMerge &>(*table);
-    }
-    else if (table->getName() == "DeltaMergeDummy")
-    {
-        manageable_storage = &dynamic_cast<StorageDeltaMergeDummy &>(*table);
     }
     else
     {

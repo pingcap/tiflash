@@ -11,7 +11,7 @@ add_executable(gtests_dm EXCLUDE_FROM_ALL ${dm_gtest_sources} dm_basic_include.h
 target_link_libraries(gtests_dm gtest_main dbms clickhouse_functions)
 add_check(gtests_dm)
 
-# add unit test by hand
+# add unit test manually
 add_executable(dm_test_storage_delta_merge EXCLUDE_FROM_ALL gtest_dm_storage_delta_merge.cpp)
 target_include_directories(dm_test_storage_delta_merge BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 target_link_libraries(dm_test_storage_delta_merge
@@ -33,9 +33,6 @@ target_link_libraries(dm_test_segment dbms gtest_main clickhouse_functions)
 
 add_executable(dm_test_disk_value_space EXCLUDE_FROM_ALL gtest_dm_disk_value_space.cpp)
 target_link_libraries(dm_test_disk_value_space dbms gtest_main clickhouse_functions)
-
-add_executable(dm_test_merge_block_stream EXCLUDE_FROM_ALL gtest_dm_delta_merge_block_stream.cpp)
-target_link_libraries(dm_test_merge_block_stream dbms gtest_main clickhouse_functions)
 
 add_executable(dm_test_delta_tree EXCLUDE_FROM_ALL gtest_dm_delta_tree.cpp)
 target_link_libraries(dm_test_delta_tree dbms gtest_main)
