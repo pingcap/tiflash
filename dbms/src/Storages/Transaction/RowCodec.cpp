@@ -396,7 +396,7 @@ struct RowEncoderV2
         bool is_big = false;
         size_t value_length = 0;
 
-        // Encode individual columns.
+        /// Cache encoded individual columns.
         for (size_t i_col = 0, i_val = 0; i_col < table_info.columns.size(); i_col++)
         {
             const auto & column_info = table_info.columns[i_col];
@@ -421,21 +421,21 @@ struct RowEncoderV2
         }
         is_big = is_big || value_length > std::numeric_limits<RowV2::Types<false>::ValueOffsetType>::max();
 
-        // Encode header.
+        /// Encode header.
         encodeUInt(UInt8(RowCodecVer::ROW_V2), ss);
         UInt8 row_flag = 0;
         row_flag |= is_big ? RowV2::BigRowMask : 0;
         encodeUInt(row_flag, ss);
 
-        // Encode column numbers and IDs.
+        /// Encode column numbers and IDs.
         encodeUInt(static_cast<UInt16>(num_not_null_columns), ss);
         encodeUInt(static_cast<UInt16>(num_null_columns), ss);
         is_big ? encodeColumnIDs<RowV2::Types<true>::ColumnIDType>(ss) : encodeColumnIDs<RowV2::Types<false>::ColumnIDType>(ss);
 
-        // Encode value offsets.
+        /// Encode value offsets.
         is_big ? encodeValueOffsets<RowV2::Types<true>::ValueOffsetType>(ss) : encodeValueOffsets<RowV2::Types<false>::ValueOffsetType>(ss);
 
-        // Encode values.
+        /// Encode values.
         encodeValues(ss);
     }
 
