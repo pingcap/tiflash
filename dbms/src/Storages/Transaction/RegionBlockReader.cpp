@@ -224,7 +224,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
     if (column_names_to_read.size() > MustHaveColCnt)
     {
         DecodedRecordData decoded_data(visible_column_to_read_lut.size());
-        RowPreDecoder preDecoder{table_info, column_lut};
+        RowPreDecoder pre_decoder{table_info, column_lut};
 
         // TODO: optimize columns' insertion, use better implementation rather than Field, it's terrible.
 
@@ -252,7 +252,7 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                 const DecodedRow * row = value.getDecodedRow().load();
                 if (!row)
                 {
-                    preDecoder.preDecodeRow(value);
+                    pre_decoder.preDecodeRow(value);
                     row = value.getDecodedRow().load();
                 }
 
@@ -281,9 +281,12 @@ std::tuple<Block, bool> readRegionBlock(const TableInfo & table_info,
                         if (!row->unknown_fields.with_codec_flag)
                         {
                             // If without codec flag, this column is an unknown column in V2 format, re-decode it based on the column info.
-                            it->field = decodeUnknownColumnV2(it->field, column_info);
+                            decoded_data.emplace_back(column_info.id, decodeUnknownColumnV2(it->field, column_info));
                         }
-                        decoded_data.push_back(it);
+                        else
+                        {
+                            decoded_data.push_back(it);
+                        }
                         continue;
                     }
 

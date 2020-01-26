@@ -358,10 +358,10 @@ DecodedRow * decodeRow(const TiKVValue::Base & raw_value, const TableInfo & tabl
     }
 }
 
-Field decodeUnknownColumnV2(Field & unknown, const ColumnInfo & column_info)
+Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_info)
 {
     if (unknown.isNull())
-        return std::move(unknown);
+        return Field();
 
     const auto & raw_value = unknown.safeGet<TiKVValue::Base>();
     return RowV2::decodeNotNullColumn(0, raw_value, raw_value.length(), column_info);

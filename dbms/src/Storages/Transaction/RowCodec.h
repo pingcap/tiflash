@@ -14,7 +14,7 @@ DecodedRow * decodeRow(const TiKVValue::Base & raw_value, const TableInfo & tabl
 
 /// Decode an unknown column's raw value (as string) in a V2 row format, based on the given column info.
 /// It is used for force decoding when the column info is certain, before which pre-decoding hasn't seen its column info yet thus can only record its raw value.
-Field decodeUnknownColumnV2(Field & unknown, const ColumnInfo & column_info);
+Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_info);
 
 /// The following two encode functions are used for testing.
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, std::stringstream & ss);
