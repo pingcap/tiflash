@@ -9,7 +9,7 @@
 /// The internal representation of a datum in TiFlash is Field.
 /// Encoded/decoded datum must be from/to DatumBumpy/Flat classes to do flatten/unflatten.
 /// These functions are used across the storage (row codec in RowCodec.h/cpp) and compute (coprocessor codec under Coprocessor directory) layers.
-/// But be noted that each layer could has their own datum codec implementations other than this file for endianness or specific data types - TiDB does so, thus so does TiFlash.
+/// But be noted that each layer could have their own datum codec implementations other than this file for endianness or specific data types - TiDB does so, thus so does TiFlash.
 namespace DB
 {
 
