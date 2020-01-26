@@ -7,6 +7,7 @@
 #include <Common/setThreadName.h>
 
 #include <daemon/BaseDaemon.h>
+#include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 
 
@@ -32,22 +33,29 @@ std::shared_ptr<prometheus::Registry> MetricsPrometheus::getRegistry()
 MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetrics & async_metrics_)
     : context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
-    registry = MetricsPrometheus::getRegistry();
-    metricsInterval = context.getConfigRef().getInt("status.metrics-interval", 15);
+    auto & conf = context.getConfigRef();
+    metricsInterval = conf.getInt(status_metrics_interval, 15);
+    if (metricsInterval <= 0 || metricsInterval > 120)
+    {
+        metricsInterval = 15;
+    }
 
-    const std::string metricsAddr = context.getConfigRef().getString("status.metrics-addr", "");
-    if (0 == metricsAddr.compare(""))
+    registry = MetricsPrometheus::getRegistry();
+
+    if (!conf.hasOption(status_metrics_addr))
     {
         metricsInterval = 0;
-        LOG_INFO(log, "Disable sending metrics to prometheus, cause status.metrics-addr is not set!");
+        LOG_INFO(log, "Disable sending metrics to prometheus, cause " << status_metrics_addr << " is not set!");
     }
     else
     {
+        const std::string metricsAddr = conf.getString(status_metrics_addr);
+
         auto pos = metricsAddr.find(':', 0);
         auto host = metricsAddr.substr(0, pos);
         auto port = metricsAddr.substr(pos + 1, metricsAddr.size());
 
-        auto serviceAddr = context.getConfigRef().getString("flash.service_addr");
+        auto serviceAddr = conf.getString("flash.service_addr");
         std::string jobName = serviceAddr;
         std::replace(jobName.begin(), jobName.end(), ':', '_');
         std::replace(jobName.begin(), jobName.end(), '.', '_');
@@ -59,7 +67,15 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
         gateway = std::make_shared<prometheus::Gateway>(host, port, jobName, prometheus::Gateway::GetInstanceLabel(hostname));
         gateway->RegisterCollectable(registry);
 
-        LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metricsInterval << "; addr = " << serviceAddr);
+        LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metricsInterval << "; addr = " << metricsAddr);
+    }
+
+    if (conf.hasOption(status_metrics_port))
+    {
+        auto metricsPort = conf.getString(status_metrics_port);
+        exposer = std::make_shared<prometheus::Exposer>(metricsPort);
+        exposer->RegisterCollectable(registry);
+        LOG_INFO(log, "Metrics Port = " << metricsPort);
     }
 }
 
@@ -102,7 +118,7 @@ void MetricsPrometheus::run()
 
     while (true)
     {
-        if (metricsInterval > 0 && registry != nullptr && gateway != nullptr)
+        if (metricsInterval > 0 && registry != nullptr)
             break;
 
         if (cond.wait_until(lock, get_next_time(5), [this] { return quit; }))
@@ -114,11 +130,11 @@ void MetricsPrometheus::run()
         if (cond.wait_until(lock, get_next_time(metricsInterval), [this] { return quit; }))
             break;
 
-        sendMetricsToPrometheus(prev_counters);
+        convertMetrics(prev_counters);
     }
 }
 
-void MetricsPrometheus::sendMetricsToPrometheus(std::vector<ProfileEvents::Count> & prev_counters)
+void MetricsPrometheus::convertMetrics(std::vector<ProfileEvents::Count> & prev_counters)
 {
     auto async_metrics_values = async_metrics.getValues();
 
@@ -149,10 +165,10 @@ void MetricsPrometheus::sendMetricsToPrometheus(std::vector<ProfileEvents::Count
     }
 
     if (!key_vals.empty())
-        doSendMetricsToPrometheus(key_vals);
+        doConvertMetrics(key_vals);
 }
 
-void MetricsPrometheus::doSendMetricsToPrometheus(const GraphiteWriter::KeyValueVector<ssize_t> & key_vals)
+void MetricsPrometheus::doConvertMetrics(const GraphiteWriter::KeyValueVector<ssize_t> & key_vals)
 {
     using namespace prometheus;
 
@@ -180,10 +196,13 @@ void MetricsPrometheus::doSendMetricsToPrometheus(const GraphiteWriter::KeyValue
         }
     }
 
-    auto returnCode = gateway->Push();
-    if (returnCode != 200)
+    if (gateway != nullptr)
     {
-        LOG_WARNING(log, "Failed to push metrics to gateway, return code is " << returnCode);
+        auto returnCode = gateway->Push();
+        if (returnCode != 200)
+        {
+            LOG_WARNING(log, "Failed to push metrics to gateway, return code is " << returnCode);
+        }
     }
 }
 } // namespace DB
