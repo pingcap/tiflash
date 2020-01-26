@@ -6,6 +6,7 @@
 #include <prometheus/gateway.h>
 #include <prometheus/gauge.h>
 #include <prometheus/registry.h>
+#include <prometheus/exposer.h>
 #include <condition_variable>
 #include <mutex>
 #include <string>
@@ -54,6 +55,7 @@ private:
     std::thread thread{&MetricsPrometheus::run, this};
     std::shared_ptr<prometheus::Gateway> gateway;
     std::shared_ptr<prometheus::Registry> registry;
+    std::shared_ptr<prometheus::Exposer> exposer;
     std::map<std::string, prometheus::Gauge &> gauge_map;
     int metricsInterval;
     Logger * log;

@@ -7,6 +7,7 @@
 #include <Common/setThreadName.h>
 
 #include <daemon/BaseDaemon.h>
+#include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 
 
@@ -33,16 +34,17 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
     : context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
     registry = MetricsPrometheus::getRegistry();
-    metricsInterval = context.getConfigRef().getInt("status.metrics-interval", 15);
+    metricsInterval = context.getConfigRef().getInt("status.metrics_interval", 15);
 
-    const std::string metricsAddr = context.getConfigRef().getString("status.metrics-addr", "");
-    if (0 == metricsAddr.compare(""))
+    if (!context.getConfigRef().hasOption("status.metrics_addr"))
     {
         metricsInterval = 0;
-        LOG_INFO(log, "Disable sending metrics to prometheus, cause status.metrics-addr is not set!");
+        LOG_INFO(log, "Disable sending metrics to prometheus, cause status.metrics_addr is not set!");
     }
     else
     {
+        const std::string metricsAddr = context.getConfigRef().getString("status.metrics_addr");
+
         auto pos = metricsAddr.find(':', 0);
         auto host = metricsAddr.substr(0, pos);
         auto port = metricsAddr.substr(pos + 1, metricsAddr.size());
@@ -59,7 +61,15 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
         gateway = std::make_shared<prometheus::Gateway>(host, port, jobName, prometheus::Gateway::GetInstanceLabel(hostname));
         gateway->RegisterCollectable(registry);
 
-        LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metricsInterval << "; addr = " << serviceAddr);
+        LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metricsInterval << "; addr = " << metricsAddr);
+    }
+
+    if (context.getConfigRef().hasOption("status.metrics_port"))
+    {
+        auto metricsPort = context.getConfigRef().getString("status.metrics_port");
+        exposer = std::make_shared<prometheus::Exposer>(metricsPort);
+        exposer->RegisterCollectable(registry);
+        LOG_INFO(log, "Metrics Port = " << metricsPort);
     }
 }
 
