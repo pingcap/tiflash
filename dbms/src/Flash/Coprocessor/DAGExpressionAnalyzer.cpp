@@ -8,6 +8,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
@@ -415,7 +416,7 @@ void DAGExpressionAnalyzer::makeExplicitSetForIndex(const tipb::Expr & expr, con
     }
     const String & func_name = getFunctionName(expr);
     // only support col_name in (value_list)
-    if (isInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
+    if (functionIsInOrGlobalInOperator(func_name) && expr.children(0).tp() == tipb::ExprType::ColumnRef && !prepared_sets.count(&expr))
     {
         NamesAndTypesList column_list;
         for (const auto & col : getCurrentInputColumns())
@@ -487,7 +488,7 @@ String DAGExpressionAnalyzer::getActionsForInOperator(const tipb::Expr & expr, E
     // key not in (const1, const2, non_const1, non_const2) => and(key not in (const1, const2), key not eq non_const1, key not eq non_const2)
     argument_names.clear();
     argument_names.push_back(expr_name);
-    bool is_not_in = func_name == "notIn" || func_name == "globalNotIn";
+    bool is_not_in = func_name == "notIn" || func_name == "globalNotIn" || func_name == "tidbNotIn";
     for (const tipb::Expr * non_constant_expr : set->remaining_exprs)
     {
         Names eq_arg_names;
@@ -531,7 +532,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, ExpressionActi
         }
         const String & func_name = getFunctionName(expr);
 
-        if (isInOrGlobalInOperator(func_name))
+        if (functionIsInOrGlobalInOperator(func_name))
         {
             return getActionsForInOperator(expr, actions);
         }

@@ -222,6 +222,8 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
 
             if (!value.isNull())
                 columns[0]->insert(value);
+            else
+                setContainsNullValue(true);
         }
         else if (ASTFunction * func = typeid_cast<ASTFunction *>(elem.get()))
         {
@@ -277,6 +279,10 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, 
     MutableColumns columns = header.cloneEmptyColumns();
     std::vector<const tipb::Expr *> remainingExprs;
 
+    // if left arg is null constant, just return without decode children expr
+    if (types[0]->onlyNull())
+        return remainingExprs;
+
     for (int i = 1; i < expr.children_size(); i++)
     {
         auto & child = expr.children(i);
@@ -292,6 +298,8 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, 
 
         if (!value.isNull())
             columns[0]->insert(value);
+        else
+            setContainsNullValue(true);
     }
 
     Block block = header.cloneWithColumns(std::move(columns));

@@ -1,0 +1,9 @@
+FROM hub.pingcap.net/tiflash/tiflash-builder:latest
+
+USER root
+WORKDIR /root/
+
+ENV HOME /root/
+
+COPY tiflash/libtiflash_proxy.so /libtiflash-proxy/libtiflash_proxy.so
+COPY tiflash/flash_cluster_manager /flash_cluster_manager

@@ -17,7 +17,15 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
             }
             catch (const Exception & e)
             {
-                LOG_WARNING(log, "Schema sync failed by " << e.message());
+                LOG_WARNING(log, "Schema sync failed by " << e.displayText() << " \n stack : " << e.getStackTrace().toString());
+            }
+            catch (const Poco::Exception & e)
+            {
+                LOG_WARNING(log, "Schema sync failed by " << e.displayText());
+            }
+            catch (const std::exception & e)
+            {
+                LOG_WARNING(log, "Schema sync failed by " << e.what());
             }
             return false;
         },

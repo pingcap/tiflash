@@ -1,7 +1,7 @@
-#include <Flash/Coprocessor/DAGUtils.h>
-
 #include <Core/Types.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/TiDB.h>
@@ -78,11 +78,11 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             if (field.getType() == Field::Types::Decimal32)
                 return field.get<DecimalField<Decimal32>>().toString();
             else if (field.getType() == Field::Types::Decimal64)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal64>>().toString();
             else if (field.getType() == Field::Types::Decimal128)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal128>>().toString();
             else if (field.getType() == Field::Types::Decimal256)
-                return field.get<DecimalField<Decimal32>>().toString();
+                return field.get<DecimalField<Decimal256>>().toString();
             else
                 throw Exception("Not decimal literal" + expr.DebugString(), ErrorCodes::COP_BAD_DAG_REQUEST);
         }
@@ -119,7 +119,7 @@ String exprToString(const tipb::Expr & expr, const std::vector<NameAndTypePair> 
             throw Exception(tipb::ExprType_Name(expr.tp()) + " not supported", ErrorCodes::UNSUPPORTED_METHOD);
     }
     // build function expr
-    if (isInOrGlobalInOperator(func_name))
+    if (functionIsInOrGlobalInOperator(func_name))
     {
         // for in, we could not represent the function expr using func_name(param1, param2, ...)
         ss << exprToString(expr.children(0), input_col) << " " << func_name << " (";
@@ -263,8 +263,6 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     return input_col[column_index].name;
 }
 
-bool isInOrGlobalInOperator(const String & name) { return name == "in" || name == "notIn" || name == "globalIn" || name == "globalNotIn"; }
-
 // for some historical or unknown reasons, TiDB might set a invalid
 // field type. This function checks if the expr has a valid field type
 // so far the known invalid field types are:
@@ -276,13 +274,17 @@ bool exprHasValidFieldType(const tipb::Expr & expr)
 
 bool isUnsupportedEncodeType(const std::vector<tipb::FieldType> & types, tipb::EncodeType encode_type)
 {
-    if (encode_type == tipb::EncodeType::TypeDefault)
+    const static std::unordered_map<tipb::EncodeType, std::unordered_set<Int32>> unsupported_types_map({
+        {tipb::EncodeType::TypeCHBlock, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull, TiDB::TypeEnum, TiDB::TypeJSON}},
+        {tipb::EncodeType::TypeChunk, {TiDB::TypeSet, TiDB::TypeGeometry, TiDB::TypeNull}},
+    });
+
+    auto unsupported_set = unsupported_types_map.find(encode_type);
+    if (unsupported_set == unsupported_types_map.end())
         return false;
     for (const auto & type : types)
     {
-        if (encode_type == tipb::EncodeType::TypeCHBlock && (type.tp() == TiDB::TypeSet || type.tp() == TiDB::TypeEnum))
-            return true;
-        if (encode_type == tipb::EncodeType::TypeChunk && type.tp() == TiDB::TypeSet)
+        if (unsupported_set->second.find(type.tp()) != unsupported_set->second.end())
             return true;
     }
     return false;
@@ -320,6 +322,7 @@ UInt8 getFieldLengthForArrowEncode(Int32 tp)
         case TiDB::TypeLongBlob:
         case TiDB::TypeBit:
         case TiDB::TypeEnum:
+        case TiDB::TypeJSON:
             return VAR_SIZE;
         default:
             throw Exception("not supported field type in arrow encode: " + std::to_string(tp));
@@ -573,9 +576,9 @@ std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::ValuesString, "cast"},
     //{tipb::ScalarFuncSig::ValuesTime, "cast"},
 
-    {tipb::ScalarFuncSig::InInt, "in"}, {tipb::ScalarFuncSig::InReal, "in"}, {tipb::ScalarFuncSig::InString, "in"},
-    {tipb::ScalarFuncSig::InDecimal, "in"}, {tipb::ScalarFuncSig::InTime, "in"}, {tipb::ScalarFuncSig::InDuration, "in"},
-    {tipb::ScalarFuncSig::InJson, "in"},
+    {tipb::ScalarFuncSig::InInt, "tidbIn"}, {tipb::ScalarFuncSig::InReal, "tidbIn"}, {tipb::ScalarFuncSig::InString, "tidbIn"},
+    {tipb::ScalarFuncSig::InDecimal, "tidbIn"}, {tipb::ScalarFuncSig::InTime, "tidbIn"}, {tipb::ScalarFuncSig::InDuration, "tidbIn"},
+    {tipb::ScalarFuncSig::InJson, "tidbIn"},
 
     {tipb::ScalarFuncSig::IfNullInt, "ifNull"}, {tipb::ScalarFuncSig::IfNullReal, "ifNull"}, {tipb::ScalarFuncSig::IfNullString, "ifNull"},
     {tipb::ScalarFuncSig::IfNullDecimal, "ifNull"}, {tipb::ScalarFuncSig::IfNullTime, "ifNull"},

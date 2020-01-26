@@ -938,8 +938,11 @@ void MergeTreeData::checkAlter(const AlterCommands & commands)
                     continue;
             }
 
+            if (command.type == AlterCommand::RENAME_COLUMN || command.type == AlterCommand::MODIFY_COLUMN)
+                    continue;
+
             throw Exception(
-                    "ALTER of key column " + command.column_name + " must be metadata-only",
+                    "ALTER of key column " + command.column_name + " must be metadata-only, and command tyoe is " + std::to_string(command.type),
                     ErrorCodes::ILLEGAL_COLUMN);
         }
     }
@@ -1129,6 +1132,20 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
     {
         throw Exception("L0 compact does not support alter clause.");
     }
+
+    // Check if this part has column that needs to be renamed.
+    // There is one case that column cannot be found : the column is added after the table is created.
+    auto it = std::find_if(part->columns.begin(), part->columns.end(), [&](const NameAndTypePair & pair)
+    {
+        return pair.name == command.column_name;
+    });
+
+    if (it == part->columns.end())
+    {
+        LOG_INFO(log, "Not find column name " << command.column_name << " in part " << part->name);
+        return nullptr;
+    }
+
     AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part)); /// Blocks changes to the part.
     DataPart::Checksums new_checksums = part->checksums;
 
@@ -1189,7 +1206,10 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
 
     /// Write the new column list to the temporary file.
     {
-        transaction->new_columns = new_columns;
+        // new_columns should be set as old columns + renamed column
+        std::vector<std::string> filter_columns = part->columns.getNames();
+        filter_columns.push_back(command.new_column_name);
+        transaction->new_columns = new_columns.filter(filter_columns);
         WriteBufferFromFile columns_file(part->getFullPath() + "columns.txt.tmp", 4096);
         transaction->new_columns.writeText(columns_file);
         transaction->rename_map["columns.txt.tmp"] = "columns.txt";

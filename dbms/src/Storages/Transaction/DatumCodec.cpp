@@ -380,6 +380,12 @@ void EncodeCompactBytes(const String & str, std::stringstream & ss)
     ss.write(str.c_str(), str.size());
 }
 
+void EncodeJSON(const String & str, std::stringstream & ss)
+{
+    // TiFlash store the JSON binary as string, so just return the string
+    ss.write(str.c_str(), str.size());
+}
+
 void EncodeVarUInt(UInt64 num, std::stringstream & ss) { TiKV::writeVarUInt(num, ss); }
 
 void EncodeVarInt(Int64 num, std::stringstream & ss) { TiKV::writeVarInt(num, ss); }
@@ -516,10 +522,7 @@ void EncodeDecimal(const Field & field, std::stringstream & ss)
 void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & ss)
 {
     if (field.isNull())
-    {
-        ss << UInt8(TiDB::CodecFlagNil);
-        return;
-    }
+        flag = TiDB::CodecFlagNil;
     ss << UInt8(flag);
     switch (flag)
     {
@@ -539,6 +542,10 @@ void EncodeDatum(const Field & field, TiDB::CodecFlag flag, std::stringstream & 
             return EncodeVarUInt(field.safeGet<UInt64>(), ss);
         case TiDB::CodecFlagDuration:
             return EncodeInt64(field.safeGet<Int64>(), ss);
+        case TiDB::CodecFlagJson:
+            return EncodeJSON(field.safeGet<String>(), ss);
+        case TiDB::CodecFlagNil:
+            return;
         default:
             throw Exception("Not implemented codec flag: " + std::to_string(flag), ErrorCodes::LOGICAL_ERROR);
     }

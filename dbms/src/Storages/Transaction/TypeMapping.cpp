@@ -11,6 +11,10 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Poco/StringTokenizer.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
@@ -214,11 +218,122 @@ void setDecimalPrecScale(const T * decimal_type, ColumnInfo & column_info)
     column_info.decimal = decimal_type->getScale();
 }
 
-ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value)
+void fillTiDBColumnInfo(const String & family_name, const ASTPtr & parameters, ColumnInfo & column_info);
+void fillTiDBColumnInfo(const ASTPtr & type, ColumnInfo & column_info)
+{
+    auto * func = typeid_cast<const ASTFunction *>(type.get());
+    if (func != nullptr)
+        return fillTiDBColumnInfo(func->name, func->arguments, column_info);
+    auto * ident = typeid_cast<const ASTIdentifier *>(type.get());
+    if (ident != nullptr)
+        return fillTiDBColumnInfo(ident->name, {}, column_info);
+    throw Exception("Failed to get TiDB data type");
+}
+
+void fillTiDBColumnInfo(const String & family_name, const ASTPtr & parameters, ColumnInfo & column_info)
+{
+    if (family_name == "Nullable")
+    {
+        if (!parameters || parameters->children.size() != 1)
+            throw Exception("Nullable data type must have exactly one argument - nested type");
+        fillTiDBColumnInfo(parameters->children[0], column_info);
+        column_info.clearNotNullFlag();
+        return;
+    }
+
+    const static std::unordered_map<String, TiDB::TP> tidb_type_map({
+        {"timestamp", TiDB::TypeTimestamp},
+        {"time", TiDB::TypeTime},
+        {"set", TiDB::TypeSet},
+        {"year", TiDB::TypeYear},
+        {"bit", TiDB::TypeBit},
+    });
+
+    auto it = tidb_type_map.find(Poco::toLower(family_name));
+    if (it == tidb_type_map.end())
+        throw Exception("Unknown TiDB data type " + family_name);
+    column_info.setNotNullFlag();
+    column_info.tp = it->second;
+    int val = 1;
+
+    switch (column_info.tp)
+    {
+        case TiDB::TypeTimestamp:
+        case TiDB::TypeTime:
+            if (!parameters)
+                column_info.decimal = 0;
+            else
+            {
+                if (parameters->children.size() != 1)
+                    throw Exception("TimeStamp/Time type can optionally have only one argument - fractional");
+                column_info.decimal = typeid_cast<const ASTLiteral *>(parameters->children[0].get())->value.get<int>();
+            }
+            break;
+        case TiDB::TypeSet:
+            if (!parameters)
+                throw Exception("Set type must have arguments");
+            for (auto & ele : parameters->children)
+            {
+                column_info.elems.emplace_back(typeid_cast<const ASTLiteral *>(ele.get())->value.get<String>(), val);
+                val++;
+            }
+            column_info.setUnsignedFlag();
+            break;
+        case TiDB::TypeBit:
+            if (!parameters)
+                column_info.flen = 1;
+            else
+            {
+                if (parameters->children.size() != 1)
+                    throw Exception("Bit type can optionally have only one argument");
+                column_info.flen = typeid_cast<const ASTLiteral *>(parameters->children[0].get())->value.get<int>();
+            }
+            column_info.setUnsignedFlag();
+            break;
+        default:
+            break;
+    }
+}
+
+// This is a hack to create TiDB type that can not get from a TiFlash type
+// the rule is use `col_name default value` to declare a TiFlash column
+// and if the default value is a string and starts with "asTiDBType", then
+// we extract TiDB type from the default value and in this case the default
+// value should be formatted as "asTiDBType|tidbType[|defaultValue]"
+bool hijackTiDBTypeForMockTest(const Field & default_value, ColumnInfo & column_info)
+{
+    if (!default_value.isNull() && default_value.getType() == Field::Types::String)
+    {
+        const auto & value = default_value.get<String>();
+        Poco::StringTokenizer st(value, "|");
+        if (st[0] == "asTiDBType")
+        {
+            ParserIdentifierWithOptionalParameters type_parser;
+            Tokens tokens(st[1].data(), st[1].data() + st[1].length());
+            TokenIterator pos(tokens);
+            Expected expected;
+            ASTPtr type;
+            if (!type_parser.parse(pos, type, expected))
+                throw Exception("Invalid TiDB data type");
+            fillTiDBColumnInfo(type, column_info);
+            if (st.count() >= 3)
+                column_info.origin_default_value = st[2];
+            return true;
+        }
+        else
+            return false;
+    }
+    else
+        return false;
+}
+
+ColumnInfo reverseGetColumnInfo(const NameAndTypePair & column, ColumnID id, const Field & default_value, bool for_test)
 {
     ColumnInfo column_info;
     column_info.id = id;
     column_info.name = column.name;
+    if (for_test && hijackTiDBTypeForMockTest(default_value, column_info))
+        return column_info;
     const IDataType * nested_type = column.type.get();
 
     // Fill not null.
