@@ -154,6 +154,7 @@ target_link_libraries (dbms
     kvproto
     prometheus-cpp::core
     prometheus-cpp::push
+    prometheus-cpp::pull
     kv_client
     tipb
     ${Protobuf_LIBRARIES}
