@@ -119,8 +119,6 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtr & region, bool t
         {
             if (try_persist)
                 tmt.getKVStore()->tryPersist(region->id());
-            else
-                region->incDirtyFlag();
         }
 
         LOG_INFO(log,
@@ -143,7 +141,7 @@ static const Seconds FTH_PERIOD_4(5);       // 5 seconds
 
 RegionTable::RegionTable(Context & context_)
     : flush_thresholds(RegionTable::FlushThresholds::FlushThresholdsData{
-          {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
+        {FTH_BYTES_1, FTH_PERIOD_1}, {FTH_BYTES_2, FTH_PERIOD_2}, {FTH_BYTES_3, FTH_PERIOD_3}, {FTH_BYTES_4, FTH_PERIOD_4}}),
       context(&context_),
       log(&Logger::get("RegionTable"))
 {}

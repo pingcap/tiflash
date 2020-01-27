@@ -47,4 +47,3 @@
 [submodule "contrib/tiflash-proxy"]
 	path = contrib/tiflash-proxy
 	url = git@github.com:solotzg/tikv.git
-	branch = tiflash-proxy-lib

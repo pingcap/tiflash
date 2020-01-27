@@ -1,8 +1,8 @@
 #pragma once
 
-#include <condition_variable>
-
 #include <Storages/Transaction/RegionState.h>
+
+#include <condition_variable>
 
 namespace pingcap::kv
 {
@@ -49,8 +49,6 @@ public:
     void notifyAll() const;
 
     std::string toString(bool dump_status = true) const;
-
-    enginepb::CommandResponse toCommandResponse() const;
 
     std::tuple<size_t, UInt64> serialize(WriteBuffer & buf) const;
 
@@ -123,7 +121,6 @@ class MetaRaftCommandDelegate : public RegionMeta, private boost::noncopyable
     const RegionState & regionState() const;
 
     void execChangePeer(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
-    void execCompactLog(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
     void execPrepareMerge(const raft_cmdpb::AdminRequest & request, const raft_cmdpb::AdminResponse & response, UInt64 index, UInt64 term);
     void execCommitMerge(const RegionMergeResult & result, UInt64 index, UInt64 term, const MetaRaftCommandDelegate & source_meta);
     RegionMergeResult checkBeforeCommitMerge(const raft_cmdpb::AdminRequest & request, const MetaRaftCommandDelegate & source_meta) const;

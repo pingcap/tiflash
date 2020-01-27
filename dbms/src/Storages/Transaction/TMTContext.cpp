@@ -1,5 +1,6 @@
 #include <Common/DNSCache.h>
 #include <Interpreters/Context.h>
+#include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/RaftCommandResult.h>
 #include <Storages/Transaction/RegionRangeKeys.h>
@@ -11,11 +12,13 @@
 namespace DB
 {
 
-TMTContext::TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
+TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addrs, const std::string & learner_key,
     const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
     const std::string & flash_service_address_)
-    : kvstore(std::make_shared<KVStore>(kvstore_path)),
+    : context(context_),
+      kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context),
+      background_service(nullptr),
       cluster(addrs.size() == 0 ? std::make_shared<pingcap::kv::Cluster>()
                                 : std::make_shared<pingcap::kv::Cluster>(addrs, learner_key, learner_value)),
       ignore_databases(ignore_databases_),
@@ -29,6 +32,8 @@ void TMTContext::restore()
     kvstore->restore([&](pingcap::kv::RegionVerID id) -> IndexReaderPtr { return this->createIndexReader(id); });
     region_table.restore();
     initialized = true;
+
+    background_service = std::make_unique<BackgroundService>(context);
 }
 
 KVStorePtr & TMTContext::getKVStore() { return kvstore; }
@@ -42,6 +47,12 @@ const TMTStorages & TMTContext::getStorages() const { return storages; }
 RegionTable & TMTContext::getRegionTable() { return region_table; }
 
 const RegionTable & TMTContext::getRegionTable() const { return region_table; }
+
+BackgroundService & TMTContext::getBackgroundService() { return *background_service; }
+
+const BackgroundService & TMTContext::getBackgroundService() const { return *background_service; }
+
+Context & TMTContext::getContext() { return context; }
 
 bool TMTContext::isInitialized() const { return initialized; }
 

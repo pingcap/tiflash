@@ -1,52 +1,44 @@
 #pragma once
 
-#include <memory>
-#include <queue>
-
-#include <Raft/RaftContext.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
+
 #include <boost/noncopyable.hpp>
+#include <memory>
+#include <queue>
 
 namespace DB
 {
 
-class KVStore;
-using KVStorePtr = std::shared_ptr<KVStore>;
-
+class TMTContext;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using Regions = std::vector<RegionPtr>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 
-class RaftService final : public enginepb::Engine::Service, public std::enable_shared_from_this<RaftService>, private boost::noncopyable
+class BackgroundService : boost::noncopyable
 {
 public:
-    RaftService(Context & db_context);
+    BackgroundService(Context & db_context_);
 
-    ~RaftService() final;
+    ~BackgroundService();
 
     void dataMemReclaim(RegionDataReadInfoList &&);
     void addRegionToDecode(const RegionPtr & region);
-
-private:
-    grpc::Status ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream) override;
-
-    grpc::Status ApplySnapshot(
-        grpc::ServerContext * grpc_context, CommandServerReader * reader, enginepb::SnapshotDone * response) override;
+    void addRegionToFlush(const RegionPtr & region);
 
 private:
     Context & db_context;
-    KVStorePtr kvstore;
-
+    TMTContext & tmt;
     BackgroundProcessingPool & background_pool;
 
     Logger * log;
 
     std::mutex region_mutex;
     RegionMap regions_to_decode;
+    RegionMap regions_to_flush;
 
     std::mutex reclaim_mutex;
     std::list<RegionDataReadInfoList> data_to_reclaim;
@@ -57,7 +49,7 @@ private:
     // kvstore will try to flush data into ch when handling raft cmd CompactLog in order to reduce the size of region.
     // use this task to reclaim data in another thread.
     BackgroundProcessingPool::TaskHandle data_reclaim_handle;
-    BackgroundProcessingPool::TaskHandle region_decode_handle;
+    BackgroundProcessingPool::TaskHandle region_handle;
 };
 
 } // namespace DB

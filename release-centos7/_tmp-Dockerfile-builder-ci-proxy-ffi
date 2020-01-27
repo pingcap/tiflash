@@ -1,0 +1,10 @@
+# hacked by solotzg.
+
+FROM hub.pingcap.net/tiflash/tiflash-builder-ci:latest
+
+USER root
+WORKDIR /root/
+
+ENV HOME /root/
+
+COPY libtiflash_proxy.so /libtiflash-proxy2/libtiflash_proxy.so

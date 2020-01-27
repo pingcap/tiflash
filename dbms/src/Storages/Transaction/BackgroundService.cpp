@@ -1,37 +1,34 @@
 #include <Interpreters/Context.h>
-#include <Raft/RaftService.h>
+#include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/applySnapshot.h>
 
 namespace DB
 {
 
-RaftService::RaftService(DB::Context & db_context_)
+BackgroundService::BackgroundService(Context & db_context_)
     : db_context(db_context_),
-      kvstore(db_context.getTMTContext().getKVStore()),
+      tmt(db_context_.getTMTContext()),
       background_pool(db_context.getBackgroundPool()),
-      log(&Logger::get("RaftService"))
+      log(&Logger::get("BackgroundService"))
 {
-    if (!db_context.getTMTContext().isInitialized())
+    if (!tmt.isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     single_thread_task_handle = background_pool.addTask(
         [this] {
-            auto & tmt = db_context.getTMTContext();
             {
                 RegionTable & region_table = tmt.getRegionTable();
                 region_table.checkTableOptimize();
             }
-            kvstore->tryPersist();
+            tmt.getKVStore()->gcRegionCache();
             return false;
         },
         false);
 
     table_flush_handle = background_pool.addTask([this] {
-        auto & tmt = db_context.getTMTContext();
         RegionTable & region_table = tmt.getRegionTable();
 
         // if all regions of table is removed, try to optimize data.
@@ -53,23 +50,46 @@ RaftService::RaftService(DB::Context & db_context_)
         return false;
     });
 
-    region_decode_handle = background_pool.addTask([this] {
-        RegionPtr region;
+    region_handle = background_pool.addTask([this] {
+        bool ok = false;
         {
-            std::lock_guard<std::mutex> lock(region_mutex);
-            if (regions_to_decode.empty())
-                return false;
-            auto it = regions_to_decode.begin();
-            region = it->second;
-            regions_to_decode.erase(it);
+            RegionPtr region = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(region_mutex);
+                if (!regions_to_decode.empty())
+                {
+                    auto it = regions_to_decode.begin();
+                    region = it->second;
+                    regions_to_decode.erase(it);
+                    ok = true;
+                }
+            }
+            if (region)
+                region->tryPreDecodeTiKVValue(tmt);
         }
-        region->tryPreDecodeTiKVValue(db_context);
-        return true;
+
+        {
+            RegionPtr region = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(region_mutex);
+                if (!regions_to_flush.empty())
+                {
+                    auto it = regions_to_flush.begin();
+                    region = it->second;
+                    regions_to_flush.erase(it);
+                    ok = true;
+                }
+            }
+            if (region)
+                tmt.getRegionTable().tryFlushRegion(region, false);
+        }
+
+        return ok;
     });
 
     {
         std::vector<RegionPtr> regions;
-        kvstore->traverseRegions([&regions](RegionID, const RegionPtr & region) {
+        tmt.getKVStore()->traverseRegions([&regions](RegionID, const RegionPtr & region) {
             if (region->dataSize())
                 regions.emplace_back(region);
         });
@@ -79,22 +99,31 @@ RaftService::RaftService(DB::Context & db_context_)
     }
 }
 
-void RaftService::dataMemReclaim(DB::RegionDataReadInfoList && data)
+void BackgroundService::dataMemReclaim(DB::RegionDataReadInfoList && data)
 {
     std::lock_guard<std::mutex> lock(reclaim_mutex);
     data_to_reclaim.emplace_back(std::move(data));
 }
 
-void RaftService::addRegionToDecode(const RegionPtr & region)
+void BackgroundService::addRegionToDecode(const RegionPtr & region)
 {
     {
         std::lock_guard<std::mutex> lock(region_mutex);
         regions_to_decode.emplace(region->id(), region);
     }
-    region_decode_handle->wake();
+    region_handle->wake();
 }
 
-RaftService::~RaftService()
+void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
+{
+    {
+        std::lock_guard<std::mutex> lock(region_mutex);
+        regions_to_flush.emplace(region->id(), region);
+    }
+    region_handle->wake();
+}
+
+BackgroundService::~BackgroundService()
 {
     if (single_thread_task_handle)
     {
@@ -113,46 +142,10 @@ RaftService::~RaftService()
         data_reclaim_handle = nullptr;
     }
 
-    if (region_decode_handle)
+    if (region_handle)
     {
-        background_pool.removeTask(region_decode_handle);
-        region_decode_handle = nullptr;
-    }
-}
-
-grpc::Status RaftService::ApplyCommandBatch(grpc::ServerContext * grpc_context, CommandServerReaderWriter * stream)
-{
-    RaftContext raft_contex(&db_context, grpc_context, stream);
-
-    try
-    {
-        kvstore->report(raft_contex);
-
-        enginepb::CommandRequestBatch cmds;
-        while (stream->Read(&cmds))
-        {
-            kvstore->onServiceCommand(std::move(cmds), raft_contex);
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "gRPC ApplyCommandBatch error");
-    }
-
-    return grpc::Status::CANCELLED;
-}
-
-grpc::Status RaftService::ApplySnapshot(grpc::ServerContext *, CommandServerReader * reader, enginepb::SnapshotDone * /*response*/)
-{
-    try
-    {
-        applySnapshot(kvstore, std::bind(&CommandServerReader::Read, reader, std::placeholders::_1), &db_context);
-        return grpc::Status::OK;
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "gRPC ApplyCommandBatch error");
-        return grpc::Status(grpc::StatusCode::UNKNOWN, "Runtime error, check theflash log for detail.");
+        background_pool.removeTask(region_handle);
+        region_handle = nullptr;
     }
 }
 
