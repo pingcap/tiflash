@@ -292,27 +292,15 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             LOG_INFO(log, "Persist " << region.toString(false) << " done");
         };
 
-        const auto try_to_flush_data = [&]() {
+        const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
             constexpr size_t MIN_FLUSH_SIZE = 10 * 1024 * 1024;
-            if (curr_region.writeCFCount() && curr_region.dataSize() > MIN_FLUSH_SIZE)
-            {
-                try
-                {
-                    auto _data = region_table.tryFlushRegion(curr_region_ptr, false);
-                    tmt.getBackgroundService().dataMemReclaim(std::move(_data));
-                }
-                catch (...)
-                {
-                }
-            }
+            if (region->writeCFCount() && region->dataSize() > MIN_FLUSH_SIZE)
+                tmt.getBackgroundService().addRegionToFlush(region);
         };
 
         const auto persist_and_sync = [&]() {
             if (sync_log)
-            {
-                try_to_flush_data();
                 persist_region(curr_region);
-            }
         };
 
         const auto handle_batch_split = [&](Regions & split_regions) {
@@ -351,8 +339,8 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
 
             {
                 for (const auto & new_region : split_regions)
-                    tmt.getBackgroundService().addRegionToFlush(new_region);
-                tmt.getBackgroundService().addRegionToFlush(curr_region_ptr);
+                    try_to_flush_region(new_region);
+                try_to_flush_region(curr_region_ptr);
             }
 
             {

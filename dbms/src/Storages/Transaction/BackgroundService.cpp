@@ -41,15 +41,6 @@ BackgroundService::BackgroundService(Context & db_context_)
         return region_table.tryFlushRegions();
     });
 
-    data_reclaim_handle = background_pool.addTask([this] {
-        std::list<RegionDataReadInfoList> tmp;
-        {
-            std::lock_guard<std::mutex> lock(reclaim_mutex);
-            tmp = std::move(data_to_reclaim);
-        }
-        return false;
-    });
-
     region_handle = background_pool.addTask([this] {
         bool ok = false;
         {
@@ -99,12 +90,6 @@ BackgroundService::BackgroundService(Context & db_context_)
     }
 }
 
-void BackgroundService::dataMemReclaim(DB::RegionDataReadInfoList && data)
-{
-    std::lock_guard<std::mutex> lock(reclaim_mutex);
-    data_to_reclaim.emplace_back(std::move(data));
-}
-
 void BackgroundService::addRegionToDecode(const RegionPtr & region)
 {
     {
@@ -134,12 +119,6 @@ BackgroundService::~BackgroundService()
     {
         background_pool.removeTask(table_flush_handle);
         table_flush_handle = nullptr;
-    }
-
-    if (data_reclaim_handle)
-    {
-        background_pool.removeTask(data_reclaim_handle);
-        data_reclaim_handle = nullptr;
     }
 
     if (region_handle)
