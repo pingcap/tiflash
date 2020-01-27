@@ -293,8 +293,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         };
 
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
-            constexpr size_t MIN_FLUSH_SIZE = 10 * 1024 * 1024;
-            if (region->writeCFCount() && region->dataSize() > MIN_FLUSH_SIZE)
+            if (region->writeCFCount() > 8192)
                 tmt.getBackgroundService().addRegionToFlush(region);
         };
 
