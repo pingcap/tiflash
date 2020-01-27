@@ -293,7 +293,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         };
 
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
-            if (region->writeCFCount() > 8192)
+            if (region->writeCFCount() >= 8192)
                 tmt.getBackgroundService().addRegionToFlush(region);
         };
 
@@ -371,6 +371,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             }
             region_range_index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
             region_range_index.add(curr_region_ptr);
+            try_to_flush_region(curr_region_ptr);
         };
 
         switch (result.type)
