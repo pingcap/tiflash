@@ -259,6 +259,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
     if (index <= appliedIndex())
     {
         LOG_WARNING(log, toString() << " ignore outdated raft log [term: " << term << ", index: " << index << "]");
+        result.type = RaftCommandResult::Type::IndexError;
         return;
     }
 

@@ -363,6 +363,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
 
         const auto handle_commit_merge = [&](const RegionID source_region_id) {
             region_table.shrinkRegionRange(curr_region);
+            try_to_flush_region(curr_region_ptr);
             persist_region(curr_region);
             {
                 auto source_region = getRegion(source_region_id);
@@ -371,12 +372,12 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             }
             region_range_index.remove(result.ori_region_range->comparableKeys(), curr_region_id);
             region_range_index.add(curr_region_ptr);
-            try_to_flush_region(curr_region_ptr);
         };
 
         switch (result.type)
         {
             case RaftCommandResult::Type::IndexError:
+                sync_log = true;
                 break;
             case RaftCommandResult::Type::BatchSplit:
                 handle_batch_split(result.split_regions);
