@@ -61,7 +61,7 @@ private:
     std::shared_ptr<prometheus::Registry> registry;
     std::shared_ptr<prometheus::Exposer> exposer;
     std::map<std::string, prometheus::Gauge &> gauge_map;
-    int metricsInterval;
+    int metrics_interval;
     Logger * log;
 };
 

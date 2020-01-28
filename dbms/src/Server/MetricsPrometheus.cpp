@@ -34,48 +34,54 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
     : context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
     auto & conf = context.getConfigRef();
-    metricsInterval = conf.getInt(status_metrics_interval, 15);
-    if (metricsInterval <= 0 || metricsInterval > 120)
+    metrics_interval = conf.getInt(status_metrics_interval, 15);
+    if (metrics_interval <= 0 || metrics_interval > 120)
     {
-        metricsInterval = 15;
+        metrics_interval = 15;
     }
 
     registry = MetricsPrometheus::getRegistry();
 
     if (!conf.hasOption(status_metrics_addr))
     {
-        metricsInterval = 0;
         LOG_INFO(log, "Disable sending metrics to prometheus, cause " << status_metrics_addr << " is not set!");
     }
     else
     {
-        const std::string metricsAddr = conf.getString(status_metrics_addr);
+        const std::string metrics_addr = conf.getString(status_metrics_addr);
 
-        auto pos = metricsAddr.find(':', 0);
-        auto host = metricsAddr.substr(0, pos);
-        auto port = metricsAddr.substr(pos + 1, metricsAddr.size());
+        auto pos = metrics_addr.find(':', 0);
+        if (pos == std::string::npos)
+        {
+            LOG_ERROR(log, "Format error: " << status_metrics_addr << " = " << metrics_addr);
+        }
+        else
+        {
+            auto host = metrics_addr.substr(0, pos);
+            auto port = metrics_addr.substr(pos + 1, metrics_addr.size());
 
-        auto serviceAddr = conf.getString("flash.service_addr");
-        std::string jobName = serviceAddr;
-        std::replace(jobName.begin(), jobName.end(), ':', '_');
-        std::replace(jobName.begin(), jobName.end(), '.', '_');
-        jobName = "tiflash_" + jobName;
+            auto service_addr = conf.getString("flash.service_addr");
+            std::string job_name = service_addr;
+            std::replace(job_name.begin(), job_name.end(), ':', '_');
+            std::replace(job_name.begin(), job_name.end(), '.', '_');
+            job_name = "tiflash_" + job_name;
 
-        char hostname[1024];
-        ::gethostname(hostname, sizeof(hostname));
+            char hostname[1024];
+            ::gethostname(hostname, sizeof(hostname));
 
-        gateway = std::make_shared<prometheus::Gateway>(host, port, jobName, prometheus::Gateway::GetInstanceLabel(hostname));
-        gateway->RegisterCollectable(registry);
+            gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
+            gateway->RegisterCollectable(registry);
 
-        LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metricsInterval << "; addr = " << metricsAddr);
+            LOG_INFO(log, "Enable sending metrics to prometheus; interval =" << metrics_interval << "; addr = " << metrics_addr);
+        }
     }
 
     if (conf.hasOption(status_metrics_port))
     {
-        auto metricsPort = conf.getString(status_metrics_port);
-        exposer = std::make_shared<prometheus::Exposer>(metricsPort);
+        auto metrics_port = conf.getString(status_metrics_port);
+        exposer = std::make_shared<prometheus::Exposer>(metrics_port);
         exposer->RegisterCollectable(registry);
-        LOG_INFO(log, "Metrics Port = " << metricsPort);
+        LOG_INFO(log, "Metrics Port = " << metrics_port);
     }
 }
 
@@ -100,7 +106,7 @@ MetricsPrometheus::~MetricsPrometheus()
 
 void MetricsPrometheus::run()
 {
-    const std::string thread_name = "MetricsPrometheus " + std::to_string(metricsInterval) + "s";
+    const std::string thread_name = "MetricsPrometheus " + std::to_string(metrics_interval) + "s";
     setThreadName(thread_name.c_str());
 
     const auto get_next_time = [](size_t seconds) {
@@ -118,7 +124,7 @@ void MetricsPrometheus::run()
 
     while (true)
     {
-        if (metricsInterval > 0 && registry != nullptr)
+        if (metrics_interval > 0 && registry != nullptr)
             break;
 
         if (cond.wait_until(lock, get_next_time(5), [this] { return quit; }))
@@ -127,7 +133,7 @@ void MetricsPrometheus::run()
 
     while (true)
     {
-        if (cond.wait_until(lock, get_next_time(metricsInterval), [this] { return quit; }))
+        if (cond.wait_until(lock, get_next_time(metrics_interval), [this] { return quit; }))
             break;
 
         convertMetrics(prev_counters);
@@ -198,10 +204,10 @@ void MetricsPrometheus::doConvertMetrics(const GraphiteWriter::KeyValueVector<ss
 
     if (gateway != nullptr)
     {
-        auto returnCode = gateway->Push();
-        if (returnCode != 200)
+        auto return_code = gateway->Push();
+        if (return_code != 200)
         {
-            LOG_WARNING(log, "Failed to push metrics to gateway, return code is " << returnCode);
+            LOG_WARNING(log, "Failed to push metrics to gateway, return code is " << return_code);
         }
     }
 }
