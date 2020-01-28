@@ -70,6 +70,8 @@ void RegionTable::shrinkRegionRange(const Region & region)
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getHandleRangeByTable(region.getMappedTableID());
     internal_region.cache_bytes = region.dataSize();
+    if (internal_region.cache_bytes)
+        dirty_regions.insert(internal_region.region_id);
 }
 
 bool RegionTable::shouldFlush(const InternalRegion & region) const
