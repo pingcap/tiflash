@@ -40,10 +40,17 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
     auto & conf = context.getConfigRef();
 
     metrics_interval = conf.getInt(status_metrics_interval, 15);
-    if (metrics_interval < 5 || metrics_interval > 120)
+    if (metrics_interval < 5)
     {
-        metrics_interval = 15;
+        LOG_WARNING(log, "Config Error: " << status_metrics_interval << " should >= 5");
+        metrics_interval = 5;
     }
+    if (metrics_interval > 120)
+    {
+        LOG_WARNING(log, "Config Error: " << status_metrics_interval << " should <= 120");
+        metrics_interval = 120;
+    }
+    LOG_INFO(log, "Config: " << status_metrics_interval << " = " << metrics_interval);
 
     if (!conf.hasOption(status_metrics_addr))
     {
