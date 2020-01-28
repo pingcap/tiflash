@@ -6,7 +6,7 @@ VERSION="3.10"
 COMPLETE_VERSION="3.10.2"
 
 cd ~
-wget "https://cmake.org/files/v${VERSION}/cmake-${COMPLETE_VERSION}-Linux-x86_64.tar.gz"
+wget "https://download.pingcap.org/cmake-${COMPLETE_VERSION}-Linux-x86_64.tar.gz"
 tar zxvf cmake-${COMPLETE_VERSION}-Linux-x86_64.tar.gz
 
 rm cmake-${COMPLETE_VERSION}-Linux-x86_64.tar.gz
