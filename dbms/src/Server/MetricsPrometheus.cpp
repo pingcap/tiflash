@@ -3,16 +3,20 @@
 #include <Interpreters/AsynchronousMetrics.h>
 
 #include <Common/CurrentMetrics.h>
-#include <Common/Exception.h>
-#include <Common/setThreadName.h>
 
 #include <daemon/BaseDaemon.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 
+#include <Common/FunctionTimerTask.h>
+
 
 namespace DB
 {
+
+constexpr long MILLISECOND = 1000;
+constexpr long INIT_DELAY = 5;
+
 std::shared_ptr<prometheus::Registry> MetricsPrometheus::registry_instance_ptr = nullptr;
 
 std::mutex MetricsPrometheus::registry_instance_mutex;
@@ -31,16 +35,15 @@ std::shared_ptr<prometheus::Registry> MetricsPrometheus::getRegistry()
 }
 
 MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetrics & async_metrics_)
-    : context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
+    : timer(), context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus")), registry(MetricsPrometheus::getRegistry())
 {
     auto & conf = context.getConfigRef();
+
     metrics_interval = conf.getInt(status_metrics_interval, 15);
-    if (metrics_interval <= 0 || metrics_interval > 120)
+    if (metrics_interval < 5 || metrics_interval > 120)
     {
         metrics_interval = 15;
     }
-
-    registry = MetricsPrometheus::getRegistry();
 
     if (!conf.hasOption(status_metrics_addr))
     {
@@ -83,65 +86,16 @@ MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetri
         exposer->RegisterCollectable(registry);
         LOG_INFO(log, "Metrics Port = " << metrics_port);
     }
+
+    timer.scheduleAtFixedRate(
+        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)), INIT_DELAY * MILLISECOND, metrics_interval * MILLISECOND);
 }
 
-MetricsPrometheus::~MetricsPrometheus()
-{
-    try
-    {
-        {
-            std::lock_guard<std::mutex> lock{mutex};
-            quit = true;
-        }
-
-        cond.notify_one();
-
-        thread.join();
-    }
-    catch (...)
-    {
-        DB::tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
-}
+MetricsPrometheus::~MetricsPrometheus() { timer.cancel(true); }
 
 void MetricsPrometheus::run()
 {
-    const std::string thread_name = "MetricsPrometheus " + std::to_string(metrics_interval) + "s";
-    setThreadName(thread_name.c_str());
-
-    const auto get_next_time = [](size_t seconds) {
-        /// To avoid time drift and transmit values exactly each interval:
-        ///  next time aligned to system seconds
-        /// (60s -> every minute at 00 seconds, 5s -> every minute:[00, 05, 15 ... 55]s, 3600 -> every hour:00:00
-        return std::chrono::system_clock::time_point(
-            (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()) / seconds) * seconds
-            + std::chrono::seconds(seconds));
-    };
-
     std::vector<ProfileEvents::Count> prev_counters(ProfileEvents::end());
-
-    std::unique_lock<std::mutex> lock{mutex};
-
-    while (true)
-    {
-        if (metrics_interval > 0 && registry != nullptr)
-            break;
-
-        if (cond.wait_until(lock, get_next_time(5), [this] { return quit; }))
-            break;
-    }
-
-    while (true)
-    {
-        if (cond.wait_until(lock, get_next_time(metrics_interval), [this] { return quit; }))
-            break;
-
-        convertMetrics(prev_counters);
-    }
-}
-
-void MetricsPrometheus::convertMetrics(std::vector<ProfileEvents::Count> & prev_counters)
-{
     auto async_metrics_values = async_metrics.getValues();
 
     GraphiteWriter::KeyValueVector<ssize_t> key_vals{};
@@ -171,10 +125,10 @@ void MetricsPrometheus::convertMetrics(std::vector<ProfileEvents::Count> & prev_
     }
 
     if (!key_vals.empty())
-        doConvertMetrics(key_vals);
+        convertMetrics(key_vals);
 }
 
-void MetricsPrometheus::doConvertMetrics(const GraphiteWriter::KeyValueVector<ssize_t> & key_vals)
+void MetricsPrometheus::convertMetrics(const GraphiteWriter::KeyValueVector<ssize_t> & key_vals)
 {
     using namespace prometheus;
 

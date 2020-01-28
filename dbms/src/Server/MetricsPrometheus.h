@@ -10,9 +10,9 @@
 #include <condition_variable>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
+#include <Poco/Util/Timer.h>
 
 namespace DB
 {
@@ -48,21 +48,18 @@ private:
     static constexpr auto status_metrics_port = "status.metrics_port";
 
     void run();
-    void convertMetrics(std::vector<ProfileEvents::Count> & prev_counters);
-    void doConvertMetrics(const GraphiteWriter::KeyValueVector<ssize_t> & key_vals);
+    void convertMetrics(const GraphiteWriter::KeyValueVector<ssize_t> & key_vals);
 
+    Poco::Util::Timer timer;
     Context & context;
     const AsynchronousMetrics & async_metrics;
-    bool quit = false;
-    std::mutex mutex;
-    std::condition_variable cond;
-    std::thread thread{&MetricsPrometheus::run, this};
-    std::shared_ptr<prometheus::Gateway> gateway;
+    Logger * log;
     std::shared_ptr<prometheus::Registry> registry;
+
+    int metrics_interval;
+    std::shared_ptr<prometheus::Gateway> gateway;
     std::shared_ptr<prometheus::Exposer> exposer;
     std::map<std::string, prometheus::Gauge &> gauge_map;
-    int metrics_interval;
-    Logger * log;
 };
 
 } // namespace DB
