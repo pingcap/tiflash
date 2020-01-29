@@ -249,9 +249,9 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
         flatten_fields.emplace_back(datum.field());
     }
 
-    static bool flip = false;
+    static bool row_format_flip = false;
     // Ping-pong encoding using row format V1/V2.
-    (flip = !flip) ? encodeRowV1(table_info, flatten_fields, ss) : encodeRowV2(table_info, flatten_fields, ss);
+    (row_format_flip = !row_format_flip) ? encodeRowV1(table_info, flatten_fields, ss) : encodeRowV2(table_info, flatten_fields, ss);
 }
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
