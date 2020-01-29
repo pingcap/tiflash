@@ -8,81 +8,81 @@ using TiDB::ColumnInfo;
 using TiDB::TableInfo;
 
 template <typename T>
-struct ColumnTp
+struct ColumnTP
 {
 };
 template <>
-struct ColumnTp<Int8>
-{
-    static const auto tp = TiDB::TypeTiny;
-};
-template <>
-struct ColumnTp<Int16>
-{
-    static const auto tp = TiDB::TypeShort;
-};
-template <>
-struct ColumnTp<Int32>
-{
-    static const auto tp = TiDB::TypeLong;
-};
-template <>
-struct ColumnTp<Int64>
-{
-    static const auto tp = TiDB::TypeLongLong;
-};
-template <>
-struct ColumnTp<UInt8>
+struct ColumnTP<Int8>
 {
     static const auto tp = TiDB::TypeTiny;
 };
 template <>
-struct ColumnTp<UInt16>
+struct ColumnTP<Int16>
 {
     static const auto tp = TiDB::TypeShort;
 };
 template <>
-struct ColumnTp<UInt32>
+struct ColumnTP<Int32>
 {
     static const auto tp = TiDB::TypeLong;
 };
 template <>
-struct ColumnTp<UInt64>
+struct ColumnTP<Int64>
 {
     static const auto tp = TiDB::TypeLongLong;
 };
 template <>
-struct ColumnTp<Float32>
+struct ColumnTP<UInt8>
+{
+    static const auto tp = TiDB::TypeTiny;
+};
+template <>
+struct ColumnTP<UInt16>
+{
+    static const auto tp = TiDB::TypeShort;
+};
+template <>
+struct ColumnTP<UInt32>
+{
+    static const auto tp = TiDB::TypeLong;
+};
+template <>
+struct ColumnTP<UInt64>
+{
+    static const auto tp = TiDB::TypeLongLong;
+};
+template <>
+struct ColumnTP<Float32>
 {
     static const auto tp = TiDB::TypeFloat;
 };
 template <>
-struct ColumnTp<Float64>
+struct ColumnTP<Float64>
 {
     static const auto tp = TiDB::TypeDouble;
 };
 template <>
-struct ColumnTp<String>
+struct ColumnTP<String>
 {
     static const auto tp = TiDB::TypeString;
 };
 template <>
-struct ColumnTp<DecimalField<Decimal32>>
+struct ColumnTP<DecimalField<Decimal32>>
 {
     static const auto tp = TiDB::TypeNewDecimal;
 };
 template <>
-struct ColumnTp<DecimalField<Decimal64>>
+struct ColumnTP<DecimalField<Decimal64>>
 {
     static const auto tp = TiDB::TypeNewDecimal;
 };
 template <>
-struct ColumnTp<DecimalField<Decimal128>>
+struct ColumnTP<DecimalField<Decimal128>>
 {
     static const auto tp = TiDB::TypeNewDecimal;
 };
 template <>
-struct ColumnTp<DecimalField<Decimal256>>
+struct ColumnTP<DecimalField<Decimal256>>
 {
     static const auto tp = TiDB::TypeNewDecimal;
 };
@@ -92,10 +92,57 @@ ColumnInfo getColumnInfo(ColumnID id)
 {
     ColumnInfo column_info;
     column_info.id = id;
-    column_info.tp = ColumnTp<T>::tp;
+    column_info.tp = ColumnTP<T>::tp;
     if constexpr (std::is_unsigned_v<T>)
         column_info.setUnsignedFlag();
     return column_info;
+}
+
+template <typename T>
+struct ColumnIDValue
+{
+    using ValueType = std::decay_t<T>;
+    ColumnIDValue(ColumnID && id_, const T & value_) : id(id_), value(value_) {}
+    ColumnIDValue(ColumnID && id_, T && value_) : id(id_), value(std::move(value_)) {}
+    ColumnID id;
+    ValueType value;
+};
+
+using OrderedColumnInfoFields = std::map<ColumnID, std::tuple<ColumnInfo, Field>>;
+
+template <typename Type>
+void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Type && column_id_value)
+{
+    using DecayType = std::decay_t<Type>;
+    using NearestType = typename NearestFieldType<typename DecayType::ValueType>::Type;
+    column_info_fields.emplace(column_id_value.id,
+        std::make_tuple(
+            getColumnInfo<typename DecayType::ValueType>(column_id_value.id), static_cast<NearestType>(std::move(column_id_value.value))));
+}
+
+template <typename Type, typename... Rest>
+void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Type && first, Rest &&... rest)
+{
+    getTableInfoFieldsInternal(column_info_fields, first);
+    getTableInfoFieldsInternal(column_info_fields, std::forward<Rest>(rest)...);
+}
+
+template <typename... Types>
+std::tuple<TableInfo, ColumnIdToIndex, std::vector<Field>> getTableInfoLutFields(Types &&... column_value_ids)
+{
+    OrderedColumnInfoFields column_info_fields;
+    getTableInfoFieldsInternal(column_info_fields, std::forward<Types>(column_value_ids)...);
+    TableInfo table_info;
+    ColumnIdToIndex column_lut;
+    column_lut.set_empty_key(EmptyColumnID);
+    std::vector<Field> fields;
+    for (auto & column_info_field : column_info_fields)
+    {
+        table_info.columns.emplace_back(std::move(std::get<0>(column_info_field.second)));
+        column_lut.insert({table_info.columns.back().id, table_info.columns.size() - 1});
+        fields.emplace_back(std::move(std::get<1>(column_info_field.second)));
+    }
+    return std::make_tuple(std::move(table_info), std::move(column_lut), std::move(fields));
 }
 
 template <bool is_big>
@@ -104,61 +151,62 @@ size_t valueStartPos(const TableInfo & table_info)
     return 1 + 1 + 2 + 2 + (is_big ? 8 : 3) * table_info.columns.size();
 }
 
+bool isBig(const TiKVValue::Base & encoded)
+{
+    static constexpr UInt8 BigRowMask = 0x1;
+    return encoded[1] & BigRowMask;
+}
+
 template <bool is_big, typename T>
-std::tuple<T, size_t> getValueAndLength(T v)
+std::tuple<T, size_t> getValueLength(const T & v)
 {
     using NearestType = typename NearestFieldType<T>::Type;
-
-    TableInfo table_info;
-    table_info.columns.emplace_back(getColumnInfo<T>(1));
-    ColumnIdToIndex column_lut;
-    column_lut.set_empty_key(EmptyColumnID);
-    column_lut.insert({1, 0});
+    auto [table_info, column_lut, fields] = getTableInfoLutFields(ColumnIDValue(1, v));
 
     std::stringstream ss;
-    encodeRowV2(table_info, std::vector<Field>{Field(static_cast<NearestType>(v))}, ss);
+    encodeRowV2(table_info, fields, ss);
     auto encoded = ss.str();
     auto * decoded = decodeRow(encoded, table_info, column_lut);
 
-    return std::make_tuple(
-        static_cast<T>(decoded->decoded_fields[0].field.safeGet<NearestType>()), encoded.size() - valueStartPos<is_big>(table_info));
+    return std::make_tuple(static_cast<T>(std::move(decoded->decoded_fields[0].field.template safeGet<NearestType>())),
+        encoded.size() - valueStartPos<is_big>(table_info));
 }
 
-#define ASSERT_INT_VALUE_AND_LENGTH(v, l) ASSERT_EQ(getValueAndLength<false>(v), std::make_tuple(v, l))
+#define ASSERT_INT_VALUE_LENGTH(v, l) ASSERT_EQ(getValueLength<false>(v), std::make_tuple(v, l))
 
-TEST(RowV2Suite, IntValueAndLength)
+TEST(RowV2Suite, IntValueLength)
 {
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int8>::max(), 1UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int8>::min(), 1UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt8>::max(), 1UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt8>::min(), 1UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<Int16>(static_cast<Int16>(std::numeric_limits<Int8>::max()) + Int16(1)), 2UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<Int16>(static_cast<Int16>(std::numeric_limits<Int8>::min()) - Int16(1)), 2UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<UInt16>(static_cast<UInt16>(std::numeric_limits<UInt8>::max()) + UInt16(1)), 2UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<UInt16>(static_cast<UInt16>(std::numeric_limits<UInt8>::min()) - UInt16(1)), 2UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int16>::max(), 2UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int16>::min(), 2UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt16>::max(), 2UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt16>::min(), 1UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<Int32>(static_cast<Int32>(std::numeric_limits<Int16>::max()) + Int32(1)), 4UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<Int32>(static_cast<Int32>(std::numeric_limits<Int16>::min()) - Int32(1)), 4UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<UInt32>(static_cast<UInt32>(std::numeric_limits<UInt16>::max()) + UInt32(1)), 4UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<UInt32>(static_cast<UInt32>(std::numeric_limits<UInt16>::min()) - UInt32(1)), 4UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int32>::max(), 4UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int32>::min(), 4UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt32>::max(), 4UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt32>::min(), 1UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<Int64>(static_cast<Int64>(std::numeric_limits<Int32>::max()) + Int64(1)), 8UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<Int64>(static_cast<Int64>(std::numeric_limits<Int32>::min()) - Int64(1)), 8UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<UInt64>(static_cast<UInt64>(std::numeric_limits<UInt32>::max()) + UInt64(1)), 8UL);
-    ASSERT_INT_VALUE_AND_LENGTH(static_cast<UInt64>(static_cast<UInt64>(std::numeric_limits<UInt32>::min()) - UInt64(1)), 8UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int64>::max(), 8UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<Int64>::min(), 8UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt64>::max(), 8UL);
-    ASSERT_INT_VALUE_AND_LENGTH(std::numeric_limits<UInt64>::min(), 1UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int8>::max(), 1UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int8>::min(), 1UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt8>::max(), 1UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt8>::min(), 1UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<Int16>(static_cast<Int16>(std::numeric_limits<Int8>::max()) + Int16(1)), 2UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<Int16>(static_cast<Int16>(std::numeric_limits<Int8>::min()) - Int16(1)), 2UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<UInt16>(static_cast<UInt16>(std::numeric_limits<UInt8>::max()) + UInt16(1)), 2UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<UInt16>(static_cast<UInt16>(std::numeric_limits<UInt8>::min()) - UInt16(1)), 2UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int16>::max(), 2UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int16>::min(), 2UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt16>::max(), 2UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt16>::min(), 1UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<Int32>(static_cast<Int32>(std::numeric_limits<Int16>::max()) + Int32(1)), 4UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<Int32>(static_cast<Int32>(std::numeric_limits<Int16>::min()) - Int32(1)), 4UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<UInt32>(static_cast<UInt32>(std::numeric_limits<UInt16>::max()) + UInt32(1)), 4UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<UInt32>(static_cast<UInt32>(std::numeric_limits<UInt16>::min()) - UInt32(1)), 4UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int32>::max(), 4UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int32>::min(), 4UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt32>::max(), 4UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt32>::min(), 1UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<Int64>(static_cast<Int64>(std::numeric_limits<Int32>::max()) + Int64(1)), 8UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<Int64>(static_cast<Int64>(std::numeric_limits<Int32>::min()) - Int64(1)), 8UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<UInt64>(static_cast<UInt64>(std::numeric_limits<UInt32>::max()) + UInt64(1)), 8UL);
+    ASSERT_INT_VALUE_LENGTH(static_cast<UInt64>(static_cast<UInt64>(std::numeric_limits<UInt32>::min()) - UInt64(1)), 8UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int64>::max(), 8UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<Int64>::min(), 8UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt64>::max(), 8UL);
+    ASSERT_INT_VALUE_LENGTH(std::numeric_limits<UInt64>::min(), 1UL);
 }
 
-#define ASSERT_FLOAT_VALUE(f) ASSERT_FLOAT_EQ(std::get<0>(getValueAndLength<false>(f)), f)
+#define ASSERT_FLOAT_VALUE(f) ASSERT_DOUBLE_EQ(std::get<0>(getValueLength<false>(f)), f)
 
 TEST(RowV2Suite, FloatValue)
 {
@@ -170,23 +218,73 @@ TEST(RowV2Suite, FloatValue)
     ASSERT_FLOAT_VALUE(std::numeric_limits<Float64>::max());
 }
 
-#define ASSERT_STRING_VALUE_AND_LENGTH(b, s) ASSERT_EQ(getValueAndLength<b>(s), std::make_tuple(s, s.length()))
+#define ASSERT_STRING_VALUE_LENGTH(b, s) ASSERT_EQ(getValueLength<b>(s), std::make_tuple(s, s.length()))
 
-TEST(RowV2Suite, StringValueAndLength)
+TEST(RowV2Suite, StringValueLength)
 {
-    ASSERT_STRING_VALUE_AND_LENGTH(false, String(""));
-    ASSERT_STRING_VALUE_AND_LENGTH(false, String("aaa"));
-    ASSERT_STRING_VALUE_AND_LENGTH(false, String(std::numeric_limits<UInt16>::max(), 'a'));
-    ASSERT_STRING_VALUE_AND_LENGTH(true, String(std::numeric_limits<UInt16>::max() + 1, 'a'));
+    ASSERT_STRING_VALUE_LENGTH(false, String(""));
+    ASSERT_STRING_VALUE_LENGTH(false, String("aaa"));
+    ASSERT_STRING_VALUE_LENGTH(false, String(std::numeric_limits<UInt16>::max(), 'a'));
+    ASSERT_STRING_VALUE_LENGTH(true, String(std::numeric_limits<UInt16>::max() + 1, 'a'));
 }
 
-#define ASSERT_DECIMAL_VALUE(d) ASSERT_EQ(std::get<0>(getValueAndLength<false>(d)), d)
+#define ASSERT_DECIMAL_VALUE(d) ASSERT_EQ(std::get<0>(getValueLength<false>(d)), d)
 
-TEST(RowV2Suite, DecimalValueAndLength)
+TEST(RowV2Suite, DecimalValueLength)
 {
-    ASSERT_DECIMAL_VALUE(DecimalField((ToDecimal<UInt64, Decimal64>(12345678910ULL, 4)), 4));
-    ASSERT_DECIMAL_VALUE(DecimalField((ToDecimal<Float64, Decimal32>(1234.56789, 5)), 5));
-    ASSERT_DECIMAL_VALUE(DecimalField((ToDecimal<Float64, Decimal32>(1234.56789, 2)), 2));
+    ASSERT_DECIMAL_VALUE(DecimalField(ToDecimal<UInt64, Decimal64>(12345678910ULL, 4), 4));
+    ASSERT_DECIMAL_VALUE(DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5));
+    ASSERT_DECIMAL_VALUE(DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 2), 2));
+}
+
+#define ASSERT_ROW_VALUE(is_big, ...)                                               \
+    {                                                                               \
+        auto [table_info, column_lut, fields] = getTableInfoLutFields(__VA_ARGS__); \
+        std::stringstream ss;                                                       \
+        encodeRowV2(table_info, fields, ss);                                        \
+        auto encoded = ss.str();                                                    \
+        ASSERT_EQ(is_big, isBig(encoded));                                          \
+        auto * decoded = decodeRow(encoded, table_info, column_lut);                \
+        ASSERT_EQ(fields.size(), decoded->decoded_fields.size());                   \
+        for (size_t i = 0; i < fields.size(); i++)                                  \
+        {                                                                           \
+            ASSERT_EQ(fields[i], decoded->decoded_fields[i].field);                 \
+        }                                                                           \
+    }
+
+TEST(RowV2Suite, SmallRow)
+{
+    // Small row of integers.
+    ASSERT_ROW_VALUE(false,
+        ColumnIDValue(1, std::numeric_limits<Int8>::min()),
+        ColumnIDValue(3, std::numeric_limits<UInt16>::max()),
+        ColumnIDValue(2, std::numeric_limits<Int32>::max()),
+        ColumnIDValue(4, std::numeric_limits<UInt64>::min()));
+    // Small row of string, float, decimal.
+    ASSERT_ROW_VALUE(false,
+        ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() - 128, 'a')),
+        ColumnIDValue(2, std::numeric_limits<Float64>::min()),
+        ColumnIDValue(1, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)));
+}
+
+TEST(RowV2Suite, BigRow)
+{
+    // Big row elevated by large column ID.
+    ASSERT_ROW_VALUE(true,
+        ColumnIDValue(1, std::numeric_limits<Int8>::min()),
+        ColumnIDValue(3, std::numeric_limits<UInt16>::max()),
+        ColumnIDValue(std::numeric_limits<UInt8>::max() + 1, std::numeric_limits<Int32>::max()),
+        ColumnIDValue(4, std::numeric_limits<UInt64>::min()));
+    // Big row elevated by a single large column value.
+    ASSERT_ROW_VALUE(true,
+        ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() + 1, 'a')),
+        ColumnIDValue(2, std::numeric_limits<Float64>::min()),
+        ColumnIDValue(1, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)));
+    // Big row elevated by overall large column values.
+    ASSERT_ROW_VALUE(true,
+        ColumnIDValue(3, String(std::numeric_limits<UInt16>::max() - 8, 'a')),
+        ColumnIDValue(2, std::numeric_limits<Float64>::min()),
+        ColumnIDValue(1, DecimalField(ToDecimal<Float64, Decimal32>(1234.56789, 5), 5)));
 }
 
 } // namespace DB::tests
