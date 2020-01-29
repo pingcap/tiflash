@@ -8,11 +8,8 @@
 namespace DB
 {
 
-BackgroundService::BackgroundService(Context & db_context_)
-    : db_context(db_context_),
-      tmt(db_context_.getTMTContext()),
-      background_pool(db_context.getBackgroundPool()),
-      log(&Logger::get("BackgroundService"))
+BackgroundService::BackgroundService(TMTContext & tmt_)
+    : tmt(tmt_), background_pool(tmt.getContext().getBackgroundPool()), log(&Logger::get("BackgroundService"))
 {
     if (!tmt.isInitialized())
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
@@ -35,7 +32,7 @@ BackgroundService::BackgroundService(Context & db_context_)
         if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
         {
             LOG_INFO(log, "try to final optimize table " << table_id);
-            tryOptimizeStorageFinal(db_context, table_id);
+            tryOptimizeStorageFinal(tmt.getContext(), table_id);
             LOG_INFO(log, "finish final optimize table " << table_id);
         }
         return region_table.tryFlushRegions();

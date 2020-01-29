@@ -33,7 +33,7 @@ void TMTContext::restore()
     region_table.restore();
     initialized = true;
 
-    background_service = std::make_unique<BackgroundService>(context);
+    background_service = std::make_unique<BackgroundService>(*this);
 }
 
 KVStorePtr & TMTContext::getKVStore() { return kvstore; }

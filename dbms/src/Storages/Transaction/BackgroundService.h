@@ -21,7 +21,7 @@ using RegionMap = std::unordered_map<RegionID, RegionPtr>;
 class BackgroundService : boost::noncopyable
 {
 public:
-    BackgroundService(Context & db_context_);
+    BackgroundService(TMTContext &);
 
     ~BackgroundService();
 
@@ -29,7 +29,6 @@ public:
     void addRegionToFlush(const RegionPtr & region);
 
 private:
-    Context & db_context;
     TMTContext & tmt;
     BackgroundProcessingPool & background_pool;
 
