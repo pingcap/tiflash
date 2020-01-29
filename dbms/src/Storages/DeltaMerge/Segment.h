@@ -104,6 +104,7 @@ public:
 
     /// Use #createAppendTask and #applyAppendTask to build higher atomic level.
     AppendTaskPtr createAppendTask(const OpContext & context, WriteBatches & wbs, const BlockOrDelete & update);
+    void          applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs);
     void          applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
     SegmentSnapshot getReadSnapshot(bool use_delta_cache = true) const;

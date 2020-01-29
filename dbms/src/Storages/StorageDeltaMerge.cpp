@@ -10,8 +10,7 @@
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/StorageFactory.h>
-#include <Storages/StorageTinyLog.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -603,6 +602,10 @@ BlockInputStreams StorageDeltaMerge::read( //
 
 void StorageDeltaMerge::checkStatus(const Context & context) { store->check(context); }
 
+void StorageDeltaMerge::deleteRange(const DM::HandleRange & range_to_delete, const Settings & settings)
+{
+    return store->deleteRange(global_context, settings, range_to_delete);
+}
 
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::HandleRange & range)
 {

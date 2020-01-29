@@ -261,7 +261,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         action.task   = action.segment->createAppendTask(op_context, wbs, action.update);
     }
 
-    commitWrites(actions, wbs, dm_context, op_context);
+    commitWrites(std::move(actions), wbs, dm_context, op_context);
 }
 
 
@@ -305,13 +305,10 @@ void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings
 
     // TODO: We need to do a delta merge after write a delete range, otherwise, the rows got deleted could never be actually removed.
 
-    commitWrites(actions, wbs, dm_context, op_context);
+    commitWrites(std::move(actions), wbs, dm_context, op_context);
 }
 
-void DeltaMergeStore::commitWrites(const WriteActions & actions,
-                                   WriteBatches &       wbs,
-                                   const DMContextPtr & dm_context,
-                                   OpContext &          op_context)
+void DeltaMergeStore::commitWrites(WriteActions && actions, WriteBatches & wbs, const DMContextPtr & dm_context, OpContext & op_context)
 {
     if (unlikely(!wbs.data.empty() || !wbs.meta.empty()))
         throw Exception("Unexpected data or meta modifications!");
@@ -322,14 +319,11 @@ void DeltaMergeStore::commitWrites(const WriteActions & actions,
         wbs.writeLogAndData(dm_context->storage_pool);
     }
 
-    Segments updated_segments;
-    updated_segments.reserve(actions.size());
-
     {
         std::unique_lock lock(read_write_mutex);
 
         // Commit the meta of updates to memory and apply updates in memory.
-        for (auto & action : actions)
+        for (auto && action : actions)
         {
             // During write, segment instances could have been updated by background merge delta threads.
             // So we must get segment instances again from segments map.
@@ -338,8 +332,29 @@ void DeltaMergeStore::commitWrites(const WriteActions & actions,
             if (unlikely(it == segments.end()))
                 throw Exception("Segment with end [" + DB::toString(range.end) + "] can not find in segments map after write");
             auto & segment = it->second;
-            updated_segments.push_back(segment);
-            segment->applyAppendTask(op_context, action.task, action.update);
+            action.segment = segment;
+
+            segment->applyAppendToWriteBatches(action.task, wbs);
+        }
+
+        // Atomic commit store level changes in disk.
+        {
+            // Changes of data && log should be commit at the first of this function.
+            if (unlikely(!wbs.data.empty()))
+                throw Exception("Unexpected data modifications!");
+            if (unlikely(!wbs.log.empty()))
+                throw Exception("Unexpected log modifications!");
+            // Changes of meta should be commit in store level.
+            if (unlikely(wbs.meta.empty()))
+                throw Exception("Expected updates on meta modifications but empty!");
+            EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitDisk, ProfileEvents::DMAppendDeltaCommitDiskNS);
+            wbs.writeMeta(dm_context->storage_pool);
+        }
+
+        // Commit the meta of updates to memory and apply updates in memory.
+        for (const auto & action : actions)
+        {
+            action.segment->applyAppendTask(op_context, action.task, action.update);
         }
     }
 
@@ -347,9 +362,9 @@ void DeltaMergeStore::commitWrites(const WriteActions & actions,
     EventRecorder recorder(ProfileEvents::DMAppendDeltaCleanUp, ProfileEvents::DMAppendDeltaCleanUpNS);
     wbs.writeRemoves(dm_context->storage_pool);
 
-    for (auto & segment : updated_segments)
+    for (const auto & action : actions)
     {
-        checkSegmentUpdate<true>(dm_context, segment);
+        checkSegmentUpdate<true>(dm_context, action.segment);
     }
 }
 
