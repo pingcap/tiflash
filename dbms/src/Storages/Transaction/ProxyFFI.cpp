@@ -16,7 +16,6 @@ void GcBuff(BaseBuff * buff)
     buff->inner = nullptr;
 }
 
-static_assert(sizeof(TiFlashServerHelper) == 9 * sizeof(void *));
 static_assert(alignof(TiFlashServerHelper) == alignof(void *));
 
 TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, BaseBuffView req_buff, RaftCmdHeader header)
@@ -32,12 +31,6 @@ TiFlashApplyRes HandleWriteRaftCmd(const TiFlashServer * server, BaseBuffView re
         tryLogCurrentException(__PRETTY_FUNCTION__);
         exit(-1);
     }
-}
-
-BaseBuff HelloWorld()
-{
-    auto s = new std::string("Hello World");
-    return BaseBuff{s, s->data(), s->size()};
 }
 
 TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header)

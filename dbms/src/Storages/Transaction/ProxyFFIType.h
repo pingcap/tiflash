@@ -57,7 +57,6 @@ struct TiFlashServerHelper
 {
     TiFlashServer * inner;
     void (*fn_gc_buff)(BaseBuff *);
-    BaseBuff (*fn_get_region_state)(const TiFlashServer *, RegionId);
     TiFlashApplyRes (*fn_handle_write_raft_cmd)(const TiFlashServer *, BaseBuffView, RaftCmdHeader);
     TiFlashApplyRes (*fn_handle_admin_raft_cmd)(const TiFlashServer *, BaseBuffView, BaseBuffView, RaftCmdHeader);
     void (*fn_handle_apply_snapshot)(
@@ -65,7 +64,8 @@ struct TiFlashServerHelper
     void (*fn_atomic_update_proxy)(TiFlashServer *, TiFlashRaftProxy *);
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
     //
-    BaseBuff (*fn_hello_world)();
+    uint32_t magic_number;
+    uint32_t version;
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
@@ -78,7 +78,6 @@ struct TiFlashServer
 };
 
 void GcBuff(BaseBuff * buff);
-BaseBuff HelloWorld();
 TiFlashApplyRes HandleAdminRaftCmd(const TiFlashServer * server, BaseBuffView req_buff, BaseBuffView resp_buff, RaftCmdHeader header);
 void HandleApplySnapshot(const TiFlashServer * server, BaseBuffView region_buff, uint64_t peer_id, SnapshotDataView lock_buff,
     SnapshotDataView write_buff, SnapshotDataView default_buff, uint64_t index, uint64_t term);

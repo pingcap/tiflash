@@ -40,8 +40,8 @@
 
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
-#include "MetricsTransmitter.h"
 #include "MetricsPrometheus.h"
+#include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
 
@@ -491,13 +491,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashServer tiflash_instance_wrap{.tmt = global_context->getTMTContext()};
     TiFlashServerHelper helper{.inner = &tiflash_instance_wrap,
         .fn_gc_buff = GcBuff,
-        .fn_get_region_state = nullptr,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
         .fn_handle_apply_snapshot = HandleApplySnapshot,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
-        .fn_hello_world = HelloWorld};
+        .magic_number = 0x13579BDF,
+        .version = 1};
 
     auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
         if (!proxy_conf.inited)
