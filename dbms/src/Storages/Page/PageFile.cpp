@@ -436,7 +436,7 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
 {
 
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
-        && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_snapshot))
+        && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
     {
         LOG_INFO(log, "Not page file, ignored " + page_file_name);
         return {{}, Type::Invalid};
@@ -485,17 +485,17 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
         }
         return {pf, Type::Formal};
     }
-    else if (ss[0] == folder_prefix_snapshot)
+    else if (ss[0] == folder_prefix_checkpoint)
     {
-        pf.type = Type::Snapshot;
+        pf.type = Type::Checkpoint;
         if (!Poco::File(pf.metaPath()).exists())
         {
             LOG_INFO(log, "Broken page without meta file, ignored: " + pf.metaPath());
             return {{}, Type::Invalid};
         }
-        pf.type = Type::Snapshot;
+        pf.type = Type::Checkpoint;
 
-        return {pf, Type::Snapshot};
+        return {pf, Type::Checkpoint};
     }
 
     LOG_INFO(log, "Unrecognized file prefix, ignored: " + page_file_name);
@@ -556,12 +556,12 @@ void PageFile::setLegacy()
     }
 }
 
-void PageFile::setSnapshot()
+void PageFile::setCheckpoint()
 {
     if (type != Type::Temp)
         return;
     Poco::File file(folderPath());
-    type = Type::Snapshot;
+    type = Type::Checkpoint;
     file.renameTo(folderPath());
 }
 
@@ -625,8 +625,8 @@ String PageFile::folderPath() const
     case Type::Legacy:
         path += folder_prefix_legacy;
         break;
-    case Type::Snapshot:
-        path += folder_prefix_snapshot;
+    case Type::Checkpoint:
+        path += folder_prefix_checkpoint;
         break;
 
     case Type::Invalid:

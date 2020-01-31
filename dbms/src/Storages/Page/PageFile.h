@@ -82,9 +82,9 @@ public:
     {
         Invalid = 0,
         Formal,
-        Temp,     // written by GC thread
-        Legacy,   // the data is obsoleted and has been removed, only meta left
-        Snapshot, // for recovery, only meta left
+        Temp,       // written by GC thread
+        Legacy,     // the data is obsoleted and has been removed, only meta left
+        Checkpoint, // for recovery, only meta left
     };
 
     /// Create an empty page file.
@@ -105,8 +105,8 @@ public:
     void setFormal();
     /// Rename this page file into legacy style and remove data.
     void setLegacy();
-    /// Rename this page file into snapshot style.
-    void setSnapshot();
+    /// Rename this page file into checkpoint style.
+    void setCheckpoint();
     /// Destroy underlying system files.
     void destroy() const;
 
@@ -136,10 +136,10 @@ private:
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }
 
-    constexpr static const char * folder_prefix_formal   = "page";
-    constexpr static const char * folder_prefix_temp     = ".temp.page";
-    constexpr static const char * folder_prefix_legacy   = "legacy.page";
-    constexpr static const char * folder_prefix_snapshot = "snapshot.page";
+    constexpr static const char * folder_prefix_formal     = "page";
+    constexpr static const char * folder_prefix_temp       = ".temp.page";
+    constexpr static const char * folder_prefix_legacy     = "legacy.page";
+    constexpr static const char * folder_prefix_checkpoint = "checkpoint.page";
 
 private:
     UInt64 file_id = 0; // Valid id start from 1.

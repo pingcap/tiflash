@@ -455,7 +455,7 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     PageStorage::ListPageFilesOption opt;
     opt.remove_tmp_files       = true;
     opt.ignore_legacy          = true;
-    opt.ignore_snapshot        = true;
+    opt.ignore_checkpoint      = true;
     auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     s0.reset();
@@ -569,7 +569,7 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     PageStorage::ListPageFilesOption opt;
     opt.remove_tmp_files       = true;
     opt.ignore_legacy          = true;
-    opt.ignore_snapshot        = true;
+    opt.ignore_checkpoint      = true;
     auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     auto            s0         = storage->getSnapshot();
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
@@ -620,7 +620,7 @@ try
     PageStorage::ListPageFilesOption opt;
     opt.remove_tmp_files       = true;
     opt.ignore_legacy          = true;
-    opt.ignore_snapshot        = true;
+    opt.ignore_checkpoint      = true;
     auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit;
     {
@@ -790,7 +790,7 @@ try
             PageEntriesEdit edit;
             w->write(wb, edit);
         }
-        f.setSnapshot();
+        f.setCheckpoint();
     }
 
     {
@@ -807,13 +807,13 @@ try
 
     {
         PageStorage::ListPageFilesOption opt;
-        opt.ignore_snapshot = true;
-        auto page_files     = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        opt.ignore_checkpoint = true;
+        auto page_files       = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
         // Snapshot should be ignored
         ASSERT_EQ(page_files.size(), 1UL);
         for (auto & page_file : page_files)
         {
-            EXPECT_TRUE(page_file.getType() != PageFile::Type::Snapshot);
+            EXPECT_TRUE(page_file.getType() != PageFile::Type::Checkpoint);
         }
     }
 }

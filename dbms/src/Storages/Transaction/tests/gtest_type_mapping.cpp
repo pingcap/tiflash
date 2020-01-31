@@ -43,7 +43,7 @@ try
                 if (nullable)
                     actual_test_type = "Nullable(" + actual_test_type + ")";
 
-                column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString(actual_test_type)}, 1, default_field);
+                column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString(actual_test_type)}, 1, default_field, true);
                 ASSERT_EQ(!sign, column_info.hasUnsignedFlag()) << actual_test_type;
                 ASSERT_EQ(!nullable, column_info.hasNotNullFlag()) << actual_test_type;
 
@@ -67,7 +67,7 @@ try
         }
     }
 
-    column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString("String")}, 1, default_field);
+    column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString("String")}, 1, default_field, true);
     ASSERT_EQ(column_info.tp, TiDB::TypeString);
 }
 catch (const Exception & e)

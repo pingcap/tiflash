@@ -46,9 +46,9 @@ PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_f
             if (!option.ignore_legacy)
                 page_files.insert(page_file);
         }
-        else if (page_file_type == PageFile::Type::Snapshot)
+        else if (page_file_type == PageFile::Type::Checkpoint)
         {
-            if (!option.ignore_snapshot)
+            if (!option.ignore_checkpoint)
                 page_files.insert(page_file);
         }
         else
@@ -80,20 +80,20 @@ std::optional<PageFile> PageStorage::tryGetCheckpoint(const String & storage_pat
         return {};
 
     std::optional<PageFile> ret = {};
-    std::vector<PageFile>   snapshots;
+    std::vector<PageFile>   checkpoints;
     for (const auto & name : file_names)
     {
         auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_logger);
-        if (page_file_type == PageFile::Type::Snapshot)
+        if (page_file_type == PageFile::Type::Checkpoint)
         {
             ret = page_file;
-            snapshots.emplace_back(page_file);
+            checkpoints.emplace_back(page_file);
         }
     }
 
     if (remove_old)
     {
-        for (auto page_file : snapshots)
+        for (auto page_file : checkpoints)
         {
             if (page_file.fileIdLevel() != ret->fileIdLevel())
                 page_file.destroy();
@@ -114,21 +114,21 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
     opt.remove_tmp_files = true;
-    opt.ignore_snapshot  = true;
+    opt.ignore_checkpoint  = true;
     auto page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     // recover current version from both formal and legacy page files
 
 #ifdef DELTA_VERSION_SET
-    // Remove old snapshots and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
-    auto snapshot_file = PageStorage::tryGetCheckpoint(storage_path, page_file_log, true);
+    // Remove old checkpoints and archieve obsolete PageFiles that have not been archieved yet during gc for some reason.
+    auto checkpoint_file = PageStorage::tryGetCheckpoint(storage_path, page_file_log, true);
     {
         std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
-        if (snapshot_file)
+        if (checkpoint_file)
         {
             for (auto itr = page_files.begin(); itr != page_files.end();)
             {
-                if (itr->fileIdLevel() < snapshot_file->fileIdLevel() //
-                    || itr->fileIdLevel() == snapshot_file->fileIdLevel())
+                if (itr->fileIdLevel() < checkpoint_file->fileIdLevel() //
+                    || itr->fileIdLevel() == checkpoint_file->fileIdLevel())
                 {
                     page_files_to_archieve.insert(*itr);
                     itr = page_files.erase(itr);
@@ -140,7 +140,7 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
             }
 
             archievePageFiles(page_files_to_archieve);
-            page_files.insert(*snapshot_file);
+            page_files.insert(*checkpoint_file);
         }
     }
 
@@ -643,7 +643,7 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
 
         if (page_file_type == PageFile::Type::Legacy)
             page_files_to_compact.emplace(page_file);
-        else if (page_file_type == PageFile::Type::Snapshot)
+        else if (page_file_type == PageFile::Type::Checkpoint)
             page_files_to_compact.emplace(page_file);
         else
             break;
@@ -651,7 +651,7 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
 
     if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
-        return page_files;
+        return std::move(page_files);
     }
 
     // Build a version_set with snapshot
@@ -670,15 +670,15 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
 
     // Use the largest id-level in page_files_to_compact as Snapshot's
     PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
-    auto snapshot_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
+    auto checkpoint_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
     {
-        auto snapshot_writer = snapshot_file.createWriter(false);
+        auto checkpoint_writer = checkpoint_file.createWriter(false);
 
         PageEntriesEdit edit;
-        snapshot_writer->write(wb, edit);
+        checkpoint_writer->write(wb, edit);
     }
 
-    snapshot_file.setSnapshot();
+    checkpoint_file.setCheckpoint();
 
     // Archieve obsolete PageFiles
     {
@@ -706,7 +706,7 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
         archievePageFiles(page_files_to_archieve);
     }
 
-    return page_files;
+    return std::move(page_files);
 }
 
 void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb)

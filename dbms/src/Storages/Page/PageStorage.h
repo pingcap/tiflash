@@ -54,9 +54,9 @@ public:
     {
         ListPageFilesOption() {}
 
-        bool remove_tmp_files    = false;
-        bool ignore_legacy       = false;
-        bool ignore_snapshot     = false;
+        bool remove_tmp_files  = false;
+        bool ignore_legacy     = false;
+        bool ignore_checkpoint = false;
     };
 
 #ifdef DELTA_VERSION_SET
