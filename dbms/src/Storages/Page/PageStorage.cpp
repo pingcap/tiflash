@@ -689,10 +689,12 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
             if (page_file.fileIdLevel() < largest_id_level || page_file.fileIdLevel() == largest_id_level)
             {
                 page_files_to_archieve.insert(page_file);
+                // Remove page files have been archieved
                 itr = page_files.erase(itr);
             }
             else if (page_file.getType() == PageFile::Type::Legacy)
             {
+                // Remove legacy page files since we don't do gc on them later
                 itr = page_files.erase(itr);
             }
             else
