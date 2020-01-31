@@ -192,6 +192,15 @@
 │ 2 │ 0 │
 └───┴───┘
 
+=> DBGInvoke __rename_column_in_tidb_table(default, test, a, d)
+=> DBGInvoke __refresh_schemas()
+=> DBGInvoke __rename_column_in_tidb_table(default, test, g, k)
+=> DBGInvoke __refresh_schemas()
+=> select d, k from default.test order by _tidb_rowid
+┌─d─┬─k─┐
+│ 1 │ 0 │
+│ 2 │ 0 │
+└───┴───┘
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
 => DBGInvoke __refresh_schemas()

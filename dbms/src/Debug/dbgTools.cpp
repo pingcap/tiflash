@@ -197,7 +197,6 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
         case TiDB::TypeLong:
         case TiDB::TypeLongLong:
         case TiDB::TypeInt24:
-        case TiDB::TypeBit:
             if (column_info.hasUnsignedFlag())
                 return convertNumber<UInt64>(field);
             else
@@ -225,11 +224,11 @@ Field convertField(const ColumnInfo & column_info, const Field & field)
         case TiDB::TypeNewDecimal:
             return convertDecimal(column_info, field);
         case TiDB::TypeTime:
-            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Time", ErrorCodes::LOGICAL_ERROR);
         case TiDB::TypeYear:
-            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Year", ErrorCodes::LOGICAL_ERROR);
+            return convertNumber<Int64>(field);
         case TiDB::TypeSet:
-            throw Exception(String("Unable to convert field type ") + field.getTypeName() + " to Set", ErrorCodes::LOGICAL_ERROR);
+        case TiDB::TypeBit:
+            return convertNumber<UInt64>(field);
         default:
             return Field();
     }

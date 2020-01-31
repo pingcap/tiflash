@@ -14,4 +14,4 @@ $SCRIPTPATH/build-cluster-manager.sh
 rm -f "$install_dir/libtiflash_proxy.so"
 rm -rf "$install_dir/flash_cluster_manager"
 cp "$SRCPATH/contrib/tiflash-proxy/target/release/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
-cp "$SRCPATH/cluster_manage/dist/flash_cluster_manager" "$install_dir/flash_cluster_manager"
+cp -r "$SRCPATH/cluster_manage/dist/flash_cluster_manager" "$install_dir/flash_cluster_manager"

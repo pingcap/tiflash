@@ -338,29 +338,6 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, tipb::Selection * filter
     compileExpr(input, ast, cond, referred_columns, col_ref_map);
 }
 
-// The rule is
-// 1. datetime with fsp = 5  => timestamp
-// 2. Int64 with default value = 1024 => time
-// 3. UInt64 with default value in [1, 64] => bit(default_value)
-void hijackTiDBTypeForMockTest(ColumnInfo & ci)
-{
-    if (ci.tp == TiDB::TypeLongLong && !ci.origin_default_value.isEmpty())
-    {
-        auto default_value = ci.origin_default_value.convert<Int64>();
-        if (default_value == 1024 && !ci.hasUnsignedFlag())
-        {
-            ci.tp = TiDB::TypeTime;
-        }
-        if (default_value >= 1 && default_value <= 64 && ci.hasUnsignedFlag())
-        {
-            ci.tp = TiDB::TypeBit;
-            ci.flen = default_value;
-        }
-    }
-    if (ci.tp == TiDB::TypeDatetime && ci.decimal == 5)
-        ci.tp = TiDB::TypeTimestamp;
-}
-
 std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context, const String & query, SchemaFetcher schema_fetcher,
     Int64 tz_offset, const String & tz_name, const String & encode_type)
 {
@@ -425,7 +402,6 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
             ci.elems = column_info.elems;
             ci.default_value = column_info.default_value;
             ci.origin_default_value = column_info.origin_default_value;
-            hijackTiDBTypeForMockTest(ci);
             ts_output.emplace_back(std::make_pair(column_info.name, std::move(ci)));
         }
         for (const auto & expr : ast_query.select_expression_list->children)
@@ -438,7 +414,6 @@ std::tuple<TableID, DAGSchema, tipb::DAGRequest> compileQuery(Context & context,
                     ci.tp = TiDB::TypeLongLong;
                     ci.setPriKeyFlag();
                     ci.setNotNullFlag();
-                    hijackTiDBTypeForMockTest(ci);
                     ts_output.emplace_back(std::make_pair(MutableSupport::tidb_pk_column_name, std::move(ci)));
                 }
             }

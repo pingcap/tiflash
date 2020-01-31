@@ -1206,7 +1206,10 @@ MergeTreeData::AlterDataPartTransactionPtr MergeTreeData::renameColumnPart(
 
     /// Write the new column list to the temporary file.
     {
-        transaction->new_columns = new_columns;
+        // new_columns should be set as old columns + renamed column
+        std::vector<std::string> filter_columns = part->columns.getNames();
+        filter_columns.push_back(command.new_column_name);
+        transaction->new_columns = new_columns.filter(filter_columns);
         WriteBufferFromFile columns_file(part->getFullPath() + "columns.txt.tmp", 4096);
         transaction->new_columns.writeText(columns_file);
         transaction->rename_map["columns.txt.tmp"] = "columns.txt";

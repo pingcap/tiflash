@@ -178,7 +178,8 @@ struct ColumnInfo
 #endif
 #define M(f, v)                                                  \
     inline bool has##f##Flag() const { return (flag & v) != 0; } \
-    inline void set##f##Flag() { flag |= v; }
+    inline void set##f##Flag() { flag |= v; }                    \
+    inline void clear##f##Flag() { flag &= (~v); }
     COLUMN_FLAGS(M)
 #undef M
 
@@ -186,6 +187,9 @@ struct ColumnInfo
     CodecFlag getCodecFlag() const;
     DB::Field getDecimalValue(const String &) const;
     Int64 getEnumIndex(const String &) const;
+    UInt64 getSetValue(const String &) const;
+    Int64 getTimeValue(const String &) const;
+    Int64 getYearValue(Int64) const;
 };
 
 enum PartitionType

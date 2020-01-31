@@ -161,3 +161,5 @@ if (USE_INTERNAL_POCO_LIBRARY)
         target_include_directories(Crypto PUBLIC ${OPENSSL_INCLUDE_DIR})
     endif ()
 endif ()
+
+add_subdirectory (prometheus-cpp)
