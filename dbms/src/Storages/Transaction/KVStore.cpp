@@ -377,8 +377,21 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         switch (result.type)
         {
             case RaftCommandResult::Type::IndexError:
+            {
                 sync_log = true;
+                if (type == raft_cmdpb::AdminCmdType::CommitMerge)
+                {
+                    if (auto source_region = getRegion(request.commit_merge().source().id()); source_region)
+                    {
+                        LOG_WARNING(log,
+                            "Admin cmd " << raft_cmdpb::AdminCmdType_Name(type) << " has been applied, try to remove source "
+                                         << source_region->toString(false));
+                        source_region->setPendingRemove();
+                        removeRegion(source_region->id(), region_table, task_lock, region_manager.genRegionTaskLock(source_region->id()));
+                    }
+                }
                 break;
+            }
             case RaftCommandResult::Type::BatchSplit:
                 handle_batch_split(result.split_regions);
                 break;
