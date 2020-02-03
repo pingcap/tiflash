@@ -305,11 +305,13 @@ struct RowDecoderV2
     }
 
 private:
+    /// Returns <decoded (null) field, is unknown>.
     std::tuple<DecodedField, bool> decodeNullColumn(size_t id)
     {
-        return std::make_tuple(DecodedField{null_column_ids[id], Field()}, column_lut.count(null_column_ids[id]));
+        return std::make_tuple(DecodedField{null_column_ids[id], Field()}, !column_lut.count(null_column_ids[id]));
     }
 
+    /// Returns <decoded field, is unknown>.
     std::tuple<DecodedField, bool> decodeNotNullColumn(size_t id)
     {
         ColumnID column_id = not_null_column_ids[id];
