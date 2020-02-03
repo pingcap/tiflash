@@ -167,9 +167,10 @@ std::tuple<T, size_t> getValueLength(const T & v)
     encodeRowV2(table_info, fields, ss);
     auto encoded = ss.str();
     auto * decoded = decodeRow(encoded, table_info, column_lut);
-
-    return std::make_tuple(static_cast<T>(std::move(decoded->decoded_fields[0].field.template safeGet<NearestType>())),
+    auto ret = std::make_tuple(static_cast<T>(std::move(decoded->decoded_fields[0].field.template safeGet<NearestType>())),
         encoded.size() - valueStartPos<is_big>(table_info));
+    delete decoded;
+    return ret;
 }
 
 #define ASSERT_INT_VALUE_LENGTH(v, l) ASSERT_EQ(getValueLength<false>(v), std::make_tuple(v, l))
@@ -250,6 +251,7 @@ TEST(RowV2Suite, DecimalValueLength)
         {                                                                           \
             ASSERT_EQ(fields[i], decoded->decoded_fields[i].field);                 \
         }                                                                           \
+        delete decoded;                                                             \
     }
 
 TEST(RowV2Suite, SmallRow)
