@@ -82,8 +82,9 @@ public:
     {
         Invalid = 0,
         Formal,
-        Temp,   // written by GC thread
-        Legacy, // the data is obsoleted and has been removed, only meta left
+        Temp,       // written by GC thread
+        Legacy,     // the data is obsoleted and has been removed, only meta left
+        Checkpoint, // for recovery, only meta left
     };
 
     /// Create an empty page file.
@@ -91,9 +92,9 @@ public:
     /// Recover a page file from disk.
     static std::pair<PageFile, Type> recover(const String & parent_path, const String & page_file_name, Poco::Logger * log);
     /// Create a new page file.
-    static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, bool is_tmp, Poco::Logger * log);
+    static PageFile newPageFile(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
     /// Open an existing page file for read.
-    static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, Poco::Logger * log);
+    static PageFile openPageFileForRead(PageFileId file_id, UInt32 level, const String & parent_path, Type type, Poco::Logger * log);
 
     /// Get pages' metadata by this method. Will also update file pos.
     /// Call this method after a page file recovered.
@@ -104,6 +105,8 @@ public:
     void setFormal();
     /// Rename this page file into legacy style and remove data.
     void setLegacy();
+    /// Rename this page file into checkpoint style.
+    void setCheckpoint();
     /// Destroy underlying system files.
     void destroy() const;
 
@@ -122,18 +125,21 @@ public:
     UInt64             getDataFileSize() const;
     bool               isExist() const;
     void               removeDataIfExists() const;
+    Type               getType() const { return type; }
 
     String folderPath() const;
+
 private:
     /// Create a new page file.
-    PageFile(PageFileId file_id_, UInt32 level_, const String & parent_path, bool is_tmp_, bool is_create, Poco::Logger * log);
+    PageFile(PageFileId file_id_, UInt32 level_, const String & parent_path, Type type_, bool is_create, Poco::Logger * log);
 
     String dataPath() const { return folderPath() + "/page"; }
     String metaPath() const { return folderPath() + "/meta"; }
 
-    constexpr static const char * folder_prefix_formal = "page";
-    constexpr static const char * folder_prefix_temp   = ".temp.page";
-    constexpr static const char * folder_prefix_legacy = "legacy.page";
+    constexpr static const char * folder_prefix_formal     = "page";
+    constexpr static const char * folder_prefix_temp       = ".temp.page";
+    constexpr static const char * folder_prefix_legacy     = "legacy.page";
+    constexpr static const char * folder_prefix_checkpoint = "checkpoint.page";
 
 private:
     UInt64 file_id = 0; // Valid id start from 1.

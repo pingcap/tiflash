@@ -7,10 +7,10 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/StorageDeltaMerge-internal.h>
 #include <Storages/StorageDeltaMerge.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
 
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -811,8 +811,9 @@ void updateDeltaMergeTableCreateStatement(                   //
         {
             if (hidden_columns.has(column_define.name))
                 continue;
-            TiDB::ColumnInfo column_info = reverseGetColumnInfo(
-                NameAndTypePair{column_define.name, column_define.type}, column_define.id, column_define.default_value);
+            TiDB::ColumnInfo column_info = reverseGetColumnInfo( //
+                NameAndTypePair{column_define.name, column_define.type}, column_define.id, column_define.default_value,
+                /* for_test= */ true);
             table_info_from_store.columns.emplace_back(std::move(column_info));
         }
     }

@@ -1,5 +1,5 @@
-#include "gtest/gtest.h"
 #include <test_utils/TiflashTestBasic.h>
+#include "gtest/gtest.h"
 
 #include <Common/CurrentMetrics.h>
 #include <IO/ReadBufferFromMemory.h>
@@ -11,6 +11,7 @@
 #include <Poco/PatternFormatter.h>
 #include <common/logger_useful.h>
 
+#include <Storages/DeltaMerge/tests/dm_basic_include.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageFile.h>
@@ -28,7 +29,7 @@ namespace tests
 class PageStorage_test : public ::testing::Test
 {
 public:
-    PageStorage_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "/page_storage_test"), storage() {}
+    PageStorage_test() : path(DB::tests::TiFlashTestEnv::getTemporaryPath() + "page_storage_test"), storage() {}
 
 protected:
     static void SetUpTestCase()
@@ -450,8 +451,12 @@ TEST_F(PageStorage_test, GcMoveNormalPage)
     PageStorage::GcCandidates candidates{
         id_and_lvl,
     };
-    auto            s0         = storage->getSnapshot();
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
+    auto                             s0 = storage->getSnapshot();
+    PageStorage::ListPageFilesOption opt;
+    opt.remove_tmp_files       = true;
+    opt.ignore_legacy          = true;
+    opt.ignore_checkpoint      = true;
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 1);
     s0.reset();
     auto [live_files, live_normal_pages] = storage->versioned_page_entries.gcApply(edit);
@@ -561,7 +566,11 @@ TEST_F(PageStorage_test, GcMovePageDelMeta)
     PageStorage::GcCandidates candidates{
         id_and_lvl,
     };
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
+    PageStorage::ListPageFilesOption opt;
+    opt.remove_tmp_files       = true;
+    opt.ignore_legacy          = true;
+    opt.ignore_checkpoint      = true;
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     auto            s0         = storage->getSnapshot();
     PageEntriesEdit edit       = storage->gcMigratePages(s0, livesPages, candidates, 2);
     s0.reset();
@@ -608,7 +617,11 @@ try
 
     PageFileIdAndLevel id_and_lvl = {1, 0}; // PageFile{1, 0} is ready to be migrated by gc
 
-    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, true, true, storage->page_file_log);
+    PageStorage::ListPageFilesOption opt;
+    opt.remove_tmp_files       = true;
+    opt.ignore_legacy          = true;
+    opt.ignore_checkpoint      = true;
+    auto            page_files = PageStorage::listAllPageFiles(storage->storage_path, storage->page_file_log, opt);
     PageEntriesEdit edit;
     {
         // migrate PageFile{1, 0} -> PageFile{1, 1}
@@ -646,6 +659,165 @@ catch (const Exception & e)
     throw;
 }
 
+TEST_F(PageStorage_test, GcCompactLegacyLogicalCorrectness)
+try
+{
+    PageEntriesVersionSetWithDelta original_version(config.version_set_config, storage->log);
+
+    // Prepare a simple version
+    {
+        PageEntry entry1, entry2;
+        // Specify magic checksum for test
+        entry1.checksum = 0x123;
+        entry2.checksum = 0x321;
+
+        PageEntriesEdit edit;
+
+        edit.put(1, entry1);
+        edit.put(2, entry2);
+        edit.ref(3, 1);
+        edit.del(1);
+
+        // Expected version is:
+        //   Page{3} -> NormalPage{1}
+        //   Page{2} -> NormalPage{2}
+        original_version.apply(edit);
+    }
+
+    PageEntriesVersionSetWithDelta version_restored_with_snapshot(config.version_set_config, storage->log);
+    // Restore a new version set with snapshot WriteBatch
+    {
+        WriteBatch wb;
+        auto       snapshot = original_version.getSnapshot();
+        storage->prepareSnapshotWriteBatch(snapshot, wb);
+
+        PageEntriesEdit edit;
+
+        auto writes = wb.getWrites();
+        for (auto w : writes)
+        {
+            if (w.type == WriteBatch::WriteType::UPSERT)
+            {
+                auto entry = snapshot->version()->findNormalPageEntry(w.page_id);
+                if (entry)
+                    edit.upsertPage(w.page_id, *entry);
+                else
+                    FAIL() << "Cannot find specified page";
+            }
+            else if (w.type == WriteBatch::WriteType::REF)
+                edit.ref(w.page_id, w.ori_page_id);
+            else
+                FAIL() << "Snapshot writes should only contain UPSERT and REF";
+        }
+
+        version_restored_with_snapshot.apply(edit);
+    }
+
+    // Compare the two versions above
+    {
+        auto original_snapshot = original_version.getSnapshot();
+        auto original          = original_snapshot->version();
+        auto restored_snapshot = version_restored_with_snapshot.getSnapshot();
+        auto restored          = restored_snapshot->version();
+
+        auto original_normal_page_ids = original->validNormalPageIds();
+        auto restored_normal_page_ids = restored->validNormalPageIds();
+
+        ASSERT_EQ(original_normal_page_ids.size(), restored_normal_page_ids.size());
+
+        for (auto id : original_normal_page_ids)
+        {
+            EXPECT_TRUE(restored_normal_page_ids.find(id) != restored_normal_page_ids.end());
+
+            auto original_page = original->findNormalPageEntry(id);
+            auto restored_page = restored->findNormalPageEntry(id);
+
+            ASSERT_TRUE(original_page);
+            ASSERT_TRUE(restored_page);
+
+            ASSERT_EQ(original_page->ref, restored_page->ref);
+
+            // Use specified checksum to identify page_entry
+            ASSERT_EQ(original_page->checksum, restored_page->checksum);
+            if (id == 1)
+                ASSERT_EQ(original_page->checksum, 0x123UL);
+            else if (id == 2)
+                ASSERT_EQ(original_page->checksum, 0x321UL);
+            else
+                FAIL() << "Invalid normal page id";
+        }
+
+        auto original_ref_page_ids = original->validPageIds();
+        auto restored_ref_page_ids = restored->validPageIds();
+
+        ASSERT_EQ(original_ref_page_ids.size(), restored_ref_page_ids.size());
+
+        for (auto id : original_ref_page_ids)
+        {
+            EXPECT_TRUE(restored_ref_page_ids.find(id) != restored_ref_page_ids.end());
+        }
+    }
+}
+CATCH
+
+TEST_F(PageStorage_test, ListPageFiles)
+try
+{
+    constexpr size_t buf_sz = 512;
+    char             c_buff[buf_sz];
+
+    {
+        WriteBatch wb;
+        memset(c_buff, 0xf, buf_sz);
+        auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        wb.putPage(1, 0, buf, buf_sz);
+        storage->write(wb);
+
+        auto f = PageFile::openPageFileForRead(1, 0, storage->storage_path, PageFile::Type::Formal, storage->log);
+        f.setLegacy();
+    }
+
+    {
+        WriteBatch wb;
+        memset(c_buff, 0xf, buf_sz);
+        auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
+        wb.putPage(1, 0, buf, buf_sz);
+
+        auto f = PageFile::newPageFile(2, 0, storage->storage_path, PageFile::Type::Temp, storage->log);
+        {
+            auto w = f.createWriter(false);
+
+            PageEntriesEdit edit;
+            w->write(wb, edit);
+        }
+        f.setCheckpoint();
+    }
+
+    {
+        PageStorage::ListPageFilesOption opt;
+        opt.ignore_legacy = true;
+        auto page_files   = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        // Legacy should be ignored
+        ASSERT_EQ(page_files.size(), 1UL);
+        for (auto & page_file : page_files)
+        {
+            EXPECT_TRUE(page_file.getType() != PageFile::Type::Legacy);
+        }
+    }
+
+    {
+        PageStorage::ListPageFilesOption opt;
+        opt.ignore_checkpoint = true;
+        auto page_files       = storage->listAllPageFiles(storage->storage_path, storage->log, opt);
+        // Snapshot should be ignored
+        ASSERT_EQ(page_files.size(), 1UL);
+        for (auto & page_file : page_files)
+        {
+            EXPECT_TRUE(page_file.getType() != PageFile::Type::Checkpoint);
+        }
+    }
+}
+CATCH
 
 /**
  * PageStorage tests with predefine Page1 && Page2

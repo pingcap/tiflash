@@ -4,6 +4,7 @@
 #include <optional>
 #include <set>
 #include <shared_mutex>
+#include <type_traits>
 #include <unordered_map>
 
 #include <Storages/Page/Page.h>
@@ -43,7 +44,19 @@ public:
         size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
         size_t  merge_hint_low_used_file_num        = 10;
 
+        // Minimum number of legacy files to be selected for compaction
+        size_t gc_compact_legacy_min_num = 3;
+
         ::DB::MVCC::VersionSetConfig version_set_config;
+    };
+
+    struct ListPageFilesOption
+    {
+        ListPageFilesOption() {}
+
+        bool remove_tmp_files  = false;
+        bool ignore_legacy     = false;
+        bool ignore_checkpoint = false;
     };
 
 #ifdef DELTA_VERSION_SET
@@ -88,7 +101,9 @@ public:
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
     static std::set<PageFile, PageFile::Comparator>
-    listAllPageFiles(const String & storage_path, bool remove_tmp_file, bool ignore_legacy, Poco::Logger * page_file_log);
+    listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
+
+    static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, Poco::Logger * page_file_log, bool remove_old = false);
 
 private:
     PageFile::Writer & getWriter();
@@ -96,11 +111,18 @@ private:
     // gc helper functions
     using GcCandidates = std::set<PageFileIdAndLevel>;
     using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
-    GcCandidates    gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                           const GcLivesPages &                             file_valid_pages,
-                                           const PageFileIdAndLevel &                       writing_file_id_level,
-                                           UInt64 &                                         candidate_total_size,
-                                           size_t &                                         migrate_page_count) const;
+    GcCandidates gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
+                                        const GcLivesPages &                             file_valid_pages,
+                                        const PageFileIdAndLevel &                       writing_file_id_level,
+                                        UInt64 &                                         candidate_total_size,
+                                        size_t &                                         migrate_page_count) const;
+
+    std::set<PageFile, PageFile::Comparator> gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files);
+
+    void prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb);
+
+    void archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files_to_archieve);
+
     PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
                                    const GcLivesPages & file_valid_pages,
                                    const GcCandidates & merge_files,
@@ -136,7 +158,7 @@ private:
     size_t deletes = 0;
     size_t puts    = 0;
     size_t refs    = 0;
-    size_t moves   = 0;
+    size_t upserts = 0;
 };
 
 class PageReader

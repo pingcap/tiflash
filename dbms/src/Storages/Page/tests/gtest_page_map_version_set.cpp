@@ -495,7 +495,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencyDelPage)
     PageEntry       e;
     e.file_id = 5;
     e.level   = 1;
-    gc_edit.moveNormalPage(pid, e);
+    gc_edit.upsertPage(pid, e);
 
     {
         // write thread del Page0 before gc thread get unique_lock of `read_mutex`
@@ -549,7 +549,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcPageMove)
         PageEntry e;
         e.file_id = 5;
         e.level   = 1;
-        gc_edit.moveNormalPage(pid, e);
+        gc_edit.upsertPage(pid, e);
         versions.gcApply(gc_edit);
     }
 
@@ -581,7 +581,7 @@ TYPED_TEST_P(PageMapVersionSet_test, GcConcurrencySetPage)
         PageEntry e;
         e.file_id = 5;
         e.level   = 1;
-        gc_edit.moveNormalPage(pid, e);
+        gc_edit.upsertPage(pid, e);
     }
 
     {

@@ -42,12 +42,11 @@ public:
      */
     void put(PageId page_id, const PageEntry & entry);
 
-    /** Update Page{normal_page_id}'s entry, if the entry is existed, this method
-     *  will inherit the ref-counting of old entry.
+    /** Create or Update Page{normal_page_id}'s entry, if the entry is existed, this method
+     *  will inherit the ref-counting of old entry, otherwise the ref count will be set to 0.
      *  Compare to method `put`, this method won't create RefPage{page_id} -> Page{page_id}.
-     *  Caller should ensure Page{normal_page_id} is exists.
      */
-    void updateNormalPage(PageId normal_page_id, PageEntry entry);
+    void upsertPage(PageId normal_page_id, PageEntry entry);
 
     /** Delete RefPage{page_id} and decrease corresponding Page ref-count.
      *  if origin Page ref-count down to 0, the Page is erased from entry map
@@ -236,7 +235,7 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
 }
 
 template <typename T>
-void PageEntriesMixin<T>::updateNormalPage(PageId normal_page_id, PageEntry entry)
+void PageEntriesMixin<T>::upsertPage(PageId normal_page_id, PageEntry entry)
 {
     assert(is_base); // can only call by base
 
@@ -252,7 +251,8 @@ void PageEntriesMixin<T>::updateNormalPage(PageId normal_page_id, PageEntry entr
     else
     {
         // Page{normal_page_id} not exist
-        throw Exception("Try to move non-exist normal page: " + DB::toString(normal_page_id), ErrorCodes::LOGICAL_ERROR);
+        entry.ref                    = 0;
+        normal_pages[normal_page_id] = entry;
     }
 
     // update max_page_id

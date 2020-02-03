@@ -32,8 +32,8 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
                 }
             }
             break;
-        case WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-            current_version->updateNormalPage(rec.page_id, rec.entry);
+        case WriteBatch::WriteType::UPSERT:
+            current_version->upsertPage(rec.page_id, rec.entry);
             break;
         }
     }
