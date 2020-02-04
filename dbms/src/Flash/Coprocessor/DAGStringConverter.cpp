@@ -1,10 +1,9 @@
-#include <Flash/Coprocessor/DAGStringConverter.h>
-
 #include <Core/QueryProcessingStage.h>
+#include <Flash/Coprocessor/DAGStringConverter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
