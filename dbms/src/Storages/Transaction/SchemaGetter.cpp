@@ -1,4 +1,4 @@
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/SchemaGetter.h>
 #include <pingcap/kv/Scanner.h>
 
