@@ -1,19 +1,17 @@
 #pragma once
 
-#include <sstream>
-
-#include <common/likely.h>
-
 #include <Common/Exception.h>
 #include <Core/Types.h>
 #include <IO/Endian.h>
-
-#include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/Datum.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/TiKVVarInt.h>
 #include <Storages/Transaction/Types.h>
+#include <common/likely.h>
+
+#include <sstream>
 
 namespace DB
 {
