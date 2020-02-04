@@ -1,4 +1,4 @@
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/JSONCodec.h>
 
 #pragma GCC diagnostic push
