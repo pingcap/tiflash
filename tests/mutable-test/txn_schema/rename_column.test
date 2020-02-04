@@ -199,6 +199,16 @@
 │ 1 │ 0 │
 │ 2 │ 0 │
 └───┴───┘
-=> DBGInvoke __drop_tidb_table(default, test)
+
+=> DBGInvoke __rename_tidb_table(default, test, test1)
+=> DBGInvoke __add_column_to_tidb_table(default, test1, 'z Nullable(Int8) default 0')
+=> DBGInvoke __refresh_schemas()
+=> select d, z from default.test1 order by _tidb_rowid
+┌─d─┬─z─┐
+│ 1 │ 0 │
+│ 2 │ 0 │
+└───┴───┘
+
+=> DBGInvoke __drop_tidb_table(default, test1)
 => drop table if exists default.test
 => DBGInvoke __refresh_schemas()
