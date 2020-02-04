@@ -3,9 +3,10 @@
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
+#include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
 
@@ -228,14 +229,19 @@ void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fi
 {
     if (table_info.columns.size() != fields.size() + table_info.pk_is_handle)
         throw Exception("Encoding row has different sizes between columns and values", ErrorCodes::LOGICAL_ERROR);
+
+    std::vector<Field> flatten_fields;
     for (size_t i = 0; i < fields.size(); i++)
     {
-        const TiDB::ColumnInfo & column_info = table_info.columns[i];
-        EncodeDatum(Field(column_info.id), TiDB::CodecFlagInt, ss);
+        const auto & column_info = table_info.columns[i];
         Field field = convertField(column_info, fields[i]);
         TiDB::DatumBumpy datum = TiDB::DatumBumpy(field, column_info.tp);
-        EncodeDatum(datum.field(), column_info.getCodecFlag(), ss);
+        flatten_fields.emplace_back(datum.field());
     }
+
+    static bool row_format_flip = false;
+    // Ping-pong encoding using row format V1/V2.
+    (row_format_flip = !row_format_flip) ? encodeRowV1(table_info, flatten_fields, ss) : encodeRowV2(table_info, flatten_fields, ss);
 }
 
 void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, ASTs::const_iterator begin,
