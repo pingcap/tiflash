@@ -11,6 +11,7 @@ socket = ""
 split-table = true
 store = "tikv"
 token-limit = 10000
+alter-primary-key = true
 
 [log]
 disable-timestamp = false
