@@ -49,7 +49,7 @@ cmake "$SRCPATH" \
     -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE
 make -j $NPROC
 
-cp -f "$build_dir/dbms/src/Server/theflash" "$install_dir/theflash"
+cp -f "$build_dir/dbms/src/Server/theflash" "$install_dir/tiflash"
 cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libtiflash_proxy.so"
 
 # copy gtest binary under Debug mode
