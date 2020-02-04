@@ -37,7 +37,7 @@ void RegionData::insert(ColumnFamilyType cf, TiKVKey && key, const DecodedTiKVKe
 void RegionData::removeLockCF(const DecodedTiKVKey & raw_key)
 {
     HandleID handle_id = RecordKVFormat::getHandle(raw_key);
-    lock_cf.remove(handle_id);
+    lock_cf.remove(handle_id, true);
 }
 
 void RegionData::removeDefaultCF(const TiKVKey & key, const DecodedTiKVKey & raw_key)
