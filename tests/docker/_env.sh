@@ -3,7 +3,7 @@
 export build_dir="/tiflash"
 
 # Executable path
-export storage_bin="$build_dir/theflash"
+export storage_bin="$build_dir/tiflash"
 
 # Server address for connecting
 export storage_server="127.0.0.1"
