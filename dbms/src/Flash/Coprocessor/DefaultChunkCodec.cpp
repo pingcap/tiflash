@@ -1,7 +1,6 @@
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-
-#include <Storages/Transaction/Codec.h>
 #include <Storages/Transaction/Datum.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TypeMapping.h>
 
