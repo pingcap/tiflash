@@ -204,11 +204,14 @@ void placeInsert(const BlockInputStreamPtr &  stable, //
     using Rids = std::vector<std::pair<UInt64, bool>>;
     Rids rids(block_rows);
     for (size_t i = 0; i < block_rows; ++i)
+    {
         rids[i] = rid_gen.nextForUpsert();
+    }
 
     for (size_t i = 0; i < block_rows; ++i)
     {
         auto [rid, dup] = rids[i];
+
         UInt64 tuple_id;
         if constexpr (use_row_id_ref)
             tuple_id = delta_value_space_offset + row_id_ref[i];
@@ -219,6 +222,10 @@ void placeInsert(const BlockInputStreamPtr &  stable, //
             delta_tree.addDelete(rid);
         delta_tree.addInsert(rid, tuple_id);
     }
+
+#ifndef NDEBUG
+    delta_tree.checkAll();
+#endif
 }
 
 /// del_range_id: the pos of delete range action in value space. It is used to filter out irrelevant deletes.
@@ -243,6 +250,9 @@ void placeDelete(const BlockInputStreamPtr & stable, //
         if (rids[i] >= 0)
             delta_tree.addDelete(rids[i]);
     }
+#ifndef NDEBUG
+    delta_tree.checkAll();
+#endif
 }
 
 } // namespace DM

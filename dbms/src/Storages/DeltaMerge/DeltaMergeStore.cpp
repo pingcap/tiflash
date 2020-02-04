@@ -39,13 +39,14 @@ namespace DM
 
 DeltaMergeStore::DeltaMergeStore(Context &             db_context,
                                  const String &        path_,
-                                 const String &        db_name,
+                                 const String &        db_name_,
                                  const String &        table_name_,
                                  const ColumnDefines & columns,
                                  const ColumnDefine &  handle,
                                  const Settings &      settings_)
     : path(path_),
-      storage_pool(db_name + "." + table_name_, path),
+      storage_pool(db_name_ + "." + table_name_, path),
+      db_name(db_name_),
       table_name(table_name_),
       table_handle_define(handle),
       background_pool(db_context.getBackgroundPool()),
@@ -171,7 +172,9 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                db_settings.dm_segment_delta_limit_rows,
                                db_settings.dm_segment_delta_cache_limit_rows,
                                db_settings.dm_segment_stable_chunk_rows,
-                               db_settings.dm_enable_logical_split);
+                               db_settings.dm_enable_logical_split,
+                               db_settings.dm_read_delta_only,
+                               db_settings.dm_read_stable_only);
     return DMContextPtr(ctx);
 }
 
@@ -201,6 +204,8 @@ inline Block getSubBlock(const Block & block, size_t offset, size_t limit)
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, const Block & to_write)
 {
     std::scoped_lock write_write_lock(write_write_mutex);
+
+    LOG_TRACE(log, "Write into " << db_name << "." << table_name << " " << to_write.rows() << "rows.");
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -268,6 +273,8 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const HandleRange & delete_range)
 {
     std::scoped_lock write_write_lock(write_write_mutex);
+
+    LOG_TRACE(log, "Write into " << db_name << "." << table_name << " delte range " << delete_range.toString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -1223,7 +1230,7 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
         {
             // Fall back to find column by name, this path should only call by tests.
             LOG_WARNING(log,
-                        "Try to apply alter to column: " << command.column_name << ", id:" << toString(command.column_id)
+                        "Try to apply alter to column: " << command.column_name << ", id:" << DB::toString(command.column_id)
                                                          << ", but not found by id, fall back locating col by name.");
             for (auto && column_define : table_columns)
             {
@@ -1278,7 +1285,7 @@ void DeltaMergeStore::applyAlter(const AlterCommand & command, const OptionTable
     }
     else
     {
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << " receive unknown alter command, type: " << toString(static_cast<Int32>(command.type)));
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << " receive unknown alter command, type: " << DB::toString(static_cast<Int32>(command.type)));
     }
 }
 

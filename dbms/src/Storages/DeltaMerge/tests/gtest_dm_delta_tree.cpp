@@ -2,7 +2,6 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
-#include <Storages/DeltaMerge/DummyValueSpace.h>
 #include <Storages/DeltaMerge/Tuple.h>
 
 namespace DB
@@ -127,21 +126,6 @@ TEST_F(DeltaTree_test, Insert)
     std::cout << "c====\n";
     printTree(tree);
 
-    // modify
-    tree.addModify(8, 0, 8);
-    tree.addModify(8, 1, 8);
-    tree.addModify(8, 0, 8);
-    std::cout << "d====\n";
-    printTree(tree);
-
-    // modify
-    tree.addModify(97, 0, 97);
-    tree.addModify(97, 0, 97);
-    tree.addModify(97, 8, 97);
-    tree.addModify(97, 1, 97);
-    std::cout << "e====\n";
-    printTree(tree);
-
     // delete
     for (int i = 5; i <= 8; ++i)
     {
@@ -149,15 +133,6 @@ TEST_F(DeltaTree_test, Insert)
         tree.checkAll();
     }
     std::cout << "f====\n";
-    printTree(tree);
-
-    // modify
-    for (int i = 5; i <= 8; ++i)
-    {
-        tree.addModify(i, 1, i);
-        tree.checkAll();
-    }
-    std::cout << "g====\n";
     printTree(tree);
 
     // delete
@@ -297,74 +272,6 @@ TEST_F(DeltaTree_test, InsertSkipDelete)
         {
             expectedResult += "(" + std::to_string(j) + "|1|INS|1|" + std::to_string(i - j) + "),";
         }
-        ASSERT_EQ(expectedResult, treeToString(tree));
-    }
-}
-
-TEST_F(DeltaTree_test, DeleteAfterUpdate)
-{
-    int batch_num = 100;
-
-    std::string expectedResult;
-    std::string expectedResult2;
-    // multiple update to the same row and same column
-    for (int i = 0; i < batch_num; ++i)
-    {
-        tree.addModify(i, 0, 2 * i);
-        tree.checkAll();
-        expectedResult = expectedResult2 + "(" + std::to_string(i) + "|" + std::to_string(i) + "|0|0|" + std::to_string(2 * i) + "),";
-        ASSERT_EQ(expectedResult, treeToString(tree));
-
-        tree.addModify(i, 0, 2 * i + 1);
-        tree.checkAll();
-        expectedResult2 = expectedResult2 + "(" + std::to_string(i) + "|" + std::to_string(i) + "|0|0|" + std::to_string(2 * i + 1) + "),";
-        ASSERT_EQ(expectedResult2, treeToString(tree));
-    }
-
-    for (int i = batch_num - 1; i >= 0; --i)
-    {
-        tree.addDelete(i);
-        tree.checkAll();
-        expectedResult = "";
-        for (int j = 0; j < i; j++)
-        {
-            expectedResult += "(" + std::to_string(j) + "|" + std::to_string(j) + "|0|0|" + std::to_string(2 * j + 1) + "),";
-        }
-        for (int j = i; j < batch_num; j++)
-        {
-            expectedResult += "(" + std::to_string(i) + "|" + std::to_string(j) + "|DEL|1|0),";
-        }
-        ASSERT_EQ(expectedResult, treeToString(tree));
-    }
-}
-
-TEST_F(DeltaTree_test, UpdateSkipDelete)
-{
-    tree.addDelete(0);
-    std::string expectedResult = "(0|0|DEL|1|0),";
-    ASSERT_EQ(expectedResult, treeToString(tree));
-
-    tree.addModify(0, 0, 0);
-    tree.checkAll();
-    expectedResult = "(0|0|DEL|1|0),(0|1|0|0|0),";
-
-    std::cout << expectedResult << std::endl;
-    std::cout << treeToString(tree) << std::endl;
-    ASSERT_EQ(expectedResult, treeToString(tree));
-}
-
-TEST_F(DeltaTree_test, InplaceUpdate)
-{
-    int         batch_num = 100;
-    std::string expectedResult;
-    for (int i = 0; i < batch_num; ++i)
-    {
-        tree.addInsert(i, i);
-        tree.checkAll();
-        expectedResult = expectedResult + "(" + std::to_string(i) + "|0|INS|1|" + std::to_string(i) + "),";
-        ASSERT_EQ(expectedResult, treeToString(tree));
-        tree.addModify(i, 0, i);
-        tree.checkAll();
         ASSERT_EQ(expectedResult, treeToString(tree));
     }
 }

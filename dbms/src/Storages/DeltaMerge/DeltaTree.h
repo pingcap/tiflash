@@ -45,7 +45,6 @@ using DT_TYPE = UInt16;
 
 static constexpr DT_TYPE DT_INS           = 65535;
 static constexpr DT_TYPE DT_DEL           = 65534;
-static constexpr DT_TYPE DT_MULTI_MOD     = 65533;
 static constexpr DT_TYPE DT_MAX_COLUMN_ID = 65500;
 
 inline std::string DTTypeString(UInt16 type)
@@ -59,11 +58,8 @@ inline std::string DTTypeString(UInt16 type)
     case DT_DEL:
         type_s = "DEL";
         break;
-    case DT_MULTI_MOD:
-        type_s = "MMD";
-        break;
     default:
-        type_s = ::DB::toString(type);
+        type_s = DB::toString(type);
         break;
     }
     return type_s;
@@ -76,13 +72,10 @@ struct DTMutation
 
     /// DT_INS : Insert
     /// DT_DEL : Delete
-    /// DT_MULTI_MOD : modify chain
-    /// Otherwise, mutation is in DT_MOD mode, "type" is modify columnId.
     UInt16 type = 0;
     /// For DT_INS and DT_DEL, "count" is the number of values got inserted or delete from "value".
     UInt32 count = 0;
     /// For DT_INS and DT_MOD, "value" is the value index in value space;
-    /// For DT_MULTI_MOD, "value" represents the chain pointer;
     UInt64 value = 0;
 
     inline bool isModify() const { return type != DT_INS && type != DT_DEL; }
@@ -640,10 +633,8 @@ private:
     LeafPtr left_leaf, right_leaf;
     size_t  height = 1;
 
-    size_t num_inserts  = 0;
-    size_t num_deletes  = 0;
-    size_t num_modifies = 0;
-
+    size_t num_inserts = 0;
+    size_t num_deletes = 0;
     size_t num_entries = 0;
 
     Logger * log;
@@ -657,16 +648,27 @@ public:
 private:
     inline bool isRootOnly() const { return height == 1; }
 
-    void check(NodePtr node) const;
+    void check(NodePtr node, bool recursive) const;
 
-    using LeafPtrAndDelta = std::pair<LeafPtr, Int64>;
-    /// Find right most leaf this id (rid/sid) could exists/insert.
-    template <bool isRid>
-    LeafPtrAndDelta findRightLeaf(const UInt64 id) const;
+    template <bool is_rid, bool is_left>
+    EntryIterator findLeaf(const UInt64 id) const;
 
-    /// Find left most leaf this id (rid/sid) could exists.
-    template <bool isRid>
-    LeafPtrAndDelta findLeftLeaf(const UInt64 id) const;
+    /// Find the leaf which could contains id.
+    template <bool is_rid>
+    EntryIterator findRightLeaf(const UInt64 id) const
+    {
+        return findLeaf<is_rid, false>(id);
+    }
+
+    template <bool is_rid, bool is_left>
+    void searchId(EntryIterator & it, const UInt64 id) const;
+
+    /// Go to first entry that has greater or equal id.
+    template <bool is_rid>
+    void searchLeftId(EntryIterator & it, const UInt64 id) const
+    {
+        return searchId<is_rid, true>(it, id);
+    }
 
     using InterAndSid = std::pair<InternPtr, UInt64>;
     template <typename T>
@@ -693,10 +695,6 @@ private:
         {
             next = afterNodeUpdated(next);
         }
-
-        //#ifndef NDEBUG
-        //        checkAll();
-        //#endif
     }
 
     template <typename T>
@@ -771,8 +769,6 @@ public:
 
         std::swap(num_inserts, other.num_inserts);
         std::swap(num_deletes, other.num_deletes);
-        std::swap(num_modifies, other.num_modifies);
-
         std::swap(num_entries, other.num_entries);
 
         std::swap(log, other.log);
@@ -807,7 +803,7 @@ public:
         if (count != num_entries)
             throw Exception("entries count not match");
 
-        check(root);
+        check(root, true);
     }
 
     size_t        getHeight() const { return height; }
@@ -825,27 +821,10 @@ public:
         return std::make_shared<DTEntriesCopy<M, F, S, CopyAllocator>>(left_leaf, num_entries, delta);
     }
 
-    EntryIterator sidLowerBound(UInt64 sid) const
-    {
-        LeafPtr leaf;
-        Int64   delta;
-        size_t  pos;
-        std::tie(leaf, delta) = findLeftLeaf<false>(sid);
-        std::tie(pos, delta)  = leaf->searchSid(sid, delta);
-        EntryIterator it(leaf, pos, delta);
-        if (it != end() && pos == leaf->count)
-            return {leaf->next, 0, delta};
-        else
-            return it;
-    }
-
     size_t numEntries() const { return num_entries; }
     size_t numInserts() const { return num_inserts; }
     size_t numDeletes() const { return num_deletes; }
-    size_t numModifies() const { return num_modifies; }
 
-    void addModify(const UInt64 rid, const UInt16 column_id, const UInt64 new_value_id);
-    void addModify(const UInt64 rid, const RefTuple & tuple);
     void addDelete(const UInt64 rid);
     void addInsert(const UInt64 rid, const UInt64 tuple_id);
 };
@@ -854,7 +833,7 @@ public:
 #define DT_CLASS DeltaTree<ValueSpace, M, F, S, Allocator>
 
 DT_TEMPLATE
-void DT_CLASS::check(NodePtr node) const
+void DT_CLASS::check(NodePtr node, bool recursive) const
 {
     if (isLeaf(node))
     {
@@ -894,238 +873,68 @@ void DT_CLASS::check(NodePtr node) const
                 throw Exception("illegal node");
             }
         }
-        for (size_t i = 0; i < p->count; ++i)
+        if (recursive)
         {
-            check(p->children[i]);
-        }
-    }
-}
-
-DT_TEMPLATE
-void DT_CLASS::addModify(const UInt64 rid, const UInt16 column_id, const UInt64 new_value_id)
-{
-    addModify(rid, RefTuple(column_id, new_value_id));
-}
-
-DT_TEMPLATE
-void DT_CLASS::addModify(const UInt64 rid, const RefTuple & tuple)
-{
-    if (tuple.values.empty())
-        return;
-
-    ++num_modifies;
-
-    size_t  pos;
-    LeafPtr leaf;
-    Int64   delta;
-    std::tie(leaf, delta) = findRightLeaf<true>(rid);
-    std::tie(pos, delta)  = leaf->searchRid(rid, delta);
-
-    bool exists = pos != leaf->count && leaf->rid(pos, delta) == rid;
-    if (exists && leaf->type(pos) == DT_DEL)
-    {
-        /// Skip DT_DEL entries.
-        EntryIterator leaf_it(leaf, pos, delta);
-        EntryIterator leaf_end(this->end());
-        while (leaf_it != leaf_end && leaf_it.getRid() == rid && leaf_it.getType() == DT_DEL)
-        {
-            ++leaf_it;
-        }
-        leaf  = leaf_it.getLeaf();
-        pos   = leaf_it.getPos();
-        delta = leaf_it.getDelta();
-
-        exists = leaf_it != leaf_end && leaf->rid(pos, delta) == rid;
-    }
-
-    if (unlikely(!isRootOnly() && !leaf->legal()))
-        throw Exception("Illegal leaf state: " + leaf->state());
-
-    auto & modify_values = tuple.values;
-    if (!exists)
-    {
-        /// Either rid does not exists in this leaf, or all entries with same rid are DT_DEL, simply append an new entry.
-
-        ++num_entries;
-
-        leaf->shiftEntries(pos, 1);
-        leaf->sids[pos]      = rid - delta;
-        leaf->mutations[pos] = DTMutation();
-        ++(leaf->count);
-
-        auto & mutation = leaf->mutations[pos];
-        if (modify_values.size() == 1)
-        {
-            mutation.type  = modify_values[0].column;
-            mutation.value = modify_values[0].value;
-        }
-        else
-        {
-            DTModifiesPtr modifies = new DTModifies(modify_values.size());
-            for (size_t i = 0; i < modify_values.size(); ++i)
+            for (size_t i = 0; i < p->count; ++i)
             {
-                (*modifies)[i] = DTModify(modify_values[i].column, modify_values[i].value);
-            }
-            mutation.type  = DT_MULTI_MOD;
-            mutation.value = reinterpret_cast<UInt64>(modifies);
-        }
-    }
-    else
-    {
-        /// In-place update for DT_INS.
-        if (leaf->mutations[pos].type == DT_INS)
-        {
-            leaf->mutations[pos].value = insert_value_space->withModify(leaf->value(pos), *modify_value_space, tuple);
-            // No leaf entry update.
-            return;
-        }
-
-        /// Deal with existing modifies.
-        DTModifiesPtr modifies;
-        {
-            auto & m = leaf->mutations[pos];
-            if (m.type != DT_MULTI_MOD)
-            {
-                if (modify_values.size() == 1 && m.type == modify_values[0].column)
-                {
-                    modify_value_space->removeFromModify(m.value, m.type);
-                    m.value = modify_values[0].value;
-                    // No leaf entry update.
-                    return;
-                }
-                /// Create modify chain and move the value of current entry into.
-                modifies = new DTModifies();
-                modifies->emplace_back(m.type, m.value);
-                m.type  = DT_MULTI_MOD;
-                m.value = reinterpret_cast<UInt64>(modifies);
-            }
-            else
-            {
-                modifies = reinterpret_cast<DTModifiesPtr>(m.value);
+                check(p->children[i], recursive);
             }
         }
-
-        /// TODO improve algorithm here
-        for (const auto & value : modify_values)
-        {
-            auto it  = modifies->begin();
-            auto end = modifies->end();
-            for (; it != end; ++it)
-            {
-                auto & old_modify = *it;
-                if (value.column == old_modify.column_id)
-                {
-                    modify_value_space->removeFromModify(old_modify.value, old_modify.column_id);
-                    old_modify.value = value.value;
-                    break;
-                }
-                else if (value.column < old_modify.column_id)
-                {
-                    modifies->insert(it, DTModify(value.column, value.value));
-                    break;
-                }
-            }
-            if (it == end)
-                modifies->emplace_back(value.column, value.value);
-        }
     }
-    afterLeafUpdated(leaf);
 }
 
 DT_TEMPLATE
 void DT_CLASS::addDelete(const UInt64 rid)
 {
-    ++num_deletes;
+    EntryIterator leaf_end(this->end());
+    auto          it = findRightLeaf<true>(rid);
+    searchLeftId<true>(it, rid);
 
-    size_t  pos;
-    LeafPtr leaf;
-    Int64   delta;
-    std::tie(leaf, delta) = findLeftLeaf<true>(rid);
-    std::tie(pos, delta)  = leaf->searchRid(rid, delta);
-
-    bool          merge = false;
-    EntryIterator merge_it;
-
-    bool exists = pos != leaf->count && leaf->rid(pos, delta) == rid;
-    if (exists && leaf->type(pos) == DT_DEL)
+    bool has_delete = false;
+    while (it != leaf_end && it.getRid() == rid && it.getType() == DT_DEL)
     {
-        /// Skip DT_DEL entries.
-        EntryIterator leaf_it(leaf, pos, delta);
-        EntryIterator leaf_end(this->end());
-        while (leaf_it != leaf_end && leaf_it.getRid() == rid && leaf_it.getType() == DT_DEL)
-        {
-            merge = true;
-            ++leaf_it;
-        }
-
-        if (merge)
-        {
-            merge_it = leaf_it;
-            --merge_it;
-        }
-
-        leaf  = leaf_it.getLeaf();
-        pos   = leaf_it.getPos();
-        delta = leaf_it.getDelta();
-
-        exists = leaf_it != leaf_end && leaf->rid(pos, delta) == rid;
+        has_delete = true;
+        ++it;
     }
 
-    if (unlikely(!isRootOnly() && !leaf->legal()))
-        throw Exception("Illegal leaf state: " + leaf->state());
-
-    if (exists)
+    bool has_insert = it != leaf_end && it.getRid() == rid && it.getType() == DT_INS;
+    if (has_insert)
     {
-        /// Delete existing insert entry.
-        if (leaf->mutations[pos].type == DT_INS)
-        {
-            --num_entries;
-            --num_deletes; // delete entries in delta tree haven't increased.
-            --num_inserts;
+        /// Remove existing insert entry.
 
-            insert_value_space->removeFromInsert(leaf->mutations[pos].value);
-            leaf->shiftEntries(pos + 1, -1);
-            --(leaf->count);
+        --num_entries;
+        --num_inserts;
 
-            afterLeafUpdated(leaf);
+        auto leaf  = it.getLeaf();
+        auto pos   = it.getPos();
+        auto value = it.getValue();
 
-            return;
-        }
-        else
-        {
-            // Modify
-            --num_entries;
-
-            auto & m = leaf->mutations[pos];
-            if (m.type == DT_MULTI_MOD)
-            {
-                auto modifies = reinterpret_cast<DTModifiesPtr>(m.value);
-                for (const auto & md : *modifies)
-                {
-                    modify_value_space->removeFromModify(md.value, md.column_id);
-                    --num_modifies;
-                }
-                delete modifies;
-            }
-            else
-            {
-                modify_value_space->removeFromModify(m.value, m.type);
-                --num_modifies;
-            }
-
-            leaf->shiftEntries(pos + 1, -1);
-            --(leaf->count);
-        }
+        insert_value_space->removeFromInsert(value);
+        leaf->shiftEntries(pos + 1, -1);
+        --(leaf->count);
     }
-
-    if (merge)
+    else if (has_delete)
     {
         /// Simply increase delete count at the last one of delete chain.
-        ++(merge_it.getLeaf()->mutations[merge_it.getPos()].count);
+
+        ++num_deletes;
+
+        --it; // <-- Go to last delete entry.
+
+        auto leaf = it.getLeaf();
+        auto pos  = it.getPos();
+
+        ++leaf->mutations[pos].count;
     }
     else
     {
+        /// Insert a new delete entry.
+        ++num_deletes;
         ++num_entries;
+
+        auto leaf  = it.getLeaf();
+        auto pos   = it.getPos();
+        auto delta = it.getDelta();
 
         leaf->shiftEntries(pos, 1);
         leaf->sids[pos]      = rid - delta;
@@ -1133,45 +942,40 @@ void DT_CLASS::addDelete(const UInt64 rid)
         ++(leaf->count);
     }
 
-    afterLeafUpdated(leaf);
+    afterLeafUpdated(it.getLeaf());
 
-    if (unlikely(!isRootOnly() && !leaf->legal()))
-        throw Exception("Illegal leaf state: " + leaf->state());
+    if (unlikely(!isRootOnly() && !it.getLeaf()->legal()))
+        throw Exception("Illegal leaf state: " + it.getLeaf()->state());
 }
 
 DT_TEMPLATE
 void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 {
-    ++num_inserts;
+    EntryIterator leaf_end(this->end());
+    auto          it = findRightLeaf<true>(rid);
+    searchLeftId<true>(it, rid);
 
-    size_t  pos;
-    LeafPtr leaf;
-    Int64   delta;
-    std::tie(leaf, delta) = findRightLeaf<true>(rid);
-    std::tie(pos, delta)  = leaf->searchRid(rid, delta);
-
-    bool exists = pos != leaf->count && leaf->rid(pos, delta) == rid;
-    if (exists && leaf->type(pos) == DT_DEL)
+    /// Skip DT_DEL entries.
+    while (it != leaf_end && it.getRid() == rid && it.getType() == DT_DEL)
     {
-        /// Skip DT_DEL entries.
-        EntryIterator leaf_it(leaf, pos, delta);
-        EntryIterator leaf_end(this->end());
-        while (leaf_it != leaf_end && leaf_it.getRid() == rid && leaf_it.getType() == DT_DEL)
-        {
-            ++leaf_it;
-        }
-        leaf  = leaf_it.getLeaf();
-        pos   = leaf_it.getPos();
-        delta = leaf_it.getDelta();
+        ++it;
     }
 
-    if (unlikely(!isRootOnly() && !leaf->legal()))
-        throw Exception("Illegal leaf state: " + leaf->state());
-
+    ++num_inserts;
     ++num_entries;
 
+    auto leaf  = it.getLeaf();
+    auto pos   = it.getPos();
+    auto delta = it.getDelta();
+    auto sid   = rid - delta;
+
+#ifndef NDEBUG
+    if (it != leaf_end && sid > it.getSid())
+        throw Exception("Unexpected insertion, sid is bigger than current pos");
+#endif
+
     leaf->shiftEntries(pos, 1);
-    leaf->sids[pos]      = rid - delta;
+    leaf->sids[pos]      = sid;
     leaf->mutations[pos] = DTMutation(DT_INS, /*count*/ 1, tuple_id);
     ++(leaf->count);
 
@@ -1182,8 +986,8 @@ void DT_CLASS::addInsert(const UInt64 rid, const UInt64 tuple_id)
 }
 
 DT_TEMPLATE
-template <bool isRid>
-typename DT_CLASS::LeafPtrAndDelta DT_CLASS::findRightLeaf(const UInt64 id) const
+template <bool is_rid, bool is_left>
+typename DT_CLASS::EntryIterator DT_CLASS::findLeaf(const UInt64 id) const
 {
     NodePtr node  = root;
     Int64   delta = 0;
@@ -1194,85 +998,75 @@ typename DT_CLASS::LeafPtrAndDelta DT_CLASS::findRightLeaf(const UInt64 id) cons
         for (; i < intern->count - 1; ++i)
         {
             delta += intern->deltas[i];
-            if constexpr (isRid)
+            bool ok;
+            if constexpr (is_rid)
             {
-                if (id < (intern->rid(i, delta)))
+                if constexpr (is_left)
                 {
-                    delta -= intern->deltas[i];
-                    break;
+                    ok = id <= intern->rid(i, delta);
+                }
+                else
+                {
+                    ok = id < intern->rid(i, delta);
                 }
             }
             else
             {
-                if (id < intern->sid(i))
+                if constexpr (is_left)
                 {
-                    delta -= intern->deltas[i];
-                    break;
+                    ok = id <= intern->sid(i);
+                }
+                else
+                {
+                    ok = id < intern->sid(i);
                 }
             }
-        }
-        node = intern->children[i];
-    }
-    return {as(Leaf, node), delta};
-}
-
-DT_TEMPLATE
-template <bool isRid>
-typename DT_CLASS::LeafPtrAndDelta DT_CLASS::findLeftLeaf(const UInt64 id) const
-{
-    NodePtr node      = root;
-    Int64   delta     = 0;
-    bool    checkLeaf = false;
-    while (!isLeaf(node))
-    {
-        InternPtr intern = as(Intern, node);
-        size_t    i      = 0;
-        for (; i < intern->count - 1; ++i)
-        {
-            delta += intern->deltas[i];
-            bool less;
-            bool equal;
-            if constexpr (isRid)
-            {
-                less  = id < (intern->rid(i, delta));
-                equal = id == (intern->rid(i, delta));
-            }
-            else
-            {
-                less  = id < intern->sid(i);
-                equal = id == intern->sid(i);
-            }
-            if (less || equal)
+            if (ok)
             {
                 delta -= intern->deltas[i];
-                if (equal)
-                {
-                    checkLeaf = true;
-                }
                 break;
             }
         }
         node = intern->children[i];
     }
-    LeafPtr leaf = as(Leaf, node);
-    if (checkLeaf)
-    {
-        // We can't simply call leaf->exists<isRid>(id, delta) because of bug (likely) of C++ compliler, both Clang(6.0.0) and GCC.
-        // They think '<' is an operator and complain like:
-        //  invalid operands of types '<unresolved overloaded function type>' and 'bool' to binary 'operator<'
+    return EntryIterator{as(Leaf, node), 0, delta};
+}
 
-        bool exists;
-        if constexpr (isRid)
-            exists = leaf->existsRid(id, delta);
-        else
-            exists = leaf->existsSid(id);
-        if (!exists)
+DT_TEMPLATE
+template <bool is_rid, bool is_left>
+void DT_CLASS::searchId(EntryIterator & it, const UInt64 id) const
+{
+    EntryIterator leaf_end(this->end());
+    while (it != leaf_end)
+    {
+        if constexpr (is_rid)
         {
-            delta += leaf->getDelta();
-            leaf = leaf->next;
+            if constexpr (is_left)
+            {
+                if (id <= it.getRid())
+                    break;
+            }
+            else
+            {
+                if (id < it.getRid())
+                    break;
+            }
         }
+        else
+        {
+            if constexpr (is_left)
+            {
+                if (id <= it.getSid())
+                    break;
+            }
+            else
+            {
+                if (id < it.getSid())
+                    break;
+            }
+        }
+        ++it;
     }
-    return {leaf, delta};
 }
 
 DT_TEMPLATE
@@ -1324,7 +1118,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             as(Intern, root)->parent = nullptr;
         --height;
 
-        LOG_TRACE(log, "height " + toString(height + 1) + " -> " + toString(height));
+        LOG_TRACE(log, "height " + DB::toString(height + 1) + " -> " + DB::toString(height));
 
         return {};
     }
@@ -1347,7 +1141,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 
             ++height;
 
-            LOG_TRACE(log, "height " + toString(height - 1) + " -> " + toString(height));
+            LOG_TRACE(log, "height " + DB::toString(height - 1) + " -> " + DB::toString(height));
         }
 
         auto pos = parent->searchChild(asNode(node));
@@ -1387,7 +1181,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
         T *    sibling;
 
         if (unlikely(parent->count <= 1))
-            throw Exception("Unexpected parent entry count: " + toString(parent->count));
+            throw Exception("Unexpected parent entry count: " + DB::toString(parent->count));
 
         if (pos == parent->count - 1)
         {
@@ -1401,6 +1195,9 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             sibling_pos     = pos + 1;
             sibling         = as(T, parent->children[sibling_pos]);
         }
+
+        if (sibling->parent != node->parent)
+            throw Exception("parent not the same");
 
         auto after_adopt = (node->count + sibling->count) / 2;
         if (T::underflow(after_adopt))

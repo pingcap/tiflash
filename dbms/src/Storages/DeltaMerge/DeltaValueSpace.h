@@ -38,12 +38,11 @@ public:
             {
                 for (size_t col_index = 0; col_index < output_columns.size(); ++col_index)
                 {
+                    auto & col = *(block.getByPosition(col_index).column);
                     if (rows_in_chunk_limit == 1)
-                        output_columns[col_index]->insertFrom(*(block.getByPosition(col_index).column), rows_start_in_chunk);
+                        output_columns[col_index]->insertFrom(col, rows_start_in_chunk);
                     else
-                        output_columns[col_index]->insertRangeFrom(*(block.getByPosition(col_index).column), //
-                                                                   rows_start_in_chunk,
-                                                                   rows_in_chunk_limit);
+                        output_columns[col_index]->insertRangeFrom(col, rows_start_in_chunk, rows_in_chunk_limit);
                 }
 
                 actually_read += rows_in_chunk_limit;

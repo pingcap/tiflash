@@ -19,7 +19,7 @@ namespace tests
 class DiskValueSpace_test : public ::testing::Test
 {
 public:
-    DiskValueSpace_test() : name("tmp"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() +name), storage_pool() {}
+    DiskValueSpace_test() : name("tmp"), path(DB::tests::TiFlashTestEnv::getTemporaryPath() + name), storage_pool() {}
 
 private:
     void dropDataInDisk()
@@ -58,8 +58,9 @@ protected:
                                                  context.getSettingsRef().dm_segment_delta_limit_rows,
                                                  context.getSettingsRef().dm_segment_delta_cache_limit_rows,
                                                  context.getSettingsRef().dm_segment_stable_chunk_rows,
-                                                 context.getSettingsRef().dm_enable_logical_split
-                                                 );
+                                                 context.getSettingsRef().dm_enable_logical_split,
+                                                 false,
+                                                 false);
     }
 
 protected:
@@ -271,7 +272,7 @@ TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocks)
             // version [100, 110) for pk=30
             Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(30, 100, 110);
             // pk [31,40]
-            Block block_2                 = DMTestEnv::prepareSimpleWriteBlock(31, 41, false);
+            Block block_2 = DMTestEnv::prepareSimpleWriteBlock(31, 41, false);
             DM::concat(block_of_multi_versions, block_2);
             block = block_of_multi_versions;
             {
@@ -288,7 +289,7 @@ TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocks)
             // version [300, 305) for pk=40
             Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(40, 300, 305);
             // pk [41,50)
-            Block block_2                 = DMTestEnv::prepareSimpleWriteBlock(41, 50, false);
+            Block block_2 = DMTestEnv::prepareSimpleWriteBlock(41, 50, false);
             DM::concat(block_of_multi_versions, block_2);
             block = block_of_multi_versions;
             {
@@ -347,7 +348,7 @@ TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocksMerged)
         {
             // version [100, 110) for pk=30
             Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(30, 100, 110);
-            block = block_of_multi_versions;
+            block                         = block_of_multi_versions;
             {
                 auto col = block.getByName(DMTestEnv::pk_name);
                 EXPECT_EQ(col.column->getInt(0), 30);
@@ -362,7 +363,7 @@ TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocksMerged)
             // version [300, 305) for pk=30
             Block block_of_multi_versions = DMTestEnv::prepareBlockWithIncreasingTso(30, 300, 305);
             // pk [41,50)
-            Block block_2                 = DMTestEnv::prepareSimpleWriteBlock(31, 50, false);
+            Block block_2 = DMTestEnv::prepareSimpleWriteBlock(31, 50, false);
             DM::concat(block_of_multi_versions, block_2);
             block = block_of_multi_versions;
             {

@@ -312,10 +312,19 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
 
     auto create_stream = [&](const HandleRange & read_range) -> BlockInputStreamPtr {
         BlockInputStreamPtr stream;
-        if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0 //
-            && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)          //
-            && !hasColumn(columns_to_read, VERSION_COLUMN_ID)               //
-            && !hasColumn(columns_to_read, TAG_COLUMN_ID))
+        if (dm_context.read_delta_only)
+        {
+            throw Exception("Unsupported");
+        }
+        else if (dm_context.read_stable_only)
+        {
+            stream
+                = read_info.segment_snap.stable->getInputStream(dm_context, read_info.read_columns, read_range, filter, max_version, false);
+        }
+        else if (segment_snap.delta_rows == 0 && segment_snap.delta_deletes == 0 //
+                 && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID)          //
+                 && !hasColumn(columns_to_read, VERSION_COLUMN_ID)               //
+                 && !hasColumn(columns_to_read, TAG_COLUMN_ID))
         {
             // No delta, let's try some optimizations.
             stream
@@ -343,7 +352,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
 
     if (read_ranges.size() == 1)
     {
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(1) << " ranges");
+        LOG_TRACE(log,
+                  "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", 1"
+                              << " range: " << toString(read_ranges));
         return create_stream(range.shrink(read_ranges[0]));
     }
     else
@@ -356,7 +367,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext &       dm_context,
                 streams.push_back(create_stream(real_range));
         }
 
-        LOG_TRACE(log, "Segment [" << DB::toString(segment_id) << "] is read by " << DB::toString(streams.size()) << " ranges");
+        LOG_TRACE(log,
+                  "Segment [" << DB::toString(segment_id) << "] is read by max_version: " << max_version << ", "
+                              << DB::toString(streams.size()) << " ranges: " << toString(read_ranges));
 
         return std::make_shared<ConcatBlockInputStream>(streams);
     }
@@ -416,8 +429,20 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext &       dm_contex
     }
 
     BlockInputStreams streams;
-    streams.push_back(delta_stream);
-    streams.push_back(stable_stream);
+
+    if (dm_context.read_delta_only)
+    {
+        streams.push_back(delta_stream);
+    }
+    else if (dm_context.read_stable_only)
+    {
+        streams.push_back(stable_stream);
+    }
+    else
+    {
+        streams.push_back(delta_stream);
+        streams.push_back(stable_stream);
+    }
     return std::make_shared<ConcatBlockInputStream>(streams);
 }
 
@@ -534,9 +559,10 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext &             dm_contex
                                        read_info.index_end,
                                        read_info.index->entryCount(),
                                        dm_context.stable_chunk_rows);
-    data_stream      = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
-    data_stream      = std::make_shared<ReorganizeBlockInputStream>(data_stream, dm_context.handle_column.name);
-    data_stream      = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
+
+    data_stream = std::make_shared<DMHandleFilterBlockInputStream<true>>(data_stream, range, 0);
+    data_stream = std::make_shared<ReorganizeBlockInputStream>(data_stream, dm_context.handle_column.name);
+    data_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         data_stream, read_info.read_columns, dm_context.min_version);
 
     auto new_stable = createNewStable(dm_context, data_stream, segment_snap.stable->getId(), wbs);
