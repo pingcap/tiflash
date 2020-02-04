@@ -20,3 +20,19 @@ SLEEP 15
 │ f           │ Nullable(Int32) │              │                    │
 │ _tidb_rowid │ Int64           │              │                    │
 └─────────────┴─────────────────┴──────────────┴────────────────────┘
+
+
+mysql> alter table test.t drop primary key;
+
+SLEEP 15
+
+>> desc test.t
+┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
+│ a           │ Int32           │              │                    │
+│ b           │ Int32           │              │                    │
+│ c           │ Int32           │              │                    │
+│ d           │ Nullable(Int32) │              │                    │
+│ e           │ Nullable(Int32) │              │                    │
+│ f           │ Nullable(Int32) │              │                    │
+│ _tidb_rowid │ Int64           │              │                    │
+└─────────────┴─────────────────┴──────────────┴────────────────────┘
