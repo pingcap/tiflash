@@ -152,7 +152,7 @@ grpc::Status RaftService::ApplySnapshot(grpc::ServerContext *, CommandServerRead
     catch (...)
     {
         tryLogCurrentException(log, "gRPC ApplyCommandBatch error");
-        return grpc::Status(grpc::StatusCode::UNKNOWN, "Runtime error, check theflash log for detail.");
+        return grpc::Status(grpc::StatusCode::UNKNOWN, "Runtime error, check tiflash log for detail.");
     }
 }
 
