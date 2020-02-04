@@ -64,8 +64,8 @@ struct TiFlashServerHelper
     void (*fn_atomic_update_proxy)(TiFlashServer *, TiFlashRaftProxy *);
     void (*fn_handle_destroy)(TiFlashServer *, RegionId);
     //
-    uint32_t magic_number;
-    uint32_t version;
+    uint32_t magic_number; // use a very special number to check whether this struct is legal
+    uint32_t version;      // version of function interface
 };
 
 void run_tiflash_proxy_ffi(int argc, const char ** argv, const TiFlashServerHelper *);
