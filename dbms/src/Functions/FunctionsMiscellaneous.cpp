@@ -5,6 +5,7 @@
 #include <ext/bit_cast.h>
 #include <Poco/Net/DNS.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <Columns/ColumnSet.h>
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnConst.h>
@@ -1922,7 +1923,7 @@ public:
 std::string FunctionVersion::getVersion() const
 {
     std::ostringstream os;
-    os << DBMS_VERSION_MAJOR << "." << DBMS_VERSION_MINOR << "." << ClickHouseRevision::get();
+    os << TiFlashBuildInfo::getVersion();
     return os.str();
 }
 
