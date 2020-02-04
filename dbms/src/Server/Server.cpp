@@ -496,6 +496,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         .fn_handle_apply_snapshot = HandleApplySnapshot,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
+
+        // a special number, also defined in proxy
         .magic_number = 0x13579BDF,
         .version = 1};
 
