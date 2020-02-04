@@ -31,6 +31,8 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 
+#include <fiu-local.h>
+
 
 namespace DB
 {
@@ -431,6 +433,10 @@ void StorageMergeTree::alterInternal(
     }
     /// Reinitialize primary key because primary key column types might have changed.
     data.initPrimaryKey();
+
+    // The process of data change and meta change is not atomic, so we must make sure change data firstly
+    // and change meta secondly. If server crashes during or after changing data, we must fix the schema after restart.
+    fiu_exit_on("crash_after_change_data");
 
     for (auto & transaction : transactions)
         transaction->commit();

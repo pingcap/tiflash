@@ -243,6 +243,9 @@ if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
 endif ()
 
+#use libfiu
+target_include_directories(dbms PUBLIC ${fiu_include_dirs})
+
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${DBMS_INCLUDE_DIR})
 target_include_directories (clickhouse_common_io PUBLIC ${PCG_RANDOM_INCLUDE_DIR})
@@ -256,6 +259,8 @@ add_subdirectory (tests)
 
 if (ENABLE_TESTS)
     include (${ClickHouse_SOURCE_DIR}/cmake/find_gtest.cmake)
+
+    add_definitions(-DFIU_ENABLE)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
         # Google Test from sources

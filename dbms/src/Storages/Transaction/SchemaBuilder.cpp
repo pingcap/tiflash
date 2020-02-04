@@ -198,7 +198,8 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
 
     // Call storage alter to apply schema changes.
     for (const auto & alter_commands : commands_vec)
-        storage->alterForTMT(alter_commands, *table_info, db_name, context);
+        if (!alter_commands.empty())
+            storage->alterForTMT(alter_commands, *table_info, db_name, context);
 
     auto & tmt_context = context.getTMTContext();
 
