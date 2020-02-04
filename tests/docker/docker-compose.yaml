@@ -30,7 +30,7 @@ services:
       - ./_env.sh:/tests/_env.sh
     entrypoint: sleep infinity # just wait
   pd0:
-    image: hub.pingcap.net/tiflash/pd:191023
+    image: pingcap/pd:latest
     ports:
       - "2379:2379"
     volumes:
