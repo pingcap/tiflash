@@ -40,7 +40,7 @@ TEST_F(StringPad, string_pad_string_unit_Test)
 
 	auto &factory = FunctionFactory::instance();
 
-	std::vector<String> strs{"hello", "hello, world", "It's TheFlash", "     ", ""};
+	std::vector<String> strs{"hello", "hello, world", "It's TiFlash", "     ", ""};
 
 	MutableColumnPtr csp = ColumnString::create();
 	for (const auto &str: strs)
@@ -187,7 +187,7 @@ TEST_F(StringPad, string_pad_empty_padding_unit_Test)
 
 	auto &factory = FunctionFactory::instance();
 
-	std::vector<String> strs{"hello", "hello, world", "It's TheFlash", "     ", ""};
+	std::vector<String> strs{"hello", "hello, world", "It's TiFlash", "     ", ""};
 
 	MutableColumnPtr csp = ColumnString::create();
 	for (const auto &str: strs)
@@ -262,7 +262,7 @@ TEST_F(StringPad, string_pad_utf8_padding_unit_Test)
 
 	auto &factory = FunctionFactory::instance();
 
-	std::vector<String> strs{"你好,", "你好， 世界", "这是 TheFlash", "     ", ""};
+	std::vector<String> strs{"你好,", "你好， 世界", "这是 TiFlash", "     ", ""};
 
 	MutableColumnPtr csp = ColumnString::create();
 	for (const auto &str: strs)
@@ -339,7 +339,7 @@ TEST_F(StringPad, string_pad_fixed_utf8_padding_unit_Test)
 
 	auto &factory = FunctionFactory::instance();
 
-	std::vector<String> strs{"你好,", "你好， 世界", "这是 TheFlash", "     ", ""};
+	std::vector<String> strs{"你好,", "你好， 世界", "这是 TiFlash", "     ", ""};
 
 	MutableColumnPtr csp = ColumnFixedString::create(30);
 	for (const auto &str: strs)
@@ -568,7 +568,7 @@ TEST_F(StringPad, string_pad_empty_utf8_padding_unit_Test)
 
     auto &factory = FunctionFactory::instance();
 
-    std::vector<String> strs{"你好,", "你好， 世界", "这是 TheFlash", "     ", ""};
+    std::vector<String> strs{"你好,", "你好， 世界", "这是 TiFlash", "     ", ""};
 
     MutableColumnPtr csp = ColumnString::create();
     for (const auto &str: strs)

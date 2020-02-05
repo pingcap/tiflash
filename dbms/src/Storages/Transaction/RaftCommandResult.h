@@ -1,8 +1,8 @@
 #pragma once
 
-#include <memory>
-
 #include <Storages/Transaction/Types.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -20,9 +20,7 @@ struct RaftCommandResult : private boost::noncopyable
         Default,
         IndexError,
         BatchSplit,
-        UpdateTable,
         ChangePeer,
-        CompactLog,
         CommitMerge
     };
 

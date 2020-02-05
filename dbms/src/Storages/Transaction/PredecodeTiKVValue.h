@@ -25,14 +25,11 @@ constexpr ColumnID DeleteColumnID = EmptyColumnID - 1;
 // should keep the same way tidb does.
 Field GenDefaultField(const TiDB::ColumnInfo & col_info);
 
-struct ValueDecodeHelper
+struct RowPreDecoder
 {
     const TiDB::TableInfo & table_info;
-    const ColumnIdToIndex & schema_all_column_ids;
-    void forceDecodeTiKVValue(const TiKVValue & value);
-
-private:
-    bool forceDecodeTiKVValue(DecodedFields & decoded_fields, DecodedFields & unknown);
+    const ColumnIdToIndex & column_lut;
+    void preDecodeRow(const TiKVValue & value);
 };
 
 using CFDataPreDecodeQueue = std::deque<std::shared_ptr<const TiKVValue>>;

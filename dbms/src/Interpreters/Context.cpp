@@ -25,6 +25,7 @@
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/SchemaSyncService.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/PartPathSelector.h>
@@ -53,7 +54,6 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Raft/RaftService.h>
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -155,7 +155,6 @@ struct ContextShared
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
-    RaftServicePtr raft_service;                            /// Raft service instance.
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
 
@@ -1432,22 +1431,6 @@ DDLWorker & Context::getDDLWorker() const
     return *shared->ddl_worker;
 }
 
-void Context::initializeRaftService()
-{
-    auto lock = getLock();
-    if (shared->raft_service)
-        throw Exception("Raft Service has already been initialized.", ErrorCodes::LOGICAL_ERROR);
-    shared->raft_service = std::make_shared<RaftService>(*this);
-}
-
-void Context::shutdownRaftService()
-{
-    auto lock = getLock();
-    if (!shared->raft_service)
-        return;
-    shared->raft_service.reset();
-}
-
 void Context::createTMTContext(const std::vector<std::string> & pd_addrs,
                                const std::string & learner_key,
                                const std::string & learner_value,
@@ -1477,14 +1460,6 @@ PartPathSelector & Context::getPartPathSelector()
     if (!shared->part_path_selector_ptr)
         throw Exception("PartPathSelector is not initialized.", ErrorCodes::LOGICAL_ERROR);
     return *shared->part_path_selector_ptr;
-}
-
-RaftService & Context::getRaftService()
-{
-    auto lock = getLock();
-    if (!shared->raft_service)
-        throw Exception("Raft Service is not initialized.", ErrorCodes::LOGICAL_ERROR);
-    return *shared->raft_service;
 }
 
 void Context::initializeSchemaSyncService()

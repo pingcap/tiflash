@@ -9,8 +9,7 @@ namespace DB
 {
 
 // TODO move to Settings.h
-static const Seconds REGION_PERSIST_PERIOD(300);      // 5 minutes
-static const Seconds KVSTORE_TRY_PERSIST_PERIOD(180); // 3 minutes
+static const Seconds REGION_CACHE_GC_PERIOD(60 * 5);
 
 class Context;
 class IAST;
@@ -21,8 +20,6 @@ class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
 class RegionTable;
-struct RaftContext;
-
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 struct RaftCommandResult;
@@ -31,13 +28,17 @@ class KVStoreTaskLock;
 struct MockTiDBTable;
 struct TiKVRangeKey;
 
+class TMTContext;
+
+extern "C" struct SnapshotDataView;
+enum TiFlashApplyRes : uint32_t;
+
 /// TODO: brief design document.
 class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(const std::string & data_dir);
     void restore(const IndexReaderCreateFunc & index_reader_create);
-
     RegionPtr getRegion(const RegionID region_id) const;
 
     using RegionsAppliedindexMap = std::unordered_map<RegionID, std::pair<RegionPtr, UInt64>>;
@@ -47,28 +48,34 @@ public:
 
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
 
-    bool onSnapshot(RegionPtr new_region, Context * context, const RegionsAppliedindexMap & regions_to_check = {}, bool try_flush_region = false);
+    bool onSnapshot(
+        RegionPtr new_region, TMTContext & tmt, const RegionsAppliedindexMap & regions_to_check = {}, bool try_flush_region = false);
 
-    // TODO: remove RaftContext and use Context + CommandServerReaderWriter
-    void onServiceCommand(enginepb::CommandRequestBatch && cmds, RaftContext & context);
-
-    // Send all regions status to remote TiKV.
-    void report(RaftContext & context);
-
-    // Persist chosen regions.
-    // Currently we also trigger region files GC in it.
-    bool tryPersist(
-        const Seconds kvstore_try_persist_period = KVSTORE_TRY_PERSIST_PERIOD, const Seconds region_persist_period = REGION_PERSIST_PERIOD);
+    void gcRegionCache(Seconds gc_persist_period = REGION_CACHE_GC_PERIOD);
 
     void tryPersist(const RegionID region_id);
 
     size_t regionSize() const;
+    TiFlashApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
+        raft_cmdpb::AdminResponse && response,
+        UInt64 region_id,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt);
+    TiFlashApplyRes handleWriteRaftCmd(
+        raft_cmdpb::RaftCmdRequest && request, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SnapshotDataView & lock_buff,
+        const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, uint64_t index, uint64_t term, TMTContext & tmt);
+    bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);
+    void handleDestroy(UInt64 region_id, TMTContext & tmt);
 
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
-    friend void dbgFuncRemoveRegion(Context &, const ASTs &, std::function<void(const std::string &)>);
-    void removeRegion(const RegionID region_id, RegionTable * region_table, const KVStoreTaskLock & task_lock);
+    friend void dbgFuncRemoveRegion(Context &, const ASTs &, /*DBGInvoker::Printer*/ std::function<void(const std::string &)>);
+    void removeRegion(
+        const RegionID region_id, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock);
+    void mockRemoveRegion(const RegionID region_id, RegionTable & region_table);
     KVStoreTaskLock genTaskLock() const;
 
     using RegionManageLock = std::lock_guard<std::mutex>;
@@ -82,9 +89,8 @@ private:
 
     RegionPersister region_persister;
 
-    std::atomic<Timepoint> last_try_persist_time = Clock::now();
+    std::atomic<Timepoint> last_gc_time = Clock::now();
 
-    // onServiceCommand and onSnapshot should not be called concurrently
     mutable std::mutex task_mutex;
     // region_range_index must be protected by task_mutex. It's used to search for region by range.
     // region merge/split/apply-snapshot/remove will change the range.

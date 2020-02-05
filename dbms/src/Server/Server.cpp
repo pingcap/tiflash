@@ -26,9 +26,9 @@
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
-#include <Raft/RaftService.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -38,18 +38,21 @@
 #include <common/getMemoryAmount.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
+
 #include <ext/scope_guard.h>
 #include <memory>
+
 #include "ClusterManagerService.h"
 #include "HTTPHandlerFactory.h"
-#include "MetricsTransmitter.h"
 #include "MetricsPrometheus.h"
+#include "MetricsTransmitter.h"
 #include "StatusFile.h"
 #include "TCPHandlerFactory.h"
 
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
+#include <grpc++/grpc++.h>
 #endif
 
 namespace CurrentMetrics
@@ -93,16 +96,14 @@ void Server::initialize(Poco::Util::Application & self)
 
 std::string Server::getDefaultCorePath() const { return getCanonicalPath(config().getString("path")) + "cores"; }
 
-extern "C" void run_tiflash_proxy(int, const char **);
-
-struct TiFlashProxy
+struct TiFlashProxyConfig
 {
     static const std::string config_prefix;
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool inited = false;
 
-    TiFlashProxy(Poco::Util::LayeredConfiguration & config)
+    TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
         if (!config.has(config_prefix))
             return;
@@ -127,7 +128,7 @@ struct TiFlashProxy
     }
 };
 
-const std::string TiFlashProxy::config_prefix = "flash.proxy";
+const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
 int Server::main(const std::vector<std::string> & /*args*/)
 {
@@ -398,7 +399,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// After the system database is created, attach virtual system tables (in addition to query_log and part_log)
     attachSystemTablesServer(*global_context->getDatabase("system"), has_zookeeper);
     /// Load raft related configs ahead of loading metadata, as TMT storage relies on TMT context, which needs these configs.
-    bool need_raft_service = false;
     std::vector<std::string> pd_addrs;
     const std::string learner_key = "engine";
     const std::string learner_value = "tiflash";
@@ -413,8 +413,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (config().has("raft"))
     {
-        need_raft_service = true;
-
         if (config().has("raft.pd_addr"))
         {
             String pd_service_addrs = config().getString("raft.pd_addr");
@@ -531,14 +529,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         grpc::ServerBuilder builder;
         builder.AddListeningPort(flash_server_addr, grpc::InsecureServerCredentials());
 
-        /// Init and register raft service if necessary.
-        if (need_raft_service)
-        {
-            global_context->initializeRaftService();
-            builder.RegisterService(&(global_context->getRaftService()));
-            LOG_INFO(log, "Raft service registered");
-        }
-
         /// Init and register flash service.
         flash_service = std::make_unique<FlashService>(*this);
         builder.RegisterService(flash_service.get());
@@ -566,24 +556,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "Begin to shut down flash service");
         flash_service.reset();
         LOG_INFO(log, "Shut down flash service");
-
-        /// Close raft service if necessary.
-        if (need_raft_service)
-        {
-            LOG_INFO(log, "Begin to shut down raft service");
-            global_context->shutdownRaftService();
-            LOG_INFO(log, "Shut down raft service");
-        }
     });
 
-    TiFlashProxy proxy(config());
+    TiFlashProxyConfig proxy_conf(config());
+    TiFlashServer tiflash_instance_wrap{.tmt = global_context->getTMTContext()};
+    TiFlashServerHelper helper{.inner = &tiflash_instance_wrap,
+        .fn_gc_buff = GcBuff,
+        .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
+        .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
+        .fn_handle_apply_snapshot = HandleApplySnapshot,
+        .fn_atomic_update_proxy = AtomicUpdateProxy,
+        .fn_handle_destroy = HandleDestroy,
 
-    auto proxy_runner = std::thread([&proxy, &log]() {
-        if (!proxy.inited)
+        // a special number, also defined in proxy
+        .magic_number = 0x13579BDF,
+        .version = 1};
+
+    auto proxy_runner = std::thread([&proxy_conf, &log, &helper]() {
+        if (!proxy_conf.inited)
             return;
 
         LOG_INFO(log, "Start tiflash proxy");
-        run_tiflash_proxy((int)proxy.args.size(), proxy.args.data());
+        run_tiflash_proxy_ffi((int)proxy_conf.args.size(), proxy_conf.args.data(), &helper);
         LOG_INFO(log, "End tiflash proxy");
     });
 

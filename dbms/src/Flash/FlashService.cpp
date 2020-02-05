@@ -1,9 +1,7 @@
-#include <Flash/FlashService.h>
-
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
-#include <Raft/RaftService.h>
+#include <Flash/FlashService.h>
 #include <Server/IServer.h>
 #include <grpcpp/server_builder.h>
 

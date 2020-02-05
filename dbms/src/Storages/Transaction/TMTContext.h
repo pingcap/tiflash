@@ -18,6 +18,9 @@ using KVStorePtr = std::shared_ptr<KVStore>;
 class SchemaSyncer;
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
+class BackgroundService;
+using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
+
 class TMTContext : private boost::noncopyable
 {
 public:
@@ -30,6 +33,10 @@ public:
     const RegionTable & getRegionTable() const;
     RegionTable & getRegionTable();
 
+    const BackgroundService & getBackgroundService() const;
+    BackgroundService & getBackgroundService();
+
+    Context & getContext();
     bool isInitialized() const;
 
     bool isBgFlushDisabled() const { return disable_bg_flush; }
@@ -53,9 +60,11 @@ public:
     ::TiDB::StorageEngine getEngineType() const { return engine; }
 
 private:
+    Context & context;
     KVStorePtr kvstore;
     ManagedStorages storages;
     RegionTable region_table;
+    BackGroundServicePtr background_service;
 
 private:
     KVClusterPtr cluster;

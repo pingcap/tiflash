@@ -1,20 +1,22 @@
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable (tikv_keyvalue gtest_tikv_keyvalue.cpp)
-target_link_libraries (tikv_keyvalue dbms gtest_main)
-
 add_executable (region_persister region_persister.cpp)
 target_link_libraries (region_persister dbms)
-
-add_executable (kvstore kvstore.cpp)
-target_link_libraries (kvstore dbms)
-
-add_executable (table_info gtest_table_info.cpp)
-target_link_libraries (table_info dbms clickhouse_functions gtest_main)
 
 add_executable (region_test region.cpp)
 target_link_libraries (region_test dbms)
 
-add_executable(type_mapping gtest_type_mapping.cpp)
-target_link_libraries(type_mapping dbms gtest_main)
+# glob all unit tests of tmt into gtests_tmt
+macro (grep_gtest_sources BASE_DIR DST_VAR)
+    # Cold match files that are not in tests/ directories
+    file (GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
+endmacro ()
 
+# attach all tmt gtest sources
+grep_gtest_sources (${ClickHouse_SOURCE_DIR}/dbms/src/Storages/Transaction/tests gtests_tmt_sources)
+
+add_executable (gtests_tmt EXCLUDE_FROM_ALL ${gtests_tmt_sources})
+target_include_directories (gtests_tmt BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
+target_link_libraries (gtests_tmt gtest_main dbms)
+target_compile_options (gtests_tmt PRIVATE -Wno-unknown-pragmas)
+add_check (gtests_tmt)

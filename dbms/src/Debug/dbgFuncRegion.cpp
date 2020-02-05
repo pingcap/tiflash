@@ -8,10 +8,10 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiKVRange.h>
-#include <Storages/Transaction/applySnapshot.h>
 #include <Storages/Transaction/tests/region_helper.h>
 
 namespace DB
@@ -66,7 +66,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
 
     TMTContext & tmt = context.getTMTContext();
     RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
-    tmt.getKVStore()->onSnapshot(region, &context);
+    tmt.getKVStore()->onSnapshot(region, tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -154,7 +154,7 @@ void dbgFuncRegionSnapshotWithData(Context & context, const ASTs & args, DBGInvo
         MockTiKV::instance().getRaftIndex(region_id);
     }
 
-    applySnapshot(tmt.getKVStore(), region, &context, false);
+    tmt.getKVStore()->tryApplySnapshot(region, context, false);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -181,33 +181,27 @@ void dbgFuncRegionSnapshot(Context & context, const ASTs & args, DBGInvoker::Pri
 
     TMTContext & tmt = context.getTMTContext();
 
-    enginepb::SnapshotRequest req;
-    bool is_readed = false;
-
-    *(req.mutable_state()->mutable_peer()) = createPeer(1, true);
-
     metapb::Region region_info;
+    SnapshotDataView lock_cf;
+    SnapshotDataView write_cf;
+    SnapshotDataView default_cf;
+
     region_info.set_id(region_id);
     region_info.set_start_key(RecordKVFormat::genKey(table_id, start).getStr());
     region_info.set_end_key(RecordKVFormat::genKey(table_id, end).getStr());
-    *(region_info.mutable_peers()->Add()) = createPeer(1, true);
-    *(region_info.mutable_peers()->Add()) = createPeer(2, false);
-    *(req.mutable_state()->mutable_region()) = region_info;
 
-    *(req.mutable_state()->mutable_apply_state()) = initialApplyState();
+    *region_info.add_peers() = createPeer(1, true);
+    *region_info.add_peers() = createPeer(2, true);
+    auto peer_id = 1;
 
-    (req.mutable_state()->mutable_apply_state())->set_applied_index(MockTiKV::instance().getRaftIndex(region_id));
-
-    // TODO: Put data into snapshot cmd
-
-    auto reader = [&](enginepb::SnapshotRequest * out) {
-        if (is_readed)
-            return false;
-        *out = req;
-        is_readed = true;
-        return true;
-    };
-    applySnapshot(tmt.getKVStore(), reader, &context);
+    tmt.getKVStore()->handleApplySnapshot(std::move(region_info),
+        peer_id,
+        (lock_cf),
+        (write_cf),
+        (default_cf),
+        MockTiKV::instance().getRaftIndex(region_id),
+        RAFT_INIT_LOG_TERM,
+        tmt);
 
     std::stringstream ss;
     ss << "put region #" << region_id << ", range[" << start << ", " << end << ")"
@@ -334,7 +328,7 @@ void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Print
     TMTContext & tmt = context.getTMTContext();
     KVStorePtr & kvstore = tmt.getKVStore();
     RegionTable & region_table = tmt.getRegionTable();
-    kvstore->removeRegion(region_id, &region_table, kvstore->genTaskLock());
+    kvstore->mockRemoveRegion(region_id, region_table);
 
     std::stringstream ss;
     ss << "remove region #" << region_id;

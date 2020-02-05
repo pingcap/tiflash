@@ -11,7 +11,7 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-void RegionPersister::drop(RegionID region_id)
+void RegionPersister::drop(RegionID region_id, const RegionTaskLock &)
 {
     WriteBatch wb;
     wb.delPage(region_id);
@@ -33,50 +33,37 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     }
 }
 
-void RegionPersister::persist(const Region & region, const RegionTaskLock & lock)
-{
-    UInt64 applied_index = region.appliedIndex();
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        auto cache = page_storage.getEntry(region.id());
-        if (cache.isValid() && cache.tag == applied_index)
-        {
-            LOG_DEBUG(log, region.toString(false) << " ignore persist because of same applied index " << applied_index);
-            return;
-        }
-    }
-    doPersist(region, &lock);
-}
+void RegionPersister::persist(const Region & region, const RegionTaskLock & lock) { doPersist(region, &lock); }
 
 void RegionPersister::persist(const Region & region) { doPersist(region, nullptr); }
 
 void RegionPersister::doPersist(const Region & region, const RegionTaskLock * lock)
 {
-    // Support only on thread persist.
-    size_t dirty_flag = region.dirtyFlag();
-
+    // Support only one thread persist.
     RegionCacheWriteElement region_buffer;
     computeRegionWriteBuffer(region, region_buffer);
 
     if (lock)
-        doPersist(region_buffer, *lock);
+        doPersist(region_buffer, *lock, region);
     else
-        doPersist(region_buffer, region_manager.genRegionTaskLock(region.id()));
+        doPersist(region_buffer, region_manager.genRegionTaskLock(region.id()), region);
 
     region.markPersisted();
-    region.decDirtyFlag(dirty_flag);
 }
 
-void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock &)
+void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, const RegionTaskLock &, const Region & region)
 {
     auto & [region_id, buffer, region_size, applied_index] = region_write_buffer;
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto entry = page_storage.getEntry(region_id);
-    if (entry.isValid() && entry.tag > applied_index)
+    auto cache = page_storage.getEntry(region_id);
+    if (cache.isValid() && cache.tag > applied_index)
+        return;
+
+    if (region.isPendingRemove())
     {
-        LOG_DEBUG(log, "[region " << region_id << ", applied index " << applied_index << "] have already persisted index " << entry.tag);
+        LOG_DEBUG(log, "no need to persist " << region.toString(false) << " because of pending remove");
         return;
     }
 

@@ -1,5 +1,3 @@
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
-
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Columns/ColumnSet.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -7,6 +5,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
@@ -15,7 +14,7 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/Transaction/Codec.h>
+#include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
 
 namespace DB

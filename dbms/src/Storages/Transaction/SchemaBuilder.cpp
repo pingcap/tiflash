@@ -361,13 +361,13 @@ void SchemaBuilder<Getter>::applyAlterPartition(TiDB::DBInfoPtr db_info, TableID
     }
 }
 
-std::vector<std::pair<TableInfoPtr, DBInfoPtr>> collectPartitionTables(TableInfoPtr table_info, DBInfoPtr db_info)
+std::vector<std::pair<TableInfoPtr, DBInfoPtr>> collectPartitionTables(const TableInfo & table_info, DBInfoPtr db_info)
 {
     std::vector<std::pair<TableInfoPtr, DBInfoPtr>> all_tables;
     // Collect All partition tables.
-    for (const auto& part_def : table_info->partition.definitions)
+    for (const auto & part_def : table_info.partition.definitions)
     {
-        auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
+        auto new_table_info = table_info.producePartitionTableInfo(part_def.id);
         all_tables.emplace_back(std::make_shared<TableInfo>(new_table_info), db_info);
     }
     return all_tables;
@@ -391,24 +391,29 @@ void SchemaBuilder<Getter>::applyRenameTable(DBInfoPtr db_info, DatabaseID old_d
         old_db_info = db;
     }
 
-    auto table_info = getter.getTableInfo(db_info->id, table_id);
-    if (table_info == nullptr)
+    auto new_table_info = getter.getTableInfo(db_info->id, table_id);
+    if (new_table_info == nullptr)
     {
         throw Exception("miss old table id in TiKV " + std::to_string(table_id));
     }
 
     auto & tmt_context = context.getTMTContext();
     auto storage_to_rename = tmt_context.getStorages().get(table_id);
+    // Note that table_info should keep consistent with current ch schema, but table_info in tikv may be newer,
+    // corresponding the case that rename and alter command are in same schema sync batch.
+    // So we should use the old table_info with new table name.
+    TableInfo table_info = storage_to_rename->getTableInfo();
+    table_info.name = new_table_info->name;
     if (storage_to_rename == nullptr)
     {
         throw Exception("miss old table id in Flash " + std::to_string(table_id));
     }
 
-    applyRenameTableImpl(old_db_info->name, db_info->name, storage_to_rename->getTableName(), table_info->name);
+    applyRenameTableImpl(old_db_info->name, db_info->name, storage_to_rename->getTableName(), table_info.name);
 
-    storage_to_rename->setTableInfo(*table_info);
+    storage_to_rename->setTableInfo(table_info);
 
-    if (table_info->isLogicalPartitionTable())
+    if (table_info.isLogicalPartitionTable())
     {
         const auto & table_dbs = collectPartitionTables(table_info, db_info);
         alterAndRenameTables(table_dbs);
@@ -849,7 +854,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
             all_tables.emplace_back(table, db);
             if (table->isLogicalPartitionTable())
             {
-                auto partition_tables = collectPartitionTables(table, db);
+                auto partition_tables = collectPartitionTables(*table, db);
                 all_tables.insert(all_tables.end(), partition_tables.begin(), partition_tables.end());
             }
         }
