@@ -381,10 +381,10 @@ namespace ErrorCodes
     extern const int STD_EXCEPTION = 1001;
     extern const int UNKNOWN_EXCEPTION = 1002;
 
-    extern const int THEFLASH_UNHANDLED_TYPE_CONVERTION = 9000;
-    extern const int THEFLASH_BAD_REQUEST = 9001;
-    extern const int THEFLASH_ENCODER_ERROR = 9002;
-    extern const int THEFLASH_SESSION_ERROR = 9003;
+    extern const int TIFLASH_UNHANDLED_TYPE_CONVERTION = 9000;
+    extern const int TIFLASH_BAD_REQUEST = 9001;
+    extern const int TIFLASH_ENCODER_ERROR = 9002;
+    extern const int TIFLASH_SESSION_ERROR = 9003;
     extern const int DECIMAL_OVERFLOW_ERROR = 9004;
     extern const int FILE_SIZE_NOT_MATCH = 9005;
     extern const int PAGE_SIZE_NOT_MATCH = 9006;
