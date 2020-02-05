@@ -327,20 +327,10 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         if (cid == -1)
         {
             // Column ID -1 return the handle column
-            if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
-            {
-                required_columns.push_back(pk_handle_col->get().name);
-                auto pair = storage->getColumns().getPhysical(pk_handle_col->get().name);
-                source_columns.push_back(pair);
-                is_ts_column.push_back(false);
-            }
-            else
-            {
-                required_columns.push_back(MutableSupport::tidb_pk_column_name);
-                auto pair = storage->getColumns().getPhysical(MutableSupport::tidb_pk_column_name);
-                source_columns.push_back(pair);
-                is_ts_column.push_back(false);
-            }
+            required_columns.push_back(handle_column_name);
+            auto pair = storage->getColumns().getPhysical(handle_column_name);
+            source_columns.push_back(pair);
+            is_ts_column.push_back(false);
             handle_col_id = i;
             continue;
         }
@@ -380,20 +370,10 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         // if need to add filter on handle column, and
         // the handle column is not selected in ts, add
         // the handle column
-        if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
-        {
-            required_columns.push_back(pk_handle_col->get().name);
-            auto pair = storage->getColumns().getPhysical(pk_handle_col->get().name);
-            source_columns.push_back(pair);
-            is_ts_column.push_back(false);
-        }
-        else
-        {
-            required_columns.push_back(MutableSupport::tidb_pk_column_name);
-            auto pair = storage->getColumns().getPhysical(MutableSupport::tidb_pk_column_name);
-            source_columns.push_back(pair);
-            is_ts_column.push_back(false);
-        }
+        required_columns.push_back(handle_column_name);
+        auto pair = storage->getColumns().getPhysical(handle_column_name);
+        source_columns.push_back(pair);
+        is_ts_column.push_back(false);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
