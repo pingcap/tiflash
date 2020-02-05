@@ -1118,7 +1118,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             as(Intern, root)->parent = nullptr;
         --height;
 
-        LOG_TRACE(log, "height " + DB::toString(height + 1) + " -> " + DB::toString(height));
+        LOG_TRACE(log, "height " << DB::toString(height + 1) << " -> " << DB::toString(height));
 
         return {};
     }
@@ -1141,7 +1141,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
 
             ++height;
 
-            LOG_TRACE(log, "height " + DB::toString(height - 1) + " -> " + DB::toString(height));
+            LOG_TRACE(log, "height " << DB::toString(height - 1) << " -> " << DB::toString(height));
         }
 
         auto pos = parent->searchChild(asNode(node));
@@ -1196,7 +1196,7 @@ typename DT_CLASS::InternPtr DT_CLASS::afterNodeUpdated(T * node)
             sibling         = as(T, parent->children[sibling_pos]);
         }
 
-        if (sibling->parent != node->parent)
+        if (unlikely(sibling->parent != node->parent))
             throw Exception("parent not the same");
 
         auto after_adopt = (node->count + sibling->count) / 2;
