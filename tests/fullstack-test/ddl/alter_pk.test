@@ -10,6 +10,14 @@ mysql> alter table test.t add primary key new_pk(a,b,c) USING RTREE;
 
 SLEEP 15
 
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++---+---+---+------+------+------+
+| a | b | c | d    | e    | f    |
++---+---+---+------+------+------+
+| 1 | 1 | 1 |    1 |    1 |    1 |
+| 1 | 2 | 3 | NULL | NULL |    1 |
++---+---+---+------+------+------+
+
 >> desc test.t
 ┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
 │ a           │ Int32           │              │                    │
@@ -20,7 +28,6 @@ SLEEP 15
 │ f           │ Nullable(Int32) │              │                    │
 │ _tidb_rowid │ Int64           │              │                    │
 └─────────────┴─────────────────┴──────────────┴────────────────────┘
-
 
 mysql> alter table test.t drop primary key;
 
