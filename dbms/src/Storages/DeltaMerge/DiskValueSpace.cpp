@@ -208,7 +208,7 @@ void DiskValueSpace::applyAppendToWriteBatches(const AppendTaskPtr & task, Write
 {
     assert(is_delta_vs == true);
     // Serialize meta updates and return by wbs.meta, later we will commit them in DeltaMergeStore level.
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
     serializePacks(buf, packs.begin(), packs.begin() + (packs.size() - task->remove_packs_back), task->append_packs);
     const auto data_size = buf.count();
     wbs.meta.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
@@ -328,7 +328,7 @@ void DiskValueSpace::clearPacks(WriteBatch & removed_wb)
 void DiskValueSpace::replacePacks(
     WriteBatch & meta_wb, WriteBatch & removed_wb, Packs && new_packs, MutableColumnMap && cache_, size_t cache_packs_)
 {
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
     serializePacks(buf, new_packs.begin(), new_packs.end(), {});
     auto data_size = buf.count();
     meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
@@ -357,7 +357,7 @@ void DiskValueSpace::setPacks(WriteBatch & meta_wb, Packs && new_packs)
 
 void DiskValueSpace::setPacksAndCache(WriteBatch & meta_wb, Packs && new_packs, MutableColumnMap && cache_, size_t cache_packs_)
 {
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
     serializePacks(buf, new_packs.begin(), new_packs.end(), {});
     auto data_size = buf.count();
     meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
@@ -371,7 +371,7 @@ void DiskValueSpace::appendPackWithCache(const OpContext & context, Pack && pack
     // should only append to delta
     assert(is_delta_vs);
     {
-        MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+        MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
         serializePacks(buf, packs.begin(), packs.end(), &pack);
         auto       data_size = buf.count();
         WriteBatch meta_wb;
@@ -664,7 +664,7 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
         new_packs.emplace_back(delete_range);
 
     {
-        MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+        MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
         serializePacks(buf, new_packs.begin(), new_packs.end(), {});
         auto data_size = buf.count();
         meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
@@ -769,7 +769,7 @@ Packs DiskValueSpace::getPacksAfter(size_t rows, size_t deletes) const
 
 void DiskValueSpace::check(const PageReader & meta_page_reader, const String & when)
 {
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
     serializePacks(buf, packs.begin(), packs.end());
     auto   size        = buf.count();
     char * data_buffer = (char *)::malloc(size);

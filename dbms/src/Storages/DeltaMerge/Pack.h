@@ -19,7 +19,7 @@ namespace DB
 {
 namespace DM
 {
-static constexpr size_t CHUNK_SERIALIZE_BUFFER_SIZE = 65536;
+static constexpr size_t PACK_SERIALIZE_BUFFER_SIZE = 65536;
 
 
 struct ColumnMeta
@@ -33,7 +33,7 @@ struct ColumnMeta
 };
 using ColumnMetas = std::vector<ColumnMeta>;
 
-static std::atomic<UInt64> CHUNK_MAX_CHUNK_ID = 0;
+static std::atomic<UInt64> PACK_MAX_PACK_ID = 0;
 
 class Pack
 {
@@ -46,11 +46,11 @@ public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
     Pack(Handle handle_first_, Handle handle_last_)
-        : pack_id(++CHUNK_MAX_CHUNK_ID), handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false)
+        : pack_id(++PACK_MAX_PACK_ID), handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false)
     {
     }
     explicit Pack(const HandleRange & delete_range)
-        : pack_id(++CHUNK_MAX_CHUNK_ID), handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
+        : pack_id(++PACK_MAX_PACK_ID), handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
     {
     }
 
