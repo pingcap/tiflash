@@ -7,10 +7,9 @@
 namespace DB
 {
 
-void Region::tryPreDecodeTiKVValue(Context & context)
+void Region::tryPreDecodeTiKVValue(TMTContext & tmt)
 {
     auto table_id = getMappedTableID();
-    auto & tmt = context.getTMTContext();
     auto storage = tmt.getStorages().get(table_id);
     if (!storage)
         return;

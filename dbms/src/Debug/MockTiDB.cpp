@@ -1,5 +1,3 @@
-#include <Debug/MockTiDB.h>
-
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeMyDate.h>
@@ -9,6 +7,7 @@
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Debug/MockTiDB.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
@@ -51,7 +50,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
             if (drop_regions)
             {
                 for (auto & e : region_table.getRegionsByTable(partition.id))
-                    kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
+                    kvstore->mockRemoveRegion(e.first, region_table);
                 region_table.removeTable(partition.id);
             }
         }
@@ -63,7 +62,7 @@ TablePtr MockTiDB::dropTableInternal(Context & context, const String & database_
     if (drop_regions)
     {
         for (auto & e : region_table.getRegionsByTable(table->id()))
-            kvstore->removeRegion(e.first, &region_table, kvstore->genTaskLock());
+            kvstore->mockRemoveRegion(e.first, region_table);
         region_table.removeTable(table->id());
     }
 
@@ -135,8 +134,8 @@ DatabaseID MockTiDB::newDataBase(const String & database_name)
     return schema_id;
 }
 
-TableID MockTiDB::newTable(const String & database_name, const String & table_name,
-        const ColumnsDescription & columns, Timestamp tso, const String & handle_pk_name)
+TableID MockTiDB::newTable(const String & database_name, const String & table_name, const ColumnsDescription & columns, Timestamp tso,
+    const String & handle_pk_name)
 {
     std::lock_guard lock(tables_mutex);
 
@@ -198,8 +197,8 @@ Field getDefaultValue(const ASTPtr & default_value_ast)
     const auto * func = typeid_cast<const ASTFunction *>(default_value_ast.get());
     if (func != nullptr)
     {
-        const auto *value_ptr = typeid_cast<const ASTLiteral *>(
-                typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
+        const auto * value_ptr
+            = typeid_cast<const ASTLiteral *>(typeid_cast<const ASTExpressionList *>(func->arguments.get())->children[0].get());
         return value_ptr->value;
     }
     else if (typeid_cast<const ASTLiteral *>(default_value_ast.get()) != nullptr)
