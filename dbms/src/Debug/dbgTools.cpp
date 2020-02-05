@@ -3,7 +3,6 @@
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTLiteral.h>
-#include <Raft/RaftContext.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
@@ -29,20 +28,19 @@ using TiDB::TableInfo;
 
 RegionPtr createRegion(TableID table_id, RegionID region_id, const HandleID & start, const HandleID & end)
 {
-    enginepb::SnapshotRequest request;
-    enginepb::SnapshotState * state = request.mutable_state();
-    state->mutable_region()->set_id(region_id);
+    metapb::Region region;
+    metapb::Peer peer;
+    region.set_id(region_id);
 
     TiKVKey start_key = RecordKVFormat::genKey(table_id, start);
     TiKVKey end_key = RecordKVFormat::genKey(table_id, end);
 
-    state->mutable_region()->set_start_key(start_key.getStr());
-    state->mutable_region()->set_end_key(end_key.getStr());
+    region.set_start_key(start_key.getStr());
+    region.set_end_key(end_key.getStr());
 
-    RegionMeta region_meta(state->peer(), state->region(), initialApplyState());
+    RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
     region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
-    RegionPtr region = std::make_shared<Region>(std::move(region_meta));
-    return region;
+    return std::make_shared<Region>(std::move(region_meta));
 }
 
 Regions createRegions(TableID table_id, size_t region_num, size_t key_num_each_region, HandleID handle_begin, RegionID new_region_id_begin)
@@ -74,17 +72,9 @@ void setupDelRequest(raft_cmdpb::Request * req, const std::string & cf, const Ti
     del->set_key(key.getStr());
 }
 
-void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, const TiKVKey & key, const TiKVValue & value,
-    UInt64 prewrite_ts, UInt64 commit_ts, bool del, const String pk = "pk")
+void addRequestsToRaftCmd(raft_cmdpb::RaftCmdRequest & request, const TiKVKey & key, const TiKVValue & value, UInt64 prewrite_ts,
+    UInt64 commit_ts, bool del, const String pk = "pk")
 {
-    {
-        enginepb::CommandRequestHeader * header = cmd->mutable_header();
-        header->set_region_id(region_id);
-        header->set_term(MockTiKV::instance().getRaftTerm(region_id));
-        header->set_index(MockTiKV::instance().getRaftIndex(region_id));
-        header->set_sync_log(false);
-    }
-
     TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
     const TiKVKey & lock_key = key;
 
@@ -93,9 +83,9 @@ void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, co
         TiKVValue lock_value = RecordKVFormat::encodeLockCfValue(Region::DelFlag, pk, prewrite_ts, 0);
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, prewrite_ts);
 
-        setupPutRequest(cmd->add_requests(), Region::lock_cf_name, lock_key, lock_value);
-        setupPutRequest(cmd->add_requests(), Region::write_cf_name, commit_key, commit_value);
-        setupDelRequest(cmd->add_requests(), Region::lock_cf_name, lock_key);
+        setupPutRequest(request.add_requests(), Region::lock_cf_name, lock_key, lock_value);
+        setupPutRequest(request.add_requests(), Region::write_cf_name, commit_key, commit_value);
+        setupDelRequest(request.add_requests(), Region::lock_cf_name, lock_key);
         return;
     }
 
@@ -105,9 +95,9 @@ void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, co
 
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value.toString());
 
-        setupPutRequest(cmd->add_requests(), Region::lock_cf_name, lock_key, lock_value);
-        setupPutRequest(cmd->add_requests(), Region::write_cf_name, commit_key, commit_value);
-        setupDelRequest(cmd->add_requests(), Region::lock_cf_name, lock_key);
+        setupPutRequest(request.add_requests(), Region::lock_cf_name, lock_key, lock_value);
+        setupPutRequest(request.add_requests(), Region::write_cf_name, commit_key, commit_value);
+        setupDelRequest(request.add_requests(), Region::lock_cf_name, lock_key);
     }
     else
     {
@@ -118,10 +108,10 @@ void addRequestsToRaftCmd(enginepb::CommandRequest * cmd, RegionID region_id, co
 
         TiKVValue commit_value = RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts);
 
-        setupPutRequest(cmd->add_requests(), Region::lock_cf_name, lock_key, lock_value);
-        setupPutRequest(cmd->add_requests(), Region::default_cf_name, prewrite_key, prewrite_value);
-        setupPutRequest(cmd->add_requests(), Region::write_cf_name, commit_key, commit_value);
-        setupDelRequest(cmd->add_requests(), Region::lock_cf_name, lock_key);
+        setupPutRequest(request.add_requests(), Region::lock_cf_name, lock_key, lock_value);
+        setupPutRequest(request.add_requests(), Region::default_cf_name, prewrite_key, prewrite_value);
+        setupPutRequest(request.add_requests(), Region::write_cf_name, commit_key, commit_value);
+        setupDelRequest(request.add_requests(), Region::lock_cf_name, lock_key);
     }
 }
 
@@ -294,10 +284,10 @@ void insert(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
         is_del = del;
     }
 
-    RaftContext raft_ctx(&context, nullptr, nullptr);
-    enginepb::CommandRequestBatch cmds;
-    addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, is_del);
-    tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
+    raft_cmdpb::RaftCmdRequest request;
+    addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, is_del);
+    tmt.getKVStore()->handleWriteRaftCmd(
+        std::move(request), region_id, MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
 }
 
 void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context)
@@ -313,12 +303,10 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
     UInt64 prewrite_ts = pd_client->getTS();
     UInt64 commit_ts = pd_client->getTS();
 
-    RaftContext raft_ctx(&context, nullptr, nullptr);
-    enginepb::CommandRequestBatch cmds;
-
-    addRequestsToRaftCmd(cmds.add_requests(), region_id, key, value, prewrite_ts, commit_ts, true);
-
-    tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
+    raft_cmdpb::RaftCmdRequest request;
+    addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, true);
+    tmt.getKVStore()->handleWriteRaftCmd(
+        std::move(request), region_id, MockTiKV::instance().getRaftIndex(region_id), MockTiKV::instance().getRaftTerm(region_id), tmt);
 }
 
 struct BatchCtrl
@@ -417,18 +405,17 @@ void batchInsert(const TiDB::TableInfo & table_info, std::unique_ptr<BatchCtrl> 
         UInt64 prewrite_ts = pd_client->getTS();
         UInt64 commit_ts = pd_client->getTS();
 
-        RaftContext raft_ctx(batch_ctrl->context, nullptr, nullptr);
-        enginepb::CommandRequestBatch cmds;
-        enginepb::CommandRequest * cmd = cmds.add_requests();
+        raft_cmdpb::RaftCmdRequest request;
 
         for (Int64 cnt = 0; cnt < batch_ctrl->batch_num; ++index, ++cnt)
         {
             TiKVKey key = RecordKVFormat::genKey(table_info.id, index);
             TiKVValue value = batch_ctrl->EncodeRow(table_info, fn_gen_magic_num(index));
-            addRequestsToRaftCmd(cmd, region->id(), key, value, prewrite_ts, commit_ts, batch_ctrl->del);
+            addRequestsToRaftCmd(request, key, value, prewrite_ts, commit_ts, batch_ctrl->del);
         }
 
-        tmt.getKVStore()->onServiceCommand(std::move(cmds), raft_ctx);
+        tmt.getKVStore()->handleWriteRaftCmd(std::move(request), region->id(), MockTiKV::instance().getRaftIndex(region->id()),
+            MockTiKV::instance().getRaftTerm(region->id()), tmt);
     }
 }
 
@@ -450,7 +437,7 @@ void concurrentBatchInsert(const TiDB::TableInfo & table_info, Int64 concurrent_
 
     Regions regions = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        tmt.getKVStore()->onSnapshot(region, &context);
+        tmt.getKVStore()->onSnapshot(region, tmt);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
