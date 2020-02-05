@@ -6,17 +6,20 @@
 namespace TiFlashBuildInfo
 {
 std::string getName() { return TIFLASH_NAME; }
+/// Semantic version.
 std::string getVersion() { return TIFLASH_VERSION; }
-std::string getGitTag() { return TIFLASH_GITTAG; }
-std::string getGitHash() { return TIFLASH_GITHASH; }
+/// Release version that follows PD/TiKV/TiDB convention.
+std::string getReleaseVersion() { return TIFLASH_RELEASE_VERSION; }
+std::string getGitHash() { return TIFLASH_GIT_HASH; }
+std::string getGitBranch() { return TIFLASH_GIT_BRANCH; }
 std::string getUTCBuildTime() { return TIFLASH_UTC_BUILD_TIME; }
 
 void outputDetail(std::ostream & os)
 {
-    os << getName() << std::endl
-       << "Version:        " << getVersion() << std::endl
-       << "Git Tag:        " << getGitTag() << std::endl
-       << "Git Hash:       " << getGitHash() << std::endl
-       << "UTC Build Time: " << getUTCBuildTime() << std::endl;
+    os << getName() << " " << getVersion() << std::endl
+       << "Release Version: " << getReleaseVersion() << std::endl
+       << "Git Commit Hash: " << getGitHash() << std::endl
+       << "Git Branch:      " << getGitBranch() << std::endl
+       << "UTC Build Time:  " << getUTCBuildTime() << std::endl;
 }
 } // namespace TiFlashBuildInfo
