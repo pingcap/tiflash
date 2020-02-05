@@ -17,6 +17,9 @@ using KVStorePtr = std::shared_ptr<KVStore>;
 class SchemaSyncer;
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
 
+class BackgroundService;
+using BackGroundServicePtr = std::unique_ptr<BackgroundService>;
+
 class TMTContext : private boost::noncopyable
 {
 public:
@@ -29,6 +32,10 @@ public:
     const RegionTable & getRegionTable() const;
     RegionTable & getRegionTable();
 
+    const BackgroundService & getBackgroundService() const;
+    BackgroundService & getBackgroundService();
+
+    Context & getContext();
     bool isInitialized() const;
 
     // TODO: get flusher args from config file
@@ -48,9 +55,11 @@ public:
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
 private:
+    Context & context;
     KVStorePtr kvstore;
     TMTStorages storages;
     RegionTable region_table;
+    BackGroundServicePtr background_service;
 
 private:
     KVClusterPtr cluster;

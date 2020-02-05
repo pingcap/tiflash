@@ -77,8 +77,6 @@ struct SystemLogs;
 using SystemLogsPtr = std::shared_ptr<SystemLogs>;
 class SharedQueries;
 using SharedQueriesPtr = std::shared_ptr<SharedQueries>;
-class RaftService;
-using RaftServicePtr = std::shared_ptr<RaftService>;
 class TiDBService;
 using TiDBServicePtr = std::shared_ptr<TiDBService>;
 class SchemaSyncService;
@@ -358,15 +356,12 @@ public:
     void setDDLWorker(std::shared_ptr<DDLWorker> ddl_worker);
     DDLWorker & getDDLWorker() const;
 
-    void initializeRaftService();
-    void shutdownRaftService();
     void createTMTContext(const std::vector<std::string> & pd_addrs,
                           const std::string & learner_key,
                           const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
                           const std::string & flash_service_address);
-    RaftService & getRaftService();
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();

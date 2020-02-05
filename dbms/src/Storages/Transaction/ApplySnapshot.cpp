@@ -4,10 +4,10 @@
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PDTiKVClient.h>
+#include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Storages/Transaction/applySnapshot.h>
 
 namespace DB
 {
@@ -17,13 +17,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 }
 
-static const std::string RegionSnapshotName = "RegionSnapshot";
-
-bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * context, bool try_flush_region)
+bool KVStore::tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region)
 {
-    Logger * log = &Logger::get(RegionSnapshotName);
+    auto & tmt = context.getTMTContext();
 
-    auto old_region = kvstore->getRegion(new_region->id());
+    auto old_region = getRegion(new_region->id());
     UInt64 old_applied_index = 0;
     KVStore::RegionsAppliedindexMap regions_to_check;
 
@@ -37,9 +35,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         }
     }
 
-    if (context)
     {
-        auto & tmt = context->getTMTContext();
         Timestamp safe_point = PDClientHelper::getGCSafePointWithRetry(tmt.getPDClient());
 
         HandleMap handle_map;
@@ -52,7 +48,7 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
             ss << "New range " << new_range->comparableKeys().first.key.toHex() << "," << new_range->comparableKeys().second.key.toHex()
                << " is overlapped with ";
 
-            kvstore->handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock & task_lock) {
+            handleRegionsByRangeOverlap(new_range->comparableKeys(), [&](RegionMap region_map, const KVStoreTaskLock & task_lock) {
                 for (const auto & region : region_map)
                 {
                     auto & region_delegate = region.second->makeRaftCommandDelegate(task_lock);
@@ -83,12 +79,12 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
                 if (pk_is_uint64)
                 {
                     const auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle(handle_range);
-                    getHandleMapByRange<UInt64>(*context, *storage, new_range[0], handle_map);
+                    getHandleMapByRange<UInt64>(context, *storage, new_range[0], handle_map);
                     if (n > 1)
-                        getHandleMapByRange<UInt64>(*context, *storage, new_range[1], handle_map);
+                        getHandleMapByRange<UInt64>(context, *storage, new_range[1], handle_map);
                 }
                 else
-                    getHandleMapByRange<Int64>(*context, *storage, handle_range, handle_map);
+                    getHandleMapByRange<Int64>(context, *storage, handle_range, handle_map);
             }
         }
 
@@ -109,59 +105,66 @@ bool applySnapshot(const KVStorePtr & kvstore, RegionPtr new_region, Context * c
         }
     }
 
-    return kvstore->onSnapshot(new_region, context, regions_to_check, try_flush_region);
+    return onSnapshot(new_region, tmt, regions_to_check, try_flush_region);
 }
 
-void applySnapshot(const KVStorePtr & kvstore, RequestReader read, Context * context)
+static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
 {
-    Logger * log = &Logger::get(RegionSnapshotName);
-
-    enginepb::SnapshotRequest request;
-    auto ok = read(&request);
-    if (!ok)
-        throw Exception("Read snapshot fail", ErrorCodes::LOGICAL_ERROR);
-
-    if (!request.has_state())
-        throw Exception("Failed to read snapshot state", ErrorCodes::LOGICAL_ERROR);
-
-    const auto & state = request.state();
-    IndexReaderPtr index_reader = nullptr;
-    auto meta = RegionMeta(state.peer(), state.region(), state.apply_state());
-    IndexReaderCreateFunc index_reader_create = [&](pingcap::kv::RegionVerID id) -> IndexReaderPtr {
-        if (context)
+    for (const auto & peer : region.peers())
+    {
+        if (peer.id() == peer_id)
         {
-            auto & tmt_ctx = context->getTMTContext();
-            return tmt_ctx.createIndexReader(id);
+            if (!peer.is_learner())
+                throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer is not learner, should not happen", ErrorCodes::LOGICAL_ERROR);
+            return peer;
         }
-        return nullptr;
-    };
+    }
+
+    throw Exception(std::string(__PRETTY_FUNCTION__) + ": peer " + DB::toString(peer_id) + " not found", ErrorCodes::LOGICAL_ERROR);
+}
+
+void KVStore::handleApplySnapshot(metapb::Region && region, UInt64 peer_id, const SnapshotDataView & lock_buff,
+    const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    auto meta = ({
+        auto peer = findPeer(region, peer_id);
+        raft_serverpb::RaftApplyState apply_state;
+        {
+            apply_state.set_applied_index(index);
+            apply_state.mutable_truncated_state()->set_index(index);
+            apply_state.mutable_truncated_state()->set_term(term);
+        }
+        RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
+    });
+    IndexReaderCreateFunc index_reader_create = [&](pingcap::kv::RegionVerID id) -> IndexReaderPtr { return tmt.createIndexReader(id); };
     auto new_region = std::make_shared<Region>(std::move(meta), index_reader_create);
 
     LOG_INFO(log, "Try to apply snapshot: " << new_region->toString(true));
 
-    while (read(&request))
     {
-        if (!request.has_data())
-            throw Exception("Failed to read snapshot data", ErrorCodes::LOGICAL_ERROR);
-
-        auto & data = *request.mutable_data();
-        auto & cf_data = *data.mutable_data();
-        for (auto it = cf_data.begin(); it != cf_data.end(); ++it)
+        struct CfData
         {
-            auto & key = *it->mutable_key();
-            auto & value = *it->mutable_value();
-
-            new_region->insert(data.cf(), TiKVKey(std::move(key)), TiKVValue(std::move(value)));
+            ColumnFamilyType type;
+            const SnapshotDataView & data;
+        };
+        CfData cf_data[3]
+            = {{ColumnFamilyType::Lock, (lock_buff)}, {ColumnFamilyType::Default, (default_buff)}, {ColumnFamilyType::Write, (write_buff)}};
+        for (auto i = 0; i < 3; ++i)
+        {
+            for (UInt64 n = 0; n < cf_data[i].data.len; ++n)
+            {
+                auto & k = cf_data[i].data.keys[n];
+                auto & v = cf_data[i].data.vals[n];
+                auto key = std::string(k.data, k.len);
+                auto value = std::string(v.data, v.len);
+                new_region->insert(cf_data[i].type, TiKVKey(std::move(key)), TiKVValue(std::move(value)));
+            }
         }
     }
 
-    if (context)
-        new_region->tryPreDecodeTiKVValue(*context);
+    new_region->tryPreDecodeTiKVValue(tmt);
 
-    if (new_region->isPeerRemoved())
-        throw Exception("[applySnapshot] region is removed, should not happen", ErrorCodes::LOGICAL_ERROR);
-
-    bool status = applySnapshot(kvstore, new_region, context, true);
+    bool status = tryApplySnapshot(new_region, tmt.getContext(), true);
 
     LOG_INFO(log, new_region->toString(false) << " apply snapshot " << (status ? "success" : "fail"));
 }
