@@ -6,7 +6,6 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Raft/RaftContext.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -42,25 +41,16 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
     auto table = MockTiDB::instance().getTableByName(database_name, table_name);
     auto table_id = table->id();
 
-    RaftContext raft_ctx(&context, nullptr, nullptr);
-    enginepb::CommandRequestBatch cmds;
-
     auto source_region = kvstore->getRegion(region_id);
 
     metapb::RegionEpoch new_epoch;
     new_epoch.set_version(source_region->version() + 1);
     new_epoch.set_conf_ver(source_region->confVer());
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
     {
-        enginepb::CommandRequest * cmd = cmds.add_requests();
-        enginepb::CommandRequestHeader * header = cmd->mutable_header();
-        header->set_region_id(region_id);
-        header->set_term(MockTiKV::instance().getRaftTerm(region_id));
-        header->set_index(MockTiKV::instance().getRaftIndex(region_id));
-        header->set_sync_log(false);
-
-        cmd->mutable_admin_request()->set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
-        raft_cmdpb::AdminResponse * response = cmd->mutable_admin_response();
-        raft_cmdpb::BatchSplitResponse * splits = response->mutable_splits();
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
+        raft_cmdpb::BatchSplitResponse * splits = response.mutable_splits();
         {
             auto region = splits->add_regions();
             region->set_id(region_id);
@@ -82,7 +72,13 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
             *region->mutable_region_epoch() = new_epoch;
         }
     }
-    kvstore->onServiceCommand(std::move(cmds), raft_ctx);
+
+    kvstore->handleAdminRaftCmd(std::move(request),
+        std::move(response),
+        region_id,
+        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
 
     std::stringstream ss;
     ss << "execute batch split, region " << region_id << " into (" << region_id << "," << region_id2 << ")";
@@ -99,26 +95,17 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID target_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    RaftContext raft_ctx(&context, nullptr, nullptr);
-    enginepb::CommandRequestBatch cmds;
-
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
     auto region = kvstore->getRegion(region_id);
     auto target_region = kvstore->getRegion(target_id);
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
 
     {
-        enginepb::CommandRequest * cmd = cmds.add_requests();
-        enginepb::CommandRequestHeader * header = cmd->mutable_header();
-        header->set_region_id(region_id);
-        header->set_term(MockTiKV::instance().getRaftTerm(region_id));
-        header->set_index(MockTiKV::instance().getRaftIndex(region_id));
-        header->set_sync_log(false);
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::PrepareMerge);
 
-        raft_cmdpb::AdminRequest * request = cmd->mutable_admin_request();
-        request->set_cmd_type(raft_cmdpb::AdminCmdType::PrepareMerge);
-
-        auto prepare_merge = request->mutable_prepare_merge();
+        auto prepare_merge = request.mutable_prepare_merge();
         {
             auto min_index = region->appliedIndex();
             prepare_merge->set_min_index(min_index);
@@ -128,7 +115,12 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
         }
     }
 
-    kvstore->onServiceCommand(std::move(cmds), raft_ctx);
+    kvstore->handleAdminRaftCmd(std::move(request),
+        std::move(response),
+        region_id,
+        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
 
     std::stringstream ss;
     ss << "execute prepare merge, source " << region_id << " target " << target_id;
@@ -145,33 +137,28 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
     RegionID source_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     RegionID current_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
 
-    RaftContext raft_ctx(&context, nullptr, nullptr);
-    enginepb::CommandRequestBatch cmds;
-
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
     auto source_region = kvstore->getRegion(source_id);
     auto current_region = kvstore->getRegion(current_id);
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
 
     {
-        enginepb::CommandRequest * cmd = cmds.add_requests();
-        enginepb::CommandRequestHeader * header = cmd->mutable_header();
-        header->set_region_id(current_id);
-        header->set_term(MockTiKV::instance().getRaftTerm(current_id));
-        header->set_index(MockTiKV::instance().getRaftIndex(current_id));
-        header->set_sync_log(false);
-
-        raft_cmdpb::AdminRequest * request = cmd->mutable_admin_request();
-        request->set_cmd_type(raft_cmdpb::AdminCmdType::CommitMerge);
-
-        auto commit_merge = request->mutable_commit_merge();
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::CommitMerge);
+        auto commit_merge = request.mutable_commit_merge();
         {
             commit_merge->set_commit(source_region->appliedIndex());
             *commit_merge->mutable_source() = source_region->getMetaRegion();
         }
     }
 
-    kvstore->onServiceCommand(std::move(cmds), raft_ctx);
+    kvstore->handleAdminRaftCmd(std::move(request),
+        std::move(response),
+        current_id,
+        MockTiKV::instance().getRaftIndex(current_id),
+        MockTiKV::instance().getRaftTerm(current_id),
+        tmt);
 
     std::stringstream ss;
     ss << "execute commit merge, source " << source_id << " current " << current_id;
@@ -186,32 +173,29 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
     }
 
     RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RaftContext raft_ctx(&context, nullptr, nullptr);
-    enginepb::CommandRequestBatch cmds;
 
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
     auto region = kvstore->getRegion(region_id);
+    raft_cmdpb::AdminRequest request;
+    raft_cmdpb::AdminResponse response;
 
     {
-        enginepb::CommandRequest * cmd = cmds.add_requests();
-        enginepb::CommandRequestHeader * header = cmd->mutable_header();
-        header->set_region_id(region_id);
-        header->set_term(MockTiKV::instance().getRaftTerm(region_id));
-        header->set_index(MockTiKV::instance().getRaftIndex(region_id));
-        header->set_sync_log(false);
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::RollbackMerge);
 
-        raft_cmdpb::AdminRequest * request = cmd->mutable_admin_request();
-        request->set_cmd_type(raft_cmdpb::AdminCmdType::RollbackMerge);
-
-        auto rollback_merge = request->mutable_rollback_merge();
+        auto rollback_merge = request.mutable_rollback_merge();
         {
             auto merge_state = region->getMergeState();
             rollback_merge->set_commit(merge_state.commit());
         }
     }
 
-    kvstore->onServiceCommand(std::move(cmds), raft_ctx);
+    kvstore->handleAdminRaftCmd(std::move(request),
+        std::move(response),
+        region_id,
+        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getRaftTerm(region_id),
+        tmt);
 
     std::stringstream ss;
     ss << "execute rollback merge, region " << region_id;
