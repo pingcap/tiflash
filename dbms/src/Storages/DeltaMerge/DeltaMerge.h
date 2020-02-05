@@ -80,7 +80,7 @@ private:
 
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
-                               const DeltaValueSpacePtr &           delta_value_space_,
+                               DeltaValueSpacePtr &                 delta_value_space_,
                                IndexIterator                        index_begin,
                                IndexIterator                        index_end,
                                size_t                               index_size_,
@@ -425,7 +425,7 @@ private:
                 output_columns[column_id]->reserve(max_block_size);
         }
 
-        auto actually_write_rows = delta_value_space->write(output_columns, use_delta_offset, write_rows);
+        auto actually_write_rows = delta_value_space->read(output_columns, use_delta_offset, write_rows);
 
         output_write_limit -= actually_write_rows;
         use_delta_offset += write_rows;

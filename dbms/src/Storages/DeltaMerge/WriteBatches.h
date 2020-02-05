@@ -21,6 +21,27 @@ struct WriteBatches
     WriteBatch removed_data;
     WriteBatch removed_meta;
 
+    ~WriteBatches()
+    {
+        if constexpr (DM_RUN_CHECK)
+        {
+            Logger * logger      = &Logger::get("WriteBatches");
+            auto     check_empty = [&](const WriteBatch & wb, const String & name) {
+                if (!wb.empty())
+                {
+                    LOG_ERROR(logger,
+                              "!!!=========================Modifications in " + name + " haven't persisted=========================!!!");
+                }
+            };
+            check_empty(log, "log");
+            check_empty(data, "data");
+            check_empty(meta, "meta");
+            check_empty(removed_log, "removed_log");
+            check_empty(removed_data, "removed_data");
+            check_empty(removed_meta, "removed_meta");
+        }
+    }
+
     void writeLogAndData(StoragePool & storage_pool)
     {
         PageIds log_write_pages, data_write_pages;
@@ -76,6 +97,20 @@ struct WriteBatches
         writeLogAndData(storage_pool);
         writeMeta(storage_pool);
         writeRemoves(storage_pool);
+    }
+
+    void clear()
+    {
+        log.clear();
+        data.clear();
+        meta.clear();
+
+        writtenLog.clear();
+        writtenData.clear();
+
+        removed_log.clear();
+        removed_data.clear();
+        removed_meta.clear();
     }
 };
 } // namespace DM

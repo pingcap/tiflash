@@ -38,7 +38,7 @@ public:
     {
         Poco::AutoPtr<Poco::ConsoleChannel>   channel = new Poco::ConsoleChannel(std::cerr);
         Poco::AutoPtr<Poco::PatternFormatter> formatter(new Poco::PatternFormatter);
-        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i <%p> %s: %t");
+        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Logger::root().setChannel(formatting_channel);
         Logger::root().setLevel("trace");
@@ -116,20 +116,16 @@ try
 {
     const size_t num_rows_write = 100;
     {
-        // write to segment
-        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
-        segment->write(dmContext(), std::move(block));
-    }
 
-    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        // write to segment
+        segment->write(dmContext(), block);
         // estimate segment
         auto estimatedRows = segment->getEstimatedRows();
-        ASSERT_GT(estimatedRows, num_rows_write / 2);
-        ASSERT_LT(estimatedRows, num_rows_write * 2);
+        ASSERT_EQ(estimatedRows, block.rows());
 
         auto estimatedBytes = segment->getEstimatedBytes();
-        ASSERT_GT(estimatedBytes, num_rows_write * 5 / 2);
-        ASSERT_LT(estimatedBytes, num_rows_write * 5 * 2);
+        ASSERT_EQ(estimatedBytes, block.bytes());
     }
 
     {

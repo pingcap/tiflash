@@ -11,9 +11,9 @@ namespace DM
 
 struct SegmentReadTask
 {
-    SegmentPtr      segment;
-    SegmentSnapshot read_snapshot;
-    HandleRanges    ranges;
+    SegmentPtr         segment;
+    SegmentSnapshot    read_snapshot;
+    HandleRanges       ranges;
 
     explicit SegmentReadTask(const SegmentPtr & segment_, const SegmentSnapshot & read_snapshot_)
         : segment(segment_), read_snapshot(read_snapshot_)

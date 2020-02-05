@@ -42,8 +42,10 @@ public:
 
     static StableValueSpacePtr restore(DMContext & context, PageId id);
 
+    void recordRemovePacksPages(WriteBatches & wbs) const;
+
 private:
-    static const UInt64 CURRENT_VERSION;
+    static const Int64 CURRENT_VERSION;
 
     const PageId id;
 

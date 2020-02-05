@@ -80,45 +80,72 @@ static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
 class DeltaMergeStore : private boost::noncopyable
 {
-    using OpContext = DiskValueSpace::OpContext;
-
 public:
     struct Settings
     {
         NotCompress not_compress_columns{};
     };
 
-    struct WriteAction
-    {
-        SegmentPtr    segment;
-        const size_t  offset = 0;
-        const size_t  limit  = 0;
-        BlockOrDelete update = {};
-
-        AppendTaskPtr task = {};
-
-        WriteAction(){};
-        WriteAction(const SegmentPtr & segment_, size_t offset_, size_t limit_) : segment(segment_), offset(offset_), limit(limit_) {}
-        WriteAction(const SegmentPtr & segment_, const BlockOrDelete & update_) : segment(segment_), update(update_) {}
-    };
-
-    using WriteActions     = std::vector<WriteAction>;
     using SegmentSortedMap = std::map<Handle, SegmentPtr>;
+    using SegmentMap       = std::unordered_map<PageId, SegmentPtr>;
 
-    enum BackgroundType
+    enum ThreadType
     {
-        MergeDelta,
-        SegmentMerge
+        Write,
+        Read,
+        BG_Split,
+        BG_Merge,
+        BG_MergeDelta,
+        BG_Compact,
+        BG_Flush,
     };
 
-    static std::string getBackgroundTypeName(BackgroundType type)
+    enum TaskType
+    {
+        Split,
+        Merge,
+        MergeDelta,
+        Compact,
+        Flush,
+    };
+
+    static std::string toString(ThreadType type)
     {
         switch (type)
         {
-        case BackgroundType ::MergeDelta:
+        case Write:
+            return "Write";
+        case Read:
+            return "Read";
+        case BG_Split:
+            return "BG_Split";
+        case BG_Merge:
+            return "BG_Merge";
+        case BG_MergeDelta:
+            return "BG_MergeDelta";
+        case BG_Compact:
+            return "BG_Compact";
+        case BG_Flush:
+            return "BG_Flush";
+        default:
+            return "Unknown";
+        }
+    }
+
+    static std::string toString(TaskType type)
+    {
+        switch (type)
+        {
+        case Split:
+            return "Split";
+        case Merge:
+            return "Merge";
+        case MergeDelta:
             return "MergeDelta";
-        case BackgroundType ::SegmentMerge:
-            return "SegmentMerge";
+        case Compact:
+            return "Compact";
+        case Flush:
+            return "Flush";
         default:
             return "Unknown";
         }
@@ -126,9 +153,11 @@ public:
 
     struct BackgroundTask
     {
-        DMContextPtr   dm_context = {};
-        SegmentPtr     segment    = {};
-        BackgroundType type;
+        TaskType type;
+
+        DMContextPtr dm_context;
+        SegmentPtr   segment;
+        SegmentPtr   next_segment;
 
         explicit operator bool() { return (bool)segment; }
     };
@@ -142,11 +171,11 @@ public:
         std::mutex mutex;
 
     public:
-        void addTask(const BackgroundTask & task, const String & whom, Logger * log_)
+        void addTask(const BackgroundTask & task, const ThreadType & whom, Logger * log_)
         {
             LOG_DEBUG(log_,
-                      "Segment [" << task.segment->segmentId() << "] task [" << getBackgroundTypeName(task.type)
-                                  << "] add to background task pool by [" << whom << "]");
+                      "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] add to background task pool by ["
+                                  << toString(whom) << "]");
 
             std::scoped_lock lock(mutex);
             tasks.push(task);
@@ -162,8 +191,7 @@ public:
             tasks.pop();
 
             LOG_DEBUG(log_,
-                      "Segment [" << task.segment->segmentId() << "] task [" << getBackgroundTypeName(task.type)
-                                  << "] pop from background task pool");
+                      "Segment [" << task.segment->segmentId() << "] task [" << toString(task.type) << "] pop from background task pool");
 
             return task;
         }
@@ -196,9 +224,16 @@ public:
                            size_t                expected_block_size = DEFAULT_BLOCK_SIZE);
 
     /// Force flush all data to disk.
-    /// Now is called by `StorageDeltaMerge`'s `alter` / `rename`
-    /// and no other threads is able to read / write at the same time.
-    void flushCache(const Context & context);
+    void flushCache(const Context & context, const HandleRange & range = HandleRange::newAll())
+    {
+        auto dm_context = newDMContext(context, context.getSettingsRef());
+        flushCache(dm_context, range);
+    }
+
+    void flushCache(const DMContextPtr & dm_context, const HandleRange & range);
+
+    /// Compact fregment packs into bigger one.
+    void compact(const Context & context, const HandleRange & range = HandleRange::newAll());
 
     /// Apply `commands` on `table_columns`
     void applyAlters(const AlterCommands &         commands, //
@@ -206,11 +241,11 @@ public:
                      ColumnID &                    max_column_id_used,
                      const Context &               context);
 
-    const ColumnDefines & getTableColumns() const { return table_columns; }
-    const ColumnDefine &  getHandle() const { return table_handle_define; }
-    Block                 getHeader() const { return toEmptyBlock(table_columns); }
+    const ColumnDefines & getTableColumns() const { return original_table_columns; }
+    const ColumnDefine &  getHandle() const { return original_table_handle_define; }
+    Block                 getHeader() const { return toEmptyBlock(original_table_columns); }
     const Settings &      getSettings() const { return settings; }
-    DataTypePtr           getPKDataType() const { return table_handle_define.type; }
+    DataTypePtr           getPKDataType() const { return original_table_handle_define.type; }
     SortDescription       getPrimarySortDescription() const;
 
     void                check(const Context & db_context);
@@ -219,30 +254,22 @@ public:
 private:
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings);
 
-    bool pkIsHandle() const { return table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    bool pkIsHandle() const { return original_table_handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
 
-    template <bool by_write_thread>
-    void checkSegmentUpdate(const DMContextPtr & context, SegmentPtr segment);
+    void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
+    void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
+
+    void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment);
     void        segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right);
-    SegmentPtr  segmentMergeDelta(DMContext &             dm_context,
-                                  const SegmentPtr &      segment,
-                                  const SegmentSnapshot & segment_snap,
-                                  const StorageSnapshot & storage_snap,
-                                  bool                    is_foreground);
+    SegmentPtr  segmentMergeDelta(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
     SegmentPtr segmentForegroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
     void       segmentBackgroundMergeDelta(DMContext & dm_context, const SegmentPtr & segment);
     void       segmentForegroundMerge(DMContext & dm_context, const SegmentPtr & segment);
 
     bool handleBackgroundTask();
-
-    void applyAlter(const AlterCommand &          command, //
-                    const OptionTableInfoConstRef table_info,
-                    ColumnID &                    max_column_id_used);
-
-    void commitWrites(WriteActions && actions, WriteBatches & wbs, const DMContextPtr & dm_context, OpContext & op_context);
 
     bool isSegmentValid(const SegmentPtr & segment);
 
@@ -251,10 +278,14 @@ private:
     PathPool    extra_paths;
     StoragePool storage_pool;
 
-    String        db_name;
-    String        table_name;
-    ColumnDefines table_columns;
-    ColumnDefine  table_handle_define;
+    String db_name;
+    String table_name;
+
+    ColumnDefines      original_table_columns;
+    const ColumnDefine original_table_handle_define;
+
+    // The columns we actually store.
+    ColumnDefinesPtr store_columns;
 
     BackgroundProcessingPool &           background_pool;
     BackgroundProcessingPool::TaskHandle gc_handle;
@@ -265,14 +296,13 @@ private:
 
     /// end of range -> segment
     SegmentSortedMap segments;
+    /// Mainly for debug.
+    SegmentMap id_to_segment;
 
-    MergeDeltaTaskPool merge_delta_tasks;
+    MergeDeltaTaskPool background_tasks;
 
-    // Synchronize between one write thread and multiple read threads.
+    // Synchronize between write threads and read threads.
     std::shared_mutex read_write_mutex;
-
-    // Used to guarantee only one thread can do write.
-    std::mutex write_write_mutex;
 
     UInt64   hash_salt;
     Logger * log;
