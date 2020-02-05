@@ -6,9 +6,12 @@
 namespace TiFlashBuildInfo
 {
 std::string getName();
+/// Semantic version.
 std::string getVersion();
-std::string getGitTag();
+/// Release version that follows PD/TiKV/TiDB convention.
+std::string getReleaseVersion();
 std::string getGitHash();
+std::string getGitBranch();
 std::string getUTCBuildTime();
 
 void outputDetail(std::ostream & os);

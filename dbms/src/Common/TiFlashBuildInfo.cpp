@@ -6,9 +6,7 @@
 namespace TiFlashBuildInfo
 {
 std::string getName() { return TIFLASH_NAME; }
-/// Semantic version.
 std::string getVersion() { return TIFLASH_VERSION; }
-/// Release version that follows PD/TiKV/TiDB convention.
 std::string getReleaseVersion() { return TIFLASH_RELEASE_VERSION; }
 std::string getGitHash() { return TIFLASH_GIT_HASH; }
 std::string getGitBranch() { return TIFLASH_GIT_BRANCH; }
