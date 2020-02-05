@@ -25,8 +25,8 @@ void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, 
         auto hash_salt   = dm_context->hash_salt;
         for (auto & file : files_)
         {
-            DMFileChunkFilter chunk_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {});
-            rows += chunk_filter.validRows();
+            DMFilePackFilter pack_filter(file, index_cache, hash_salt, range, EMPTY_FILTER, {});
+            rows += pack_filter.validRows();
         }
     }
 
@@ -114,12 +114,12 @@ size_t StableValueSpace::getBytes()
     return 0;
 }
 
-size_t StableValueSpace::getChunks()
+size_t StableValueSpace::getPacks()
 {
-    size_t chunks = 0;
+    size_t packs = 0;
     for (auto & file : files)
-        chunks += file->getChunks();
-    return chunks;
+        packs += file->getPacks();
+    return packs;
 }
 
 String StableValueSpace::getDMFilesString()

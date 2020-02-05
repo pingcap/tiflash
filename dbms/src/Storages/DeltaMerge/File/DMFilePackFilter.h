@@ -12,36 +12,36 @@ namespace DM
 using IdSet    = std::set<UInt64>;
 using IdSetPtr = std::shared_ptr<IdSet>;
 
-class DMFileChunkFilter
+class DMFilePackFilter
 {
 public:
-    DMFileChunkFilter(const DMFilePtr &     dmfile_,
+    DMFilePackFilter(const DMFilePtr &     dmfile_,
                       MinMaxIndexCache *    index_cache_,
                       UInt64                hash_salt_,
                       const HandleRange &   handle_range_,
                       const RSOperatorPtr & filter_,
-                      const IdSetPtr &      read_chunks_)
+                      const IdSetPtr &      read_packs_)
         : dmfile(dmfile_),
           index_cache(index_cache_),
           hash_salt(hash_salt_),
           handle_range(handle_range_),
           filter(filter_),
-          read_chunks(read_chunks_),
-          handle_res(dmfile->getChunks(), RSResult::All),
-          use_chunks(dmfile->getChunks())
+          read_packs(read_packs_),
+          handle_res(dmfile->getPacks(), RSResult::All),
+          use_packs(dmfile->getPacks())
     {
 
         if (!handle_range.all())
         {
             loadIndex(EXTRA_HANDLE_COLUMN_ID);
             auto handle_filter = toFilter(handle_range);
-            for (size_t i = 0; i < dmfile->getChunks(); ++i)
+            for (size_t i = 0; i < dmfile->getPacks(); ++i)
             {
                 handle_res[i] = handle_filter->roughCheck(i, param);
             }
         }
 
-        if (filter || read_chunks)
+        if (filter || read_packs)
         {
             if (filter)
             {
@@ -53,21 +53,21 @@ public:
                 }
             }
 
-            for (size_t i = 0; i < dmfile->getChunks(); ++i)
+            for (size_t i = 0; i < dmfile->getPacks(); ++i)
             {
                 bool use = handle_res[i] != None;
                 if (filter && use)
                     use &= filter->roughCheck(i, param) != None;
-                if (read_chunks && use)
-                    use &= read_chunks->count(i);
-                use_chunks[i] = use;
+                if (read_packs && use)
+                    use &= read_packs->count(i);
+                use_packs[i] = use;
             }
         }
         else
         {
-            for (size_t i = 0; i < dmfile->getChunks(); ++i)
+            for (size_t i = 0; i < dmfile->getPacks(); ++i)
             {
-                use_chunks[i] = handle_res[i] != None;
+                use_packs[i] = handle_res[i] != None;
             }
         }
     }
@@ -102,30 +102,30 @@ public:
     }
 
     const std::vector<RSResult> & getHandleRes() { return handle_res; }
-    const std::vector<UInt8> &    getUseChunks() { return use_chunks; }
+    const std::vector<UInt8> &    getUsePacks() { return use_packs; }
 
-    Handle getMinHandle(size_t chunk_id)
+    Handle getMinHandle(size_t pack_id)
     {
         if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
             loadIndex(EXTRA_HANDLE_COLUMN_ID);
         auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
-        return minmax_index->getIntMinMax(chunk_id).first;
+        return minmax_index->getIntMinMax(pack_id).first;
     }
 
-    UInt64 getMaxVersion(size_t chunk_id)
+    UInt64 getMaxVersion(size_t pack_id)
     {
         if (!param.indexes.count(VERSION_COLUMN_ID))
             loadIndex(VERSION_COLUMN_ID);
         auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
-        return minmax_index->getUInt64MinMax(chunk_id).second;
+        return minmax_index->getUInt64MinMax(pack_id).second;
     }
 
     size_t validRows()
     {
         size_t rows        = 0;
-        auto & chunk_stats = dmfile->getChunkStats();
-        for (size_t i = 0; i < chunk_stats.size(); ++i)
-            rows += use_chunks[i] ? chunk_stats[i].rows : 0;
+        auto & pack_stats = dmfile->getPackStats();
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+            rows += use_packs[i] ? pack_stats[i].rows : 0;
         return rows;
     }
 
@@ -135,12 +135,12 @@ private:
     UInt64             hash_salt;
     HandleRange        handle_range;
     RSOperatorPtr      filter;
-    IdSetPtr           read_chunks;
+    IdSetPtr           read_packs;
 
     RSCheckParam param;
 
     std::vector<RSResult> handle_res;
-    std::vector<UInt8>    use_chunks;
+    std::vector<UInt8>    use_packs;
 };
 
 } // namespace DM

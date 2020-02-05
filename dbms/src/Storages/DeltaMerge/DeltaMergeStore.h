@@ -49,15 +49,15 @@ struct DeltaMergeStoreStat
     Float64 avg_stable_rows    = 0;
     Float64 avg_stable_bytes   = 0;
 
-    UInt64  total_chunk_count_in_delta = 0;
-    Float64 avg_chunk_count_in_delta   = 0;
-    Float64 avg_chunk_rows_in_delta    = 0;
-    Float64 avg_chunk_bytes_in_delta   = 0;
+    UInt64  total_pack_count_in_delta = 0;
+    Float64 avg_pack_count_in_delta   = 0;
+    Float64 avg_pack_rows_in_delta    = 0;
+    Float64 avg_pack_bytes_in_delta   = 0;
 
-    UInt64  total_chunk_count_in_stable = 0;
-    Float64 avg_chunk_count_in_stable   = 0;
-    Float64 avg_chunk_rows_in_stable    = 0;
-    Float64 avg_chunk_bytes_in_stable   = 0;
+    UInt64  total_pack_count_in_stable = 0;
+    Float64 avg_pack_count_in_stable   = 0;
+    Float64 avg_pack_rows_in_stable    = 0;
+    Float64 avg_pack_bytes_in_stable   = 0;
 
     UInt64 storage_stable_num_snapshots    = 0;
     UInt64 storage_stable_num_pages        = 0;

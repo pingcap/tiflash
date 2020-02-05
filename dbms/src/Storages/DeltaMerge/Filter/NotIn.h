@@ -34,13 +34,13 @@ public:
     };
 
 
-    RSResult roughCheck(size_t chunk_id, const RSCheckParam & param) override
+    RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
     {
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
         // TODO optimize for IN
-        RSResult res = !rsindex.minmax->checkEqual(chunk_id, values[0], rsindex.type);
+        RSResult res = !rsindex.minmax->checkEqual(pack_id, values[0], rsindex.type);
         for (size_t i = 1; i < values.size(); ++i)
-            res = res && !rsindex.minmax->checkEqual(chunk_id, values[i], rsindex.type);
+            res = res && !rsindex.minmax->checkEqual(pack_id, values[i], rsindex.type);
         return res;
     }
 

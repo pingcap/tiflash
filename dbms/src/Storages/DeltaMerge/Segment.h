@@ -3,7 +3,7 @@
 #include <Core/Block.h>
 
 #include <Interpreters/ExpressionActions.h>
-#include <Storages/DeltaMerge/Chunk.h>
+#include <Storages/DeltaMerge/Pack.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/DiskValueSpace.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -26,7 +26,7 @@ using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
 using Segments    = std::vector<SegmentPtr>;
 
 using SegmentAndStorageSnap = std::pair<SegmentSnapshot, StorageSnapshot>;
-using SegmentSnapAndChunks  = std::pair<SegmentSnapshot, Chunks>;
+using SegmentSnapAndPacks  = std::pair<SegmentSnapshot, Packs>;
 
 /// A structure stores the informations to constantly read a segment instance.
 struct SegmentSnapshot
@@ -163,7 +163,7 @@ public:
     WARN_UNUSED_RESULT
     SegmentPtr mergeDelta(DMContext & dm_context) const;
 
-    /// Flush delta's cache chunks.
+    /// Flush delta's cache packs.
     void flushCache(DMContext & dm_context);
 
     size_t getEstimatedRows() const;
@@ -238,7 +238,7 @@ private:
 
     void doFlushCache(DMContext & dm_context, WriteBatch & remove_log_wb);
 
-    /// Make sure that all delta chunks have been placed.
+    /// Make sure that all delta packs have been placed.
     DeltaIndexPtr ensurePlace(const DMContext &           dm_context,
                               const StorageSnapshot &     storage_snapshot,
                               const StableValueSpacePtr & stable_snap,

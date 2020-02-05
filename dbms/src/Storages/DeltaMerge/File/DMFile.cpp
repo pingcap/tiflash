@@ -61,12 +61,12 @@ void DMFile::readMeta()
     }
 
     {
-        auto       chunk_stat_path = chunkStatPath();
-        Poco::File chunk_stat_file(chunk_stat_path);
-        size_t     chunks = chunk_stat_file.getSize() / sizeof(ChunkStat);
-        chunk_stats.resize(chunks);
-        auto buf = openForRead(chunk_stat_path);
-        buf.read((char *)chunk_stats.data(), sizeof(ChunkStat) * chunks);
+        auto       pack_stat_path = packStatPath();
+        Poco::File pack_stat_file(pack_stat_path);
+        size_t     packs = pack_stat_file.getSize() / sizeof(PackStat);
+        pack_stats.resize(packs);
+        auto buf = openForRead(pack_stat_path);
+        buf.read((char *)pack_stats.data(), sizeof(PackStat) * packs);
     }
 }
 

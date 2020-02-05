@@ -1,6 +1,6 @@
 #include <cstring>
 
-#include <Storages/DeltaMerge/Chunk.h>
+#include <Storages/DeltaMerge/Pack.h>
 
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Functions/FunctionHelpers.h>
@@ -13,11 +13,11 @@ namespace DB
 namespace DM
 {
 
-const Chunk::Version Chunk::CURRENT_VERSION = 1;
+const Pack::Version Pack::CURRENT_VERSION = 1;
 
-void Chunk::serialize(WriteBuffer & buf) const
+void Pack::serialize(WriteBuffer & buf) const
 {
-    writeVarUInt(Chunk::CURRENT_VERSION, buf); // Add binary version
+    writeVarUInt(Pack::CURRENT_VERSION, buf); // Add binary version
 
     writeIntBinary(handle_start, buf);
     writeIntBinary(handle_end, buf);
@@ -30,36 +30,36 @@ void Chunk::serialize(WriteBuffer & buf) const
         writeIntBinary(d.rows, buf);
         writeIntBinary(d.bytes, buf);
         writeStringBinary(d.type->getName(), buf);
-        if (d.minmax)
-        {
-            writePODBinary(true, buf);
-            d.minmax->write(*d.type, buf);
-        }
-        else
-        {
-            writePODBinary(false, buf);
-        }
+        //        if (d.minmax)
+        //        {
+        //            writePODBinary(true, buf);
+        //            d.minmax->write(*d.type, buf);
+        //        }
+        //        else
+        //        {
+        //            writePODBinary(false, buf);
+        //        }
     }
 }
 
-Chunk Chunk::deserialize(ReadBuffer & buf)
+Pack Pack::deserialize(ReadBuffer & buf)
 {
     // Check binary version
-    Chunk::Version chunk_batch_version;
-    readVarUInt(chunk_batch_version, buf);
-    if (chunk_batch_version != Chunk::CURRENT_VERSION)
-        throw Exception("Chunk binary version not match: " + DB::toString(chunk_batch_version), ErrorCodes::LOGICAL_ERROR);
+    Pack::Version pack_batch_version;
+    readVarUInt(pack_batch_version, buf);
+    if (pack_batch_version != Pack::CURRENT_VERSION)
+        throw Exception("Pack binary version not match: " + DB::toString(pack_batch_version), ErrorCodes::LOGICAL_ERROR);
 
     Handle start, end;
     readIntBinary(start, buf);
     readIntBinary(end, buf);
 
-    Chunk chunk(start, end);
+    Pack pack(start, end);
 
-    readPODBinary(chunk.is_delete_range, buf);
+    readPODBinary(pack.is_delete_range, buf);
     UInt64 col_size;
     readIntBinary(col_size, buf);
-    chunk.columns.reserve(col_size);
+    pack.columns.reserve(col_size);
     for (UInt64 ci = 0; ci < col_size; ++ci)
     {
         ColumnMeta d;
@@ -70,29 +70,29 @@ Chunk Chunk::deserialize(ReadBuffer & buf)
         readIntBinary(d.bytes, buf);
         readStringBinary(type, buf);
         d.type = DataTypeFactory::instance().get(type);
-        bool has_minmax;
-        readPODBinary(has_minmax, buf);
-        if (has_minmax)
-            d.minmax = MinMaxIndex::read(*d.type, buf);
+        //        bool has_minmax;
+        //        readPODBinary(has_minmax, buf);
+        //        if (has_minmax)
+        //            d.minmax = MinMaxIndex::read(*d.type, buf);
 
-        chunk.columns.emplace(d.col_id, d);
+        pack.columns.emplace(d.col_id, d);
 
-        if (chunk.rows != 0 && chunk.rows != d.rows)
+        if (pack.rows != 0 && pack.rows != d.rows)
             throw Exception("Rows not match");
         else
-            chunk.rows = d.rows;
+            pack.rows = d.rows;
     }
-    return chunk;
+    return pack;
 }
 
-Chunk createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, WriteBatch & wb)
+Pack createRefPack(const Pack & pack, const GenPageId & gen_data_page_id, WriteBatch & wb)
 {
-    if (chunk.isDeleteRange())
-        return Chunk(chunk.getDeleteRange());
+    if (pack.isDeleteRange())
+        return Pack(pack.getDeleteRange());
 
-    auto [handle_first, handle_end] = chunk.getHandleFirstLast();
-    Chunk ref_chunk(handle_first, handle_end);
-    for (auto && [col_id, col_meta] : chunk.getMetas())
+    auto [handle_first, handle_end] = pack.getHandleFirstLast();
+    Pack ref_pack(handle_first, handle_end);
+    for (auto && [col_id, col_meta] : pack.getMetas())
     {
         ColumnMeta m;
 
@@ -101,25 +101,25 @@ Chunk createRefChunk(const Chunk & chunk, const GenPageId & gen_data_page_id, Wr
         m.rows    = col_meta.rows;
         m.bytes   = col_meta.bytes;
         m.type    = col_meta.type;
-        m.minmax  = col_meta.minmax;
+        //        m.minmax  = col_meta.minmax;
 
         wb.putRefPage(m.page_id, col_meta.page_id);
-        ref_chunk.insert(m);
+        ref_pack.insert(m);
     }
-    return ref_chunk;
+    return ref_pack;
 }
 
-Chunks createRefChunks(const Chunks & chunks, const GenPageId & gen_data_page_id, WriteBatch & wb)
+Packs createRefPacks(const Packs & packs, const GenPageId & gen_data_page_id, WriteBatch & wb)
 {
-    Chunks ref_chunks;
-    ref_chunks.reserve(chunks.size());
-    for (auto & chunk : chunks)
-        ref_chunks.push_back(createRefChunk(chunk, gen_data_page_id, wb));
-    return ref_chunks;
+    Packs ref_packs;
+    ref_packs.reserve(packs.size());
+    for (auto & pack : packs)
+        ref_packs.push_back(createRefPack(pack, gen_data_page_id, wb));
+    return ref_packs;
 }
 
-void serializeChunks(
-    WriteBuffer & buf, Chunks::const_iterator begin, Chunks::const_iterator end, const Chunk * extra1, const Chunk * extra2)
+void serializePacks(
+    WriteBuffer & buf, Packs::const_iterator begin, Packs::const_iterator end, const Pack * extra1, const Pack * extra2)
 {
     auto size = (UInt64)(end - begin);
     if (extra1)
@@ -136,25 +136,25 @@ void serializeChunks(
         extra2->serialize(buf);
 }
 
-void serializeChunks(WriteBuffer & buf, Chunks::const_iterator begin, Chunks ::const_iterator end, const Chunks & extra_chunks)
+void serializePacks(WriteBuffer & buf, Packs::const_iterator begin, Packs ::const_iterator end, const Packs & extra_packs)
 {
-    auto size = (UInt64)(end - begin) + extra_chunks.size();
+    auto size = (UInt64)(end - begin) + extra_packs.size();
     writeIntBinary(size, buf);
 
     for (; begin != end; ++begin)
         (*begin).serialize(buf);
-    for (auto & chunk : extra_chunks)
-        chunk.serialize(buf);
+    for (auto & pack : extra_packs)
+        pack.serialize(buf);
 }
 
-Chunks deserializeChunks(ReadBuffer & buf)
+Packs deserializePacks(ReadBuffer & buf)
 {
-    Chunks chunks;
+    Packs packs;
     UInt64 size;
     readIntBinary(size, buf);
     for (UInt64 i = 0; i < size; ++i)
-        chunks.push_back(Chunk::deserialize(buf));
-    return chunks;
+        packs.push_back(Pack::deserialize(buf));
+    return packs;
 }
 
 using BufferAndSize = std::pair<ReadBufferPtr, size_t>;
@@ -176,10 +176,10 @@ BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, 
     return {plain.tryGetReadBuffer(), data_size};
 }
 
-Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block)
+Pack preparePackDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block)
 {
     auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.handle_column.name));
-    Chunk  chunk(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
+    Pack  pack(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
     for (const auto & col_define : dm_context.store_columns)
     {
         auto            col_id = col_define.id;
@@ -192,18 +192,18 @@ Chunk prepareChunkDataWrite(const DMContext & dm_context, const GenPageId & gen_
         d.rows    = column.size();
         d.bytes   = size;
         d.type    = col_define.type;
-        if (col_define.id == EXTRA_HANDLE_COLUMN_ID)
-        {
-            // Only index the handle column for now.
-            d.minmax = std::make_shared<MinMaxIndex>(*col_define.type);
-            d.minmax->addChunk(column, /*del_mark*/ nullptr);
-        }
+        //        if (col_define.id == EXTRA_HANDLE_COLUMN_ID)
+        //        {
+        //            // Only index the handle column for now.
+        //            d.minmax = std::make_shared<MinMaxIndex>(*col_define.type);
+        //            d.minmax->addPack(column, /*del_mark*/ nullptr);
+        //        }
 
         wb.putPage(d.page_id, 0, buf, size);
-        chunk.insert(d);
+        pack.insert(d);
     }
 
-    return chunk;
+    return pack;
 }
 
 void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & page, size_t rows_limit)
@@ -218,14 +218,14 @@ void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & p
                                                         {});
 }
 
-void readChunkData(MutableColumns &      columns,
+void readPackData(MutableColumns &      columns,
                    const ColumnDefines & column_defines,
-                   const Chunk &         chunk,
+                   const Pack &         pack,
                    const PageReader &    page_reader,
                    size_t                rows_offset,
                    size_t                rows_limit)
 {
-    assert(!chunk.isDeleteRange());
+    assert(!pack.isDeleteRange());
 
     std::unordered_map<PageId, size_t> page_to_index;
     PageIds                            page_ids;
@@ -233,16 +233,16 @@ void readChunkData(MutableColumns &      columns,
     for (size_t index = 0; index < column_defines.size(); ++index)
     {
         const auto & define = column_defines[index];
-        if (chunk.hasColumn(define.id))
+        if (pack.hasColumn(define.id))
         {
-            // Read chunk's data from PageStorage later
-            auto page_id = chunk.getColumn(define.id).page_id;
+            // Read pack's data from PageStorage later
+            auto page_id = pack.getColumn(define.id).page_id;
             page_ids.push_back(page_id);
             page_to_index[page_id] = index;
         }
         else
         {
-            // New column after ddl is not exist in chunk's meta, fill with default value
+            // New column after ddl is not exist in pack's meta, fill with default value
             IColumn & col = *columns[index];
 
             // Read default value from `define.default_value`
@@ -265,7 +265,7 @@ void readChunkData(MutableColumns &      columns,
         size_t               index       = page_to_index[page_id];
         IColumn &            col         = *columns[index];
         const ColumnDefine & read_define = column_defines[index];
-        const ColumnMeta &   disk_meta   = chunk.getColumn(read_define.id);
+        const ColumnMeta &   disk_meta   = pack.getColumn(read_define.id);
 
         // define.type is current type at memory
         // meta.type is the type at disk (maybe different from define.type)
@@ -286,23 +286,23 @@ void readChunkData(MutableColumns &      columns,
         else
         {
 #ifndef NDEBUG
-            const auto && [first, last] = chunk.getHandleFirstLast();
+            const auto && [first, last] = pack.getHandleFirstLast();
             const String disk_col_str   = "col{name:" + DB::toString(read_define.name) + ",id:" + DB::toString(disk_meta.col_id)
                 + ",type:" + disk_meta.type->getName() + "]";
-            LOG_TRACE(&Poco::Logger::get("Chunk"),
-                      "Reading chunk[" + DB::toString(first) + "-" + DB::toString(last) + "] " + disk_col_str + " as type "
+            LOG_TRACE(&Poco::Logger::get("Pack"),
+                      "Reading pack[" + DB::toString(first) + "-" + DB::toString(last) + "] " + disk_col_str + " as type "
                           + read_define.type->getName());
 #endif
 
             // sanity check
             if (unlikely(!isSupportedDataTypeCast(disk_meta.type, read_define.type)))
             {
-                throw Exception("Reading mismatch data type chunk. Cast from " + disk_meta.type->getName() + " to "
+                throw Exception("Reading mismatch data type pack. Cast from " + disk_meta.type->getName() + " to "
                                     + read_define.type->getName() + " is NOT supported!",
                                 ErrorCodes::NOT_IMPLEMENTED);
             }
 
-            // Read from disk according to chunk meta
+            // Read from disk according to pack meta
             MutableColumnPtr disk_col = disk_meta.type->createColumn();
             deserializeColumn(*disk_col, disk_meta, page, rows_offset + rows_limit);
 
@@ -314,7 +314,7 @@ void readChunkData(MutableColumns &      columns,
 }
 
 
-Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, const PageReader & page_reader)
+Block readPack(const Pack & pack, const ColumnDefines & read_column_defines, const PageReader & page_reader)
 {
     if (read_column_defines.empty())
         return {};
@@ -323,13 +323,13 @@ Block readChunk(const Chunk & chunk, const ColumnDefines & read_column_defines, 
     for (const auto & define : read_column_defines)
     {
         columns.emplace_back(define.type->createColumn());
-        columns.back()->reserve(chunk.getRows());
+        columns.back()->reserve(pack.getRows());
     }
 
-    if (chunk.getRows())
+    if (pack.getRows())
     {
         // Read from storage
-        readChunkData(columns, read_column_defines, chunk, page_reader, 0, chunk.getRows());
+        readPackData(columns, read_column_defines, pack, page_reader, 0, pack.getRows());
     }
 
     Block res;
@@ -466,7 +466,7 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
                 {
                     // `from_col[i]` is "NULL", fill `to_col[rows_offset + i]` with default value
                     // TiDB/MySQL don't support this, should not call here.
-                    throw Exception("Reading mismatch data type chunk. Cast from " + disk_type->getName() + " to " + read_type->getName()
+                    throw Exception("Reading mismatch data type pack. Cast from " + disk_type->getName() + " to " + read_type->getName()
                                         + " with \"NULL\" value is NOT supported!",
                                     ErrorCodes::NOT_IMPLEMENTED);
                 }
@@ -476,7 +476,7 @@ void castColumnAccordingToColumnDefine(const DataTypePtr &  disk_type,
     else if (!castNonNullNumericColumn(
                  disk_type_not_null, disk_col_not_null, read_define_not_null, null_map, memory_col_not_null, rows_offset, rows_limit))
     {
-        throw Exception("Reading mismatch data type chunk. Cast and assign from " + disk_type->getName() + " to " + read_type->getName()
+        throw Exception("Reading mismatch data type pack. Cast and assign from " + disk_type->getName() + " to " + read_type->getName()
                             + " is NOT supported!",
                         ErrorCodes::NOT_IMPLEMENTED);
     }

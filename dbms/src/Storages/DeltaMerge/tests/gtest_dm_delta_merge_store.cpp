@@ -693,7 +693,7 @@ try
     settings.dm_segment_limit_rows             = 11;
     settings.dm_segment_delta_limit_rows       = 7;
     settings.dm_segment_delta_cache_limit_rows = 4;
-    settings.dm_segment_stable_chunk_rows      = 10;
+    settings.dm_segment_stable_pack_rows      = 10;
 
     size_t num_rows_write_in_total = 0;
 

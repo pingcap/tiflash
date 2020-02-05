@@ -43,7 +43,7 @@ public:
         }
     }
 
-    struct ChunkStat
+    struct PackStat
     {
         UInt32 rows;
         UInt32 not_clean;
@@ -51,7 +51,7 @@ public:
         UInt8  first_tag;
     };
 
-    using ChunkStats = PaddedPODArray<ChunkStat>;
+    using PackStats = PaddedPODArray<PackStat>;
 
     static DMFilePtr create(UInt64 file_id, const String & parent_path);
     static DMFilePtr restore(UInt64 file_id, UInt64 ref_id, const String & parent_path, bool read_meta = true);
@@ -69,7 +69,7 @@ public:
     UInt64 refId() { return ref_id; }
     String path() { return parent_path + (status == Status::READABLE ? "/dmf_" : "/.tmp.dmf_") + DB::toString(file_id); }
     String metaPath() { return path() + "/meta.txt"; }
-    String chunkStatPath() { return path() + "/chunk"; }
+    String packStatPath() { return path() + "/pack"; }
     // Do not gc me.
     String ngcPath() { return path() + "/" + NGC_FILE_NAME; }
     String colDataPath(const String & file_name_base) { return path() + "/" + file_name_base + ".dat"; }
@@ -88,7 +88,7 @@ public:
     size_t getRows()
     {
         size_t rows = 0;
-        for (auto & s : chunk_stats)
+        for (auto & s : pack_stats)
             rows += s.rows;
         return rows;
     }
@@ -99,9 +99,9 @@ public:
         return 0;
     }
 
-    size_t              getChunks() { return chunk_stats.size(); }
-    const ChunkStats &  getChunkStats() { return chunk_stats; }
-    const ChunkStat &   getChunkStat(size_t chunk_index) { return chunk_stats[chunk_index]; }
+    size_t              getPacks() { return pack_stats.size(); }
+    const PackStats &  getPackStats() { return pack_stats; }
+    const PackStat &   getPackStat(size_t pack_index) { return pack_stats[pack_index]; }
     const ColumnStats & getColumnStats() { return column_stats; }
     Status              getStatus() { return status; }
 
@@ -116,7 +116,7 @@ private:
     {
     }
 
-    void addChunk(const ChunkStat & chunk_stat) { chunk_stats.push_back(chunk_stat); }
+    void addPack(const PackStat & pack_stat) { pack_stats.push_back(pack_stat); }
     void setStatus(Status status_) { status = status_; }
 
     void finalize();
@@ -126,7 +126,7 @@ private:
     UInt64 ref_id; // It is a reference to file_id, could be the same.
     String parent_path;
 
-    ChunkStats  chunk_stats;
+    PackStats  pack_stats;
     ColumnStats column_stats;
 
     Status status;

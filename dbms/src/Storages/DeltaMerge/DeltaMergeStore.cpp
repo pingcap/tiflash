@@ -171,7 +171,8 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
                                db_settings.dm_segment_limit_rows,
                                db_settings.dm_segment_delta_limit_rows,
                                db_settings.dm_segment_delta_cache_limit_rows,
-                               db_settings.dm_segment_stable_chunk_rows,
+                               db_settings.dm_segment_delta_small_pack_rows,
+                               db_settings.dm_segment_stable_pack_rows,
                                db_settings.dm_enable_logical_split,
                                db_settings.dm_read_delta_only,
                                db_settings.dm_read_stable_only);
@@ -320,7 +321,7 @@ void DeltaMergeStore::commitWrites(WriteActions && actions, WriteBatches & wbs, 
     if (unlikely(!wbs.data.empty() || !wbs.meta.empty()))
         throw Exception("Unexpected data or meta modifications!");
 
-    // Save generated chunks to disk.
+    // Save generated packs to disk.
     {
         EventRecorder recorder(ProfileEvents::DMAppendDeltaCommitDisk, ProfileEvents::DMAppendDeltaCommitDiskNS);
         wbs.writeLogAndData(dm_context->storage_pool);
@@ -335,7 +336,9 @@ void DeltaMergeStore::commitWrites(WriteActions && actions, WriteBatches & wbs, 
             // During write, segment instances could have been updated by background merge delta threads.
             // So we must get segment instances again from segments map.
             auto & range = action.segment->getRange();
-            auto   it    = segments.find(range.end);
+
+            // FIXME. Bug here: segments.find(range.end) cannot ensure get the correct segment under multi-thread mode. E.g. after split/merge.
+            auto it = segments.find(range.end);
             if (unlikely(it == segments.end()))
                 throw Exception("Segment with end [" + DB::toString(range.end) + "] can not find in segments map after write");
             auto & segment = it->second;
@@ -976,7 +979,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
 
         total_placed_rows += segment->getPlacedDeltaRows();
 
-        if (delta.num_chunks())
+        if (delta.num_packs())
         {
             stat.total_rows += delta.num_rows();
             stat.total_bytes += delta.num_bytes();
@@ -984,19 +987,19 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             stat.total_delete_ranges += delta.num_deletes();
 
             stat.delta_count += 1;
-            stat.total_chunk_count_in_delta += delta.num_chunks();
+            stat.total_pack_count_in_delta += delta.num_packs();
 
             stat.total_delta_rows += delta.num_rows();
             stat.total_delta_bytes += delta.num_bytes();
         }
 
-        if (stable->getChunks())
+        if (stable->getPacks())
         {
             stat.total_rows += stable->getRows();
             stat.total_bytes += stable->getBytes();
 
             stat.stable_count += 1;
-            stat.total_chunk_count_in_stable += stable->getChunks();
+            stat.total_pack_count_in_stable += stable->getPacks();
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_bytes += stable->getBytes();
@@ -1017,13 +1020,13 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
     stat.avg_stable_rows  = (Float64)stat.total_stable_rows / stat.stable_count;
     stat.avg_stable_bytes = (Float64)stat.total_stable_bytes / stat.stable_count;
 
-    stat.avg_chunk_count_in_delta = (Float64)stat.total_chunk_count_in_delta / stat.delta_count;
-    stat.avg_chunk_rows_in_delta  = (Float64)stat.total_delta_rows / stat.total_chunk_count_in_delta;
-    stat.avg_chunk_bytes_in_delta = (Float64)stat.total_delta_bytes / stat.total_chunk_count_in_delta;
+    stat.avg_pack_count_in_delta = (Float64)stat.total_pack_count_in_delta / stat.delta_count;
+    stat.avg_pack_rows_in_delta  = (Float64)stat.total_delta_rows / stat.total_pack_count_in_delta;
+    stat.avg_pack_bytes_in_delta = (Float64)stat.total_delta_bytes / stat.total_pack_count_in_delta;
 
-    stat.avg_chunk_count_in_stable = (Float64)stat.total_chunk_count_in_stable / stat.stable_count;
-    stat.avg_chunk_rows_in_stable  = (Float64)stat.total_stable_rows / stat.total_chunk_count_in_stable;
-    stat.avg_chunk_bytes_in_stable = (Float64)stat.total_stable_bytes / stat.total_chunk_count_in_stable;
+    stat.avg_pack_count_in_stable = (Float64)stat.total_pack_count_in_stable / stat.stable_count;
+    stat.avg_pack_rows_in_stable  = (Float64)stat.total_stable_rows / stat.total_pack_count_in_stable;
+    stat.avg_pack_bytes_in_stable = (Float64)stat.total_stable_bytes / stat.total_pack_count_in_stable;
 
     {
         stat.storage_stable_num_snapshots        = storage_pool.data().getNumSnapshots();
@@ -1055,7 +1058,7 @@ void DeltaMergeStore::applyAlters(const AlterCommands &         commands,
                                   ColumnID &                    max_column_id_used,
                                   const Context &               context)
 {
-    /// Force flush on store, so that no chunks with different data type in memory
+    /// Force flush on store, so that no packs with different data type in memory
     // TODO maybe some ddl do not need to flush cache? eg. just change default value
     this->flushCache(context);
 

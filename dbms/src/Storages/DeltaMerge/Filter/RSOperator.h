@@ -40,7 +40,7 @@ public:
 
     // TODO: implement a batch check version
 
-    virtual RSResult roughCheck(size_t chunk_id, const RSCheckParam & param) = 0;
+    virtual RSResult roughCheck(size_t pack_id, const RSCheckParam & param) = 0;
 
     virtual Attrs getAttrs() = 0;
 
