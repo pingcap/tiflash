@@ -8,7 +8,7 @@ namespace DB
 namespace DM
 {
 
-const UInt64 StableValueSpace::CURRENT_VERSION = 1;
+const Int64 StableValueSpace::CURRENT_VERSION = 1;
 
 void StableValueSpace::setFiles(const DMFiles & files_, DMContext * dm_context, HandleRange range)
 {
@@ -138,6 +138,17 @@ void StableValueSpace::enableDMFilesGC()
     for (auto & file : files)
         file->enableGC();
 }
+
+void StableValueSpace::recordRemovePacksPages(WriteBatches & wbs) const
+{
+    for (auto & file : files)
+    {
+        // Here we should remove the ref id instead of file_id.
+        // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
+        wbs.removed_data.delPage(file->refId());
+    }
+}
+
 
 } // namespace DM
 } // namespace DB

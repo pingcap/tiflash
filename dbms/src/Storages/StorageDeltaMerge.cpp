@@ -717,14 +717,14 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
     if (actual_delete_rows != delete_rows)
-        throw Exception("Expected delete rows: " + DB::toString(delete_rows) + ", got: " + DB::toString(actual_delete_rows));
+        LOG_ERROR(log, "Expected delete rows: " << delete_rows << ", got: " << actual_delete_rows);
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
     size_t after_delete_rows = getRows(store, context, DM::HandleRange::newAll());
     if (after_delete_rows != total_rows - delete_rows)
-        throw Exception("Rows after delete range not match, expected: " + DB::toString(total_rows - delete_rows)
-            + ", got: " + DB::toString(after_delete_rows));
+        LOG_ERROR(log, "Rows after delete range not match, expected: " << (total_rows - delete_rows)
+            << ", got: " << after_delete_rows);
 }
 
 //==========================================================================================

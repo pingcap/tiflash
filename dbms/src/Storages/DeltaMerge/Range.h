@@ -58,6 +58,7 @@ struct Range
     inline String toString() const { return rangeToString(*this); }
 
     bool operator==(const Range & rhs) const { return start == rhs.start && end == rhs.end; }
+    bool operator!=(const Range & rhs) const { return !(*this == rhs); }
 };
 
 using HandleRange  = Range<Handle>;
