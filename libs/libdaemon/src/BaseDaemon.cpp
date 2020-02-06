@@ -61,6 +61,7 @@
 #include <IO/WriteHelpers.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/ClickHouseRevision.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <daemon/OwnPatternFormatter.h>
 
 
@@ -1060,7 +1061,9 @@ void BaseDaemon::initialize(Application & self)
 void BaseDaemon::logRevision() const
 {
     Logger::root().information("Starting daemon with revision " + Poco::NumberFormatter::format(ClickHouseRevision::get()));
-    Logger::root().information("TiFlash version: " + TiFlashVersion::get());
+    std::stringstream ss;
+    TiFlashBuildInfo::outputDetail(ss);
+    Logger::root().information("TiFlash build info: " + ss.str());
 }
 
 /// Makes server shutdown if at least one Poco::Task have failed.

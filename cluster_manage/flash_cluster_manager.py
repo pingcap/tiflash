@@ -38,7 +38,7 @@ def wrap_try_get_lock(func):
         if role == TiFlashClusterManager.ROLE_MASTER:
             return func(manager, *args, **kwargs)
         else:
-            raise TiFlashClusterNotMaster()
+            pass
 
     return wrap_func
 

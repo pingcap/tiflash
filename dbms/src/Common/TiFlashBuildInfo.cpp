@@ -1,0 +1,23 @@
+#include <Common/config_version.h>
+
+#include <ostream>
+#include <string>
+
+namespace TiFlashBuildInfo
+{
+std::string getName() { return TIFLASH_NAME; }
+std::string getVersion() { return TIFLASH_VERSION; }
+std::string getReleaseVersion() { return TIFLASH_RELEASE_VERSION; }
+std::string getGitHash() { return TIFLASH_GIT_HASH; }
+std::string getGitBranch() { return TIFLASH_GIT_BRANCH; }
+std::string getUTCBuildTime() { return TIFLASH_UTC_BUILD_TIME; }
+
+void outputDetail(std::ostream & os)
+{
+    os << getName() << " " << getVersion() << std::endl
+       << "Release Version: " << getReleaseVersion() << std::endl
+       << "Git Commit Hash: " << getGitHash() << std::endl
+       << "Git Branch:      " << getGitBranch() << std::endl
+       << "UTC Build Time:  " << getUTCBuildTime() << std::endl;
+}
+} // namespace TiFlashBuildInfo
