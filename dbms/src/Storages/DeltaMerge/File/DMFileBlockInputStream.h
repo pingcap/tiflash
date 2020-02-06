@@ -20,7 +20,7 @@ public:
                            const ColumnDefines & read_columns,
                            const HandleRange &   handle_range,
                            const RSOperatorPtr & filter,
-                           const IdSetPtr &      read_chunks,
+                           const IdSetPtr &      read_packs,
                            size_t                expected_size = DMFILE_READ_ROWS_THRESHOLD)
         : reader(enable_clean_read,
                  max_data_version,
@@ -28,7 +28,7 @@ public:
                  read_columns,
                  handle_range,
                  filter,
-                 read_chunks,
+                 read_packs,
                  context.getGlobalContext().getMarkCache().get(),
                  context.getGlobalContext().getMinMaxIndexCache().get(),
                  hash_salt,

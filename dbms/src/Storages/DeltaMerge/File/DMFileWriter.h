@@ -89,7 +89,7 @@ private:
     bool                wal_mode;
 
     ColumnStreams       column_streams;
-    WriteBufferFromFile chunk_stat_file;
+    WriteBufferFromFile pack_stat_file;
 };
 
 } // namespace DM

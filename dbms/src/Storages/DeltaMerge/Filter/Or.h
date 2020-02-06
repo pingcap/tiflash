@@ -19,11 +19,11 @@ public:
 
     String name() override { return "or"; }
 
-    RSResult roughCheck(size_t chunk_id, const RSCheckParam & param) override
+    RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
     {
-        auto res = children[0]->roughCheck(chunk_id, param);
+        auto res = children[0]->roughCheck(pack_id, param);
         for (size_t i = 1; i < children.size(); ++i)
-            res = res || children[i]->roughCheck(chunk_id, param);
+            res = res || children[i]->roughCheck(pack_id, param);
         return res;
     }
 

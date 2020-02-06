@@ -7,14 +7,14 @@
 #include <Core/SortDescription.h>
 
 #include <DataStreams/IBlockInputStream.h>
-#include <Storages/DeltaMerge/Chunk.h>
-#include <Storages/DeltaMerge/ChunkBlockInputStream.h>
+#include <Storages/DeltaMerge/Pack.h>
+#include <Storages/DeltaMerge/PackBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/StoragePool.h>
-#include <Storages/Page/WriteBatch.h>
+#include <Storages/DeltaMerge/WriteBatches.h>
 
 namespace DB
 {
@@ -32,76 +32,12 @@ struct BlockOrDelete
 };
 using BlockOrDeletes = std::vector<BlockOrDelete>;
 
-struct WriteBatches
-{
-    WriteBatch log;
-    WriteBatch data;
-    WriteBatch meta;
-
-    PageIds writtenLog;
-    PageIds writtenData;
-
-    WriteBatch removed_log;
-    WriteBatch removed_data;
-    WriteBatch removed_meta;
-
-    void writeLogAndData(StoragePool & storage_pool)
-    {
-        storage_pool.log().write(log);
-        storage_pool.data().write(data);
-
-        for (auto & w : log.getWrites())
-            writtenLog.push_back(w.page_id);
-        for (auto & w : data.getWrites())
-            writtenData.push_back(w.page_id);
-
-        log.clear();
-        data.clear();
-    }
-
-    void rollbackWrittenLogAndData(StoragePool & storage_pool)
-    {
-        WriteBatch log_wb;
-        for (auto p : writtenLog)
-            log_wb.delPage(p);
-        WriteBatch data_wb;
-        for (auto p : writtenData)
-            data_wb.delPage(p);
-
-        storage_pool.log().write(log_wb);
-        storage_pool.data().write(data_wb);
-    }
-
-    void writeMeta(StoragePool & storage_pool)
-    {
-        storage_pool.meta().write(meta);
-        meta.clear();
-    }
-
-    void writeRemoves(StoragePool & storage_pool)
-    {
-        storage_pool.log().write(removed_log);
-        storage_pool.data().write(removed_data);
-        storage_pool.meta().write(removed_meta);
-
-        removed_log.clear();
-        removed_data.clear();
-        removed_meta.clear();
-    }
-
-    void writeAll(StoragePool & storage_pool)
-    {
-        writeLogAndData(storage_pool);
-        writeMeta(storage_pool);
-        writeRemoves(storage_pool);
-    }
-};
 
 struct AppendTask
 {
     bool   append_cache; // If not append cache, then clear cache.
-    size_t remove_chunks_back;
-    Chunks append_chunks;
+    size_t remove_packs_back;
+    Packs append_packs;
 };
 using AppendTaskPtr = std::shared_ptr<AppendTask>;
 
@@ -140,7 +76,7 @@ public:
         GenPageId     gen_data_page_id;
     };
 
-    DiskValueSpace(bool should_cache_, PageId page_id_, Chunks && chunks_ = {}, MutableColumnMap && cache_ = {}, size_t cache_chunks_ = 0);
+    DiskValueSpace(bool should_cache_, PageId page_id_, Packs && packs_ = {}, MutableColumnMap && cache_ = {}, size_t cache_packs_ = 0);
     DiskValueSpace(const DiskValueSpace & other);
 
     /// Called after the instance is created from existing metadata.
@@ -150,27 +86,27 @@ public:
     void              applyAppendToWriteBatches(const AppendTaskPtr & task, WriteBatches & wbs);
     DiskValueSpacePtr applyAppendTask(const OpContext & context, const AppendTaskPtr & task, const BlockOrDelete & update);
 
-    /// Write the blocks from sorted_input_stream into underlying storage, the returned chunks can be added to
-    /// specified value space instance by #setChunks or #appendChunkWithCache later.
-    static Chunks writeChunks(const OpContext & context, const BlockInputStreamPtr & sorted_input_stream, WriteBatch & wb);
+    /// Write the blocks from sorted_input_stream into underlying storage, the returned packs can be added to
+    /// specified value space instance by #setPacks or #appendPackWithCache later.
+    static Packs writePacks(const OpContext & context, const BlockInputStreamPtr & sorted_input_stream, WriteBatch & wb);
 
-    static Chunk writeDelete(const OpContext & context, const HandleRange & delete_range);
+    static Pack writeDelete(const OpContext & context, const HandleRange & delete_range);
 
-    /// Remove all chunks and clear cache.
-    void replaceChunks(WriteBatch &        meta_wb, //
+    /// Remove all packs and clear cache.
+    void replacePacks(WriteBatch &        meta_wb, //
                        WriteBatch &        removed_wb,
-                       Chunks &&           new_chunks,
+                       Packs &&           new_packs,
                        MutableColumnMap && cache_,
-                       size_t              cache_chunks_);
-    void replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks);
-    void clearChunks(WriteBatch & removed_wb);
-    void setChunks(WriteBatch & meta_wb, Chunks && new_chunks);
-    void setChunksAndCache(WriteBatch & meta_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_);
+                       size_t              cache_packs_);
+    void replacePacks(WriteBatch & meta_wb, WriteBatch & removed_wb, Packs && new_packs);
+    void clearPacks(WriteBatch & removed_wb);
+    void setPacks(WriteBatch & meta_wb, Packs && new_packs);
+    void setPacksAndCache(WriteBatch & meta_wb, Packs && new_packs, MutableColumnMap && cache_, size_t cache_packs_);
 
-    /// Append the chunk to this value space, and could cache the block in memory if it is too fragment.
-    void appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block);
+    /// Append the pack to this value space, and could cache the block in memory if it is too fragment.
+    void appendPackWithCache(const OpContext & context, Pack && pack, const Block & block);
 
-    /// Read the requested chunks' data and compact into a block.
+    /// Read the requested packs' data and compact into a block.
     /// The columns of the returned block are guaranteed to be in order of read_columns.
     Block read(const ColumnDefines & read_columns,
                const PageReader &    page_reader,
@@ -178,9 +114,9 @@ public:
                size_t                rows_limit,
                std::optional<size_t> reserve_rows = {}) const;
 
-    /// Read the chunk data.
+    /// Read the pack data.
     /// The columns of the returned block are guaranteed to be in order of read_columns.
-    Block read(const ColumnDefines & read_columns, const PageReader & page_reader, size_t chunk_index) const;
+    Block read(const ColumnDefines & read_columns, const PageReader & page_reader, size_t pack_index) const;
 
     /// The data of returned block is in insert order.
     BlockOrDeletes getMergeBlocks(const ColumnDefine & handle,
@@ -193,7 +129,7 @@ public:
     DiskValueSpacePtr tryFlushCache(const OpContext & context, WriteBatch & remove_data_wb, bool force = false);
 
     // TODO: getInputStream can be removed
-    ChunkBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
+    PackBlockInputStreamPtr getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const;
 
     DeltaValueSpacePtr getValueSpace(const PageReader &    page_reader, //
                                      const ColumnDefines & read_columns,
@@ -201,43 +137,43 @@ public:
                                      size_t                rows_limit) const;
 
     MutableColumnMap cloneCache();
-    size_t           cacheChunks() { return cache_chunks; }
+    size_t           cachePacks() { return cache_packs; }
 
     size_t num_rows() const;
-    size_t num_rows(size_t chunks_offset, size_t chunk_length) const;
+    size_t num_rows(size_t packs_offset, size_t pack_length) const;
     size_t num_deletes() const;
     size_t num_bytes() const;
-    size_t num_chunks() const;
+    size_t num_packs() const;
 
     size_t cacheRows() const;
     size_t cacheBytes() const;
 
     PageId         pageId() const { return page_id; }
-    const Chunks & getChunks() const { return chunks; }
-    Chunks         getChunksBefore(size_t rows, size_t deletes) const;
-    Chunks         getChunksAfter(size_t rows, size_t deletes) const;
+    const Packs & getPacks() const { return packs; }
+    Packs         getPacksBefore(size_t rows, size_t deletes) const;
+    Packs         getPacksAfter(size_t rows, size_t deletes) const;
 
     void check(const PageReader & meta_page_reader, const String & when);
 
 private:
     DiskValueSpacePtr doFlushCache(const OpContext & context, WriteBatch & remove_data_wb);
 
-    size_t rowsFromBack(size_t chunks) const;
+    size_t rowsFromBack(size_t packs) const;
 
-    /// Return (chunk_index, offset_in_chunk)
-    std::pair<size_t, size_t> findChunk(size_t rows) const;
-    std::pair<size_t, size_t> findChunk(size_t rows, size_t deletes) const;
+    /// Return (pack_index, offset_in_pack)
+    std::pair<size_t, size_t> findPack(size_t rows) const;
+    std::pair<size_t, size_t> findPack(size_t rows, size_t deletes) const;
 
 private:
     bool is_delta_vs;
 
-    // page_id and chunks are the only vars needed to persist.
+    // page_id and packs are the only vars needed to persist.
     PageId page_id;
-    Chunks chunks;
+    Packs packs;
 
-    // The cache is mainly used to merge fragment chunks.
+    // The cache is mainly used to merge fragment packs.
     MutableColumnMap cache;
-    size_t           cache_chunks = 0;
+    size_t           cache_packs = 0;
 
     Logger * log;
 };

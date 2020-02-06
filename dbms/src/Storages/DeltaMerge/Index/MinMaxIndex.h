@@ -49,20 +49,20 @@ public:
         return sizeof(UInt8) * has_null_marks->size() + sizeof(UInt8) * has_value_marks->size() + minmaxes->byteSize();
     }
 
-    void addChunk(const IColumn & column, const ColumnVector<UInt8> * del_mark);
+    void addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark);
 
     void                  write(const IDataType & type, WriteBuffer & buf);
     static MinMaxIndexPtr read(const IDataType & type, ReadBuffer & buf);
 
-    std::pair<Int64, Int64> getIntMinMax(size_t chunk_index);
+    std::pair<Int64, Int64> getIntMinMax(size_t pack_index);
 
-    std::pair<UInt64, UInt64> getUInt64MinMax(size_t chunk_index);
+    std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
     // TODO: Use has_null and value.isNull to check.
 
-    RSResult checkEqual(size_t chunk_index, const Field & value, const DataTypePtr & type);
-    RSResult checkGreater(size_t chunk_index, const Field & value, const DataTypePtr & type, int nan_direction);
-    RSResult checkGreaterEqual(size_t chunk_index, const Field & value, const DataTypePtr & type, int nan_direction);
+    RSResult checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
+    RSResult checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
+    RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
 
     String toString() const;
 };

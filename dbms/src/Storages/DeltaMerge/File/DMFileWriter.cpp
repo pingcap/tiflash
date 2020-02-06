@@ -19,7 +19,7 @@ DMFileWriter::DMFileWriter(const DMFilePtr &           dmfile_,
       max_compress_block_size(max_compress_block_size_),
       compression_settings(compression_settings_),
       wal_mode(wal_mode_),
-      chunk_stat_file(dmfile->chunkStatPath())
+      pack_stat_file(dmfile->packStatPath())
 {
     dmfile->setStatus(DMFile::Status::WRITING);
     for (auto & cd : write_columns)
@@ -50,7 +50,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 
 void DMFileWriter::write(const Block & block, size_t not_clean_rows)
 {
-    DMFile::ChunkStat stat;
+    DMFile::PackStat stat;
     stat.rows      = block.rows();
     stat.not_clean = not_clean_rows;
 
@@ -65,11 +65,11 @@ void DMFileWriter::write(const Block & block, size_t not_clean_rows)
             stat.first_tag = (UInt8)(col->get64(0));
     }
 
-    writePODBinary(stat, chunk_stat_file);
+    writePODBinary(stat, pack_stat_file);
     if (wal_mode)
-        chunk_stat_file.sync();
+        pack_stat_file.sync();
 
-    dmfile->addChunk(stat);
+    dmfile->addPack(stat);
 }
 
 void DMFileWriter::finalize()
@@ -91,7 +91,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             String name   = DMFile::getFileNameBase(col_id, substream);
             auto & stream = column_streams.at(name);
             if (stream->minmaxes)
-                stream->minmaxes->addChunk(column, nullptr);
+                stream->minmaxes->addPack(column, nullptr);
 
             /// There could already be enough data to compress into the new block.
             if (stream->original_hashing.offset() >= min_compress_block_size)

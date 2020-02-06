@@ -29,7 +29,7 @@ public:
 
     size_t getRows();
     size_t getBytes();
-    size_t getChunks();
+    size_t getPacks();
 
     void enableDMFilesGC();
 

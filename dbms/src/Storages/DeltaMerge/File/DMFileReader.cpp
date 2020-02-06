@@ -22,10 +22,10 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
     String data_path = reader.dmfile->colDataPath(file_name_base);
 
     auto mark_load = [&]() -> MarksInCompressedFilePtr {
-        auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getChunks());
+        auto res = std::make_shared<MarksInCompressedFile>(reader.dmfile->getPacks());
         if (res->empty()) // 0 rows.
             return res;
-        size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getChunks();
+        size_t size = sizeof(MarkInCompressedFile) * reader.dmfile->getPacks();
         auto   fd   = PageUtil::openFile<true>(mark_path);
         SCOPE_EXIT({ ::close(fd); });
         PageUtil::readFile(fd, 0, reinterpret_cast<char *>(res->data()), size, mark_path);
@@ -39,12 +39,12 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         marks = mark_load();
 
     size_t data_file_size = Poco::File(data_path).getSize();
-    size_t chunks         = reader.dmfile->getChunks();
+    size_t packs         = reader.dmfile->getPacks();
     size_t buffer_size    = 0;
     size_t estimated_size = 0;
-    for (size_t i = 0; i < chunks;)
+    for (size_t i = 0; i < packs;)
     {
-        if (!reader.use_chunks[i])
+        if (!reader.use_packs[i])
         {
             ++i;
             continue;
@@ -52,21 +52,21 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
         size_t cur_offset_in_file = (*marks)[i].offset_in_compressed_file;
         size_t end                = i + 1;
         // First find the end of current available range.
-        while (end < chunks && reader.use_chunks[end])
+        while (end < packs && reader.use_packs[end])
             ++end;
 
         // Second If the end of range is inside the block, we will need to read it too.
-        if (end < chunks)
+        if (end < packs)
         {
             size_t last_offset_in_file = (*marks)[end].offset_in_compressed_file;
             if ((*marks)[end].offset_in_decompressed_block > 0)
             {
-                while (end < chunks && (*marks)[end].offset_in_compressed_file == last_offset_in_file)
+                while (end < packs && (*marks)[end].offset_in_compressed_file == last_offset_in_file)
                     ++end;
             }
         }
 
-        size_t range_end_in_file = (end == chunks) ? data_file_size : (*marks)[end].offset_in_compressed_file;
+        size_t range_end_in_file = (end == packs) ? data_file_size : (*marks)[end].offset_in_compressed_file;
 
         size_t range = range_end_in_file - cur_offset_in_file;
         buffer_size  = std::max(buffer_size, range);
@@ -81,12 +81,12 @@ DMFileReader::Stream::Stream(DMFileReader & reader, //
               "file size: " << data_file_size << ", estimated read size: " << estimated_size << ", buffer_size: " << buffer_size
                             << " (aio_threshold: " << aio_threshold << ", max_read_buffer_size: " << max_read_buffer_size << ")");
 
-    for (size_t i = 0; i < chunks; ++i)
+    for (size_t i = 0; i < packs; ++i)
     {
-        if (reader.use_chunks[i])
+        if (reader.use_packs[i])
         {
             auto start = (*marks)[i].offset_in_compressed_file;
-            auto end   = (i == chunks - 1) ? data_file_size : (*marks)[i + 1].offset_in_compressed_file;
+            auto end   = (i == packs - 1) ? data_file_size : (*marks)[i + 1].offset_in_compressed_file;
             estimated_size += end - start;
         }
     }
@@ -100,7 +100,7 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
                            const ColumnDefines & read_columns_,
                            const HandleRange &   handle_range_,
                            const RSOperatorPtr & filter_,
-                           const IdSetPtr &      read_chunks_,
+                           const IdSetPtr &      read_packs_,
                            MarkCache *           mark_cache_,
                            MinMaxIndexCache *    index_cache_,
                            UInt64                hash_salt_,
@@ -115,10 +115,10 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
       mark_cache(mark_cache_),
       hash_salt(hash_salt_),
       rows_threshold_per_read(rows_threshold_per_read_),
-      chunk_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_chunks_),
-      handle_res(chunk_filter.getHandleRes()),
-      use_chunks(chunk_filter.getUseChunks()),
-      skip_chunks_by_column(read_columns.size(), 0),
+      pack_filter(dmfile_, index_cache_, hash_salt_, handle_range_, filter_, read_packs_),
+      handle_res(pack_filter.getHandleRes()),
+      use_packs(pack_filter.getUsePacks()),
+      skip_packs_by_column(read_columns.size(), 0),
       log(&Logger::get("DMFileReader"))
 {
     if (dmfile->getStatus() != DMFile::Status::READABLE)
@@ -141,20 +141,20 @@ DMFileReader::DMFileReader(bool                  enable_clean_read_,
     }
 }
 
-bool DMFileReader::shouldSeek(size_t chunk_id)
+bool DMFileReader::shouldSeek(size_t pack_id)
 {
-    // If current chunk is the first one, or we just finished reading the last chunk, then no need to seek.
-    return chunk_id != 0 && !use_chunks[chunk_id - 1];
+    // If current pack is the first one, or we just finished reading the last pack, then no need to seek.
+    return pack_id != 0 && !use_packs[pack_id - 1];
 }
 
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
-    for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id)
+    for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
-        skip_rows += dmfile->getChunkStat(next_chunk_id).rows;
+        skip_rows += dmfile->getPackStat(next_pack_id).rows;
     }
-    return next_chunk_id < use_chunks.size();
+    return next_pack_id < use_packs.size();
 }
 
 bool isExtraColumn(const ColumnDefine & cd)
@@ -164,27 +164,27 @@ bool isExtraColumn(const ColumnDefine & cd)
 
 Block DMFileReader::read()
 {
-    // Go to next available chunk.
-    for (; next_chunk_id < use_chunks.size() && !use_chunks[next_chunk_id]; ++next_chunk_id) {}
+    // Go to next available pack.
+    for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id) {}
 
-    if (next_chunk_id >= use_chunks.size())
+    if (next_pack_id >= use_packs.size())
         return {};
 
     // Find max continuing rows we can read.
-    size_t start_chunk_id = next_chunk_id;
+    size_t start_pack_id = next_pack_id;
 
-    auto & chunk_stats    = dmfile->getChunkStats();
+    auto & pack_stats    = dmfile->getPackStats();
     size_t read_rows      = 0;
     size_t not_clean_rows = 0;
 
-    RSResult expected_handle_res = handle_res[next_chunk_id];
-    for (; next_chunk_id < use_chunks.size() && use_chunks[next_chunk_id] && read_rows < rows_threshold_per_read; ++next_chunk_id)
+    RSResult expected_handle_res = handle_res[next_pack_id];
+    for (; next_pack_id < use_packs.size() && use_packs[next_pack_id] && read_rows < rows_threshold_per_read; ++next_pack_id)
     {
-        if (enable_clean_read && handle_res[next_chunk_id] != expected_handle_res)
+        if (enable_clean_read && handle_res[next_pack_id] != expected_handle_res)
             break;
 
-        read_rows += chunk_stats[next_chunk_id].rows;
-        not_clean_rows += chunk_stats[next_chunk_id].not_clean;
+        read_rows += pack_stats[next_pack_id].rows;
+        not_clean_rows += pack_stats[next_pack_id].not_clean;
     }
 
     if (!read_rows)
@@ -192,15 +192,15 @@ Block DMFileReader::read()
 
     Block res;
 
-    size_t read_chunks = next_chunk_id - start_chunk_id;
+    size_t read_packs = next_pack_id - start_pack_id;
 
-    // TODO: this will need better algorithm: we should separate those chunks which can and can not do clean read.
+    // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
     bool do_clean_read = enable_clean_read && expected_handle_res == All && !not_clean_rows;
     if (do_clean_read)
     {
         UInt64 max_version = 0;
-        for (size_t chunk_id = start_chunk_id; chunk_id < next_chunk_id; ++chunk_id)
-            max_version = std::max(chunk_filter.getMaxVersion(chunk_id), max_version);
+        for (size_t pack_id = start_pack_id; pack_id < next_pack_id; ++pack_id)
+            max_version = std::max(pack_filter.getMaxVersion(pack_id), max_version);
         do_clean_read = max_version <= max_data_version;
     }
 
@@ -213,29 +213,29 @@ Block DMFileReader::read()
             if (cd.id == EXTRA_HANDLE_COLUMN_ID)
             {
                 // Return the first row's handle
-                Handle min_handle = chunk_filter.getMinHandle(start_chunk_id);
+                Handle min_handle = pack_filter.getMinHandle(start_pack_id);
                 column            = cd.type->createColumnConst(read_rows, Field(min_handle));
             }
             else if (cd.id == VERSION_COLUMN_ID)
             {
-                column = cd.type->createColumnConst(read_rows, Field(chunk_stats[start_chunk_id].first_version));
+                column = cd.type->createColumnConst(read_rows, Field(pack_stats[start_pack_id].first_version));
             }
             else if (cd.id == TAG_COLUMN_ID)
             {
-                column = cd.type->createColumnConst(read_rows, Field((UInt64)(chunk_stats[start_chunk_id].first_tag)));
+                column = cd.type->createColumnConst(read_rows, Field((UInt64)(pack_stats[start_pack_id].first_tag)));
             }
 
             res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
 
-            skip_chunks_by_column[i] = read_chunks;
+            skip_packs_by_column[i] = read_packs;
         }
         else
         {
             String stream_name = DMFile::getFileNameBase(cd.id);
             auto & stream      = column_streams.at(stream_name);
-            if (shouldSeek(start_chunk_id) || skip_chunks_by_column[i] > 0)
+            if (shouldSeek(start_pack_id) || skip_packs_by_column[i] > 0)
             {
-                auto & mark = (*stream->marks)[start_chunk_id];
+                auto & mark = (*stream->marks)[start_pack_id];
                 stream->buf->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
             }
 
@@ -254,7 +254,7 @@ Block DMFileReader::read()
 
             res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
 
-            skip_chunks_by_column[i] = 0;
+            skip_packs_by_column[i] = 0;
         }
     }
 

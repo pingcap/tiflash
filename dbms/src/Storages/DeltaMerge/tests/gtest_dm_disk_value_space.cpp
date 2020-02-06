@@ -57,7 +57,8 @@ protected:
                                                  context.getSettingsRef().dm_segment_limit_rows,
                                                  context.getSettingsRef().dm_segment_delta_limit_rows,
                                                  context.getSettingsRef().dm_segment_delta_cache_limit_rows,
-                                                 context.getSettingsRef().dm_segment_stable_chunk_rows,
+                                                 context.getSettingsRef().dm_segment_delta_small_pack_rows,
+                                                 context.getSettingsRef().dm_segment_stable_pack_rows,
                                                  context.getSettingsRef().dm_enable_logical_split,
                                                  false,
                                                  false);
@@ -90,19 +91,19 @@ try
         Block      block2 = DMTestEnv::prepareSimpleWriteBlock(value_beg + num_rows_write / 2, value_beg + num_rows_write, false);
         auto       opc    = DiskValueSpace::OpContext::createForLogStorage(*dm_context);
         WriteBatch wb;
-        Chunks     chunks1 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
-        Chunks     chunks2 = DiskValueSpace::writeChunks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
+        Packs     packs1 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block1), wb);
+        Packs     packs2 = DiskValueSpace::writePacks(opc, std::make_shared<OneBlockInputStream>(block2), wb);
         dm_context->storage_pool.log().write(wb);
 
-        for (auto & chunk : chunks1)
+        for (auto & pack : packs1)
         {
-            delta->appendChunkWithCache(opc, std::move(chunk), block1);
+            delta->appendPackWithCache(opc, std::move(pack), block1);
         }
 
-        for (auto & chunk : chunks2)
+        for (auto & pack : packs2)
 
         {
-            delta->appendChunkWithCache(opc, std::move(chunk), block2);
+            delta->appendPackWithCache(opc, std::move(pack), block2);
         }
 
         EXPECT_EQ(num_rows_write, delta->num_rows(0, 2));
@@ -161,10 +162,10 @@ try
     }
 
     {
-        // read using `read` of chunk_index
-        const size_t chunk_index = 0;
+        // read using `read` of pack_index
+        const size_t pack_index = 0;
         PageReader   page_reader(dm_context->storage_pool.log());
-        Block        block = delta->read(table_columns, page_reader, chunk_index);
+        Block        block = delta->read(table_columns, page_reader, pack_index);
 
         // check the order of cols is the same as read_columns
         const Names col_names = block.getNames();
@@ -191,7 +192,7 @@ try
 }
 CATCH
 
-TEST_F(DiskValueSpace_test, writeChunks_OneBlock)
+TEST_F(DiskValueSpace_test, writePacks_OneBlock)
 {
     const Int64 pk_min = 20, pk_max = 40;
     Block       block = DMTestEnv::prepareSimpleWriteBlock(pk_min, pk_max, false);
@@ -199,15 +200,15 @@ TEST_F(DiskValueSpace_test, writeChunks_OneBlock)
 
     WriteBatch wb;
     auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
-    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
-    ASSERT_EQ(chunks.size(), 1UL);
+    auto       packs = DiskValueSpace::writePacks(opc, in, wb);
+    ASSERT_EQ(packs.size(), 1UL);
 
-    const Chunk & chunk = chunks[0];
-    ASSERT_EQ(chunk.getRows(), size_t(pk_max - pk_min));
-    ASSERT_EQ(chunk.getHandleFirstLast(), HandlePair(pk_min, pk_max - 1));
+    const Pack & pack = packs[0];
+    ASSERT_EQ(pack.getRows(), size_t(pk_max - pk_min));
+    ASSERT_EQ(pack.getHandleFirstLast(), HandlePair(pk_min, pk_max - 1));
 }
 
-TEST_F(DiskValueSpace_test, writeChunks_NonOverlapBlocks)
+TEST_F(DiskValueSpace_test, writePacks_NonOverlapBlocks)
 {
     const Int64         pk_min = 20, pk_max = 40;
     const Int64         pk_span = pk_max - pk_min;
@@ -237,22 +238,22 @@ TEST_F(DiskValueSpace_test, writeChunks_NonOverlapBlocks)
 
     WriteBatch wb;
     auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
-    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
-    ASSERT_EQ(chunks.size(), 2UL);
+    auto       packs = DiskValueSpace::writePacks(opc, in, wb);
+    ASSERT_EQ(packs.size(), 2UL);
 
     {
-        const Chunk & chunk = chunks[0];
-        ASSERT_EQ(chunk.getRows(), size_t(pk_span / 2));
-        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(pk_min, pk_min + pk_span / 2 - 1));
+        const Pack & pack = packs[0];
+        ASSERT_EQ(pack.getRows(), size_t(pk_span / 2));
+        EXPECT_EQ(pack.getHandleFirstLast(), HandlePair(pk_min, pk_min + pk_span / 2 - 1));
     }
     {
-        const Chunk & chunk = chunks[1];
-        ASSERT_EQ(chunk.getRows(), size_t(pk_span / 2));
-        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(pk_min + pk_span / 2, pk_max - 1));
+        const Pack & pack = packs[1];
+        ASSERT_EQ(pack.getRows(), size_t(pk_span / 2));
+        EXPECT_EQ(pack.getHandleFirstLast(), HandlePair(pk_min + pk_span / 2, pk_max - 1));
     }
 }
 
-TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocks)
+TEST_F(DiskValueSpace_test, writePacks_OverlapBlocks)
 {
     BlockInputStreamPtr in = {};
     {
@@ -306,30 +307,30 @@ TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocks)
 
     WriteBatch wb;
     auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
-    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
-    ASSERT_EQ(chunks.size(), 3UL);
+    auto       packs = DiskValueSpace::writePacks(opc, in, wb);
+    ASSERT_EQ(packs.size(), 3UL);
 
     {
-        const Chunk & chunk = chunks[0];
+        const Pack & pack = packs[0];
         // should be [20, 30], and pk=30 with 11 versions
-        ASSERT_EQ(chunk.getRows(), size_t(11 + 10));
-        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(20, 30));
+        ASSERT_EQ(pack.getRows(), size_t(11 + 10));
+        EXPECT_EQ(pack.getHandleFirstLast(), HandlePair(20, 30));
     }
     {
-        const Chunk & chunk = chunks[1];
+        const Pack & pack = packs[1];
         // should be [31, 40], and pk=40 with 6 versions
-        ASSERT_EQ(chunk.getRows(), size_t(9 + 6));
-        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(31, 40));
+        ASSERT_EQ(pack.getRows(), size_t(9 + 6));
+        EXPECT_EQ(pack.getHandleFirstLast(), HandlePair(31, 40));
     }
     {
-        const Chunk & chunk = chunks[2];
+        const Pack & pack = packs[2];
         // should be [41, 50)
-        ASSERT_EQ(chunk.getRows(), size_t(9));
-        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(41, 49));
+        ASSERT_EQ(pack.getRows(), size_t(9));
+        EXPECT_EQ(pack.getHandleFirstLast(), HandlePair(41, 49));
     }
 }
 
-TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocksMerged)
+TEST_F(DiskValueSpace_test, writePacks_OverlapBlocksMerged)
 {
     BlockInputStreamPtr in = {};
     {
@@ -380,21 +381,21 @@ TEST_F(DiskValueSpace_test, writeChunks_OverlapBlocksMerged)
 
     WriteBatch wb;
     auto       opc    = DiskValueSpace::OpContext::createForDataStorage(*dm_context);
-    auto       chunks = DiskValueSpace::writeChunks(opc, in, wb);
+    auto       packs = DiskValueSpace::writePacks(opc, in, wb);
     // Second block is merge to the first
-    ASSERT_EQ(chunks.size(), 2UL);
+    ASSERT_EQ(packs.size(), 2UL);
 
     {
-        const Chunk & chunk = chunks[0];
+        const Pack & pack = packs[0];
         // should be [20, 30], and pk=30 with 1 + 10 + 5 versions
-        ASSERT_EQ(chunk.getRows(), size_t(11 + 10 + 5));
-        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(20, 30));
+        ASSERT_EQ(pack.getRows(), size_t(11 + 10 + 5));
+        EXPECT_EQ(pack.getHandleFirstLast(), HandlePair(20, 30));
     }
     {
-        const Chunk & chunk = chunks[1];
+        const Pack & pack = packs[1];
         // should be [31, 50)
-        ASSERT_EQ(chunk.getRows(), size_t(19));
-        EXPECT_EQ(chunk.getHandleFirstLast(), HandlePair(31, 49));
+        ASSERT_EQ(pack.getRows(), size_t(19));
+        EXPECT_EQ(pack.getHandleFirstLast(), HandlePair(31, 49));
     }
 }
 

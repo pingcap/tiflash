@@ -884,15 +884,15 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_INT(total_stable_rows)
     INSERT_FLOAT(avg_stable_rows)
 
-    INSERT_INT(total_chunk_count_in_delta)
-    INSERT_FLOAT(avg_chunk_count_in_delta)
-    INSERT_FLOAT(avg_chunk_rows_in_delta)
-    INSERT_FLOAT(avg_chunk_bytes_in_delta)
+    INSERT_INT(total_pack_count_in_delta)
+    INSERT_FLOAT(avg_pack_count_in_delta)
+    INSERT_FLOAT(avg_pack_rows_in_delta)
+    INSERT_FLOAT(avg_pack_bytes_in_delta)
 
-    INSERT_INT(total_chunk_count_in_stable)
-    INSERT_FLOAT(avg_chunk_count_in_stable)
-    INSERT_FLOAT(avg_chunk_rows_in_stable)
-    INSERT_FLOAT(avg_chunk_bytes_in_stable)
+    INSERT_INT(total_pack_count_in_stable)
+    INSERT_FLOAT(avg_pack_count_in_stable)
+    INSERT_FLOAT(avg_pack_rows_in_stable)
+    INSERT_FLOAT(avg_pack_bytes_in_stable)
 
     INSERT_INT(storage_stable_num_snapshots);
     INSERT_INT(storage_stable_num_pages);

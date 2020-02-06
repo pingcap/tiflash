@@ -25,7 +25,7 @@ public:
             Block header = sorted_input_stream->getHeader();
             if (!header.has(pk_column_name))
             {
-                throw Exception("Try to write block to Chunk without pk column", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Try to write block to Pack without pk column", ErrorCodes::LOGICAL_ERROR);
             }
         }
     }

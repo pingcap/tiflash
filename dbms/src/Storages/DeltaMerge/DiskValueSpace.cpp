@@ -25,12 +25,12 @@ namespace DM
 // DiskValueSpace public methods.
 //==========================================================================================
 
-DiskValueSpace::DiskValueSpace(bool is_delta_vs_, PageId page_id_, Chunks && chunks_, MutableColumnMap && cache_, size_t cache_chunks_)
+DiskValueSpace::DiskValueSpace(bool is_delta_vs_, PageId page_id_, Packs && packs_, MutableColumnMap && cache_, size_t cache_packs_)
     : is_delta_vs(is_delta_vs_),
       page_id(page_id_),
-      chunks(std::move(chunks_)),
+      packs(std::move(packs_)),
       cache(std::move(cache_)),
-      cache_chunks(cache_chunks_),
+      cache_packs(cache_packs_),
       log(&Logger::get("DiskValueSpace"))
 {
 }
@@ -38,8 +38,8 @@ DiskValueSpace::DiskValueSpace(bool is_delta_vs_, PageId page_id_, Chunks && chu
 DiskValueSpace::DiskValueSpace(const DiskValueSpace & other)
     : is_delta_vs(other.is_delta_vs), //
       page_id(other.page_id),
-      chunks(other.chunks),
-      cache_chunks(other.cache_chunks),
+      packs(other.packs),
+      cache_packs(other.cache_packs),
       log(other.log)
 {
     for (auto & [col_id, col] : other.cache)
@@ -51,26 +51,26 @@ void DiskValueSpace::restore(const OpContext & context)
     // Deserialize.
     Page                 page = context.meta_storage.read(page_id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-    chunks = deserializeChunks(buf);
+    packs = deserializePacks(buf);
 
     // Restore cache.
-    if (is_delta_vs && !chunks.empty())
+    if (is_delta_vs && !packs.empty())
     {
-        size_t chunks_to_cache = 0;
-        for (ssize_t i = chunks.size() - 1; i >= 0; --i)
+        size_t packs_to_cache = 0;
+        for (ssize_t i = packs.size() - 1; i >= 0; --i)
         {
-            const auto & chunk = chunks[i];
-            // We can not cache a chunk which is a delete range and not the latest one.
-            if (chunk.isDeleteRange() && i != (ssize_t)chunks.size() - 1)
+            const auto & pack = packs[i];
+            // We can not cache a pack which is a delete range and not the latest one.
+            if (pack.isDeleteRange() && i != (ssize_t)packs.size() - 1)
                 break;
-            if (chunk.getRows() >= context.dm_context.delta_cache_limit_rows)
+            if (pack.getRows() >= context.dm_context.delta_cache_limit_rows)
                 break;
-            ++chunks_to_cache;
+            ++packs_to_cache;
         }
 
         // Load cache into memory.
         size_t     total_rows = num_rows();
-        size_t     cache_rows = rowsFromBack(chunks_to_cache);
+        size_t     cache_rows = rowsFromBack(packs_to_cache);
         PageReader page_reader(context.data_storage);
         Block      cache_data = read(context.dm_context.store_columns, page_reader, total_rows - cache_rows, cache_rows);
         if (unlikely(cache_data.rows() != cache_rows))
@@ -81,8 +81,8 @@ void DiskValueSpace::restore(const OpContext & context)
             ColumnWithTypeAndName & col = cache_data.getByName(col_define.name);
             cache[col_define.id]        = (*std::move(col.column)).mutate();
         }
-        // Note: cache_chunks must be set after #read() .
-        cache_chunks = chunks_to_cache;
+        // Note: cache_packs must be set after #read() .
+        cache_packs = packs_to_cache;
     }
 
     // Try flush now, in case of last flush failure recover.
@@ -90,9 +90,9 @@ void DiskValueSpace::restore(const OpContext & context)
     auto       new_instance = tryFlushCache(context, remove_data_wb);
     if (new_instance)
     {
-        chunks.swap(new_instance->chunks);
+        packs.swap(new_instance->packs);
         cache.swap(new_instance->cache);
-        cache_chunks = new_instance->cache_chunks;
+        cache_packs = new_instance->cache_packs;
     }
     context.data_storage.write(remove_data_wb);
 }
@@ -113,46 +113,44 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
     const size_t total_rows      = num_rows();
     const size_t in_storage_rows = total_rows - cache_rows;
 
-    Chunk delete_chunk = is_delete ? Chunk(delete_range) : Chunk();
-
     // If the newly appended object is a delete_range, then we must clear the cache and flush them.
 
     if (is_delta_vs && !is_delete //
         && (cache_rows + append_rows) < context.dm_context.delta_cache_limit_rows)
     {
         // Simply put the newly appended block into cache.
-        Chunk chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wbs.log, append_block);
+        Pack pack = preparePackDataWrite(context.dm_context, context.gen_data_page_id, wbs.log, append_block);
 
         task->append_cache       = true;
-        task->remove_chunks_back = 0;
+        task->remove_packs_back = 0;
 
-        task->append_chunks.emplace_back(std::move(chunk));
+        task->append_packs.emplace_back(std::move(pack));
     }
     else
     {
         // Flush cache.
 
         task->append_cache       = false;
-        task->remove_chunks_back = cache_chunks;
+        task->remove_packs_back = cache_packs;
 
-        if (!cache_chunks)
+        if (!cache_packs)
         {
             // There are no caches, simple write the newly block or delete_range is enough.
-            Chunk chunk
-                = is_delete ? delete_chunk : prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wbs.log, append_block);
+            Pack pack
+                = is_delete ? Pack(delete_range) : preparePackDataWrite(context.dm_context, context.gen_data_page_id, wbs.log, append_block);
 
-            task->append_chunks.emplace_back(std::move(chunk));
+            task->append_packs.emplace_back(std::move(pack));
         }
         else
         {
-            // Merge the former caches chunks and the newly block into one big chunk, and then flush it.
-            // delete_range is stored by a separated chunk.
+            // Merge the former caches packs and the newly block into one big pack, and then flush it.
+            // delete_range is stored by a separated pack.
 
-            size_t cache_start = chunks.size() - cache_chunks;
-            for (size_t i = cache_start; i < chunks.size(); ++i)
+            size_t cache_start = packs.size() - cache_packs;
+            for (size_t i = cache_start; i < packs.size(); ++i)
             {
-                auto & old_chunk = chunks[i];
-                for (const auto & [col_id, col_meta] : old_chunk.getMetas())
+                auto & old_pack = packs[i];
+                for (const auto & [col_id, col_meta] : old_pack.getMetas())
                 {
                     (void)col_id;
                     wbs.removed_log.delPage(col_meta.page_id);
@@ -166,7 +164,7 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
                 // TODO: Currently in write thread, we do not use snapshot read. This may need to refactor later.
 
                 PageReader page_reader(context.data_storage);
-                // Load fragment chunks' data from disk.
+                // Load fragment packs' data from disk.
                 compacted_block = read(context.dm_context.store_columns, //
                                        page_reader,
                                        in_storage_rows,
@@ -195,11 +193,11 @@ AppendTaskPtr DiskValueSpace::createAppendTask(const OpContext & context, WriteB
                 }
             }
 
-            Chunk compacted_chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wbs.log, compacted_block);
+            Pack compacted_pack = preparePackDataWrite(context.dm_context, context.gen_data_page_id, wbs.log, compacted_block);
 
-            task->append_chunks.emplace_back(std::move(compacted_chunk));
+            task->append_packs.emplace_back(std::move(compacted_pack));
             if (is_delete)
-                task->append_chunks.emplace_back(delete_chunk);
+                task->append_packs.emplace_back(Pack(delete_range));
         }
     }
 
@@ -210,8 +208,8 @@ void DiskValueSpace::applyAppendToWriteBatches(const AppendTaskPtr & task, Write
 {
     assert(is_delta_vs == true);
     // Serialize meta updates and return by wbs.meta, later we will commit them in DeltaMergeStore level.
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
-    serializeChunks(buf, chunks.begin(), chunks.begin() + (chunks.size() - task->remove_chunks_back), task->append_chunks);
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
+    serializePacks(buf, packs.begin(), packs.begin() + (packs.size() - task->remove_packs_back), task->append_packs);
     const auto data_size = buf.count();
     wbs.meta.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
 }
@@ -222,17 +220,16 @@ DiskValueSpacePtr DiskValueSpace::applyAppendTask(const OpContext & context, con
 
     // Apply in memory.
     DiskValueSpace * instance = this;
-    if (task->remove_chunks_back > 0)
+    if (task->remove_packs_back > 0)
     {
-        // If any chunks got removed, then we create a new instance.
+        // If any packs got removed, then we create a new instance.
         // Make sure a reference to an instance is read constantly by rows.
-        Chunks new_chunks(chunks.begin(), chunks.end());
-        instance = new DiskValueSpace(is_delta_vs, page_id, std::move(new_chunks));
-        instance->chunks.resize(chunks.size() - task->remove_chunks_back);
+        Packs new_packs(packs.begin(), packs.end() - task->remove_packs_back);
+        instance = new DiskValueSpace(is_delta_vs, page_id, std::move(new_packs));
     }
 
-    for (auto & chunk : task->append_chunks)
-        instance->chunks.emplace_back(std::move(chunk));
+    for (auto & pack : task->append_packs)
+        instance->packs.emplace_back(std::move(pack));
 
     if (task->append_cache)
     {
@@ -250,12 +247,12 @@ DiskValueSpacePtr DiskValueSpace::applyAppendTask(const OpContext & context, con
 
             instance->cache[col_define.id]->insertRangeFrom(*col.column, 0, block_rows);
         }
-        ++instance->cache_chunks;
+        ++instance->cache_packs;
     }
     else
     {
         instance->cache.clear();
-        instance->cache_chunks = 0;
+        instance->cache_packs = 0;
     }
 
     if (instance != this)
@@ -264,31 +261,31 @@ DiskValueSpacePtr DiskValueSpace::applyAppendTask(const OpContext & context, con
         return {};
 }
 
-Chunks DiskValueSpace::writeChunks(const OpContext & context, const BlockInputStreamPtr & sorted_input_stream, WriteBatch & wb)
+Packs DiskValueSpace::writePacks(const OpContext & context, const BlockInputStreamPtr & sorted_input_stream, WriteBatch & wb)
 {
     // Cleanning up the boundary between blocks.
     const String &             pk_column_name = context.dm_context.handle_column.name;
     ReorganizeBlockInputStream stream(sorted_input_stream, pk_column_name);
 
-    Chunks chunks;
+    Packs packs;
     while (true)
     {
         Block block = stream.read();
         if (!block)
             break;
-        Chunk chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, wb, block);
-        chunks.push_back(std::move(chunk));
+        Pack pack = preparePackDataWrite(context.dm_context, context.gen_data_page_id, wb, block);
+        packs.push_back(std::move(pack));
     }
 
     if constexpr (DM_RUN_CHECK)
     {
-        //  Sanity check the boundary between different chunks is not overlap
-        if (chunks.size() > 1)
+        //  Sanity check the boundary between different packs is not overlap
+        if (packs.size() > 1)
         {
-            for (size_t i = 1; i < chunks.size(); ++i)
+            for (size_t i = 1; i < packs.size(); ++i)
             {
-                const Chunk & prev = chunks[i - 1];
-                const Chunk & curr = chunks[i];
+                const Pack & prev = packs[i - 1];
+                const Pack & curr = packs[i];
                 if (prev.isDeleteRange() || curr.isDeleteRange())
                 {
                     throw Exception("Unexpected DeleteRange in stable inputstream. prev:" + prev.info() + " curr: " + curr.info(),
@@ -297,103 +294,103 @@ Chunks DiskValueSpace::writeChunks(const OpContext & context, const BlockInputSt
 
                 const HandlePair prev_handle = prev.getHandleFirstLast();
                 const HandlePair curr_handle = curr.getHandleFirstLast();
-                // pk should be increasing and no overlap between chunks
+                // pk should be increasing and no overlap between packs
                 if (prev_handle.second >= curr_handle.first)
                 {
-                    throw Exception("Overlap chunks between " + prev.info() + " and " + curr.info(), ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Overlap packs between " + prev.info() + " and " + curr.info(), ErrorCodes::LOGICAL_ERROR);
                 }
             }
         }
     }
-    return chunks;
+    return packs;
 }
 
-Chunk DiskValueSpace::writeDelete(const OpContext &, const HandleRange & delete_range)
+Pack DiskValueSpace::writeDelete(const OpContext &, const HandleRange & delete_range)
 {
-    return Chunk(delete_range);
+    return Pack(delete_range);
 }
 
-void DiskValueSpace::clearChunks(WriteBatch & removed_wb)
+void DiskValueSpace::clearPacks(WriteBatch & removed_wb)
 {
-    for (const auto & c : chunks)
+    for (const auto & c : packs)
     {
         for (const auto & m : c.getMetas())
             removed_wb.delPage(m.second.page_id);
     }
 
-    Chunks tmp;
-    chunks.swap(tmp);
+    Packs tmp;
+    packs.swap(tmp);
 
     cache.clear();
-    cache_chunks = 0;
+    cache_packs = 0;
 }
 
-void DiskValueSpace::replaceChunks(
-    WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_)
+void DiskValueSpace::replacePacks(
+    WriteBatch & meta_wb, WriteBatch & removed_wb, Packs && new_packs, MutableColumnMap && cache_, size_t cache_packs_)
 {
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
-    serializeChunks(buf, new_chunks.begin(), new_chunks.end(), {});
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
+    serializePacks(buf, new_packs.begin(), new_packs.end(), {});
     auto data_size = buf.count();
     meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
 
-    for (const auto & c : chunks)
+    for (const auto & c : packs)
     {
         for (const auto & m : c.getMetas())
             removed_wb.delPage(m.second.page_id);
     }
 
-    chunks.swap(new_chunks);
+    packs.swap(new_packs);
 
     cache        = std::move(cache_);
-    cache_chunks = cache_chunks_;
+    cache_packs = cache_packs_;
 }
 
-void DiskValueSpace::replaceChunks(WriteBatch & meta_wb, WriteBatch & removed_wb, Chunks && new_chunks)
+void DiskValueSpace::replacePacks(WriteBatch & meta_wb, WriteBatch & removed_wb, Packs && new_packs)
 {
-    replaceChunks(meta_wb, removed_wb, std::move(new_chunks), {}, 0);
+    replacePacks(meta_wb, removed_wb, std::move(new_packs), {}, 0);
 }
 
-void DiskValueSpace::setChunks(WriteBatch & meta_wb, Chunks && new_chunks)
+void DiskValueSpace::setPacks(WriteBatch & meta_wb, Packs && new_packs)
 {
-    setChunksAndCache(meta_wb, std::move(new_chunks), {}, 0);
+    setPacksAndCache(meta_wb, std::move(new_packs), {}, 0);
 }
 
-void DiskValueSpace::setChunksAndCache(WriteBatch & meta_wb, Chunks && new_chunks, MutableColumnMap && cache_, size_t cache_chunks_)
+void DiskValueSpace::setPacksAndCache(WriteBatch & meta_wb, Packs && new_packs, MutableColumnMap && cache_, size_t cache_packs_)
 {
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
-    serializeChunks(buf, new_chunks.begin(), new_chunks.end(), {});
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
+    serializePacks(buf, new_packs.begin(), new_packs.end(), {});
     auto data_size = buf.count();
     meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
 
     cache        = std::move(cache_);
-    cache_chunks = cache_chunks_;
+    cache_packs = cache_packs_;
 }
 
-void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && chunk, const Block & block)
+void DiskValueSpace::appendPackWithCache(const OpContext & context, Pack && pack, const Block & block)
 {
     // should only append to delta
     assert(is_delta_vs);
     {
-        MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
-        serializeChunks(buf, chunks.begin(), chunks.end(), &chunk);
+        MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
+        serializePacks(buf, packs.begin(), packs.end(), &pack);
         auto       data_size = buf.count();
         WriteBatch meta_wb;
         meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
         context.meta_storage.write(meta_wb);
     }
 
-    chunks.push_back(std::move(chunk));
+    packs.push_back(std::move(pack));
 
     auto write_rows = block.rows();
     if (!write_rows)
     {
-        // If it is an empty chunk, then nothing to append.
-        ++cache_chunks;
+        // If it is an empty pack, then nothing to append.
+        ++cache_packs;
         return;
     }
 
-    // If former cache is empty, and this chunk is big enough, then no need to cache.
-    if (cache_chunks == 0 && write_rows >= context.dm_context.delta_cache_limit_rows)
+    // If former cache is empty, and this pack is big enough, then no need to cache.
+    if (cache_packs == 0 && write_rows >= context.dm_context.delta_cache_limit_rows)
         return;
 
     for (const auto & col_define : context.dm_context.store_columns)
@@ -406,7 +403,7 @@ void DiskValueSpace::appendChunkWithCache(const OpContext & context, Chunk && ch
 
         cache[col_define.id]->insertRangeFrom(*col.column, 0, write_rows);
     }
-    ++cache_chunks;
+    ++cache_packs;
 }
 
 Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
@@ -427,32 +424,32 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
         columns.back()->reserve(reserve_rows);
     }
 
-    auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(rows_offset);
-    auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(rows_offset + rows_limit);
+    auto [start_pack_index, rows_start_in_start_pack] = findPack(rows_offset);
+    auto [end_pack_index, rows_end_in_end_pack]       = findPack(rows_offset + rows_limit);
 
-    size_t chunk_cache_start = chunks.size() - cache_chunks;
+    size_t pack_cache_start = packs.size() - cache_packs;
     size_t already_read_rows = 0;
 
-    /// For the chunks in storage, we read chunk by chunk, instead of column by column.
-    /// Because the column data of a same chunk are likely to be stored together, or at least closed.
-    /// While for the chunks in cache, we read column by column.
+    /// For the packs in storage, we read pack by pack, instead of column by column.
+    /// Because the column data of a same pack are likely to be stored together, or at least closed.
+    /// While for the packs in cache, we read column by column.
 
-    size_t chunk_index = start_chunk_index;
-    for (; chunk_index < chunk_cache_start && chunk_index <= end_chunk_index; ++chunk_index)
+    size_t pack_index = start_pack_index;
+    for (; pack_index < pack_cache_start && pack_index <= end_pack_index; ++pack_index)
     {
-        const auto & cur_chunk = chunks[chunk_index];
+        const auto & cur_pack = packs[pack_index];
 
-        if (cur_chunk.getRows())
+        if (cur_pack.getRows())
         {
-            size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
-            size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : cur_chunk.getRows();
+            size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
+            size_t rows_end_in_pack   = pack_index == end_pack_index ? rows_end_in_end_pack : cur_pack.getRows();
 
-            if (rows_end_in_chunk > rows_start_in_chunk)
+            if (rows_end_in_pack > rows_start_in_pack)
             {
-                readChunkData(
-                    columns, read_column_defines, cur_chunk, page_reader, rows_start_in_chunk, rows_end_in_chunk - rows_start_in_chunk);
+                readPackData(
+                    columns, read_column_defines, cur_pack, page_reader, rows_start_in_pack, rows_end_in_pack - rows_start_in_pack);
 
-                already_read_rows += rows_end_in_chunk - rows_start_in_chunk;
+                already_read_rows += rows_end_in_pack - rows_start_in_pack;
             }
         }
     }
@@ -463,20 +460,20 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
     {
         // TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
 
-        // chunk_index could be larger than chunk_cache_start.
+        // pack_index could be larger than pack_cache_start.
         size_t cache_rows_offset = 0;
-        for (size_t i = chunk_cache_start; i < chunk_index; ++i)
-            cache_rows_offset += chunks[i].getRows();
+        for (size_t i = pack_cache_start; i < pack_index; ++i)
+            cache_rows_offset += packs[i].getRows();
 
         for (size_t index = 0; index < read_column_defines.size(); ++index)
         {
             const ColumnDefine & define    = read_column_defines[index];
             auto &               cache_col = cache.at(define.id); // TODO new inserted col'id don't exist in cache.
 
-            size_t rows_offset_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
+            size_t rows_offset_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
 
             // TODO columns[index].type maybe not consisted with cache_col after ddl.
-            columns[index]->insertRangeFrom(*cache_col, cache_rows_offset + rows_offset_in_chunk, rows_limit - already_read_rows);
+            columns[index]->insertRangeFrom(*cache_col, cache_rows_offset + rows_offset_in_pack, rows_limit - already_read_rows);
         }
     }
 
@@ -490,27 +487,27 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines,
     return res;
 }
 
-Block DiskValueSpace::read(const ColumnDefines & read_column_defines, const PageReader & page_reader, size_t chunk_index) const
+Block DiskValueSpace::read(const ColumnDefines & read_column_defines, const PageReader & page_reader, size_t pack_index) const
 {
     if (read_column_defines.empty())
         return {};
 
-    const auto & chunk = chunks.at(chunk_index);
+    const auto & pack = packs.at(pack_index);
 
     MutableColumns columns;
     for (const auto & define : read_column_defines)
     {
         columns.emplace_back(define.type->createColumn());
-        columns.back()->reserve(chunk.getRows());
+        columns.back()->reserve(pack.getRows());
     }
 
-    if (chunk.getRows())
+    if (pack.getRows())
     {
-        size_t chunk_cache_start = chunks.size() - cache_chunks;
-        if (chunk_index < chunk_cache_start)
+        size_t pack_cache_start = packs.size() - cache_packs;
+        if (pack_index < pack_cache_start)
         {
             // Read from storage
-            readChunkData(columns, read_column_defines, chunk, page_reader, 0, chunk.getRows());
+            readPackData(columns, read_column_defines, pack, page_reader, 0, pack.getRows());
         }
         else
         {
@@ -518,14 +515,14 @@ Block DiskValueSpace::read(const ColumnDefines & read_column_defines, const Page
 
             // TODO We do flush each time in `StorageDeltaMerge::alterImpl`, so that there is only the data with newest schema in cache. We ignore either new inserted col nor col type changed in cache for now.
             size_t cache_rows_offset = 0;
-            for (size_t i = chunk_cache_start; i < chunk_index; ++i)
-                cache_rows_offset += chunks[i].getRows();
+            for (size_t i = pack_cache_start; i < pack_index; ++i)
+                cache_rows_offset += packs[i].getRows();
 
             for (size_t index = 0; index < read_column_defines.size(); ++index)
             {
                 const auto & define    = read_column_defines[index];
                 auto &       cache_col = cache.at(define.id);
-                columns[index]->insertRangeFrom(*cache_col, cache_rows_offset, chunk.getRows());
+                columns[index]->insertRangeFrom(*cache_col, cache_rows_offset, pack.getRows());
             }
         }
     }
@@ -549,28 +546,28 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
 {
     BlockOrDeletes res;
 
-    auto [start_chunk_index, rows_start_in_start_chunk] = findChunk(rows_begin, deletes_begin);
-    auto [end_chunk_index, rows_end_in_end_chunk]       = findChunk(rows_end, deletes_end);
+    auto [start_pack_index, rows_start_in_start_pack] = findPack(rows_begin, deletes_begin);
+    auto [end_pack_index, rows_end_in_end_pack]       = findPack(rows_end, deletes_end);
 
     size_t block_rows_start = rows_begin;
     size_t block_rows_end   = rows_begin;
 
-    for (size_t chunk_index = start_chunk_index; chunk_index < chunks.size() && chunk_index <= end_chunk_index; ++chunk_index)
+    for (size_t pack_index = start_pack_index; pack_index < packs.size() && pack_index <= end_pack_index; ++pack_index)
     {
-        const Chunk & chunk = chunks[chunk_index];
+        const Pack & pack = packs[pack_index];
 
-        size_t rows_start_in_chunk = chunk_index == start_chunk_index ? rows_start_in_start_chunk : 0;
-        size_t rows_end_in_chunk   = chunk_index == end_chunk_index ? rows_end_in_end_chunk : chunk.getRows();
+        size_t rows_start_in_pack = pack_index == start_pack_index ? rows_start_in_start_pack : 0;
+        size_t rows_end_in_pack   = pack_index == end_pack_index ? rows_end_in_end_pack : pack.getRows();
 
-        block_rows_end += rows_end_in_chunk - rows_start_in_chunk;
+        block_rows_end += rows_end_in_pack - rows_start_in_pack;
 
-        if (chunk.isDeleteRange() || (chunk_index == chunks.size() - 1 || chunk_index == end_chunk_index))
+        if (pack.isDeleteRange() || (pack_index == packs.size() - 1 || pack_index == end_pack_index))
         {
             if (block_rows_end != block_rows_start)
                 res.emplace_back(
                     read({handle, getVersionColumnDefine()}, page_reader, block_rows_start, block_rows_end - block_rows_start));
-            if (chunk.isDeleteRange())
-                res.emplace_back(chunk.getDeleteRange());
+            if (pack.isDeleteRange())
+                res.emplace_back(pack.getDeleteRange());
 
             block_rows_start = block_rows_end;
         }
@@ -581,11 +578,11 @@ BlockOrDeletes DiskValueSpace::getMergeBlocks(const ColumnDefine & handle,
 
 DiskValueSpacePtr DiskValueSpace::tryFlushCache(const OpContext & context, WriteBatch & remove_data_wb, bool force)
 {
-    if (cache_chunks == 0)
+    if (cache_packs == 0)
         return {};
 
-    // If last chunk is a delete range, we should flush cache.
-    HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
+    // If last pack is a delete range, we should flush cache.
+    HandleRange delete_range = packs.back().isDeleteRange() ? packs.back().getDeleteRange() : HandleRange::newNone();
     if (!delete_range.none())
         force = true;
 
@@ -602,34 +599,34 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
     const size_t total_rows      = num_rows();
     const size_t in_storage_rows = total_rows - cache_rows;
 
-    HandleRange delete_range = chunks.back().isDeleteRange() ? chunks.back().getDeleteRange() : HandleRange::newNone();
+    HandleRange delete_range = packs.back().isDeleteRange() ? packs.back().getDeleteRange() : HandleRange::newNone();
 
-    if (cache_chunks <= 1)
+    if (cache_packs <= 1)
     {
-        // One chunk no need to compact.
+        // One pack no need to compact.
         cache.clear();
-        cache_chunks = 0;
+        cache_packs = 0;
         return {};
     }
 
     // Create an new instance.
-    Chunks tmp_chunks(chunks.begin(), chunks.end());
-    auto   new_instance = std::make_shared<DiskValueSpace>(is_delta_vs, page_id, std::move(tmp_chunks));
+    Packs tmp_packs(packs.begin(), packs.end());
+    auto   new_instance = std::make_shared<DiskValueSpace>(is_delta_vs, page_id, std::move(tmp_packs));
 
     EventRecorder recorder(ProfileEvents::DMFlushDeltaCache, ProfileEvents::DMFlushDeltaCacheNS);
 
     LOG_DEBUG(log, "Start flush cache");
 
-    /// Flush cache to disk and replace the fragment chunks.
+    /// Flush cache to disk and replace the fragment packs.
 
     WriteBatch data_wb_insert;
     WriteBatch meta_wb;
 
-    size_t cache_start = chunks.size() - cache_chunks;
-    for (size_t i = cache_start; i < chunks.size(); ++i)
+    size_t cache_start = packs.size() - cache_packs;
+    for (size_t i = cache_start; i < packs.size(); ++i)
     {
-        auto & old_chunk = chunks[i];
-        for (const auto & [col_id, col_meta] : old_chunk.getMetas())
+        auto & old_pack = packs[i];
+        for (const auto & [col_id, col_meta] : old_pack.getMetas())
         {
             (void)col_id;
             remove_data_wb.delPage(col_meta.page_id);
@@ -659,16 +656,16 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
         }
     }
 
-    Chunk compacted_chunk = prepareChunkDataWrite(context.dm_context, context.gen_data_page_id, data_wb_insert, compacted);
+    Pack compacted_pack = preparePackDataWrite(context.dm_context, context.gen_data_page_id, data_wb_insert, compacted);
 
-    Chunks new_chunks(chunks.begin(), chunks.begin() + (chunks.size() - cache_chunks));
-    new_chunks.push_back(std::move(compacted_chunk));
+    Packs new_packs(packs.begin(), packs.begin() + (packs.size() - cache_packs));
+    new_packs.push_back(std::move(compacted_pack));
     if (!delete_range.none())
-        new_chunks.emplace_back(delete_range);
+        new_packs.emplace_back(delete_range);
 
     {
-        MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
-        serializeChunks(buf, new_chunks.begin(), new_chunks.end(), {});
+        MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
+        serializePacks(buf, new_packs.begin(), new_packs.end(), {});
         auto data_size = buf.count();
         meta_wb.putPage(page_id, 0, buf.tryGetReadBuffer(), data_size);
     }
@@ -684,9 +681,9 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
     // The following code are pure memory operations,
     // they are considered safe and won't fail.
 
-    new_instance->chunks.swap(new_chunks);
+    new_instance->packs.swap(new_packs);
     new_instance->cache.clear();
-    new_instance->cache_chunks = 0;
+    new_instance->cache_packs = 0;
 
     // ============================================================
 
@@ -697,9 +694,9 @@ DiskValueSpacePtr DiskValueSpace::doFlushCache(const OpContext & context, WriteB
     return new_instance;
 }
 
-ChunkBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const
+PackBlockInputStreamPtr DiskValueSpace::getInputStream(const ColumnDefines & read_columns, const PageReader & page_reader) const
 {
-    return std::make_shared<ChunkBlockInputStream>(chunks, read_columns, page_reader, RSOperatorPtr());
+    return std::make_shared<PackBlockInputStream>(packs, read_columns, page_reader, RSOperatorPtr());
 }
 
 DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_reader,
@@ -709,28 +706,28 @@ DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_read
 {
     auto mvs = std::make_shared<DeltaValueSpace>();
 
-    size_t chunk_cache_start = chunks.size() - cache_chunks;
+    size_t pack_cache_start = packs.size() - cache_packs;
     size_t already_read_rows = 0;
-    size_t chunk_index       = 0;
-    for (; chunk_index < chunk_cache_start && chunk_index < chunks.size(); ++chunk_index)
+    size_t pack_index       = 0;
+    for (; pack_index < pack_cache_start && pack_index < packs.size(); ++pack_index)
     {
-        auto & chunk = chunks[chunk_index];
-        if (chunk.isDeleteRange() || !chunk.getRows())
+        auto & pack = packs[pack_index];
+        if (pack.isDeleteRange() || !pack.getRows())
             continue;
 #if 0
         // FIXME: Disable filter since we need to use all values to build DeltaTree.
-        auto & handle_meta            = chunk.getColumn(EXTRA_HANDLE_COLUMN_ID);
+        auto & handle_meta            = pack.getColumn(EXTRA_HANDLE_COLUMN_ID);
         auto [min_handle, max_handle] = handle_meta.minmax->getIntMinMax(0);
         if (range.intersect(min_handle, max_handle))
-            mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
+            mvs->addBlock(read(read_columns, page_reader, pack_index), pack.getRows());
         else
-            mvs->addBlock({}, chunk.getRows());
+            mvs->addBlock({}, pack.getRows());
 #else
         (void)range;
-        mvs->addBlock(read(read_columns, page_reader, chunk_index), chunk.getRows());
+        mvs->addBlock(read(read_columns, page_reader, pack_index), pack.getRows());
 #endif
 
-        already_read_rows += chunk.getRows();
+        already_read_rows += pack.getRows();
         if (already_read_rows >= rows_limit)
             break;
     }
@@ -754,26 +751,26 @@ DeltaValueSpacePtr DiskValueSpace::getValueSpace(const PageReader &    page_read
     return mvs;
 }
 
-Chunks DiskValueSpace::getChunksBefore(size_t rows, size_t deletes) const
+Packs DiskValueSpace::getPacksBefore(size_t rows, size_t deletes) const
 {
-    auto [chunk_index, offset_in_chunk] = findChunk(rows, deletes);
-    if (offset_in_chunk != 0)
-        throw Exception("offset_in_chunk is expected to be zero");
-    return Chunks(chunks.begin(), chunks.begin() + chunk_index);
+    auto [pack_index, offset_in_pack] = findPack(rows, deletes);
+    if (offset_in_pack != 0)
+        throw Exception("offset_in_pack is expected to be zero");
+    return Packs(packs.begin(), packs.begin() + pack_index);
 }
 
-Chunks DiskValueSpace::getChunksAfter(size_t rows, size_t deletes) const
+Packs DiskValueSpace::getPacksAfter(size_t rows, size_t deletes) const
 {
-    auto [chunk_index, offset_in_chunk] = findChunk(rows, deletes);
-    if (offset_in_chunk != 0)
-        throw Exception("offset_in_chunk is expected to be zero");
-    return Chunks(chunks.begin() + chunk_index, chunks.end());
+    auto [pack_index, offset_in_pack] = findPack(rows, deletes);
+    if (offset_in_pack != 0)
+        throw Exception("offset_in_pack is expected to be zero");
+    return Packs(packs.begin() + pack_index, packs.end());
 }
 
 void DiskValueSpace::check(const PageReader & meta_page_reader, const String & when)
 {
-    MemoryWriteBuffer buf(0, CHUNK_SERIALIZE_BUFFER_SIZE);
-    serializeChunks(buf, chunks.begin(), chunks.end());
+    MemoryWriteBuffer buf(0, PACK_SERIALIZE_BUFFER_SIZE);
+    serializePacks(buf, packs.begin(), packs.end());
     auto   size        = buf.count();
     char * data_buffer = (char *)::malloc(size);
     SCOPE_EXIT({ ::free(data_buffer); });
@@ -784,9 +781,9 @@ void DiskValueSpace::check(const PageReader & meta_page_reader, const String & w
     {
         auto                 page = meta_page_reader.read(page_id);
         ReadBufferFromMemory rb(page.data.begin(), page.data.size());
-        auto                 disk_chunks = deserializeChunks(rb);
+        auto                 disk_packs = deserializePacks(rb);
         throw Exception(when + ", DiskValueSpace [" + DB::toString(page_id) + "] memory and disk content not match, memory: "
-                        + DB::toString(chunks.size()) + ", disk: " + DB::toString(disk_chunks.size()));
+                        + DB::toString(packs.size()) + ", disk: " + DB::toString(disk_packs.size()));
     }
 }
 
@@ -803,23 +800,23 @@ MutableColumnMap DiskValueSpace::cloneCache()
 size_t DiskValueSpace::num_rows() const
 {
     size_t rows = 0;
-    for (const auto & c : chunks)
+    for (const auto & c : packs)
         rows += c.getRows();
     return rows;
 }
 
-size_t DiskValueSpace::num_rows(size_t chunks_offset, size_t chunks_length) const
+size_t DiskValueSpace::num_rows(size_t packs_offset, size_t packs_length) const
 {
     size_t rows = 0;
-    for (size_t i = chunks_offset; i < chunks_offset + chunks_length; ++i)
-        rows += chunks.at(i).getRows();
+    for (size_t i = packs_offset; i < packs_offset + packs_length; ++i)
+        rows += packs.at(i).getRows();
     return rows;
 }
 
 size_t DiskValueSpace::num_deletes() const
 {
     size_t deletes = 0;
-    for (const auto & c : chunks)
+    for (const auto & c : packs)
         deletes += c.isDeleteRange();
     return deletes;
 }
@@ -827,27 +824,27 @@ size_t DiskValueSpace::num_deletes() const
 size_t DiskValueSpace::num_bytes() const
 {
     size_t bytes = 0;
-    for (const auto & c : chunks)
+    for (const auto & c : packs)
         bytes += c.getBytes();
     return bytes;
 }
 
-size_t DiskValueSpace::num_chunks() const
+size_t DiskValueSpace::num_packs() const
 {
-    return chunks.size();
+    return packs.size();
 }
 
-size_t DiskValueSpace::rowsFromBack(size_t chunk_num_from_back) const
+size_t DiskValueSpace::rowsFromBack(size_t pack_num_from_back) const
 {
     size_t rows = 0;
-    for (ssize_t i = chunks.size() - 1; i >= (ssize_t)(chunks.size() - chunk_num_from_back); --i)
-        rows += chunks[i].getRows();
+    for (ssize_t i = packs.size() - 1; i >= (ssize_t)(packs.size() - pack_num_from_back); --i)
+        rows += packs[i].getRows();
     return rows;
 }
 
 size_t DiskValueSpace::cacheRows() const
 {
-    return rowsFromBack(cache_chunks);
+    return rowsFromBack(cache_packs);
 }
 
 size_t DiskValueSpace::cacheBytes() const
@@ -864,53 +861,53 @@ size_t DiskValueSpace::cacheBytes() const
     return cache_bytes;
 }
 
-std::pair<size_t, size_t> DiskValueSpace::findChunk(size_t rows_offset) const
+std::pair<size_t, size_t> DiskValueSpace::findPack(size_t rows_offset) const
 {
     size_t count       = 0;
-    size_t chunk_index = 0;
-    for (; chunk_index < chunks.size(); ++chunk_index)
+    size_t pack_index = 0;
+    for (; pack_index < packs.size(); ++pack_index)
     {
         if (count == rows_offset)
-            return {chunk_index, 0};
-        auto cur_chunk_rows = chunks[chunk_index].getRows();
-        count += cur_chunk_rows;
+            return {pack_index, 0};
+        auto cur_pack_rows = packs[pack_index].getRows();
+        count += cur_pack_rows;
         if (count > rows_offset)
-            return {chunk_index, cur_chunk_rows - (count - rows_offset)};
+            return {pack_index, cur_pack_rows - (count - rows_offset)};
     }
     if (count != rows_offset)
         throw Exception("rows_offset(" + DB::toString(rows_offset) + ") is out of total_rows(" + DB::toString(count) + ")");
 
-    return {chunk_index, 0};
+    return {pack_index, 0};
 }
 
-std::pair<size_t, size_t> DiskValueSpace::findChunk(size_t rows_offset, size_t deletes_offset) const
+std::pair<size_t, size_t> DiskValueSpace::findPack(size_t rows_offset, size_t deletes_offset) const
 {
     size_t rows_count    = 0;
     size_t deletes_count = 0;
-    size_t chunk_index   = 0;
-    for (; chunk_index < chunks.size(); ++chunk_index)
+    size_t pack_index   = 0;
+    for (; pack_index < packs.size(); ++pack_index)
     {
         if (rows_count == rows_offset && deletes_count == deletes_offset)
-            return {chunk_index, 0};
-        const auto & chunk = chunks[chunk_index];
-        if (chunk.getRows())
+            return {pack_index, 0};
+        const auto & pack = packs[pack_index];
+        if (pack.getRows())
         {
-            rows_count += chunk.getRows();
+            rows_count += pack.getRows();
             if (rows_count > rows_offset)
             {
                 if (unlikely(deletes_count != deletes_offset))
                     throw Exception("deletes_offset and rows_offset are not matched");
 
-                return {chunk_index, chunk.getRows() - (rows_count - rows_offset)};
+                return {pack_index, pack.getRows() - (rows_count - rows_offset)};
             }
         }
-        if (chunk.isDeleteRange())
+        if (pack.isDeleteRange())
         {
             if (deletes_count == deletes_offset)
             {
                 if (unlikely(rows_count != rows_offset))
                     throw Exception("deletes_offset and rows_offset are not matched");
-                return {chunk_index, 0};
+                return {pack_index, 0};
             }
             ++deletes_count;
         }
@@ -918,7 +915,7 @@ std::pair<size_t, size_t> DiskValueSpace::findChunk(size_t rows_offset, size_t d
     if (rows_count != rows_offset || deletes_count != deletes_offset)
         throw Exception("illegal rows_offset(" + DB::toString(rows_offset) + "), deletes_count(" + DB::toString(deletes_count) + ")");
 
-    return {chunk_index, 0};
+    return {pack_index, 0};
 }
 
 } // namespace DM

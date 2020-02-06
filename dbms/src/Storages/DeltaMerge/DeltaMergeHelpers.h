@@ -186,6 +186,20 @@ inline bool hasColumn(const ColumnDefines & columns, const ColId & col_id)
     return false;
 }
 
+inline bool checkSchema(const Block & a, const Block & b)
+{
+    if (a.columns() != b.columns())
+        return false;
+    for (size_t i = 0; i < a.columns(); ++i)
+    {
+        auto & ca = a.getByPosition(i);
+        auto & cb = a.getByPosition(i);
+        if (ca.column_id != cb.column_id || ca.name != cb.name || !ca.type->equals(*(cb.type)))
+            return false;
+    }
+    return true;
+}
+
 /// This method guarantees that the returned valid block is not empty.
 inline Block readNextBlock(const BlockInputStreamPtr & in)
 {

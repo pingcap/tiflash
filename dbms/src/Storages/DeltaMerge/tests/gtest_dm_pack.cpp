@@ -2,7 +2,7 @@
 
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Storages/DeltaMerge/Chunk.h>
+#include <Storages/DeltaMerge/Pack.h>
 
 namespace DB
 {
@@ -11,16 +11,16 @@ namespace DM
 namespace tests
 {
 
-TEST(Chunk_test, Insert)
+TEST(Pack_test, Insert)
 {
     const UInt32 num_rows = 1024;
-    Chunk        chunk;
+    Pack        pack(0, 0);
 
-    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>(), {}};
-    chunk.insert(u64_meta);
+    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>()};
+    pack.insert(u64_meta);
 
     {
-        const ColumnMeta & got = chunk.getColumn(u64_meta.col_id);
+        const ColumnMeta & got = pack.getColumn(u64_meta.col_id);
         EXPECT_EQ(got.col_id, u64_meta.col_id);
         EXPECT_EQ(got.rows, u64_meta.rows);
         EXPECT_EQ(got.bytes, u64_meta.bytes);
@@ -28,11 +28,11 @@ TEST(Chunk_test, Insert)
         EXPECT_TRUE(got.type->equals(*u64_meta.type));
     }
 
-    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>(), {}};
-    chunk.insert(string_meta);
+    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>()};
+    pack.insert(string_meta);
 
     {
-        const ColumnMeta & got = chunk.getColumn(string_meta.col_id);
+        const ColumnMeta & got = pack.getColumn(string_meta.col_id);
         EXPECT_EQ(got.col_id, string_meta.col_id);
         EXPECT_EQ(got.rows, string_meta.rows);
         EXPECT_EQ(got.bytes, string_meta.bytes);
@@ -41,28 +41,28 @@ TEST(Chunk_test, Insert)
     }
 }
 
-TEST(Chunk_test, Seri)
+TEST(Pack_test, Seri)
 {
     const UInt32 num_rows = 1024;
-    Chunk        chunk;
+    Pack        pack(0, 0);
 
-    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>(), {}};
-    chunk.insert(u64_meta);
-    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>(), {}};
-    chunk.insert(string_meta);
-    EXPECT_FALSE(chunk.isDeleteRange());
+    ColumnMeta u64_meta{1, 2, num_rows, 4, std::make_shared<DataTypeUInt64>()};
+    pack.insert(u64_meta);
+    ColumnMeta string_meta{2, 3, num_rows, 5, std::make_shared<DataTypeString>()};
+    pack.insert(string_meta);
+    EXPECT_FALSE(pack.isDeleteRange());
 
     MemoryWriteBuffer wbuf(0, 1024);
-    chunk.serialize(wbuf);
+    pack.serialize(wbuf);
     auto                 buf = wbuf.buffer();
     ReadBufferFromMemory rbuf(buf.begin(), buf.size());
-    Chunk                deseri_chunk = Chunk::deserialize(rbuf);
-    EXPECT_EQ(deseri_chunk.getRows(), chunk.getRows());
-    EXPECT_FALSE(deseri_chunk.isDeleteRange());
+    Pack                deseri_pack = Pack::deserialize(rbuf);
+    EXPECT_EQ(deseri_pack.getRows(), pack.getRows());
+    EXPECT_FALSE(deseri_pack.isDeleteRange());
 
-    // check ColumnMeta in deseri_chunk
+    // check ColumnMeta in deseri_pack
     {
-        const ColumnMeta & got = deseri_chunk.getColumn(u64_meta.col_id);
+        const ColumnMeta & got = deseri_pack.getColumn(u64_meta.col_id);
         EXPECT_EQ(got.col_id, u64_meta.col_id);
         EXPECT_EQ(got.rows, u64_meta.rows);
         EXPECT_EQ(got.bytes, u64_meta.bytes);
@@ -70,7 +70,7 @@ TEST(Chunk_test, Seri)
         EXPECT_TRUE(got.type->equals(*u64_meta.type));
     }
     {
-        const ColumnMeta & got = deseri_chunk.getColumn(string_meta.col_id);
+        const ColumnMeta & got = deseri_pack.getColumn(string_meta.col_id);
         EXPECT_EQ(got.col_id, string_meta.col_id);
         EXPECT_EQ(got.rows, string_meta.rows);
         EXPECT_EQ(got.bytes, string_meta.bytes);
@@ -82,17 +82,17 @@ TEST(Chunk_test, Seri)
 TEST(DeleteRange_test, Seri)
 {
     HandleRange range{20, 999};
-    Chunk       chunk(range);
-    EXPECT_TRUE(chunk.isDeleteRange());
+    Pack       pack(range);
+    EXPECT_TRUE(pack.isDeleteRange());
 
     MemoryWriteBuffer wbuf(0, 1024);
-    chunk.serialize(wbuf);
+    pack.serialize(wbuf);
     auto                 buf = wbuf.buffer();
     ReadBufferFromMemory rbuf(buf.begin(), buf.size());
-    Chunk                deseri_chunk = Chunk::deserialize(rbuf);
-    EXPECT_TRUE(deseri_chunk.isDeleteRange());
+    Pack                deseri_pack = Pack::deserialize(rbuf);
+    EXPECT_TRUE(deseri_pack.isDeleteRange());
 
-    const HandleRange deseri_range = deseri_chunk.getDeleteRange();
+    const HandleRange deseri_range = deseri_pack.getDeleteRange();
     EXPECT_EQ(deseri_range.start, range.start);
     EXPECT_EQ(deseri_range.end, range.end);
 }
@@ -106,7 +106,7 @@ DataTypePtr typeFromString(const String & str)
 }
 } // namespace
 
-TEST(ChunkColumnCast_test, CastNumeric)
+TEST(PackColumnCast_test, CastNumeric)
 {
     {
         const Strings to_types = {"UInt8", "UInt16", "UInt32", "UInt64"};
@@ -253,7 +253,7 @@ TEST(ChunkColumnCast_test, CastNumeric)
     }
 }
 
-TEST(ChunkColumnCast_test, CastNullableToNotNull)
+TEST(PackColumnCast_test, CastNullableToNotNull)
 {
     const Strings to_types = {"Int16", "Int32", "Int64"};
 
@@ -281,7 +281,7 @@ TEST(ChunkColumnCast_test, CastNullableToNotNull)
     }
 }
 
-TEST(ChunkColumnCast_test, DISABLED_CastNullableToNotNullWithNonZeroDefaultValue)
+TEST(PackColumnCast_test, DISABLED_CastNullableToNotNullWithNonZeroDefaultValue)
 {
     const Strings to_types = {"Int16", "Int32", "Int64"};
 
@@ -310,7 +310,7 @@ TEST(ChunkColumnCast_test, DISABLED_CastNullableToNotNullWithNonZeroDefaultValue
     }
 }
 
-TEST(ChunkColumnCast_test, CastNullableToNullable)
+TEST(PackColumnCast_test, CastNullableToNullable)
 {
     const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
@@ -345,7 +345,7 @@ TEST(ChunkColumnCast_test, CastNullableToNullable)
     }
 }
 
-TEST(ChunkColumnCast_test, CastNotNullToNullable)
+TEST(PackColumnCast_test, CastNotNullToNullable)
 {
     const Strings to_types = {"Nullable(Int8)", "Nullable(Int16)", "Nullable(Int32)", "Nullable(Int64)"};
 
