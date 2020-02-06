@@ -30,15 +30,15 @@ void Pack::serialize(WriteBuffer & buf) const
         writeIntBinary(d.rows, buf);
         writeIntBinary(d.bytes, buf);
         writeStringBinary(d.type->getName(), buf);
-        //        if (d.minmax)
-        //        {
-        //            writePODBinary(true, buf);
-        //            d.minmax->write(*d.type, buf);
-        //        }
-        //        else
-        //        {
-        //            writePODBinary(false, buf);
-        //        }
+        if (d.minmax)
+        {
+            writePODBinary(true, buf);
+            d.minmax->write(*d.type, buf);
+        }
+        else
+        {
+            writePODBinary(false, buf);
+        }
     }
 }
 
@@ -70,10 +70,10 @@ Pack Pack::deserialize(ReadBuffer & buf)
         readIntBinary(d.bytes, buf);
         readStringBinary(type, buf);
         d.type = DataTypeFactory::instance().get(type);
-        //        bool has_minmax;
-        //        readPODBinary(has_minmax, buf);
-        //        if (has_minmax)
-        //            d.minmax = MinMaxIndex::read(*d.type, buf);
+        bool has_minmax;
+        readPODBinary(has_minmax, buf);
+        if (has_minmax)
+            d.minmax = MinMaxIndex::read(*d.type, buf);
 
         pack.columns.emplace(d.col_id, d);
 
@@ -101,7 +101,7 @@ Pack createRefPack(const Pack & pack, const GenPageId & gen_data_page_id, WriteB
         m.rows    = col_meta.rows;
         m.bytes   = col_meta.bytes;
         m.type    = col_meta.type;
-        //        m.minmax  = col_meta.minmax;
+        m.minmax  = col_meta.minmax;
 
         wb.putRefPage(m.page_id, col_meta.page_id);
         ref_pack.insert(m);
@@ -118,8 +118,7 @@ Packs createRefPacks(const Packs & packs, const GenPageId & gen_data_page_id, Wr
     return ref_packs;
 }
 
-void serializePacks(
-    WriteBuffer & buf, Packs::const_iterator begin, Packs::const_iterator end, const Pack * extra1, const Pack * extra2)
+void serializePacks(WriteBuffer & buf, Packs::const_iterator begin, Packs::const_iterator end, const Pack * extra1, const Pack * extra2)
 {
     auto size = (UInt64)(end - begin);
     if (extra1)
@@ -149,7 +148,7 @@ void serializePacks(WriteBuffer & buf, Packs::const_iterator begin, Packs ::cons
 
 Packs deserializePacks(ReadBuffer & buf)
 {
-    Packs packs;
+    Packs  packs;
     UInt64 size;
     readIntBinary(size, buf);
     for (UInt64 i = 0; i < size; ++i)
@@ -179,7 +178,7 @@ BufferAndSize serializeColumn(const IColumn & column, const DataTypePtr & type, 
 Pack preparePackDataWrite(const DMContext & dm_context, const GenPageId & gen_data_page_id, WriteBatch & wb, const Block & block)
 {
     auto & handle_col_data = getColumnVectorData<Handle>(block, block.getPositionByName(dm_context.handle_column.name));
-    Pack  pack(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
+    Pack   pack(handle_col_data[0], handle_col_data[handle_col_data.size() - 1]);
     for (const auto & col_define : dm_context.store_columns)
     {
         auto            col_id = col_define.id;
@@ -192,12 +191,12 @@ Pack preparePackDataWrite(const DMContext & dm_context, const GenPageId & gen_da
         d.rows    = column.size();
         d.bytes   = size;
         d.type    = col_define.type;
-        //        if (col_define.id == EXTRA_HANDLE_COLUMN_ID)
-        //        {
-        //            // Only index the handle column for now.
-        //            d.minmax = std::make_shared<MinMaxIndex>(*col_define.type);
-        //            d.minmax->addPack(column, /*del_mark*/ nullptr);
-        //        }
+        if (col_define.id == EXTRA_HANDLE_COLUMN_ID)
+        {
+            // Only index the handle column for now.
+            d.minmax = std::make_shared<MinMaxIndex>(*col_define.type);
+            d.minmax->addPack(column, /*del_mark*/ nullptr);
+        }
 
         wb.putPage(d.page_id, 0, buf, size);
         pack.insert(d);
@@ -219,11 +218,11 @@ void deserializeColumn(IColumn & column, const ColumnMeta & meta, const Page & p
 }
 
 void readPackData(MutableColumns &      columns,
-                   const ColumnDefines & column_defines,
-                   const Pack &         pack,
-                   const PageReader &    page_reader,
-                   size_t                rows_offset,
-                   size_t                rows_limit)
+                  const ColumnDefines & column_defines,
+                  const Pack &          pack,
+                  const PageReader &    page_reader,
+                  size_t                rows_offset,
+                  size_t                rows_limit)
 {
     assert(!pack.isDeleteRange());
 

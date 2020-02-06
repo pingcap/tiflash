@@ -22,17 +22,17 @@ public:
     {
         if (filter)
         {
-            //            for (size_t i = 0; i < packs.size(); ++i)
-            //            {
-            //                auto &       pack = packs[i];
-            //                RSCheckParam param;
-            //                for (auto & [col_id, meta] : pack.getMetas())
-            //                {
-            //                    if (col_id == EXTRA_HANDLE_COLUMN_ID)
-            //                        param.indexes.emplace(col_id, RSIndex(meta.type, meta.minmax));
-            //                }
-            //                use_packs[i] = filter->roughCheck(0, param) != None;
-            //            }
+            for (size_t i = 0; i < packs.size(); ++i)
+            {
+                auto &       pack = packs[i];
+                RSCheckParam param;
+                for (auto & [col_id, meta] : pack.getMetas())
+                {
+                    if (col_id == EXTRA_HANDLE_COLUMN_ID)
+                        param.indexes.emplace(col_id, RSIndex(meta.type, meta.minmax));
+                }
+                use_packs[i] = filter->roughCheck(0, param) != None;
+            }
         }
     }
 

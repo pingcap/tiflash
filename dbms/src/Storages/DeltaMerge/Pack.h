@@ -29,11 +29,9 @@ struct ColumnMeta
     UInt32         rows;
     UInt64         bytes;
     DataTypePtr    type;
-//    MinMaxIndexPtr minmax{};
+    MinMaxIndexPtr minmax{};
 };
 using ColumnMetas = std::vector<ColumnMeta>;
-
-static std::atomic<UInt64> PACK_MAX_PACK_ID = 0;
 
 class Pack
 {
@@ -45,16 +43,11 @@ public:
 public:
     using ColumnMetaMap = std::unordered_map<ColId, ColumnMeta>;
 
-    Pack(Handle handle_first_, Handle handle_last_)
-        : pack_id(++PACK_MAX_PACK_ID), handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false)
-    {
-    }
-    explicit Pack(const HandleRange & delete_range)
-        : pack_id(++PACK_MAX_PACK_ID), handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
+    Pack(Handle handle_first_, Handle handle_last_) : handle_start(handle_first_), handle_end(handle_last_), is_delete_range(false) {}
+    explicit Pack(const HandleRange & delete_range) : handle_start(delete_range.start), handle_end(delete_range.end), is_delete_range(true)
     {
     }
 
-    UInt64      id() const { return pack_id; }
     bool        isDeleteRange() const { return is_delete_range; }
     HandleRange getDeleteRange() const
     {
@@ -113,7 +106,7 @@ public:
             rows = c.rows;
     }
 
-    void         serialize(WriteBuffer & buf) const;
+    void        serialize(WriteBuffer & buf) const;
     static Pack deserialize(ReadBuffer & buf);
 
     String info() const
@@ -125,9 +118,6 @@ public:
     }
 
 private:
-    // pack_id is a in-memory concept. It is mainly used to determine whether an operation is legal or not before apply.
-    UInt64 pack_id;
-
     Handle        handle_start;
     Handle        handle_end;
     bool          is_delete_range;
@@ -136,21 +126,21 @@ private:
 };
 
 // TODO: use list instead of vector, so that DiskValueSpace won't need to do copy during Segment#getReadSnapshot.
-using Packs    = std::vector<Pack>;
+using Packs     = std::vector<Pack>;
 using GenPageId = std::function<PageId()>;
 
 Pack  createRefPack(const Pack & pack, const GenPageId & gen_data_page_id, WriteBatch & wb);
 Packs createRefPacks(const Packs & packs, const GenPageId & gen_data_page_id, WriteBatch & wb);
 
-void serializePacks(WriteBuffer &          buf,
-                     Packs::const_iterator begin,
-                     Packs::const_iterator end,
-                     const Pack *          extra1 = nullptr,
-                     const Pack *          extra2 = nullptr);
-void serializePacks(WriteBuffer &          buf, //
-                     Packs::const_iterator begin,
-                     Packs::const_iterator end,
-                     const Packs &         extr_packs);
+void serializePacks(WriteBuffer &         buf,
+                    Packs::const_iterator begin,
+                    Packs::const_iterator end,
+                    const Pack *          extra1 = nullptr,
+                    const Pack *          extra2 = nullptr);
+void serializePacks(WriteBuffer &         buf, //
+                    Packs::const_iterator begin,
+                    Packs::const_iterator end,
+                    const Packs &         extr_packs);
 
 Packs deserializePacks(ReadBuffer & buf);
 
@@ -171,11 +161,11 @@ Pack preparePackDataWrite(const DMContext & dm_context, const GenPageId & gen_da
  * @param rows_limit
  */
 void readPackData(MutableColumns &      columns,
-                   const ColumnDefines & column_defines,
-                   const Pack &         pack,
-                   const PageReader &    page_reader,
-                   size_t                rows_offset,
-                   size_t                rows_limit);
+                  const ColumnDefines & column_defines,
+                  const Pack &          pack,
+                  const PageReader &    page_reader,
+                  size_t                rows_offset,
+                  size_t                rows_limit);
 
 
 Block readPack(const Pack & pack, const ColumnDefines & read_column_defines, const PageReader & page_reader);
