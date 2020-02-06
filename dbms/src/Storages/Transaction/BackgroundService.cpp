@@ -69,7 +69,7 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
                 }
             }
             if (region)
-                tmt.getRegionTable().tryFlushRegion(region, false);
+                tmt.getRegionTable().tryFlushRegion(region, true);
         }
 
         return ok;

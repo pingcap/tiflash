@@ -65,6 +65,7 @@ public:
         const SnapshotDataView & write_buff, const SnapshotDataView & default_buff, uint64_t index, uint64_t term, TMTContext & tmt);
     bool tryApplySnapshot(RegionPtr new_region, Context & context, bool try_flush_region);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
+    void setRegionCompactLogPeriod(Seconds period);
 
 private:
     friend class MockTiDB;
@@ -85,7 +86,7 @@ private:
 
     RegionPersister region_persister;
 
-    std::atomic<Timepoint> last_gc_time = Clock::now();
+    std::atomic<Timepoint> last_gc_time = Timepoint::min();
 
     mutable std::mutex task_mutex;
     // region_range_index must be protected by task_mutex. It's used to search for region by range.
@@ -96,6 +97,8 @@ private:
     std::unique_ptr<RaftCommandResult> raft_cmd_res;
 
     Logger * log;
+
+    std::atomic<Seconds> REGION_COMPACT_LOG_PERIOD;
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore

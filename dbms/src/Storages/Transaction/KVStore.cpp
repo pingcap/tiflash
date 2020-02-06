@@ -234,6 +234,8 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt)
     removeRegion(region_id, tmt.getRegionTable(), task_lock, region_manager.genRegionTaskLock(region_id));
 }
 
+void KVStore::setRegionCompactLogPeriod(Seconds period) { REGION_COMPACT_LOG_PERIOD = period; }
+
 TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
     raft_cmdpb::AdminResponse && response,
     UInt64 curr_region_id,
@@ -264,8 +266,7 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
         {
             case raft_cmdpb::AdminCmdType::CompactLog:
             {
-                static const Seconds REGION_COMPACT_LOG_PERIOD(60 * 5);
-                if (curr_region.lastCompactLogTime() + REGION_COMPACT_LOG_PERIOD > Clock::now())
+                if (curr_region.lastCompactLogTime() + REGION_COMPACT_LOG_PERIOD.load(std::memory_order_relaxed) > Clock::now())
                     sync_log = false;
                 else
                 {
@@ -339,7 +340,6 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             {
                 for (const auto & new_region : split_regions)
                     try_to_flush_region(new_region);
-                try_to_flush_region(curr_region_ptr);
             }
 
             {
