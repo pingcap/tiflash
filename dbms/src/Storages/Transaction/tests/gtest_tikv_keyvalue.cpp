@@ -60,37 +60,37 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
         auto lock_value
             = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max(), "value");
         auto [lock_type, primary, ts, ttl, short_value] = RecordKVFormat::decodeLockCfValue(lock_value);
-        assert(Region::PutFlag == lock_type);
-        assert("primary key" == primary);
-        assert(421321 == ts);
-        assert(std::numeric_limits<UInt64>::max() == ttl);
-        assert("value" == *short_value);
+        ASSERT_TRUE(Region::PutFlag == lock_type);
+        ASSERT_TRUE("primary key" == primary);
+        ASSERT_TRUE(421321 == ts);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
+        ASSERT_TRUE("value" == *short_value);
     }
 
     {
         auto lock_value = RecordKVFormat::encodeLockCfValue(Region::PutFlag, "primary key", 421321, std::numeric_limits<UInt64>::max());
         auto [lock_type, primary, ts, ttl, short_value] = RecordKVFormat::decodeLockCfValue(lock_value);
-        assert(Region::PutFlag == lock_type);
-        assert("primary key" == primary);
-        assert(421321 == ts);
-        assert(std::numeric_limits<UInt64>::max() == ttl);
-        assert(nullptr == short_value);
+        ASSERT_TRUE(Region::PutFlag == lock_type);
+        ASSERT_TRUE("primary key" == primary);
+        ASSERT_TRUE(421321 == ts);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ttl);
+        ASSERT_TRUE(nullptr == short_value);
     }
 
     {
         auto write_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max(), "value");
         auto [write_type, ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
-        assert(Region::DelFlag == write_type);
-        assert(std::numeric_limits<UInt64>::max() == ts);
-        assert("value" == *short_value);
+        ASSERT_TRUE(Region::DelFlag == write_type);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
+        ASSERT_TRUE("value" == *short_value);
     }
 
     {
         auto write_value = RecordKVFormat::encodeWriteCfValue(Region::DelFlag, std::numeric_limits<UInt64>::max());
         auto [write_type, ts, short_value] = RecordKVFormat::decodeWriteCfValue(write_value);
-        assert(Region::DelFlag == write_type);
-        assert(std::numeric_limits<UInt64>::max() == ts);
-        assert(nullptr == short_value);
+        ASSERT_TRUE(Region::DelFlag == write_type);
+        ASSERT_TRUE(std::numeric_limits<UInt64>::max() == ts);
+        ASSERT_TRUE(nullptr == short_value);
     }
 
     {
@@ -98,33 +98,33 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
         UInt64 a = 13241432453554;
         Crc32 crc32;
         crc32.put(&a, sizeof(a));
-        assert(crc32.checkSum() == 3312221216);
+        ASSERT_TRUE(crc32.checkSum() == 3312221216);
     }
 
     {
         TiKVKey start_key = RecordKVFormat::genKey(200, 123);
         TiKVKey end_key = RecordKVFormat::genKey(300, 124);
 
-        assert(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
-        assert(checkTableInvolveRange(250, RangeRef{start_key, end_key}));
-        assert(checkTableInvolveRange(300, RangeRef{start_key, end_key}));
-        assert(!checkTableInvolveRange(400, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(250, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(300, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(!checkTableInvolveRange(400, RangeRef{start_key, end_key}));
     }
     {
         TiKVKey start_key = RecordKVFormat::genKey(200, std::numeric_limits<HandleID>::min());
         TiKVKey end_key = RecordKVFormat::genKey(200, 100);
 
-        assert(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
-        assert(!checkTableInvolveRange(100, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(!checkTableInvolveRange(100, RangeRef{start_key, end_key}));
     }
     {
         TiKVKey start_key;
         TiKVKey end_key;
 
-        assert(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
-        assert(checkTableInvolveRange(250, RangeRef{start_key, end_key}));
-        assert(checkTableInvolveRange(300, RangeRef{start_key, end_key}));
-        assert(checkTableInvolveRange(400, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(200, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(250, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(300, RangeRef{start_key, end_key}));
+        ASSERT_TRUE(checkTableInvolveRange(400, RangeRef{start_key, end_key}));
     }
 
     {
@@ -132,8 +132,8 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
         TiKVKey end_key = RecordKVFormat::genKey(300, 124);
         auto begin = TiKVRange::getRangeHandle<true>(start_key, 233);
         auto end = TiKVRange::getRangeHandle<false>(end_key, 233);
-        assert(begin == begin.normal_min);
-        assert(end == end.max);
+        ASSERT_TRUE(begin == begin.normal_min);
+        ASSERT_TRUE(end == end.max);
     }
 
     {
@@ -141,117 +141,117 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
         TiKVKey end_key = RecordKVFormat::genKey(300, 124);
         auto begin = TiKVRange::getRangeHandle<true>(start_key, 300);
         auto end = TiKVRange::getRangeHandle<false>(end_key, 300);
-        assert(begin == begin.normal_min);
-        assert(Int64{124} == end);
+        ASSERT_TRUE(begin == begin.normal_min);
+        ASSERT_TRUE(Int64{124} == end);
     }
 
     {
         using HandleInt64 = TiKVHandle::Handle<Int64>;
         Int64 int64_min = std::numeric_limits<Int64>::min();
         Int64 int64_max = std::numeric_limits<Int64>::max();
-        assert(HandleInt64(int64_min) < HandleInt64(int64_max));
-        assert(HandleInt64(int64_min) <= HandleInt64(int64_max));
-        assert(HandleInt64(int64_max) > HandleInt64(int64_min));
-        assert(HandleInt64(int64_max) >= HandleInt64(int64_min));
-        assert(HandleInt64(int64_min) == HandleInt64(int64_min));
-        assert(HandleInt64(int64_max) == HandleInt64(int64_max));
+        ASSERT_TRUE(HandleInt64(int64_min) < HandleInt64(int64_max));
+        ASSERT_TRUE(HandleInt64(int64_min) <= HandleInt64(int64_max));
+        ASSERT_TRUE(HandleInt64(int64_max) > HandleInt64(int64_min));
+        ASSERT_TRUE(HandleInt64(int64_max) >= HandleInt64(int64_min));
+        ASSERT_TRUE(HandleInt64(int64_min) == HandleInt64(int64_min));
+        ASSERT_TRUE(HandleInt64(int64_max) == HandleInt64(int64_max));
 
-        assert(int64_min < HandleInt64(int64_max));
-        assert(int64_min <= HandleInt64(int64_max));
-        assert(int64_max > HandleInt64(int64_min));
-        assert(int64_max >= HandleInt64(int64_min));
-        assert(int64_min == HandleInt64(int64_min));
-        assert(int64_max == HandleInt64(int64_max));
+        ASSERT_TRUE(int64_min < HandleInt64(int64_max));
+        ASSERT_TRUE(int64_min <= HandleInt64(int64_max));
+        ASSERT_TRUE(int64_max > HandleInt64(int64_min));
+        ASSERT_TRUE(int64_max >= HandleInt64(int64_min));
+        ASSERT_TRUE(int64_min == HandleInt64(int64_min));
+        ASSERT_TRUE(int64_max == HandleInt64(int64_max));
 
-        assert(int64_max < HandleInt64::max);
-        assert(int64_max <= HandleInt64::max);
+        ASSERT_TRUE(int64_max < HandleInt64::max);
+        ASSERT_TRUE(int64_max <= HandleInt64::max);
 
-        assert(HandleInt64::max > int64_max);
-        assert(HandleInt64::max >= int64_max);
+        ASSERT_TRUE(HandleInt64::max > int64_max);
+        ASSERT_TRUE(HandleInt64::max >= int64_max);
 
-        assert(HandleInt64::max == HandleInt64::max);
+        ASSERT_TRUE(HandleInt64::max == HandleInt64::max);
     }
 
     {
-        assert(TiKVRange::getRangeHandle<true>(TiKVKey(""), 1000) == TiKVRange::Handle::normal_min);
-        assert(TiKVRange::getRangeHandle<false>(TiKVKey(""), 1000) == TiKVRange::Handle::max);
+        ASSERT_TRUE(TiKVRange::getRangeHandle<true>(TiKVKey(""), 1000) == TiKVRange::Handle::normal_min);
+        ASSERT_TRUE(TiKVRange::getRangeHandle<false>(TiKVKey(""), 1000) == TiKVRange::Handle::max);
     }
 
     {
         TiKVKey start_key = RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min());
         TiKVKey end_key = RecordKVFormat::genKey(123, std::numeric_limits<Int64>::max());
-        assert(TiKVRange::getRangeHandle<true>(start_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::min()));
-        assert(TiKVRange::getRangeHandle<false>(end_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::max()));
+        ASSERT_TRUE(TiKVRange::getRangeHandle<true>(start_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::min()));
+        ASSERT_TRUE(TiKVRange::getRangeHandle<false>(end_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::max()));
 
-        assert(TiKVRange::getRangeHandle<true>(start_key, 123) >= TiKVRange::Handle::normal_min);
-        assert(TiKVRange::getRangeHandle<false>(end_key, 123) < TiKVRange::Handle::max);
+        ASSERT_TRUE(TiKVRange::getRangeHandle<true>(start_key, 123) >= TiKVRange::Handle::normal_min);
+        ASSERT_TRUE(TiKVRange::getRangeHandle<false>(end_key, 123) < TiKVRange::Handle::max);
 
         start_key = RecordKVFormat::encodeAsTiKVKey(RecordKVFormat::decodeTiKVKey(start_key) + "123");
-        assert(TiKVRange::getRangeHandle<true>(start_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::min() + 1));
-        assert(RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min() + 2) >= start_key);
-        assert(RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min()) < start_key);
+        ASSERT_TRUE(TiKVRange::getRangeHandle<true>(start_key, 123) == TiKVRange::Handle(std::numeric_limits<Int64>::min() + 1));
+        ASSERT_TRUE(RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min() + 2) >= start_key);
+        ASSERT_TRUE(RecordKVFormat::genKey(123, std::numeric_limits<Int64>::min()) < start_key);
 
         end_key = RecordKVFormat::encodeAsTiKVKey(RecordKVFormat::decodeTiKVKey(end_key) + "123");
-        assert(TiKVRange::getRangeHandle<false>(end_key, 123) == TiKVRange::Handle::max);
+        ASSERT_TRUE(TiKVRange::getRangeHandle<false>(end_key, 123) == TiKVRange::Handle::max);
 
         auto s = RecordKVFormat::genRawKey(123, -1);
         s.resize(17);
-        assert(s.size() == 17);
+        ASSERT_TRUE(s.size() == 17);
         start_key = RecordKVFormat::encodeAsTiKVKey(s);
         auto o1 = TiKVRange::getRangeHandle<true>(start_key, 123);
 
         s = RecordKVFormat::genRawKey(123, -1);
         s[17] = s[18] = 0;
-        assert(s.size() == 19);
+        ASSERT_TRUE(s.size() == 19);
         auto o2 = RecordKVFormat::getHandle(s);
-        assert(o2 == o1);
+        ASSERT_TRUE(o2 == o1);
     }
 
     {
         auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::normal_min});
-        assert(n == 1);
-        assert(new_range[0].first == new_range[0].second);
+        ASSERT_TRUE(n == 1);
+        ASSERT_TRUE(new_range[0].first == new_range[0].second);
     }
 
     {
         auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::max, TiKVRange::Handle::max});
-        assert(n == 1);
-        assert(new_range[0].first == new_range[0].second);
+        ASSERT_TRUE(n == 1);
+        ASSERT_TRUE(new_range[0].first == new_range[0].second);
     }
 
     {
         // 100000... , -1 (111111...), 0, 011111... ==> 0 ~ 111111...
         auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, TiKVRange::Handle::max});
-        assert(n == 1);
-        assert(CHTableHandle::UInt64TableHandle::normal_min == new_range[0].first);
-        assert(CHTableHandle::UInt64TableHandle::max == new_range[0].second);
+        ASSERT_TRUE(n == 1);
+        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::normal_min == new_range[0].first);
+        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::max == new_range[0].second);
     }
 
     {
         // 100000... , 111111...
         auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({TiKVRange::Handle::normal_min, -1});
-        assert(n == 1);
-        assert(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(TiKVRange::Handle::normal_min.handle_id)} == new_range[0].first);
-        assert(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[0].second);
-        assert((new_range[0].second.handle_id - new_range[0].first.handle_id) == UInt64(-1 - TiKVRange::Handle::normal_min.handle_id));
+        ASSERT_TRUE(n == 1);
+        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(TiKVRange::Handle::normal_min.handle_id)} == new_range[0].first);
+        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[0].second);
+        ASSERT_TRUE((new_range[0].second.handle_id - new_range[0].first.handle_id) == UInt64(-1 - TiKVRange::Handle::normal_min.handle_id));
     }
 
     {
         auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({{2333ll}, {2334ll}});
-        assert(n == 1);
-        assert(UInt64{2333} == new_range[0].first);
-        assert(UInt64{2334} == new_range[0].second);
+        ASSERT_TRUE(n == 1);
+        ASSERT_TRUE(UInt64{2333} == new_range[0].first);
+        ASSERT_TRUE(UInt64{2334} == new_range[0].second);
     }
 
     {
         auto [n, new_range] = CHTableHandle::splitForUInt64TableHandle({-1, 10});
-        assert(n == 2);
+        ASSERT_TRUE(n == 2);
 
-        assert(UInt64{0} == new_range[0].first);
-        assert(UInt64{10} == new_range[0].second);
+        ASSERT_TRUE(UInt64{0} == new_range[0].first);
+        ASSERT_TRUE(UInt64{10} == new_range[0].second);
 
-        assert(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[1].first);
-        assert(CHTableHandle::UInt64TableHandle::max == new_range[1].second);
+        ASSERT_TRUE(CHTableHandle::UInt64TableHandle{static_cast<UInt64>(-1)} == new_range[1].first);
+        ASSERT_TRUE(CHTableHandle::UInt64TableHandle::max == new_range[1].second);
     }
 
     {
@@ -259,41 +259,41 @@ TEST(TiKVKeyValue_test, DISABLED_PortedTests)
         s[0] = char(1);
         s[3] = char(111);
         const auto & key = TiKVKey(s.data(), s.size());
-        assert(key.toHex() == "[1 32 33 6f]");
+        ASSERT_TRUE(key.toHex() == "[1 32 33 6f]");
     }
 
     {
         std::string s(12, 1);
         s[8] = s[9] = s[10] = 0;
-        assert(RecordKVFormat::checkKeyPaddingValid(s.data() + 1, 1));
-        assert(RecordKVFormat::checkKeyPaddingValid(s.data() + 2, 2));
-        assert(RecordKVFormat::checkKeyPaddingValid(s.data() + 3, 3));
+        ASSERT_TRUE(RecordKVFormat::checkKeyPaddingValid(s.data() + 1, 1));
+        ASSERT_TRUE(RecordKVFormat::checkKeyPaddingValid(s.data() + 2, 2));
+        ASSERT_TRUE(RecordKVFormat::checkKeyPaddingValid(s.data() + 3, 3));
         for (auto i = 1; i <= 8; ++i)
-            assert(!RecordKVFormat::checkKeyPaddingValid(s.data() + 4, i));
+            ASSERT_TRUE(!RecordKVFormat::checkKeyPaddingValid(s.data() + 4, i));
     }
 
     {
         RegionRangeKeys range(RecordKVFormat::genKey(1, 2, 3), RecordKVFormat::genKey(2, 4, 100));
-        assert(RecordKVFormat::getTs(range.comparableKeys().first.key) == 3);
-        assert(RecordKVFormat::getTs(range.comparableKeys().second.key) == 100);
-        assert(RecordKVFormat::getTableId(range.rawKeys().first) == 1);
-        assert(RecordKVFormat::getTableId(range.rawKeys().second) == 2);
-        assert(RecordKVFormat::getHandle(range.rawKeys().first) == 2);
-        assert(RecordKVFormat::getHandle(range.rawKeys().second) == 4);
+        ASSERT_TRUE(RecordKVFormat::getTs(range.comparableKeys().first.key) == 3);
+        ASSERT_TRUE(RecordKVFormat::getTs(range.comparableKeys().second.key) == 100);
+        ASSERT_TRUE(RecordKVFormat::getTableId(range.rawKeys().first) == 1);
+        ASSERT_TRUE(RecordKVFormat::getTableId(range.rawKeys().second) == 2);
+        ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().first) == 2);
+        ASSERT_TRUE(RecordKVFormat::getHandle(range.rawKeys().second) == 4);
 
-        assert(range.comparableKeys().first.state == TiKVRangeKey::NORMAL);
-        assert(range.comparableKeys().second.state == TiKVRangeKey::NORMAL);
+        ASSERT_TRUE(range.comparableKeys().first.state == TiKVRangeKey::NORMAL);
+        ASSERT_TRUE(range.comparableKeys().second.state == TiKVRangeKey::NORMAL);
 
         RegionRangeKeys range2(TiKVKey{}, TiKVKey{});
-        assert(range2.comparableKeys().first.state == TiKVRangeKey::MIN);
-        assert(range2.comparableKeys().second.state == TiKVRangeKey::MAX);
+        ASSERT_TRUE(range2.comparableKeys().first.state == TiKVRangeKey::MIN);
+        ASSERT_TRUE(range2.comparableKeys().second.state == TiKVRangeKey::MAX);
 
-        assert(range2.comparableKeys().first.compare(range2.comparableKeys().second) < 0);
-        assert(range2.comparableKeys().first.compare(range.comparableKeys().second) < 0);
-        assert(range.comparableKeys().first.compare(range.comparableKeys().second) < 0);
-        assert(range.comparableKeys().second.compare(range2.comparableKeys().second) < 0);
+        ASSERT_TRUE(range2.comparableKeys().first.compare(range2.comparableKeys().second) < 0);
+        ASSERT_TRUE(range2.comparableKeys().first.compare(range.comparableKeys().second) < 0);
+        ASSERT_TRUE(range.comparableKeys().first.compare(range.comparableKeys().second) < 0);
+        ASSERT_TRUE(range.comparableKeys().second.compare(range2.comparableKeys().second) < 0);
 
-        assert(range.comparableKeys().first.compare(RecordKVFormat::genKey(1, 2, 3)) == 0);
+        ASSERT_TRUE(range.comparableKeys().first.compare(RecordKVFormat::genKey(1, 2, 3)) == 0);
     }
 
     ASSERT_TRUE(res);
