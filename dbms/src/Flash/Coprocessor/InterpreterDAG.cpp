@@ -99,7 +99,7 @@ void constructIntLiteralExpr(tipb::Expr & expr, HandleType value)
     auto * field_type = expr.mutable_field_type();
     field_type->set_tp(TiDB::TypeLongLong);
     field_type->set_flag(TiDB::ColumnFlagNotNull);
-    if constexpr (!std::is_signed_v<HandleType>)
+    if constexpr (!is_signed)
     {
         field_type->set_flag(TiDB::ColumnFlagUnsigned);
     }
@@ -151,7 +151,7 @@ bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges,
 {
     if (ranges.empty())
     {
-        // generator a false filter
+        // generate a always false filter
         constructInt64LiteralTiExpr(handle_filter, 0);
         return false;
     }
