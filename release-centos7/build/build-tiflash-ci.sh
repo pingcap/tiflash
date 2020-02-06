@@ -55,8 +55,7 @@ cp -f "${SRCPATH}/libs/libtiflash-proxy/libtiflash_proxy.so" "$install_dir/libti
 # copy gtest binary under Debug mode
 if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     #ctest -V -j $(nproc || grep -c ^processor /proc/cpuinfo)
-    make -j ${NPROC} gtests_dbms gtests_libcommon gtests_tmt
+    make -j ${NPROC} gtests_dbms gtests_libcommon
     cp -f "$build_dir/dbms/gtests_dbms" "$install_dir/"
     cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "$install_dir/"
-    cp -f "$build_dir/dbms/src/Storages/Transaction/tests/gtests_tmt" "$install_dir/"
 fi
