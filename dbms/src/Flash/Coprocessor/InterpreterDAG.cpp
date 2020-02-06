@@ -151,7 +151,7 @@ bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges,
 {
     if (ranges.empty())
     {
-        // generate a always false filter
+        // generate an always false filter
         constructInt64LiteralTiExpr(handle_filter, 0);
         return false;
     }
