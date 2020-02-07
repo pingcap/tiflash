@@ -142,21 +142,23 @@ void MetricsPrometheus::convertMetrics(const GraphiteWriter::KeyValueVector<ssiz
     for (const auto & key_val : key_vals)
     {
         auto key = key_val.first;
+        std::replace(key.begin(), key.end(), '.', '_');
+        const auto & value = key_val.second;
         auto it = gauge_map.find(key);
         if (it != gauge_map.end())
         {
             auto & guage = it->second;
-            guage.Set(key_val.second);
+            guage.Set(value);
         }
         else
         {
             auto & gauge_family = BuildGauge()
-                                      .Name(key_val.first)
+                                      .Name(key)
                                       .Help("Get from system.metrics, system.events and system.asynchronous_metrics tables")
                                       .Register(*registry);
 
             auto & guage = gauge_family.Add({});
-            guage.Set(key_val.second);
+            guage.Set(value);
 
             auto pair = std::pair<std::string, prometheus::Gauge &>(key, guage);
             gauge_map.insert(pair);
