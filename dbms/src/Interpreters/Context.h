@@ -81,6 +81,8 @@ class TiDBService;
 using TiDBServicePtr = std::shared_ptr<TiDBService>;
 class SchemaSyncService;
 using SchemaSyncServicePtr = std::shared_ptr<SchemaSyncService>;
+class TiFlashMetrics;
+using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
 
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
@@ -368,6 +370,9 @@ public:
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
     PartPathSelector & getPartPathSelector();
+
+    void initializeTiFlashMetrics();
+    TiFlashMetricsPtr getTiFlashMetrics();
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

@@ -11,6 +11,7 @@
 #include <pcg_random.hpp>
 
 #include <Common/Macros.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <Common/setThreadName.h>
 #include <Common/Stopwatch.h>
@@ -153,6 +154,7 @@ struct ContextShared
     SharedQueriesPtr shared_queries;                        /// The cache of shared queries.
     SchemaSyncServicePtr schema_sync_service;               /// Schema sync service instance.
     PartPathSelectorPtr part_path_selector_ptr;             /// PartPathSelector service instance.
+    TiFlashMetricsPtr tiflash_metrics;                      /// TiFlash metrics registry.
 
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
 
@@ -1429,6 +1431,20 @@ SchemaSyncServicePtr & Context::getSchemaSyncService()
 {
     auto lock = getLock();
     return shared->schema_sync_service;
+}
+
+void Context::initializeTiFlashMetrics()
+{
+    auto lock = getLock();
+    if (shared->tiflash_metrics)
+        throw Exception("TiFlash metrics has already been initialized.", ErrorCodes::LOGICAL_ERROR);
+    shared->tiflash_metrics = std::make_shared<TiFlashMetrics>();
+}
+
+TiFlashMetricsPtr Context::getTiFlashMetrics()
+{
+    auto lock = getLock();
+    return shared->tiflash_metrics;
 }
 
 zkutil::ZooKeeperPtr Context::getZooKeeper() const
