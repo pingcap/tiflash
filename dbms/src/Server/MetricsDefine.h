@@ -112,13 +112,8 @@ void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, First
     addMetricsCommon(dst, i + 1, family, std::forward<Rest>(rest)...);
 }
 
-template <typename T, size_t n, typename = void>
-struct MetricFamily
-{
-};
-
 template <typename T, size_t n>
-struct MetricFamily<T, n, std::enable_if_t<n != 0>>
+struct MetricFamily
 {
     template <typename... Args>
     MetricFamily(prometheus::Registry & registry, const std::string & name, const std::string & help, Args &&... args)
@@ -128,30 +123,24 @@ struct MetricFamily<T, n, std::enable_if_t<n != 0>>
         MetricFamilyTrait<T>::addMetrics(metrics, family, std::forward<Args>(args)...);
     }
 
+    template <>
+    MetricFamily(prometheus::Registry & registry, const std::string & name, const std::string & help)
+    {
+        static_assert(n == 0);
+        auto & family = MetricFamilyTrait<T>::build().Name(name).Help(help).Register(registry);
+        MetricFamilyTrait<T>::addMetrics(metrics, family, typename MetricFamilyTrait<T>::ArgType{});
+    }
+
     template <size_t idx = 0>
     T & get()
     {
-        static_assert(idx < n);
+        static_assert(idx < actual_size);
         return *metrics[idx];
     }
 
 private:
-    T * metrics[n];
-};
-
-template <typename T, size_t n>
-struct MetricFamily<T, n, std::enable_if_t<n == 0>>
-{
-    MetricFamily(prometheus::Registry & registry, const std::string & name, const std::string & help)
-    {
-        auto & family = MetricFamilyTrait<T>::build().Name(name).Help(help).Register(registry);
-        MetricFamilyTrait<T>::addMetrics(&metric, family, typename MetricFamilyTrait<T>::ArgType{});
-    }
-
-    T & get() { return *metric; }
-
-private:
-    T * metric;
+    static constexpr size_t actual_size = !n ? 1 : n;
+    T * metrics[actual_size];
 };
 
 } // namespace DB
