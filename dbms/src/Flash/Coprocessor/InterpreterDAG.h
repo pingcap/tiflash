@@ -107,6 +107,11 @@ private:
 
     const bool keep_session_timezone_info;
 
+    bool filter_on_handle = false;
+    tipb::Expr handle_filter_expr;
+    Int32 handle_col_id = -1;
+    std::vector<const tipb::Expr *> conditions;
+
     Poco::Logger * log;
 };
 } // namespace DB
