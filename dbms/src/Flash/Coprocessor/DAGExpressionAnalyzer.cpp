@@ -127,19 +127,15 @@ String DAGExpressionAnalyzer::applyFunction(const String & func_name, const Name
     return result_name;
 }
 
-void DAGExpressionAnalyzer::appendWhere(ExpressionActionsChain & chain, const tipb::Selection & sel, String & filter_column_name)
+void DAGExpressionAnalyzer::appendWhere(
+    ExpressionActionsChain & chain, const std::vector<const tipb::Expr *> & conditions, String & filter_column_name)
 {
-    if (sel.conditions_size() == 0)
-    {
-        throw Exception("Selection executor without condition exprs", ErrorCodes::COP_BAD_DAG_REQUEST);
-    }
-
     initChain(chain, getCurrentInputColumns());
     ExpressionActionsChain::Step & last_step = chain.steps.back();
     Names arg_names;
-    for (auto & condition : sel.conditions())
+    for (const auto * condition : conditions)
     {
-        arg_names.push_back(getActions(condition, last_step.actions));
+        arg_names.push_back(getActions(*condition, last_step.actions));
     }
     if (arg_names.size() == 1)
     {
