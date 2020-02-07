@@ -465,7 +465,10 @@ BlockInputStreams StorageDeltaMerge::read( //
     size_t max_block_size,
     unsigned num_streams)
 {
-    ColumnDefines to_read;
+    // Note that `columns_to_read` should keep the same sequence as ColumnRef
+    // in `Coprocessor.TableScan.columns`, or rough set filter chould be
+    // failed to parsed.
+    ColumnDefines columns_to_read;
     const Block & header = store->getHeader();
     for (auto & n : column_names)
     {
@@ -484,13 +487,13 @@ BlockInputStreams StorageDeltaMerge::read( //
             col_define.type = column.type;
             col_define.default_value = column.default_value;
         }
-        to_read.push_back(col_define);
+        columns_to_read.push_back(col_define);
     }
 
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
     if (select_query.raw_for_mutable)
-        return store->readRaw(context, context.getSettingsRef(), to_read, num_streams);
+        return store->readRaw(context, context.getSettingsRef(), columns_to_read, num_streams);
     else
     {
         if (unlikely(!query_info.mvcc_query_info))
@@ -571,7 +574,7 @@ BlockInputStreams StorageDeltaMerge::read( //
                         // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
                         return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
                 };
-                rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, std::move(create_attr_by_column_id), log);
+                rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
             }
             else
             {
@@ -595,8 +598,8 @@ BlockInputStreams StorageDeltaMerge::read( //
             LOG_DEBUG(log, "Rough set filter is disabled.");
 
 
-        return store->read(context, context.getSettingsRef(), to_read, ranges, num_streams, /*max_version=*/mvcc_query_info.read_tso,
-            rs_operator, max_block_size);
+        return store->read(context, context.getSettingsRef(), columns_to_read, ranges, num_streams,
+            /*max_version=*/mvcc_query_info.read_tso, rs_operator, max_block_size);
     }
 }
 

@@ -26,7 +26,10 @@ public:
 public:
     /// From dag.
     using AttrCreatorByColumnID = std::function<Attr(const ColumnID)>;
-    static RSOperatorPtr parseDAGQuery(const DAGQueryInfo & dag_info, AttrCreatorByColumnID && creator, Poco::Logger * log);
+    static RSOperatorPtr parseDAGQuery(const DAGQueryInfo &     dag_info,
+                                       const ColumnDefines &    columns_to_read,
+                                       AttrCreatorByColumnID && creator,
+                                       Poco::Logger *           log);
 
     /// Some helper structur
 

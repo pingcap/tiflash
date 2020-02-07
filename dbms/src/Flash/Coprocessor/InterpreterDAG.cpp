@@ -356,7 +356,8 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
         LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << dag.getRegionID());
         throw RegionException(std::move(region_ids), region_read_status);
     }
-    if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange(), handle_col_id, handle_filter_expr))
+    const bool pk_is_uint64 = storage->getPKType() == IManageableStorage::PKType::UINT64;
+    if (!checkKeyRanges(dag.getKeyRanges(), table_id, pk_is_uint64, current_region->getRange(), handle_col_id, handle_filter_expr))
     {
         // need to add extra filter on handle column
         filter_on_handle = true;
@@ -634,8 +635,8 @@ void InterpreterDAG::getAndLockStorageWithSchemaVersion(TableID table_id, Int64 
 
         if (storage_->engineType() != ::TiDB::StorageEngine::TMT && storage_->engineType() != ::TiDB::StorageEngine::DM)
         {
-            throw Exception("Specifying schema_version for non-managed storage: " + storage_->getName() + ", table: " + storage_->getTableName()
-                    + ",id: " + DB::toString(table_id) + " is not allowed",
+            throw Exception("Specifying schema_version for non-managed storage: " + storage_->getName()
+                    + ", table: " + storage_->getTableName() + ", id: " + DB::toString(table_id) + " is not allowed",
                 ErrorCodes::LOGICAL_ERROR);
         }
 

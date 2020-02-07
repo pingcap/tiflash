@@ -24,23 +24,23 @@ namespace DM
 namespace cop
 {
 
-ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const std::vector<ColumnID> & input_col_ids)
+ColumnID getColumnIDForColumnExpr(const tipb::Expr & expr, const ColumnDefines & columns_to_read)
 {
     assert(isColumnExpr(expr));
     auto column_index = decodeDAGInt64(expr.val());
-    if (column_index < 0 || column_index >= static_cast<Int64>(input_col_ids.size()))
+    if (column_index < 0 || column_index >= static_cast<Int64>(columns_to_read.size()))
     {
-        throw Exception("Column index out of bound: " + DB::toString(column_index) + ", should in [0," + DB::toString(input_col_ids.size())
-                            + ")",
+        throw Exception("Column index out of bound: " + DB::toString(column_index) + ", should in [0,"
+                            + DB::toString(columns_to_read.size()) + ")",
                         ErrorCodes::COP_BAD_DAG_REQUEST);
     }
-    return input_col_ids[column_index];
+    return columns_to_read[column_index].id;
 }
 
 inline RSOperatorPtr parseTiCompareExpr( //
     const tipb::Expr &                          expr,
     const FilterParser::RSFilterType            filter_type,
-    const std::vector<ColumnID> &               input_col_ids,
+    const ColumnDefines &                       columns_to_read,
     const FilterParser::AttrCreatorByColumnID & creator,
     Poco::Logger * /* log */)
 {
@@ -63,7 +63,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
         if (isColumnExpr(child))
         {
             state |= state_has_column;
-            ColumnID id = getColumnIDForColumnExpr(child, input_col_ids);
+            ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
             attr        = creator(id);
         }
         else if (isLiteralExpr(child))
@@ -109,7 +109,7 @@ inline RSOperatorPtr parseTiCompareExpr( //
 }
 
 RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
-                          const std::vector<ColumnID> &               input_colids,
+                          const ColumnDefines &                       columns_to_read,
                           const FilterParser::AttrCreatorByColumnID & creator,
                           Poco::Logger *                              log)
 {
@@ -136,7 +136,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
             {
                 const auto & child = expr.children(0);
                 if (likely(isFunctionExpr(child)))
-                    op = createNot(parseTiExpr(child, input_colids, creator, log));
+                    op = createNot(parseTiExpr(child, columns_to_read, creator, log));
                 else
                     op = createUnsupported(child.DebugString(), "child of logical not is not function", false);
             }
@@ -151,7 +151,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
             {
                 const auto & child = expr.children(i);
                 if (likely(isFunctionExpr(child)))
-                    children.emplace_back(parseTiExpr(child, input_colids, creator, log));
+                    children.emplace_back(parseTiExpr(child, columns_to_read, creator, log));
                 else
                     children.emplace_back(createUnsupported(child.DebugString(), "child of logical operator is not function", false));
             }
@@ -168,7 +168,7 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
         case FilterParser::RSFilterType::GreaterEqual:
         case FilterParser::RSFilterType::Less:
         case FilterParser::RSFilterType::LessEuqal:
-            op = parseTiCompareExpr(expr, filter_type, input_colids, creator, log);
+            op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, log);
             break;
 
         case FilterParser::RSFilterType::In:
@@ -191,37 +191,28 @@ RSOperatorPtr parseTiExpr(const tipb::Expr &                          expr,
 } // namespace cop
 
 
-RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo & dag_info, FilterParser::AttrCreatorByColumnID && creator, Poco::Logger * log)
+RSOperatorPtr FilterParser::parseDAGQuery(const DAGQueryInfo &                   dag_info,
+                                          const ColumnDefines &                  columns_to_read,
+                                          FilterParser::AttrCreatorByColumnID && creator,
+                                          Poco::Logger *                         log)
 {
     RSOperatorPtr op = EMPTY_FILTER;
-    if (!dag_info.dag.hasSelection() || dag_info.dag.getSelection().conditions_size() == 0)
+    if (dag_info.filters.empty())
         return op;
 
-    std::vector<ColumnID> column_ids;
-    for (const tipb::ColumnInfo & col : dag_info.dag.getTS().columns())
-    {
-        ColumnID cid = col.column_id();
-        if (cid == -1)
-            // Column ID -1 means TiDB expects no specific column, mostly it is for cases like `select count(*)`.
-            continue;
-
-        column_ids.emplace_back(cid);
-    }
-
-    const auto & selection = dag_info.dag.getSelection();
-    if (selection.conditions_size() == 1)
-        op = cop::parseTiExpr(selection.conditions(0), column_ids, creator, log);
+    if (dag_info.filters.size() == 1)
+        op = cop::parseTiExpr(*dag_info.filters[0], columns_to_read, creator, log);
     else
     {
         /// By default, multiple conditions with operator "and"
         RSOperators children;
-        for (Int32 i = 0; i < selection.conditions_size(); ++i)
+        for (size_t i = 0; i < dag_info.filters.size(); ++i)
         {
-            const auto & child = selection.conditions(i);
-            if (isFunctionExpr(child))
-                children.emplace_back(cop::parseTiExpr(child, column_ids, creator, log));
+            const auto & filter = *dag_info.filters[i];
+            if (isFunctionExpr(filter))
+                children.emplace_back(cop::parseTiExpr(filter, columns_to_read, creator, log));
             else
-                children.emplace_back(createUnsupported(child.DebugString(), "child of logical and is not function", false));
+                children.emplace_back(createUnsupported(filter.DebugString(), "child of logical and is not function", false));
         }
         op = createAnd(children);
     }
