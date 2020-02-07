@@ -48,15 +48,16 @@ TEST(TiFlashMetrics, Counter)
 {
     ASSERT_NO_THROW(TestMetrics::instance().test_counter.get().Increment(0));
     ASSERT_NO_THROW(TestMetrics::instance().test_counter.get<0>().Increment(1));
-    ASSERT_EQ(TestMetrics::instance().test_counter.get().Value(), 1);
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_counter.get().Value(), 1);
 
     ASSERT_NO_THROW(TestMetrics::instance().test_counter_with_1_label.get().Increment(0));
     ASSERT_NO_THROW(TestMetrics::instance().test_counter_with_1_label.get<0>().Increment(2));
-    ASSERT_EQ(TestMetrics::instance().test_counter_with_1_label.get().Value(), 2);
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_counter_with_1_label.get().Value(), 2);
 
-    ASSERT_NO_THROW(TestMetrics::instance().test_counter_with_2_labels.get().Increment(0));
+    ASSERT_NO_THROW(TestMetrics::instance().test_counter_with_2_labels.get().Increment(2));
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_counter_with_2_labels.get<0>().Value(), 2);
     ASSERT_NO_THROW(TestMetrics::instance().test_counter_with_2_labels.get<1>().Increment(3));
-    ASSERT_EQ(TestMetrics::instance().test_counter_with_2_labels.get().Value(), 3);
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_counter_with_2_labels.get<1>().Value(), 3);
 }
 
 } // namespace tests
