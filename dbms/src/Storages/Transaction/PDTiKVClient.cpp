@@ -16,7 +16,7 @@ IndexReader::IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID &
     : region_id(id_), cluster(cluster_), log(&Logger::get("pingcap.index_read"))
 {}
 
-int64_t IndexReader::getReadIndex()
+std::pair<uint64_t, bool> IndexReader::getReadIndex()
 {
     pingcap::kv::Backoffer bo(readIndexMaxBackoff);
     auto request = std::make_shared<kvrpcpb::ReadIndexRequest>();
@@ -27,12 +27,18 @@ int64_t IndexReader::getReadIndex()
 
         try
         {
-            return region_client.sendReqToRegion(bo, request)->read_index();
+            uint64_t index = region_client.sendReqToRegion(bo, request)->read_index();
+            return std::make_pair(index, false);
         }
         catch (pingcap::Exception & e)
         {
             LOG_WARNING(log, "Retry get read index");
-            bo.backoff(pingcap::kv::boRegionMiss, e);
+            // If region epoch is not match , we shouldn't wait any more, because region epoch will never update here.
+            if (e.code() == pingcap::ErrorCodes::RegionEpochNotMatch)
+            {
+                return std::make_pair(0, true);
+            }
+            bo.backoff(pingcap::kv::boTiKVRPC, e);
             continue;
         }
     }

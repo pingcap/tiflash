@@ -427,11 +427,11 @@ std::string Region::toString(bool dump_status) const { return meta.toString(dump
 
 ImutRegionRangePtr Region::getRange() const { return meta.getRange(); }
 
-UInt64 Region::learnerRead()
+std::pair<UInt64, bool> Region::learnerRead()
 {
     if (index_reader != nullptr)
         return index_reader->getReadIndex();
-    return 0;
+    return std::make_pair(0, false);
 }
 
 void Region::waitIndex(UInt64 index)

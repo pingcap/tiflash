@@ -350,11 +350,20 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
 
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
-                    region->waitIndex(region->learnerRead());
+                    auto [read_index, region_stale] = region->learnerRead();
+                    // client-c may detect region stale. In this cast, we should report RegionError directly.
+                    if(!region_stale)
+                        region->waitIndex(read_index);
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
                         mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.range_in_table);
+
+                    // If client-c detect region stale, but TMT not, it's a terrible bug.
+                    if (region_stale && status == RegionException::RegionReadStatus::OK)
+                    {
+                        throw Exception("Logical Error: client c reports region stale, but TMT region check is ok.", ErrorCodes::LOGICAL_ERROR);
+                    }
 
                     if (status != RegionException::RegionReadStatus::OK)
                     {
