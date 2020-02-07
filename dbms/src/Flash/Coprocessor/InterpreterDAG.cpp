@@ -10,6 +10,7 @@
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGStringConverter.h>
@@ -48,13 +49,112 @@ InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
       keep_session_timezone_info(
           dag.getEncodeType() == tipb::EncodeType::TypeChunk || dag.getEncodeType() == tipb::EncodeType::TypeCHBlock),
       log(&Logger::get("InterpreterDAG"))
-{}
+{
+    if (dag.hasSelection())
+    {
+        for (auto & condition : dag.getSelection().conditions())
+            conditions.push_back(&condition);
+    }
+}
 
 template <typename HandleType>
-bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, const std::vector<HandleRange<HandleType>> & region_ranges)
+void constructHandleColRefExpr(tipb::Expr & expr, Int64 col_index)
+{
+    expr.set_tp(tipb::ExprType::ColumnRef);
+    std::stringstream ss;
+    encodeDAGInt64(col_index, ss);
+    expr.set_val(ss.str());
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeLongLong);
+    // handle col is always not null
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
+    if constexpr (!std::is_signed_v<HandleType>)
+    {
+        field_type->set_flag(TiDB::ColumnFlagUnsigned);
+    }
+}
+
+template <typename HandleType>
+void constructIntLiteralExpr(tipb::Expr & expr, HandleType value)
+{
+    constexpr bool is_signed = std::is_signed_v<HandleType>;
+    if constexpr (is_signed)
+    {
+        expr.set_tp(tipb::ExprType::Int64);
+    }
+    else
+    {
+        expr.set_tp(tipb::ExprType::Uint64);
+    }
+    std::stringstream ss;
+    if constexpr (is_signed)
+    {
+        encodeDAGInt64(value, ss);
+    }
+    else
+    {
+        encodeDAGUInt64(value, ss);
+    }
+    expr.set_val(ss.str());
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeLongLong);
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
+    if constexpr (!is_signed)
+    {
+        field_type->set_flag(TiDB::ColumnFlagUnsigned);
+    }
+}
+
+template <typename HandleType>
+void constructBoundExpr(Int32 handle_col_id, tipb::Expr & expr, TiKVHandle::Handle<HandleType> bound, bool is_left_bound)
+{
+    auto * left = expr.add_children();
+    constructHandleColRefExpr<HandleType>(*left, handle_col_id);
+    auto * right = expr.add_children();
+    constructIntLiteralExpr<HandleType>(*right, bound.handle_id);
+    expr.set_tp(tipb::ExprType::ScalarFunc);
+    if (is_left_bound)
+        expr.set_sig(tipb::ScalarFuncSig::GEInt);
+    else
+        expr.set_sig(tipb::ScalarFuncSig::LTInt);
+    auto * field_type = expr.mutable_field_type();
+    field_type->set_tp(TiDB::TypeLongLong);
+    field_type->set_flag(TiDB::ColumnFlagNotNull);
+    field_type->set_flag(TiDB::ColumnFlagUnsigned);
+}
+
+template <typename HandleType>
+void constructExprBasedOnRange(Int32 handle_col_id, tipb::Expr & expr, HandleRange<HandleType> range)
+{
+    if (range.second == TiKVHandle::Handle<HandleType>::max)
+    {
+        constructBoundExpr<HandleType>(handle_col_id, expr, range.first, true);
+    }
+    else
+    {
+        auto * left = expr.add_children();
+        constructBoundExpr<HandleType>(handle_col_id, *left, range.first, true);
+        auto * right = expr.add_children();
+        constructBoundExpr<HandleType>(handle_col_id, *right, range.second, false);
+        expr.set_tp(tipb::ExprType::ScalarFunc);
+        expr.set_sig(tipb::ScalarFuncSig::LogicalAnd);
+        auto * field_type = expr.mutable_field_type();
+        field_type->set_tp(TiDB::TypeLongLong);
+        field_type->set_flag(TiDB::ColumnFlagNotNull);
+        field_type->set_flag(TiDB::ColumnFlagUnsigned);
+    }
+}
+
+template <typename HandleType>
+bool checkRangeAndGenExprIfNeeded(std::vector<HandleRange<HandleType>> & ranges, const std::vector<HandleRange<HandleType>> & region_ranges,
+    Int32 handle_col_id, tipb::Expr & handle_filter)
 {
     if (ranges.empty())
+    {
+        // generate an always false filter
+        constructInt64LiteralTiExpr(handle_filter, 0);
         return false;
+    }
     std::sort(ranges.begin(), ranges.end(),
         [](const HandleRange<HandleType> & a, const HandleRange<HandleType> & b) { return a.first < b.first; });
 
@@ -69,13 +169,16 @@ bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, co
             merged_range.second = merged_range.second >= ranges[i].second ? merged_range.second : ranges[i].second;
         else
         {
-            merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
+            if (merged_range.second > merged_range.first)
+                merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
             merged_range.first = ranges[i].first;
             merged_range.second = ranges[i].second;
         }
     }
-    merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
+    if (merged_range.second > merged_range.first)
+        merged_ranges.emplace_back(std::make_pair(merged_range.first, merged_range.second));
 
+    bool ret = true;
     for (const auto & region_range : region_ranges)
     {
         bool covered = false;
@@ -88,16 +191,47 @@ bool isAllValueCoveredByRanges(std::vector<HandleRange<HandleType>> & ranges, co
             }
         }
         if (!covered && region_range.second > region_range.first)
-            return false;
+        {
+            ret = false;
+            break;
+        }
     }
-    return true;
+    if (!ret)
+    {
+        if (merged_ranges.empty())
+        {
+            constructInt64LiteralTiExpr(handle_filter, 0);
+        }
+        else if (merged_ranges.size() == 1)
+        {
+            constructExprBasedOnRange<HandleType>(handle_col_id, handle_filter, merged_ranges[0]);
+        }
+        else
+        {
+            for (const auto & range : merged_ranges)
+            {
+                auto * filter = handle_filter.add_children();
+                constructExprBasedOnRange<HandleType>(handle_col_id, *filter, range);
+            }
+            handle_filter.set_tp(tipb::ExprType::ScalarFunc);
+            handle_filter.set_sig(tipb::ScalarFuncSig::LogicalOr);
+            auto * field_type = handle_filter.mutable_field_type();
+            field_type->set_tp(TiDB::TypeLongLong);
+            field_type->set_flag(TiDB::ColumnFlagNotNull);
+            field_type->set_flag(TiDB::ColumnFlagUnsigned);
+        }
+    }
+    return ret;
 }
 
 bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> & key_ranges, TableID table_id, bool pk_is_uint64,
-    const ImutRegionRangePtr & region_key_range)
+    const ImutRegionRangePtr & region_key_range, Int32 handle_col_id, tipb::Expr & handle_filter)
 {
     if (key_ranges.empty())
-        return true;
+    {
+        constructInt64LiteralTiExpr(handle_filter, 0);
+        return false;
+    }
 
     std::vector<HandleRange<Int64>> handle_ranges;
     for (auto & range : key_ranges)
@@ -135,10 +269,10 @@ bool checkKeyRanges(const std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>>
                 update_region_handle_ranges.emplace_back(new_range[i]);
             }
         }
-        return isAllValueCoveredByRanges<UInt64>(update_handle_ranges, update_region_handle_ranges);
+        return checkRangeAndGenExprIfNeeded<UInt64>(update_handle_ranges, update_region_handle_ranges, handle_col_id, handle_filter);
     }
     else
-        return isAllValueCoveredByRanges<Int64>(handle_ranges, region_handle_ranges);
+        return checkRangeAndGenExprIfNeeded<Int64>(handle_ranges, region_handle_ranges, handle_col_id, handle_filter);
 }
 
 RegionException::RegionReadStatus InterpreterDAG::getRegionReadStatus(const RegionPtr & current_region)
@@ -181,35 +315,65 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     Names required_columns;
     std::vector<NameAndTypePair> source_columns;
     std::vector<bool> is_ts_column;
-    for (const tipb::ColumnInfo & ci : ts.columns())
+    String handle_column_name = MutableSupport::tidb_pk_column_name;
+    if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
+        handle_column_name = pk_handle_col->get().name;
+
+    for (Int32 i = 0; i < ts.columns().size(); i++)
     {
+        auto const & ci = ts.columns(i);
         ColumnID cid = ci.column_id();
 
         if (cid == -1)
         {
             // Column ID -1 return the handle column
-            if (auto pk_handle_col = storage->getTableInfo().getPKHandleColumn())
-            {
-                required_columns.push_back(pk_handle_col->get().name);
-                auto pair = storage->getColumns().getPhysical(pk_handle_col->get().name);
-                source_columns.push_back(pair);
-                is_ts_column.push_back(false);
-            }
-            else
-            {
-                required_columns.push_back(MutableSupport::tidb_pk_column_name);
-                auto pair = storage->getColumns().getPhysical(MutableSupport::tidb_pk_column_name);
-                source_columns.push_back(pair);
-                is_ts_column.push_back(false);
-            }
+            required_columns.push_back(handle_column_name);
+            auto pair = storage->getColumns().getPhysical(handle_column_name);
+            source_columns.push_back(pair);
+            is_ts_column.push_back(false);
+            handle_col_id = i;
             continue;
         }
 
         String name = storage->getTableInfo().getColumnName(cid);
         required_columns.push_back(name);
+        if (name == handle_column_name)
+            handle_col_id = i;
         auto pair = storage->getColumns().getPhysical(name);
         source_columns.emplace_back(std::move(pair));
         is_ts_column.push_back(ci.tp() == TiDB::TypeTimestamp);
+    }
+
+    if (handle_col_id == -1)
+        handle_col_id = required_columns.size();
+
+    auto current_region = context.getTMTContext().getKVStore()->getRegion(dag.getRegionID());
+    auto region_read_status = getRegionReadStatus(current_region);
+    if (region_read_status != RegionException::OK)
+    {
+        std::vector<RegionID> region_ids;
+        region_ids.push_back(dag.getRegionID());
+        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << dag.getRegionID());
+        throw RegionException(std::move(region_ids), region_read_status);
+    }
+    if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange(), handle_col_id, handle_filter_expr))
+    {
+        // need to add extra filter on handle column
+        filter_on_handle = true;
+        conditions.push_back(&handle_filter_expr);
+    }
+
+    bool has_handle_column = (handle_col_id != (Int32)required_columns.size());
+
+    if (filter_on_handle && !has_handle_column)
+    {
+        // if need to add filter on handle column, and
+        // the handle column is not selected in ts, add
+        // the handle column
+        required_columns.push_back(handle_column_name);
+        auto pair = storage->getColumns().getPhysical(handle_column_name);
+        source_columns.push_back(pair);
+        is_ts_column.push_back(false);
     }
 
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
@@ -218,9 +382,10 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     {
         // if the dag request does not contain agg, then the final output is
         // based on the output of table scan
+        int extra_col_size = (filter_on_handle && !has_handle_column) ? 1 : 0;
         for (auto i : dag.getDAGRequest().output_offsets())
         {
-            if (i >= required_columns.size())
+            if (i >= required_columns.size() - extra_col_size)
             {
                 // array index out of bound
                 throw Exception("Output offset index is out of bound", ErrorCodes::COP_BAD_DAG_REQUEST);
@@ -256,7 +421,7 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     SelectQueryInfo query_info;
     // set query to avoid unexpected NPE
     query_info.query = dag.getAST();
-    query_info.dag_query = std::make_unique<DAGQueryInfo>(dag, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
+    query_info.dag_query = std::make_unique<DAGQueryInfo>(conditions, analyzer->getPreparedSets(), analyzer->getCurrentInputColumns());
     query_info.mvcc_query_info = std::make_unique<MvccQueryInfo>();
     query_info.mvcc_query_info->resolve_locks = true;
     query_info.mvcc_query_info->read_tso = settings.read_tso;
@@ -264,17 +429,6 @@ void InterpreterDAG::executeTS(const tipb::TableScan & ts, Pipeline & pipeline)
     info.region_id = dag.getRegionID();
     info.version = dag.getRegionVersion();
     info.conf_version = dag.getRegionConfVersion();
-    auto current_region = context.getTMTContext().getKVStore()->getRegion(info.region_id);
-    auto region_read_status = getRegionReadStatus(current_region);
-    if (region_read_status != RegionException::OK)
-    {
-        std::vector<RegionID> region_ids;
-        region_ids.push_back(info.region_id);
-        LOG_WARNING(log, __PRETTY_FUNCTION__ << " Meet region exception for region " << info.region_id);
-        throw RegionException(std::move(region_ids), region_read_status);
-    }
-    if (!checkKeyRanges(dag.getKeyRanges(), table_id, storage->pkIsUInt64(), current_region->getRange()))
-        throw Exception("Cop request only support full range scan for given region", ErrorCodes::COP_BAD_DAG_REQUEST);
     info.range_in_table = current_region->getHandleRangeByTable(table_id);
     query_info.mvcc_query_info->regions_query_info.push_back(info);
     query_info.mvcc_query_info->concurrent = 0.0;
@@ -355,9 +509,9 @@ InterpreterDAG::AnalysisResult InterpreterDAG::analyzeExpressions()
 {
     AnalysisResult res;
     ExpressionActionsChain chain;
-    if (dag.hasSelection())
+    if (!conditions.empty())
     {
-        analyzer->appendWhere(chain, dag.getSelection(), res.filter_column_name);
+        analyzer->appendWhere(chain, conditions, res.filter_column_name);
         res.has_where = true;
         res.before_where = chain.getLastActions();
         chain.addStep();
@@ -629,7 +783,8 @@ void InterpreterDAG::executeImpl(Pipeline & pipeline)
     if (res.has_where)
     {
         executeWhere(pipeline, res.before_where, res.filter_column_name);
-        recordProfileStreams(pipeline, dag.getSelectionIndex());
+        if (dag.hasSelection())
+            recordProfileStreams(pipeline, dag.getSelectionIndex());
     }
     if (res.need_aggregate)
     {
