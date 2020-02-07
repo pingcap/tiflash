@@ -19,22 +19,16 @@ namespace DB
 {
 
 
-struct IndexReader : public pingcap::kv::RegionClient
+struct IndexReader
 {
-    std::string suggested_ip;
-    UInt16 suggested_port;
-
+    pingcap::kv::RegionVerID region_id;
     KVClusterPtr cluster;
-
     Logger * log;
 
-    IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id, const std::string & suggested_ip, UInt16 suggested_port);
+    IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id);
 
     int64_t getReadIndex();
 
-private:
-    std::shared_ptr<::kvrpcpb::ReadIndexResponse> getReadIndexFromLearners(
-        pingcap::kv::Backoffer & bo, const metapb::Region & meta, const std::vector<metapb::Peer> & learners);
 };
 
 using IndexReaderPtr = std::shared_ptr<IndexReader>;
