@@ -1,7 +1,6 @@
-#include <Storages/Transaction/PDTiKVClient.h>
-
 #include <Common/DNSCache.h>
 #include <Common/Exception.h>
+#include <Storages/Transaction/PDTiKVClient.h>
 
 namespace DB
 {
@@ -13,11 +12,8 @@ extern const int LOGICAL_ERROR;
 
 constexpr int readIndexMaxBackoff = 5000;
 
-IndexReader::IndexReader(
-    KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id_)
-    : region_id(id_),
-      cluster(cluster_),
-      log(&Logger::get("pingcap.index_read"))
+IndexReader::IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id_)
+    : region_id(id_), cluster(cluster_), log(&Logger::get("pingcap.index_read"))
 {}
 
 int64_t IndexReader::getReadIndex()
@@ -40,7 +36,6 @@ int64_t IndexReader::getReadIndex()
             continue;
         }
     }
-
 }
 
 } // namespace DB
