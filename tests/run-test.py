@@ -96,7 +96,7 @@ class MySQLCompare:
         results = set()
         for output_line in outputs:
             parsed_line = MySQLCompare.parse_output_line(output_line)
-            while parsed_line in parts:
+            while parsed_line in results:
                 parsed_line += '-extra'
             results.add(parsed_line)
         return results
@@ -106,7 +106,7 @@ class MySQLCompare:
         for output_line in outputs:
             if not output_line.startswith('+'):
                 parsed_line = MySQLCompare.parse_mysql_line(output_line)
-                while parsed_line in parts:
+                while parsed_line in results:
                     parsed_line += '-extra'
                 results.add(parsed_line)
         return results
