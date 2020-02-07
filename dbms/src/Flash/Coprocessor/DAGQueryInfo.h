@@ -10,9 +10,9 @@ namespace DB
 
 struct DAGQueryInfo
 {
-    DAGQueryInfo(const DAGQuerySource & dag_, DAGPreparedSets dag_sets_, const std::vector<NameAndTypePair> & source_columns_)
-        : dag(dag_), dag_sets(std::move(dag_sets_)), source_columns(source_columns_){};
-    const DAGQuerySource & dag;
+    DAGQueryInfo(const std::vector<const tipb::Expr *> & conditions_, DAGPreparedSets dag_sets_, const std::vector<NameAndTypePair> & source_columns_)
+        : conditions(conditions_), dag_sets(std::move(dag_sets_)), source_columns(source_columns_){};
+    const std::vector<const tipb::Expr *> & conditions;
     DAGPreparedSets dag_sets;
     const std::vector<NameAndTypePair> & source_columns;
 };

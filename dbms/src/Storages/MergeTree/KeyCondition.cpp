@@ -311,14 +311,13 @@ KeyCondition::KeyCondition(
     {
         RPNBuilder<tipb::Expr, DAGPreparedSets> rpn_builder(key_expr_, key_columns, query_info.dag_query->source_columns);
         DAGPreparedSets sets(query_info.dag_query->dag_sets);
-        const auto & dag = query_info.dag_query->dag;
-        if (dag.hasSelection())
+        const auto & conditions = query_info.dag_query->conditions;
+        if (!conditions.empty())
         {
             Block block_with_constants{{DataTypeUInt8().createColumnConstWithDefaultValue(1), std::make_shared<DataTypeUInt8>(), "_dummy"}};
-            auto & selection = dag.getSelection();
-            for (int i = 0; i < selection.conditions_size(); i++)
+            for (UInt32 i = 0; i < conditions.size(); i++)
             {
-                rpn_builder.traverseNodeTree(selection.conditions(i), context, block_with_constants, sets, rpn);
+                rpn_builder.traverseNodeTree(*conditions[i], context, block_with_constants, sets, rpn);
                 if (i != 0)
                     rpn.emplace_back(RPNElement::FUNCTION_AND);
             }
