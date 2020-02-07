@@ -59,3 +59,8 @@ if [[ "${CMAKE_BUILD_TYPE}" = "Debug" && ${ENABLE_TEST} -ne 0 ]]; then
     cp -f "$build_dir/dbms/gtests_dbms" "$install_dir/"
     cp -f "$build_dir/libs/libcommon/src/tests/gtests_libcommon" "$install_dir/"
 fi
+
+ldd "$install_dir/tiflash"
+cd "$install_dir"
+chrpath -d libtiflash_proxy.so "$install_dir/tiflash"
+ldd "$install_dir/tiflash"

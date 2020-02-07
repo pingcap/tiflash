@@ -28,6 +28,7 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/StorageEngineType.h>
@@ -480,6 +481,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->createTMTContext(
             pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr, engine, disable_bg_flush);
         global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.9));
+        global_context->getTMTContext().getKVStore()->setRegionCompactLogPeriod(
+            Seconds{config().getUInt64("flash.compact_log_min_period", 5 * 60)});
     }
 
     /// Then, load remaining databases
