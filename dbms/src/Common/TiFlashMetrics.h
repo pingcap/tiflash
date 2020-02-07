@@ -24,15 +24,15 @@ namespace DB
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define APPLY_FOR_METRICS(M)                                                                                                 \
-    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 0)                                     \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 0)                                       \
+#define APPLY_FOR_METRICS(M)                                                             \
+    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 0) \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 0)   \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 0)
 
 template <typename T, typename First, typename... Rest>
-void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, First && first, Rest &&... rest);
+inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, First && first, Rest &&... rest);
 template <typename T, typename Arg>
-void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, Arg && arg);
+inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, Arg && arg);
 
 template <typename T>
 struct MetricFamilyTrait
@@ -80,19 +80,19 @@ using GaugeArg = typename MetricFamilyTrait<prometheus::Gauge>::ArgType;
 using HistogramArg = typename MetricFamilyTrait<prometheus::Histogram>::ArgType;
 
 template <typename T, typename Arg>
-void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, Arg && arg)
+inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, Arg && arg)
 {
     dst[i] = &family.Add(std::forward<Arg>(arg));
 }
 template <>
-void addMetricsCommon<prometheus::Histogram, MetricFamilyTrait<prometheus::Histogram>::ArgType>(prometheus::Histogram * dst[], size_t i,
-    prometheus::Family<prometheus::Histogram> & family, MetricFamilyTrait<prometheus::Histogram>::ArgType && arg)
+inline void addMetricsCommon<prometheus::Histogram, MetricFamilyTrait<prometheus::Histogram>::ArgType>(prometheus::Histogram * dst[],
+    size_t i, prometheus::Family<prometheus::Histogram> & family, MetricFamilyTrait<prometheus::Histogram>::ArgType && arg)
 {
     HistogramArg args{std::forward<HistogramArg>(arg)};
     dst[i] = &family.Add(std::move(std::get<0>(args)), std::move(std::get<1>(args)));
 }
 template <typename T, typename First, typename... Rest>
-void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, First && first, Rest &&... rest)
+inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, First && first, Rest &&... rest)
 {
     addMetricsCommon(dst, i, family, std::forward<First>(first));
     addMetricsCommon(dst, i + 1, family, std::forward<Rest>(rest)...);
