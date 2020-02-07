@@ -22,6 +22,7 @@ RUN yum makecache \
          python3-devel \
          libcurl-devel \
          bzip2 \
+         chrpath \
   && curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly  \
   && pip3 install \
           pybind11 \
