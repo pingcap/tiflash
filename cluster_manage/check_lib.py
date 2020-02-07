@@ -7,6 +7,7 @@ if __name__ == '__main__':
         import toml
         import pybind11
         import setuptools
+        import prometheus_client
     except Exception as e:
         print(e)
         exit(-1)

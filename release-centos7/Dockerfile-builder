@@ -33,6 +33,7 @@ RUN yum makecache \
           urllib3 \
           toml \
           setuptools \
+          prometheus_client \
   && cd /prepare-environments \
   && ./install-openssl.sh \
   && ./install-cmake.sh \

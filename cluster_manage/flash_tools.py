@@ -25,6 +25,9 @@ class FlashConfig:
             int(flash_cluster['refresh_interval']), self.cluster_master_ttl)
         self.update_rule_interval = int(flash_cluster['update_rule_interval'])
         self.log_path = flash_cluster.get('log', '{}/flash_cluster_manager.log'.format(tmp_path))
+        status = self.conf_toml.get('status', {})
+        self.metrics_addr = status.get('metrics_addr')
+        self.metrics_interval = status.get('metrics_interval', 20)
 
 
 def main():

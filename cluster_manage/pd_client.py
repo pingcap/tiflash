@@ -2,6 +2,7 @@
 import logging
 from typing import Optional
 
+import define
 import etcd
 import uri
 import conf
@@ -9,12 +10,9 @@ import util
 
 
 class EtcdClient:
-    FLASH_PREFIX = 'tiflash'
-    FLASH_CLUSTER_MUTEX_KEY = '{}/cluster/master'.format(FLASH_PREFIX)
-
     def try_init_mutex(self, cluster_mutex_value):
         try:
-            res = self.client.write(EtcdClient.FLASH_CLUSTER_MUTEX_KEY,
+            res = self.client.write(define.TIFLASH_CLUSTER_MUTEX_KEY,
                                     cluster_mutex_value,
                                     ttl=conf.flash_conf.cluster_master_ttl, prevExist=False)
             self.logger.info('Try to init master success, ttl: %d, create new key: %s', res.ttl, res.key)
@@ -24,11 +22,17 @@ class EtcdClient:
         return False
 
     def refresh_ttl(self, cluster_mutex_value):
-        self.client.refresh(EtcdClient.FLASH_CLUSTER_MUTEX_KEY, conf.flash_conf.cluster_master_ttl,
+        self.client.refresh(define.TIFLASH_CLUSTER_MUTEX_KEY, conf.flash_conf.cluster_master_ttl,
                             prevValue=cluster_mutex_value)
 
-    def test_refresh_ttl_wrong_value(self, cluster_mutex_value):
-        self.refresh_ttl(cluster_mutex_value)
+    def get(self, key):
+        try:
+            return self.client.get(key).value
+        except etcd.EtcdKeyError as _:
+            return None
+
+    def write(self, key, value):
+        self.client.write(key, value, ttl=conf.flash_conf.cluster_master_ttl)
 
     def __init__(self, host, port):
         self.logger = logging.getLogger('etcd.client')
