@@ -7,12 +7,16 @@
 
 namespace DB
 {
-
+// DAGQueryInfo contains filter information in dag request, it will
+// be used to extracted key conditions by storage engine
 struct DAGQueryInfo
 {
-    DAGQueryInfo(const std::vector<const tipb::Expr *> & conditions_, DAGPreparedSets dag_sets_, const std::vector<NameAndTypePair> & source_columns_)
-        : conditions(conditions_), dag_sets(std::move(dag_sets_)), source_columns(source_columns_){};
-    const std::vector<const tipb::Expr *> & conditions;
+    DAGQueryInfo(const std::vector<const tipb::Expr *> & filters_, DAGPreparedSets dag_sets_, const std::vector<NameAndTypePair> & source_columns_)
+        : filters(filters_), dag_sets(std::move(dag_sets_)), source_columns(source_columns_){};
+    // filters in dag request
+    const std::vector<const tipb::Expr *> & filters;
+    // Prepared sets extracted from dag request, which are used for indices
+    // by storage engine.
     DAGPreparedSets dag_sets;
     const std::vector<NameAndTypePair> & source_columns;
 };
