@@ -1,14 +1,11 @@
 #include "MetricsPrometheus.h"
 
-#include <Interpreters/AsynchronousMetrics.h>
-
 #include <Common/CurrentMetrics.h>
-
+#include <Common/FunctionTimerTask.h>
+#include <Interpreters/AsynchronousMetrics.h>
 #include <daemon/BaseDaemon.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
-
-#include <Common/FunctionTimerTask.h>
 
 
 namespace DB
@@ -17,25 +14,8 @@ namespace DB
 constexpr long MILLISECOND = 1000;
 constexpr long INIT_DELAY = 5;
 
-std::shared_ptr<prometheus::Registry> MetricsPrometheus::registry_instance_ptr = nullptr;
-
-std::mutex MetricsPrometheus::registry_instance_mutex;
-
-std::shared_ptr<prometheus::Registry> MetricsPrometheus::getRegistry()
-{
-    if (registry_instance_ptr == nullptr)
-    {
-        std::lock_guard<std::mutex> lk(registry_instance_mutex);
-        if (registry_instance_ptr == nullptr)
-        {
-            registry_instance_ptr = std::make_shared<prometheus::Registry>();
-        }
-    }
-    return registry_instance_ptr;
-}
-
 MetricsPrometheus::MetricsPrometheus(Context & context_, const AsynchronousMetrics & async_metrics_)
-    : timer(), context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus")), registry(MetricsPrometheus::getRegistry())
+    : timer(), context(context_), async_metrics(async_metrics_), log(&Logger::get("Prometheus"))
 {
     auto & conf = context.getConfigRef();
 
@@ -172,4 +152,5 @@ void MetricsPrometheus::convertMetrics(const GraphiteWriter::KeyValueVector<ssiz
         }
     }
 }
+
 } // namespace DB
