@@ -354,12 +354,15 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     // client-c may detect region removed.
                     if(!region_removed)
                         region->waitIndex(read_index);
-                    else
-                        LOG_WARNING(log, "region " << std::to_string(region->id()) <<" is removed.");
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
                         mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.range_in_table);
+
+                    if (region_removed)
+                    {
+                        status = RegionException::RegionReadStatus::NOT_FOUND;
+                    }
 
                     if (status != RegionException::RegionReadStatus::OK || region_removed)
                     {
