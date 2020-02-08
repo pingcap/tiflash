@@ -21,6 +21,12 @@ std::pair<uint64_t, bool> IndexReader::getReadIndex()
     pingcap::kv::Backoffer bo(readIndexMaxBackoff);
     auto request = std::make_shared<kvrpcpb::ReadIndexRequest>();
 
+    auto region_ptr = cluster->region_cache->getRegionByID(bo, region_id);
+    if (region_ptr == nullptr)
+    {
+        return std::make_pair(0, true);
+    }
+
     for (;;)
     {
         auto region_client = pingcap::kv::RegionClient(cluster.get(), region_id);
