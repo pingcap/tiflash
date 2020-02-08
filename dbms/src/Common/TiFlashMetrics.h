@@ -9,18 +9,9 @@ namespace DB
 {
 
 /// Central place to define metrics across all subsystems.
-/// Sample defines:
-/// M(tiflash_test_counter, "Test counter metric w/o labels", Counter, 0)
-/// M(tiflash_test_counter_with_1_label, "Test counter metric with 1 label", Counter, 1, CounterArg{{"label1", "value1"}})
-/// M(tiflash_test_counter_with_2_labels, "Test counter metric with 2 labels", Counter, 2, CounterArg{{"label1", "value1"}}, CounterArg{{"label21", "value21"}, {"label22", "value22"}})
-/// M(tiflash_test_gauge, "Test gauge metric w/o labels", Gauge, 0)
-/// M(tiflash_test_gauge_with_1_label, "Test gauge metric with 1 label", Gauge, 1, GaugeArg{{"label1", "value1"}})
-/// M(tiflash_test_gauge_with_2_labels, "Test gauge metric with 2 labels", Gauge, 2, GaugeArg{{"label1", "value1"}}, GaugeArg{{"label21", "value22"}, {"label22", "value22"}})
-/// M(tiflash_test_histogram, "Test histogram metric w/o labels", Histogram, 0)
-/// M(tiflash_test_histogram_with_1_label, "Test histogram metric with 1 label", Histogram, 1, HistogramArg{{{"label1", "value1"}}, {100}})
-/// M(tiflash_test_histogram_with_2_labels, "Test histogram metric with 2 labels", Histogram, 2, HistogramArg{{{"label1", "value1"}}, {0.1, 0.2, 0.3, 0.4}}, HistogramArg{{{"label21", "value21"}, {"label22", "value22"}}, {1, 2, 3, 4}})
-/// Sample usage:
-/// context.getTiFlashMetrics()->tiflash_test_counter.Set(1);
+/// Refer to gtest_tiflash_metrics.cpp for more sample defines.
+/// Usage:
+/// context.getTiFlashMetrics()->tiflash_test_counter.get().Set(1);
 #ifdef M
 #error "Please undefine macro M first."
 #endif
@@ -31,7 +22,7 @@ namespace DB
         CounterArg{{"type", "selection"}}, CounterArg{{"type", "aggregation"}}, CounterArg{{"type", "top_n"}},              \
         CounterArg{{"type", "limit"}})                                                                                      \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 1,     \
-        HistogramArg{{{"req", "select"}}, {}})                                                                              \
+        HistogramArg{{{"req", "select"}}, ExpBuckets{0.0005, 2, 20}})                                                       \
     M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                             \
     M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                             \
     M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
@@ -65,6 +56,23 @@ struct MetricFamilyTrait<prometheus::Histogram>
 using CounterArg = typename MetricFamilyTrait<prometheus::Counter>::ArgType;
 using GaugeArg = typename MetricFamilyTrait<prometheus::Gauge>::ArgType;
 using HistogramArg = typename MetricFamilyTrait<prometheus::Histogram>::ArgType;
+
+struct ExpBuckets
+{
+    const double start;
+    const int base;
+    const size_t size;
+    inline operator prometheus::Histogram::BucketBoundaries() const &&
+    {
+        prometheus::Histogram::BucketBoundaries buckets(size);
+        double current = start;
+        std::for_each(buckets.begin(), buckets.end(), [&](auto & e) {
+            e = current;
+            current *= base;
+        });
+        return buckets;
+    }
+};
 
 template <typename T, size_t n>
 struct MetricFamily
