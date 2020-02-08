@@ -77,18 +77,6 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
         LOG_INFO(log, "Metrics Port = " << metrics_port);
     }
 
-    // Register all async metrics into registry.
-    auto async_metric_values = async_metrics.getValues();
-    for (const auto & metric : async_metric_values)
-    {
-        auto name = TiFlashMetrics::async_metrics_prefix + metric.first;
-        // Prometheus doesn't allow metric name containing dot.
-        std::replace(name.begin(), name.end(), '.', '_');
-        auto & family = prometheus::BuildGauge().Name(name).Help("System asynchronous metric " + name).Register(*tiflash_metrics->registry);
-        // Use original name as key for the sake of further accesses.
-        registered_async_metrics.emplace(metric.first, &family.Add({}));
-    }
-
     timer.scheduleAtFixedRate(
         FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)), INIT_DELAY * MILLISECOND, metrics_interval * MILLISECOND);
 }
@@ -112,7 +100,22 @@ void MetricsPrometheus::run()
     auto async_metric_values = async_metrics.getValues();
     for (const auto & metric : async_metric_values)
     {
-        registered_async_metrics[metric.first]->Set(metric.second);
+        const auto & origin_name = metric.first;
+        const auto & value = metric.second;
+        if (!tiflash_metrics->registered_async_metrics.count(origin_name))
+        {
+            // Register this async metric into registry on flight, as async metrics are not accumulated at once.
+            auto prometheus_name = TiFlashMetrics::async_metrics_prefix + metric.first;
+            // Prometheus doesn't allow metric name containing dot.
+            std::replace(prometheus_name.begin(), prometheus_name.end(), '.', '_');
+            auto & family = prometheus::BuildGauge()
+                                .Name(prometheus_name)
+                                .Help("System asynchronous metric " + prometheus_name)
+                                .Register(*tiflash_metrics->registry);
+            // Use original name as key for the sake of further accesses.
+            tiflash_metrics->registered_async_metrics.emplace(origin_name, &family.Add({}));
+        }
+        tiflash_metrics->registered_async_metrics[origin_name]->Set(value);
     }
 
     if (gateway != nullptr)

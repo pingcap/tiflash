@@ -4,13 +4,6 @@
 #include <common/logger_useful.h>
 #include <prometheus/exposer.h>
 #include <prometheus/gateway.h>
-#include <prometheus/gauge.h>
-#include <prometheus/registry.h>
-
-#include <condition_variable>
-#include <mutex>
-#include <string>
-#include <vector>
 
 namespace DB
 {
@@ -47,8 +40,6 @@ private:
     int metrics_interval;
     std::shared_ptr<prometheus::Gateway> gateway;
     std::shared_ptr<prometheus::Exposer> exposer;
-
-    std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 };
 
 } // namespace DB

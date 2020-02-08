@@ -120,10 +120,6 @@ public:
     TiFlashMetrics();
 
 private:
-    void registerProfileEvents();
-    void registerCurrentMetrics();
-
-private:
     static constexpr auto profile_events_prefix = "tiflash_system_profile_events_";
     static constexpr auto current_metrics_prefix = "tiflash_system_metrics_";
     static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metrics_";
@@ -132,6 +128,7 @@ private:
 
     std::vector<prometheus::Gauge *> registered_profile_events;
     std::vector<prometheus::Gauge *> registered_current_metrics;
+    std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
 public:
 #ifdef M

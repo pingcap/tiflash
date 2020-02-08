@@ -7,12 +7,6 @@ namespace DB
 
 TiFlashMetrics::TiFlashMetrics()
 {
-    registerProfileEvents();
-    registerCurrentMetrics();
-}
-
-void TiFlashMetrics::registerProfileEvents()
-{
     registered_profile_events.reserve(ProfileEvents::end());
     for (ProfileEvents::Event event = 0; event < ProfileEvents::end(); event++)
     {
@@ -21,10 +15,7 @@ void TiFlashMetrics::registerProfileEvents()
             = prometheus::BuildGauge().Name(profile_events_prefix + name).Help("System profile event " + name).Register(*registry);
         registered_profile_events.push_back(&family.Add({}));
     }
-}
 
-void TiFlashMetrics::registerCurrentMetrics()
-{
     registered_current_metrics.reserve(CurrentMetrics::end());
     for (CurrentMetrics::Metric metric = 0; metric < CurrentMetrics::end(); metric++)
     {
