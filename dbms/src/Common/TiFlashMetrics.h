@@ -31,7 +31,7 @@ namespace DB
         CounterArg{{"type", "selection"}}, CounterArg{{"type", "aggregation"}}, CounterArg{{"type", "top_n"}},              \
         CounterArg{{"type", "limit"}})                                                                                      \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 1,     \
-        HistogramArg{{"req", "select"}})                                                                                    \
+        HistogramArg{{{"req", "select"}}, {}})                                                                              \
     M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                             \
     M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                             \
     M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
