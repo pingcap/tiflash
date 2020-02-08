@@ -28,9 +28,7 @@ std::pair<uint64_t, bool> IndexReader::getReadIndex()
         {
             return std::make_pair(0, true);
         }
-        auto epoch = region_ptr->meta().region_epoch();
-        region_id.conf_ver = epoch.conf_ver();
-        region_id.ver = epoch.ver();
+       region_id = region_ptr->verID();
 
         auto region_client = pingcap::kv::RegionClient(cluster.get(), region_id);
 
