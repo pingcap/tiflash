@@ -12,6 +12,11 @@ namespace DB
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
 /// context.getTiFlashMetrics()->tiflash_test_counter.get().Set(1);
+/// Maintenance notes:
+/// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/tmt/raft/etc.).
+/// 2. Keep metrics with same prefix next to each other.
+/// 3. Add metrics of new subsystems at tail.
+/// 4. Keep it proper formatted using clang-format.
 #ifdef M
 #error "Please undefine macro M first."
 #endif
