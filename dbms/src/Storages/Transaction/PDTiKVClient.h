@@ -27,6 +27,7 @@ struct IndexReader
 
     IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id);
 
+    // if region is merged and this region is removed, the second value returns true.
     std::pair<uint64_t, bool> getReadIndex();
 };
 
