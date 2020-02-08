@@ -353,7 +353,8 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     auto [read_index, region_removed] = region->learnerRead();
                     if(!region_removed)
                         region->waitIndex(read_index);
-                    else {
+                    else
+                    {
                         // client-c detect region removed. Set region_status and continue.
                         region_status = RegionException::RegionReadStatus::NOT_FOUND;
                         continue;
