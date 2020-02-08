@@ -1,0 +1,45 @@
+mysql> drop table if exists test.t
+mysql> create table test.t(a int, b int, c int, d int, e int, f int)
+mysql> alter table test.t set tiflash replica 1 location labels 'rack', 'host', 'abc'
+
+SLEEP 15
+
+mysql> insert into test.t values (1, 1, 1, 1, 1, 1);
+mysql> insert into test.t values (1, 2, 3, NULL, NULL, 1);
+mysql> alter table test.t add primary key new_pk(a,b,c) USING RTREE;
+
+SLEEP 15
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ * from test.t;
++---+---+---+------+------+------+
+| a | b | c | d    | e    | f    |
++---+---+---+------+------+------+
+| 1 | 1 | 1 |    1 |    1 |    1 |
+| 1 | 2 | 3 | NULL | NULL |    1 |
++---+---+---+------+------+------+
+
+>> desc test.t
+┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
+│ a           │ Int32           │              │                    │
+│ b           │ Int32           │              │                    │
+│ c           │ Int32           │              │                    │
+│ d           │ Nullable(Int32) │              │                    │
+│ e           │ Nullable(Int32) │              │                    │
+│ f           │ Nullable(Int32) │              │                    │
+│ _tidb_rowid │ Int64           │              │                    │
+└─────────────┴─────────────────┴──────────────┴────────────────────┘
+
+mysql> alter table test.t drop primary key;
+
+SLEEP 15
+
+>> desc test.t
+┌─name────────┬─type────────────┬─default_type─┬─default_expression─┐
+│ a           │ Int32           │              │                    │
+│ b           │ Int32           │              │                    │
+│ c           │ Int32           │              │                    │
+│ d           │ Nullable(Int32) │              │                    │
+│ e           │ Nullable(Int32) │              │                    │
+│ f           │ Nullable(Int32) │              │                    │
+│ _tidb_rowid │ Int64           │              │                    │
+└─────────────┴─────────────────┴──────────────┴────────────────────┘

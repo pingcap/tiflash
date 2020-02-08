@@ -39,7 +39,17 @@ enum SchemaActionType : Int8
     SchemaActionTruncateTablePartition = 23,
     SchemaActionDropView = 24,
     SchemaActionRecoverTable = 25,
-    SchemaActionModifySchemaCharsetAndCollate = 26
+    SchemaActionModifySchemaCharsetAndCollate = 26,
+    SchemaActionLockTable = 27,
+    SchemaActionUnlockTable = 28,
+    SchemaActionRepairTable = 29,
+    SchemaActionSetTiFlashReplica = 30,
+    SchemaActionUpdateTiFlashReplicaStatus = 31,
+    SchemaActionAddPrimaryKey = 32,
+    SchemaActionDropPrimaryKey = 33,
+    SchemaActionCreateSequence = 34,
+    SchemaActionAlterSequence = 35,
+    SchemaActionDropSequence = 36
 };
 
 struct SchemaDiff
