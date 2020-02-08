@@ -24,10 +24,17 @@ namespace DB
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define APPLY_FOR_METRICS(M)                                                             \
-    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 0) \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 0)   \
-    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 0)
+#define APPLY_FOR_METRICS(M)                                                                                                \
+    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 2, CounterArg{{"vec_type", "batch"}}, \
+        CounterArg{{"vec_type", "normal"}})                                                                                 \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, CounterArg{{"type", "table_scan"}},  \
+        CounterArg{{"type", "selection"}}, CounterArg{{"type", "aggregation"}}, CounterArg{{"type", "top_n"}},              \
+        CounterArg{{"type", "limit"}})                                                                                      \
+    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 1,     \
+        HistogramArg{{"req", "select"}})                                                                                    \
+    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                             \
+    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                             \
+    M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
 
 template <typename T>
 struct MetricFamilyTrait
@@ -70,7 +77,6 @@ struct MetricFamily
         addMetrics(0, family, std::forward<Args>(args)...);
     }
 
-    template <>
     MetricFamily(prometheus::Registry & registry, const std::string & name, const std::string & help)
     {
         static_assert(n == 0);
@@ -91,8 +97,7 @@ private:
     {
         metrics[i] = &family.Add(std::forward<Arg>(arg));
     }
-    template <>
-    inline void addMetrics<prometheus::Histogram, MetricFamilyTrait<prometheus::Histogram>::ArgType>(
+    inline void addMetrics(
         size_t i, prometheus::Family<prometheus::Histogram> & family, MetricFamilyTrait<prometheus::Histogram>::ArgType && arg)
     {
         HistogramArg args{std::forward<HistogramArg>(arg)};
