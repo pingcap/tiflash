@@ -60,6 +60,22 @@ TEST(TiFlashMetrics, Counter)
     ASSERT_DOUBLE_EQ(TestMetrics::instance().test_counter_with_2_labels.get<1>().Value(), 3);
 }
 
+TEST(TiFlashMetrics, Gauge)
+{
+    ASSERT_NO_THROW(TestMetrics::instance().test_gauge.get().Set(10));
+    ASSERT_NO_THROW(TestMetrics::instance().test_gauge.get<0>().Increment(1));
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_gauge.get().Value(), 11);
+
+    ASSERT_NO_THROW(TestMetrics::instance().test_gauge_with_1_label.get().Set(-10));
+    ASSERT_NO_THROW(TestMetrics::instance().test_gauge_with_1_label.get<0>().Increment(2));
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_gauge_with_1_label.get().Value(), -8);
+
+    ASSERT_NO_THROW(TestMetrics::instance().test_gauge_with_2_labels.get().Set(2));
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_gauge_with_2_labels.get<0>().Value(), 2);
+    ASSERT_NO_THROW(TestMetrics::instance().test_gauge_with_2_labels.get<1>().Set(3));
+    ASSERT_DOUBLE_EQ(TestMetrics::instance().test_gauge_with_2_labels.get<1>().Value(), 3);
+}
+
 } // namespace tests
 
 } // namespace DB

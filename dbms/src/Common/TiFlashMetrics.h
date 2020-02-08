@@ -120,9 +120,9 @@ public:
     TiFlashMetrics();
 
 private:
-    static constexpr auto profile_events_prefix = "tiflash_system_profile_events_";
-    static constexpr auto current_metrics_prefix = "tiflash_system_current_metrics_";
-    static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metrics_";
+    static constexpr auto profile_events_prefix = "tiflash_system_profile_event_";
+    static constexpr auto current_metrics_prefix = "tiflash_system_current_metric_";
+    static constexpr auto async_metrics_prefix = "tiflash_system_asynchronous_metric_";
 
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
 
