@@ -351,20 +351,24 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     /// Blocking learner read. Note that learner read must be performed ahead of data read,
                     /// otherwise the desired index will be blocked by the lock of data read.
                     auto [read_index, region_removed] = region->learnerRead();
-                    // client-c may detect region removed.
                     if(!region_removed)
                         region->waitIndex(read_index);
+                    else {
+                        // client-c detect region removed. log region_status and continue;
+                        LOG_WARNING(log,
+                                    "Client-c found an error: region " << region_query_info.region_id << ", version " << region_query_info.version
+                                                                  << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
+                                                                  << region_query_info.range_in_table.second.toString() << ") , status "
+                                                                  << RegionException::RegionReadStatusString(RegionException::RegionReadStatus::NOT_FOUND));
+                        region_status = RegionException::RegionReadStatus::NOT_FOUND;
+                        continue;
+                    }
 
                     auto [block, status] = RegionTable::readBlockByRegion(*data.table_info, data.getColumns(), tmt_column_names_to_read,
                         kvstore_region[region_query_info.region_id], region_query_info.version, region_query_info.conf_version,
                         mvcc_query_info.resolve_locks, mvcc_query_info.read_tso, region_query_info.range_in_table);
 
-                    if (region_removed)
-                    {
-                        status = RegionException::RegionReadStatus::NOT_FOUND;
-                    }
-
-                    if (status != RegionException::RegionReadStatus::OK || region_removed)
+                    if (status != RegionException::RegionReadStatus::OK)
                     {
                         LOG_WARNING(log,
                             "Check memory cache, region " << region_query_info.region_id << ", version " << region_query_info.version
