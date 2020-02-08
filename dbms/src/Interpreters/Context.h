@@ -360,8 +360,7 @@ public:
                           const std::string & learner_key,
                           const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
-                          const std::string & kvstore_path,
-                          const std::string & flash_service_address);
+                          const std::string & kvstore_path);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();
