@@ -1,9 +1,13 @@
+#include <Common/TiFlashMetrics.h>
 #include <Core/Types.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/FlashService.h>
+#include <Interpreters/Context.h>
 #include <Server/IServer.h>
 #include <grpcpp/server_builder.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -18,6 +22,8 @@ FlashService::FlashService(IServer & server_) : server(server_), log(&Logger::ge
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
+    auto start_time = std::chrono::system_clock::now();
+
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
     auto [context, status] = createDBContext(grpc_context);
@@ -25,6 +31,12 @@ grpc::Status FlashService::Coprocessor(
     {
         return status;
     }
+
+    auto tiflash_metrics = context.getTiFlashMetrics();
+    SCOPE_EXIT({
+        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+        tiflash_metrics->tiflash_coprocessor_request_duration_seconds.get().Observe(duration_sec.count());
+    });
 
     CoprocessorContext cop_context(context, request->context(), *grpc_context);
     CoprocessorHandler cop_handler(cop_context, request, response);
