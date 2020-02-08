@@ -29,11 +29,6 @@ namespace DB
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 0)   \
     M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 0)
 
-template <typename T, typename First, typename... Rest>
-inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, First && first, Rest &&... rest);
-template <typename T, typename Arg>
-inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, Arg && arg);
-
 template <typename T>
 struct MetricFamilyTrait
 {
@@ -44,11 +39,6 @@ struct MetricFamilyTrait<prometheus::Counter>
     using MetricType = prometheus::Counter;
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildCounter(); }
-    template <typename... Args>
-    static void addMetrics(MetricType * dst[], prometheus::Family<MetricType> & family, Args &&... args)
-    {
-        addMetricsCommon(dst, 0, family, std::forward<Args>(args)...);
-    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Gauge>
@@ -56,11 +46,6 @@ struct MetricFamilyTrait<prometheus::Gauge>
     using MetricType = prometheus::Gauge;
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildGauge(); }
-    template <typename... Args>
-    static void addMetrics(MetricType * dst[], prometheus::Family<MetricType> & family, Args &&... args)
-    {
-        addMetricsCommon(dst, 0, family, std::forward<Args>(args)...);
-    }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Histogram>
@@ -68,35 +53,11 @@ struct MetricFamilyTrait<prometheus::Histogram>
     using MetricType = prometheus::Histogram;
     using ArgType = std::tuple<std::map<std::string, std::string>, prometheus::Histogram::BucketBoundaries>;
     static auto build() { return prometheus::BuildHistogram(); }
-    template <typename... Args>
-    static void addMetrics(MetricType * dst[], prometheus::Family<MetricType> & family, Args &&... args)
-    {
-        addMetricsCommon(dst, 0, family, std::forward<Args>(args)...);
-    }
 };
 
 using CounterArg = typename MetricFamilyTrait<prometheus::Counter>::ArgType;
 using GaugeArg = typename MetricFamilyTrait<prometheus::Gauge>::ArgType;
 using HistogramArg = typename MetricFamilyTrait<prometheus::Histogram>::ArgType;
-
-template <typename T, typename Arg>
-inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, Arg && arg)
-{
-    dst[i] = &family.Add(std::forward<Arg>(arg));
-}
-template <>
-inline void addMetricsCommon<prometheus::Histogram, MetricFamilyTrait<prometheus::Histogram>::ArgType>(prometheus::Histogram * dst[],
-    size_t i, prometheus::Family<prometheus::Histogram> & family, MetricFamilyTrait<prometheus::Histogram>::ArgType && arg)
-{
-    HistogramArg args{std::forward<HistogramArg>(arg)};
-    dst[i] = &family.Add(std::move(std::get<0>(args)), std::move(std::get<1>(args)));
-}
-template <typename T, typename First, typename... Rest>
-inline void addMetricsCommon(T * dst[], size_t i, prometheus::Family<T> & family, First && first, Rest &&... rest)
-{
-    addMetricsCommon(dst, i, family, std::forward<First>(first));
-    addMetricsCommon(dst, i + 1, family, std::forward<Rest>(rest)...);
-}
 
 template <typename T, size_t n>
 struct MetricFamily
@@ -106,7 +67,7 @@ struct MetricFamily
     {
         static_assert(sizeof...(Args) == n);
         auto & family = MetricFamilyTrait<T>::build().Name(name).Help(help).Register(registry);
-        MetricFamilyTrait<T>::addMetrics(metrics, family, std::forward<Args>(args)...);
+        addMetrics(0, family, std::forward<Args>(args)...);
     }
 
     template <>
@@ -114,7 +75,7 @@ struct MetricFamily
     {
         static_assert(n == 0);
         auto & family = MetricFamilyTrait<T>::build().Name(name).Help(help).Register(registry);
-        MetricFamilyTrait<T>::addMetrics(metrics, family, typename MetricFamilyTrait<T>::ArgType{});
+        addMetrics(0, family, typename MetricFamilyTrait<T>::ArgType{});
     }
 
     template <size_t idx = 0>
@@ -122,6 +83,26 @@ struct MetricFamily
     {
         static_assert(idx < actual_size);
         return *metrics[idx];
+    }
+
+private:
+    template <typename Type, typename Arg>
+    inline void addMetrics(size_t i, prometheus::Family<Type> & family, Arg && arg)
+    {
+        metrics[i] = &family.Add(std::forward<Arg>(arg));
+    }
+    template <>
+    inline void addMetrics<prometheus::Histogram, MetricFamilyTrait<prometheus::Histogram>::ArgType>(
+        size_t i, prometheus::Family<prometheus::Histogram> & family, MetricFamilyTrait<prometheus::Histogram>::ArgType && arg)
+    {
+        HistogramArg args{std::forward<HistogramArg>(arg)};
+        metrics[i] = &family.Add(std::move(std::get<0>(args)), std::move(std::get<1>(args)));
+    }
+    template <typename Type, typename First, typename... Rest>
+    inline void addMetrics(size_t i, prometheus::Family<Type> & family, First && first, Rest &&... rest)
+    {
+        addMetrics(i, family, std::forward<First>(first));
+        addMetrics(i + 1, family, std::forward<Rest>(rest)...);
     }
 
 private:
