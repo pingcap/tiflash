@@ -354,12 +354,7 @@ BlockInputStreams MergeTreeDataSelectExecutor::read(const Names & column_names_t
                     if(!region_removed)
                         region->waitIndex(read_index);
                     else {
-                        // client-c detect region removed. log region_status and continue;
-                        LOG_WARNING(log,
-                                    "Client-c found an error: region " << region_query_info.region_id << ", version " << region_query_info.version
-                                                                  << ", handle range [" << region_query_info.range_in_table.first.toString() << ", "
-                                                                  << region_query_info.range_in_table.second.toString() << ") , status "
-                                                                  << RegionException::RegionReadStatusString(RegionException::RegionReadStatus::NOT_FOUND));
+                        // client-c detect region removed. Set region_status and continue.
                         region_status = RegionException::RegionReadStatus::NOT_FOUND;
                         continue;
                     }
