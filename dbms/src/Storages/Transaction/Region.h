@@ -126,7 +126,7 @@ public:
         return region1.meta == region2.meta && region1.data == region2.data;
     }
 
-    UInt64 learnerRead();
+    std::pair<UInt64, bool> learnerRead();
 
     void waitIndex(UInt64 index);
 

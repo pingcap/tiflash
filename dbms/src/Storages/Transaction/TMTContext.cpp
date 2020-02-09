@@ -13,8 +13,7 @@ namespace DB
 {
 
 TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addrs, const std::string & learner_key,
-    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path,
-    const std::string & flash_service_address_)
+    const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kvstore_path)
     : context(context_),
       kvstore(std::make_shared<KVStore>(kvstore_path)),
       region_table(context),
@@ -23,8 +22,7 @@ TMTContext::TMTContext(Context & context_, const std::vector<std::string> & addr
                                 : std::make_shared<pingcap::kv::Cluster>(addrs, learner_key, learner_value)),
       ignore_databases(ignore_databases_),
       schema_syncer(addrs.size() == 0 ? std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<true>>(cluster))
-                                      : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster))),
-      flash_service_address(flash_service_address_)
+                                      : std::static_pointer_cast<SchemaSyncer>(std::make_shared<TiDBSchemaSyncer<false>>(cluster)))
 {}
 
 void TMTContext::restore()
@@ -77,15 +75,7 @@ IndexReaderPtr TMTContext::createIndexReader(pingcap::kv::RegionVerID region_ver
     {
         return nullptr;
     }
-    // Assume net type of flash_service_address is AF_NET.
-    auto socket_addr = DNSCache::instance().resolveHostAndPort(flash_service_address);
-    std::string flash_service_ip = socket_addr.host().toString();
-    UInt16 flash_service_port = socket_addr.port();
-    if (flash_service_ip.empty())
-    {
-        throw Exception("Cannot resolve flash service address " + flash_service_address, ErrorCodes::LOGICAL_ERROR);
-    }
-    return std::make_shared<IndexReader>(cluster, region_version_id, flash_service_ip, flash_service_port);
+    return std::make_shared<IndexReader>(cluster, region_version_id);
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const { return ignore_databases; }
