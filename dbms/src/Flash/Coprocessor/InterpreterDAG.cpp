@@ -1,4 +1,3 @@
-#include <Core/TMTPKType.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/ConcatBlockInputStream.h>
