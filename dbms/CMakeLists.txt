@@ -143,6 +143,9 @@ target_link_libraries (clickhouse_common_io
     ${EXECINFO_LIBRARY}
     ${Boost_SYSTEM_LIBRARY}
     ${CMAKE_DL_LIBS}
+    prometheus-cpp::core
+    prometheus-cpp::push
+    prometheus-cpp::pull
 )
 
 target_link_libraries (dbms
@@ -151,9 +154,6 @@ target_link_libraries (dbms
     clickhouse_common_io
     flash_service
     kvproto
-    prometheus-cpp::core
-    prometheus-cpp::push
-    prometheus-cpp::pull
     kv_client
     tipb
     ${Protobuf_LIBRARIES}

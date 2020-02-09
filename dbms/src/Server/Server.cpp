@@ -350,6 +350,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
+    /// Init TiFlash metrics.
+    global_context->initializeTiFlashMetrics();
+
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");

@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/CoprocessorHandler.h>
@@ -28,6 +29,7 @@ try
     {
         case COP_REQ_TYPE_DAG:
         {
+            cop_context.db_context.getTiFlashMetrics()->tiflash_coprocessor_dag_request_count.get<1>().Increment();
             std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
             for (auto & range : cop_request->ranges())
             {
