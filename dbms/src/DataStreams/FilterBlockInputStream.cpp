@@ -1,23 +1,24 @@
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnsCommon.h>
+#include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Common/typeid_cast.h>
+#include <Interpreters/ExpressionActions.h>
 
 #include <DataStreams/FilterBlockInputStream.h>
-
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
-}
+extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 
-FilterBlockInputStream::FilterBlockInputStream(const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name)
+FilterBlockInputStream::FilterBlockInputStream(
+    const BlockInputStreamPtr & input, const ExpressionActionsPtr & expression_, const String & filter_column_name)
     : expression(expression_)
 {
     children.push_back(input);
@@ -33,8 +34,7 @@ FilterBlockInputStream::FilterBlockInputStream(const BlockInputStreamPtr & input
     if (column_elem.column)
         constant_filter_description = ConstantFilterDescription(*column_elem.column);
 
-    if (!constant_filter_description.always_false
-        && !constant_filter_description.always_true)
+    if (!constant_filter_description.always_false && !constant_filter_description.always_true)
     {
         /// Replace the filter column to a constant with value 1.
         FilterDescription filter_description_check(*column_elem.column);
@@ -58,10 +58,7 @@ Block FilterBlockInputStream::getTotals()
 }
 
 
-Block FilterBlockInputStream::getHeader() const
-{
-    return header;
-}
+Block FilterBlockInputStream::getHeader() const { return header; }
 
 
 Block FilterBlockInputStream::readImpl()
@@ -74,24 +71,31 @@ Block FilterBlockInputStream::readImpl()
     /// Until non-empty block after filtering or end of stream.
     while (1)
     {
-        res = children.back()->read();
+        IColumn::Filter * child_filter = nullptr;
+
+        res = children.back()->read(child_filter, true);
+
         if (!res)
             return res;
 
         expression->execute(res);
 
-        if (constant_filter_description.always_true)
+        if (constant_filter_description.always_true && !child_filter)
             return res;
 
         size_t columns = res.columns();
-        ColumnPtr column = res.safeGetByPosition(filter_column).column;
+        size_t rows = res.rows();
+        ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
+
+        if (unlikely(child_filter && child_filter->size() != rows))
+            throw Exception("Unexpected child filter size", ErrorCodes::LOGICAL_ERROR);
 
         /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
             *  and now - are calculated. That is, not all cases are covered by the code above.
             * This happens if the function returns a constant for a non-constant argument.
             * For example, `ignore` function.
             */
-        constant_filter_description = ConstantFilterDescription(*column);
+        constant_filter_description = ConstantFilterDescription(*column_of_filter);
 
         if (constant_filter_description.always_false)
         {
@@ -99,10 +103,35 @@ Block FilterBlockInputStream::readImpl()
             return res;
         }
 
-        if (constant_filter_description.always_true)
-            return res;
+        IColumn::Filter * filter;
+        ColumnPtr filter_holder;
 
-        FilterDescription filter_and_holder(*column);
+        if (constant_filter_description.always_true)
+        {
+            if (child_filter)
+                filter = child_filter;
+            else
+                return res;
+        }
+        else
+        {
+            FilterDescription filter_and_holder(*column_of_filter);
+            filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
+            filter_holder = filter_and_holder.data_holder;
+
+            if (child_filter)
+            {
+                /// Merge child_filter
+                UInt8 * a = filter->data();
+                UInt8 * b = child_filter->data();
+                for (size_t i = 0; i < rows; ++i)
+                {
+                    *a = *a > 0 && *b != 0;
+                    ++a;
+                    ++b;
+                }
+            }
+        }
 
         /** Let's find out how many rows will be in result.
           * To do this, we filter out the first non-constant column
@@ -124,12 +153,12 @@ Block FilterBlockInputStream::readImpl()
         if (first_non_constant_column != static_cast<size_t>(filter_column))
         {
             ColumnWithTypeAndName & current_column = res.safeGetByPosition(first_non_constant_column);
-            current_column.column = current_column.column->filter(*filter_and_holder.data, -1);
+            current_column.column = current_column.column->filter(*filter, -1);
             filtered_rows = current_column.column->size();
         }
         else
         {
-            filtered_rows = countBytesInFilter(*filter_and_holder.data);
+            filtered_rows = countBytesInFilter(*filter);
         }
 
         /// If the current block is completely filtered out, let's move on to the next one.
@@ -137,10 +166,11 @@ Block FilterBlockInputStream::readImpl()
             continue;
 
         /// If all the rows pass through the filter.
-        if (filtered_rows == filter_and_holder.data->size())
+        if (filtered_rows == rows)
         {
             /// Replace the column with the filter by a constant.
-            res.safeGetByPosition(filter_column).column = res.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, UInt64(1));
+            res.safeGetByPosition(filter_column).column
+                = res.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, UInt64(1));
             /// No need to touch the rest of the columns.
             return res;
         }
@@ -167,7 +197,7 @@ Block FilterBlockInputStream::readImpl()
             if (current_column.column->isColumnConst())
                 current_column.column = current_column.column->cut(0, filtered_rows);
             else
-                current_column.column = current_column.column->filter(*filter_and_holder.data, -1);
+                current_column.column = current_column.column->filter(*filter, -1);
         }
 
         return res;
@@ -175,4 +205,4 @@ Block FilterBlockInputStream::readImpl()
 }
 
 
-}
+} // namespace DB

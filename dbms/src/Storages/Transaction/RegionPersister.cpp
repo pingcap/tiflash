@@ -57,7 +57,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
     std::lock_guard<std::mutex> lock(mutex);
 
-    auto cache = page_storage.getCache(region_id);
+    auto cache = page_storage.getEntry(region_id);
     if (cache.isValid() && cache.tag > applied_index)
         return;
 

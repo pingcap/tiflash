@@ -9,6 +9,7 @@ namespace DB
 
 void registerStorageLog(StorageFactory & factory);
 void registerStorageTinyLog(StorageFactory & factory);
+void registerStorageDeltaMerge(StorageFactory & factory);
 void registerStorageStripeLog(StorageFactory & factory);
 void registerStorageMergeTree(StorageFactory & factory);
 void registerStorageNull(StorageFactory & factory);
@@ -22,6 +23,9 @@ void registerStorageSet(StorageFactory & factory);
 void registerStorageJoin(StorageFactory & factory);
 void registerStorageView(StorageFactory & factory);
 void registerStorageMaterializedView(StorageFactory & factory);
+
+// A buggy table just for test
+void registerStorageDebugging(StorageFactory & factory);
 
 #if Poco_SQLODBC_FOUND || Poco_DataODBC_FOUND
 void registerStorageODBC(StorageFactory & factory);
@@ -42,6 +46,7 @@ void registerStorages()
 
     registerStorageLog(factory);
     registerStorageTinyLog(factory);
+    registerStorageDeltaMerge(factory);
     registerStorageStripeLog(factory);
     registerStorageMergeTree(factory);
     registerStorageNull(factory);
@@ -49,6 +54,7 @@ void registerStorages()
     registerStorageBuffer(factory);
     registerStorageDistributed(factory);
     registerStorageMemory(factory);
+    registerStorageDebugging(factory);
     registerStorageFile(factory);
     registerStorageDictionary(factory);
     registerStorageSet(factory);

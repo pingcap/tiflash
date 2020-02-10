@@ -137,7 +137,7 @@ public:
 
 private:
     ColumnVector() {}
-    ColumnVector(const size_t n) : data(n) {}
+    explicit ColumnVector(const size_t n) : data(n) {}
     ColumnVector(const size_t n, const value_type x) : data(n, x) {}
     ColumnVector(const ColumnVector & src) : data(src.data.begin(), src.data.end()) {};
 

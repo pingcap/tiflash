@@ -25,6 +25,12 @@ IProfilingBlockInputStream::IProfilingBlockInputStream()
 
 Block IProfilingBlockInputStream::read()
 {
+    FilterPtr filter;
+    return read(filter, false);
+}
+
+Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
+{
     if (total_rows_approx)
     {
         progressImpl(Progress(0, 0, total_rows_approx));
@@ -48,7 +54,12 @@ Block IProfilingBlockInputStream::read()
         limit_exceeded_need_break = true;
 
     if (!limit_exceeded_need_break)
-        res = readImpl();
+    {
+        if (return_filter)
+            res = readImpl(res_filter, return_filter);
+        else
+            res = readImpl();
+    }
 
     if (res)
     {

@@ -1,5 +1,8 @@
 #include "Server.h"
 
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
+
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
@@ -28,6 +31,7 @@
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
 #include <Storages/Transaction/SchemaSyncer.h>
+#include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -65,17 +69,18 @@ namespace ErrorCodes
 extern const int NO_ELEMENTS_IN_CONFIG;
 extern const int SUPPORT_IS_DISABLED;
 extern const int ARGUMENT_OUT_OF_BOUND;
+extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
 
-static std::string getCanonicalPath(std::string && path)
+static std::string getCanonicalPath(std::string path)
 {
     Poco::trimInPlace(path);
     if (path.empty())
         throw Exception("path configuration parameter is empty");
     if (path.back() != '/')
         path += '/';
-    return std::move(path);
+    return path;
 }
 
 void Server::uninitialize()
@@ -161,22 +166,49 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
     }
-    String paths = config().getString("path");
     std::vector<String> all_normal_path;
-    Poco::trimInPlace(paths);
-    if (paths.empty())
-        throw Exception("path configuration parameter is empty");
-    Poco::StringTokenizer string_tokens(paths, ",");
-    for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
     {
-        all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
-        LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+        String paths = config().getString("path");
+        Poco::trimInPlace(paths);
+        if (paths.empty())
+            throw Exception("path configuration parameter is empty");
+        Poco::StringTokenizer string_tokens(paths, ",");
+        for (auto it = string_tokens.begin(); it != string_tokens.end(); it++)
+        {
+            all_normal_path.emplace_back(getCanonicalPath(std::string(*it)));
+            LOG_DEBUG(log, "Data part candidate path: " << std::string(*it));
+        }
+    }
+
+    std::vector<std::pair<UInt32, String>> extra_paths;
+    if (config().has("extra_path"))
+    {
+        String s = config().getString("extra_path");
+        Poco::trimInPlace(s);
+        if (s.empty())
+            throw Exception("Extra path configuration parameter is empty");
+
+        std::vector<std::string> id_path_list;
+        boost::split(id_path_list, s, boost::is_any_of(";"));
+        for (auto & id_path_s : id_path_list)
+        {
+            std::vector<String> id_path;
+            boost::split(id_path, id_path_s, boost::is_any_of(":"));
+            if (id_path.size() != 2)
+                throw Exception("Illegal id_path format: " + id_path_s);
+            UInt32 id = std::stoul(id_path[0]);
+            String path = id_path[1];
+            extra_paths.emplace_back(id, getCanonicalPath(path));
+            LOG_DEBUG(log, "Extra path add " + DB::toString(id) + ":" + path);
+        }
     }
 
     std::string path = all_normal_path[0];
     std::string default_database = config().getString("default_database", "default");
     global_context->setPath(path);
     global_context->initializePartPathSelector(std::move(all_normal_path), std::move(all_fast_path));
+    if (!extra_paths.empty())
+        global_context->setExtraPaths(extra_paths);
 
     /// Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : global_context->getPartPathSelector().getAllPath())
@@ -350,6 +382,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (mark_cache_size)
         global_context->setMarkCache(mark_cache_size);
 
+    /// Size of cache for minmax index, used by DeltaMerge engine.
+    size_t minmax_index_cache_size
+        = config().has("minmax_index_cache_size") ? config().getUInt64("minmax_index_cache_size") : mark_cache_size;
+    if (minmax_index_cache_size)
+        global_context->setMinMaxIndexCache(minmax_index_cache_size);
+
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
@@ -371,6 +409,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::unordered_set<std::string> ignore_databases{"system"};
     std::string kvstore_path = path + "kvstore/";
     String flash_server_addr = config().getString("flash.service_addr", "0.0.0.0:3930");
+
+    bool disable_bg_flush = false;
+
+    ::TiDB::StorageEngine engine_if_empty = ::TiDB::StorageEngine::TMT;
+    ::TiDB::StorageEngine engine = engine_if_empty;
 
     if (config().has("raft"))
     {
@@ -407,11 +450,38 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             kvstore_path = config().getString("raft.kvstore_path");
         }
+
+        if (config().has("raft.storage_engine"))
+        {
+            String s_engine = config().getString("raft.storage_engine");
+            std::transform(s_engine.begin(), s_engine.end(), s_engine.begin(), [](char ch) { return std::tolower(ch); });
+            if (s_engine == "tmt")
+                engine = ::TiDB::StorageEngine::TMT;
+            else if (s_engine == "dm")
+                engine = ::TiDB::StorageEngine::DM;
+            else
+                engine = engine_if_empty;
+        }
+
+        if (config().has("raft.disable_bg_flush"))
+        {
+            bool disable = config().getBool("raft.disable_bg_flush");
+            if (disable)
+            {
+                if (engine == ::TiDB::StorageEngine::TMT)
+                {
+                    throw Exception("Illegal arguments: disable background flush while using engine TxnMergeTree.",
+                        ErrorCodes::INVALID_CONFIG_PARAMETER);
+                }
+                disable_bg_flush = true;
+            }
+        }
     }
 
     {
+        LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
-        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
         global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.9));
         global_context->getTMTContext().getKVStore()->setRegionCompactLogPeriod(
             Seconds{config().getUInt64("flash.compact_log_min_period", 5 * 60)});

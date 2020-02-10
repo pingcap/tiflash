@@ -37,6 +37,7 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TiKVRange.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/RegionRangeKeys.h>
 
 #include <Storages/IStorage.h>
 #include <Storages/StorageMergeTree.h>
@@ -195,10 +196,10 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
 
 void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & database_name, const String & table_name, Int64 query_schema_version)
 {
-    String qualified_name = database_name + "." + table_name;
+    const String qualified_name = database_name + "." + table_name;
 
     /// Get current schema version in schema syncer for a chance to shortcut.
-    auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
+    const auto global_schema_version = context.getTMTContext().getSchemaSyncer()->getCurrentVersion();
 
     /// Lambda for get storage, then align schema version under the read lock.
     auto get_and_lock_storage = [&](bool schema_synced) -> std::tuple<StoragePtr, TableStructureReadLockPtr, Int64, bool> {
@@ -208,9 +209,14 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         if (!storage_)
             return std::make_tuple(nullptr, nullptr, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, false);
 
-        const auto merge_tree = dynamic_cast<const StorageMergeTree *>(storage_.get());
-        if (!merge_tree || merge_tree->getData().merging_params.mode != MergeTreeData::MergingParams::Txn)
-            throw Exception("Specifying schema_version for non-TMT storage: " + storage_->getName() + ", table: " + qualified_name + " is not allowed", ErrorCodes::LOGICAL_ERROR);
+        const auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage_);
+        if (!managed_storage
+           || !(managed_storage->engineType() == ::TiDB::StorageEngine::TMT || managed_storage->engineType() == ::TiDB::StorageEngine::DM))
+        {
+            throw Exception("Specifying schema_version for storage: " + storage_->getName()
+                            + ", table: " + qualified_name + " is not allowed",
+                            ErrorCodes::LOGICAL_ERROR);
+        }
 
         /// Lock storage.
         auto lock = storage_->lockStructure(false, __PRETTY_FUNCTION__);
@@ -221,10 +227,10 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         // 2. Global: the version that TiFlash global schema is at.
         // And one from TiDB/TiSpark:
         // 3. Query: the version that TiDB/TiSpark used for this query.
-        auto storage_schema_version = merge_tree->getTableInfo().schema_version;
+        auto storage_schema_version = managed_storage->getTableInfo().schema_version;
         // Not allow storage > query in any case, one example is time travel queries.
         if (storage_schema_version > query_schema_version)
-            throw Exception("Table " + qualified_name + " schema version " + std::to_string(storage_schema_version) + " newer than query schema version " + std::to_string(query_schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
+            throw Exception("Table " + qualified_name + " schema version " + toString(storage_schema_version) + " newer than query schema version " + toString(query_schema_version), ErrorCodes::SCHEMA_VERSION_ERROR);
         // From now on we have storage <= query.
         // If schema was synced, it implies that global >= query, as mentioned above we have storage <= query, we are OK to serve.
         if (schema_synced)
@@ -778,7 +784,7 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
         const String & request_str = settings.regions;
 
-        if (request_str.size() > 0)
+        if (!request_str.empty())
         {
             Poco::JSON::Parser parser;
             Poco::Dynamic::Var result = parser.parse(request_str);
@@ -797,6 +803,14 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 const auto & epoch = region.region_epoch();
                 info.version = epoch.version();
                 info.conf_version = epoch.conf_ver();
+                if (const auto & managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage))
+                {
+                    // Extract the handle range according to current table
+                    TiKVKey start_key = RecordKVFormat::encodeAsTiKVKey(region.start_key());
+                    TiKVKey end_key = RecordKVFormat::encodeAsTiKVKey(region.end_key());
+                    RegionRangeKeys region_range(std::move(start_key), std::move(end_key));
+                    info.range_in_table = region_range.getHandleRangeByTable(managed_storage->getTableInfo().id);
+                }
                 query_info.mvcc_query_info->regions_query_info.push_back(info);
             }
 
@@ -829,10 +843,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
                 throw Exception("PARTITION SELECT only supports MergeTree family.");
             }
         }
-
-        //if (storage->getData().merging_params.mode == MergeTreeData::MergingParams::Txn) {
-        //    TMTContext & tmt = context.getTMTContext();
-        //}
 
         if (!dry_run)
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);

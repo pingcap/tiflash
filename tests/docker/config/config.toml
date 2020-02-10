@@ -4,6 +4,7 @@ default_profile = "default"
 users_config = "users.toml"
 path = "/tmp/tiflash/data/db"
 mark_cache_size = 5368709120
+minmax_index_cache_size = 5368709120
 listen_host = "0.0.0.0"
 tcp_port = 9000
 http_port = 8123
@@ -17,3 +18,6 @@ interserver_http_port = 9009
 [application]
 	runAsDaemon = true
 [raft]
+	# specify which storage engine we use. tmt or dm 
+	storage_engine = "tmt"
+	disable_bg_flush = false

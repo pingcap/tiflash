@@ -37,12 +37,18 @@ void dbgFuncDumpAllMockRegion(Context & context, const ASTs & args, DBGInvoker::
 
 // Try flush regions
 // Usage:
-//   ./storage-client.sh "DBGInvoke try_flush()"
+//   ./storage-client.sh "DBGInvoke try_flush([force_flush])"
 void dbgFuncTryFlush(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
 // Try flush regions
 // Usage:
 //   ./storage-client.sh "DBGInvoke try_flush_region(database_name, table_name, region_id)"
 void dbgFuncTryFlushRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+// Remove region
+// Usage:
+//   ./storage-client.sh "DBGInvoke remove_region(region_id)"
+void dbgFuncRemoveRegion(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 
 } // namespace DB
