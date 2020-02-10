@@ -28,9 +28,11 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     // TODO: support partition in sub query
 
-    ParserKeyword s_insert_into("INSERT INTO");
-    ParserKeyword s_upsert_into("UPSERT INTO");
-    ParserKeyword s_import_into("IMPORT INTO");
+    ParserKeyword s_insert_into("INSERT");
+    ParserKeyword s_upsert_into("UPSERT");
+    ParserKeyword s_import_into("IMPORT");
+    ParserKeyword s_delete("DELETE");
+    ParserKeyword s_into("INTO");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_partition("PARTITION");
     ParserKeyword s_function("FUNCTION");
@@ -38,6 +40,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_values("VALUES");
     ParserKeyword s_format("FORMAT");
     ParserKeyword s_select("SELECT");
+    ParserKeyword s_selraw("SELRAW");
     ParserKeyword s_with("WITH");
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
@@ -54,10 +57,15 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// Insertion data
     const char * data = nullptr;
 
-    bool is_insert = s_insert_into.ignore(pos, expected) ||
-                     s_upsert_into.ignore(pos, expected);
+    bool is_insert = s_insert_into.ignore(pos, expected);
+    bool is_upsert = s_upsert_into.ignore(pos, expected);
     bool is_import = s_import_into.ignore(pos, expected);
-    if (!is_insert && !is_import)
+    if (!is_insert && !is_upsert && !is_import)
+        return false;
+
+    bool is_delete = s_delete.ignore(pos, expected);
+
+    if (!s_into.ignore(pos, expected))
         return false;
 
     s_table.ignore(pos, expected);
@@ -137,7 +145,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (data < end && *data == '\n')
             ++data;
     }
-    else if (s_select.ignore(pos, expected) || s_with.ignore(pos,expected))
+    else if (s_select.ignore(pos, expected) || s_selraw.ignore(pos, expected) || s_with.ignore(pos,expected))
     {
         pos = before_select;
         ParserSelectWithUnionQuery select_p;
@@ -168,6 +176,8 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->data = data != end ? data : nullptr;
     query->end = end;
     query->is_import = is_import;
+    query->is_upsert = is_upsert;
+    query->is_delete = is_delete;
 
     if (columns)
         query->children.push_back(columns);

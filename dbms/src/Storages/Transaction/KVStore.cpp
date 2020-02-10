@@ -1,4 +1,7 @@
+#include <chrono>
+
 #include <Interpreters/Context.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/BackgroundService.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFIType.h>
@@ -210,12 +213,23 @@ TiFlashApplyRes KVStore::handleWriteRaftCmd(
         LOG_WARNING(log, __PRETTY_FUNCTION__ << ": [region " << region_id << "] is not found, might be removed already");
         return TiFlashApplyRes::NotFound;
     }
-    auto ori_size = region->dataSize();
+    const auto ori_size = region->dataSize();
     region->handleWriteRaftCmd(std::move(request), index, term);
     {
         tmt.getRegionTable().updateRegion(*region);
         if (region->dataSize() != ori_size)
-            tmt.getBackgroundService().addRegionToDecode(region);
+        {
+            if (tmt.isBgFlushDisabled())
+            {
+                // Decode data in region and then flush
+                region->tryPreDecodeTiKVValue(tmt);
+                tmt.getRegionTable().tryFlushRegion(region, true);
+            }
+            else
+            {
+                tmt.getBackgroundService().addRegionToDecode(region);
+            }
+        }
     }
     return TiFlashApplyRes::None;
 }
@@ -293,9 +307,17 @@ TiFlashApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
             LOG_INFO(log, "Persist " << region.toString(false) << " done");
         };
 
+        // After region split / merge, try to flush it
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {
-            if (region->writeCFCount() >= 8192)
-                tmt.getBackgroundService().addRegionToFlush(region);
+            if (tmt.isBgFlushDisabled())
+            {
+                tmt.getRegionTable().tryFlushRegion(region, false);
+            }
+            else
+            {
+                if (region->writeCFCount() >= 8192)
+                    tmt.getBackgroundService().addRegionToFlush(region);
+            }
         };
 
         const auto persist_and_sync = [&]() {

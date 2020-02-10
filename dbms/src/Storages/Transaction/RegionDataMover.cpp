@@ -105,7 +105,14 @@ void tryOptimizeStorageFinal(Context & context, TableID table_id)
         return;
     }
 
-    auto table_lock = storage->lockStructure(true, __PRETTY_FUNCTION__);
+    // Only for TMT
+    ManageableStoragePtr managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
+    if (!managed_storage || managed_storage->engineType() != TiDB::StorageEngine::TMT)
+        return;
+
+    auto table_lock = managed_storage->lockStructure(true, __PRETTY_FUNCTION__);
+    if (managed_storage->is_dropped)
+        return;
 
     std::stringstream ss;
     ss << "OPTIMIZE TABLE `" << storage->getDatabaseName() << "`.`" << storage->getTableName() << "` PARTITION ID '0' FINAL";

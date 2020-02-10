@@ -2,6 +2,7 @@
 
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
+#include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTStorages.h>
 
 #include <unordered_set>
@@ -26,8 +27,8 @@ public:
     const KVStorePtr & getKVStore() const;
     KVStorePtr & getKVStore();
 
-    const TMTStorages & getStorages() const;
-    TMTStorages & getStorages();
+    const ManagedStorages & getStorages() const;
+    ManagedStorages & getStorages();
 
     const RegionTable & getRegionTable() const;
     RegionTable & getRegionTable();
@@ -38,9 +39,12 @@ public:
     Context & getContext();
     bool isInitialized() const;
 
+    bool isBgFlushDisabled() const { return disable_bg_flush; }
+
     // TODO: get flusher args from config file
     explicit TMTContext(Context & context, const std::vector<std::string> & addrs, const std::string & learner_key,
-        const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path);
+        const std::string & learner_value, const std::unordered_set<std::string> & ignore_databases_, const std::string & kv_store_path,
+        TiDB::StorageEngine engine_, bool disable_bg_flush_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
     void setSchemaSyncer(SchemaSyncerPtr);
@@ -53,10 +57,12 @@ public:
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
+    ::TiDB::StorageEngine getEngineType() const { return engine; }
+
 private:
     Context & context;
     KVStorePtr kvstore;
-    TMTStorages storages;
+    ManagedStorages storages;
     RegionTable region_table;
     BackGroundServicePtr background_service;
 
@@ -68,6 +74,10 @@ private:
 
     const std::unordered_set<std::string> ignore_databases;
     SchemaSyncerPtr schema_syncer;
+
+    ::TiDB::StorageEngine engine;
+
+    bool disable_bg_flush;
 };
 
 } // namespace DB

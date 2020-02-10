@@ -152,15 +152,53 @@
     M(RWLockWritersWaitMilliseconds) \
     \
     M(PSMWritePages) \
-    M(PSMWritePageCalls) \
+    M(PSMWriteCalls) \
     M(PSMWriteIOCalls) \
     M(PSMWriteBytes) \
     M(PSMReadPages) \
-    M(PSMReadPageCalls) \
+    M(PSMReadCalls) \
     M(PSMReadIOCalls) \
     M(PSMReadBytes) \
     M(PSMWriteFailed) \
-    M(PSMReadFailed)
+    M(PSMReadFailed) \
+    \
+    M(PSMVCCApplyOnCurrentBase) \
+    M(PSMVCCApplyOnCurrentDelta) \
+    M(PSMVCCApplyOnNewDelta) \
+    M(PSMVCCCompactOnDelta) \
+    M(PSMVCCCompactOnDeltaRebaseRejected) \
+    M(PSMVCCCompactOnBase) \
+    \
+    M(DMWriteBlock) \
+    M(DMWriteBlockNS) \
+    M(DMDeleteRange) \
+    M(DMDeleteRangeNS) \
+    M(DMAppendDeltaPrepare) \
+    M(DMAppendDeltaPrepareNS) \
+    M(DMAppendDeltaCommitMemory) \
+    M(DMAppendDeltaCommitMemoryNS) \
+    M(DMAppendDeltaCommitDisk) \
+    M(DMAppendDeltaCommitDiskNS) \
+    M(DMAppendDeltaCleanUp) \
+    M(DMAppendDeltaCleanUpNS) \
+    M(DMPlace) \
+    M(DMPlaceNS) \
+    M(DMPlaceUpsert) \
+    M(DMPlaceUpsertNS) \
+    M(DMPlaceDeleteRange) \
+    M(DMPlaceDeleteRangeNS) \
+    M(DMDeltaMerge) \
+    M(DMDeltaMergeNS) \
+    M(DMSegmentSplit) \
+    M(DMSegmentSplitNS) \
+    M(DMSegmentGetSplitPoint) \
+    M(DMSegmentGetSplitPointNS) \
+    M(DMSegmentMerge) \
+    M(DMSegmentMergeNS) \
+    M(DMFlushDeltaCache) \
+    M(DMFlushDeltaCacheNS) \
+    M(DMCleanReadRows) \
+
 
 namespace ProfileEvents
 {

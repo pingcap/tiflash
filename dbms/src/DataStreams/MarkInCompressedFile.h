@@ -35,5 +35,6 @@ struct MarkInCompressedFile
 };
 
 using MarksInCompressedFile = PODArray<MarkInCompressedFile>;
+using MarksInCompressedFilePtr = std::shared_ptr<MarksInCompressedFile>;
 
 }

@@ -98,7 +98,12 @@ bool shouldOptimizeTable(const TableID table_id, TMTContext & tmt, Logger * log,
         return false;
     auto lock = storage->lockStructure(false, __PRETTY_FUNCTION__);
 
-    auto & data = storage->getData();
+    if (storage->engineType() != TiDB::StorageEngine::TMT)
+        return false;
+
+    // Only for TMT
+    auto tmt_storage = std::dynamic_pointer_cast<StorageMergeTree>(storage);
+    auto & data = tmt_storage->getData();
     const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
     auto [selected_marks, overlapped_marks] = pk_is_uint64 ? shouldOptimizeTable<UInt64>(data) : shouldOptimizeTable<Int64>(data);
 
