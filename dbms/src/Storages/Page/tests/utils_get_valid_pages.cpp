@@ -67,8 +67,12 @@ int main(int argc, char ** argv) try
     }
 
     // Do not remove any files.
+    DB::PageStorage::ListPageFilesOption options;
+    options.remove_tmp_files = false;
+    options.ignore_legacy = false;
+    options.ignore_checkpoint = false;
     auto page_files
-        = DB::PageStorage::listAllPageFiles(path, /* remove_tmp_file= */ false, /* ignore_legacy= */ false, &Poco::Logger::get("root"));
+        = DB::PageStorage::listAllPageFiles(path, &Poco::Logger::get("root"), options);
 
     //DB::PageEntriesVersionSet versions;
     DB::PageEntriesVersionSetWithDelta versions(DB::MVCC::VersionSetConfig(), &Poco::Logger::get("GetValidPages"));
@@ -90,8 +94,8 @@ int main(int argc, char ** argv) try
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case DB::WriteBatch::WriteType::MOVE_NORMAL_PAGE:
-                    printf("MOVE");
+                case DB::WriteBatch::WriteType::UPSERT:
+                    printf("UPSERT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
