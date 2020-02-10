@@ -1,6 +1,7 @@
 #pragma once
 
 #include <common/logger_useful.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 
 namespace DB
 {

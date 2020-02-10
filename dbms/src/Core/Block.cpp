@@ -331,7 +331,7 @@ Block Block::cloneWithColumns(MutableColumns && columns) const
 
     size_t num_columns = data.size();
     for (size_t i = 0; i < num_columns; ++i)
-        res.insert({ std::move(columns[i]), data[i].type, data[i].name });
+        res.insert({ std::move(columns[i]), data[i].type, data[i].name, data[i].column_id });
 
     return res;
 }
@@ -407,8 +407,20 @@ static ReturnType checkBlockStructure(const Block & lhs, const Block & rhs, cons
                 + lhs.dumpStructure() + "\n" + rhs.dumpStructure(), ErrorCodes::BLOCKS_HAVE_DIFFERENT_STRUCTURE);
 
         if (actual.column->getName() != expected.column->getName())
-            return on_error("Block structure mismatch in " + context_description + " stream: different columns:\n"
-                + lhs.dumpStructure() + "\n" + rhs.dumpStructure(), ErrorCodes::BLOCKS_HAVE_DIFFERENT_STRUCTURE);
+        {
+            if (actual.column->isColumnConst() || expected.column->isColumnConst())
+            {
+                // FIXME: We enable return const column here, but find a good way to check equality.
+            }
+            else
+            {
+                return on_error("Block structure mismatch in " + context_description + " stream: different columns:\n"
+                                    + lhs.dumpStructure() + "\n" + rhs.dumpStructure(),
+                                ErrorCodes::BLOCKS_HAVE_DIFFERENT_STRUCTURE);
+            }
+        }
+
+        // TODO should we check column_id here?
 
         if (actual.column->isColumnConst() && expected.column->isColumnConst())
         {

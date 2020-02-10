@@ -48,7 +48,7 @@ namespace detail
   */
 inline void memcpySmallAllowReadWriteOverflow15(void * __restrict dst, const void * __restrict src, size_t n)
 {
-    detail::memcpySmallAllowReadWriteOverflow15Impl(reinterpret_cast<char *>(dst), reinterpret_cast<const char *>(src), n);
+    ::detail::memcpySmallAllowReadWriteOverflow15Impl(reinterpret_cast<char *>(dst), reinterpret_cast<const char *>(src), n);
 }
 
 /** NOTE There was also a function, that assumes, that you could read any bytes inside same memory page of src.
