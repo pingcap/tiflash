@@ -30,7 +30,7 @@ public:
             context.setGlobalContext(context);
             context.setApplicationType(DB::Context::ApplicationType::SERVER);
 
-            context.createTMTContext({}, "", "", {"default"}, getTemporaryPath() + "/kvstore", "", TiDB::StorageEngine::TMT, false);
+            context.createTMTContext({}, "", "", {"default"}, getTemporaryPath() + "/kvstore", TiDB::StorageEngine::TMT, false);
             context.getTMTContext().restore();
         }
         context.getSettingsRef() = settings;

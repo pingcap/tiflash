@@ -388,6 +388,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (minmax_index_cache_size)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
+    /// Init TiFlash metrics.
+    global_context->initializeTiFlashMetrics();
+
     /// Set path for format schema files
     auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
@@ -478,8 +481,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_DEBUG(log, "Default storage engine: " << static_cast<Int64>(engine));
         /// create TMTContext
-        global_context->createTMTContext(
-            pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, flash_server_addr, engine, disable_bg_flush);
+        global_context->createTMTContext(pd_addrs, learner_key, learner_value, ignore_databases, kvstore_path, engine, disable_bg_flush);
         global_context->getTMTContext().getRegionTable().setTableCheckerThreshold(config().getDouble("flash.overlap_threshold", 0.9));
         global_context->getTMTContext().getKVStore()->setRegionCompactLogPeriod(
             Seconds{config().getUInt64("flash.compact_log_min_period", 5 * 60)});

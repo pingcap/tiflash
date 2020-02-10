@@ -1,5 +1,9 @@
+#include <Common/TiFlashMetrics.h>
 #include <Flash/BatchCommandsHandler.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Interpreters/Context.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -29,6 +33,8 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
             return;
         }
 
+        context.getTiFlashMetrics()->tiflash_coprocessor_dag_request_count.get().Increment();
+
         CoprocessorContext cop_context(context, cop_req.context(), batch_commands_context.grpc_server_context);
         CoprocessorHandler cop_handler(cop_context, &cop_req, cop_resp);
 
@@ -40,6 +46,15 @@ grpc::Status BatchCommandsHandler::execute()
 {
     if (request.requests_size() == 0)
         return grpc::Status::OK;
+
+    auto start_time = std::chrono::system_clock::now();
+    SCOPE_EXIT({
+        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+        // Observe `request size` times as duration.
+        auto tiflash_metrics = batch_commands_context.db_context.getTiFlashMetrics();
+        for (int i = 0; i < request.requests_size(); i++)
+            tiflash_metrics->tiflash_coprocessor_request_duration_seconds.get().Observe(duration_sec.count());
+    });
 
     // TODO: Fill transport_layer_load into BatchCommandsResponse.
 

@@ -89,6 +89,9 @@ namespace DM
 class MinMaxIndexCache;
 }
 
+class TiFlashMetrics;
+using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
 
@@ -374,7 +377,6 @@ public:
                           const std::string & learner_value,
                           const std::unordered_set<std::string> & ignore_databases,
                           const std::string & kvstore_path,
-                          const std::string & flash_service_address,
                           ::TiDB::StorageEngine engine,
                           bool disable_bg_tasks);
 
@@ -383,6 +385,9 @@ public:
 
     void initializePartPathSelector(std::vector<std::string> && all_path, std::vector<std::string> && all_fast_path);
     PartPathSelector & getPartPathSelector();
+
+    void initializeTiFlashMetrics();
+    TiFlashMetricsPtr getTiFlashMetrics();
 
     Clusters & getClusters() const;
     std::shared_ptr<Cluster> getCluster(const std::string & cluster_name) const;

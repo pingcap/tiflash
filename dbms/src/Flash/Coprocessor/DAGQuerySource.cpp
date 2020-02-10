@@ -1,6 +1,7 @@
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-
 #include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
@@ -44,20 +45,25 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
         switch (dag_request.executors(i).tp())
         {
             case tipb::ExecType::TypeTableScan:
+                context.getTiFlashMetrics()->tiflash_coprocessor_executor_count.get<0>().Increment();
                 assignOrThrowException(ts_index, i, TS_NAME);
                 break;
             case tipb::ExecType::TypeSelection:
+                context.getTiFlashMetrics()->tiflash_coprocessor_executor_count.get<1>().Increment();
                 assignOrThrowException(sel_index, i, SEL_NAME);
                 break;
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeAggregation:
+                context.getTiFlashMetrics()->tiflash_coprocessor_executor_count.get<2>().Increment();
                 assignOrThrowException(agg_index, i, AGG_NAME);
                 break;
             case tipb::ExecType::TypeTopN:
+                context.getTiFlashMetrics()->tiflash_coprocessor_executor_count.get<3>().Increment();
                 assignOrThrowException(order_index, i, TOPN_NAME);
                 assignOrThrowException(limit_index, i, TOPN_NAME);
                 break;
             case tipb::ExecType::TypeLimit:
+                context.getTiFlashMetrics()->tiflash_coprocessor_executor_count.get<4>().Increment();
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
                 break;
             default:
