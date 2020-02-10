@@ -1,4 +1,13 @@
-option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ON)
+# Only enable under linux
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    set(ENABLE_JEMALLOC_DEFAULT 1)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+    set(ENABLE_JEMALLOC_DEFAULT 0)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    set(ENABLE_JEMALLOC_DEFAULT 0)
+endif()
+
+option (ENABLE_JEMALLOC "Set to TRUE to use jemalloc" ${ENABLE_JEMALLOC_DEFAULT})
 option (USE_INTERNAL_JEMALLOC_LIBRARY "Set to FALSE to use system jemalloc library instead of bundled" ${NOT_UNBUNDLED})
 
 if (ENABLE_JEMALLOC)

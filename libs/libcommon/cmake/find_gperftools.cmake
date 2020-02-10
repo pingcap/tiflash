@@ -4,7 +4,15 @@ else ()
     option (USE_INTERNAL_GPERFTOOLS_LIBRARY "Set to FALSE to use system gperftools (tcmalloc) library instead of bundled" ${NOT_UNBUNDLED})
 endif ()
 
-option (ENABLE_TCMALLOC "Set to TRUE to enable tcmalloc" OFF)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    set(ENABLE_TCMALLOC_DEFAULT 0)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+    set(ENABLE_TCMALLOC_DEFAULT 1)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    set(ENABLE_TCMALLOC_DEFAULT 1)
+endif()
+
+option (ENABLE_TCMALLOC "Set to TRUE to enable tcmalloc" ${ENABLE_TCMALLOC_DEFAULT})
 
 option (DEBUG_TCMALLOC "Set to TRUE to use debug version of libtcmalloc" OFF)
 

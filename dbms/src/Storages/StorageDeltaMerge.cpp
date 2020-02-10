@@ -1,6 +1,7 @@
 #include <random>
 
 #include <common/ThreadPool.h>
+#include <common/config_common.h>
 
 #if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
