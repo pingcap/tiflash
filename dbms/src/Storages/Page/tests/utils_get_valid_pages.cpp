@@ -37,9 +37,13 @@ enum Mode
     DUMP_VALID_ENTRIES  = 2,
     CHECK_DATA_CHECKSUM = 3,
     LIST_ALL_CAPACITY   = 4,
+    LIST_ALL_PAGE_FILE  = 5,
+
+    TOTAL_NUM_MODES,
 };
 
-int main(int argc, char ** argv) try
+int main(int argc, char ** argv)
+try
 {
     (void)argc;
     (void)argv;
@@ -60,7 +64,7 @@ int main(int argc, char ** argv) try
     DB::String path     = argv[1];
     DB::String mode_str = argv[2];
     int32_t    mode     = strtol(mode_str.c_str(), nullptr, 10);
-    if (mode != DUMP_ALL_ENTRIES && mode != DUMP_VALID_ENTRIES && mode != CHECK_DATA_CHECKSUM && mode != LIST_ALL_CAPACITY)
+    if (mode >= TOTAL_NUM_MODES)
     {
         Usage(argv[0]);
         return 1;
@@ -68,11 +72,22 @@ int main(int argc, char ** argv) try
 
     // Do not remove any files.
     DB::PageStorage::ListPageFilesOption options;
-    options.remove_tmp_files = false;
-    options.ignore_legacy = false;
+    options.remove_tmp_files  = false;
+    options.ignore_legacy     = false;
     options.ignore_checkpoint = false;
-    auto page_files
-        = DB::PageStorage::listAllPageFiles(path, &Poco::Logger::get("root"), options);
+    auto page_files           = DB::PageStorage::listAllPageFiles(path, &Poco::Logger::get("root"), options);
+
+    if (mode == LIST_ALL_PAGE_FILE)
+    {
+        for (auto & page_file : page_files)
+        {
+            auto [id, level] = page_file.fileIdLevel();
+            auto type        = page_file.getType();
+            std::cout << "PageFile_" << id << "_" << level //
+                      << "\t" << DB::PageFile::typeToString(type) << std::endl;
+        }
+        return 0;
+    }
 
     //DB::PageEntriesVersionSet versions;
     DB::PageEntriesVersionSetWithDelta versions(DB::MVCC::VersionSetConfig(), &Poco::Logger::get("GetValidPages"));
