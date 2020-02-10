@@ -2,6 +2,7 @@
 import socket
 import toml
 import util
+import random
 
 
 class FlashConfig:
@@ -10,6 +11,7 @@ class FlashConfig:
         self.conf_file_path = file_path
         self.conf_toml = toml.load(self.conf_file_path, _dict=dict)
         self.pd_addrs = util.compute_addr_list(self.conf_toml['raft']['pd_addr'])
+        random.shuffle(self.pd_addrs)
         self.http_port = self.conf_toml['http_port']
         tmp_path = self.conf_toml['tmp_path']
 
@@ -19,6 +21,7 @@ class FlashConfig:
         self.service_ip = socket.gethostbyname(host)
         self.service_addr = '{}:{}'.format(self.service_ip, port)
         self.tidb_status_addr = util.compute_addr_list(p['tidb_status_addr'])
+        random.shuffle(self.tidb_status_addr)
         flash_cluster = p['flash_cluster']
         self.cluster_master_ttl = flash_cluster['master_ttl']
         self.cluster_refresh_interval = min(
