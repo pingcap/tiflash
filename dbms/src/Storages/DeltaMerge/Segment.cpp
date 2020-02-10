@@ -1,4 +1,6 @@
+#if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
+#endif
 
 #include <numeric>
 

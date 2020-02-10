@@ -1,7 +1,10 @@
 #include <random>
 
 #include <common/ThreadPool.h>
+
+#if USE_TCMALLOC
 #include <gperftools/malloc_extension.h>
+#endif
 
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -137,8 +140,10 @@ StorageDeltaMerge::StorageDeltaMerge(const String & path_,
 void StorageDeltaMerge::drop()
 {
     shutdown();
+#if USE_TCMALLOC
     // Reclaim memory.
     MallocExtension::instance()->ReleaseFreeMemory();
+#endif
     // Remove data in extra paths;
     for (auto & p : global_context.getExtraPaths().listPaths())
     {
