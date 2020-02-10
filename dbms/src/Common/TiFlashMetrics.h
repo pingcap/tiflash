@@ -31,7 +31,7 @@ namespace DB
     M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge, 0)                                              \
     M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, 3, CounterArg{{"type", "diff"}},               \
         CounterArg{{"type", "full"}}, CounterArg{{"type", "failed"}})                                                            \
-    M(tiflash_schema_inter_ddl_count, "Total number of each kinds of internal ddl operations", Counter, 9,                       \
+    M(tiflash_schema_internal_ddl_count, "Total number of each kinds of internal ddl operations", Counter, 9,                       \
         CounterArg{{"type", "create_table"}}, CounterArg{{"type", "create_db"}}, CounterArg{{"type", "drop_table"}},             \
         CounterArg{{"type", "drop_db"}}, CounterArg{{"type", "rename_table"}}, CounterArg{{"type", "add_column"}},               \
         CounterArg{{"type", "delete_column"}}, CounterArg{{"type", "alter_column_type"}}, CounterArg{{"type", "rename_column"}}) \
