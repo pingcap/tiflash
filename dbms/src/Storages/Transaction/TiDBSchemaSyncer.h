@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -73,11 +74,14 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         LOG_INFO(log,
             "start to sync schemas. current version is: " + std::to_string(cur_version)
                 + " and try to sync schema version to: " + std::to_string(version));
+        context.getTiFlashMetrics()->tiflash_schema_apply_count.get<0>().Increment();
         if (!tryLoadSchemaDiffs(getter, version, context))
         {
+            context.getTiFlashMetrics()->tiflash_schema_apply_count.get<1>().Increment();
             loadAllSchema(getter, version, context);
         }
         cur_version = version;
+        context.getTiFlashMetrics()->tiflash_schema_version.get().Set(cur_version);
         LOG_INFO(log, "end sync schema, version has been updated to " + std::to_string(cur_version));
         return true;
     }
@@ -110,6 +114,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         catch (Exception & e)
         {
+            context.getTiFlashMetrics()->tiflash_schema_apply_count.get<2>().Increment();
             LOG_ERROR(log, "apply diff meets exception : " << e.displayText() << " \n stack is " << e.getStackTrace().toString());
             return false;
         }

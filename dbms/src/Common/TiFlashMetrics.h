@@ -20,17 +20,23 @@ namespace DB
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define APPLY_FOR_METRICS(M)                                                                                                \
-    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 2, CounterArg{{"vec_type", "batch"}}, \
-        CounterArg{{"vec_type", "normal"}})                                                                                 \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, CounterArg{{"type", "table_scan"}},  \
-        CounterArg{{"type", "selection"}}, CounterArg{{"type", "aggregation"}}, CounterArg{{"type", "top_n"}},              \
-        CounterArg{{"type", "limit"}})                                                                                      \
-    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 1,     \
-        HistogramArg{{{"req", "select"}}, ExpBuckets{0.0005, 2, 20}})                                                       \
-    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                             \
-    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                             \
-    M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
+#define APPLY_FOR_METRICS(M)                                                                                                     \
+    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 2, CounterArg{{"vec_type", "batch"}},      \
+        CounterArg{{"vec_type", "normal"}})                                                                                      \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, CounterArg{{"type", "table_scan"}},       \
+        CounterArg{{"type", "selection"}}, CounterArg{{"type", "aggregation"}}, CounterArg{{"type", "top_n"}},                   \
+        CounterArg{{"type", "limit"}})                                                                                           \
+    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 1,          \
+        HistogramArg{{{"req", "select"}}, ExpBuckets{0.0005, 2, 20}})                                                            \
+    M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge, 0)                                              \
+    M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, 3, CounterArg{{"type", "diff"}},               \
+        CounterArg{{"type", "full"}}, CounterArg{{"type", "failed"}})                                                            \
+    M(tiflash_schema_inter_ddl_count, "Total number of each kinds of internal ddl operations", Counter, 9,                       \
+        CounterArg{{"type", "create_table"}}, CounterArg{{"type", "create_db"}}, CounterArg{{"type", "drop_table"}},             \
+        CounterArg{{"type", "drop_db"}}, CounterArg{{"type", "rename_table"}}, CounterArg{{"type", "add_column"}},               \
+        CounterArg{{"type", "delete_column"}}, CounterArg{{"type", "alter_column_type"}}, CounterArg{{"type", "rename_column"}}) \
+    M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram, 1,                           \
+        HistogramArg{{{"req", "ddl_apply"}}, ExpBuckets{0.0005, 2, 20}})
 
 template <typename T>
 struct MetricFamilyTrait
