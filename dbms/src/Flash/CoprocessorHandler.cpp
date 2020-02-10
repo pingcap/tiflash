@@ -34,8 +34,7 @@ grpc::Status CoprocessorHandler::execute()
     auto start_time = std::chrono::system_clock::now();
     SCOPE_EXIT({
         std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-        cop_context.metrics->tiflash_coprocessor_request_handle_seconds.get<tiflash_coprocessor_request_handle_seconds_metrics::type_cop>()
-            .Observe(duration_sec.count());
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_cop).Observe(duration_sec.count());
     });
 
     try
@@ -44,8 +43,7 @@ grpc::Status CoprocessorHandler::execute()
         {
             case COP_REQ_TYPE_DAG:
             {
-                cop_context.metrics->tiflash_coprocessor_request_count.get<tiflash_coprocessor_request_count_metrics::cop_type_dag>()
-                    .Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, cop_type_dag).Increment();
                 std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
                 for (auto & range : cop_request->ranges())
                 {
@@ -83,8 +81,7 @@ grpc::Status CoprocessorHandler::execute()
         LOG_WARNING(
             log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
         cop_response->Clear();
-        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_meet_lock>()
-            .Increment();
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_meet_lock).Increment();
         kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
         lock_info->set_key(e.lock_infos[0]->key);
         lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
@@ -103,16 +100,12 @@ grpc::Status CoprocessorHandler::execute()
         {
             case RegionException::RegionReadStatus::NOT_FOUND:
             case RegionException::RegionReadStatus::PENDING_REMOVE:
-                cop_context.metrics->tiflash_coprocessor_request_error
-                    .get<tiflash_coprocessor_request_error_metrics::reason_region_not_found>()
-                    .Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_region_not_found).Increment();
                 region_err = cop_response->mutable_region_error();
                 region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
                 break;
             case RegionException::RegionReadStatus::VERSION_ERROR:
-                cop_context.metrics->tiflash_coprocessor_request_error
-                    .get<tiflash_coprocessor_request_error_metrics::reason_epoch_not_match>()
-                    .Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_epoch_not_match).Increment();
                 region_err = cop_response->mutable_region_error();
                 region_err->mutable_epoch_not_match();
                 break;
@@ -126,31 +119,27 @@ grpc::Status CoprocessorHandler::execute()
     catch (const pingcap::Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
-        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_kv_client_error>()
-            .Increment();
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_kv_client_error).Increment();
         return recordError(
             e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const Exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
-        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_internal_error>()
-            .Increment();
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_internal_error).Increment();
         return recordError(
             e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
-        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_other_error>()
-            .Increment();
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_other_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, e.what());
     }
     catch (...)
     {
         LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
-        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_other_error>()
-            .Increment();
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_error, reason_other_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, "other exception");
     }
 }

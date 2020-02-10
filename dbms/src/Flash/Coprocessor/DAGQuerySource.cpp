@@ -45,27 +45,26 @@ DAGQuerySource::DAGQuerySource(Context & context_, DAGContext & dag_context_, Re
     {
         switch (dag_request.executors(i).tp())
         {
-            using namespace tiflash_coprocessor_executor_count_metrics;
             case tipb::ExecType::TypeTableScan:
-                metrics->tiflash_coprocessor_executor_count.get<type_ts>().Increment();
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_ts).Increment();
                 assignOrThrowException(ts_index, i, TS_NAME);
                 break;
             case tipb::ExecType::TypeSelection:
-                metrics->tiflash_coprocessor_executor_count.get<type_sel>().Increment();
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_sel).Increment();
                 assignOrThrowException(sel_index, i, SEL_NAME);
                 break;
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeAggregation:
-                metrics->tiflash_coprocessor_executor_count.get<type_agg>().Increment();
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_agg).Increment();
                 assignOrThrowException(agg_index, i, AGG_NAME);
                 break;
             case tipb::ExecType::TypeTopN:
-                metrics->tiflash_coprocessor_executor_count.get<type_topn>().Increment();
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_topn).Increment();
                 assignOrThrowException(order_index, i, TOPN_NAME);
                 assignOrThrowException(limit_index, i, TOPN_NAME);
                 break;
             case tipb::ExecType::TypeLimit:
-                metrics->tiflash_coprocessor_executor_count.get<type_limit>().Increment();
+                GET_METRIC(metrics, tiflash_coprocessor_executor_count, type_limit).Increment();
                 assignOrThrowException(limit_index, i, LIMIT_NAME);
                 break;
             default:

@@ -200,4 +200,9 @@ APPLY_FOR_METRICS(M)
 #undef F
 #undef M
 
+#define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
+#define __GET_METRIC_0(ptr, family) (ptr)->family.get()
+#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get<family##_metrics::metric>()
+#define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
+
 } // namespace DB

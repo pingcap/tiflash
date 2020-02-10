@@ -24,13 +24,12 @@ FlashService::FlashService(IServer & server_)
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
-    metrics->tiflash_coprocessor_request_count.get<tiflash_coprocessor_request_count_metrics::type_cop>().Increment();
+    GET_METRIC(metrics, tiflash_coprocessor_request_count, type_cop).Increment();
     auto start_time = std::chrono::system_clock::now();
     SCOPE_EXIT({
         std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-        metrics->tiflash_coprocessor_request_duration_seconds.get<tiflash_coprocessor_request_duration_seconds_metrics::type_cop>().Observe(
-            duration_sec.count());
-        metrics->tiflash_coprocessor_response_bytes.get().Increment(response->ByteSizeLong());
+        GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_cop).Observe(duration_sec.count());
+        GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
@@ -63,13 +62,12 @@ grpc::Status FlashService::BatchCommands(
     while (stream->Read(&request))
     {
         tikvpb::BatchCommandsResponse response;
-        metrics->tiflash_coprocessor_request_count.get<tiflash_coprocessor_request_count_metrics::type_batch>().Increment();
+        GET_METRIC(metrics, tiflash_coprocessor_request_count, type_batch).Increment();
         auto start_time = std::chrono::system_clock::now();
         SCOPE_EXIT({
             std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            metrics->tiflash_coprocessor_request_duration_seconds.get<tiflash_coprocessor_request_duration_seconds_metrics::type_batch>()
-                .Observe(duration_sec.count());
-            metrics->tiflash_coprocessor_response_bytes.get().Increment(response.ByteSizeLong());
+            GET_METRIC(metrics, tiflash_coprocessor_request_duration_seconds, type_batch).Observe(duration_sec.count());
+            GET_METRIC(metrics, tiflash_coprocessor_response_bytes).Increment(response.ByteSizeLong());
         });
 
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());

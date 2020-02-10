@@ -28,8 +28,7 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
         auto start_time = std::chrono::system_clock::now();
         SCOPE_EXIT({
             std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-            batch_commands_context.metrics->tiflash_coprocessor_request_handle_seconds
-                .get<tiflash_coprocessor_request_handle_seconds_metrics::type_batch>()
+            GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_handle_seconds, type_batch)
                 .Observe(duration_sec.count());
         });
 
@@ -39,8 +38,7 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
             return;
         }
 
-        batch_commands_context.metrics->tiflash_coprocessor_request_count.get<tiflash_coprocessor_request_count_metrics::batch_type_cop>()
-            .Increment();
+        GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_count, batch_type_cop).Increment();
 
         const auto & cop_req = req.coprocessor();
         auto cop_resp = resp.mutable_coprocessor();
