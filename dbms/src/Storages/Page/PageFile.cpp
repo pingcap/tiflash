@@ -514,22 +514,26 @@ PageFile PageFile::openPageFileForRead(PageFileId file_id, UInt32 level, const s
 
 void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
 {
-    const auto   path = metaPath();
-    Poco::File   file(path);
+    const auto path = metaPath();
+    Poco::File file(path);
+    if (unlikely(!file.exists()))
+        throw Exception("Try to read meta of PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
+                            + ", but not exists. Path: " + path,
+                        ErrorCodes::LOGICAL_ERROR);
+
     const size_t file_size = file.getSize();
-
-    int file_fd = PageUtil::openFile<true, false>(path);
+    const int    file_fd   = PageUtil::openFile<true, false>(path);
     // File not exists.
-    if (!file_fd)
+    if (unlikely(!file_fd))
         return;
-    char * data = (char *)alloc(file_size);
-    SCOPE_EXIT({ free(data, file_size); });
+    char * meta_data = (char *)alloc(file_size);
+    SCOPE_EXIT({ free(meta_data, file_size); });
 
-    PageUtil::readFile(file_fd, 0, data, file_size, path);
+    PageUtil::readFile(file_fd, 0, meta_data, file_size, path);
 
     // analyze meta file and update page_entries
     std::tie(this->meta_file_pos, this->data_file_pos)
-        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, data, file_size, edit, log);
+        = PageMetaFormat::analyzeMetaFile(folderPath(), file_id, level, meta_data, file_size, edit, log);
 }
 
 void PageFile::setFormal()
@@ -545,7 +549,8 @@ void PageFile::setLegacy()
 {
     if (type != Type::Formal)
         return;
-    // rename to legacy dir
+    // Rename to legacy dir. Note that we can NOT remove the data part before
+    // successfully rename to legacy status.
     Poco::File formal_dir(folderPath());
     type = Type::Legacy;
     formal_dir.renameTo(folderPath());
