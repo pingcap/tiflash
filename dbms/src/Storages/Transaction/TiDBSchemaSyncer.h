@@ -7,6 +7,8 @@
 #include <pingcap/kv/Cluster.h>
 #include <pingcap/kv/Snapshot.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
@@ -71,6 +73,13 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         {
             return false;
         }
+        auto start_time = std::chrono::system_clock::now();
+        SCOPE_EXIT({
+            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+            // Observe `request size` times as duration.
+            context.getTiFlashMetrics()->tiflash_schema_apply_duration_seconds.get().Observe(duration_sec.count());
+        });
+
         LOG_INFO(log,
             "start to sync schemas. current version is: " + std::to_string(cur_version)
                 + " and try to sync schema version to: " + std::to_string(version));
