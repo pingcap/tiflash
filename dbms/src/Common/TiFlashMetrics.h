@@ -17,19 +17,33 @@ namespace DB
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
+#ifdef F
+#error "Please undefine macro F first."
+#endif
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define APPLY_FOR_METRICS(M)                                                                                                \
-    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 2, CounterArg{{"vec_type", "batch"}}, \
-        CounterArg{{"vec_type", "normal"}})                                                                                 \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, CounterArg{{"type", "table_scan"}},  \
-        CounterArg{{"type", "selection"}}, CounterArg{{"type", "aggregation"}}, CounterArg{{"type", "top_n"}},              \
-        CounterArg{{"type", "limit"}})                                                                                      \
-    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 1,     \
-        HistogramArg{{{"req", "select"}}, ExpBuckets{0.0005, 2, 20}})                                                       \
-    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                             \
-    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                             \
+#define APPLY_FOR_METRICS(M)                                                                                                        \
+    M(tiflash_coprocessor_request_count, "Total number of request", Counter, 4, F(type_batch, Counter, {"type", "batch"}),          \
+        F(batch_type_cop, Counter, {"batch_type", "cop"}), F(type_cop, Counter, {"type", "cop"}),                                   \
+        F(cop_type_dag, Counter, {"cop_type", "dag"}))                                                                              \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, F(type_ts, Counter, {"type", "table_scan"}), \
+        F(type_sel, Counter, {"type", "selection"}), F(type_agg, Counter, {"type", "aggregation"}),                                 \
+        F(type_topn, Counter, {"type", "top_n"}), F(type_limit, Counter, {"type", "limit"}))                                        \
+    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram, 2,                         \
+        F(type_batch, Histogram, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}),                                                   \
+        F(type_cop, Histogram, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))                                                       \
+    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, 6,                                               \
+        F(reason_meet_lock, Counter, {"reason", "meet_lock"}), F(reason_region_not_found, Counter, {"reason", "region_not_found"}), \
+        F(reason_epoch_not_match, Counter, {"reason", "epoch_not_match"}),                                                          \
+        F(reason_kv_client_error, Counter, {"reason", "kv_client_error"}),                                                          \
+        F(reason_internal_error, Counter, {"reason", "internal_error"}), F(reason_other_error, Counter, {"reason", "other_error"})) \
+    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram, 2,                    \
+        F(type_batch, Histogram, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}),                                                   \
+        F(type_cop, Histogram, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))                                                       \
+    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter, 0)                                               \
+    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                                     \
+    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                                     \
     M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
 
 template <typename T>
@@ -149,15 +163,41 @@ private:
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
 public:
+#ifdef F
+#error "Please undefine macro F first."
+#endif
+#define F(field_name, type, ...) \
+    type##Arg { __VA_ARGS__ }
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(name, help, type, n, ...) \
-    MetricFamily<prometheus::type, n> name = MetricFamily<prometheus::type, n>(*registry, #name, #help, ##__VA_ARGS__);
+#define M(family_name, help, type, n, ...) \
+    MetricFamily<prometheus::type, n> family_name = MetricFamily<prometheus::type, n>(*registry, #family_name, #help, ##__VA_ARGS__);
     APPLY_FOR_METRICS(M)
+#undef F
 #undef M
 
     friend class MetricsPrometheus;
 };
+
+#ifdef F
+#error "Please undefine macro F first."
+#endif
+#define F(field_name, type, ...) field_name
+#ifdef M
+#error "Please undefine macro M first."
+#endif
+#define M(family_name, help, type, n, ...) \
+    namespace family_name##_metrics        \
+    {                                      \
+        enum                               \
+        {                                  \
+            invalid = -1,                  \
+            ##__VA_ARGS__                  \
+        };                                 \
+    }
+APPLY_FOR_METRICS(M)
+#undef F
+#undef M
 
 } // namespace DB

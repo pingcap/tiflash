@@ -9,6 +9,8 @@
 #include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 
@@ -17,107 +19,140 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
+CoprocessorContext::CoprocessorContext(
+    Context & db_context_, const kvrpcpb::Context & kv_context_, const grpc::ServerContext & grpc_server_context_)
+    : db_context(db_context_), kv_context(kv_context_), grpc_server_context(grpc_server_context_), metrics(db_context.getTiFlashMetrics())
+{}
+
 CoprocessorHandler::CoprocessorHandler(
     CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * cop_response_)
     : cop_context(cop_context_), cop_request(cop_request_), cop_response(cop_response_), log(&Logger::get("CoprocessorHandler"))
 {}
 
 grpc::Status CoprocessorHandler::execute()
-try
 {
-    switch (cop_request->tp())
+    auto start_time = std::chrono::system_clock::now();
+    SCOPE_EXIT({
+        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+        cop_context.metrics->tiflash_coprocessor_request_handle_seconds.get<tiflash_coprocessor_request_handle_seconds_metrics::type_cop>()
+            .Observe(duration_sec.count());
+    });
+
+    try
     {
-        case COP_REQ_TYPE_DAG:
+        switch (cop_request->tp())
         {
-            cop_context.db_context.getTiFlashMetrics()->tiflash_coprocessor_dag_request_count.get<1>().Increment();
-            std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
-            for (auto & range : cop_request->ranges())
+            case COP_REQ_TYPE_DAG:
             {
-                std::string start_key(range.start());
-                DecodedTiKVKey start(std::move(start_key));
-                std::string end_key(range.end());
-                DecodedTiKVKey end(std::move(end_key));
-                key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+                cop_context.metrics->tiflash_coprocessor_request_count.get<tiflash_coprocessor_request_count_metrics::cop_type_dag>()
+                    .Increment();
+                std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
+                for (auto & range : cop_request->ranges())
+                {
+                    std::string start_key(range.start());
+                    DecodedTiKVKey start(std::move(start_key));
+                    std::string end_key(range.end());
+                    DecodedTiKVKey end(std::move(end_key));
+                    key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+                }
+                tipb::DAGRequest dag_request;
+                dag_request.ParseFromString(cop_request->data());
+                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
+                if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
+                    throw Exception("DAG request with rpn expression is not supported in TiFlash", ErrorCodes::NOT_IMPLEMENTED);
+                tipb::SelectResponse dag_response;
+                DAGDriver driver(cop_context.db_context, dag_request, cop_context.kv_context.region_id(),
+                    cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(),
+                    cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
+                    std::move(key_ranges), dag_response);
+                driver.execute();
+                cop_response->set_data(dag_response.SerializeAsString());
+                LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
+                break;
             }
-            tipb::DAGRequest dag_request;
-            dag_request.ParseFromString(cop_request->data());
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling DAG request: " << dag_request.DebugString());
-            if (dag_request.has_is_rpn_expr() && dag_request.is_rpn_expr())
-                throw Exception("DAG request with rpn expression is not supported in TiFlash", ErrorCodes::NOT_IMPLEMENTED);
-            tipb::SelectResponse dag_response;
-            DAGDriver driver(cop_context.db_context, dag_request, cop_context.kv_context.region_id(),
-                cop_context.kv_context.region_epoch().version(), cop_context.kv_context.region_epoch().conf_ver(),
-                cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(),
-                std::move(key_ranges), dag_response);
-            driver.execute();
-            cop_response->set_data(dag_response.SerializeAsString());
-            LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handle DAG request done");
-            break;
+            case COP_REQ_TYPE_ANALYZE:
+            case COP_REQ_TYPE_CHECKSUM:
+            default:
+                throw Exception(
+                    "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
         }
-        case COP_REQ_TYPE_ANALYZE:
-        case COP_REQ_TYPE_CHECKSUM:
-        default:
-            throw Exception(
-                "Coprocessor request type " + std::to_string(cop_request->tp()) + " is not implemented", ErrorCodes::NOT_IMPLEMENTED);
+        return grpc::Status::OK;
     }
-    return grpc::Status::OK;
-}
-catch (const LockException & e)
-{
-    LOG_WARNING(
-        log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
-    cop_response->Clear();
-    kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
-    lock_info->set_key(e.lock_infos[0]->key);
-    lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
-    lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
-    lock_info->set_lock_version(e.lock_infos[0]->lock_version);
-    // return ok so TiDB has the chance to see the LockException
-    return grpc::Status::OK;
-}
-catch (const RegionException & e)
-{
-    LOG_WARNING(
-        log, __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << ", message: " << e.message());
-    cop_response->Clear();
-    errorpb::Error * region_err;
-    switch (e.status)
+    catch (const LockException & e)
     {
-        case RegionException::RegionReadStatus::NOT_FOUND:
-        case RegionException::RegionReadStatus::PENDING_REMOVE:
-            region_err = cop_response->mutable_region_error();
-            region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
-            break;
-        case RegionException::RegionReadStatus::VERSION_ERROR:
-            region_err = cop_response->mutable_region_error();
-            region_err->mutable_epoch_not_match();
-            break;
-        default:
-            // should not happen
-            break;
+        LOG_WARNING(
+            log, __PRETTY_FUNCTION__ << ": LockException: region " << cop_request->context().region_id() << ", message: " << e.message());
+        cop_response->Clear();
+        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_meet_lock>()
+            .Increment();
+        kvrpcpb::LockInfo * lock_info = cop_response->mutable_locked();
+        lock_info->set_key(e.lock_infos[0]->key);
+        lock_info->set_primary_lock(e.lock_infos[0]->primary_lock);
+        lock_info->set_lock_ttl(e.lock_infos[0]->lock_ttl);
+        lock_info->set_lock_version(e.lock_infos[0]->lock_version);
+        // return ok so TiDB has the chance to see the LockException
+        return grpc::Status::OK;
     }
-    // return ok so TiDB has the chance to see the LockException
-    return grpc::Status::OK;
-}
-catch (const Exception & e)
-{
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
-    return recordError(e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
-}
-catch (const pingcap::Exception & e)
-{
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
-    return recordError(e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
-}
-catch (const std::exception & e)
-{
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
-    return recordError(grpc::StatusCode::INTERNAL, e.what());
-}
-catch (...)
-{
-    LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
-    return recordError(grpc::StatusCode::INTERNAL, "other exception");
+    catch (const RegionException & e)
+    {
+        LOG_WARNING(
+            log, __PRETTY_FUNCTION__ << ": RegionException: region " << cop_request->context().region_id() << ", message: " << e.message());
+        cop_response->Clear();
+        errorpb::Error * region_err;
+        switch (e.status)
+        {
+            case RegionException::RegionReadStatus::NOT_FOUND:
+            case RegionException::RegionReadStatus::PENDING_REMOVE:
+                cop_context.metrics->tiflash_coprocessor_request_error
+                    .get<tiflash_coprocessor_request_error_metrics::reason_region_not_found>()
+                    .Increment();
+                region_err = cop_response->mutable_region_error();
+                region_err->mutable_region_not_found()->set_region_id(cop_request->context().region_id());
+                break;
+            case RegionException::RegionReadStatus::VERSION_ERROR:
+                cop_context.metrics->tiflash_coprocessor_request_error
+                    .get<tiflash_coprocessor_request_error_metrics::reason_epoch_not_match>()
+                    .Increment();
+                region_err = cop_response->mutable_region_error();
+                region_err->mutable_epoch_not_match();
+                break;
+            default:
+                // should not happen
+                break;
+        }
+        // return ok so TiDB has the chance to see the LockException
+        return grpc::Status::OK;
+    }
+    catch (const pingcap::Exception & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": KV Client Exception: " << e.message());
+        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_kv_client_error>()
+            .Increment();
+        return recordError(
+            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": DB Exception: " << e.message() << "\n" << e.getStackTrace().toString());
+        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_internal_error>()
+            .Increment();
+        return recordError(
+            e.code() == ErrorCodes::NOT_IMPLEMENTED ? grpc::StatusCode::UNIMPLEMENTED : grpc::StatusCode::INTERNAL, e.message());
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": std exception: " << e.what());
+        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_other_error>()
+            .Increment();
+        return recordError(grpc::StatusCode::INTERNAL, e.what());
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, __PRETTY_FUNCTION__ << ": other exception");
+        cop_context.metrics->tiflash_coprocessor_request_error.get<tiflash_coprocessor_request_error_metrics::reason_other_error>()
+            .Increment();
+        return recordError(grpc::StatusCode::INTERNAL, "other exception");
+    }
 }
 
 grpc::Status CoprocessorHandler::recordError(grpc::StatusCode err_code, const String & err_msg)

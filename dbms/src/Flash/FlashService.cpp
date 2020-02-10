@@ -17,12 +17,21 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-FlashService::FlashService(IServer & server_) : server(server_), log(&Logger::get("FlashService")) {}
+FlashService::FlashService(IServer & server_)
+    : server(server_), metrics(server.context().getTiFlashMetrics()), log(&Logger::get("FlashService"))
+{}
 
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context, const coprocessor::Request * request, coprocessor::Response * response)
 {
+    metrics->tiflash_coprocessor_request_count.get<tiflash_coprocessor_request_count_metrics::type_cop>().Increment();
     auto start_time = std::chrono::system_clock::now();
+    SCOPE_EXIT({
+        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+        metrics->tiflash_coprocessor_request_duration_seconds.get<tiflash_coprocessor_request_duration_seconds_metrics::type_cop>().Observe(
+            duration_sec.count());
+        metrics->tiflash_coprocessor_response_bytes.get().Increment(response->ByteSizeLong());
+    });
 
     LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling coprocessor request: " << request->DebugString());
 
@@ -31,12 +40,6 @@ grpc::Status FlashService::Coprocessor(
     {
         return status;
     }
-
-    auto tiflash_metrics = context.getTiFlashMetrics();
-    SCOPE_EXIT({
-        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-        tiflash_metrics->tiflash_coprocessor_request_duration_seconds.get().Observe(duration_sec.count());
-    });
 
     CoprocessorContext cop_context(context, request->context(), *grpc_context);
     CoprocessorHandler cop_handler(cop_context, request, response);
@@ -59,9 +62,18 @@ grpc::Status FlashService::BatchCommands(
     tikvpb::BatchCommandsRequest request;
     while (stream->Read(&request))
     {
+        tikvpb::BatchCommandsResponse response;
+        metrics->tiflash_coprocessor_request_count.get<tiflash_coprocessor_request_count_metrics::type_batch>().Increment();
+        auto start_time = std::chrono::system_clock::now();
+        SCOPE_EXIT({
+            std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
+            metrics->tiflash_coprocessor_request_duration_seconds.get<tiflash_coprocessor_request_duration_seconds_metrics::type_batch>()
+                .Observe(duration_sec.count());
+            metrics->tiflash_coprocessor_response_bytes.get().Increment(response.ByteSizeLong());
+        });
+
         LOG_DEBUG(log, __PRETTY_FUNCTION__ << ": Handling batch commands: " << request.DebugString());
 
-        tikvpb::BatchCommandsResponse response;
         BatchCommandsContext batch_commands_context(
             context, [this](const grpc::ServerContext * grpc_server_context) { return createDBContext(grpc_server_context); },
             *grpc_context);
