@@ -87,6 +87,25 @@ public:
         Checkpoint, // for recovery, only meta left
     };
 
+    static String typeToString(Type type)
+    {
+        switch (type)
+        {
+        case Type::Invalid:
+            return "Invalid";
+        case Type::Formal:
+            return "Formal";
+        case Type::Temp:
+            return "Temp";
+        case Type::Legacy:
+            return "Legacy";
+        case Type::Checkpoint:
+            return "Checkpoint";
+        default:
+            throw Exception("Unexpected PageFile::Type: " + DB::toString((int)type));
+        }
+    }
+
     /// Create an empty page file.
     PageFile() = default;
     /// Recover a page file from disk.
@@ -115,7 +134,15 @@ public:
     std::unique_ptr<Writer> createWriter(bool sync_on_write) { return std::make_unique<Writer>(*this, sync_on_write); }
     /// Return a reader for this file.
     /// The PageFile object can be released any time.
-    std::shared_ptr<Reader> createReader() { return std::make_shared<Reader>(*this); }
+    std::shared_ptr<Reader> createReader()
+    {
+        if (unlikely(type != Type::Formal))
+            throw Exception("Try to create reader for PageFile_" + DB::toString(file_id) + "_" + DB::toString(level)
+                                + " of illegal type: " + typeToString(type),
+                            ErrorCodes::LOGICAL_ERROR);
+
+        return std::make_shared<Reader>(*this);
+    }
 
     UInt64             getFileId() const { return file_id; }
     UInt32             getLevel() const { return level; }

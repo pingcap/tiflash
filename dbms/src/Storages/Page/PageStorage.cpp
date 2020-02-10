@@ -113,9 +113,9 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
 {
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
-    opt.remove_tmp_files = true;
-    opt.ignore_checkpoint  = true;
-    auto page_files      = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    opt.remove_tmp_files  = true;
+    opt.ignore_checkpoint = true;
+    auto page_files       = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     // recover current version from both formal and legacy page files
 
 #ifdef DELTA_VERSION_SET
@@ -601,6 +601,13 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     GcCandidates merge_files;
     for (auto & page_file : page_files)
     {
+        if (unlikely(page_file.getType() != PageFile::Type::Formal))
+        {
+            throw Exception("Try to pick PageFile_" + DB::toString(page_file.getFileId()) + "_" + DB::toString(page_file.getLevel()) + "("
+                                + PageFile::typeToString(page_file.getType()) + ") as gc candidate, path: " + page_file.folderPath(),
+                            ErrorCodes::LOGICAL_ERROR);
+        }
+
         const auto file_size        = page_file.getDataFileSize();
         UInt64     valid_size       = 0;
         float      valid_rate       = 0.0f;
@@ -651,6 +658,20 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
 
     if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
+        // Nothing to compact, remove legacy/checkpoint page files since we
+        // don't do gc on them later.
+        for (auto itr = page_files.begin(); itr != page_files.end(); /* empty */)
+        {
+            auto & page_file = *itr;
+            if (page_file.getType() == PageFile::Type::Legacy || page_file.getType() == PageFile::Type::Checkpoint)
+            {
+                itr = page_files.erase(itr);
+            }
+            else
+            {
+                itr++;
+            }
+        }
         return std::move(page_files);
     }
 
@@ -669,7 +690,15 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
     prepareSnapshotWriteBatch(snapshot, wb);
 
     // Use the largest id-level in page_files_to_compact as Snapshot's
-    PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
+    const PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
+    {
+        const auto smallest_id_level = page_files_to_compact.begin()->fileIdLevel();
+        LOG_INFO(log,
+                 storage_name << " Compact legacy PageFile_"                                                 //
+                              << smallest_id_level.first << "_" << smallest_id_level.second                  //
+                              << " to PageFile_" << largest_id_level.first << "_" << largest_id_level.second //
+                              << " into checkpoint PageFile_" << largest_id_level.first << "_" << largest_id_level.second);
+    }
     auto checkpoint_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
     {
         auto checkpoint_writer = checkpoint_file.createWriter(false);
