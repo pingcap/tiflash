@@ -32,6 +32,7 @@ struct Settings
     M(SettingInt64, dag_records_per_chunk, DEFAULT_DAG_RECORDS_PER_CHUNK, "default chunk size of a DAG response.") \
     M(SettingBool, dag_expr_field_type_strict_check, true, "when set to true, every expr in the dag request must provide field type, otherwise only the result expr will be checked.") \
     M(SettingInt64, schema_version, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, "tmt schema version.") \
+    M(SettingInt64, safe_point_update_interval_seconds, 1, "The interval in seconds to update safe point from PD.")\
     M(SettingUInt64, batch_commands_threads, 0, "Number of threads to use for handling batch commands concurrently. 0 means - same as 'max_threads'.") \
     M(SettingUInt64, min_compress_block_size, DEFAULT_MIN_COMPRESS_BLOCK_SIZE, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value and no less than the volume of data for one mark.") \
     M(SettingUInt64, max_compress_block_size, DEFAULT_MAX_COMPRESS_BLOCK_SIZE, "The maximum size of blocks of uncompressed data before compressing for writing to a table.") \
@@ -234,6 +235,19 @@ struct Settings
     M(SettingUInt64, shared_query_clients, 0, "How many clients will share the same query_id. If > 0, enable shared query mode.")\
     M(SettingString, query_id, "", "The query_id, only for testing.")\
     M(SettingUInt64, mutable_deduper, 5, "The deduper used by MutableMergeTree storage. By default 5. 0: OriginStreams, 1: OriginUnity, 2: ReplacingUnity, 3: ReplacingPartitioning, 4: DedupPartitioning, 5: ReplacingPartitioningOpt.")\
+    M(SettingUInt64, delta_merge_size, 10000000, "The delta rows limit in memory. After that delta rows will be flushed.")\
+    \
+    M(SettingUInt64, dm_segment_limit_rows, 1500000, "Average rows of segments in DeltaMerge Engine")\
+    M(SettingUInt64, dm_segment_delta_limit_rows, 150000, "Max rows of segment delta in DeltaMerge Engine ")\
+    M(SettingUInt64, dm_segment_delta_cache_limit_rows, 4000, "Max rows of cache in segment delta in DeltaMerge Engine")\
+    M(SettingUInt64, dm_segment_delta_small_pack_rows, 2000, "Determine whether a pack in delta is small or not")\
+    M(SettingUInt64, dm_segment_stable_pack_rows, DEFAULT_MERGE_BLOCK_SIZE, "Expected stable pack rows in DeltaMerge Engine")\
+    M(SettingUInt64, dm_insert_max_rows, 0, "Max rows of insert blocks when write into DeltaMerge Engine. By default 0 means no limit.")\
+    M(SettingBool, dm_enable_rough_set_filter, true, "Whether to parse where expression as Rough Set Index filter or not") \
+    M(SettingBool, dm_raw_filter_range, true, "Do range filter or not when read data in raw mode in DeltaMerge Engine.")\
+    M(SettingBool, dm_read_delta_only, false, "Only read delta data in DeltaMerge Engine.")\
+    M(SettingBool, dm_read_stable_only, false, "Only read stable data in DeltaMerge Engine.")\
+    M(SettingBool, dm_enable_logical_split, true, "Enable logical split or not in DeltaMerge Engine.")\
     \
     M(SettingUInt64, max_rows_in_set, 0, "Maximum size of the set (in number of elements) resulting from the execution of the IN section.") \
     M(SettingUInt64, max_bytes_in_set, 0, "Maximum size of the set (in bytes in memory) resulting from the execution of the IN section.") \

@@ -25,55 +25,61 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
         },
         false);
 
-    table_flush_handle = background_pool.addTask([this] {
-        RegionTable & region_table = tmt.getRegionTable();
+    if (!tmt.isBgFlushDisabled())
+    {
+        table_flush_handle = background_pool.addTask([this] {
+            RegionTable & region_table = tmt.getRegionTable();
 
-        // if all regions of table is removed, try to optimize data.
-        if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
-        {
-            LOG_INFO(log, "try to final optimize table " << table_id);
-            tryOptimizeStorageFinal(tmt.getContext(), table_id);
-            LOG_INFO(log, "finish final optimize table " << table_id);
-        }
-        return region_table.tryFlushRegions();
-    });
-
-    region_handle = background_pool.addTask([this] {
-        bool ok = false;
-        {
-            RegionPtr region = nullptr;
+            // if all regions of table is removed, try to optimize data.
+            if (auto table_id = region_table.popOneTableToOptimize(); table_id != InvalidTableID)
             {
-                std::lock_guard<std::mutex> lock(region_mutex);
-                if (!regions_to_decode.empty())
-                {
-                    auto it = regions_to_decode.begin();
-                    region = it->second;
-                    regions_to_decode.erase(it);
-                    ok = true;
-                }
+                LOG_INFO(log, "try to final optimize table " << table_id);
+                tryOptimizeStorageFinal(tmt.getContext(), table_id);
+                LOG_INFO(log, "finish final optimize table " << table_id);
             }
-            if (region)
-                region->tryPreDecodeTiKVValue(tmt);
-        }
+            return region_table.tryFlushRegions();
+        });
 
-        {
-            RegionPtr region = nullptr;
+        region_handle = background_pool.addTask([this] {
+            bool ok = false;
             {
-                std::lock_guard<std::mutex> lock(region_mutex);
-                if (!regions_to_flush.empty())
+                RegionPtr region = nullptr;
                 {
-                    auto it = regions_to_flush.begin();
-                    region = it->second;
-                    regions_to_flush.erase(it);
-                    ok = true;
+                    std::lock_guard<std::mutex> lock(region_mutex);
+                    if (!regions_to_decode.empty())
+                    {
+                        auto it = regions_to_decode.begin();
+                        region = it->second;
+                        regions_to_decode.erase(it);
+                        ok = true;
+                    }
                 }
+                if (region)
+                    region->tryPreDecodeTiKVValue(tmt);
             }
-            if (region)
-                tmt.getRegionTable().tryFlushRegion(region, true);
-        }
 
-        return ok;
-    });
+            {
+                RegionPtr region = nullptr;
+                {
+                    std::lock_guard<std::mutex> lock(region_mutex);
+                    if (!regions_to_flush.empty())
+                    {
+                        auto it = regions_to_flush.begin();
+                        region = it->second;
+                        regions_to_flush.erase(it);
+                        ok = true;
+                    }
+                }
+                if (region)
+                    tmt.getRegionTable().tryFlushRegion(region, true);
+            }
+            return ok;
+        });
+    }
+    else
+    {
+        LOG_INFO(log, "Configuration raft.disable_bg_flush is set to true, background flush tasks are disabled.");
+    }
 
     {
         std::vector<RegionPtr> regions;
@@ -89,6 +95,9 @@ BackgroundService::BackgroundService(TMTContext & tmt_)
 
 void BackgroundService::addRegionToDecode(const RegionPtr & region)
 {
+    if (tmt.isBgFlushDisabled())
+        throw Exception("Try to addRegionToDecode while background flush is disabled.", ErrorCodes::LOGICAL_ERROR);
+
     {
         std::lock_guard<std::mutex> lock(region_mutex);
         regions_to_decode.emplace(region->id(), region);
@@ -98,6 +107,9 @@ void BackgroundService::addRegionToDecode(const RegionPtr & region)
 
 void BackgroundService::addRegionToFlush(const DB::RegionPtr & region)
 {
+    if (tmt.isBgFlushDisabled())
+        throw Exception("Try to addRegionToFlush while background flush is disabled.", ErrorCodes::LOGICAL_ERROR);
+
     {
         std::lock_guard<std::mutex> lock(region_mutex);
         regions_to_flush.emplace(region->id(), region);

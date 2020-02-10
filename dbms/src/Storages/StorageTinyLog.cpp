@@ -171,7 +171,14 @@ Block TinyLogBlockInputStream::readImpl()
 
     {
         /// if there are no files in the folder, it means that the table is empty
-        if (Poco::DirectoryIterator(storage.full_path()) == Poco::DirectoryIterator())
+        auto it = Poco::DirectoryIterator(storage.full_path());
+        size_t count = 0;
+        for (;it != Poco::DirectoryIterator(); ++it)
+        {
+            if (it.name() != "sizes.json")
+                ++ count;
+        }
+        if (!count)
             return res;
     }
 
@@ -336,7 +343,6 @@ void StorageTinyLog::rename(const String & new_path_to_db, const String & /*new_
         it->second.data_file = Poco::File(path + escapeForFileName(name) + '/' + Poco::Path(it->second.data_file.path()).getFileName());
 }
 
-
 BlockInputStreams StorageTinyLog::read(
     const Names & column_names,
     const SelectQueryInfo & /*query_info*/,
@@ -345,12 +351,20 @@ BlockInputStreams StorageTinyLog::read(
     const size_t max_block_size,
     const unsigned /*num_streams*/)
 {
-    check(column_names);
-    processed_stage = QueryProcessingStage::FetchColumns;
-    return BlockInputStreams(1, std::make_shared<TinyLogBlockInputStream>(
-        max_block_size, Nested::collect(getColumns().getAllPhysical().addTypes(column_names)), *this, context.getSettingsRef().max_read_buffer_size));
+    return read(column_names, processed_stage, max_block_size, context.getSettingsRef().max_read_buffer_size);
 }
 
+BlockInputStreams StorageTinyLog::read(
+    const Names & column_names,
+    QueryProcessingStage::Enum & processed_stage,
+    const size_t max_block_size,
+    const size_t max_read_buffer_size)
+{
+    check(column_names);
+    processed_stage = QueryProcessingStage::FetchColumns;
+    return {std::make_shared<TinyLogBlockInputStream>(
+        max_block_size, Nested::collect(getColumns().getAllPhysical().addTypes(column_names)), *this, max_read_buffer_size)};
+}
 
 BlockOutputStreamPtr StorageTinyLog::write(
     const ASTPtr & /*query*/, const Settings & /*settings*/)

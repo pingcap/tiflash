@@ -42,6 +42,55 @@ TEST(CyclicRenameResolver_test, resolve_linked)
     ASSERT_EQ(rename_result[1].second, "a");
 }
 
+TEST(CyclicRenameResolver_test, resolve_linked_2)
+{
+    using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
+    std::map<String, String> rename_map;
+    rename_map["b"] = "c";
+    rename_map["c"] = "d";
+
+    typename Resolver::NamePairs rename_result = Resolver().resolve(std::move(rename_map));
+
+    ASSERT_EQ(rename_result.size(), 2UL);
+    // c -> d
+    ASSERT_EQ(rename_result[0].first, "c");
+    ASSERT_EQ(rename_result[0].second, "d");
+    // b -> c
+    ASSERT_EQ(rename_result[1].first, "b");
+    ASSERT_EQ(rename_result[1].second, "c");
+}
+
+namespace
+{
+template<typename T>
+bool isEqualPairs(const std::pair<T, T> &lhs, const std::pair<T, T> &rhs)
+{
+    return lhs == rhs;
+}
+}
+
+TEST(CyclicRenameResolver_test, resolve_long_linked)
+{
+    using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
+    std::map<String, String> rename_map;
+    rename_map["a"] = "b";
+    rename_map["b"] = "c";
+    rename_map["c"] = "d";
+    rename_map["d"] = "e";
+    rename_map["e"] = "z";
+    rename_map["z"] = "h";
+
+    typename Resolver::NamePairs rename_result = Resolver().resolve(std::move(rename_map));
+
+    ASSERT_EQ(rename_result.size(), 6UL);
+    ASSERT_TRUE(isEqualPairs(rename_result[0], std::make_pair(String("z"), String("h"))));
+    ASSERT_TRUE(isEqualPairs(rename_result[1], std::make_pair(String("e"), String("z"))));
+    ASSERT_TRUE(isEqualPairs(rename_result[2], std::make_pair(String("d"), String("e"))));
+    ASSERT_TRUE(isEqualPairs(rename_result[3], std::make_pair(String("c"), String("d"))));
+    ASSERT_TRUE(isEqualPairs(rename_result[4], std::make_pair(String("b"), String("c"))));
+    ASSERT_TRUE(isEqualPairs(rename_result[5], std::make_pair(String("a"), String("b"))));
+}
+
 TEST(CyclicRenameResolver_test, resolve_simple_cycle)
 {
     using Resolver = CyclicRenameResolver<String, TmpColNameGenerator>;
