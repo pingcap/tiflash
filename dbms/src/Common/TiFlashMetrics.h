@@ -37,6 +37,23 @@ namespace DB
     M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter)                                                      \
     M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter)
 
+struct ExpBuckets
+{
+    const double start;
+    const int base;
+    const size_t size;
+    inline operator prometheus::Histogram::BucketBoundaries() const &&
+    {
+        prometheus::Histogram::BucketBoundaries buckets(size);
+        double current = start;
+        std::for_each(buckets.begin(), buckets.end(), [&](auto & e) {
+            e = current;
+            current *= base;
+        });
+        return buckets;
+    }
+};
+
 template <typename T>
 struct MetricFamilyTrait
 {
@@ -63,23 +80,6 @@ struct MetricFamilyTrait<prometheus::Histogram>
     static auto & add(prometheus::Family<prometheus::Histogram> & family, ArgType && arg)
     {
         return family.Add(std::move(std::get<0>(arg)), std::move(std::get<1>(arg)));
-    }
-};
-
-struct ExpBuckets
-{
-    const double start;
-    const int base;
-    const size_t size;
-    inline operator prometheus::Histogram::BucketBoundaries() const &&
-    {
-        prometheus::Histogram::BucketBoundaries buckets(size);
-        double current = start;
-        std::for_each(buckets.begin(), buckets.end(), [&](auto & e) {
-            e = current;
-            current *= base;
-        });
-        return buckets;
     }
 };
 
