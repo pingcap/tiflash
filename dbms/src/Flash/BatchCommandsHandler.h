@@ -12,6 +12,9 @@
 namespace DB
 {
 
+class TiFlashMetrics;
+using TiFlashMetricsPtr = std::shared_ptr<TiFlashMetrics>;
+
 struct BatchCommandsContext
 {
     /// Context for this batch commands.
@@ -24,10 +27,10 @@ struct BatchCommandsContext
 
     const grpc::ServerContext & grpc_server_context;
 
+    TiFlashMetricsPtr metrics;
+
     BatchCommandsContext(
-        Context & db_context_, DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_)
-        : db_context(db_context_), db_context_creation_func(std::move(db_context_creation_func_)), grpc_server_context(grpc_server_context_)
-    {}
+        Context & db_context_, DBContextCreationFunc && db_context_creation_func_, grpc::ServerContext & grpc_server_context_);
 };
 
 class BatchCommandsHandler

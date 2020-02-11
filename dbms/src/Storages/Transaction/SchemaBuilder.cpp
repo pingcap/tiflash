@@ -94,7 +94,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(
                 command.column_id = orig_column_info.id;
                 drop_commands.emplace_back(std::move(command));
             }
-            context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.get<6>().Increment();
+            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_column).Increment();
         }
         result.push_back(drop_commands);
     }
@@ -126,7 +126,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(
             rename_commands.push_back(
                 newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info));
             result.push_back(rename_commands);
-            context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.get<8>().Increment();
+            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
         }
     }
 
@@ -153,7 +153,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(
                 // Alter column with new column info
                 setAlterCommandColumn(log, command, *column_info);
                 alter_commands.emplace_back(std::move(command));
-                context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.get<7>().Increment();
+                GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_alter_column_tp).Increment();
             }
         }
         result.push_back(alter_commands);
@@ -176,7 +176,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(
                 setAlterCommandColumn(log, command, column_info);
 
                 add_commands.emplace_back(std::move(command));
-                context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.get<5>().Increment();
+                GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_add_column).Increment();
             }
         }
 
@@ -456,7 +456,7 @@ void SchemaBuilder<Getter>::applyRenameTableImpl(
         return;
     }
 
-    context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.template get<4>().Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
 
     auto rename = std::make_shared<ASTRenameQuery>();
 
@@ -498,7 +498,7 @@ void SchemaBuilder<Getter>::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info)
         return;
     }
 
-    context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.template get<1>().Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_db).Increment();
 
     ASTCreateQuery * create_query = new ASTCreateQuery();
     create_query->database = db_info->name;
@@ -529,7 +529,7 @@ void SchemaBuilder<Getter>::applyDropSchema(DatabaseID schema_id)
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropSchemaImpl(const String & database_name)
 {
-    context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.template get<3>().Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_db).Increment();
     LOG_INFO(log, "Try to drop database: " << database_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
@@ -630,7 +630,7 @@ void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db
         return;
     }
 
-    context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.template get<0>().Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_table).Increment();
 
     table_info.schema_version = target_version;
     if (table_info.engine_type == StorageEngine::UNSPECIFIED)
@@ -690,7 +690,7 @@ void SchemaBuilder<Getter>::applyCreateTableImpl(const TiDB::DBInfo & db_info, T
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropTableImpl(const String & database_name, const String & table_name)
 {
-    context.getTiFlashMetrics()->tiflash_schema_internal_ddl_count.template get<2>().Increment();
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(log, "try to drop table : " << database_name << "." << table_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
