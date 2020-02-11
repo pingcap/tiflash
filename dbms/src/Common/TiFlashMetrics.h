@@ -11,25 +11,34 @@ namespace DB
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
-/// context.getTiFlashMetrics()->tiflash_test_counter.get().Set(1);
+/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_response_bytes).Increment(1);
+/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_batch).Set(1);
 /// Maintenance notes:
 /// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/tmt/raft/etc.).
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define APPLY_FOR_METRICS(M)                                                                                                \
-    M(tiflash_coprocessor_dag_request_count, "Total number of DAG requests", Counter, 2, CounterArg{{"vec_type", "batch"}}, \
-        CounterArg{{"vec_type", "normal"}})                                                                                 \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, CounterArg{{"type", "table_scan"}},  \
-        CounterArg{{"type", "selection"}}, CounterArg{{"type", "aggregation"}}, CounterArg{{"type", "top_n"}},              \
-        CounterArg{{"type", "limit"}})                                                                                      \
-    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of coprocessor request duration", Histogram, 1,     \
-        HistogramArg{{{"req", "select"}}, ExpBuckets{0.0005, 2, 20}})                                                       \
-    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                             \
-    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                             \
+#define APPLY_FOR_METRICS(M, F)                                                                                                     \
+    M(tiflash_coprocessor_request_count, "Total number of request", Counter, 4, F(type_batch, Counter, {"type", "batch"}),          \
+        F(batch_type_cop, Counter, {"batch_type", "cop"}), F(type_cop, Counter, {"type", "cop"}),                                   \
+        F(cop_type_dag, Counter, {"cop_type", "dag"}))                                                                              \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, F(type_ts, Counter, {"type", "table_scan"}), \
+        F(type_sel, Counter, {"type", "selection"}), F(type_agg, Counter, {"type", "aggregation"}),                                 \
+        F(type_topn, Counter, {"type", "top_n"}), F(type_limit, Counter, {"type", "limit"}))                                        \
+    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram, 2,                         \
+        F(type_batch, Histogram, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}),                                                   \
+        F(type_cop, Histogram, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))                                                       \
+    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, 6,                                               \
+        F(reason_meet_lock, Counter, {"reason", "meet_lock"}), F(reason_region_not_found, Counter, {"reason", "region_not_found"}), \
+        F(reason_epoch_not_match, Counter, {"reason", "epoch_not_match"}),                                                          \
+        F(reason_kv_client_error, Counter, {"reason", "kv_client_error"}),                                                          \
+        F(reason_internal_error, Counter, {"reason", "internal_error"}), F(reason_other_error, Counter, {"reason", "other_error"})) \
+    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram, 2,                    \
+        F(type_batch, Histogram, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}),                                                   \
+        F(type_cop, Histogram, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))                                                       \
+    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter, 0)                                               \
+    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                                     \
+    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                                     \
     M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
 
 template <typename T>
@@ -149,15 +158,30 @@ private:
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
 public:
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(name, help, type, n, ...) \
-    MetricFamily<prometheus::type, n> name = MetricFamily<prometheus::type, n>(*registry, #name, #help, ##__VA_ARGS__);
-    APPLY_FOR_METRICS(M)
-#undef M
+#define MAKE_METRIC_MEMBER_M(family_name, help, type, n, ...) \
+    MetricFamily<prometheus::type, n> family_name = MetricFamily<prometheus::type, n>(*registry, #family_name, #help, ##__VA_ARGS__);
+#define MAKE_METRIC_MEMBER_F(field_name, type, ...) \
+    type##Arg { __VA_ARGS__ }
+    APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
     friend class MetricsPrometheus;
 };
+
+#define MAKE_METRIC_ENUM_M(family_name, help, type, n, ...) \
+    namespace family_name##_metrics                         \
+    {                                                       \
+        enum                                                \
+        {                                                   \
+            invalid = -1,                                   \
+            ##__VA_ARGS__                                   \
+        };                                                  \
+    }
+#define MAKE_METRIC_ENUM_F(field_name, type, ...) field_name
+APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
+
+#define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
+#define __GET_METRIC_0(ptr, family) (ptr)->family.get()
+#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get<family##_metrics::metric>()
+#define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
 
 } // namespace DB
