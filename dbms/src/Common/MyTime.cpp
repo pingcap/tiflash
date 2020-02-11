@@ -115,6 +115,20 @@ UInt64 MyTimeBase::toPackedUInt() const
     return (ymd << 17 | hms) << 24 | micro_second;
 }
 
+UInt64 MyTimeBase::toCoreTime() const
+{
+    // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
+    UInt64 v = 0;
+    v |= (UInt64(micro_second) << MICROSECOND_BIT_FIELD_OFFSET) & MICROSECOND_BIT_FIELD_MASK;
+    v |= (UInt64(second) << SECOND_BIT_FIELD_OFFSET) & SECOND_BIT_FIELD_MASK;
+    v |= (UInt64(minute) << MINUTE_BIT_FIELD_OFFSET) & MINUTE_BIT_FIELD_MASK;
+    v |= (UInt64(hour) << HOUR_BIT_FIELD_OFFSET) & HOUR_BIT_FIELD_MASK;
+    v |= (UInt64(day) << DAY_BIT_FIELD_OFFSET) & DAY_BIT_FIELD_MASK;
+    v |= (UInt64(month) << MONTH_BIT_FIELD_OFFSET) & MONTH_BIT_FIELD_MASK;
+    v |= (UInt64(year) << YEAR_BIT_FIELD_OFFSET) & YEAR_BIT_FIELD_MASK;
+    return v;
+}
+
 String MyTimeBase::dateFormat(const String & layout) const
 {
     String result;

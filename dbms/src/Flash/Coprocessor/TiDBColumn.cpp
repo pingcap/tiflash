@@ -1,6 +1,5 @@
-#include <Flash/Coprocessor/TiDBColumn.h>
-
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/TiDBColumn.h>
 #include <IO/Endian.h>
 
 namespace DB
@@ -114,19 +113,7 @@ void TiDBColumn::append(UInt64 value)
 
 void TiDBColumn::append(const TiDBTime & time)
 {
-    encodeLittleEndian<UInt32>(time.my_date_time.hour, data);
-    encodeLittleEndian<UInt32>(time.my_date_time.micro_second, data);
-    encodeLittleEndian<UInt16>(time.my_date_time.year, data);
-    encodeLittleEndian<UInt8>(time.my_date_time.month, data);
-    encodeLittleEndian<UInt8>(time.my_date_time.day, data);
-    encodeLittleEndian<UInt8>(time.my_date_time.minute, data);
-    encodeLittleEndian<UInt8>(time.my_date_time.second, data);
-    // Encode an useless u16 to make byte alignment 16 bytes.
-    encodeLittleEndian<UInt16>(0, data);
-    encodeLittleEndian<UInt8>(time.time_type, data);
-    encodeLittleEndian<Int8>(time.fsp, data);
-    // Encode an useless u16 to make byte alignment 20 bytes.
-    encodeLittleEndian<UInt16>(0, data);
+    encodeLittleEndian<UInt64>(time.toChunkTime(), data);
     finishAppendFixed();
 }
 
