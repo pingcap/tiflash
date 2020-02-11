@@ -18,28 +18,24 @@ namespace DB
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
-#define APPLY_FOR_METRICS(M, F)                                                                                                     \
-    M(tiflash_coprocessor_request_count, "Total number of request", Counter, 4, F(type_batch, Counter, {"type", "batch"}),          \
-        F(batch_type_cop, Counter, {"batch_type", "cop"}), F(type_cop, Counter, {"type", "cop"}),                                   \
-        F(cop_type_dag, Counter, {"cop_type", "dag"}))                                                                              \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, 5, F(type_ts, Counter, {"type", "table_scan"}), \
-        F(type_sel, Counter, {"type", "selection"}), F(type_agg, Counter, {"type", "aggregation"}),                                 \
-        F(type_topn, Counter, {"type", "top_n"}), F(type_limit, Counter, {"type", "limit"}))                                        \
-    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram, 2,                         \
-        F(type_batch, Histogram, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}),                                                   \
-        F(type_cop, Histogram, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))                                                       \
-    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, 6,                                               \
-        F(reason_meet_lock, Counter, {"reason", "meet_lock"}), F(reason_region_not_found, Counter, {"reason", "region_not_found"}), \
-        F(reason_epoch_not_match, Counter, {"reason", "epoch_not_match"}),                                                          \
-        F(reason_kv_client_error, Counter, {"reason", "kv_client_error"}),                                                          \
-        F(reason_internal_error, Counter, {"reason", "internal_error"}), F(reason_other_error, Counter, {"reason", "other_error"})) \
-    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram, 2,                    \
-        F(type_batch, Histogram, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}),                                                   \
-        F(type_cop, Histogram, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))                                                       \
-    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter, 0)                                               \
-    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                                     \
-    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                                     \
-    M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
+#define APPLY_FOR_METRICS(M, F)                                                                                                   \
+    M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                    \
+        F(batch_type_cop, {"batch_type", "cop"}), F(type_cop, {"type", "cop"}), F(cop_type_dag, {"cop_type", "dag"}))             \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),           \
+        F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                \
+        F(type_limit, {"type", "limit"}))                                                                                         \
+    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                          \
+        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20})) \
+    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),  \
+        F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),     \
+        F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),         \
+        F(reason_other_error, {"reason", "other_error"}))                                                                         \
+    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                     \
+        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20})) \
+    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                \
+    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter)                                                      \
+    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter)                                                      \
+    M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter)
 
 template <typename T>
 struct MetricFamilyTrait
@@ -48,28 +44,27 @@ struct MetricFamilyTrait
 template <>
 struct MetricFamilyTrait<prometheus::Counter>
 {
-    using MetricType = prometheus::Counter;
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildCounter(); }
+    static auto & add(prometheus::Family<prometheus::Counter> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Gauge>
 {
-    using MetricType = prometheus::Gauge;
     using ArgType = std::map<std::string, std::string>;
     static auto build() { return prometheus::BuildGauge(); }
+    static auto & add(prometheus::Family<prometheus::Gauge> & family, ArgType && arg) { return family.Add(std::forward<ArgType>(arg)); }
 };
 template <>
 struct MetricFamilyTrait<prometheus::Histogram>
 {
-    using MetricType = prometheus::Histogram;
     using ArgType = std::tuple<std::map<std::string, std::string>, prometheus::Histogram::BucketBoundaries>;
     static auto build() { return prometheus::BuildHistogram(); }
+    static auto & add(prometheus::Family<prometheus::Histogram> & family, ArgType && arg)
+    {
+        return family.Add(std::move(std::get<0>(arg)), std::move(std::get<1>(arg)));
+    }
 };
-
-using CounterArg = typename MetricFamilyTrait<prometheus::Counter>::ArgType;
-using GaugeArg = typename MetricFamilyTrait<prometheus::Gauge>::ArgType;
-using HistogramArg = typename MetricFamilyTrait<prometheus::Histogram>::ArgType;
 
 struct ExpBuckets
 {
@@ -88,53 +83,33 @@ struct ExpBuckets
     }
 };
 
-template <typename T, size_t n>
+template <typename T>
 struct MetricFamily
 {
-    template <typename... Args>
-    MetricFamily(prometheus::Registry & registry, const std::string & name, const std::string & help, Args &&... args)
+    using MetricTrait = MetricFamilyTrait<T>;
+    using MetricArgType = typename MetricTrait::ArgType;
+
+    MetricFamily(
+        prometheus::Registry & registry, const std::string & name, const std::string & help, std::initializer_list<MetricArgType> args)
     {
-        static_assert(sizeof...(Args) == n);
-        auto & family = MetricFamilyTrait<T>::build().Name(name).Help(help).Register(registry);
-        addMetrics(0, family, std::forward<Args>(args)...);
+        auto & family = MetricTrait::build().Name(name).Help(help).Register(registry);
+        metrics.reserve(args.size() ? args.size() : 1);
+        for (auto arg : args)
+        {
+            auto & metric = MetricTrait::add(family, std::forward<MetricArgType>(arg));
+            metrics.emplace_back(&metric);
+        }
+        if (metrics.empty())
+        {
+            auto & metric = MetricTrait::add(family, MetricArgType{});
+            metrics.emplace_back(&metric);
+        }
     }
 
-    MetricFamily(prometheus::Registry & registry, const std::string & name, const std::string & help)
-    {
-        static_assert(n == 0);
-        auto & family = MetricFamilyTrait<T>::build().Name(name).Help(help).Register(registry);
-        addMetrics(0, family, typename MetricFamilyTrait<T>::ArgType{});
-    }
-
-    template <size_t idx = 0>
-    T & get()
-    {
-        static_assert(idx < actual_size);
-        return *(metrics[idx]);
-    }
-
-private:
-    template <typename Type, typename Arg>
-    inline void addMetrics(size_t i, prometheus::Family<Type> & family, Arg && arg)
-    {
-        metrics[i] = &family.Add(std::forward<Arg>(arg));
-    }
-    inline void addMetrics(
-        size_t i, prometheus::Family<prometheus::Histogram> & family, MetricFamilyTrait<prometheus::Histogram>::ArgType && arg)
-    {
-        HistogramArg args{std::forward<HistogramArg>(arg)};
-        metrics[i] = &family.Add(std::move(std::get<0>(args)), std::move(std::get<1>(args)));
-    }
-    template <typename Type, typename First, typename... Rest>
-    inline void addMetrics(size_t i, prometheus::Family<Type> & family, First && first, Rest &&... rest)
-    {
-        addMetrics(i, family, std::forward<First>(first));
-        addMetrics(i + 1, family, std::forward<Rest>(rest)...);
-    }
+    T & get(size_t idx = 0) { return *(metrics[idx]); }
 
 private:
-    static constexpr size_t actual_size = !n ? 1 : n;
-    T * metrics[actual_size];
+    std::vector<T *> metrics;
 };
 
 /// Centralized registry of TiFlash metrics.
@@ -158,30 +133,32 @@ private:
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
 public:
-#define MAKE_METRIC_MEMBER_M(family_name, help, type, n, ...) \
-    MetricFamily<prometheus::type, n> family_name = MetricFamily<prometheus::type, n>(*registry, #family_name, #help, ##__VA_ARGS__);
-#define MAKE_METRIC_MEMBER_F(field_name, type, ...) \
-    type##Arg { __VA_ARGS__ }
+#define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \
+    MetricFamily<prometheus::type> family_name = MetricFamily<prometheus::type>(*registry, #family_name, #help, {__VA_ARGS__});
+#define MAKE_METRIC_MEMBER_F(field_name, ...) \
+    {                                         \
+        __VA_ARGS__                           \
+    }
     APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
     friend class MetricsPrometheus;
 };
 
-#define MAKE_METRIC_ENUM_M(family_name, help, type, n, ...) \
-    namespace family_name##_metrics                         \
-    {                                                       \
-        enum                                                \
-        {                                                   \
-            invalid = -1,                                   \
-            ##__VA_ARGS__                                   \
-        };                                                  \
+#define MAKE_METRIC_ENUM_M(family_name, help, type, ...) \
+    namespace family_name##_metrics                      \
+    {                                                    \
+        enum                                             \
+        {                                                \
+            invalid = -1,                                \
+            ##__VA_ARGS__                                \
+        };                                               \
     }
-#define MAKE_METRIC_ENUM_F(field_name, type, ...) field_name
+#define MAKE_METRIC_ENUM_F(field_name, ...) field_name
 APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 #define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #define __GET_METRIC_0(ptr, family) (ptr)->family.get()
-#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get<family##_metrics::metric>()
+#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get(family##_metrics::metric)
 #define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
 
 } // namespace DB
