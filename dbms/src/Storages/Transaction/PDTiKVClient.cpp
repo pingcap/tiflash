@@ -11,6 +11,9 @@ extern const int LOGICAL_ERROR;
 }
 
 constexpr int readIndexMaxBackoff = 5000;
+Timestamp PDClientHelper::cached_gc_safe_point = 0;
+std::chrono::time_point<std::chrono::system_clock> PDClientHelper::safe_point_last_update_time;
+
 
 IndexReader::IndexReader(KVClusterPtr cluster_, const pingcap::kv::RegionVerID & id_)
     : region_id(id_), cluster(cluster_), log(&Logger::get("pingcap.index_read"))

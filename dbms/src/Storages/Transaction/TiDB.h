@@ -1,10 +1,13 @@
 #pragma once
 
+#include <optional>
+
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/Types.h>
+#include <Storages/Transaction/StorageEngineType.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -278,7 +281,9 @@ struct TableInfo
     PartitionInfo partition;
     // If the table is view, we should ignore it.
     bool is_view = false;
-    Int64 schema_version = -1;
+    Int64 schema_version = DEFAULT_UNSPECIFIED_SCHEMA_VERSION;
+
+    ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
     String getColumnName(const ColumnID id) const;

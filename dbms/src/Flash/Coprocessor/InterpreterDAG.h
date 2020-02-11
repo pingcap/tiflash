@@ -100,7 +100,7 @@ private:
     size_t max_streams = 1;
 
     /// Table from where to read data, if not subquery.
-    TMTStoragePtr storage;
+    ManageableStoragePtr storage;
     TableStructureReadLockPtr table_lock;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;

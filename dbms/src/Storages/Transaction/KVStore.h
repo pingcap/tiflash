@@ -12,6 +12,9 @@ namespace DB
 static const Seconds REGION_CACHE_GC_PERIOD(60 * 5);
 
 class Context;
+class IAST;
+using ASTPtr = std::shared_ptr<IAST>;
+using ASTs = std::vector<ASTPtr>;
 
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
@@ -70,6 +73,7 @@ public:
 private:
     friend class MockTiDB;
     friend struct MockTiDBTable;
+    friend void dbgFuncRemoveRegion(Context &, const ASTs &, /*DBGInvoker::Printer*/ std::function<void(const std::string &)>);
     void removeRegion(
         const RegionID region_id, RegionTable & region_table, const KVStoreTaskLock & task_lock, const RegionTaskLock & region_lock);
     void mockRemoveRegion(const RegionID region_id, RegionTable & region_table);

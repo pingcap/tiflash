@@ -15,6 +15,8 @@ UNFINISHED_1_PREFIX = '\t'
 UNFINISHED_2_PREFIX = '   '
 WORD_PH = '{#WORD}'
 
+verbose = False
+
 class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
@@ -167,6 +169,7 @@ class Matcher:
             self.outputs = filter(lambda x: len(x) != 0, self.outputs)
             self.matches = []
         elif line.startswith(CMD_PREFIX) or line.startswith(CMD_PREFIX_ALTER):
+            if verbose: print 'running', line
             if self.outputs != None and ((not self.is_mysql and not matched(self.outputs, self.matches, self.fuzz)) or (self.is_mysql and not MySQLCompare.matched(self.outputs, self.matches))):
                 return False
             self.is_mysql = False
@@ -211,14 +214,18 @@ def parse_exe_match(path, executor, executor_tidb, fuzz):
         return True, matcher, todos
 
 def run():
-    if len(sys.argv) != 5:
-        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd'
+    if len(sys.argv) not in (5, 6):
+        print 'usage: <bin> tiflash-client-cmd test-file-path fuzz-check tidb-client-cmd [verbose]'
         sys.exit(1)
 
     dbc = sys.argv[1]
     path = sys.argv[2]
     fuzz = (sys.argv[3] == 'true')
     mysql_client = sys.argv[4]
+    global verbose
+    if len(sys.argv) == 6:
+        verbose = (sys.argv[5] == 'true')
+    if verbose: print 'parsing file: `{}`'.format(path)
 
     matched, matcher, todos = parse_exe_match(path, Executor(dbc), Executor(mysql_client), fuzz)
 
