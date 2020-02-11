@@ -37,9 +37,17 @@ namespace DB
         F(type_batch, Histogram, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}),                                                   \
         F(type_cop, Histogram, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))                                                       \
     M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter, 0)                                               \
-    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter, 0)                                                     \
-    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter, 0)                                                     \
-    M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter, 0)
+    M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge, 0)                                                 \
+    M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, 3, F(type_diff, Counter, {"type", "diff"}),       \
+        F(type_full, Counter, {"type", "full"}), F(type_failed, Counter, {"type", "failed"}))                                       \
+    M(tiflash_schema_internal_ddl_count, "Total number of each kinds of internal ddl operations", Counter, 9,                       \
+        F(type_create_table, Counter, {"type", "create_table"}), F(type_create_db, Counter, {"type", "create_db"}),                 \
+        F(type_drop_table, Counter, {"type", "drop_table"}), F(type_drop_db, Counter, {"type", "drop_db"}),                         \
+        F(type_rename_table, Counter, {"type", "rename_table"}), F(type_add_column, Counter, {"type", "add_column"}),               \
+        F(type_drop_column, Counter, {"type", "drop_column"}), F(type_alter_column_tp, Counter, {"type", "alter_column_type"}),     \
+        F(type_rename_column, Counter, {"type", "rename_column"}))                                                                  \
+    M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram, 1,                              \
+        F(type_ddl_apply_duration, Histogram, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.0005, 2, 20}))
 
 template <typename T>
 struct MetricFamilyTrait
@@ -181,7 +189,7 @@ APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 #define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #define __GET_METRIC_0(ptr, family) (ptr)->family.get()
-#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.get<family##_metrics::metric>()
+#define __GET_METRIC_1(ptr, family, metric) (ptr)->family.template get<family##_metrics::metric>()
 #define GET_METRIC(...) __GET_METRIC_MACRO(__VA_ARGS__, __GET_METRIC_1, __GET_METRIC_0)(__VA_ARGS__)
 
 } // namespace DB

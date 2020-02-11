@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/InterpreterAlterQuery.h>
@@ -10,12 +11,12 @@
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/SchemaBuilder-internal.h>
 #include <Storages/Transaction/SchemaBuilder.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
-#include <Storages/IManageableStorage.h>
 
 namespace DB
 {
@@ -67,7 +68,8 @@ AlterCommand newRenameColCommand(const String & old_col, const String & new_col,
     return command;
 }
 
-inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableInfo & table_info, const TableInfo & orig_table_info)
+inline std::vector<AlterCommands> detectSchemaChanges(
+    Logger * log, Context & context, const TableInfo & table_info, const TableInfo & orig_table_info)
 {
     std::vector<AlterCommands> result;
 
@@ -92,6 +94,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
                 command.column_id = orig_column_info.id;
                 drop_commands.emplace_back(std::move(command));
             }
+            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_column).Increment();
         }
         result.push_back(drop_commands);
     }
@@ -111,7 +114,8 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
 
             if (column_info != table_info.columns.end())
             {
-                rename_map[ColumnNameWithID{orig_column_info.name, orig_column_info.id}] = ColumnNameWithID{column_info->name, column_info->id};
+                rename_map[ColumnNameWithID{orig_column_info.name, orig_column_info.id}]
+                    = ColumnNameWithID{column_info->name, column_info->id};
             }
         }
 
@@ -119,8 +123,10 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
         for (const auto & rename_pair : rename_result)
         {
             AlterCommands rename_commands;
-            rename_commands.push_back(newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info));
+            rename_commands.push_back(
+                newRenameColCommand(rename_pair.first.name, rename_pair.second.name, rename_pair.second.id, orig_table_info));
             result.push_back(rename_commands);
+            GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
         }
     }
 
@@ -147,6 +153,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
                 // Alter column with new column info
                 setAlterCommandColumn(log, command, *column_info);
                 alter_commands.emplace_back(std::move(command));
+                GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_alter_column_tp).Increment();
             }
         }
         result.push_back(alter_commands);
@@ -169,6 +176,7 @@ inline std::vector<AlterCommands> detectSchemaChanges(Logger * log, const TableI
                 setAlterCommandColumn(log, command, column_info);
 
                 add_commands.emplace_back(std::move(command));
+                GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_add_column).Increment();
             }
         }
 
@@ -183,7 +191,7 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
 {
     table_info->schema_version = target_version;
     auto orig_table_info = storage->getTableInfo();
-    auto commands_vec = detectSchemaChanges(log, *table_info, orig_table_info);
+    auto commands_vec = detectSchemaChanges(log, context, *table_info, orig_table_info);
 
     std::stringstream ss;
     ss << "Detected schema changes: " << db_name << "." << table_info->name << "\n";
@@ -211,7 +219,7 @@ void SchemaBuilder<Getter>::applyAlterTableImpl(TableInfoPtr table_info, const S
     if (table_info->isLogicalPartitionTable())
     {
         // create partition table.
-        for (const auto& part_def : table_info->partition.definitions)
+        for (const auto & part_def : table_info->partition.definitions)
         {
             auto new_table_info = table_info->producePartitionTableInfo(part_def.id);
             auto part_storage = tmt_context.getStorages().get(part_def.id);
@@ -268,16 +276,19 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
     switch (diff.type)
     {
         case SchemaActionCreateTable:
-        case SchemaActionRecoverTable: {
+        case SchemaActionRecoverTable:
+        {
             newTableID = diff.table_id;
             break;
         }
         case SchemaActionDropTable:
-        case SchemaActionDropView: {
+        case SchemaActionDropView:
+        {
             oldTableID = diff.table_id;
             break;
         }
-        case SchemaActionTruncateTable: {
+        case SchemaActionTruncateTable:
+        {
             newTableID = diff.table_id;
             oldTableID = diff.old_table_id;
             break;
@@ -287,20 +298,24 @@ void SchemaBuilder<Getter>::applyDiff(const SchemaDiff & diff)
         case SchemaActionModifyColumn:
         case SchemaActionSetDefaultValue:
         // Add primary key change primary keys to not null, so it's equal to alter table for tiflash.
-        case SchemaActionAddPrimaryKey: {
+        case SchemaActionAddPrimaryKey:
+        {
             applyAlterTable(di, diff.table_id);
             break;
         }
-        case SchemaActionRenameTable: {
+        case SchemaActionRenameTable:
+        {
             applyRenameTable(di, diff.old_schema_id, diff.table_id);
             break;
         }
         case SchemaActionAddTablePartition:
-        case SchemaActionDropTablePartition: {
+        case SchemaActionDropTablePartition:
+        {
             applyAlterPartition(di, diff.table_id);
             break;
         }
-        default: {
+        default:
+        {
             LOG_INFO(log, "ignore change type: " << int(diff.type));
             break;
         }
@@ -419,7 +434,7 @@ void SchemaBuilder<Getter>::applyRenameTable(DBInfoPtr db_info, DatabaseID old_d
     {
         const auto & table_dbs = collectPartitionTables(table_info, db_info);
         alterAndRenameTables(table_dbs);
-        for (const auto& table_db : table_dbs)
+        for (const auto & table_db : table_dbs)
         {
             auto table = table_db.first;
             auto part_storage = tmt_context.getStorages().get(table->id);
@@ -440,6 +455,8 @@ void SchemaBuilder<Getter>::applyRenameTableImpl(
     {
         return;
     }
+
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_rename_column).Increment();
 
     auto rename = std::make_shared<ASTRenameQuery>();
 
@@ -481,6 +498,8 @@ void SchemaBuilder<Getter>::applyCreateSchemaImpl(TiDB::DBInfoPtr db_info)
         return;
     }
 
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_db).Increment();
+
     ASTCreateQuery * create_query = new ASTCreateQuery();
     create_query->database = db_info->name;
     create_query->if_not_exists = true;
@@ -510,6 +529,7 @@ void SchemaBuilder<Getter>::applyDropSchema(DatabaseID schema_id)
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropSchemaImpl(const String & database_name)
 {
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_db).Increment();
     LOG_INFO(log, "Try to drop database: " << database_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
@@ -610,6 +630,8 @@ void SchemaBuilder<Getter>::applyCreatePhysicalTableImpl(const TiDB::DBInfo & db
         return;
     }
 
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_create_table).Increment();
+
     table_info.schema_version = target_version;
     if (table_info.engine_type == StorageEngine::UNSPECIFIED)
     {
@@ -653,7 +675,7 @@ void SchemaBuilder<Getter>::applyCreateTableImpl(const TiDB::DBInfo & db_info, T
     if (table_info.isLogicalPartitionTable())
     {
         // create partition table.
-        for (const auto& part_def : table_info.partition.definitions)
+        for (const auto & part_def : table_info.partition.definitions)
         {
             auto new_table_info = table_info.producePartitionTableInfo(part_def.id);
             applyCreatePhysicalTableImpl(db_info, new_table_info);
@@ -668,6 +690,7 @@ void SchemaBuilder<Getter>::applyCreateTableImpl(const TiDB::DBInfo & db_info, T
 template <typename Getter>
 void SchemaBuilder<Getter>::applyDropTableImpl(const String & database_name, const String & table_name)
 {
+    GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_internal_ddl_count, type_drop_table).Increment();
     LOG_INFO(log, "try to drop table : " << database_name << "." << table_name);
     auto drop_query = std::make_shared<ASTDropQuery>();
     drop_query->database = database_name;
@@ -694,7 +717,7 @@ void SchemaBuilder<Getter>::applyDropTable(TiDB::DBInfoPtr dbInfo, Int64 table_i
     if (table_info.isLogicalPartitionTable())
     {
         // drop all partition tables.
-        for (const auto& part_def : table_info.partition.definitions)
+        for (const auto & part_def : table_info.partition.definitions)
         {
             auto new_table_name = table_info.getPartitionTableName(part_def.id);
             applyDropTableImpl(database_name, new_table_name);
@@ -714,7 +737,7 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
     std::vector<std::pair<String, String>> tables_to_drop;
     std::set<String> dbs_to_drop;
 
-    for (const auto& table_db : table_dbs)
+    for (const auto & table_db : table_dbs)
     {
         table_ids.insert(table_db.first->id);
     }
@@ -735,7 +758,7 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
             tables_to_drop.push_back(std::make_pair(db_name, storage->getTableName()));
         }
     }
-    for (const auto& table : tables_to_drop)
+    for (const auto & table : tables_to_drop)
     {
         applyDropTableImpl(table.first, table.second);
         LOG_DEBUG(log, "Table " << table.first << "." << table.second << " is dropped during sync all schemas");
@@ -751,7 +774,7 @@ void SchemaBuilder<Getter>::dropInvalidTablesAndDBs(
         if (db_names.count(db_name) == 0)
             dbs_to_drop.insert(db_name);
     }
-    for (const auto& db : dbs_to_drop)
+    for (const auto & db : dbs_to_drop)
     {
         applyDropSchemaImpl(db);
         LOG_DEBUG(log, "DB " << db << " is dropped during sync all schemas");
@@ -769,7 +792,7 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
     auto storage_map = tmt_context.getStorages().getAllStorage();
 
     typename Resolver::NameMap rename_map;
-    for (const auto& table_db : table_dbs)
+    for (const auto & table_db : table_dbs)
     {
         auto storage = tmt_context.getStorages().get(table_db.first->id);
         if (storage != nullptr)
@@ -792,7 +815,7 @@ void SchemaBuilder<Getter>::alterAndRenameTables(std::vector<std::pair<TableInfo
     }
 
     // Then Alter Table.
-    for (const auto& table_db : table_dbs)
+    for (const auto & table_db : table_dbs)
     {
         auto storage = tmt_context.getStorages().get(table_db.first->id);
         if (storage != nullptr)
@@ -807,7 +830,7 @@ template <typename Getter>
 void SchemaBuilder<Getter>::createTables(std::vector<std::pair<TableInfoPtr, DBInfoPtr>> table_dbs)
 {
     auto & tmt_context = context.getTMTContext();
-    for (const auto& table_db : table_dbs)
+    for (const auto & table_db : table_dbs)
     {
         auto storage = tmt_context.getStorages().get(table_db.first->id);
         if (storage == nullptr)
@@ -837,21 +860,21 @@ void SchemaBuilder<Getter>::syncAllSchema()
         }
     }
 
-    for (const auto& db_info : all_schema)
+    for (const auto & db_info : all_schema)
     {
         LOG_DEBUG(log, "Load schema : " << db_info->name);
     }
 
     // Collect All Table Info and Create DBs.
     std::vector<std::pair<TableInfoPtr, DBInfoPtr>> all_tables;
-    for (const auto& db : all_schema)
+    for (const auto & db : all_schema)
     {
         if (databases.find(db->id) == databases.end())
         {
             applyCreateSchemaImpl(db);
         }
         std::vector<TableInfoPtr> tables = getter.listTables(db->id);
-        for (const auto& table : tables)
+        for (const auto & table : tables)
         {
             all_tables.emplace_back(table, db);
             if (table->isLogicalPartitionTable())
@@ -863,7 +886,7 @@ void SchemaBuilder<Getter>::syncAllSchema()
     }
 
     std::set<String> db_names;
-    for (const auto& db : all_schema)
+    for (const auto & db : all_schema)
     {
         db_names.insert(db->name);
     }
