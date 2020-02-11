@@ -18,24 +18,31 @@ namespace DB
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
-#define APPLY_FOR_METRICS(M, F)                                                                                                   \
-    M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                    \
-        F(batch_type_cop, {"batch_type", "cop"}), F(type_cop, {"type", "cop"}), F(cop_type_dag, {"cop_type", "dag"}))             \
-    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),           \
-        F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                \
-        F(type_limit, {"type", "limit"}))                                                                                         \
-    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                          \
-        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20})) \
-    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),  \
-        F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),     \
-        F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),         \
-        F(reason_other_error, {"reason", "other_error"}))                                                                         \
-    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                     \
-        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20})) \
-    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                \
-    M(tiflash_schema_metric1, "Placeholder for schema sync metric", Counter)                                                      \
-    M(tiflash_schema_metric2, "Placeholder for schema sync metric", Counter)                                                      \
-    M(tiflash_schema_metric3, "Placeholder for schema sync metric", Counter)
+#define APPLY_FOR_METRICS(M, F)                                                                                                           \
+    M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                            \
+        F(batch_type_cop, {"batch_type", "cop"}), F(type_cop, {"type", "cop"}), F(cop_type_dag, {"cop_type", "dag"}))                     \
+    M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
+        F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
+        F(type_limit, {"type", "limit"}))                                                                                                 \
+    M(tiflash_coprocessor_request_duration_seconds, "Bucketed histogram of request duration", Histogram,                                  \
+        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))         \
+    M(tiflash_coprocessor_request_error, "Total number of request error", Counter, F(reason_meet_lock, {"reason", "meet_lock"}),          \
+        F(reason_region_not_found, {"reason", "region_not_found"}), F(reason_epoch_not_match, {"reason", "epoch_not_match"}),             \
+        F(reason_kv_client_error, {"reason", "kv_client_error"}), F(reason_internal_error, {"reason", "internal_error"}),                 \
+        F(reason_other_error, {"reason", "other_error"}))                                                                                 \
+    M(tiflash_coprocessor_request_handle_seconds, "Bucketed histogram of request handle duration", Histogram,                             \
+        F(type_batch, {{"type", "batch"}}, ExpBuckets{0.0005, 2, 20}), F(type_cop, {{"type", "cop"}}, ExpBuckets{0.0005, 2, 20}))         \
+    M(tiflash_coprocessor_response_bytes, "Total bytes of response body", Counter)                                                        \
+    M(tiflash_schema_version, "Current version of tiflash cached schema", Gauge)                                                          \
+    M(tiflash_schema_apply_count, "Total number of each kinds of apply", Counter, F(type_diff, {"type", "diff"}),                         \
+        F(type_full, {"type", "full"}), F(type_failed, {"type", "failed"}))                                                               \
+    M(tiflash_schema_internal_ddl_count, "Total number of each kinds of internal ddl operations", Counter,                                \
+        F(type_create_table, {"type", "create_table"}), F(type_create_db, {"type", "create_db"}),                                         \
+        F(type_drop_table, {"type", "drop_table"}), F(type_drop_db, {"type", "drop_db"}), F(type_rename_table, {"type", "rename_table"}), \
+        F(type_add_column, {"type", "add_column"}), F(type_drop_column, {"type", "drop_column"}),                                         \
+        F(type_alter_column_tp, {"type", "alter_column_type"}), F(type_rename_column, {"type", "rename_column"}))                         \
+    M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                       \
+        F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.0005, 2, 20}))
 
 struct ExpBuckets
 {
