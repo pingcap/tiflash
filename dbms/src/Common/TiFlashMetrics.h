@@ -11,7 +11,8 @@ namespace DB
 /// Central place to define metrics across all subsystems.
 /// Refer to gtest_tiflash_metrics.cpp for more sample defines.
 /// Usage:
-/// context.getTiFlashMetrics()->tiflash_test_counter.get().Set(1);
+/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_response_bytes).Increment(1);
+/// GET_METRIC(context.getTiFlashMetrics(), tiflash_coprocessor_request_count, type_batch).Set(1);
 /// Maintenance notes:
 /// 1. Use same name prefix for metrics in same subsystem (coprocessor/schema/tmt/raft/etc.).
 /// 2. Keep metrics with same prefix next to each other.
