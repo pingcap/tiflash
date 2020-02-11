@@ -9,14 +9,7 @@ namespace DB
 namespace tests
 {
 
-#ifdef F
-#error "Please undefine macro F first."
-#endif
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#undef APPLY_FOR_METRICS
-#define APPLY_FOR_METRICS(M)                                                                                             \
+#define TEST_APPLY_FOR_METRICS(M, F)                                                                                     \
     M(test_counter, "Test counter metric w/o labels", Counter, 0)                                                        \
     M(test_counter_with_1_label, "Test counter metric with 1 label", Counter, 1, F(m1, Counter, {"label1", "value1"}))   \
     M(test_counter_with_2_labels, "Test counter metric with 2 labels", Counter, 2, F(m1, Counter, {"label1", "value1"}), \
@@ -38,41 +31,10 @@ public:
     std::shared_ptr<prometheus::Registry> registry = std::make_shared<prometheus::Registry>();
 
 public:
-#ifdef F
-#error "Please undefine macro F first."
-#endif
-#define F(field_name, type, ...) \
-    type##Arg { __VA_ARGS__ }
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(family_name, help, type, n, ...) \
-    MetricFamily<prometheus::type, n> family_name = MetricFamily<prometheus::type, n>(*registry, #family_name, #help, ##__VA_ARGS__);
-    APPLY_FOR_METRICS(M)
-#undef F
-#undef M
+    TEST_APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 };
 
-#ifdef F
-#error "Please undefine macro F first."
-#endif
-#define F(field_name, type, ...) field_name
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(family_name, help, type, n, ...) \
-    namespace family_name##_metrics        \
-    {                                      \
-        enum                               \
-        {                                  \
-            invalid = -1,                  \
-            ##__VA_ARGS__                  \
-        };                                 \
-    }
-APPLY_FOR_METRICS(M)
-#undef APPLY_FOR_METRICS
-#undef F
-#undef M
+TEST_APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 TEST(TiFlashMetrics, Counter)
 {

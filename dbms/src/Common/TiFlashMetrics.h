@@ -17,13 +17,7 @@ namespace DB
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
-#ifdef F
-#error "Please undefine macro F first."
-#endif
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define APPLY_FOR_METRICS(M)                                                                                                        \
+#define APPLY_FOR_METRICS(M, F)                                                                                                     \
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, 4, F(type_batch, Counter, {"type", "batch"}),          \
         F(batch_type_cop, Counter, {"batch_type", "cop"}), F(type_cop, Counter, {"type", "cop"}),                                   \
         F(cop_type_dag, Counter, {"cop_type", "dag"}))                                                                              \
@@ -163,42 +157,26 @@ private:
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
 public:
-#ifdef F
-#error "Please undefine macro F first."
-#endif
-#define F(field_name, type, ...) \
-    type##Arg { __VA_ARGS__ }
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(family_name, help, type, n, ...) \
+#define MAKE_METRIC_MEMBER_M(family_name, help, type, n, ...) \
     MetricFamily<prometheus::type, n> family_name = MetricFamily<prometheus::type, n>(*registry, #family_name, #help, ##__VA_ARGS__);
-    APPLY_FOR_METRICS(M)
-#undef F
-#undef M
+#define MAKE_METRIC_MEMBER_F(field_name, type, ...) \
+    type##Arg { __VA_ARGS__ }
+    APPLY_FOR_METRICS(MAKE_METRIC_MEMBER_M, MAKE_METRIC_MEMBER_F)
 
     friend class MetricsPrometheus;
 };
 
-#ifdef F
-#error "Please undefine macro F first."
-#endif
-#define F(field_name, type, ...) field_name
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(family_name, help, type, n, ...) \
-    namespace family_name##_metrics        \
-    {                                      \
-        enum                               \
-        {                                  \
-            invalid = -1,                  \
-            ##__VA_ARGS__                  \
-        };                                 \
+#define MAKE_METRIC_ENUM_M(family_name, help, type, n, ...) \
+    namespace family_name##_metrics                         \
+    {                                                       \
+        enum                                                \
+        {                                                   \
+            invalid = -1,                                   \
+            ##__VA_ARGS__                                   \
+        };                                                  \
     }
-APPLY_FOR_METRICS(M)
-#undef F
-#undef M
+#define MAKE_METRIC_ENUM_F(field_name, type, ...) field_name
+APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 
 #define __GET_METRIC_MACRO(_1, _2, _3, NAME, ...) NAME
 #define __GET_METRIC_0(ptr, family) (ptr)->family.get()
