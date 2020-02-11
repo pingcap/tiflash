@@ -47,7 +47,19 @@ namespace DB
         F(type_drop_column, Counter, {"type", "drop_column"}), F(type_alter_column_tp, Counter, {"type", "alter_column_type"}),     \
         F(type_rename_column, Counter, {"type", "rename_column"}))                                                                  \
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram, 1,                              \
-        F(type_ddl_apply_duration, Histogram, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.0005, 2, 20}))
+        F(type_ddl_apply_duration, Histogram, {{"type", "ddl_apply_duration"}}, ExpBuckets{0.0005, 2, 20}))                         \
+    M(tiflash_tmt_merge_count, "Total count of TMT Engine Merge", Counter, 0)                                                       \
+    M(tiflash_tmt_merge_duration_seconds, "Bucketed histogram of tmt merge duration", Histogram, 1,                                 \
+        F(type_tmt_merge_duration, Histogram, {{"type", "tmt_merge_duration"}}, ExpBuckets{0.0005, 2, 20}))                         \
+    M(tiflash_read_index_count, "Total number of read index request", Counter, 0)                                                   \
+    M(tiflash_read_index_duration_seconds, "Bucketed histogram of read_index duration", Histogram, 1,                               \
+        F(type_read_index_duration, Histogram, {{"type", "tmt_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                   \
+    M(tiflash_wait_index_duration_seconds, "Bucketed histogram of wait_index duration", Histogram, 1,                               \
+        F(type_wait_index_duration, Histogram, {{"type", "tmt_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                   \
+    M(tiflash_tmt_write_parts_count, "Total count of TMT Engine write parts", Counter, 0)                                           \
+    M(tiflash_tmt_write_parts_duration_seconds, "Bucketed histogram of tmt write parts duration", Histogram, 1,                     \
+        F(type_tmt_write_duration, Histogram, {{"type", "tmt_write_parts_duration"}}, ExpBuckets{0.0005, 2, 20}))                   \
+    M(tiflash_tmt_read_parts_number, "Total number of TMT Engine read parts", Gauge, 0)
 
 template <typename T>
 struct MetricFamilyTrait

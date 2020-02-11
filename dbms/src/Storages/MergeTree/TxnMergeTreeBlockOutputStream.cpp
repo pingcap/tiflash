@@ -1,3 +1,4 @@
+#include <Common/TiFlashMetrics.h>
 #include <Interpreters/PartLog.h>
 #include <Storages/MergeTree/TxnMergeTreeBlockOutputStream.h>
 #include <Storages/StorageMergeTree.h>
@@ -20,6 +21,8 @@ void TxnMergeTreeBlockOutputStream::write(Block && block)
     MergeTreeData::MutableDataPartPtr part = storage.writer.writeTempPart(part_block);
     storage.data.renameTempPartAndAdd(part, &storage.increment);
 
+    GET_METRIC(storage.context.getTiFlashMetrics(), tiflash_tmt_write_parts_count).Increment();
+    GET_METRIC(storage.context.getTiFlashMetrics(), tiflash_tmt_write_parts_duration_seconds).Observe(watch.elapsedSeconds());
     PartLog::addNewPartToTheLog(storage.context, *part, watch.elapsed());
 
     storage.merge_task_handle->wake();

@@ -27,6 +27,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Common/SimpleIncrement.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/interpolate.h>
 #include <Common/typeid_cast.h>
 #include <Storages/MergeTree/TMTDataPartProperty.h>
@@ -34,6 +35,7 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/CHTableHandle.h>
 #include <Storages/Transaction/TiDB.h>
+#include <ext/scope_guard.h>
 
 #include <Poco/File.h>
 
@@ -672,6 +674,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
                 throw Exception("TMTContext is not initialized, throw exception", ErrorCodes::LOGICAL_ERROR);
             }
 
+            GET_METRIC(data.context.getTiFlashMetrics(), tiflash_tmt_merge_count).Increment();
+
             const bool pk_is_uint64 = getTMTPKType(*data.primary_key_data_types[0]) == TMTPKType::UINT64;
 
             const auto handle_col_name = data.getPrimarySortDescription()[0].column_name;
@@ -733,6 +737,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart
     auto compression_settings = data.context.chooseCompressionSettings(
             merge_entry->total_size_bytes_compressed,
             static_cast<double> (merge_entry->total_size_bytes_compressed) / data.getTotalActiveSizeInBytes());
+
+    Stopwatch watch;
+    SCOPE_EXIT ({
+        GET_METRIC(data.context.getTiFlashMetrics(), tiflash_tmt_merge_duration_seconds).Observe(watch.elapsedSeconds());
+    });
 
     MergedBlockOutputStream to{
         data, new_part_tmp_path, merging_columns, false, compression_settings, merged_column_to_size, aio_threshold};
