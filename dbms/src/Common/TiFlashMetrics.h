@@ -46,15 +46,15 @@ namespace DB
     M(tiflash_tmt_merge_count, "Total count of TMT engine Merge", Counter)                                                                \
     M(tiflash_tmt_merge_duration_seconds, "Bucketed histogram of TMT engine merge duration", Histogram,                                   \
         F(type_tmt_merge_duration, {{"type", "tmt_merge_duration"}}, ExpBuckets{0.0005, 2, 20}))                                          \
-    M(tiflash_read_index_count, "Total number of read index request", Counter)                                                            \
-    M(tiflash_read_index_duration_seconds, "Bucketed histogram of read_index duration", Histogram,                                        \
-        F(type_read_index_duration, {{"type", "tmt_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                                    \
-    M(tiflash_wait_index_duration_seconds, "Bucketed histogram of wait_index duration", Histogram,                                        \
-        F(type_wait_index_duration, {{"type", "tmt_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                                    \
     M(tiflash_tmt_write_parts_count, "Total count of TMT engine write parts", Counter)                                                    \
     M(tiflash_tmt_write_parts_duration_seconds, "Bucketed histogram of TMT engine write parts duration", Histogram,                       \
         F(type_tmt_write_duration, {{"type", "tmt_write_parts_duration"}}, ExpBuckets{0.0005, 2, 20}))                                    \
-    M(tiflash_tmt_read_parts_number, "Total number of TMT engine read parts", Gauge)
+    M(tiflash_tmt_read_parts_count, "Total number of TMT engine read parts", Gauge)                                                       \
+    M(tiflash_raft_read_index_count, "Total number of raft read index request", Counter)                                                  \
+    M(tiflash_raft_read_index_duration_seconds, "Bucketed histogram of raft read_index duration", Histogram,                              \
+        F(type_raft_read_index_duration, {{"type", "tmt_raft_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                          \
+    M(tiflash_raft_wait_index_duration_seconds, "Bucketed histogram of raft_wait_index duration", Histogram,                              \
+        F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))
 
 struct ExpBuckets
 {
