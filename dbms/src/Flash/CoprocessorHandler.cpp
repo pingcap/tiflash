@@ -43,7 +43,7 @@ grpc::Status CoprocessorHandler::execute()
         {
             case COP_REQ_TYPE_DAG:
             {
-                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, cop_type_dag).Increment();
+                GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_count, type_cop_dag).Increment();
                 std::vector<std::pair<DecodedTiKVKey, DecodedTiKVKey>> key_ranges;
                 for (auto & range : cop_request->ranges())
                 {
