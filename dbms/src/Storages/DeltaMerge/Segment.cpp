@@ -1,5 +1,3 @@
-#include <gperftools/malloc_extension.h>
-
 #include <numeric>
 
 #include <DataTypes/DataTypeFactory.h>
