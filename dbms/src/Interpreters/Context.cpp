@@ -137,7 +137,6 @@ struct ContextShared
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable PersistedCachePtr persisted_cache;              /// The persisted cache of compressed blocks written in fast(er) disk device.
     mutable DBGInvoker dbg_invoker;                         /// Execute inner functions, debug only.
-    mutable TMTContextPtr tmt_context;
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache;     /// Cache of minmax index in compressed files.
     ProcessList process_list;                               /// Executing queries at the moment.
@@ -146,6 +145,7 @@ struct ContextShared
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
     BackgroundProcessingPoolPtr background_pool;            /// The thread pool for the background work performed by the tables.
+    mutable TMTContextPtr tmt_context;                      /// Context of TiFlash. Note that this should be free before background_pool.
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<Compiler> compiler;                     /// Used for dynamic compilation of queries' parts if it necessary.
     std::shared_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
