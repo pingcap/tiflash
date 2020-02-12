@@ -38,7 +38,7 @@ ThreadPool::Job BatchCommandsHandler::handleCommandJob(
             return;
         }
 
-        GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_count, batch_type_cop).Increment();
+        GET_METRIC(batch_commands_context.metrics, tiflash_coprocessor_request_count, type_batch_cop).Increment();
 
         const auto & cop_req = req.coprocessor();
         auto cop_resp = resp.mutable_coprocessor();
