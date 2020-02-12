@@ -181,8 +181,9 @@ void AlterCommand::apply(ColumnsDescription & columns_description) const
         auto default_it = columns_description.defaults.find(old_column_name);
         if (default_it != columns_description.defaults.end())
         {
+            auto default_value = default_it->second;
             columns_description.defaults.erase(default_it->first);
-            columns_description.defaults.emplace(new_column_name, default_it->second);
+            columns_description.defaults.emplace(new_column_name, default_value);
         }
     }
     else
