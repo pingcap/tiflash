@@ -82,8 +82,13 @@ if (USE_INTERNAL_CCTZ_LIBRARY)
     add_subdirectory (cctz-cmake)
 endif ()
 
+# TODO: remove tcmalloc
 if (ENABLE_TCMALLOC AND USE_INTERNAL_GPERFTOOLS_LIBRARY)
     add_subdirectory (libtcmalloc)
+endif ()
+
+if (ENABLE_JEMALLOC AND USE_INTERNAL_JEMALLOC_LIBRARY)
+    add_subdirectory (jemalloc-cmake)
 endif ()
 
 if (NOT ARCH_ARM)
