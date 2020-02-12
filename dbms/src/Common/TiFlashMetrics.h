@@ -18,7 +18,6 @@ namespace DB
 /// 2. Keep metrics with same prefix next to each other.
 /// 3. Add metrics of new subsystems at tail.
 /// 4. Keep it proper formatted using clang-format.
-
 #define APPLY_FOR_METRICS(M, F)                                                                                                           \
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                            \
         F(batch_type_cop, {"batch_type", "cop"}), F(type_cop, {"type", "cop"}), F(cop_type_dag, {"cop_type", "dag"}))                     \
@@ -44,18 +43,18 @@ namespace DB
         F(type_alter_column_tp, {"type", "alter_column_type"}), F(type_rename_column, {"type", "rename_column"}))                         \
     M(tiflash_schema_apply_duration_seconds, "Bucketed histogram of ddl apply duration", Histogram,                                       \
         F(type_ddl_apply_duration, {{"req", "ddl_apply_duration"}}, ExpBuckets{0.0005, 2, 20}))                                           \
-    M(tiflash_tmt_merge_count, "Total count of TMT Engine Merge", Counter)                                                                \
-    M(tiflash_tmt_merge_duration_seconds, "Bucketed histogram of tmt merge duration", Histogram,                                          \
+    M(tiflash_tmt_merge_count, "Total count of TMT engine Merge", Counter)                                                                \
+    M(tiflash_tmt_merge_duration_seconds, "Bucketed histogram of TMT engine merge duration", Histogram,                                   \
         F(type_tmt_merge_duration, {{"type", "tmt_merge_duration"}}, ExpBuckets{0.0005, 2, 20}))                                          \
     M(tiflash_read_index_count, "Total number of read index request", Counter)                                                            \
     M(tiflash_read_index_duration_seconds, "Bucketed histogram of read_index duration", Histogram,                                        \
         F(type_read_index_duration, {{"type", "tmt_read_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                                    \
     M(tiflash_wait_index_duration_seconds, "Bucketed histogram of wait_index duration", Histogram,                                        \
         F(type_wait_index_duration, {{"type", "tmt_wait_index_duration"}}, ExpBuckets{0.0005, 2, 20}))                                    \
-    M(tiflash_tmt_write_parts_count, "Total count of TMT Engine write parts", Counter)                                                    \
-    M(tiflash_tmt_write_parts_duration_seconds, "Bucketed histogram of tmt write parts duration", Histogram,                              \
+    M(tiflash_tmt_write_parts_count, "Total count of TMT engine write parts", Counter)                                                    \
+    M(tiflash_tmt_write_parts_duration_seconds, "Bucketed histogram of TMT engine write parts duration", Histogram,                       \
         F(type_tmt_write_duration, {{"type", "tmt_write_parts_duration"}}, ExpBuckets{0.0005, 2, 20}))                                    \
-    M(tiflash_tmt_read_parts_number, "Total number of TMT Engine read parts", Gauge)
+    M(tiflash_tmt_read_parts_number, "Total number of TMT engine read parts", Gauge)
 
 struct ExpBuckets
 {
