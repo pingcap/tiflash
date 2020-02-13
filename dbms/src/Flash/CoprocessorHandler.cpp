@@ -1,3 +1,4 @@
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
@@ -31,10 +32,9 @@ CoprocessorHandler::CoprocessorHandler(
 
 grpc::Status CoprocessorHandler::execute()
 {
-    auto start_time = std::chrono::system_clock::now();
+    Stopwatch watch;
     SCOPE_EXIT({
-        std::chrono::duration<double> duration_sec = std::chrono::system_clock::now() - start_time;
-        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_cop).Observe(duration_sec.count());
+        GET_METRIC(cop_context.metrics, tiflash_coprocessor_request_handle_seconds, type_cop).Observe(watch.elapsedSeconds());
     });
 
     try
