@@ -75,7 +75,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return false;
         }
         Stopwatch watch;
-        SCOPE_EXIT({ context.getTiFlashMetrics()->tiflash_schema_apply_duration_seconds.get().Observe(watch.elapsedSeconds()); });
+        SCOPE_EXIT({ GET_METRIC(context.getTiFlashMetrics(), tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
         LOG_INFO(log,
             "start to sync schemas. current version is: " + std::to_string(cur_version)
