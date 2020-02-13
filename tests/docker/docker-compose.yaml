@@ -84,11 +84,7 @@ services:
     restart: on-failure
   # tiflash0 container is for tests under fullstack-test directory
   tiflash0:
-    build:
-      context: ./
-      dockerfile: Dockerfile-tiflash-with-mysql-client
-      args:
-        TAG: ${TAG:-master}
+    image: hub.pingcap.net/tiflash/tics:${TAG:-master}
     ports:
       - "3930:3930"
       - "9000:9000"
