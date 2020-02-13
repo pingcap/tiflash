@@ -15,4 +15,7 @@ image_tiflash_release:
 	docker build -f Dockerfile-tiflash-centos7 -t hub.pingcap.net/tiflash/tiflash-server-centos7 .
 
 image_tiflash_ci:
-	docker build -f Dockerfile-tiflash-centos7 -t hub.pingcap.net/tiflash/tiflash-ci-centos7 .
+	docker build -f Dockerfile-tiflash-ci -t hub.pingcap.net/tiflash/tiflash-ci-centos7 .
+
+image_tiflash_ci_base:
+	docker build -f Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base .
