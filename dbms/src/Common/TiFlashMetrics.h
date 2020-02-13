@@ -20,7 +20,7 @@ namespace DB
 /// 4. Keep it proper formatted using clang-format.
 #define APPLY_FOR_METRICS(M, F)                                                                                                           \
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_batch, {"type", "batch"}),                            \
-        F(batch_type_cop, {"batch_type", "cop"}), F(type_cop, {"type", "cop"}), F(cop_type_dag, {"cop_type", "dag"}))                     \
+        F(type_batch_cop, {"type", "batch_cop"}), F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}))                     \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}))                                                                                                 \
