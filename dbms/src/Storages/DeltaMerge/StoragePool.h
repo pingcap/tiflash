@@ -22,6 +22,8 @@ public:
 
     StoragePool(const String & name, const String & path);
 
+    void restore();
+
     PageId maxLogPageId() { return max_log_page_id; }
     PageId maxDataPageId() { return max_data_page_id; }
     PageId maxMetaPageId() { return max_meta_page_id; }

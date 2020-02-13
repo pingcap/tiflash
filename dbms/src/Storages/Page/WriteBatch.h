@@ -23,6 +23,8 @@ public:
         UPSERT = 3,
     };
 
+    using Version = UInt64;
+
 private:
     struct Write
     {
@@ -90,8 +92,13 @@ public:
         writes.swap(tmp);
     }
 
+    void setVersion(Version version_) { version = version_; }
+
+    Version getVersion() const { return version; }
+
 private:
-    Writes writes;
+    Writes  writes;
+    Version version = 0;
 };
 
 } // namespace DB

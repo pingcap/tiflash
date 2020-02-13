@@ -53,7 +53,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     WBSize meta_write_bytes = 0;
     size_t data_write_bytes = 0;
 
-    meta_write_bytes += sizeof(WBSize) + sizeof(PageFileVersion);
+    meta_write_bytes += sizeof(WBSize) + sizeof(PageFileVersion) + sizeof(WriteBatch::Version);
 
     for (const auto & write : wb.getWrites())
     {
@@ -86,6 +86,7 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     PageUtil::put(meta_pos, meta_write_bytes);
     PageUtil::put(meta_pos, PageFile::CURRENT_VERSION);
+    PageUtil::put(meta_pos, wb.getVersion());
 
     PageOffset page_data_file_off = page_file.getDataFileAppendPos();
     for (const auto & write : wb.getWrites())
@@ -175,10 +176,20 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
             break;
         }
 
-        // this field is always true now
-        const auto version = PageUtil::get<PageFileVersion>(pos);
-        if (version != PageFile::CURRENT_VERSION)
+        WriteBatch::Version wb_version = 0;
+        const auto          version    = PageUtil::get<PageFileVersion>(pos);
+        if (version == 1)
+        {
+            wb_version = 0;
+        }
+        else if (version == PageFile::CURRENT_VERSION)
+        {
+            wb_version = PageUtil::get<WriteBatch::Version>(pos);
+        }
+        else
+        {
             throw Exception("Version not match, version: " + DB::toString(version), ErrorCodes::LOGICAL_ERROR);
+        }
 
         // check the checksum of WriteBatch
         const auto wb_bytes_without_checksum = wb_bytes - sizeof(Checksum);
@@ -245,6 +256,145 @@ std::pair<UInt64, UInt64> analyzeMetaFile( //
 }
 } // namespace PageMetaFormat
 
+PageFile::MetaMergingReader::~MetaMergingReader()
+{
+    page_file.free(meta_buffer, meta_size);
+}
+
+void PageFile::MetaMergingReader::initialize()
+{
+    if (status == Status::Opened)
+        return;
+    else if (status == Status::Finished)
+        throw Exception("Try to reopen finished merging reader: " + toString(), ErrorCodes::LOGICAL_ERROR);
+
+    const auto path = page_file.metaPath();
+    Poco::File file(path);
+    if (unlikely(!file.exists()))
+        throw Exception("Try to read meta of " + page_file.toString() + ", but not exists. Path: " + path, ErrorCodes::LOGICAL_ERROR);
+
+    meta_size    = file.getSize();
+    const int fd = PageUtil::openFile<true, false>(path);
+    // File not exists.
+    if (unlikely(!fd))
+        throw Exception("Try to read meta of " + page_file.toString() + ", but open file error. Path: " + path, ErrorCodes::LOGICAL_ERROR);
+
+    meta_buffer = (char *)page_file.alloc(meta_size);
+    PageUtil::readFile(fd, 0, meta_buffer, meta_size, path);
+    status = Status::Opened;
+}
+
+bool PageFile::MetaMergingReader::hasNext() const
+{
+    return (status == Status::Uninitialized) || (status == Status::Opened && meta_file_offset < meta_size);
+}
+
+void PageFile::MetaMergingReader::moveNext()
+{
+    curr_edit.clear();
+    curr_wb_version = 0;
+
+    if (status == Status::Uninitialized)
+        initialize();
+
+    char * meta_data_end = meta_buffer + meta_size;
+    char * pos           = meta_buffer + meta_file_offset;
+    if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
+    {
+        LOG_WARNING(page_file.log, "Incomplete write batch @" + toString() + ", ignored.");
+        status = Status::Finished;
+        return;
+    }
+    const char * wb_start_pos = pos;
+    const auto   wb_bytes     = PageUtil::get<PageMetaFormat::WBSize>(pos);
+    if (wb_start_pos + wb_bytes > meta_data_end)
+    {
+        LOG_WARNING(page_file.log, "Incomplete write batch @" + toString() + ", ignored.");
+        status = Status::Finished;
+        return;
+    }
+
+    WriteBatch::Version wb_version     = 0;
+    const auto          binary_version = PageUtil::get<PageMetaFormat::PageFileVersion>(pos);
+    if (binary_version == 1)
+    {
+        wb_version = 0;
+    }
+    else if (binary_version == PageFile::CURRENT_VERSION)
+    {
+        wb_version = PageUtil::get<WriteBatch::Version>(pos);
+    }
+    else
+    {
+        throw Exception("PageFile binary version not match, unknown version: " + DB::toString(binary_version), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // check the checksum of WriteBatch
+    const auto wb_bytes_without_checksum = wb_bytes - sizeof(PageMetaFormat::Checksum);
+    const auto wb_checksum               = PageUtil::get<PageMetaFormat::Checksum, false>(wb_start_pos + wb_bytes_without_checksum);
+    const auto checksum_calc             = CityHash_v1_0_2::CityHash64(wb_start_pos, wb_bytes_without_checksum);
+    if (wb_checksum != checksum_calc)
+    {
+        std::stringstream ss;
+        ss << "expected: " << std::hex << wb_checksum << ", but: " << checksum_calc;
+        throw Exception("Write batch checksum not match, path: " + page_file.folderPath() + ", offset: "
+                            + DB::toString(wb_start_pos - meta_buffer) + ", bytes: " + DB::toString(wb_bytes) + ", " + ss.str(),
+                        ErrorCodes::CHECKSUM_DOESNT_MATCH);
+    }
+
+    // recover WriteBatch
+    size_t curr_wb_data_offset = 0;
+    while (pos < wb_start_pos + wb_bytes_without_checksum)
+    {
+        const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
+        switch (write_type)
+        {
+        case WriteBatch::WriteType::PUT:
+        case WriteBatch::WriteType::UPSERT:
+        {
+            auto      page_id = PageUtil::get<PageId>(pos);
+            PageEntry entry;
+            entry.file_id  = page_file.getFileId();
+            entry.level    = page_file.getLevel();
+            entry.tag      = PageUtil::get<PageMetaFormat::PageTag>(pos);
+            entry.offset   = PageUtil::get<PageMetaFormat::PageOffset>(pos);
+            entry.size     = PageUtil::get<PageSize>(pos);
+            entry.checksum = PageUtil::get<PageMetaFormat::Checksum>(pos);
+
+            if (write_type == WriteBatch::WriteType::PUT)
+                curr_edit.put(page_id, entry);
+            else if (write_type == WriteBatch::WriteType::UPSERT)
+                curr_edit.upsertPage(page_id, entry);
+
+            curr_wb_data_offset += entry.size;
+            break;
+        }
+        case WriteBatch::WriteType::DEL:
+        {
+            auto page_id = PageUtil::get<PageId>(pos);
+            curr_edit.del(page_id);
+            break;
+        }
+        case WriteBatch::WriteType::REF:
+        {
+            const auto ref_id  = PageUtil::get<PageId>(pos);
+            const auto page_id = PageUtil::get<PageId>(pos);
+            curr_edit.ref(ref_id, page_id);
+            break;
+        }
+        }
+    }
+    // move `pos` over the checksum of WriteBatch
+    pos += sizeof(PageMetaFormat::Checksum);
+
+    if (unlikely(pos != wb_start_pos + wb_bytes))
+        throw Exception("pos not match", ErrorCodes::LOGICAL_ERROR);
+
+    curr_wb_version  = wb_version;
+    meta_file_offset = pos - meta_buffer;
+    data_file_offset += curr_wb_data_offset;
+}
+
 // =========================================================
 // PageFile::Writer
 // =========================================================
@@ -291,6 +441,11 @@ void PageFile::Writer::write(const WriteBatch & wb, PageEntriesEdit & edit)
 
     page_file.data_file_pos += data_buf.size();
     page_file.meta_file_pos += meta_buf.size();
+}
+
+PageFileIdAndLevel PageFile::Writer::fileIdLevel() const
+{
+    return page_file.fileIdLevel();
 }
 
 // =========================================================
@@ -418,7 +573,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
 // PageFile
 // =========================================================
 
-const PageFile::Version PageFile::CURRENT_VERSION = 1;
+const PageFile::Version PageFile::CURRENT_VERSION = 2;
 
 PageFile::PageFile(PageFileId file_id_, UInt32 level_, const std::string & parent_path, PageFile::Type type_, bool is_create, Logger * log_)
     : file_id(file_id_), level(level_), type(type_), parent_path(parent_path), data_file_pos(0), meta_file_pos(0), log(log_)
@@ -612,7 +767,7 @@ bool PageFile::isExist() const
 
 UInt64 PageFile::getDataFileSize() const
 {
-    if (type == Type::Legacy)
+    if (type != Type::Formal)
         return 0;
     Poco::File file(dataPath());
     return file.getSize();

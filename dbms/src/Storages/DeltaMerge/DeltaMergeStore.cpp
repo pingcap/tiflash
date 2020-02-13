@@ -77,6 +77,7 @@ DeltaMergeStore::DeltaMergeStore(Context &             db_context,
 
     try
     {
+        storage_pool.restore(); // restore from disk
         if (!storage_pool.maxMetaPageId())
         {
             // Create the first segment.

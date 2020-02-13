@@ -59,7 +59,9 @@ protected:
 
     std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
     {
-        return std::make_shared<PageStorage>("test.t", path, config_);
+        auto storage = std::make_shared<PageStorage>("test.t", path, config_);
+        storage->restore();
+        return storage;
     }
 
 protected:
@@ -69,6 +71,7 @@ protected:
 };
 
 TEST_F(PageStorage_test, WriteRead)
+try
 {
     const UInt64 tag    = 0;
     const size_t buf_sz = 1024;
@@ -102,8 +105,10 @@ TEST_F(PageStorage_test, WriteRead)
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
 }
+CATCH
 
 TEST_F(PageStorage_test, WriteMultipleBatchRead)
+try
 {
     const UInt64 tag    = 0;
     const size_t buf_sz = 1024;
@@ -141,6 +146,7 @@ TEST_F(PageStorage_test, WriteMultipleBatchRead)
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));
     }
 }
+CATCH
 
 TEST_F(PageStorage_test, WriteReadAfterGc)
 {
@@ -687,9 +693,8 @@ try
     PageEntriesVersionSetWithDelta version_restored_with_snapshot(config.version_set_config, storage->log);
     // Restore a new version set with snapshot WriteBatch
     {
-        WriteBatch wb;
         auto       snapshot = original_version.getSnapshot();
-        storage->prepareSnapshotWriteBatch(snapshot, wb);
+        WriteBatch wb       = storage->prepareSnapshotWriteBatch(snapshot);
 
         PageEntriesEdit edit;
 
@@ -763,10 +768,11 @@ CATCH
 TEST_F(PageStorage_test, ListPageFiles)
 try
 {
-    constexpr size_t buf_sz = 512;
+    constexpr size_t buf_sz = 128;
     char             c_buff[buf_sz];
 
     {
+        // Create a Legacy PageFile_1_0
         WriteBatch wb;
         memset(c_buff, 0xf, buf_sz);
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
@@ -778,6 +784,7 @@ try
     }
 
     {
+        // Create a Checkpoint PageFile_2_0
         WriteBatch wb;
         memset(c_buff, 0xf, buf_sz);
         auto buf = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));

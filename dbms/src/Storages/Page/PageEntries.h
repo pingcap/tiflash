@@ -225,6 +225,13 @@ void PageEntriesMixin<T>::put(PageId page_id, const PageEntry & entry)
     else
     {
         // replace ori Page{normal_page_id}'s entry but inherit ref-counting
+        if (entry.tag < ori_iter->second.tag)
+        {
+            // LOG_WARNING(log,
+            //             "Try to apply Page" + DB::toString(page_id) + ", normal Page" + DB::toString(normal_page_id) + " version "
+            //                 + DB::toString(old_iter->second.tag) + " with older version " + DB::toString(entry.tag) + ", ignored.");
+            return;
+        }
         const UInt32 page_ref_count      = ori_iter->second.ref;
         normal_pages[normal_page_id]     = entry;
         normal_pages[normal_page_id].ref = page_ref_count + is_new_ref_pair_inserted;

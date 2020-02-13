@@ -38,6 +38,8 @@ public:
 
         void write(const WriteBatch & wb, PageEntriesEdit & edit);
 
+        PageFileIdAndLevel fileIdLevel() const;
+
     private:
         PageFile & page_file;
         bool       sync_on_write;
@@ -75,6 +77,72 @@ public:
         {
             return std::make_pair(lhs.file_id, lhs.level) < std::make_pair(rhs.file_id, rhs.level);
         }
+    };
+
+    class MetaMergingReader : private boost::noncopyable
+    {
+
+    public:
+        MetaMergingReader(PageFile & page_file_) : page_file(page_file_) {}
+
+        ~MetaMergingReader();
+
+        enum class Status
+        {
+            Uninitialized = 0,
+            Opened,
+            Finished,
+        };
+
+        bool operator<(const MetaMergingReader & rhs) const
+        {
+            // priority_queue always pop the "biggest" elem
+            if (curr_wb_version == rhs.curr_wb_version)
+                return rhs.page_file.fileIdLevel() < page_file.fileIdLevel();
+            return rhs.curr_wb_version < curr_wb_version;
+        }
+
+    public:
+        bool hasNext() const;
+
+        void moveNext();
+
+        PageEntriesEdit getEdits() { return std::move(curr_edit); }
+
+        void setPageFileOffsets() { page_file.setFileAppendPos(meta_file_offset, data_file_offset); }
+
+        String toString() const
+        {
+            return "MergingReader of " + page_file.toString() + ", sequence no: " + DB::toString(curr_wb_version)
+                + ", meta offset: " + DB::toString(meta_file_offset) + ", data offset: " + DB::toString(data_file_offset);
+        }
+
+        WriteBatch::Version writeBatchVersion() const { return curr_wb_version; }
+        PageFileIdAndLevel  fileIdLevel() const { return page_file.fileIdLevel(); }
+        PageFile &          belongingPageFile() { return page_file; }
+
+    private:
+        void initialize();
+
+    private:
+        PageFile & page_file;
+
+        Status status = Status::Uninitialized;
+
+        WriteBatch::Version curr_wb_version;
+        PageEntriesEdit     curr_edit;
+
+        char * meta_buffer;
+        size_t meta_size;
+
+        size_t meta_file_offset = 0;
+        size_t data_file_offset = 0;
+    };
+    using MetaMergingReaderPtr = std::shared_ptr<MetaMergingReader>;
+
+    struct MergingPtrComparator
+    {
+        bool operator()(const MetaMergingReaderPtr & lhs, const MetaMergingReaderPtr & rhs) const { return *lhs < *rhs; }
     };
 
 public:
@@ -129,6 +197,7 @@ public:
     /// Destroy underlying system files.
     void destroy() const;
 
+    MetaMergingReaderPtr createMetaMergingReader() { return std::make_unique<MetaMergingReader>(*this); }
     /// Return a writer bound with this PageFile object.
     /// Note that the user MUST keep the PageFile object around before this writer being freed.
     std::unique_ptr<Writer> createWriter(bool sync_on_write) { return std::make_unique<Writer>(*this, sync_on_write); }
@@ -148,13 +217,21 @@ public:
     UInt32             getLevel() const { return level; }
     PageFileIdAndLevel fileIdLevel() const { return std::make_pair(file_id, level); }
     bool               isValid() const { return file_id; }
-    UInt64             getDataFileAppendPos() const { return data_file_pos; }
-    UInt64             getDataFileSize() const;
     bool               isExist() const;
     void               removeDataIfExists() const;
     Type               getType() const { return type; }
 
+    void setFileAppendPos(size_t meta_pos, size_t data_pos)
+    {
+        meta_file_pos = meta_pos;
+        data_file_pos = data_pos;
+    }
+    UInt64 getDataFileAppendPos() const { return data_file_pos; }
+    UInt64 getDataFileSize() const;
+
     String folderPath() const;
+
+    String toString() const { return "PageFile_" + DB::toString(file_id) + "_" + DB::toString(level) + ", type: " + typeToString(type); }
 
 private:
     /// Create a new page file.
@@ -180,5 +257,6 @@ private:
 
     Poco::Logger * log = nullptr;
 };
+using PageFileSet = std::set<PageFile, PageFile::Comparator>;
 
 } // namespace DB

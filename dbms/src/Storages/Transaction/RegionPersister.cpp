@@ -75,6 +75,8 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 
 RegionMap RegionPersister::restore(IndexReaderCreateFunc * func)
 {
+    page_storage.restore();
+
     RegionMap regions;
     auto acceptor = [&](const Page & page) {
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());

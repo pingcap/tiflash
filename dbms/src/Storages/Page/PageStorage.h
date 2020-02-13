@@ -1,5 +1,6 @@
 #pragma once
 
+#include <deque>
 #include <functional>
 #include <optional>
 #include <set>
@@ -44,6 +45,8 @@ public:
         size_t  merge_hint_low_used_file_total_size = PAGE_FILE_ROLL_SIZE;
         size_t  merge_hint_low_used_file_num        = 10;
 
+        size_t num_write_slots = 1;
+
         // Minimum number of legacy files to be selected for compaction
         size_t gc_compact_legacy_min_num = 3;
 
@@ -78,6 +81,8 @@ public:
 public:
     PageStorage(String name, const String & storage_path, const Config & config_);
 
+    void restore();
+
     PageId getMaxId();
 
     void write(const WriteBatch & write_batch);
@@ -100,45 +105,49 @@ public:
     // `remover` will be called with living normal page ids after gc run a round.
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover);
 
-    static std::set<PageFile, PageFile::Comparator>
+    static PageFileSet
     listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option = ListPageFilesOption());
 
     static std::optional<PageFile> tryGetCheckpoint(const String & storage_path, Poco::Logger * page_file_log, bool remove_old = false);
 
 private:
-    PageFile::Writer & getWriter();
-    ReaderPtr          getReader(const PageFileIdAndLevel & file_id_level);
+    WriterPtr getWriter(PageFile & page_file);
+    ReaderPtr getReader(const PageFileIdAndLevel & file_id_level);
     // gc helper functions
     using GcCandidates = std::set<PageFileIdAndLevel>;
     using GcLivesPages = std::map<PageFileIdAndLevel, std::pair<size_t, PageIds>>;
-    GcCandidates gcSelectCandidateFiles(const std::set<PageFile, PageFile::Comparator> & page_files,
-                                        const GcLivesPages &                             file_valid_pages,
-                                        const PageFileIdAndLevel &                       writing_file_id_level,
-                                        UInt64 &                                         candidate_total_size,
-                                        size_t &                                         migrate_page_count) const;
+    GcCandidates gcSelectCandidateFiles(const PageFileSet &        page_files,
+                                        const GcLivesPages &       file_valid_pages,
+                                        const PageFileIdAndLevel & writing_file_id_level,
+                                        UInt64 &                   candidate_total_size,
+                                        size_t &                   migrate_page_count) const;
 
-    std::set<PageFile, PageFile::Comparator> gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files);
+    PageFileSet gcCompactLegacy(PageFileSet &&                       page_files,
+                                const std::set<PageFileIdAndLevel> & writing_file_id_levels);
 
-    void prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb);
+    WriteBatch prepareSnapshotWriteBatch(const SnapshotPtr snapshot, const WriteBatch::Version wb_version);
 
-    void archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files_to_archieve);
+    void archievePageFiles(const PageFileSet & page_files_to_archieve);
 
     PageEntriesEdit gcMigratePages(const SnapshotPtr &  snapshot,
                                    const GcLivesPages & file_valid_pages,
                                    const GcCandidates & merge_files,
                                    size_t               migrate_page_count) const;
 
-    static void gcRemoveObsoleteData(std::set<PageFile, PageFile::Comparator> & page_files,
-                                     const PageFileIdAndLevel &                 writing_file_id_level,
-                                     const std::set<PageFileIdAndLevel> &       live_files);
+    static void gcRemoveObsoleteData(PageFileSet &                        page_files,
+                                     const PageFileIdAndLevel &           writing_file_id_level,
+                                     const std::set<PageFileIdAndLevel> & live_files);
 
 private:
     String storage_name; // Identify between different Storage
     String storage_path;
     Config config;
 
-    PageFile  write_file;
-    WriterPtr write_file_writer;
+    std::mutex              write_mutex;
+    std::condition_variable write_mutex_cv;
+    std::vector<PageFile>   write_files;
+    std::deque<WriterPtr>   idle_writers;
+
 
     OpenReadFiles open_read_files;
     std::mutex    open_read_files_mutex; // A mutex only used to protect open_read_files.
@@ -147,8 +156,6 @@ private:
     Poco::Logger * log;
 
     VersionedPageEntries versioned_page_entries;
-
-    std::mutex write_mutex;
 
     std::atomic<bool> gc_is_running = false;
 

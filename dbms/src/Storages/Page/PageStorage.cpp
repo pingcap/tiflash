@@ -1,3 +1,4 @@
+#include <queue>
 #include <set>
 #include <utility>
 
@@ -18,8 +19,10 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-std::set<PageFile, PageFile::Comparator>
-PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option)
+using MetaMergingQueue
+    = std::priority_queue<PageFile::MetaMergingReaderPtr, std::vector<PageFile::MetaMergingReaderPtr>, PageFile::MergingPtrComparator>;
+
+PageFileSet PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_file_log, ListPageFilesOption option)
 {
     // collect all pages from `storage_path` and recover to `PageFile` objects
     Poco::File folder(storage_path);
@@ -35,7 +38,7 @@ PageStorage::listAllPageFiles(const String & storage_path, Poco::Logger * page_f
         return {};
     }
 
-    std::set<PageFile, PageFile::Comparator> page_files;
+    PageFileSet page_files;
     for (const auto & name : file_names)
     {
         auto [page_file, page_file_type] = PageFile::recover(storage_path, name, page_file_log);
@@ -107,15 +110,22 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     : storage_name(std::move(name)),
       storage_path(storage_path_),
       config(config_),
+      write_files(std::max(1UL, config.num_write_slots)),
       page_file_log(&Poco::Logger::get("PageFile")),
       log(&Poco::Logger::get("PageStorage")),
       versioned_page_entries(config.version_set_config, log)
 {
+    // at least 1 write slots
+    config.num_write_slots = std::max(1UL, config.num_write_slots);
+}
+
+void PageStorage::restore()
+{
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
-    opt.remove_tmp_files  = true;
-    opt.ignore_checkpoint = true;
-    auto page_files       = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
+    opt.remove_tmp_files   = true;
+    opt.ignore_checkpoint  = true;
+    PageFileSet page_files = PageStorage::listAllPageFiles(storage_path, page_file_log, opt);
     // recover current version from both formal and legacy page files
 
 #ifdef DELTA_VERSION_SET
@@ -123,11 +133,10 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     auto checkpoint_file = PageStorage::tryGetCheckpoint(storage_path, page_file_log, true);
     if (checkpoint_file)
     {
-        std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
+        PageFileSet page_files_to_archieve;
         for (auto itr = page_files.begin(); itr != page_files.end();)
         {
-            if (itr->fileIdLevel() < checkpoint_file->fileIdLevel() //
-                || itr->fileIdLevel() == checkpoint_file->fileIdLevel())
+            if (itr->fileIdLevel() <= checkpoint_file->fileIdLevel())
             {
                 page_files_to_archieve.insert(*itr);
                 itr = page_files.erase(itr);
@@ -142,29 +151,51 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
         page_files.insert(*checkpoint_file);
     }
 
+    MetaMergingQueue merging_queue;
     for (auto & page_file : page_files)
     {
+        if (!(page_file.getType() == PageFile::Type::Formal || page_file.getType() == PageFile::Type::Legacy
+              || page_file.getType() == PageFile::Type::Checkpoint))
+            throw Exception("Try to recover from " + page_file.toString() + ", illegal type.", ErrorCodes::LOGICAL_ERROR);
+
+        auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
+        // Read one valid WriteBatch
+        reader->moveNext();
+        merging_queue.push(std::move(reader));
+
+        // We need to keep a PageFile with largest FileID in write_files
+        if (page_file.getLevel() == 0)
+            write_files[0] = page_file;
+    }
+
+    while (!merging_queue.empty())
+    {
+        auto reader = merging_queue.top();
+        merging_queue.pop();
+        LOG_TRACE(log, storage_name << " recovering from " + reader->toString());
         try
         {
-            PageEntriesEdit edit;
-            const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
-
-            // Only level 0 is writable.
-            if (page_file.getLevel() == 0)
-            {
-                write_file = page_file;
-            }
-
-            // apply edit to new version
-            versioned_page_entries.apply(edit);
+            // Apply current WriteBatch edits
+            auto edits = reader->getEdits();
+            versioned_page_entries.apply(edits);
         }
         catch (Exception & e)
         {
             /// Better diagnostics.
-            e.addMessage("(while applying edit from " + page_file.folderPath() + " to PageStorage: " + storage_name + ")");
+            e.addMessage("(while applying edit to PageStorage: " + storage_name + " with " + reader->toString() + ")");
             throw;
         }
+        if (reader->hasNext())
+        {
+            reader->moveNext();
+            merging_queue.push(std::move(reader));
+        }
+        else
+        {
+            reader->setPageFileOffsets();
+        }
     }
+
 #else
     auto snapshot = versioned_page_entries.getSnapshot();
 
@@ -184,6 +215,14 @@ PageStorage::PageStorage(String name, const String & storage_path_, const Config
     }
     versioned_page_entries.restore(builder.build());
 #endif
+
+    // TODO: resuse some page_files
+    // fill write_files
+    for (auto & page_file : write_files)
+    {
+        auto writer = getWriter(page_file);
+        idle_writers.emplace_back(std::move(writer));
+    }
 }
 
 PageId PageStorage::getMaxId()
@@ -225,21 +264,28 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
     }
 }
 
-PageFile::Writer & PageStorage::getWriter()
+PageStorage::WriterPtr PageStorage::getWriter(PageFile & page_file)
 {
-    bool is_writable = write_file.isValid() && write_file.getDataFileAppendPos() < config.file_roll_size;
-    if (!is_writable)
+    if (page_file.getType() != PageFile::Type::Formal)
+        throw Exception("Try to create writer on PageFile_" + DB::toString(page_file.getFileId()) + "_" + DB::toString(page_file.getLevel())
+                            + ", type: " + PageFile::typeToString(page_file.getType()),
+                        ErrorCodes::LOGICAL_ERROR);
+
+    WriterPtr write_file_writer;
+    bool      is_writable = page_file.isValid() && page_file.getDataFileAppendPos() < config.file_roll_size;
+    if (is_writable)
     {
-        // create a new PageFile if old file is full
-        write_file        = PageFile::newPageFile(write_file.getFileId() + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
-        write_file_writer = write_file.createWriter(config.sync_on_write);
+        write_file_writer = page_file.createWriter(config.sync_on_write);
     }
-    else if (write_file_writer == nullptr)
+    else
     {
-        // create a Writer of current PageFile
-        write_file_writer = write_file.createWriter(config.sync_on_write);
+        PageFileIdAndLevel max_writing_id_lvl{0, 0};
+        for (const auto & pf : write_files)
+            max_writing_id_lvl = std::max(max_writing_id_lvl, pf.fileIdLevel());
+        page_file         = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
+        write_file_writer = page_file.createWriter(config.sync_on_write);
     }
-    return *write_file_writer;
+    return write_file_writer;
 }
 
 PageStorage::ReaderPtr PageStorage::getReader(const PageFileIdAndLevel & file_id_level)
@@ -261,9 +307,47 @@ void PageStorage::write(const WriteBatch & wb)
     if (wb.empty())
         return;
 
-    PageEntriesEdit             edit;
-    std::lock_guard<std::mutex> lock(write_mutex);
-    getWriter().write(wb, edit);
+    WriterPtr file_to_write = nullptr;
+    {
+        // Lock to wait for one idle writer
+        std::unique_lock lock(write_mutex);
+        write_mutex_cv.wait(lock, [this] { return !idle_writers.empty(); });
+        file_to_write = std::move(idle_writers.front());
+        idle_writers.pop_front();
+    }
+
+    PageEntriesEdit edit;
+    file_to_write->write(wb, edit);
+
+    {
+        // Return writer to idle queue
+        std::unique_lock lock(write_mutex);
+
+        // Look if we need to roll to new PageFile
+        size_t index = 0;
+        for (size_t i = 0; i < write_files.size(); ++i)
+        {
+            if (write_files[i].fileIdLevel() == file_to_write->fileIdLevel())
+            {
+                index = i;
+                break;
+            }
+        }
+        auto & page_file   = write_files[index];
+        bool   is_writable = page_file.isValid() && page_file.getDataFileAppendPos() < config.file_roll_size;
+        if (!is_writable)
+        {
+            file_to_write = nullptr; // reset writer first
+            PageFileIdAndLevel max_writing_id_lvl{0, 0};
+            for (const auto & pf : write_files)
+                max_writing_id_lvl = std::max(max_writing_id_lvl, pf.fileIdLevel());
+            LOG_DEBUG(log, storage_name << " create new PageFile_" + DB::toString(max_writing_id_lvl.first + 1) + "_0 for write.");
+            page_file     = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, storage_path, PageFile::Type::Formal, page_file_log);
+            file_to_write = page_file.createWriter(config.sync_on_write);
+        }
+
+        idle_writers.emplace_back(std::move(file_to_write));
+    }
 
     // Apply changes into versioned_page_entries(generate a new version)
     // If there are RefPages to non-exist Pages, just put the ref pair to new version
@@ -490,16 +574,19 @@ bool PageStorage::gc()
         return false;
     }
 
-    PageFileIdAndLevel writing_file_id_level;
+    std::set<PageFileIdAndLevel> writing_file_id_levels;
+    PageFileIdAndLevel           min_writing_file_id_level;
     {
         std::lock_guard<std::mutex> lock(write_mutex);
-        writing_file_id_level = write_file.fileIdLevel();
+        for (size_t i = 1; i < write_files.size(); ++i)
+        {
+            writing_file_id_levels.insert(write_files[i].fileIdLevel());
+        }
+        min_writing_file_id_level = *writing_file_id_levels.begin();
     }
 
-    {
-        // Compact consecutive Legacy PageFiles into a snapshot
-        page_files = gcCompactLegacy(std::move(page_files));
-    }
+    // Try to compact consecutive Legacy PageFiles into a snapshot
+    page_files = gcCompactLegacy(std::move(page_files), writing_file_id_levels);
 
     bool   should_merge         = false;
     UInt64 candidate_total_size = 0;
@@ -542,7 +629,8 @@ bool PageStorage::gc()
 
         // Select gc candidate files into `merge_files`
         size_t migrate_page_count = 0;
-        merge_files = gcSelectCandidateFiles(page_files, file_valid_pages, writing_file_id_level, candidate_total_size, migrate_page_count);
+        merge_files
+            = gcSelectCandidateFiles(page_files, file_valid_pages, min_writing_file_id_level, candidate_total_size, migrate_page_count);
         should_merge = merge_files.size() >= config.merge_hint_low_used_file_num
             || (merge_files.size() >= 2 && candidate_total_size >= config.merge_hint_low_used_file_total_size);
         // There are no valid pages to be migrated but valid ref pages, scan over all `merge_files` and do migrate.
@@ -561,7 +649,7 @@ bool PageStorage::gc()
         for (const auto & page_file : page_files)
         {
             const auto page_id_and_lvl = page_file.fileIdLevel();
-            if (page_id_and_lvl >= writing_file_id_level)
+            if (page_id_and_lvl >= min_writing_file_id_level)
             {
                 continue;
             }
@@ -574,7 +662,7 @@ bool PageStorage::gc()
     }
 
     // Delete obsolete files that are not used by any version, without lock
-    gcRemoveObsoleteData(page_files, writing_file_id_level, live_files);
+    gcRemoveObsoleteData(page_files, min_writing_file_id_level, live_files);
 
     // Invoke callback with valid normal page id after gc.
     if (external_pages_remover)
@@ -590,11 +678,11 @@ bool PageStorage::gc()
 }
 
 PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable indent
-    const std::set<PageFile, PageFile::Comparator> & page_files,
-    const GcLivesPages &                             file_valid_pages,
-    const PageFileIdAndLevel &                       writing_file_id_level,
-    UInt64 &                                         candidate_total_size,
-    size_t &                                         migrate_page_count) const
+    const PageFileSet &        page_files,
+    const GcLivesPages &       file_valid_pages,
+    const PageFileIdAndLevel & writing_file_id_level,
+    UInt64 &                   candidate_total_size,
+    size_t &                   migrate_page_count) const
 {
     GcCandidates merge_files;
     for (auto & page_file : page_files)
@@ -620,7 +708,7 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
         }
 
         // Don't gc writing page file.
-        bool is_candidate = (page_file.fileIdLevel() != writing_file_id_level)
+        bool is_candidate = (page_file.fileIdLevel() < writing_file_id_level)
             && (valid_rate < config.merge_hint_low_used_rate || file_size < config.file_small_size);
         if (!is_candidate)
         {
@@ -638,24 +726,66 @@ PageStorage::GcCandidates PageStorage::gcSelectCandidateFiles( // keep readable 
     return merge_files;
 }
 
-std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<PageFile, PageFile::Comparator> && page_files)
+PageFileSet PageStorage::gcCompactLegacy(PageFileSet && page_files, const std::set<PageFileIdAndLevel> & writing_file_id_levels)
 {
     // Select PageFiles to compact
-    std::set<PageFile, PageFile::Comparator> page_files_to_compact;
-    for (auto & page_file : page_files)
+    PageFileSet page_files_to_compact;
+    // Build a version_set with snapshot
+    PageEntriesVersionSetWithDelta version_set(config.version_set_config, log);
+    WriteBatch::Version            largest_wb_version = 0;
     {
-        auto page_file_type = page_file.getType();
+        MetaMergingQueue merging_queue;
+        for (auto & page_file : page_files)
+        {
+            auto reader = const_cast<PageFile &>(page_file).createMetaMergingReader();
+            // Read one valid WriteBatch
+            reader->moveNext();
+            merging_queue.push(std::move(reader));
+        }
 
-        if (page_file_type == PageFile::Type::Legacy)
-            page_files_to_compact.emplace(page_file);
-        else if (page_file_type == PageFile::Type::Checkpoint)
-            page_files_to_compact.emplace(page_file);
-        else
-            break;
+        while (!merging_queue.empty())
+        {
+            auto reader = merging_queue.top();
+            merging_queue.pop();
+            // We don't want to do compaction on writing files. If any, just stop collecting `page_files_to_compact`.
+            if (writing_file_id_levels.count(reader->fileIdLevel()) != 0)
+                break;
+            // FIXME: investgate if this is too limited.
+            if (reader->belongingPageFile().getType() == PageFile::Type::Formal)
+                break;
+
+            try
+            {
+                LOG_TRACE(log, storage_name << " gcCompactLegacy recovering from " + reader->toString());
+                // Apply current WriteBatch edits
+                auto edits = reader->getEdits();
+                version_set.apply(edits);
+                largest_wb_version = std::max(largest_wb_version, reader->writeBatchVersion());
+            }
+            catch (Exception & e)
+            {
+                /// Better diagnostics.
+                e.addMessage("(PageStorage: " + storage_name + " while applying edit in gcCompactLegacy with " + reader->toString() + ")");
+                throw;
+            }
+            if (reader->hasNext())
+            {
+                reader->moveNext();
+                merging_queue.push(std::move(reader));
+            }
+            else
+            {
+                // We apply all edit of belonging PageFile, do compaction on it.
+                page_files_to_compact.emplace(reader->belongingPageFile());
+            }
+        }
     }
 
     if (page_files_to_compact.size() < config.gc_compact_legacy_min_num)
     {
+        LOG_DEBUG(log,
+                  storage_name << " gcCompactLegacy exit without compaction, candidate size: " << page_files_to_compact.size() << " < "
+                               << config.gc_compact_legacy_min_num);
         // Nothing to compact, remove legacy/checkpoint page files since we
         // don't do gc on them later.
         for (auto itr = page_files.begin(); itr != page_files.end(); /* empty */)
@@ -673,28 +803,19 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
         return std::move(page_files);
     }
 
-    // Build a version_set with snapshot
-    PageEntriesVersionSetWithDelta version_set(config.version_set_config, log);
-    for (auto & page_file : page_files_to_compact)
-    {
-        PageEntriesEdit edit;
-        const_cast<PageFile &>(page_file).readAndSetPageMetas(edit);
-
-        version_set.apply(edit);
-    }
-
-    auto       snapshot = version_set.getSnapshot();
-    WriteBatch wb;
-    prepareSnapshotWriteBatch(snapshot, wb);
+    auto snapshot = version_set.getSnapshot();
+    auto wb       = prepareSnapshotWriteBatch(snapshot, largest_wb_version);
 
     // Use the largest id-level in page_files_to_compact as Snapshot's
     const PageFileIdAndLevel largest_id_level = page_files_to_compact.rbegin()->fileIdLevel();
     {
-        const auto smallest_id_level = page_files_to_compact.begin()->fileIdLevel();
+        std::stringstream ss;
+        ss << "[";
+        for (const auto & page_file : page_files_to_compact)
+            ss << "<" << page_file.getFileId() << "," << page_file.getLevel() << ">,";
+        ss << "]";
         LOG_INFO(log,
-                 storage_name << " Compact legacy PageFile_"                                                 //
-                              << smallest_id_level.first << "_" << smallest_id_level.second                  //
-                              << " to PageFile_" << largest_id_level.first << "_" << largest_id_level.second //
+                 storage_name << " Compact legacy PageFile " << ss.str() //
                               << " into checkpoint PageFile_" << largest_id_level.first << "_" << largest_id_level.second);
     }
     auto checkpoint_file = PageFile::newPageFile(largest_id_level.first, largest_id_level.second, storage_path, PageFile::Type::Temp, log);
@@ -709,14 +830,12 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
 
     // Archieve obsolete PageFiles
     {
-        std::set<PageFile, PageFile::Comparator> page_files_to_archieve;
         for (auto itr = page_files.begin(); itr != page_files.end();)
         {
             auto & page_file = *itr;
-            if (page_file.fileIdLevel() < largest_id_level || page_file.fileIdLevel() == largest_id_level)
+            if (page_files_to_compact.count(page_file) > 0)
             {
-                page_files_to_archieve.insert(page_file);
-                // Remove page files have been archieved
+                // Remove page files have been compacted
                 itr = page_files.erase(itr);
             }
             else if (page_file.getType() == PageFile::Type::Legacy)
@@ -730,14 +849,15 @@ std::set<PageFile, PageFile::Comparator> PageStorage::gcCompactLegacy(std::set<P
             }
         }
 
-        archievePageFiles(page_files_to_archieve);
+        archievePageFiles(page_files_to_compact);
     }
 
     return std::move(page_files);
 }
 
-void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBatch & wb)
+WriteBatch PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, const WriteBatch::Version wb_version)
 {
+    WriteBatch wb;
     // First Ingest exists pages with normal_id
     auto normal_ids = snapshot->version()->validNormalPageIds();
     for (auto & page_id : normal_ids)
@@ -753,9 +873,12 @@ void PageStorage::prepareSnapshotWriteBatch(const SnapshotPtr snapshot, WriteBat
         auto ori_id = snapshot->version()->isRefId(page_id).second;
         wb.putRefPage(page_id, ori_id);
     }
+
+    wb.setVersion(wb_version);
+    return wb;
 }
 
-void PageStorage::archievePageFiles(const std::set<PageFile, PageFile::Comparator> & page_files)
+void PageStorage::archievePageFiles(const PageFileSet & page_files)
 {
     if (page_files.empty())
         return;
@@ -931,12 +1054,12 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr &  snapshot,
 /**
  * Delete obsolete files that are not used by any version
  * @param page_files            All available files in disk
- * @param writing_file_id_level The PageFile id which is writing to
+ * @param writing_file_id_level The min PageFile id which is writing to
  * @param live_files            The live files after gc
  */
-void PageStorage::gcRemoveObsoleteData(std::set<PageFile, PageFile::Comparator> & page_files,
-                                       const PageFileIdAndLevel &                 writing_file_id_level,
-                                       const std::set<PageFileIdAndLevel> &       live_files)
+void PageStorage::gcRemoveObsoleteData(PageFileSet &                        page_files,
+                                       const PageFileIdAndLevel &           writing_file_id_level,
+                                       const std::set<PageFileIdAndLevel> & live_files)
 {
     for (auto & page_file : page_files)
     {
